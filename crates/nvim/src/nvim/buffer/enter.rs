@@ -8,336 +8,533 @@
 //! since last change" error every caller of these has to be able to
 //! raise.
 //!
+//! `BufLeave` is the family's sharpest re-entrancy: it can free the buffer
+//! being left, the buffer being entered, or both, and it can change the
+//! current window.  [`set_curbuf`] therefore takes a [`BufRef`] for each of
+//! the two before it fires and asks again after every step -- which is what
+//! the `prevbufref`/`newbufref` pair is for upstream.
+//!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int};
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
-use crate::semsg_c;
 use crate::src::nvim::arglist::check_arg_idx;
-use crate::src::nvim::autocmd::{
-    EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_BUFWINENTER, apply_autocmds,
-};
+use crate::src::nvim::autocmd::{EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_BUFWINENTER};
 use crate::src::nvim::channel::channel_job_running;
 use crate::src::nvim::diff::diff_buf_add;
 use crate::src::nvim::digraph::keymap_init;
-use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
+use crate::src::nvim::drawscreen::UPD_NOT_VALID;
 use crate::src::nvim::eval::typval::tv_dict_add;
-use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::file_search::vim_chdirfile;
 use crate::src::nvim::fileio::{buf_check_timestamp, shorten_fnames};
-use crate::src::nvim::fold::{clearFolding, foldUpdateAll};
 use crate::src::nvim::indent::inindent;
 use crate::src::nvim::main::{
     State, VIsual_active, VIsual_reselect, cmdmod, curbuf, curwin, e_job_still_running,
     e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
     e_no_write_since_last_change_add_bang_to_override,
-    e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, last_chdir_reason, lastbuf,
-    msg_silent, need_fileinfo, p_acd, starting,
+    e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, last_chdir_reason, msg_silent,
+    need_fileinfo, p_acd, starting,
 };
-use crate::src::nvim::mark::setpcmark;
-use crate::src::nvim::message::emsg;
 use crate::src::nvim::r#move::scroll_cursor_halfway;
-use crate::src::nvim::normal::end_visual_mode;
-use crate::src::nvim::option::{buf_copy_options, shortmess};
-use crate::src::nvim::os::libc::{gettext, time};
+use crate::src::nvim::option::buf_copy_options;
+use crate::src::nvim::os::libc::time;
 use crate::src::nvim::spell::parse_spelllang;
 use crate::src::nvim::state::MODE_INSERT;
-use crate::src::nvim::syntax::reset_synblock;
 use crate::src::nvim::terminal::terminal_check_size;
 use crate::src::nvim::types::{
-    CMOD_KEEPALT, ChangedtickDictItem, OptInt, VAR_FIXED, VAR_NUMBER, buf_T, bufref_T, colnr_T,
-    dictitem_T, exarg_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
+    CMOD_KEEPALT, ChangedtickDictItem, OptInt, Terminal, VAR_FIXED, VAR_NUMBER, colnr_T,
+    dictitem_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
 };
-use crate::src::nvim::undo::{bufIsChanged, u_sync};
-use crate::src::nvim::window::{check_colorcolumn, close_windows, get_last_winid, win_valid};
+use crate::src::nvim::undo::u_sync;
+use crate::src::nvim::window::{get_last_winid, win_valid};
 
-pub unsafe extern "C" fn set_curbuf(
-    mut buf: *mut buf_T,
-    mut action: ::core::ffi::c_int,
-    mut update_jumplist: bool,
+// ---------------------------------------------------------------------------
+// The neighbours, wrapped
+
+/// The id the last window created was given -- the C's cheap "did an
+/// autocommand open a window?" probe.
+fn last_winid() -> c_int {
+    // SAFETY: reads a counter only.
+    unsafe { get_last_winid() }
+}
+
+/// The window `win` names, if it is still in the current tab page.
+///
+/// `win_valid` walks the window list comparing pointers and never
+/// dereferences its argument, so asking about a possibly-closed window is a
+/// safe operation.
+fn valid_win(win: *mut win_T) -> Option<Win> {
+    // SAFETY: the pointer is only compared; a hit means a live window.
+    unsafe { win_valid(win).then(|| Win::new(win)) }
+}
+
+/// Whether `buf` may stay loaded when it is no longer shown -- `'hidden'`,
+/// `'bufhidden'` or a `:hide` modifier.
+fn may_hide(mut buf: Buf) -> bool {
+    // SAFETY: a live buffer.
+    unsafe { buf_hide(buf.raw()) }
+}
+
+/// Sync the undo state, so that what follows starts a new change.
+fn sync_undo() {
+    // SAFETY: reads the current buffer's undo tree.
+    unsafe { u_sync(false) };
+}
+
+/// Remember `win`'s cursor position for the alternate file.
+fn remember_altfpos(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { buflist_altfpos(win.raw()) };
+}
+
+/// Restore the window-local options `win` last used with this buffer.
+fn restore_winopts(mut buf: Buf) {
+    // SAFETY: a live buffer.
+    unsafe { get_winopts(buf.raw()) };
+}
+
+/// Copy the buffer-local option values into `buf`.
+fn copy_options_into(mut buf: Buf, flags: c_int) {
+    // SAFETY: a live buffer.
+    unsafe { buf_copy_options(buf.raw(), flags) };
+}
+
+fn diff_add(mut buf: Buf) {
+    // SAFETY: a live buffer.
+    unsafe { diff_buf_add(buf.raw()) };
+}
+
+/// Load the buffer that has just been made current.
+fn load_current_buffer() {
+    // SAFETY: `curbuf` and `curwin` are set.
+    unsafe { open_buffer(false, ptr::null_mut(), 0) };
+}
+
+/// Warn if the file changed on disk since the buffer was read.
+fn check_timestamp(mut buf: Buf) {
+    // SAFETY: a live buffer; `false` is upstream's `focus` flag.
+    unsafe { buf_check_timestamp(buf.raw()) };
+}
+
+/// Whether the cursor is in the indent of its line.
+fn cursor_in_indent() -> bool {
+    // SAFETY: reads the current window's cursor and line.
+    unsafe { inindent(0) }
+}
+
+/// Put the cursor back where this window last was in this buffer.
+fn restore_position() {
+    // SAFETY: reads the current window and buffer, both set.
+    unsafe { buflist_getfpos() };
+}
+
+/// Re-check the argument-list index after the buffer changed.
+fn recheck_arg_idx(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { check_arg_idx(win.raw()) };
+}
+
+/// Rebuild `'title'` and `'icon'`.
+fn rebuild_title() {
+    // SAFETY: reads the current window and buffer.
+    unsafe { maketitle() };
+}
+
+/// Scroll so that the cursor line sits in the middle of the window.
+fn scroll_halfway(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { scroll_cursor_halfway(win.raw(), false, false) };
+}
+
+/// Load the keymap `'keymap'` names.
+fn init_keymap() {
+    keymap_init();
+}
+
+/// Work out the spell-checking languages for `win`.
+fn set_spelllang(mut win: Win) {
+    // SAFETY: a live window with a syntax block.
+    unsafe { parse_spelllang(win.raw()) };
+}
+
+/// Whether the window's `'spelllang'` is set. It lives in the syntax block
+/// the window shares with its buffer.
+fn has_spelllang(mut win: Win) -> bool {
+    // SAFETY: a live window's syntax block is live, and `'spelllang'` a
+    // NUL-terminated option value.
+    unsafe { *(*win.w_s).b_p_spl as c_int != NUL }
+}
+
+fn resize_terminal(term: *mut Terminal) {
+    // SAFETY: a live terminal, the caller having ruled out null.
+    unsafe { terminal_check_size(term) };
+}
+
+/// Whether the job behind terminal buffer `buf` is still running.
+fn job_running(mut buf: Buf) -> bool {
+    // SAFETY: reads the buffer's `'channel'` and looks it up.
+    unsafe { channel_job_running(buf.b_p_channel as uint64_t) }
+}
+
+/// Change to the directory of `fname`.
+fn chdir_to_file(fname: *mut c_char) -> c_int {
+    // SAFETY: a NUL-terminated file name.
+    unsafe { vim_chdirfile(fname, kCdCauseAuto) }
+}
+
+/// Recompute every buffer's short file name against the new directory.
+fn reshorten_fnames() {
+    // SAFETY: walks the buffer list only.
+    unsafe { shorten_fnames(true_0) };
+}
+
+/// The wall clock, for `b_last_used`.
+fn now() -> time_t {
+    // SAFETY: a null argument asks for the answer by value.
+    unsafe { time(ptr::null_mut::<time_t>()) }
+}
+
+/// Add `b:changedtick` to the buffer's variable dictionary.
+fn add_changedtick(mut buf: Buf) {
+    let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut dictitem_T);
+    // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
+    unsafe { tv_dict_add(vars, di) };
+}
+
+// ---------------------------------------------------------------------------
+// Leaving one buffer for another
+
+/// Make `buf` the current buffer, closing the one being left as `action` says
+/// (`DOBUF_GOTO` frees or hides it, `DOBUF_SPLIT` leaves it alone, and
+/// `DOBUF_UNLOAD`/`DEL`/`WIPE` do what they say).
+///
+/// With `update_jumplist` the position being left joins the jump list.
+///
+/// # Safety
+/// `buf` must be a live buffer, and `curbuf`/`curwin` be set.
+pub unsafe extern "C" fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) {
+    // SAFETY: the caller's promise -- a live buffer.
+    let buf = unsafe { Buf::new(buf) };
+    let unload = action == DOBUF_UNLOAD as c_int
+        || action == DOBUF_DEL as c_int
+        || action == DOBUF_WIPE as c_int;
+    let old_tw: OptInt = cur_buf().b_p_tw;
+    let winid_before = last_winid();
+
+    if update_jumplist {
+        set_pcmark();
+    }
+
+    let mut win = cur_win();
+    if cmdmod.with(|m| m.cmod_flags) & CMOD_KEEPALT as c_int == 0 {
+        win.w_alt_fnum = cur_buf().handle as c_int; // remember alternate file
+    }
+    remember_altfpos(win); // remember curpos
+
+    // Don't restart Select mode after switching to another buffer.
+    VIsual_reselect.set(false_0);
+
+    // close_windows() or apply_autocmds() may change curbuf and wipe out "buf"
+    let prevbuf = cur_buf();
+    let prevbufref = BufRef::of(prevbuf);
+    let newbufref = BufRef::of(buf);
+    let prev_nwindows = prevbuf.b_nwindows;
+
+    // Autocommands may delete the current buffer and/or the buffer we want to
+    // go to.  In those cases don't close the buffer.
+    if !fire(EVENT_BUFLEAVE, cur_buf())
+        || prevbufref.valid() && newbufref.valid() && !aborting_now()
+    {
+        leave_prevbuf(prevbufref, action, unload, prev_nwindows, winid_before);
+    }
+
+    // An autocommand may have deleted "buf", already entered it (e.g., when it
+    // did ":bunload") or aborted the script processing!  If curwin->w_buffer is
+    // null, enter_buffer() will make it valid again.
+    // SAFETY: the pointer is only compared against the buffer list.
+    let valid = unsafe { buf_valid(buf.raw()) };
+    if valid && buf.raw() != curbuf.get() && !aborting_now() || cur_win().w_buffer.is_null() {
+        // autocommands changed curbuf and we will move to another buffer soon,
+        // so decrement curbuf->b_nwindows
+        if let Some(mut cur) = current_buf().filter(|c| *c != prevbuf) {
+            cur.b_nwindows -= 1;
+        }
+        // If the buffer is not valid but curwin->w_buffer is NULL we must enter
+        // some buffer.  Using the last one is hopefully OK.
+        enter_buffer(if valid {
+            buf
+        } else {
+            last_buf().expect("lastbuf != NULL")
+        });
+        if old_tw != cur_buf().b_p_tw {
+            recheck_colorcolumn(cur_win());
+        }
+    }
+
+    if let Some(prev) = prevbufref.get().filter(|p| !p.terminal.is_null()) {
+        resize_terminal(prev.terminal);
+    }
+}
+
+/// Close the windows and the buffer being left, if `BufLeave` has not already
+/// disposed of them.
+fn leave_prevbuf(
+    prevbufref: BufRef,
+    action: c_int,
+    unload: bool,
+    prev_nwindows: c_int,
+    winid_before: c_int,
 ) {
-    unsafe {
-        let mut prevbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut unload: ::core::ffi::c_int = (action == DOBUF_UNLOAD as ::core::ffi::c_int
-            || action == DOBUF_DEL as ::core::ffi::c_int
-            || action == DOBUF_WIPE as ::core::ffi::c_int)
-            as ::core::ffi::c_int;
-        let mut old_tw: OptInt = (*curbuf.get()).b_p_tw;
-        let last_winid: ::core::ffi::c_int = get_last_winid();
-        if update_jumplist {
-            setpcmark();
-        }
-        if (*cmdmod.ptr()).cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
-            (*curwin.get()).w_alt_fnum = (*curbuf.get()).handle as ::core::ffi::c_int;
-        }
-        buflist_altfpos(curwin.get());
-        VIsual_reselect.set(false_0);
-        prevbuf = curbuf.get();
-        let mut newbufref: bufref_T = bufref_T::default();
-        let mut prevbufref: bufref_T = bufref_T::default();
-        set_bufref(&raw mut prevbufref, prevbuf);
-        set_bufref(&raw mut newbufref, buf);
-        let prev_nwindows: ::core::ffi::c_int = (*prevbuf).b_nwindows;
-        if !apply_autocmds(
-            EVENT_BUFLEAVE,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
-            curbuf.get(),
-        ) || bufref_valid(&raw mut prevbufref) as ::core::ffi::c_int != 0
-            && bufref_valid(&raw mut newbufref) as ::core::ffi::c_int != 0
-            && !aborting()
-        {
-            if prevbuf == (*curwin.get()).w_buffer {
-                reset_synblock(curwin.get());
-            }
-            if unload != 0
-                || prev_nwindows <= 1 as ::core::ffi::c_int
-                    && last_winid != get_last_winid()
-                    && action == DOBUF_GOTO as ::core::ffi::c_int
-                    && !buf_hide(prevbuf)
-            {
-                close_windows(prevbuf, false_0 != 0);
-            }
-            if bufref_valid(&raw mut prevbufref) as ::core::ffi::c_int != 0 && !aborting() {
-                let mut previouswin: *mut win_T = curwin.get();
-                if prevbuf == curbuf.get()
-                    && (State.get() & MODE_INSERT == 0 as ::core::ffi::c_int
-                        || (*curbuf.get()).b_nwindows <= 1 as ::core::ffi::c_int)
-                {
-                    u_sync(false_0 != 0);
-                }
-                close_buffer(
-                    if prevbuf == (*curwin.get()).w_buffer {
-                        curwin.get()
-                    } else {
-                        ::core::ptr::null_mut::<win_T>()
-                    },
-                    prevbuf,
-                    if unload != 0 {
-                        action
-                    } else if action == DOBUF_GOTO as ::core::ffi::c_int
-                        && !buf_hide(prevbuf)
-                        && !bufIsChanged(prevbuf)
-                    {
-                        DOBUF_UNLOAD as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    },
-                    false_0 != 0,
-                    false_0 != 0,
-                );
-                if curwin.get() != previouswin && win_valid(previouswin) as ::core::ffi::c_int != 0
-                {
-                    curwin.set(previouswin);
-                }
-            }
-        }
-        let mut valid: bool = buf_valid(buf);
-        if valid as ::core::ffi::c_int != 0 && buf != curbuf.get() && !aborting()
-            || (*curwin.get()).w_buffer.is_null()
-        {
-            if !(*curbuf.ptr()).is_null() && prevbuf != curbuf.get() {
-                (*curbuf.get()).b_nwindows -= 1;
-            }
-            enter_buffer(if valid as ::core::ffi::c_int != 0 {
-                buf
-            } else {
-                lastbuf.get()
-            });
-            if old_tw != (*curbuf.get()).b_p_tw {
-                check_colorcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), curwin.get());
-            }
-        }
-        if bufref_valid(&raw mut prevbufref) as ::core::ffi::c_int != 0
-            && !(*prevbuf).terminal.is_null()
-        {
-            terminal_check_size((*prevbuf).terminal);
-        }
+    let prevraw = prevbufref.raw();
+    if prevraw == cur_win().w_buffer {
+        reset_syntax(cur_win());
+    }
+    // autocommands may have opened a new window with prevbuf, grr
+    // SAFETY: `prevbuf` was live when this call began; `close_windows` and
+    // `buf_hide` are only reached while it still is -- an autocommand that
+    // freed it would have failed `bufref_valid` in the caller's guard.
+    let prevbuf = unsafe { Buf::new(prevraw) };
+    if unload
+        || prev_nwindows <= 1
+            && winid_before != last_winid()
+            && action == DOBUF_GOTO as c_int
+            && !may_hide(prevbuf)
+    {
+        close_all_windows(prevbuf, false);
+    }
+    if !prevbufref.valid() || aborting_now() {
+        return;
+    }
+    let previouswin = curwin.get();
+
+    // Do not sync when in Insert mode and the buffer is open in another
+    // window, might be a timer doing something in another window.
+    if prevraw == curbuf.get() && (State.get() & MODE_INSERT == 0 || cur_buf().b_nwindows <= 1) {
+        sync_undo();
+    }
+    let win = if prevraw == cur_win().w_buffer {
+        curwin.get()
+    } else {
+        ptr::null_mut::<win_T>()
+    };
+    let how = if unload {
+        action
+    } else if action == DOBUF_GOTO as c_int && !may_hide(prevbuf) && !is_changed(prevbuf) {
+        DOBUF_UNLOAD as c_int
+    } else {
+        0
+    };
+    // SAFETY: `prevbuf` is still live, the guard above having said so.
+    unsafe { close_buffer(win, prevraw, how, false, false) };
+    if curwin.get() != previouswin && valid_win(previouswin).is_some() {
+        // autocommands changed curwin, Grr!
+        curwin.set(previouswin);
     }
 }
 
-pub(crate) unsafe extern "C" fn enter_buffer(mut buf: *mut buf_T) {
-    unsafe {
-        if VIsual_active.get() {
-            end_visual_mode();
-        }
-        (*curwin.get()).w_buffer = buf;
-        curbuf.set(buf);
-        (*curbuf.get()).b_nwindows += 1;
-        buf_copy_options(
-            buf,
-            BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,
-        );
-        if !(*buf).b_help {
-            get_winopts(buf);
-        } else {
-            clearFolding(curwin.get());
-        }
-        foldUpdateAll(curwin.get());
-        if (*curwin.get()).w_onebuf_opt.wo_diff != 0 {
-            diff_buf_add(curbuf.get());
-        }
-        (*curwin.get()).w_s = &raw mut (*curbuf.get()).b_s;
-        (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
-        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-        (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-        (*curwin.get()).w_set_curswant = true_0;
-        (*curwin.get()).w_topline_was_set = false_0 as ::core::ffi::c_char;
-        (*curwin.get()).w_valid = 0 as ::core::ffi::c_int;
-        if (*curbuf.get()).b_ml.ml_mfp.is_null() {
-            if *(*curbuf.get()).b_p_ft as ::core::ffi::c_int == NUL {
-                (*curbuf.get()).b_did_filetype = false_0 != 0;
-            }
-            open_buffer(
-                false_0 != 0,
-                ::core::ptr::null_mut::<exarg_T>(),
-                0 as ::core::ffi::c_int,
-            );
-        } else {
-            if msg_silent.get() == 0 && !shortmess(SHM_FILEINFO as ::core::ffi::c_int) {
-                need_fileinfo.set(true_0 != 0);
-            }
-            buf_check_timestamp(curbuf.get());
-            (*curwin.get()).w_topline = 1 as ::core::ffi::c_int as linenr_T;
-            (*curwin.get()).w_topfill = 0 as ::core::ffi::c_int;
-            apply_autocmds(
-                EVENT_BUFENTER,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                curbuf.get(),
-            );
-            apply_autocmds(
-                EVENT_BUFWINENTER,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                curbuf.get(),
-            );
-        }
-        if (*curwin.get()).w_cursor.lnum == 1 as linenr_T
-            && inindent(0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-        {
-            buflist_getfpos();
-        }
-        check_arg_idx(curwin.get());
-        maketitle();
-        if (*curwin.get()).w_topline == 1 as linenr_T && (*curwin.get()).w_topline_was_set == 0 {
-            scroll_cursor_halfway(curwin.get(), false_0 != 0, false_0 != 0);
-        }
-        do_autochdir();
-        if (*curbuf.get()).b_kmap_state as ::core::ffi::c_int & KEYMAP_INIT != 0 {
-            keymap_init();
-        }
-        if !(*curbuf.get()).b_help
-            && (*curwin.get()).w_onebuf_opt.wo_spell != 0
-            && *(*(*curwin.get()).w_s).b_p_spl as ::core::ffi::c_int != NUL
-        {
-            parse_spelllang(curwin.get());
-        }
-        (*curbuf.get()).b_last_used = time(::core::ptr::null_mut::<time_t>());
-        if !(*curbuf.get()).terminal.is_null() {
-            terminal_check_size((*curbuf.get()).terminal);
-        }
-        redraw_later(curwin.get(), UPD_NOT_VALID);
+/// Enter a new current buffer.
+///
+/// The old `curbuf` must have been abandoned already -- which also means it
+/// may be pointing at freed memory, so nothing here reads it.
+pub(crate) fn enter_buffer(mut buf: Buf) {
+    // when closing the current buffer stop Visual mode
+    if VIsual_active.get() {
+        end_visual();
     }
+
+    // Get the buffer in the current window.
+    let mut win = cur_win();
+    win.w_buffer = buf.raw();
+    curbuf.set(buf.raw());
+    buf.b_nwindows += 1;
+
+    // Copy buffer and window local option values.  Not for a help buffer.
+    copy_options_into(buf, BCO_ENTER as c_int | BCO_NOHELP as c_int);
+    if !buf.b_help {
+        restore_winopts(buf);
+    } else {
+        // Remove all folds in the window.
+        clear_folding(win);
+    }
+    fold_update_all(win); // update folds (later).
+
+    if win.w_onebuf_opt.wo_diff != 0 {
+        diff_add(cur_buf());
+    }
+
+    win.w_s = &raw mut buf.b_s;
+
+    // Cursor on first line by default.
+    let mut cursor = win.cursor();
+    cursor.lnum = 1 as linenr_T;
+    cursor.col = 0 as colnr_T;
+    cursor.coladd = 0 as colnr_T;
+    win.w_set_curswant = true_0;
+    win.w_topline_was_set = false_0 as c_char;
+
+    // mark cursor position as being invalid
+    win.w_valid = 0;
+
+    // Make sure the buffer is loaded.
+    if buf.b_ml.ml_mfp.is_null() {
+        // need to load the file
+        //
+        // If there is no filetype, allow for detecting one.  Esp. useful for
+        // ":ball" used in an autocommand.  If there already is a filetype we
+        // might prefer to keep it.
+        // SAFETY: `'filetype'` is a NUL-terminated option value.
+        if unsafe { *buf.b_p_ft } as c_int == NUL {
+            buf.b_did_filetype = false;
+        }
+        load_current_buffer();
+    } else {
+        if msg_silent.get() == 0 && !short_mess(SHM_FILEINFO as c_int) {
+            need_fileinfo.set(true); // display file info after redraw
+        }
+        check_timestamp(cur_buf()); // check if file changed
+
+        let mut win = cur_win();
+        win.w_topline = 1 as linenr_T;
+        win.w_topfill = 0;
+        fire(EVENT_BUFENTER, cur_buf());
+        fire(EVENT_BUFWINENTER, cur_buf());
+    }
+
+    // If autocommands did not change the cursor position, restore cursor lnum
+    // and possibly cursor col.
+    if cur_win().cursor().lnum == 1 as linenr_T && cursor_in_indent() {
+        restore_position();
+    }
+
+    recheck_arg_idx(cur_win()); // check for valid arg_idx
+    rebuild_title();
+    // when autocmds didn't change it
+    let win = cur_win();
+    if win.w_topline == 1 as linenr_T && win.w_topline_was_set == 0 {
+        scroll_halfway(win); // redisplay at correct position
+    }
+
+    // Change directories when the 'acd' option is set.
+    do_autochdir_now();
+
+    if cur_buf().b_kmap_state as c_int & KEYMAP_INIT != 0 {
+        init_keymap();
+    }
+    // May need to set the spell language.  Can only do this after the buffer
+    // has been properly setup.
+    let (buf, win) = (cur_buf(), cur_win());
+    if !buf.b_help && win.w_onebuf_opt.wo_spell != 0 && has_spelllang(win) {
+        set_spelllang(win);
+    }
+    cur_buf().b_last_used = now();
+
+    if !cur_buf().terminal.is_null() {
+        resize_terminal(cur_buf().terminal);
+    }
+
+    win.redraw_later(UPD_NOT_VALID);
 }
 
+/// Change to the directory of the current buffer, unless still starting up.
+///
+/// # Safety
+/// `curbuf` must be set.
 pub unsafe extern "C" fn do_autochdir() {
-    unsafe {
-        if p_acd.get() != 0 {
-            if starting.get() == 0 as ::core::ffi::c_int
-                && !(*curbuf.get()).b_ffname.is_null()
-                && vim_chdirfile((*curbuf.get()).b_ffname, kCdCauseAuto) == OK
-            {
-                last_chdir_reason.set(c"autochdir".as_ptr() as *mut ::core::ffi::c_char);
-                shorten_fnames(true_0);
-            }
-        }
+    do_autochdir_now();
+}
+
+fn do_autochdir_now() {
+    if p_acd.get() == 0 {
+        return;
+    }
+    let fname = cur_buf().b_ffname;
+    if starting.get() == 0 && !fname.is_null() && chdir_to_file(fname) == OK {
+        last_chdir_reason.set(c"autochdir".as_ptr().cast_mut());
+        reshorten_fnames();
     }
 }
 
-pub unsafe extern "C" fn no_write_message_buf(mut buf: *mut buf_T) {
-    unsafe {
-        if !(*buf).terminal.is_null()
-            && channel_job_running((*buf).b_p_channel as uint64_t) as ::core::ffi::c_int != 0
-        {
-            emsg(gettext(
-                &raw const e_job_still_running_add_bang_to_end_the_job
-                    as *const ::core::ffi::c_char,
-            ));
-        } else {
-            semsg_c!(
-                gettext(
-                    &raw const e_no_write_since_last_change_for_buffer_nr_add_bang_to_override
-                        as *const ::core::ffi::c_char,
-                ),
-                (*buf).handle,
-            );
-        };
+// ---------------------------------------------------------------------------
+// "No write since last change"
+
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn no_write_message_buf(buf: *mut buf_T) {
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    if !buf.terminal.is_null() && job_running(buf) {
+        err_static(&raw const e_job_still_running_add_bang_to_end_the_job);
+    } else {
+        let fmt = &raw const e_no_write_since_last_change_for_buffer_nr_add_bang_to_override;
+        err_num(tr_raw(fmt.cast::<c_char>()), buf.handle as c_int);
     }
 }
 
+/// # Safety
+/// `curbuf` must be set.
 pub unsafe extern "C" fn no_write_message() {
-    unsafe {
-        if !(*curbuf.get()).terminal.is_null()
-            && channel_job_running((*curbuf.get()).b_p_channel as uint64_t) as ::core::ffi::c_int
-                != 0
-        {
-            emsg(gettext(
-                &raw const e_job_still_running_add_bang_to_end_the_job
-                    as *const ::core::ffi::c_char,
-            ));
-        } else {
-            emsg(gettext(
-                &raw const e_no_write_since_last_change_add_bang_to_override
-                    as *const ::core::ffi::c_char,
-            ));
-        };
+    let buf = cur_buf();
+    if !buf.terminal.is_null() && job_running(buf) {
+        err_static(&raw const e_job_still_running_add_bang_to_end_the_job);
+    } else {
+        err_static(&raw const e_no_write_since_last_change_add_bang_to_override);
     }
 }
 
+/// # Safety
+/// `buf` must be a live buffer.
 pub unsafe extern "C" fn no_write_message_nobang(buf: *const buf_T) {
-    unsafe {
-        if !(*buf).terminal.is_null()
-            && channel_job_running((*buf).b_p_channel as uint64_t) as ::core::ffi::c_int != 0
-        {
-            emsg(gettext(
-                &raw const e_job_still_running as *const ::core::ffi::c_char,
-            ));
-        } else {
-            emsg(gettext(
-                &raw const e_no_write_since_last_change as *const ::core::ffi::c_char,
-            ));
-        };
+    // SAFETY: the caller's promise -- a live buffer, which is only read.
+    let buf = unsafe { Buf::new(buf.cast_mut()) };
+    if !buf.terminal.is_null() && job_running(buf) {
+        err_static(&raw const e_job_still_running);
+    } else {
+        err_static(&raw const e_no_write_since_last_change);
     }
 }
 
-#[inline(always)]
-pub(crate) unsafe extern "C" fn buf_init_changedtick(buf: *mut buf_T) {
-    unsafe {
-        (*buf).changedtick_di = ChangedtickDictItem {
-            di_tv: typval_T {
-                v_type: VAR_NUMBER,
-                v_lock: VAR_FIXED,
-                vval: typval_vval_union {
-                    v_number: buf_get_changedtick(buf),
-                },
-            },
-            di_flags: (DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int)
-                as uint8_t,
-            di_key: ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(
-                *b"changedtick\0",
-            ),
-        };
-        tv_dict_add(
-            (*buf).b_vars,
-            &raw mut (*buf).changedtick_di as *mut dictitem_T,
-        );
+/// `emsg(_(msg))` over one of `main.rs`'s message statics, which are byte
+/// arrays rather than pointers.
+fn err_static<const N: usize>(msg: *const [c_char; N]) {
+    err_raw(tr_raw(msg.cast::<c_char>()));
+}
+
+// ---------------------------------------------------------------------------
+// b:changedtick
+
+/// `"changedtick"`, in the fixed-size key `dictitem_T` carries. The static
+/// assertion upstream writes (`sizeof("changedtick") <= sizeof(di_key)`) is
+/// the array length below.
+const CHANGEDTICK_KEY: [c_char; 12] = {
+    let mut key = [0 as c_char; 12];
+    let name = b"changedtick";
+    let mut i = 0;
+    while i < name.len() {
+        key[i] = name[i] as c_char;
+        i += 1;
     }
+    key
+};
+
+/// Initialise `b:changedtick` and its `changedtick_val` attribute.
+pub(crate) fn buf_init_changedtick(mut buf: Buf) {
+    buf.changedtick_di = ChangedtickDictItem {
+        di_tv: typval_T {
+            v_type: VAR_NUMBER,
+            v_lock: VAR_FIXED,
+            vval: typval_vval_union {
+                // SAFETY: a live buffer.
+                v_number: unsafe { buf_get_changedtick(buf.raw()) },
+            },
+        },
+        // Must not include DI_FLAGS_ALLOC.
+        di_flags: (DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int) as uint8_t,
+        di_key: CHANGEDTICK_KEY,
+    };
+    add_changedtick(buf);
 }

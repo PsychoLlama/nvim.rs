@@ -53,9 +53,9 @@ use crate::src::nvim::path::FullName_save;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::src::nvim::types::{
-    AdditionalData, Callback, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, bufref_T, colnr_T,
-    event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, ptr_t, regprog_T,
-    size_t, uint64_t,
+    AdditionalData, Callback, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T, event_T,
+    fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, ptr_t, regprog_T, size_t,
+    uint64_t,
 };
 use crate::src::nvim::undo::curbufIsChanged;
 use crate::src::nvim::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -211,18 +211,6 @@ fn buffers_backwards() -> impl Iterator<Item = Buf> {
     })
 }
 
-fn bufref_of(mut buf: Buf) -> bufref_T {
-    let mut bufref = bufref_T::default();
-    // SAFETY: a local to fill in, and a live buffer.
-    unsafe { set_bufref(&raw mut bufref, buf.raw()) };
-    bufref
-}
-
-fn still_valid(bufref: &mut bufref_T) -> bool {
-    // SAFETY: a `bufref_T` `bufref_of` set.
-    unsafe { bufref_valid(bufref) }
-}
-
 fn fire_buf_event(event: event_T, mut buf: Buf) -> bool {
     let raw = buf.raw();
     // SAFETY: a live buffer; both name arguments are optional.
@@ -285,9 +273,8 @@ pub unsafe extern "C" fn buflist_new(
     // SAFETY: reads the current buffer's own state.
     if flags & BLN_CURBUF as c_int != 0 && unsafe { curbuf_reusable() } {
         let cur = current_buf().expect("curbuf != NULL");
-        let mut bufref = bufref_of(cur);
-        // SAFETY: a live buffer and the current window.
-        unsafe { trigger_undo_ftplugin(cur.raw(), current_win().raw()) };
+        let bufref = BufRef::of(cur);
+        trigger_undo_ftplugin(cur, current_win());
         // It is as if this buffer were deleted. Watch out for autocommands
         // that change curbuf: if that happens, allocate a new buffer anyway.
         // SAFETY: a live buffer.
@@ -298,7 +285,7 @@ pub unsafe extern "C" fn buflist_new(
             return ptr::null_mut();
         }
         // When the buffer was deleted, allocate a new one instead.
-        reusable = still_valid(&mut bufref).then_some(cur);
+        reusable = bufref.get();
     }
     // Upstream re-reads `curbuf` here: `buf_freeall`'s autocommands may have
     // made another buffer current, and then this one is not reusable after
@@ -314,15 +301,13 @@ pub unsafe extern "C" fn buflist_new(
         buf.b_sfname = dup(sfname);
     }
 
-    // SAFETY: a live buffer.
-    unsafe { clear_wininfo(buf.raw()) };
+    clear_wininfo(buf);
     let mut entry = Entry::new();
     WinInfos::of(&mut buf).push(entry);
 
     if reused_curbuf {
         // Delete the local variables and the rest.
-        // SAFETY: a live buffer.
-        unsafe { free_buffer_stuff(buf.raw(), kBffInitChangedtick as c_int) };
+        free_buffer_stuff(buf, kBffInitChangedtick as c_int);
         // Init the options.
         buf.b_p_initialized = false;
         copy_options_into(buf, BCO_ENTER as c_int);
@@ -398,11 +383,8 @@ fn reuse_entry(mut buf: Buf, lnum: linenr_T, flags: c_int) -> *mut buf_T {
     }
     if flags & BLN_LISTED as c_int != 0 && buf.b_p_bl == 0 {
         buf.b_p_bl = true_0;
-        let mut bufref = bufref_of(buf);
-        if flags & BLN_DUMMY as c_int == 0
-            && fire_buf_event(EVENT_BUFADD, buf)
-            && !still_valid(&mut bufref)
-        {
+        let bufref = BufRef::of(buf);
+        if flags & BLN_DUMMY as c_int == 0 && fire_buf_event(EVENT_BUFADD, buf) && !bufref.valid() {
             return ptr::null_mut();
         }
     }
@@ -420,8 +402,7 @@ fn new_buffer() -> Buf {
     let (vars, scope_var) = (buf.b_vars, &raw mut buf.b_bufvar);
     // SAFETY: the dictionary just allocated and the buffer's scope variable.
     unsafe { init_var_dict(vars, scope_var, VAR_SCOPE) };
-    // SAFETY: a live buffer.
-    unsafe { buf_init_changedtick(buf.raw()) };
+    buf_init_changedtick(buf);
     buf
 }
 
@@ -445,9 +426,9 @@ fn append_to_list(mut buf: Buf) {
     buf.handle = top_file_num.get() as handle_T;
     top_file_num.set(top_file_num.get() + 1);
     let (handle, raw) = (buf.handle as c_int, buf.raw().cast::<c_void>() as ptr_t);
-    // SAFETY: the borrow of the handle map lasts only for the insertion,
-    // which does not re-enter.
-    buffer_handles.with_mut(|map| unsafe { map_put_int_ptr_t(map, handle, raw) });
+    // The borrow of the handle map lasts only for the insertion, which does
+    // not re-enter.
+    buffer_handles.with_mut(|map| map_put_int_ptr_t(map, handle, raw));
     if top_file_num.get() < 0 {
         // Wrap around; this may cause duplicates.
         err(tr(c"W14: Warning: List of file names overflow"));
@@ -486,14 +467,11 @@ fn reset_update_subscribers(buf: &mut Buf) {
 /// split the window and re-use the one empty buffer, which may result in
 /// unexpectedly losing that buffer.
 fn announce_new_buffer(buf: Buf, flags: c_int) -> bool {
-    let mut bufref = bufref_of(buf);
-    if fire_buf_event(EVENT_BUFNEW, buf) && !still_valid(&mut bufref) {
+    let bufref = BufRef::of(buf);
+    if fire_buf_event(EVENT_BUFNEW, buf) && !bufref.valid() {
         return false;
     }
-    if flags & BLN_LISTED as c_int != 0
-        && fire_buf_event(EVENT_BUFADD, buf)
-        && !still_valid(&mut bufref)
-    {
+    if flags & BLN_LISTED as c_int != 0 && fire_buf_event(EVENT_BUFADD, buf) && !bufref.valid() {
         return false;
     }
     // Autocommands may abort script processing.

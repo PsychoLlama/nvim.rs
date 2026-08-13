@@ -18,26 +18,64 @@
 //! | [`type`] | the `'buftype'` predicates |
 //!
 //! What stays here is the flag alphabet the twelve share (`DOBUF_*`,
-//! `BLN_*`, `BFA_*`, `READ_*`), the `bufref_T` layer every one of them uses to
+//! `BLN_*`, `BFA_*`, `READ_*`), the [`BufRef`] layer every one of them uses to
 //! survive an autocommand (`set_bufref`, `bufref_valid`, `buf_valid`), the
-//! `b:changedtick` and buffer-number counters, and `buf_meta_total`, the
-//! marktree accessor `buffer.h` had as a `static inline`.
+//! `b:changedtick` and buffer-number counters, `buf_meta_total` -- the
+//! marktree accessor `buffer.h` had as a `static inline` -- and the shims for
+//! the neighbours more than one child reaches.
+//!
+//! # Surviving an autocommand
+//!
+//! Half of this family fires autocommands (`BufEnter`, `BufLeave`,
+//! `BufUnload`, `BufDelete`, `BufWipeout`, ...) and **an autocommand may free
+//! the buffer in hand**.  The C's answer is `bufref_T`: remember the pointer
+//! together with the buffer number and a global free counter, and ask again
+//! afterwards.  [`BufRef`] is that answer as a value type -- [`BufRef::get`]
+//! re-validates and only then hands a [`Buf`] back, so a stale pointer cannot
+//! be dereferenced by accident.  The discipline the whole family follows is
+//! **hold no [`Buf`], [`Win`] or borrow across a call that can fire an
+//! autocommand**: take one from a `BufRef` or from the `curbuf`/`curwin`
+//! cells on each side of it instead.
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::iter;
+use core::ptr;
+
+use crate::src::nvim::autocmd::{
+    apply_autocmds, apply_autocmds_retval, block_autocmds, unblock_autocmds,
+};
+use crate::src::nvim::change::unchanged;
+use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::ex_eval::aborting;
+use crate::src::nvim::fold::{clearFolding, foldUpdateAll};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{c_bytes, lastbuf};
+use crate::src::nvim::main::{c_bytes, curbuf, curwin, firstbuf, lastbuf};
 use crate::src::nvim::map::{map_put_ref_int_ptr_t, mh_get_int};
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::memline::ml_delete;
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::normal::end_visual_mode;
+use crate::src::nvim::option::shortmess;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::syntax::reset_synblock;
 use crate::src::nvim::types::{
     AlignTextPos, CdCause, ExtmarkOp, Map_int_ptr_t, MarkAdjustMode, MarkTree, MetaIndex,
     OptValType, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
-    cmd_addr_T, dobuf_action_values, dobuf_start_values, etype_T, getf_values, ptr_t, uint32_t,
-    varnumber_T, win_T,
+    cmd_addr_T, dobuf_action_values, dobuf_start_values, etype_T, event_T, exarg_T, getf_values,
+    linenr_T, ptr_t, uint32_t, varnumber_T,
 };
-use crate::src::nvim::window::{window_layout_lock, window_layout_unlock};
+use crate::src::nvim::undo::bufIsChanged;
+use crate::src::nvim::window::{
+    check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock,
+};
+use crate::src::nvim::winlayer::{Buf, Win};
 
 // The carve of the transpiled module; see each child's docs.
 mod all;
@@ -177,35 +215,28 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
+
+/// `pmap_get(int)`: the value stored for `key`, or the map's init value.
 #[inline]
-unsafe extern "C" fn map_get_int_ptr_t(
-    mut map: *mut Map_int_ptr_t,
-    mut key: ::core::ffi::c_int,
-) -> ptr_t {
-    unsafe {
-        let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-        return if k == MH_TOMBSTONE as uint32_t {
-            value_init_ptr_t.get()
-        } else {
-            *(*map).values.offset(k as isize)
-        };
+fn map_get_int_ptr_t(map: &mut Map_int_ptr_t, key: c_int) -> ptr_t {
+    // SAFETY: the set is the map's own, and its key type is `int`.
+    let k: uint32_t = unsafe { mh_get_int(&raw mut map.set, key) };
+    if k == MH_TOMBSTONE as uint32_t {
+        return value_init_ptr_t.get();
     }
+    // SAFETY: a slot the set answered for is a slot of the value array.
+    unsafe { *map.values.add(k as usize) }
 }
+
+/// `pmap_put(int)`: store `value` under `key`.
 #[inline]
-unsafe extern "C" fn map_put_int_ptr_t(
-    mut map: *mut Map_int_ptr_t,
-    mut key: ::core::ffi::c_int,
-    mut value: ptr_t,
-) {
-    unsafe {
-        let mut val: *mut ptr_t = map_put_ref_int_ptr_t(
-            map,
-            key,
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_int>(),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        *val = value;
-    }
+fn map_put_int_ptr_t(map: &mut Map_int_ptr_t, key: c_int, value: ptr_t) {
+    // SAFETY: the map is live; a null `oldkey`/`new` means "do not report".
+    let val: *mut ptr_t = unsafe {
+        map_put_ref_int_ptr_t(map, key, ::core::ptr::null_mut(), ::core::ptr::null_mut())
+    };
+    // SAFETY: `map_put_ref` answers a live slot of the value array.
+    unsafe { *val = value };
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
@@ -219,58 +250,124 @@ static e_attempt_to_delete_buffer_that_is_in_use_str: [::core::ffi::c_char; 52] 
     c_bytes(b"E937: Attempt to delete a buffer that is in use: %s\0");
 static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
-unsafe extern "C" fn trigger_undo_ftplugin(mut buf: *mut buf_T, mut win: *mut win_T) {
-    unsafe {
-        let win_was_locked: bool = (*win).w_locked;
-        window_layout_lock();
-        (*buf).b_locked += 1;
-        (*win).w_locked = true_0 != 0;
-        do_cmdline_cmd(c"if exists('b:undo_ftplugin') | exe b:undo_ftplugin | endif".as_ptr());
-        (*buf).b_locked -= 1;
-        (*win).w_locked = win_was_locked;
-        window_layout_unlock();
-    }
+
+/// Run `b:undo_ftplugin` with the buffer and the window pinned, so that what
+/// it does cannot close either out from under the caller.
+pub(crate) fn trigger_undo_ftplugin(mut buf: Buf, mut win: Win) {
+    let win_was_locked: bool = win.w_locked;
+    layout_lock();
+    buf.b_locked += 1;
+    win.w_locked = true;
+    // b:undo_ftplugin may be set, undo it
+    run_cmdline(c"if exists('b:undo_ftplugin') | exe b:undo_ftplugin | endif");
+    buf.b_locked -= 1;
+    win.w_locked = win_was_locked;
+    layout_unlock();
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn set_bufref(mut bufref: *mut bufref_T, mut buf: *mut buf_T) {
-    unsafe {
-        (*bufref).br_buf = buf;
-        (*bufref).br_fnum = if buf.is_null() {
-            0 as ::core::ffi::c_int
+
+// ---------------------------------------------------------------------------
+// A buffer that survives an autocommand
+
+/// A remembered buffer, as the C's `bufref_T`: the pointer, the buffer number
+/// it had, and the value of the global free counter when it was taken.
+///
+/// Autocommands fired anywhere in this family may free the buffer in hand, so
+/// nothing may be dereferenced across one. Take a `BufRef` before the call and
+/// [`get`](BufRef::get) it afterwards: it re-validates and only then answers a
+/// [`Buf`]. The buffer number is part of the check because a `:bwipe` followed
+/// by a `:new` can hand the same allocation back as a *different* buffer.
+#[derive(Clone, Copy)]
+pub(crate) struct BufRef(bufref_T);
+
+impl BufRef {
+    /// `set_bufref()`: remember `buf`, which may be null.
+    pub(crate) fn of_raw(buf: *mut buf_T) -> Self {
+        // SAFETY: a null pointer is never dereferenced below.
+        let fnum = if buf.is_null() {
+            0
         } else {
-            (*buf).handle as ::core::ffi::c_int
+            unsafe { Buf::new(buf) }.handle as c_int
         };
-        (*bufref).br_buf_free_count = buf_free_count.get();
+        BufRef(bufref_T {
+            br_buf: buf,
+            br_fnum: fnum,
+            br_buf_free_count: buf_free_count.get(),
+        })
+    }
+
+    /// `set_bufref()` over a buffer the caller already holds.
+    pub(crate) fn of(buf: Buf) -> Self {
+        Self::of_raw(buf.raw())
+    }
+
+    /// `bufref_valid()`: whether the remembered buffer is still the buffer it
+    /// was. Only walks the list when the free counter has moved.
+    pub(crate) fn valid(self) -> bool {
+        self.0.br_buf_free_count == buf_free_count.get()
+            || buffers_backwards().any(|b| b.raw() == self.0.br_buf && b.handle == self.0.br_fnum)
+    }
+
+    /// The buffer, if it is still the one that was remembered.
+    ///
+    /// Null answers `None`, which `bufref_valid()` does not: the C's callers
+    /// test the pointer separately wherever it can be null.
+    pub(crate) fn get(self) -> Option<Buf> {
+        let buf = self.0.br_buf;
+        // SAFETY: `valid` found this pointer in the buffer list, or the free
+        // counter has not moved since it was taken from a live one.
+        (!buf.is_null() && self.valid()).then(|| unsafe { Buf::new(buf) })
+    }
+
+    /// The remembered pointer, valid or not -- for the two comparisons the C
+    /// makes without dereferencing it.
+    pub(crate) fn raw(self) -> *mut buf_T {
+        self.0.br_buf
     }
 }
+
+/// Store `buf` in `bufref` and set the free count.
+///
+/// # Safety
+/// `bufref` must be a writable `bufref_T`, and `buf` a live buffer or null.
+pub unsafe extern "C" fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T) {
+    // SAFETY: the caller's promise -- a slot to write.
+    unsafe { *bufref = BufRef::of_raw(buf).0 };
+}
+
+/// Whether `bufref` still names the buffer it was set to.
+///
+/// # Safety
+/// `bufref` must be a `bufref_T` [`set_bufref`] has filled in.
+pub unsafe extern "C" fn bufref_valid(bufref: *mut bufref_T) -> bool {
+    // SAFETY: the caller's promise -- a filled-in reference.
+    BufRef(unsafe { *bufref }).valid()
+}
+
+/// Whether `buf` is still in the buffer list.
+///
+/// Can be slow when there are many buffers; prefer [`BufRef`].
+///
+/// # Safety
+/// `buf` may be any pointer, live or dangling: it is only ever compared.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn bufref_valid(mut bufref: *mut bufref_T) -> bool {
-    unsafe {
-        return if (*bufref).br_buf_free_count == buf_free_count.get() {
-            true_0
-        } else {
-            (buf_valid((*bufref).br_buf) as ::core::ffi::c_int != 0
-                && (*bufref).br_fnum == (*(*bufref).br_buf).handle)
-                as ::core::ffi::c_int
-        } != 0;
-    }
+pub unsafe extern "C" fn buf_valid(buf: *mut buf_T) -> bool {
+    // Assume that we more often have a recent buffer, start with the last one.
+    !buf.is_null() && buffers_backwards().any(|b| b.raw() == buf)
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn buf_valid(mut buf: *mut buf_T) -> bool {
-    unsafe {
-        if buf.is_null() {
-            return false_0 != 0;
-        }
-        let mut bp: *mut buf_T = lastbuf.get();
-        while !bp.is_null() {
-            if bp == buf {
-                return true_0 != 0;
-            }
-            bp = (*bp).b_prev;
-        }
-        return false_0 != 0;
-    }
+
+/// The buffer list from the end -- `FOR_ALL_BUFFERS_BACKWARDS`. Lazy, as the
+/// macro is.
+pub(crate) fn buffers_backwards() -> impl Iterator<Item = Buf> {
+    let mut next = lastbuf.get();
+    iter::from_fn(move || {
+        // SAFETY: `lastbuf`, and every `b_prev` reached from it, is a live
+        // buffer or null.
+        let buf = (!next.is_null()).then(|| unsafe { Buf::new(next) })?;
+        next = buf.b_prev;
+        Some(buf)
+    })
 }
+
 static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static lasticon: GlobalCell<*mut ::core::ffi::c_char> =
@@ -294,4 +391,238 @@ pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 /// root of its marktree. `buffer.h` had this as a `static inline`.
 pub unsafe fn buf_meta_total(b: *const buf_T, m: MetaIndex) -> uint32_t {
     unsafe { (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize] }
+}
+
+// ---------------------------------------------------------------------------
+// The neighbours more than one child reaches
+//
+// Every one of these is still an `unsafe extern "C" fn` over raw pointers, and
+// all any of them needs is a live buffer or window -- which `Buf`/`Win` carry.
+// One wrapper per *exit* therefore makes each call site ordinary code, and the
+// cost is the number of distinct neighbours rather than the number of calls.
+// They live here rather than in a child because each is reached from two or
+// more of them, and a child sees its parent's private items.
+
+/// `_()`.
+pub(crate) fn tr(msg: &CStr) -> *mut c_char {
+    tr_raw(msg.as_ptr())
+}
+
+/// `_()` over a pointer, for the message statics `main.rs` holds as byte
+/// arrays.
+pub(crate) fn tr_raw(msg: *const c_char) -> *mut c_char {
+    // SAFETY: a NUL-terminated literal or message static.
+    unsafe { gettext(msg) }
+}
+
+/// `emsg(_(msg))`.
+pub(crate) fn err(msg: &CStr) {
+    err_raw(tr(msg));
+}
+
+/// `emsg()` over an already translated message.
+pub(crate) fn err_raw(msg: *mut c_char) {
+    // SAFETY: a NUL-terminated message.
+    unsafe { emsg(msg) };
+}
+
+/// The current buffer. Null only between `open_buffer()` freeing the last one
+/// and finding a replacement, which is why [`current_buf`] exists beside it.
+pub(crate) fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit, bar that one window.
+    unsafe { Buf::current() }
+}
+
+/// The current buffer, or `None` where the C tests `curbuf != NULL`.
+pub(crate) fn current_buf() -> Option<Buf> {
+    let buf = curbuf.get();
+    // SAFETY: non-null, hence live.
+    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+}
+
+/// The current window. Null only while exiting, which is why
+/// [`current_win`] exists beside it.
+pub(crate) fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The current window, or `None` where the C tests `curwin != NULL`.
+pub(crate) fn current_win() -> Option<Win> {
+    let win = curwin.get();
+    // SAFETY: non-null, hence live.
+    (!win.is_null()).then(|| unsafe { Win::new(win) })
+}
+
+/// The first buffer in the list, `None` before any exists.
+pub(crate) fn first_buf() -> Option<Buf> {
+    let buf = firstbuf.get();
+    // SAFETY: non-null, hence live.
+    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+}
+
+/// The last buffer in the list, `None` before any exists.
+pub(crate) fn last_buf() -> Option<Buf> {
+    let buf = lastbuf.get();
+    // SAFETY: non-null, hence live.
+    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+}
+
+/// `apply_autocmds(event, NULL, NULL, false, buf)`.
+///
+/// **Everything the caller holds may be stale afterwards** -- take a
+/// [`BufRef`] first.
+pub(crate) fn fire(event: event_T, mut buf: Buf) -> bool {
+    // SAFETY: a live buffer; both name arguments are optional.
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf.raw()) }
+}
+
+/// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
+/// the unload/delete/wipe events take.
+pub(crate) fn fire_named(event: event_T, mut buf: Buf) -> bool {
+    let (name, raw) = (buf.b_fname, buf.raw());
+    // SAFETY: a live buffer and its own file name.
+    unsafe { apply_autocmds(event, name, name, false, raw) }
+}
+
+/// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
+/// into `FAIL`.
+pub(crate) fn fire_retval(event: event_T, mut buf: Buf, retval: &mut c_int) {
+    let (none, raw) = (ptr::null_mut(), buf.raw());
+    // SAFETY: a live buffer and a local to report through.
+    unsafe { apply_autocmds_retval(event, none, none, false, raw, retval) };
+}
+
+pub(crate) fn block_autocmds_now() {
+    // SAFETY: paired with `unblock_autocmds_now` by every caller.
+    unsafe { block_autocmds() };
+}
+
+pub(crate) fn unblock_autocmds_now() {
+    // SAFETY: paired with `block_autocmds_now` by every caller.
+    unsafe { unblock_autocmds() };
+}
+
+/// Whether an error, interrupt or exception is unwinding the script.
+pub(crate) fn aborting_now() -> bool {
+    aborting()
+}
+
+/// `xfree()`.
+pub(crate) fn free<T>(p: *mut T) {
+    // SAFETY: an owned allocation or null.
+    unsafe { xfree(p.cast::<c_void>()) };
+}
+
+/// `XFREE_CLEAR()` over a slot holding an owned allocation.
+pub(crate) fn xfree_clear<T>(slot: &mut *mut T) {
+    free(*slot);
+    *slot = ptr::null_mut();
+}
+
+/// `ml_delete()` on the current buffer.
+pub(crate) fn delete_line(lnum: linenr_T) {
+    // SAFETY: the caller has checked the line is in the current buffer.
+    unsafe { ml_delete(lnum) };
+}
+
+/// `unchanged()`: clear `'modified'`, and with `ff` the file-format flags.
+pub(crate) fn unchanged_now(mut buf: Buf, ff: bool, always_inc_changedtick: bool) {
+    // SAFETY: a live buffer.
+    unsafe { unchanged(buf.raw(), ff, always_inc_changedtick) };
+}
+
+pub(crate) fn end_visual() {
+    end_visual_mode();
+}
+
+/// `close_windows()`: close every window showing `buf`.
+///
+/// Fires `WinClosed`/`BufWinLeave`; everything held may be stale afterwards.
+pub(crate) fn close_all_windows(mut buf: Buf, keep_curwin: bool) {
+    // SAFETY: a live buffer.
+    unsafe { close_windows(buf.raw(), keep_curwin) };
+}
+
+/// Re-check `'colorcolumn'` after `'textwidth'` changed under the window.
+pub(crate) fn recheck_colorcolumn(mut win: Win) {
+    // SAFETY: a live window; a null pattern means "the option's own value".
+    unsafe { check_colorcolumn(ptr::null_mut(), win.raw()) };
+}
+
+pub(crate) fn clear_folding(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { clearFolding(win.raw()) };
+}
+
+pub(crate) fn fold_update_all(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { foldUpdateAll(win.raw()) };
+}
+
+/// Drop the window's own syntax state (`:ownsyntax`).
+pub(crate) fn reset_syntax(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { reset_synblock(win.raw()) };
+}
+
+/// Remember the cursor position in the jump list.
+pub(crate) fn set_pcmark() {
+    // SAFETY: reads the current window and buffer, both set.
+    unsafe { setpcmark() };
+}
+
+/// Whether `buf` has unsaved changes.
+pub(crate) fn is_changed(mut buf: Buf) -> bool {
+    // SAFETY: a live buffer.
+    unsafe { bufIsChanged(buf.raw()) }
+}
+
+/// Whether `'shortmess'` contains `flag`.
+pub(crate) fn short_mess(flag: c_int) -> bool {
+    shortmess(flag)
+}
+
+/// `semsg(fmt, n)`, for the three errors that name a buffer number.
+pub(crate) fn err_num<T>(fmt: *mut c_char, n: T) {
+    // SAFETY: a translated format taking one number, and the number.
+    let _: bool = unsafe { semsg_c!(fmt, n) };
+}
+
+/// `do_ecmd()`: edit `fname` (or buffer `fnum`) in `win`.
+///
+/// Re-enters the whole edit path; nothing held survives it.
+pub(crate) fn edit_file(
+    fnum: c_int,
+    ffname: *mut c_char,
+    sfname: *mut c_char,
+    eap: *mut exarg_T,
+    newlnum: linenr_T,
+    flags: c_int,
+    mut win: Win,
+) -> c_int {
+    let raw = win.raw();
+    // SAFETY: a live window, and the caller's own arguments passed on.
+    unsafe { do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, raw) }
+}
+
+fn layout_lock() {
+    // SAFETY: paired with `layout_unlock` below.
+    unsafe { window_layout_lock() };
+}
+
+fn layout_unlock() {
+    // SAFETY: paired with `layout_lock` above.
+    unsafe { window_layout_unlock() };
+}
+
+fn run_cmdline(cmd: &CStr) {
+    // SAFETY: a NUL-terminated command line.
+    unsafe { do_cmdline_cmd(cmd.as_ptr()) };
+}
+
+/// `buf_free_count++`: one more buffer has been freed, so every [`BufRef`]
+/// taken before now has to walk the list to answer.
+pub(crate) fn note_buffer_freed() {
+    buf_free_count.set(buf_free_count.get() + 1);
 }

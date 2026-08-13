@@ -357,10 +357,10 @@ pub unsafe extern "C" fn buflist_findnr(nr: c_int) -> *mut buf_T {
     } else {
         nr
     };
-    // SAFETY: the borrow of the handle map lasts only for the lookup, which
-    // does not re-enter; the answer is a live buffer or null.
+    // The borrow of the handle map lasts only for the lookup, which does not
+    // re-enter; the answer is a live buffer or null.
     buffer_handles
-        .with_mut(|map| unsafe { map_get_int_ptr_t(map, nr) })
+        .with_mut(|map| map_get_int_ptr_t(map, nr))
         .cast::<buf_T>()
 }
 
