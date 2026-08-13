@@ -9,7 +9,6 @@
     "crates/nvim/src/nvim/eval/expr/index.rs": 1,
     "crates/nvim/src/nvim/eval/lval.rs": 1,
     "crates/nvim/src/nvim/ex_docmd/cmdline.rs": 1,
-    "crates/nvim/src/nvim/extmark/del.rs": 1,
     "crates/nvim/src/nvim/main/remote.rs": 1,
     "crates/nvim/src/nvim/memfile.rs": 1,
     "crates/nvim/src/nvim/memline/block0.rs": 1,

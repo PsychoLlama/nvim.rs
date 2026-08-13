@@ -11,212 +11,141 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
-use crate::src::nvim::decoration::{buf_decor_remove, decor_free, decor_state_invalidate};
+use core::ffi::c_int;
+use core::mem;
+
+use super::{
+    Buf, decor_remove, free_decor, invalidate_decor_state, itr_current, itr_get, itr_next, ns_del,
+    ns_destroy, ns_ref, tree_del_itr, tree_lookup, tree_lookup_ns,
+};
 use crate::src::nvim::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
+use crate::src::nvim::types::{MTKey, MarkTreeIter, buf_T, colnr_T, uint32_t};
 
-use crate::src::nvim::map::{map_del_uint32_t_uint32_t, map_ref_uint32_t_uint32_t};
-use crate::src::nvim::marktree::{
-    marktree_del_itr, marktree_itr_current, marktree_itr_get, marktree_itr_next, marktree_lookup,
-    marktree_lookup_ns,
-};
-use crate::src::nvim::memory::xfree;
-use crate::src::nvim::types::{
-    MTKey, MTNode, MTPos, Map_uint32_t_uint32_t, MarkTree, MarkTreeIter,
-    MarkTreeIter_s as C2Rust_Unnamed_14, buf_T, colnr_T, int32_t, uint32_t, uint64_t,
-};
-
-pub unsafe extern "C" fn extmark_del_id(
-    mut buf: *mut buf_T,
-    mut ns_id: uint32_t,
-    mut id: uint32_t,
-) -> bool {
-    unsafe {
-        let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
-            pos: MTPos {
-                row: 0 as int32_t,
-                col: 0,
-            },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }];
-        let mut key: MTKey = marktree_lookup_ns(
-            &raw mut (*buf).b_marktree as *mut MarkTree,
-            ns_id,
-            id,
-            false_0 != 0,
-            &raw mut itr as *mut MarkTreeIter,
-        );
-        if key.id != 0 {
-            extmark_del(buf, &raw mut itr as *mut MarkTreeIter, key, false_0 != 0);
-        }
-        return key.id > 0 as uint32_t;
-    }
+/// Remove the extmark `id` of namespace `ns_id`.
+///
+/// Answers false when there is no such mark.
+pub unsafe extern "C" fn extmark_del_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> bool {
+    // SAFETY: the caller's promise -- a live buffer.
+    del_id(unsafe { Buf::new(buf) }, ns_id, id)
 }
 
+/// [`extmark_del_id`] for the callers that already hold a [`Buf`].
+pub(crate) fn del_id(mut buf: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
+    let mut itr = MarkTreeIter::default();
+    let key = tree_lookup_ns(buf.marktree(), ns_id, id, false, Some(&mut itr));
+    if key.id != 0 {
+        del(buf, &mut itr, key, false);
+    }
+    key.id > 0
+}
+
+/// Remove the (possibly paired) extmark `key` that `itr` is on.
 pub unsafe extern "C" fn extmark_del(
-    mut buf: *mut buf_T,
-    mut itr: *mut MarkTreeIter,
-    mut key: MTKey,
-    mut restore: bool,
+    buf: *mut buf_T,
+    itr: *mut MarkTreeIter,
+    key: MTKey,
+    restore: bool,
 ) {
-    unsafe {
-        debug_assert!(key.pos.row >= 0 as int32_t, "key.pos.row >= 0");
-        let mut key2: MTKey = key;
-        let mut other: uint64_t = marktree_del_itr(
-            &raw mut (*buf).b_marktree as *mut MarkTree,
-            itr,
-            false_0 != 0,
-        );
-        if other != 0 {
-            key2 = marktree_lookup(&raw mut (*buf).b_marktree as *mut MarkTree, other, itr);
-            debug_assert!(key2.pos.row >= 0 as int32_t, "key2.pos.row >= 0");
-            marktree_del_itr(
-                &raw mut (*buf).b_marktree as *mut MarkTree,
-                itr,
-                false_0 != 0,
-            );
-            if restore {
-                marktree_itr_get(
-                    &raw mut (*buf).b_marktree as *mut MarkTree,
-                    key.pos.row,
-                    key.pos.col as ::core::ffi::c_int,
-                    itr,
-                );
-            }
-        }
-        if mt_decor_any(key) {
-            if mt_invalid(key) {
-                decor_free(mt_decor(key));
-            } else {
-                if mt_end(key) {
-                    let mut k: MTKey = key;
-                    key = key2;
-                    key2 = k;
-                }
-                buf_decor_remove(
-                    buf,
-                    key.pos.row as ::core::ffi::c_int,
-                    key2.pos.row as ::core::ffi::c_int,
-                    key.pos.col as ::core::ffi::c_int,
-                    mt_decor(key),
-                    true_0 != 0,
-                );
-            }
-        }
-        decor_state_invalidate(buf);
-    }
+    // SAFETY: the caller's promise -- a live buffer and an iterator
+    // positioned in its marktree, both of which outlive the call.
+    del(unsafe { Buf::new(buf) }, unsafe { &mut *itr }, key, restore);
 }
 
-pub unsafe extern "C" fn extmark_clear(
-    mut buf: *mut buf_T,
-    mut ns_id: uint32_t,
-    mut l_row: ::core::ffi::c_int,
-    mut l_col: colnr_T,
-    mut u_row: ::core::ffi::c_int,
-    mut u_col: colnr_T,
-) -> bool {
-    unsafe {
-        if (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
-            .set
-            .h
-            .size
-            == 0
-        {
-            return false_0 != 0;
+/// [`extmark_del`] for the callers that already hold the two.
+pub(crate) fn del(mut buf: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
+    debug_assert!(key.pos.row >= 0, "key.pos.row >= 0");
+
+    let mut key2 = key;
+    let other = tree_del_itr(buf.marktree(), itr, false);
+    if other != 0 {
+        key2 = tree_lookup(buf.marktree(), other, Some(itr));
+        debug_assert!(key2.pos.row >= 0, "key2.pos.row >= 0");
+        tree_del_itr(buf.marktree(), itr, false);
+        if restore {
+            itr_get(buf.marktree(), key.pos.row, key.pos.col, itr);
         }
-        let mut all_ns: bool = ns_id == 0 as uint32_t;
-        let mut ns: *mut uint32_t = ::core::ptr::null_mut::<uint32_t>();
-        if !all_ns {
-            ns = map_ref_uint32_t_uint32_t(
-                &raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t,
-                ns_id,
-                ::core::ptr::null_mut::<*mut uint32_t>(),
-            );
-            if ns.is_null() {
-                return false_0 != 0;
-            }
-        }
-        let mut marks_cleared_any: bool = false_0 != 0;
-        let mut marks_cleared_all: bool =
-            l_row == 0 as ::core::ffi::c_int && l_col == 0 as ::core::ffi::c_int;
-        let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
-            pos: MTPos {
-                row: 0 as int32_t,
-                col: 0,
-            },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }];
-        marktree_itr_get(
-            &raw mut (*buf).b_marktree as *mut MarkTree,
-            l_row as int32_t,
-            l_col as ::core::ffi::c_int,
-            &raw mut itr as *mut MarkTreeIter,
-        );
-        loop {
-            let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
-            if mark.pos.row < 0 as int32_t
-                || mark.pos.row > u_row as int32_t
-                || mark.pos.row == u_row as int32_t && mark.pos.col > u_col as int32_t
-            {
-                if mark.pos.row >= 0 as int32_t {
-                    marks_cleared_all = false_0 != 0;
-                }
-                break;
-            } else if mark.ns == ns_id || all_ns as ::core::ffi::c_int != 0 {
-                marks_cleared_any = true_0 != 0;
-                extmark_del(buf, &raw mut itr as *mut MarkTreeIter, mark, true_0 != 0);
-            } else {
-                marktree_itr_next(
-                    &raw mut (*buf).b_marktree as *mut MarkTree,
-                    &raw mut itr as *mut MarkTreeIter,
-                );
-            }
-        }
-        if marks_cleared_all {
-            if all_ns {
-                xfree(
-                    (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
-                        .set
-                        .keys as *mut ::core::ffi::c_void,
-                );
-                xfree(
-                    (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
-                        .set
-                        .h
-                        .hash as *mut ::core::ffi::c_void,
-                );
-                (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set = SET_INIT;
-                let mut ptr_: *mut *mut ::core::ffi::c_void =
-                    &raw mut (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).values
-                        as *mut *mut ::core::ffi::c_void;
-                xfree(*ptr_);
-                *ptr_ = NULL;
-                let _ = *ptr_;
-                *(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t) = MAP_INIT;
-            } else {
-                map_del_uint32_t_uint32_t(
-                    &raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t,
-                    ns_id,
-                    ::core::ptr::null_mut::<uint32_t>(),
-                );
-            }
-        }
-        if marks_cleared_any {
-            decor_state_invalidate(buf);
-        }
-        return marks_cleared_any;
     }
+
+    if mt_decor_any(key) {
+        if mt_invalid(key) {
+            free_decor(mt_decor(key));
+        } else {
+            if mt_end(key) {
+                mem::swap(&mut key, &mut key2);
+            }
+            decor_remove(
+                buf,
+                key.pos.row,
+                key2.pos.row,
+                key.pos.col,
+                mt_decor(key),
+                true,
+            );
+        }
+    }
+
+    invalidate_decor_state(buf);
+
+    // TODO(bfredl): delete it from the current undo header, opportunistically?
+}
+
+/// Free every mark of namespace `ns_id` (or of every namespace, when it is 0)
+/// between two positions.
+pub unsafe extern "C" fn extmark_clear(
+    buf: *mut buf_T,
+    ns_id: uint32_t,
+    l_row: c_int,
+    l_col: colnr_T,
+    u_row: c_int,
+    u_col: colnr_T,
+) -> bool {
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    if buf.extmark_ns().set.h.size == 0 {
+        return false;
+    }
+
+    let all_ns = ns_id == 0;
+    if !all_ns && ns_ref(buf.extmark_ns(), ns_id).is_null() {
+        // Nothing to do.
+        return false;
+    }
+
+    let mut marks_cleared_any = false;
+    let mut marks_cleared_all = l_row == 0 && l_col == 0;
+
+    let mut itr = MarkTreeIter::default();
+    itr_get(buf.marktree(), l_row, l_col, &mut itr);
+    loop {
+        let mark = itr_current(&mut itr);
+        if mark.pos.row < 0
+            || mark.pos.row > u_row
+            || (mark.pos.row == u_row && mark.pos.col > u_col)
+        {
+            if mark.pos.row >= 0 {
+                marks_cleared_all = false;
+            }
+            break;
+        }
+        if mark.ns == ns_id || all_ns {
+            marks_cleared_any = true;
+            del(buf, &mut itr, mark, true);
+        } else {
+            itr_next(buf.marktree(), &mut itr);
+        }
+    }
+
+    if marks_cleared_all {
+        if all_ns {
+            ns_destroy(buf.extmark_ns());
+        } else {
+            ns_del(buf.extmark_ns(), ns_id);
+        }
+    }
+
+    if marks_cleared_any {
+        invalidate_decor_state(buf);
+    }
+
+    marks_cleared_any
 }

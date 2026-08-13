@@ -11,248 +11,142 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
-use crate::src::nvim::decoration::{decor_free, decor_type_flags};
-use crate::src::nvim::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_paired, mtpair_from};
+use core::ffi::c_int;
 
-use crate::src::nvim::marktree::{
-    marktree_clear, marktree_get_alt, marktree_itr_current, marktree_itr_get, marktree_itr_get_ext,
-    marktree_itr_get_overlap, marktree_itr_next, marktree_itr_step_overlap, marktree_lookup_ns,
+use super::{
+    Buf, KV_INITIAL_VALUE, free_decor, itr_current, itr_get, itr_get_ext, itr_get_overlap,
+    itr_next, itr_step_overlap, kExtmarkNone, kv_push, ns_destroy, tree_clear, tree_get_alt,
+    tree_lookup_ns, type_flags,
 };
-use crate::src::nvim::memory::{xfree, xrealloc};
-use crate::src::nvim::os::libc::memset;
+use crate::src::nvim::marktree::key::{
+    MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_paired, mtpair_from,
+};
 use crate::src::nvim::types::{
-    DecorHighlightInline, DecorInlineData, ExtmarkInfoArray, ExtmarkType, MTKey, MTNode, MTPair,
-    MTPos, Map_uint32_t_uint32_t, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14,
-    buf_T, colnr_T, int32_t, int64_t, size_t, uint16_t, uint32_t,
+    ExtmarkInfoArray, ExtmarkType, MTPair, MTPos, MarkTreeIter, buf_T, colnr_T, int64_t, uint32_t,
 };
 
+/// Every mark between two positions, the ones at either end included.
+///
+/// `amount` is the caller's limit, `INT64_MAX` for "all of them".
 pub unsafe extern "C" fn extmark_get(
-    mut buf: *mut buf_T,
-    mut ns_id: uint32_t,
-    mut l_row: ::core::ffi::c_int,
-    mut l_col: colnr_T,
-    mut u_row: ::core::ffi::c_int,
-    mut u_col: colnr_T,
-    mut amount: int64_t,
-    mut type_filter: ExtmarkType,
-    mut overlap: bool,
+    buf: *mut buf_T,
+    ns_id: uint32_t,
+    l_row: c_int,
+    l_col: colnr_T,
+    u_row: c_int,
+    u_col: colnr_T,
+    amount: int64_t,
+    type_filter: ExtmarkType,
+    overlap: bool,
 ) -> ExtmarkInfoArray {
-    unsafe {
-        let mut array: ExtmarkInfoArray = KV_INITIAL_VALUE;
-        let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1];
-        if overlap {
-            if !marktree_itr_get_overlap(
-                &raw mut (*buf).b_marktree as *mut MarkTree,
-                l_row,
-                l_col as ::core::ffi::c_int,
-                &raw mut itr as *mut MarkTreeIter,
-            ) {
-                return array;
-            }
-            while (array.size as int64_t) < amount {
-                let mut pair: MTPair = MTPair {
-                    start: MTKey {
-                        pos: MTPos { row: 0, col: 0 },
-                        ns: 0,
-                        id: 0,
-                        flags: 0,
-                        decor_data: DecorInlineData {
-                            hl: DecorHighlightInline {
-                                flags: 0,
-                                priority: 0,
-                                hl_id: 0,
-                                conceal_char: 0,
-                            },
-                        },
-                    },
-                    end_pos: MTPos { row: 0, col: 0 },
-                    end_right_gravity: false,
-                };
-                if !marktree_itr_step_overlap(
-                    &raw mut (*buf).b_marktree as *mut MarkTree,
-                    &raw mut itr as *mut MarkTreeIter,
-                    &raw mut pair,
-                ) {
-                    break;
-                }
-                push_mark(&raw mut array, ns_id, type_filter, pair);
-            }
-        } else {
-            marktree_itr_get_ext(
-                &raw mut (*buf).b_marktree as *mut MarkTree,
-                MTPos {
-                    row: l_row as int32_t,
-                    col: l_col as int32_t,
-                },
-                &raw mut itr as *mut MarkTreeIter,
-                false_0 != 0,
-                false_0 != 0,
-                ::core::ptr::null_mut::<MTPos>(),
-                ::core::ptr::null::<uint32_t>(),
-            );
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    let mut array: ExtmarkInfoArray = KV_INITIAL_VALUE;
+    let mut itr = MarkTreeIter::default();
+
+    if overlap {
+        // Every mark overlapping the start position.
+        if !itr_get_overlap(buf.marktree(), l_row, l_col, &mut itr) {
+            return array;
         }
+
         while (array.size as int64_t) < amount {
-            let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
-            if mark.pos.row < 0 as int32_t
-                || mark.pos.row > u_row as int32_t
-                || mark.pos.row == u_row as int32_t && mark.pos.col > u_col as int32_t
-            {
+            // Invalid until `itr_step_overlap` writes it, which it does
+            // whenever it answers true (upstream leaves it uninitialised).
+            let mut pair = mtpair_from(MT_INVALID_KEY, MT_INVALID_KEY);
+            if !itr_step_overlap(buf.marktree(), &mut itr, &mut pair) {
                 break;
             }
-            if !mt_end(mark) {
-                let mut end: MTKey = marktree_get_alt(
-                    &raw mut (*buf).b_marktree as *mut MarkTree,
-                    mark,
-                    ::core::ptr::null_mut::<MarkTreeIter>(),
-                );
-                push_mark(&raw mut array, ns_id, type_filter, mtpair_from(mark, end));
-            }
-            marktree_itr_next(
-                &raw mut (*buf).b_marktree as *mut MarkTree,
-                &raw mut itr as *mut MarkTreeIter,
-            );
+            push_mark(&mut array, ns_id, type_filter, pair);
         }
-        return array;
+    } else {
+        // Every mark beginning at or after the start position.
+        let start = MTPos {
+            row: l_row,
+            col: l_col,
+        };
+        itr_get_ext(buf.marktree(), start, &mut itr);
     }
+
+    while (array.size as int64_t) < amount {
+        let mark = itr_current(&mut itr);
+        if mark.pos.row < 0
+            || mark.pos.row > u_row
+            || (mark.pos.row == u_row && mark.pos.col > u_col)
+        {
+            break;
+        }
+        if !mt_end(mark) {
+            let end = tree_get_alt(buf.marktree(), mark, None);
+            push_mark(&mut array, ns_id, type_filter, mtpair_from(mark, end));
+        }
+        itr_next(buf.marktree(), &mut itr);
+    }
+    array
 }
 
-unsafe extern "C" fn push_mark(
-    mut array: *mut ExtmarkInfoArray,
-    mut ns_id: uint32_t,
-    mut type_filter: ExtmarkType,
-    mut mark: MTPair,
+/// Add `mark` to the answer, unless a namespace or decoration-type filter
+/// rules it out. `ns_id` is `UINT32_MAX` for "any namespace".
+fn push_mark(
+    array: &mut ExtmarkInfoArray,
+    ns_id: uint32_t,
+    type_filter: ExtmarkType,
+    mark: MTPair,
 ) {
-    unsafe {
-        if !(ns_id == UINT32_MAX as uint32_t || mark.start.ns == ns_id) {
+    if !(ns_id == uint32_t::MAX || mark.start.ns == ns_id) {
+        return;
+    }
+    if type_filter != kExtmarkNone {
+        if !mt_decor_any(mark.start) {
             return;
         }
-        if type_filter as ::core::ffi::c_uint
-            != kExtmarkNone as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            if !mt_decor_any(mark.start) {
-                return;
-            }
-            let mut type_flags: uint16_t = decor_type_flags(mt_decor(mark.start));
-            if type_flags as ::core::ffi::c_uint & type_filter as ::core::ffi::c_uint == 0 {
-                return;
-            }
+        if type_flags(mt_decor(mark.start)) as ExtmarkType & type_filter == 0 {
+            return;
         }
-        if (*array).size == (*array).capacity {
-            (*array).capacity = if (*array).capacity != 0 {
-                (*array).capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            (*array).items = xrealloc(
-                (*array).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<MTPair>().wrapping_mul((*array).capacity),
-            ) as *mut MTPair;
-        } else {
-        };
-        let c2rust_fresh0 = (*array).size;
-        (*array).size = (*array).size.wrapping_add(1);
-        *(*array).items.add(c2rust_fresh0) = mark;
     }
+
+    kv_push(&mut array.size, &mut array.capacity, &mut array.items, mark);
 }
 
-pub unsafe extern "C" fn extmark_from_id(
-    mut buf: *mut buf_T,
-    mut ns_id: uint32_t,
-    mut id: uint32_t,
-) -> MTPair {
-    unsafe {
-        let mut mark: MTKey = marktree_lookup_ns(
-            &raw mut (*buf).b_marktree as *mut MarkTree,
-            ns_id,
-            id,
-            false_0 != 0,
-            ::core::ptr::null_mut::<MarkTreeIter>(),
-        );
-        if mark.id == 0 {
-            return mtpair_from(mark, mark);
-        }
-        debug_assert!(mark.pos.row >= 0 as int32_t, "mark.pos.row >= 0");
-        let mut end: MTKey = marktree_get_alt(
-            &raw mut (*buf).b_marktree as *mut MarkTree,
-            mark,
-            ::core::ptr::null_mut::<MarkTreeIter>(),
-        );
-        return mtpair_from(mark, end);
+/// The extmark `id` of namespace `ns_id`, paired with its end position.
+pub unsafe extern "C" fn extmark_from_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> MTPair {
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    let mark = tree_lookup_ns(buf.marktree(), ns_id, id, false, None);
+    if mark.id == 0 {
+        // Invalid.
+        return mtpair_from(mark, mark);
     }
+    debug_assert!(mark.pos.row >= 0, "mark.pos.row >= 0");
+    let end = tree_get_alt(buf.marktree(), mark, None);
+
+    mtpair_from(mark, end)
 }
 
-pub unsafe extern "C" fn extmark_free_all(mut buf: *mut buf_T) {
-    unsafe {
-        let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
-            pos: MTPos {
-                row: 0 as int32_t,
-                col: 0,
-            },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }];
-        marktree_itr_get(
-            &raw mut (*buf).b_marktree as *mut MarkTree,
-            0 as int32_t,
-            0 as ::core::ffi::c_int,
-            &raw mut itr as *mut MarkTreeIter,
-        );
-        loop {
-            let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
-            if mark.pos.row < 0 as int32_t {
-                break;
-            }
-            if !(mt_paired(mark) as ::core::ffi::c_int != 0
-                && mt_end(mark) as ::core::ffi::c_int != 0)
-            {
-                decor_free(mt_decor(mark));
-            }
-            marktree_itr_next(
-                &raw mut (*buf).b_marktree as *mut MarkTree,
-                &raw mut itr as *mut MarkTreeIter,
-            );
+/// Release every mark of a buffer, as it is freed.
+pub unsafe extern "C" fn extmark_free_all(buf: *mut buf_T) {
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    let mut itr = MarkTreeIter::default();
+    itr_get(buf.marktree(), 0, 0, &mut itr);
+    loop {
+        let mark = itr_current(&mut itr);
+        if mark.pos.row < 0 {
+            break;
         }
-        marktree_clear(&raw mut (*buf).b_marktree as *mut MarkTree);
-        (*buf).b_signcols.max = 0 as ::core::ffi::c_int;
-        memset(
-            &raw mut (*buf).b_signcols.count as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<[::core::ffi::c_int; 9]>(),
-        );
-        xfree(
-            (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
-                .set
-                .keys as *mut ::core::ffi::c_void,
-        );
-        xfree(
-            (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
-                .set
-                .h
-                .hash as *mut ::core::ffi::c_void,
-        );
-        (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set = SET_INIT;
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).values
-                as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-        *(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t) = MAP_INIT;
+
+        // Don't free mark.decor twice for a paired mark.
+        if !(mt_paired(mark) && mt_end(mark)) {
+            free_decor(mt_decor(mark));
+        }
+
+        itr_next(buf.marktree(), &mut itr);
     }
+
+    tree_clear(buf.marktree());
+
+    buf.b_signcols.max = 0;
+    buf.b_signcols.count = [0; 9];
+
+    ns_destroy(buf.extmark_ns());
 }
