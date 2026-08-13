@@ -8,9 +8,17 @@
 //! [`set_buflisted`] the `'buflisted'` half, and the `changedtick` pair the
 //! `b:changedtick` counter every change bumps.
 //!
+//! Every predicate here is a raw entry point taking `buf_T *`, and most
+//! accept null for "no buffer", so each begins by turning its pointer into
+//! an `Option<Buf>` -- one unchecked line apiece, after which the body is
+//! ordinary field access through [`Buf`]'s `Deref`.
+//!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
 #[allow(unused_imports)]
 use super::*;
@@ -25,237 +33,299 @@ use crate::src::nvim::quickfix::qf_stack_get_bufnr;
 use crate::src::nvim::types::{
     CMOD_HIDE, VAR_FIXED, VAR_NUMBER, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T, varnumber_T,
 };
+use crate::src::nvim::winlayer::Buf;
 
-pub unsafe extern "C" fn bt_prompt(mut buf: *mut buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'p' as ::core::ffi::c_int;
-    }
+// ---------------------------------------------------------------------------
+// The neighbours, wrapped
+
+/// `_()` over a pointer: the message catalogue's translation of a string
+/// that is a literal here or was set once at startup.
+fn tr_raw(msg: *const c_char) -> *mut c_char {
+    // SAFETY: every caller passes a NUL-terminated literal or one of the two
+    // quickfix titles, which `qf_init` sets from the catalogue at startup.
+    unsafe { gettext(msg) }
 }
 
-#[unsafe(no_mangle)]
+/// `_()`.
+fn tr(msg: &CStr) -> *mut c_char {
+    tr_raw(msg.as_ptr())
+}
+
+/// The buffer behind a pointer the caller has promised is null or live.
+///
+/// # Safety
+/// `buf` is null or points at a live buffer.
+unsafe fn opt_buf(buf: *const buf_T) -> Option<Buf> {
+    // SAFETY: the caller's promise. Nothing below writes through the result,
+    // so dropping `const` costs nothing.
+    (!buf.is_null()).then(|| unsafe { Buf::new(buf.cast_mut()) })
+}
+
+/// The first byte of `'buftype'`, or NUL when there is no buffer. Option
+/// variables are never null, so upstream indexes `b_p_bt` unconditionally.
+fn buftype(buf: Option<Buf>) -> c_char {
+    // SAFETY: an option variable holds a NUL-terminated string, so its
+    // first byte is there to be read.
+    buf.map_or(0, |b| unsafe { *b.b_p_bt })
+}
+
+/// `b_p_bt[2]`, which upstream reads only once `b_p_bt[0] == 'n'` has said
+/// there are at least three bytes ("nofile" or "nowrite") to read.
+fn buftype_2(buf: Buf) -> c_char {
+    // SAFETY: a `'buftype'` beginning with 'n' is one of those two words.
+    unsafe { *buf.b_p_bt.add(2) }
+}
+
+fn has_terminal(buf: Buf) -> bool {
+    !buf.terminal.is_null()
+}
+
+/// One byte of `'buftype'`, as a `char`.
+const fn ch(byte: u8) -> c_char {
+    byte as c_char
+}
+
+// ---------------------------------------------------------------------------
+// The 'buftype' predicates
+
+pub unsafe extern "C" fn bt_prompt(buf: *mut buf_T) -> bool {
+    // SAFETY: the caller's promise -- null or a live buffer.
+    buftype(unsafe { opt_buf(buf) }) == ch(b'p')
+}
+
+/// [`bt_prompt`] over a buffer already wrapped.
+fn is_prompt(buf: Buf) -> bool {
+    buftype(Some(buf)) == ch(b'p')
+}
+
 pub unsafe extern "C" fn bt_help(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null() && (*buf).b_help as ::core::ffi::c_int != 0;
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    unsafe { opt_buf(buf) }.is_some_and(|b| b.b_help)
 }
 
-#[unsafe(no_mangle)]
+/// A normal buffer: `'buftype'` is empty.
 pub unsafe extern "C" fn bt_normal(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == NUL;
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    let buf = unsafe { opt_buf(buf) };
+    buf.is_some() && buftype(buf) == 0
 }
 
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn bt_quickfix(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'q' as ::core::ffi::c_int;
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    buftype(unsafe { opt_buf(buf) }) == ch(b'q')
+}
+
+/// [`bt_quickfix`] over a buffer already wrapped, for the callers in this
+/// file.
+fn is_quickfix(buf: Buf) -> bool {
+    buftype(Some(buf)) == ch(b'q')
 }
 
 pub unsafe extern "C" fn bt_terminal(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 't' as ::core::ffi::c_int;
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    buftype(unsafe { opt_buf(buf) }) == ch(b't')
 }
 
+/// A "nofile", "acwrite", terminal or "prompt" buffer: its name may not be a
+/// file name, at least not one to write to.
 pub unsafe extern "C" fn bt_nofilename(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && (*(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'n' as ::core::ffi::c_int
-                && *(*buf).b_p_bt.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'f' as ::core::ffi::c_int
-                || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'a' as ::core::ffi::c_int
-                || !(*buf).terminal.is_null()
-                || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'p' as ::core::ffi::c_int);
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    unsafe { opt_buf(buf) }.is_some_and(is_nofilename)
 }
 
+/// [`bt_nofilename`] over a buffer already wrapped.
+fn is_nofilename(buf: Buf) -> bool {
+    let bt = buftype(Some(buf));
+    bt == ch(b'n') && buftype_2(buf) == ch(b'f')
+        || bt == ch(b'a')
+        || has_terminal(buf)
+        || bt == ch(b'p')
+}
+
+/// A "nofile", "quickfix", terminal or "prompt" buffer: not to be read from
+/// a file.
 pub(crate) unsafe extern "C" fn bt_nofileread(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && (*(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'n' as ::core::ffi::c_int
-                && *(*buf).b_p_bt.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'f' as ::core::ffi::c_int
-                || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 't' as ::core::ffi::c_int
-                || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'q' as ::core::ffi::c_int
-                || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'p' as ::core::ffi::c_int);
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    let Some(buf) = (unsafe { opt_buf(buf) }) else {
+        return false;
+    };
+    let bt = buftype(Some(buf));
+    bt == ch(b'n') && buftype_2(buf) == ch(b'f')
+        || bt == ch(b't')
+        || bt == ch(b'q')
+        || bt == ch(b'p')
 }
 
 pub unsafe extern "C" fn bt_nofile(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'n' as ::core::ffi::c_int
-            && *(*buf).b_p_bt.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'f' as ::core::ffi::c_int;
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    let Some(buf) = (unsafe { opt_buf(buf) }) else {
+        return false;
+    };
+    buftype(Some(buf)) == ch(b'n') && buftype_2(buf) == ch(b'f')
 }
 
+/// A "nowrite", "nofile", terminal or "prompt" buffer.
 pub unsafe extern "C" fn bt_dontwrite(buf: *const buf_T) -> bool {
-    unsafe {
-        return !buf.is_null()
-            && (*(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'n' as ::core::ffi::c_int
-                || !(*buf).terminal.is_null()
-                || *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'p' as ::core::ffi::c_int);
-    }
+    // SAFETY: the caller's promise -- null or a live buffer.
+    unsafe { opt_buf(buf) }.is_some_and(is_dontwrite)
+}
+
+/// [`bt_dontwrite`] over a buffer already wrapped.
+fn is_dontwrite(buf: Buf) -> bool {
+    let bt = buftype(Some(buf));
+    bt == ch(b'n') || has_terminal(buf) || bt == ch(b'p')
 }
 
 pub unsafe extern "C" fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
-    unsafe {
-        if bt_dontwrite(buf) {
-            emsg(gettext(
-                c"E382: Cannot write, 'buftype' option is set".as_ptr(),
-            ));
-            return true_0 != 0;
-        }
-        return false_0 != 0;
+    // SAFETY: the caller's promise -- null or a live buffer.
+    if unsafe { opt_buf(buf) }.is_some_and(is_dontwrite) {
+        // SAFETY: a translated message literal.
+        unsafe { emsg(tr(c"E382: Cannot write, 'buftype' option is set")) };
+        return true;
     }
+    false
 }
 
+/// Whether the buffer should be hidden rather than unloaded, according to
+/// `'bufhidden'`, `'hidden'` and `:hide`.
 pub unsafe extern "C" fn buf_hide(buf: *const buf_T) -> bool {
-    unsafe {
-        match *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            117 | 119 | 100 => return false_0 != 0,
-            104 => return true_0 != 0,
-            _ => {}
-        }
-        return p_hid.get() != 0
-            || (*cmdmod.ptr()).cmod_flags & CMOD_HIDE as ::core::ffi::c_int != 0;
+    // SAFETY: the caller's promise -- a live buffer. Upstream dereferences
+    // this one without a null test.
+    let bufhidden = unsafe { *(*buf).b_p_bh };
+    match bufhidden as u8 {
+        b'u' | b'w' | b'd' => return false, // "unload", "wipe", "delete"
+        b'h' => return true,                // "hide"
+        _ => {}
     }
+    p_hid.get() != 0 || cmdmod.with(|m| m.cmod_flags) & CMOD_HIDE as c_int != 0
 }
 
-pub unsafe extern "C" fn buf_spname(mut buf: *mut buf_T) -> *mut ::core::ffi::c_char {
-    unsafe {
-        if bt_quickfix(buf) {
-            if (*buf).handle == qf_stack_get_bufnr() {
-                return gettext(msg_qflist.get());
-            }
-            return gettext(msg_loclist.get());
+// ---------------------------------------------------------------------------
+// The name a buffer without a file is shown under
+
+/// The name to display for a special buffer, or null for an ordinary one.
+pub unsafe extern "C" fn buf_spname(buf: *mut buf_T) -> *mut c_char {
+    // SAFETY: the caller's promise -- a live buffer.
+    let b = unsafe { Buf::new(buf) };
+    if is_quickfix(b) {
+        if b.handle == qf_stack_get_bufnr() {
+            return tr_raw(msg_qflist.get());
         }
-        if bt_nofilename(buf) {
-            if !(*buf).b_fname.is_null() {
-                return (*buf).b_fname;
-            }
-            if buf == cmdwin_buf.get() {
-                return gettext(c"[Command Line]".as_ptr());
-            }
-            if bt_prompt(buf) {
-                return gettext(c"[Prompt]".as_ptr());
-            }
-            return gettext(c"[Scratch]".as_ptr());
-        }
-        if (*buf).b_fname.is_null() {
-            return buf_get_fname(buf);
-        }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        return tr_raw(msg_loclist.get());
     }
+    if is_nofilename(b) {
+        if !b.b_fname.is_null() {
+            return b.b_fname;
+        }
+        if buf == cmdwin_buf.get() {
+            return tr(c"[Command Line]");
+        }
+        if is_prompt(b) {
+            return tr(c"[Prompt]");
+        }
+        return tr(c"[Scratch]");
+    }
+    if b.b_fname.is_null() {
+        return tr(c"[No Name]");
+    }
+    ptr::null_mut()
 }
 
-pub unsafe extern "C" fn buf_get_fname(mut buf: *const buf_T) -> *mut ::core::ffi::c_char {
-    unsafe {
-        if (*buf).b_fname.is_null() {
-            return gettext(c"[No Name]".as_ptr());
-        }
-        return (*buf).b_fname;
+pub unsafe extern "C" fn buf_get_fname(buf: *const buf_T) -> *mut c_char {
+    // SAFETY: the caller's promise -- a live buffer.
+    let name = unsafe { (*buf).b_fname };
+    if name.is_null() {
+        return tr(c"[No Name]");
     }
+    name
 }
 
-pub unsafe extern "C" fn set_buflisted(mut on: ::core::ffi::c_int) {
-    unsafe {
-        if on == (*curbuf.get()).b_p_bl {
-            return;
-        }
-        (*curbuf.get()).b_p_bl = on;
-        if on != 0 {
-            apply_autocmds(
-                EVENT_BUFADD,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                curbuf.get(),
-            );
-        } else {
-            apply_autocmds(
-                EVENT_BUFDELETE,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                curbuf.get(),
-            );
-        };
+// ---------------------------------------------------------------------------
+// 'buflisted', emptiness and b:changedtick
+
+/// Set `'buflisted'` for the current buffer, firing `BufAdd`/`BufDelete` if
+/// it changed.
+pub unsafe extern "C" fn set_buflisted(on: c_int) {
+    // SAFETY: `curbuf` is set from startup to exit.
+    let mut buf = unsafe { Buf::current() };
+    if on == buf.b_p_bl {
+        return;
     }
+    buf.b_p_bl = on;
+    let event = if on != 0 {
+        EVENT_BUFADD
+    } else {
+        EVENT_BUFDELETE
+    };
+    let raw = curbuf.get();
+    // SAFETY: a live buffer; both name arguments are optional.
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) };
 }
 
-pub unsafe extern "C" fn buf_is_empty(mut buf: *mut buf_T) -> bool {
-    unsafe {
-        return (*buf).b_ml.ml_line_count == 1 as linenr_T
-            && *ml_get_buf(buf, 1 as linenr_T) as ::core::ffi::c_int == NUL;
-    }
+pub unsafe extern "C" fn buf_is_empty(buf: *mut buf_T) -> bool {
+    // SAFETY: the caller's promise -- a live buffer.
+    let b = unsafe { Buf::new(buf) };
+    // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
+    // NUL-terminated line.
+    b.b_ml.ml_line_count == 1 as linenr_T && unsafe { *ml_get_buf(buf, 1 as linenr_T) } == 0
 }
 
 pub unsafe extern "C" fn buf_inc_changedtick(buf: *mut buf_T) {
-    unsafe {
-        buf_set_changedtick(buf, buf_get_changedtick(buf) + 1 as varnumber_T);
+    // SAFETY: the caller's promise -- a live buffer.
+    unsafe { buf_set_changedtick(buf, buf_get_changedtick(buf) + 1 as varnumber_T) };
+}
+
+/// Set `b:changedtick`, telling any `b:` watcher about the change.
+pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T) {
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut b = unsafe { Buf::new(buf) };
+    let mut old_val: typval_T = b.changedtick_di.di_tv;
+    check_changedtick_item(b);
+    b.changedtick_di.di_tv.vval.v_number = changedtick;
+    // SAFETY: `b_vars` is the buffer's own dictionary, allocated with it.
+    if unsafe { tv_dict_is_watched(b.b_vars) } {
+        b.b_locked += 1;
+        let vars = b.b_vars;
+        let key = (&raw mut b.changedtick_di.di_key).cast::<c_char>();
+        let new = &raw mut b.changedtick_di.di_tv;
+        // SAFETY: the buffer's own dictionary and its `changedtick` entry,
+        // plus a local holding the value it had.
+        unsafe { tv_dict_watcher_notify(vars, key, new, &raw mut old_val) };
+        b.b_locked -= 1;
     }
 }
 
-pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T) {
-    unsafe {
-        let mut old_val: typval_T = (*buf).changedtick_di.di_tv;
-        let changedtick_di: *mut dictitem_T = tv_dict_find(
-            (*buf).b_vars,
-            c"changedtick".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1_usize) as ptrdiff_t,
-        );
-        debug_assert!(!changedtick_di.is_null(), "changedtick_di != NULL");
-        assert!(
-            (*changedtick_di).di_tv.v_type as ::core::ffi::c_uint
-                == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint,
-            "changedtick_di->di_tv.v_type == VAR_NUMBER"
-        );
-        assert!(
-            (*changedtick_di).di_tv.v_lock as ::core::ffi::c_uint
-                == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint,
-            "changedtick_di->di_tv.v_lock == VAR_FIXED"
-        );
-        assert!(
-            (*changedtick_di).di_flags as ::core::ffi::c_int
-                == DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int,
-            "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
-        );
-        debug_assert!(
-            changedtick_di == &raw mut (*buf).changedtick_di as *mut dictitem_T,
-            "changedtick_di == (dictitem_T *)&buf->changedtick_di"
-        );
-        (*buf).changedtick_di.di_tv.vval.v_number = changedtick;
-        if tv_dict_is_watched((*buf).b_vars) {
-            (*buf).b_locked += 1;
-            tv_dict_watcher_notify(
-                (*buf).b_vars,
-                &raw mut (*buf).changedtick_di.di_key as *mut ::core::ffi::c_char,
-                &raw mut (*buf).changedtick_di.di_tv,
-                &raw mut old_val,
-            );
-            (*buf).b_locked -= 1;
-        }
+/// The consistency checks upstream wraps in `#ifndef NDEBUG`: `b:` must
+/// still hold the fixed, read-only number `buf_init_changedtick` put there.
+fn check_changedtick_item(buf: Buf) {
+    if !cfg!(debug_assertions) {
+        return;
     }
+    let vars = buf.b_vars;
+    let key = c"changedtick";
+    let keylen = key.count_bytes() as ptrdiff_t;
+    // SAFETY: the buffer's own dictionary; the key is a literal with its
+    // length, as `S_LEN` spells it.
+    let di = unsafe { tv_dict_find(vars, key.as_ptr(), keylen) };
+    assert!(!di.is_null(), "changedtick_di != NULL");
+    // SAFETY: non-null, and `tv_dict_find` answers a live dictionary item.
+    let item = unsafe { *di };
+    assert!(
+        item.di_tv.v_type == VAR_NUMBER as _,
+        "changedtick_di->di_tv.v_type == VAR_NUMBER"
+    );
+    assert!(
+        item.di_tv.v_lock == VAR_FIXED as _,
+        "changedtick_di->di_tv.v_lock == VAR_FIXED"
+    );
+    assert!(
+        item.di_flags as c_int == DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int,
+        "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
+    );
+    assert!(
+        di == (&raw const buf.changedtick_di)
+            .cast::<dictitem_T>()
+            .cast_mut(),
+        "changedtick_di == (dictitem_T *)&buf->changedtick_di"
+    );
 }

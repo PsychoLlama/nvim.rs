@@ -610,7 +610,6 @@ pub(crate) unsafe extern "C" fn free_buffer_stuff(
     }
 }
 
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wipe_buffer(mut buf: *mut buf_T, mut aucmd: bool) {
     unsafe {
         if !aucmd {

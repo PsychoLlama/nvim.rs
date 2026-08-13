@@ -7,265 +7,429 @@
 //! options and folds along with it, and [`buflist_findfmark`] answers the
 //! same question for a mark rather than a window.
 //!
+//! The entries live in `buf_T`'s `b_wininfo`, a `klib/kvec.h` vector of
+//! `WinInfo *`. [`WinInfos`] borrows its three parts -- which is a safe
+//! operation once the buffer pointer is a [`Buf`] -- and hands out a slice of
+//! [`Entry`], the pointer-to-one-entry newtype whose `Deref` makes every
+//! field access below ordinary code.
+//!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::c_void;
+use core::ops::{Deref, DerefMut};
+use core::ptr;
+use core::slice;
 
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::fold::{clearFolding, cloneFoldGrowArray, deleteFoldRecurse};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{curtab, curwin, firstwin, p_fdls};
+use crate::src::nvim::main::p_fdls;
 use crate::src::nvim::mark::mark_view_make;
 use crate::src::nvim::memory::{xcalloc, xrealloc};
 use crate::src::nvim::option::{clear_winopt, copy_winopt, didset_window_options};
-use crate::src::nvim::os::libc::memmove;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::types::{
-    AdditionalData, OptInt, Timestamp, WinInfo, buf_T, colnr_T, fmark_T, fmarkv_T, linenr_T, pos_T,
-    size_t, win_T,
+    AdditionalData, OptInt, Timestamp, WinInfo, buf_T, colnr_T, fmark_T, fmarkv_T, garray_T,
+    linenr_T, pos_T, size_t, win_T, winopt_T,
 };
 use crate::src::nvim::winfloat::win_set_minimal_style;
+use crate::src::nvim::winlayer::{Buf, Win, windows};
 
+// ---------------------------------------------------------------------------
+// One remembered position
+
+/// A `WinInfo` the caller has promised is live: one window's memory of one
+/// buffer.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub(crate) struct Entry(*mut WinInfo);
+
+impl Deref for Entry {
+    type Target = WinInfo;
+
+    fn deref(&self) -> &WinInfo {
+        // SAFETY: the constructor's promise -- a live entry.
+        unsafe { &*self.0 }
+    }
+}
+
+impl DerefMut for Entry {
+    fn deref_mut(&mut self) -> &mut WinInfo {
+        // SAFETY: the constructor's promise -- a live entry.
+        unsafe { &mut *self.0 }
+    }
+}
+
+impl Entry {
+    /// A fresh, zeroed entry, as upstream's `xcalloc(1, sizeof(WinInfo))`.
+    pub(crate) fn new() -> Self {
+        // SAFETY: `xcalloc` aborts rather than answering null, and a zeroed
+        // `WinInfo` is the initial value upstream gives one.
+        Entry(unsafe { xcalloc(1, size_of::<WinInfo>()) }.cast::<WinInfo>())
+    }
+
+    /// The window this entry belongs to, null for the entry `:badd` leaves.
+    fn window(self) -> *mut win_T {
+        self.wi_win
+    }
+
+    fn opt(&mut self) -> *mut winopt_T {
+        &raw mut self.wi_opt
+    }
+
+    fn folds(&mut self) -> *mut garray_T {
+        &raw mut self.wi_folds
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The vector they live in
+
+/// `buf->b_wininfo`, borrowed part by part. Most recently used first: every
+/// write puts its entry back at the front.
+pub(crate) struct WinInfos<'a> {
+    size: &'a mut size_t,
+    capacity: &'a mut size_t,
+    items: &'a mut *mut *mut WinInfo,
+}
+
+impl<'a> WinInfos<'a> {
+    pub(crate) fn of(buf: &'a mut buf_T) -> Self {
+        let kv = &mut buf.b_wininfo;
+        WinInfos {
+            size: &mut kv.size,
+            capacity: &mut kv.capacity,
+            items: &mut kv.items,
+        }
+    }
+
+    fn entries(&self) -> &[Entry] {
+        if *self.size == 0 {
+            return &[];
+        }
+        // SAFETY: a kvec's first `size` elements are initialised, and `items`
+        // is non-null once anything has been pushed. `Entry` is a transparent
+        // wrapper around the element type.
+        unsafe { slice::from_raw_parts(self.items.cast::<Entry>(), *self.size) }
+    }
+
+    fn entries_mut(&mut self) -> &mut [Entry] {
+        if *self.size == 0 {
+            return &mut [];
+        }
+        // SAFETY: as [`WinInfos::entries`].
+        unsafe { slice::from_raw_parts_mut(self.items.cast::<Entry>(), *self.size) }
+    }
+
+    /// `kv_shift(v, i, 1)`: drop entry `i`, closing the gap.
+    fn remove(&mut self, i: usize) {
+        self.entries_mut().copy_within(i + 1.., i);
+        *self.size -= 1;
+    }
+
+    /// `kv_resize` to make room for one more, when the array is full.
+    fn reserve_one(&mut self) {
+        if *self.size < *self.capacity {
+            return;
+        }
+        *self.capacity = if *self.capacity != 0 {
+            *self.capacity << 1
+        } else {
+            8
+        };
+        let bytes = size_of::<*mut WinInfo>() * *self.capacity;
+        let old = self.items.cast::<c_void>();
+        // SAFETY: `items` is null or this array's own allocation, and the
+        // new size counts the same element type.
+        *self.items = unsafe { xrealloc(old, bytes) }.cast::<*mut WinInfo>();
+    }
+
+    /// `kv_push`: append one entry.
+    pub(crate) fn push(&mut self, entry: Entry) {
+        self.reserve_one();
+        let n = *self.size;
+        // SAFETY: the array has room for `n + 1` entries, and slot `n` is
+        // the free one.
+        unsafe { self.items.cast::<Entry>().add(n).write(entry) };
+        *self.size = n + 1;
+    }
+
+    /// `kv_pushp` followed by the memmove that opens a slot at the front.
+    fn push_front(&mut self, entry: Entry) {
+        self.reserve_one();
+        let items = self.items.cast::<Entry>();
+        let n = *self.size;
+        // SAFETY: the array has room for `n + 1` entries and its first `n`
+        // are initialised; this shifts them up one, leaving slot 0 free.
+        unsafe { ptr::copy(items, items.add(1), n) };
+        // SAFETY: slot 0 is inside the allocation and no longer read.
+        unsafe { items.write(entry) };
+        *self.size = n + 1;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The window-option and fold neighbours, wrapped
+//
+// Each takes a pointer into a live `WinInfo` or a live window, which the
+// argument types below carry; they collapse when option.rs and fold.rs are
+// themselves rewritten.
+
+fn clear_options(opt: *mut winopt_T) {
+    // SAFETY: an option block inside a live entry or window.
+    unsafe { clear_winopt(opt) };
+}
+
+fn copy_options(from: *mut winopt_T, to: *mut winopt_T) {
+    // SAFETY: two option blocks inside a live entry or window.
+    unsafe { copy_winopt(from, to) };
+}
+
+fn delete_folds(folds: *mut garray_T) {
+    // SAFETY: a fold array inside a live entry.
+    unsafe { deleteFoldRecurse(folds) };
+}
+
+fn clone_folds(from: *mut garray_T, to: *mut garray_T) {
+    // SAFETY: two fold arrays inside a live entry or window.
+    unsafe { cloneFoldGrowArray(from, to) };
+}
+
+fn clear_folding(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { clearFolding(win.raw()) };
+}
+
+fn didset_options(mut win: Win) {
+    // SAFETY: a live window; `false` is upstream's `valid_cursor`.
+    unsafe { didset_window_options(win.raw(), false) };
+}
+
+fn set_minimal_style(mut win: Win) {
+    // SAFETY: a live window.
+    unsafe { win_set_minimal_style(win.raw()) };
+}
+
+/// The view (topline offset and skipcol) `win` would restore `pos` with.
+fn view_of(win: *mut win_T, pos: pos_T) -> fmarkv_T {
+    // SAFETY: a live window.
+    unsafe { mark_view_make(win, pos) }
+}
+
+fn current_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+// ---------------------------------------------------------------------------
+// Recording and finding a position
+
+/// Remember `lnum`/`col` (and, with `copy_options`, the window-local options
+/// and folds) as where `win` was in `buf`.
+///
+/// `win` may be null: `:badd` records a position for no window at all.
 pub unsafe extern "C" fn buflist_setfpos(
     buf: *mut buf_T,
     win: *mut win_T,
     mut lnum: linenr_T,
-    mut col: colnr_T,
-    mut copy_options: bool,
+    col: colnr_T,
+    copy_options: bool,
 ) {
-    unsafe {
-        let mut wip: *mut WinInfo = ::core::ptr::null_mut::<WinInfo>();
-        let mut i: size_t = 0;
-        i = 0 as size_t;
-        while i < (*buf).b_wininfo.size {
-            wip = *(*buf).b_wininfo.items.add(i);
-            if (*wip).wi_win == win {
-                break;
-            }
-            i = i.wrapping_add(1);
-        }
-        if i == (*buf).b_wininfo.size {
-            wip = xcalloc(1 as size_t, ::core::mem::size_of::<WinInfo>()) as *mut WinInfo;
-            (*wip).wi_win = win;
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    let mut list = WinInfos::of(&mut buf);
+
+    let found = list.entries().iter().position(|e| e.window() == win);
+    let mut entry = match found {
+        None => {
+            let mut entry = Entry::new();
+            entry.wi_win = win;
             if lnum == 0 as linenr_T {
-                lnum = 1 as ::core::ffi::c_int as linenr_T;
+                // Set lnum even when it is 0.
+                lnum = 1 as linenr_T;
             }
-        } else {
-            (*buf).b_wininfo.size = (*buf).b_wininfo.size.wrapping_sub(1 as size_t);
-            (i < (*buf).b_wininfo.size
-                && !memmove(
-                    (*buf).b_wininfo.items.add(i) as *mut ::core::ffi::c_void,
-                    (*buf).b_wininfo.items.add(i.wrapping_add(1 as size_t))
-                        as *const ::core::ffi::c_void,
-                    (*buf)
-                        .b_wininfo
-                        .size
-                        .wrapping_sub(i)
-                        .wrapping_mul(::core::mem::size_of::<*mut WinInfo>()),
-                )
-                .is_null()) as ::core::ffi::c_int;
-            if copy_options as ::core::ffi::c_int != 0
-                && (*wip).wi_optset as ::core::ffi::c_int != 0
-            {
-                clear_winopt(&raw mut (*wip).wi_opt);
-                deleteFoldRecurse(&raw mut (*wip).wi_folds);
-            }
+            entry
         }
-        if lnum != 0 as linenr_T {
-            (*wip).wi_mark.mark.lnum = lnum;
-            (*wip).wi_mark.mark.col = col;
-            if !win.is_null() {
-                (*wip).wi_mark.view = mark_view_make(win, (*wip).wi_mark.mark);
+        Some(i) => {
+            let mut entry = list.entries()[i];
+            list.remove(i);
+            if copy_options && entry.wi_optset {
+                clear_options(entry.opt());
+                delete_folds(entry.folds());
             }
+            entry
         }
+    };
+
+    if lnum != 0 as linenr_T {
+        entry.wi_mark.mark.lnum = lnum;
+        entry.wi_mark.mark.col = col;
         if !win.is_null() {
-            (*wip).wi_changelistidx = (*win).w_changelistidx;
+            entry.wi_mark.view = view_of(win, entry.wi_mark.mark);
         }
-        if copy_options as ::core::ffi::c_int != 0 && !win.is_null() {
-            copy_winopt(&raw mut (*win).w_onebuf_opt, &raw mut (*wip).wi_opt);
-            (*wip).wi_fold_manual = (*win).w_fold_manual;
-            cloneFoldGrowArray(&raw mut (*win).w_folds, &raw mut (*wip).wi_folds);
-            (*wip).wi_optset = true_0 != 0;
-        }
-        if (*buf).b_wininfo.size == (*buf).b_wininfo.capacity {
-            (*buf).b_wininfo.capacity = if (*buf).b_wininfo.capacity != 0 {
-                (*buf).b_wininfo.capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            (*buf).b_wininfo.items = xrealloc(
-                (*buf).b_wininfo.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<*mut WinInfo>().wrapping_mul((*buf).b_wininfo.capacity),
-            ) as *mut *mut WinInfo;
-        } else {
-        };
-        (*buf).b_wininfo.size = (*buf).b_wininfo.size.wrapping_add(1);
-        memmove(
-            (*buf)
-                .b_wininfo
-                .items
-                .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            (*buf)
-                .b_wininfo
-                .items
-                .offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-            (*buf)
-                .b_wininfo
-                .size
-                .wrapping_sub(1 as size_t)
-                .wrapping_mul(::core::mem::size_of::<*mut WinInfo>()),
-        );
-        *(*buf)
-            .b_wininfo
-            .items
-            .offset(0 as ::core::ffi::c_int as isize) = wip;
     }
+    if !win.is_null() {
+        // SAFETY: a live window, the caller having ruled out null.
+        entry.wi_changelistidx = unsafe { Win::new(win) }.w_changelistidx;
+    }
+    if copy_options && !win.is_null() {
+        // Save the window-specific option values.
+        // SAFETY: a live window.
+        let mut w = unsafe { Win::new(win) };
+        copy_options_from(&mut w, &mut entry);
+    }
+
+    list.push_front(entry);
 }
 
-unsafe extern "C" fn wininfo_other_tab_diff(mut wip: *mut WinInfo) -> bool {
-    unsafe {
-        if (*wip).wi_opt.wo_diff == 0 {
-            return false_0 != 0;
-        }
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wip).wi_win == wp {
-                return false_0 != 0;
-            }
-            wp = (*wp).w_next;
-        }
-        return true_0 != 0;
-    }
+/// The `copy_options` half of [`buflist_setfpos`]: `win`'s buffer-local
+/// window options and folds, saved into `entry`.
+fn copy_options_from(win: &mut Win, entry: &mut Entry) {
+    copy_options(&raw mut win.w_onebuf_opt, entry.opt());
+    entry.wi_fold_manual = win.w_fold_manual;
+    clone_folds(&raw mut win.w_folds, entry.folds());
+    entry.wi_optset = true;
 }
 
-unsafe extern "C" fn find_wininfo(
-    mut buf: *mut buf_T,
-    mut need_options: bool,
-    mut skip_diff_buffer: bool,
-) -> *mut WinInfo {
-    unsafe {
-        let mut i: size_t = 0 as size_t;
-        while i < (*buf).b_wininfo.size {
-            let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.add(i);
-            if (*wip).wi_win == curwin.get()
-                && (!skip_diff_buffer || !wininfo_other_tab_diff(wip))
-                && (!need_options || (*wip).wi_optset as ::core::ffi::c_int != 0)
-            {
-                return wip;
-            }
-            i = i.wrapping_add(1);
-        }
-        if skip_diff_buffer {
-            let mut i_0: size_t = 0 as size_t;
-            while i_0 < (*buf).b_wininfo.size {
-                let mut wip_0: *mut WinInfo = *(*buf).b_wininfo.items.add(i_0);
-                if !wininfo_other_tab_diff(wip_0)
+/// Whether `entry` has `'diff'` set and the diff belongs to another tab page
+/// -- a diff is local to a tab page.
+fn wininfo_other_tab_diff(entry: Entry) -> bool {
+    if entry.wi_opt.wo_diff == 0 {
+        return false;
+    }
+    // A window of the current tab page means the buffer was in diff mode
+    // here.
+    !windows().any(|wp| entry.window() == wp.raw())
+}
+
+/// The entry for the current window in `buf`, or failing that the most
+/// recently used one.
+///
+/// `need_options` skips entries whose options were never saved;
+/// `skip_diff_buffer` skips windows whose `'diff'` is another tab page's.
+fn find_wininfo(buf: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Option<Entry> {
+    let cur = current_win().raw();
+    let raw_buf = buf.raw();
+    let list = WinInfos::of(buf);
+    let found = list.entries().iter().find(|e| {
+        e.window() == cur
+            && (!skip_diff_buffer || !wininfo_other_tab_diff(**e))
+            && (!need_options || e.wi_optset)
+    });
+    if let Some(entry) = found {
+        return Some(*entry);
+    }
+
+    // No entry for curwin: use the first in the list that does not have
+    // 'diff' set in another tab page. With "need_options", skip entries
+    // whose options were never set -- unless the window is editing "buf",
+    // so that the options can be copied from the window itself.
+    if skip_diff_buffer {
+        return list
+            .entries()
+            .iter()
+            .find(|e| {
+                !wininfo_other_tab_diff(**e)
                     && (!need_options
-                        || (*wip_0).wi_optset as ::core::ffi::c_int != 0
-                        || !(*wip_0).wi_win.is_null() && (*(*wip_0).wi_win).w_buffer == buf)
-                {
-                    return wip_0;
-                }
-                i_0 = i_0.wrapping_add(1);
-            }
-        } else if (*buf).b_wininfo.size != 0 {
-            return *(*buf)
-                .b_wininfo
-                .items
-                .offset(0 as ::core::ffi::c_int as isize);
+                        || e.wi_optset
+                        || !e.window().is_null()
+                            // SAFETY: a live window.
+                            && unsafe { Win::new(e.window()) }.w_buffer == raw_buf)
+            })
+            .copied();
+    }
+    list.entries().first().copied()
+}
+
+/// Reset the current window's buffer-local options to the values last used
+/// in this window; failing that, to the most recently used window's; failing
+/// that, to the window's own global values.
+pub unsafe extern "C" fn get_winopts(buf: *mut buf_T) {
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    let mut cur = current_win();
+    clear_options(&raw mut cur.w_onebuf_opt);
+    clear_folding(cur);
+
+    let entry = find_wininfo(&mut buf, true, true);
+    // SAFETY: a live window, or null, which `Option` keeps out of the
+    // closure.
+    let entry_win =
+        entry.and_then(|e| (!e.window().is_null()).then(|| unsafe { Win::new(e.window()) }));
+
+    match (entry, entry_win) {
+        // The entry names another window still showing this buffer: copy
+        // from the window itself, so that its current values are used.
+        (Some(_), Some(mut wp))
+            if wp != cur && wp.w_buffer == buf.raw() && wp.w_config.style != kWinStyleMinimal =>
+        {
+            copy_options(&raw mut wp.w_onebuf_opt, &raw mut cur.w_onebuf_opt);
+            cur.w_fold_manual = wp.w_fold_manual;
+            cur.w_foldinvalid = true;
+            clone_folds(&raw mut wp.w_folds, &raw mut cur.w_folds);
         }
-        return ::core::ptr::null_mut::<WinInfo>();
+        (Some(mut entry), win)
+            if entry.wi_optset
+                && win.is_none_or(|wp| wp == cur || wp.w_config.style != kWinStyleMinimal) =>
+        {
+            copy_options(entry.opt(), &raw mut cur.w_onebuf_opt);
+            cur.w_fold_manual = entry.wi_fold_manual;
+            cur.w_foldinvalid = true;
+            clone_folds(entry.folds(), &raw mut cur.w_folds);
+        }
+        _ => {
+            copy_options(&raw mut cur.w_allbuf_opt, &raw mut cur.w_onebuf_opt);
+        }
+    }
+    if let Some(entry) = entry {
+        cur.w_changelistidx = entry.wi_changelistidx;
+    }
+
+    if cur.w_config.style == kWinStyleMinimal {
+        didset_options(cur);
+        set_minimal_style(cur);
+    }
+
+    // Set 'foldlevel' to 'foldlevelstart' if it's not negative.
+    if p_fdls.get() >= 0 as OptInt {
+        cur.w_onebuf_opt.wo_fdl = p_fdls.get();
+    }
+    didset_options(cur);
+}
+
+/// The mark for `buf` in the current window, or a pointer to `no_position`
+/// when there is none.
+pub unsafe extern "C" fn buflist_findfmark(buf: *mut buf_T) -> *mut fmark_T {
+    static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
+        mark: pos_T {
+            lnum: 1 as linenr_T,
+            col: 0 as colnr_T,
+            coladd: 0 as colnr_T,
+        },
+        fnum: 0,
+        timestamp: 0 as Timestamp,
+        view: fmarkv_T {
+            topline_offset: MAXLNUM as linenr_T,
+            skipcol: 0 as colnr_T,
+        },
+        additional_data: ptr::null_mut::<AdditionalData>(),
+    });
+    // SAFETY: the caller's promise -- a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    match find_wininfo(&mut buf, false, false) {
+        // The one place the shared "no position" is handed out: callers get
+        // a pointer to it exactly as they do to an entry's own mark, which
+        // is why it is a cell rather than a plain `static`.
+        None => no_position.ptr(),
+        Some(mut entry) => &raw mut entry.wi_mark,
     }
 }
 
-pub unsafe extern "C" fn get_winopts(mut buf: *mut buf_T) {
-    unsafe {
-        clear_winopt(&raw mut (*curwin.get()).w_onebuf_opt);
-        clearFolding(curwin.get());
-        let wip: *mut WinInfo = find_wininfo(buf, true_0 != 0, true_0 != 0);
-        if !wip.is_null()
-            && (*wip).wi_win != curwin.get()
-            && !(*wip).wi_win.is_null()
-            && (*(*wip).wi_win).w_buffer == buf
-            && (*(*wip).wi_win).w_config.style as ::core::ffi::c_uint
-                != kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut wp: *mut win_T = (*wip).wi_win;
-            copy_winopt(
-                &raw mut (*wp).w_onebuf_opt,
-                &raw mut (*curwin.get()).w_onebuf_opt,
-            );
-            (*curwin.get()).w_fold_manual = (*wp).w_fold_manual;
-            (*curwin.get()).w_foldinvalid = true_0 != 0;
-            cloneFoldGrowArray(&raw mut (*wp).w_folds, &raw mut (*curwin.get()).w_folds);
-        } else if !wip.is_null()
-            && (*wip).wi_optset as ::core::ffi::c_int != 0
-            && ((*wip).wi_win.is_null()
-                || (*wip).wi_win == curwin.get()
-                || (*(*wip).wi_win).w_config.style as ::core::ffi::c_uint
-                    != kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint)
-        {
-            copy_winopt(
-                &raw mut (*wip).wi_opt,
-                &raw mut (*curwin.get()).w_onebuf_opt,
-            );
-            (*curwin.get()).w_fold_manual = (*wip).wi_fold_manual;
-            (*curwin.get()).w_foldinvalid = true_0 != 0;
-            cloneFoldGrowArray(&raw mut (*wip).wi_folds, &raw mut (*curwin.get()).w_folds);
-        } else {
-            copy_winopt(
-                &raw mut (*curwin.get()).w_allbuf_opt,
-                &raw mut (*curwin.get()).w_onebuf_opt,
-            );
-        }
-        if !wip.is_null() {
-            (*curwin.get()).w_changelistidx = (*wip).wi_changelistidx;
-        }
-        if (*curwin.get()).w_config.style as ::core::ffi::c_uint
-            == kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            didset_window_options(curwin.get(), false_0 != 0);
-            win_set_minimal_style(curwin.get());
-        }
-        if p_fdls.get() >= 0 as OptInt {
-            (*curwin.get()).w_onebuf_opt.wo_fdl = p_fdls.get();
-        }
-        didset_window_options(curwin.get(), false_0 != 0);
-    }
-}
-
-pub unsafe extern "C" fn buflist_findfmark(mut buf: *mut buf_T) -> *mut fmark_T {
-    unsafe {
-        static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
-            mark: pos_T {
-                lnum: 1 as linenr_T,
-                col: 0 as colnr_T,
-                coladd: 0 as colnr_T,
-            },
-            fnum: 0 as ::core::ffi::c_int,
-            timestamp: 0 as Timestamp,
-            view: fmarkv_T {
-                topline_offset: MAXLNUM as ::core::ffi::c_int as linenr_T,
-                skipcol: 0 as colnr_T,
-            },
-            additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-        });
-        let wip: *mut WinInfo = find_wininfo(buf, false_0 != 0, false_0 != 0);
-        return if wip.is_null() {
-            no_position.ptr()
-        } else {
-            &raw mut (*wip).wi_mark
-        };
-    }
-}
-
-pub unsafe extern "C" fn buflist_findlnum(mut buf: *mut buf_T) -> linenr_T {
-    unsafe {
-        return (*buflist_findfmark(buf)).mark.lnum;
-    }
+pub unsafe extern "C" fn buflist_findlnum(buf: *mut buf_T) -> linenr_T {
+    // SAFETY: the caller's promise -- a live buffer; the answer is a live
+    // mark.
+    unsafe { (*buflist_findfmark(buf)).mark.lnum }
 }
