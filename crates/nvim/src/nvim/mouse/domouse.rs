@@ -599,11 +599,9 @@ fn tab_line_click(
             } else if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
                 // Double click opens a new page.
                 end_visual_mode();
-                // SAFETY: both walk the tab page list.
-                unsafe {
-                    tabpage_new();
-                    tabpage_move(if def.tabnr == 0 { 9999 } else { def.tabnr - 1 });
-                }
+                tabpage_new();
+                // SAFETY: walks the tab page list.
+                unsafe { tabpage_move(if def.tabnr == 0 { 9999 } else { def.tabnr - 1 }) };
             } else {
                 // Go to specified tab page, or next one if not clicking on a
                 // label.

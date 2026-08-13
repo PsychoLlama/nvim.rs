@@ -419,7 +419,7 @@ pub unsafe extern "C" fn win_count() -> ::core::ffi::c_int {
 ///
 /// The one-line bridge from [`win_valid`]'s pointer answer to a value the rest
 /// of the family may dereference.
-fn valid_win(win: *mut win_T) -> Option<Win> {
+pub(crate) fn valid_win(win: *mut win_T) -> Option<Win> {
     // SAFETY: the walk only produced windows that are on the list.
     windows().find(|wp| wp.raw() == win)
 }

@@ -667,8 +667,7 @@ fn goto_existing_window(mut buf: Buf) -> bool {
         return true;
     }
     if swb_flags.get() & kOptSwbFlagNewtab as c_int as u32 != 0 {
-        // SAFETY: opens a tab page over the globals.
-        unsafe { tabpage_new() };
+        tabpage_new();
     } else {
         let vertical = swb_flags.get() & kOptSwbFlagVsplit as c_int as u32 != 0;
         let flags = if vertical { WSP_VERT as c_int } else { 0 };
