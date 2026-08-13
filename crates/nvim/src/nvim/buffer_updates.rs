@@ -1,801 +1,762 @@
+//! The two lists of buffer-update subscribers, and the events sent to them.
+//!
+//! `nvim_buf_attach` records an RPC channel id in `buf->update_channels`
+//! or, called from Lua, a table of callbacks in `buf->update_callbacks`.
+//! Everything below walks one of those two `kvec_t`s: the channels get
+//! `nvim_buf_{lines,changedtick,detach}_event` over RPC, the callbacks get
+//! `on_lines` / `on_bytes` / `on_changedtick` / `on_reload` / `on_detach`.
+//!
+//! [`KVec`] is the lever. Both arrays are fields of `buf_T`, so borrowing
+//! their three parts is a safe operation once the buffer pointer is wrapped
+//! as a [`Buf`], and everything above it — the loops, the compaction, the
+//! argument building — is ordinary checked code.
+//!
+//! Every view is **momentary**, and that is load-bearing rather than tidy.
+//! `nlua_call_ref` re-enters the editor: a callback may attach (which
+//! reallocates the array being walked), detach, or edit the buffer and come
+//! back through [`buf_updates_send_changes`] recursively (which truncates
+//! it). That is why upstream re-reads `kv_size`/`kv_A` on every iteration
+//! instead of caching a pointer, why the loops here are `while i < len()`
+//! rather than `for i in 0..len`, and why [`KVec::at`] indexes the
+//! allocation rather than the live prefix — see its comment.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{CStr, c_int};
+use core::ptr;
+use core::slice;
+
 use crate::src::nvim::api::buffer::buf_collect_lines;
 use crate::src::nvim::api::private::helpers::arena_array;
 use crate::src::nvim::buffer::buf_get_changedtick;
-
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
-use crate::src::nvim::main::{cmdpreview, curbuf, curwin, textlock};
+use crate::src::nvim::main::{cmdpreview, curbuf, textlock};
 use crate::src::nvim::memline::ml_flush_deleted_bytes;
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
+use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
-    Arena, Array, BufUpdateCallbacks, Error, Integer, LuaRef, LuaRetMode, Object, bcount_t, buf_T,
-    colnr_T, int64_t, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeInteger,
-    kObjectTypeNil, linenr_T, lua_State, object, object_data as C2Rust_Unnamed, pos_T, size_t,
-    uint64_t,
+    Arena, Array, BufUpdateCallbacks, Integer, LuaRef, LuaRetMode, Object, bcount_t, buf_T,
+    colnr_T, int64_t, kObjectTypeBoolean, linenr_T, size_t, uint64_t,
 };
-pub const kRetNilBool: LuaRetMode = 1;
+use crate::src::nvim::winlayer::{Buf, Win};
+
 pub const kRetObject: LuaRetMode = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
-    << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8_usize)
-        .wrapping_sub(1_usize);
-pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
-pub unsafe extern "C" fn buf_updates_register(
-    mut buf: *mut buf_T,
-    mut channel_id: uint64_t,
-    mut cb: BufUpdateCallbacks,
-    mut send_buffer: bool,
-) -> bool {
-    if (*buf).b_ml.ml_mfp.is_null() {
-        return false_0 != 0;
+pub const kRetNilBool: LuaRetMode = 1;
+pub const LUA_NOREF: c_int = -2;
+const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
+const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
+const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
+
+// ---------------------------------------------------------------------------
+// The two `kvec_t`s
+
+/// One of `buf_T`'s two subscriber arrays — `klib/kvec.h`'s growable vector
+/// — borrowed field by field, so that only the element access below is
+/// unchecked.
+///
+/// Short-lived by construction: the borrow of the buffer ends with the
+/// expression that took it, which is what keeps a re-entrant callback from
+/// running while a `&mut` into the array is outstanding.
+struct KVec<'a, T> {
+    size: &'a mut size_t,
+    capacity: &'a mut size_t,
+    items: &'a mut *mut T,
+}
+
+impl<T: Copy> KVec<'_, T> {
+    /// `kv_size`.
+    fn len(&self) -> size_t {
+        *self.size
     }
-    if channel_id == LUA_INTERNAL_CALL {
-        if (*buf).update_callbacks.size == (*buf).update_callbacks.capacity {
-            (*buf).update_callbacks.capacity = if (*buf).update_callbacks.capacity != 0 {
-                (*buf).update_callbacks.capacity << 1 as ::core::ffi::c_int
+
+    /// `kv_size(v) = n`, which upstream writes as a plain assignment when a
+    /// compaction pass has finished.
+    fn set_len(&mut self, len: size_t) {
+        *self.size = len;
+    }
+
+    /// The live prefix. Only for whole-array questions asked between
+    /// callbacks — an element read that a callback could race wants
+    /// [`KVec::at`].
+    fn as_slice(&self) -> &[T] {
+        if *self.size == 0 {
+            return &[];
+        }
+        // SAFETY: a kvec's first `size` elements are initialised, and
+        // `items` is non-null once anything has been pushed.
+        unsafe { slice::from_raw_parts(*self.items, *self.size) }
+    }
+
+    /// `kv_A`: element `i` of the *allocation*, not of the live prefix.
+    ///
+    /// Upstream bounds `kv_A` by nothing at all, and the difference is
+    /// reachable: the compaction loops re-read `kv_size` each iteration, so
+    /// a callback that detaches during `nlua_call_ref` shrinks it under
+    /// them and leaves `i` and `j` past the new end but still inside the
+    /// array — and still pointing at slots this buffer has written. Bound
+    /// by `capacity` to keep that case behaving as upstream does.
+    fn at(&self, i: size_t) -> T {
+        assert!(i < *self.capacity, "kvec index past the allocation");
+        // SAFETY: `i` is inside the allocation, and every index these loops
+        // reach was written by a `push` before `size` ever passed it.
+        unsafe { *self.items.add(i) }
+    }
+
+    /// `kv_A(v, i) = x`. [`KVec::at`]'s bound, for the same reason.
+    fn set_at(&mut self, i: size_t, value: T) {
+        assert!(i < *self.capacity, "kvec index past the allocation");
+        // SAFETY: as [`KVec::at`]; writing an initialised slot of a `Copy`
+        // element type needs nothing further.
+        unsafe { *self.items.add(i) = value };
+    }
+
+    /// `kv_push`.
+    fn push(&mut self, value: T) {
+        if *self.size == *self.capacity {
+            *self.capacity = if *self.capacity != 0 {
+                *self.capacity << 1
             } else {
-                8 as size_t
+                8
             };
-            (*buf).update_callbacks.items = xrealloc(
-                (*buf).update_callbacks.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<BufUpdateCallbacks>()
-                    .wrapping_mul((*buf).update_callbacks.capacity),
-            ) as *mut BufUpdateCallbacks;
-        } else {
-        };
-        let c2rust_fresh0 = (*buf).update_callbacks.size;
-        (*buf).update_callbacks.size = (*buf).update_callbacks.size.wrapping_add(1);
-        *(*buf).update_callbacks.items.add(c2rust_fresh0) = cb;
+            let bytes = size_of::<T>() * *self.capacity;
+            let old = self.items.cast::<::core::ffi::c_void>();
+            // SAFETY: `items` is null or this array's own allocation, and
+            // the new size counts the same element type.
+            *self.items = unsafe { xrealloc(old, bytes) }.cast::<T>();
+        }
+        let end = *self.size;
+        *self.size = end + 1;
+        self.set_at(end, value);
+    }
+
+    /// `kv_destroy`, which in this klib also re-inits the vector.
+    fn destroy(&mut self) {
+        // SAFETY: `items` is null or this array's own allocation, and the
+        // three fields are reset before anything can read them again.
+        unsafe { xfree(self.items.cast::<::core::ffi::c_void>()) };
+        *self.size = 0;
+        *self.capacity = 0;
+        *self.items = ptr::null_mut();
+    }
+}
+
+impl Buf {
+    /// The RPC channels watching this buffer.
+    fn channels(&mut self) -> KVec<'_, uint64_t> {
+        let kv = &mut self.update_channels;
+        KVec {
+            size: &mut kv.size,
+            capacity: &mut kv.capacity,
+            items: &mut kv.items,
+        }
+    }
+
+    /// The Lua callback tables watching this buffer.
+    fn callbacks(&mut self) -> KVec<'_, BufUpdateCallbacks> {
+        let kv = &mut self.update_callbacks;
+        KVec {
+            size: &mut kv.size,
+            capacity: &mut kv.capacity,
+            items: &mut kv.items,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The calls out of the module
+
+/// `b:changedtick`, as `buf_get_changedtick`.
+fn changedtick(buf: Buf) -> Integer {
+    // SAFETY: a live buffer, which is [`Buf`]'s promise.
+    unsafe { buf_get_changedtick(buf.raw()) }
+}
+
+/// `rpc_send_event`, which only ever reads `args`.
+fn send_event(channel_id: uint64_t, name: &'static CStr, args: Array) -> bool {
+    // SAFETY: a NUL-terminated event name and an array borrowing the
+    // caller's frame, which the callee serialises and returns.
+    unsafe { rpc_send_event(channel_id, name.as_ptr(), args) }
+}
+
+/// C's `TEXTLOCK_WRAP`: run `f` with the cursor saved and restored and
+/// `textlock` held.
+///
+/// `curwin` is read twice on purpose. Upstream's macro expands
+/// `curwin->w_cursor = save_cursor` *after* `code`, so a callback that
+/// switched windows has the saved position written into whatever window it
+/// left current — not into the one the position came from.
+fn textlock_wrap<R>(f: impl FnOnce() -> R) -> R {
+    // SAFETY: `curwin` is set from startup to exit.
+    let save_cursor = unsafe { Win::current() }.w_cursor;
+    textlock.set(textlock.get() + 1);
+    let result = f();
+    textlock.set(textlock.get() - 1);
+    // SAFETY: `curwin` is set from startup to exit.
+    let mut win = unsafe { Win::current() };
+    win.w_cursor = save_cursor;
+    result
+}
+
+/// One callback invocation, inside [`textlock_wrap`] as upstream has it.
+fn call_ref(cb: LuaRef, name: &'static CStr, args: Array, mode: LuaRetMode) -> Object {
+    textlock_wrap(|| {
+        let (no_arena, no_err) = (ptr::null_mut(), ptr::null_mut());
+        // SAFETY: `cb` is a reference this buffer owns, `args` borrows the
+        // caller's frame, and a null arena and error are what upstream
+        // passes — the callee treats both as "not interested".
+        unsafe { nlua_call_ref(cb, name.as_ptr(), args, mode, no_arena, no_err) }
+    })
+}
+
+/// C's `LUARET_TRUTHY`: a callback asking to be detached.
+fn truthy(res: Object) -> bool {
+    // SAFETY: `boolean` is the live union member when the tag says so.
+    res.type_0 == kObjectTypeBoolean && unsafe { res.data.boolean }
+}
+
+/// Release the five Lua references one attachment holds.
+fn callbacks_free(cb: BufUpdateCallbacks) {
+    let refs = [
+        cb.on_lines,
+        cb.on_bytes,
+        cb.on_changedtick,
+        cb.on_reload,
+        cb.on_detach,
+    ];
+    for ref_0 in refs {
+        // SAFETY: a reference this value owns; the callee ignores
+        // `LUA_NOREF`.
+        unsafe { api_free_luaref(ref_0) };
+    }
+}
+
+/// C's `ELOG` for the one complaint this file makes.
+///
+/// The line number is upstream's `__LINE__` at the call, kept so the log
+/// still names the C source everyone reads.
+fn elog_dead_channel(channelid: uint64_t) {
+    let here = c"buf_updates_send_changes".as_ptr();
+    let fmt = c"Disabling buffer updates for dead channel %lu".as_ptr();
+    // SAFETY: the format string takes exactly the one `uint64_t` passed.
+    unsafe { logmsg_c!(LOGLVL_ERR, ptr::null(), here, 258, true, fmt, channelid) };
+}
+
+/// What `ml_flush_deleted_bytes` reports through three out-parameters.
+struct Deleted {
+    bytes: size_t,
+    codepoints: size_t,
+    codeunits: size_t,
+}
+
+fn flush_deleted_bytes(buf: Buf) -> Deleted {
+    let (mut codepoints, mut codeunits) = (0, 0);
+    let (cp, cu) = (&raw mut codepoints, &raw mut codeunits);
+    // SAFETY: a live buffer and two live out-parameters.
+    let bytes = unsafe { ml_flush_deleted_bytes(buf.raw(), cp, cu) };
+    Deleted {
+        bytes,
+        codepoints,
+        codeunits,
+    }
+}
+
+/// `linedata` for `nvim_buf_lines_event`: `n` lines from `first`, allocated
+/// in `arena`.
+fn collect_lines(buf: Buf, n: size_t, first: linenr_T, arena: &mut Arena) -> Array {
+    let ar = &raw mut *arena;
+    let mut linedata = arena_array(ar, n);
+    let (b, out, none) = (buf.raw(), &raw mut linedata, ptr::null_mut());
+    // SAFETY: a live buffer holding lines `first ..= first + n - 1`, and an
+    // array of `n` slots in the same arena the callee fills from.
+    unsafe { buf_collect_lines(b, n, first, 0, true, out, none, ar) };
+    linedata
+}
+
+// ---------------------------------------------------------------------------
+// Registering and unregistering
+
+/// Attach `channel_id` (or, for `LUA_INTERNAL_CALL`, `cb`) to `buf`.
+///
+/// True when the subscriber is watching afterwards, whether it was added
+/// now or already there; false only when the buffer is not loaded.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_updates_register(
+    buf: *mut buf_T,
+    channel_id: uint64_t,
+    cb: BufUpdateCallbacks,
+    send_buffer: bool,
+) -> bool {
+    // SAFETY: the caller's promise.
+    register(unsafe { Buf::new(buf) }, channel_id, cb, send_buffer)
+}
+
+fn register(mut buf: Buf, channel_id: uint64_t, cb: BufUpdateCallbacks, send_buffer: bool) -> bool {
+    // Must fail if the buffer isn't loaded.
+    if buf.b_ml.ml_mfp.is_null() {
+        return false;
+    }
+
+    if channel_id == LUA_INTERNAL_CALL {
+        buf.callbacks().push(cb);
         if cb.utf_sizes {
-            (*buf).update_need_codepoints = true_0 != 0;
+            buf.update_need_codepoints = true;
         }
-        return true_0 != 0;
+        return true;
     }
-    let mut size: size_t = (*buf).update_channels.size;
-    let mut i: size_t = 0 as size_t;
-    while i < size {
-        if *(*buf).update_channels.items.add(i) == channel_id {
-            return true_0 != 0;
-        }
-        i = i.wrapping_add(1);
+
+    // Already watching: nothing to do.
+    if buf.channels().as_slice().contains(&channel_id) {
+        return true;
     }
-    if (*buf).update_channels.size == (*buf).update_channels.capacity {
-        (*buf).update_channels.capacity = if (*buf).update_channels.capacity != 0 {
-            (*buf).update_channels.capacity << 1 as ::core::ffi::c_int
-        } else {
-            8 as size_t
-        };
-        (*buf).update_channels.items = xrealloc(
-            (*buf).update_channels.items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<uint64_t>().wrapping_mul((*buf).update_channels.capacity),
-        ) as *mut uint64_t;
-    } else {
-    };
-    let c2rust_fresh1 = (*buf).update_channels.size;
-    (*buf).update_channels.size = (*buf).update_channels.size.wrapping_add(1);
-    *(*buf).update_channels.items.add(c2rust_fresh1) = channel_id;
+
+    buf.channels().push(channel_id);
+
     if send_buffer {
-        let mut args: Array = ARRAY_DICT_INIT;
-        let mut args__items: [Object; 6] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 6];
-        args.capacity = 6 as size_t;
-        args.items = &raw mut args__items as *mut Object;
-        let c2rust_fresh2 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh2) = object {
-            type_0: kObjectTypeBuffer,
-            data: C2Rust_Unnamed {
-                integer: (*buf).handle as Integer,
-            },
-        };
-        let c2rust_fresh3 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh3) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: buf_get_changedtick(buf),
-            },
-        };
-        let c2rust_fresh4 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh4) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: 0 as Integer,
-            },
-        };
-        let c2rust_fresh5 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh5) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: -1 as Integer,
-            },
-        };
-        let mut line_count: size_t = (*buf).b_ml.ml_line_count as size_t;
-        let mut linedata: Array = ARRAY_DICT_INIT;
-        let mut arena: Arena = ARENA_EMPTY;
-        if line_count > 0 as size_t {
-            linedata = arena_array(&raw mut arena, line_count);
-            buf_collect_lines(
-                buf,
-                line_count,
-                1 as linenr_T,
-                0 as ::core::ffi::c_int,
-                true_0 != 0,
-                &raw mut linedata,
-                ::core::ptr::null_mut::<lua_State>(),
-                &raw mut arena,
-            );
-        }
-        let c2rust_fresh6 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh6) = object {
-            type_0: kObjectTypeArray,
-            data: C2Rust_Unnamed { array: linedata },
-        };
-        let c2rust_fresh7 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh7) = object {
-            type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed { boolean: false },
-        };
-        rpc_send_event(channel_id, c"nvim_buf_lines_event".as_ptr(), args);
-        arena_mem_free(arena_finish(&raw mut arena));
+        send_whole_buffer(buf, channel_id);
     } else {
-        buf_updates_changedtick_single(buf, channel_id);
+        changedtick_single(buf, channel_id);
     }
-    return true_0 != 0;
+
+    true
 }
-pub unsafe extern "C" fn buf_updates_active(mut buf: *mut buf_T) -> bool {
-    return (*buf).update_channels.size != 0 || (*buf).update_callbacks.size != 0;
+
+/// The `nvim_buf_lines_event` a channel attaching with `send_buffer` gets:
+/// the whole buffer as one replacement of the range `0 .. -1`.
+fn send_whole_buffer(buf: Buf, channel_id: uint64_t) {
+    let line_count = buf.line_count() as size_t;
+    let mut arena = ARENA_EMPTY;
+    let mut linedata = Array::EMPTY;
+    if line_count > 0 {
+        linedata = collect_lines(buf, line_count, 1, &mut arena);
+    }
+
+    let mut args = ArrayBuf::<6>::new();
+    args.push(Object::buffer(buf.handle));
+    args.push(Object::integer(changedtick(buf)));
+    // The first line that changed (zero-indexed), then the last.
+    args.push(Object::integer(0));
+    args.push(Object::integer(-1));
+    args.push(Object::array(linedata));
+    args.push(Object::boolean(false));
+    send_event(channel_id, c"nvim_buf_lines_event", args.array());
+
+    // SAFETY: the arena is this frame's, and `linedata` is not read again.
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
-pub unsafe extern "C" fn buf_updates_send_end(mut buf: *mut buf_T, mut channelid: uint64_t) {
-    let mut args: Array = ARRAY_DICT_INIT;
-    let mut args__items: [Object; 1] = [Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    }; 1];
-    args.capacity = 1 as size_t;
-    args.items = &raw mut args__items as *mut Object;
-    let c2rust_fresh10 = args.size;
-    args.size = args.size.wrapping_add(1);
-    *args.items.add(c2rust_fresh10) = object {
-        type_0: kObjectTypeBuffer,
-        data: C2Rust_Unnamed {
-            integer: (*buf).handle as Integer,
-        },
-    };
-    rpc_send_event(channelid, c"nvim_buf_detach_event".as_ptr(), args);
+
+/// Whether anything is watching `buf`.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_updates_active(buf: *mut buf_T) -> bool {
+    // SAFETY: the caller's promise.
+    active(unsafe { Buf::new(buf) })
 }
-pub unsafe extern "C" fn buf_updates_unregister(mut buf: *mut buf_T, mut channelid: uint64_t) {
-    let mut size: size_t = (*buf).update_channels.size;
+
+fn active(mut buf: Buf) -> bool {
+    buf.channels().len() != 0 || buf.callbacks().len() != 0
+}
+
+/// Tell one channel it is no longer attached.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_updates_send_end(buf: *mut buf_T, channelid: uint64_t) {
+    // SAFETY: the caller's promise.
+    send_end(unsafe { Buf::new(buf) }, channelid);
+}
+
+fn send_end(buf: Buf, channelid: uint64_t) {
+    let mut args = ArrayBuf::<1>::new();
+    args.push(Object::buffer(buf.handle));
+    send_event(channelid, c"nvim_buf_detach_event", args.array());
+}
+
+/// Detach `channelid` from `buf`, if it is attached.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_updates_unregister(buf: *mut buf_T, channelid: uint64_t) {
+    // SAFETY: the caller's promise.
+    unregister(unsafe { Buf::new(buf) }, channelid);
+}
+
+fn unregister(mut buf: Buf, channelid: uint64_t) {
+    let size = buf.channels().len();
     if size == 0 {
         return;
     }
-    let mut j: size_t = 0 as size_t;
-    let mut found: size_t = 0 as size_t;
-    let mut i: size_t = 0 as size_t;
-    while i < size {
-        if *(*buf).update_channels.items.add(i) == channelid {
-            found = found.wrapping_add(1);
+
+    // Compact the id out of the list — it should never appear more than
+    // once, but upstream counts rather than assuming.
+    let (mut j, mut found) = (0, 0);
+    let mut channels = buf.channels();
+    for i in 0..size {
+        if channels.at(i) == channelid {
+            found += 1;
         } else {
             if i != j {
-                *(*buf).update_channels.items.add(j) = *(*buf).update_channels.items.add(i);
+                channels.set_at(j, channels.at(i));
             }
-            j = j.wrapping_add(1);
+            j += 1;
         }
-        i = i.wrapping_add(1);
     }
+
     if found != 0 {
-        (*buf).update_channels.size = (*buf).update_channels.size.wrapping_sub(found);
-        buf_updates_send_end(buf, channelid);
+        // Remove `found` items from the end of the array.
+        buf.channels().set_len(size - found);
+        // Upstream tells the channel *before* releasing the array, and the
+        // order is kept: `rpc_send_event` reads only the buffer handle.
+        send_end(buf, channelid);
         if found == size {
-            xfree((*buf).update_channels.items as *mut ::core::ffi::c_void);
-            (*buf).update_channels.capacity = 0 as size_t;
-            (*buf).update_channels.size = (*buf).update_channels.capacity;
-            (*buf).update_channels.items = ::core::ptr::null_mut::<uint64_t>();
-            (*buf).update_channels.capacity = 0 as size_t;
-            (*buf).update_channels.size = (*buf).update_channels.capacity;
-            (*buf).update_channels.items = ::core::ptr::null_mut::<uint64_t>();
+            buf.channels().destroy();
         }
     }
 }
-pub unsafe extern "C" fn buf_free_callbacks(mut buf: *mut buf_T) {
-    xfree((*buf).update_channels.items as *mut ::core::ffi::c_void);
-    (*buf).update_channels.capacity = 0 as size_t;
-    (*buf).update_channels.size = (*buf).update_channels.capacity;
-    (*buf).update_channels.items = ::core::ptr::null_mut::<uint64_t>();
-    let mut i: size_t = 0 as size_t;
-    while i < (*buf).update_callbacks.size {
-        buffer_update_callbacks_free(*(*buf).update_callbacks.items.add(i));
-        i = i.wrapping_add(1);
-    }
-    xfree((*buf).update_callbacks.items as *mut ::core::ffi::c_void);
-    (*buf).update_callbacks.capacity = 0 as size_t;
-    (*buf).update_callbacks.size = (*buf).update_callbacks.capacity;
-    (*buf).update_callbacks.items = ::core::ptr::null_mut::<BufUpdateCallbacks>();
+
+/// Drop everything watching `buf`, silently: the buffer itself is going
+/// away, so nobody is told.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_free_callbacks(buf: *mut buf_T) {
+    // SAFETY: the caller's promise.
+    free_callbacks(unsafe { Buf::new(buf) });
 }
-pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload: bool) {
-    let mut size: size_t = (*buf).update_channels.size;
+
+fn free_callbacks(mut buf: Buf) {
+    buf.channels().destroy();
+    let mut i = 0;
+    while i < buf.callbacks().len() {
+        callbacks_free(buf.callbacks().at(i));
+        i += 1;
+    }
+    buf.callbacks().destroy();
+}
+
+/// The buffer's contents are gone: detach every channel, and give every
+/// callback its `on_reload` (when the contents are coming back) or its
+/// `on_detach` (when they are not).
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_updates_unload(buf: *mut buf_T, can_reload: bool) {
+    // SAFETY: the caller's promise.
+    unload(unsafe { Buf::new(buf) }, can_reload);
+}
+
+fn unload(mut buf: Buf, can_reload: bool) {
+    let size = buf.channels().len();
     if size != 0 {
-        let mut i: size_t = 0 as size_t;
-        while i < size {
-            buf_updates_send_end(buf, *(*buf).update_channels.items.add(i));
-            i = i.wrapping_add(1);
+        for i in 0..size {
+            let channelid = buf.channels().at(i);
+            send_end(buf, channelid);
         }
-        xfree((*buf).update_channels.items as *mut ::core::ffi::c_void);
-        (*buf).update_channels.capacity = 0 as size_t;
-        (*buf).update_channels.size = (*buf).update_channels.capacity;
-        (*buf).update_channels.items = ::core::ptr::null_mut::<uint64_t>();
-        (*buf).update_channels.capacity = 0 as size_t;
-        (*buf).update_channels.size = (*buf).update_channels.capacity;
-        (*buf).update_channels.items = ::core::ptr::null_mut::<uint64_t>();
+        buf.channels().destroy();
     }
-    let mut j: size_t = 0 as size_t;
-    let mut i_0: size_t = 0 as size_t;
-    while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i_0);
-        let mut thecb: LuaRef = LUA_NOREF;
-        let mut keep: bool = false_0 != 0;
-        if can_reload as ::core::ffi::c_int != 0 && cb.on_reload != LUA_NOREF {
-            keep = true_0 != 0;
+
+    let mut j = 0;
+    let mut i = 0;
+    while i < buf.callbacks().len() {
+        let cb = buf.callbacks().at(i);
+        let mut thecb = LUA_NOREF;
+
+        let mut keep = false;
+        if can_reload && cb.on_reload != LUA_NOREF {
+            keep = true;
             thecb = cb.on_reload;
         } else if cb.on_detach != LUA_NOREF {
             thecb = cb.on_detach;
         }
+
         if thecb != LUA_NOREF {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 1] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 1];
-            args.capacity = 1 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh11 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh11) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed {
-                    integer: (*buf).handle as Integer,
-                },
-            };
-            let save_cursor: pos_T = (*curwin.get()).w_cursor;
-            (*textlock.ptr()) += 1;
-            nlua_call_ref(
-                thecb,
-                if keep as ::core::ffi::c_int != 0 {
-                    c"reload".as_ptr()
-                } else {
-                    c"detach".as_ptr()
-                },
-                args,
-                kRetObject,
-                ::core::ptr::null_mut::<Arena>(),
-                ::core::ptr::null_mut::<Error>(),
-            );
-            (*textlock.ptr()) -= 1;
-            (*curwin.get()).w_cursor = save_cursor;
+            let mut args = ArrayBuf::<1>::new();
+            args.push(Object::buffer(buf.handle));
+            let name = if keep { c"reload" } else { c"detach" };
+            // Upstream discards the result here: a reload callback cannot
+            // detach itself the way `on_lines` can.
+            call_ref(thecb, name, args.array(), kRetObject);
         }
+
         if keep {
-            let c2rust_fresh12 = j;
-            j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.add(c2rust_fresh12) =
-                *(*buf).update_callbacks.items.add(i_0);
+            let moved = buf.callbacks().at(i);
+            buf.callbacks().set_at(j, moved);
+            j += 1;
         } else {
-            buffer_update_callbacks_free(cb);
+            callbacks_free(cb);
         }
-        i_0 = i_0.wrapping_add(1);
+        i += 1;
     }
-    (*buf).update_callbacks.size = j;
-    if (*buf).update_callbacks.size == 0 as size_t {
-        xfree((*buf).update_callbacks.items as *mut ::core::ffi::c_void);
-        (*buf).update_callbacks.capacity = 0 as size_t;
-        (*buf).update_callbacks.size = (*buf).update_callbacks.capacity;
-        (*buf).update_callbacks.items = ::core::ptr::null_mut::<BufUpdateCallbacks>();
-        (*buf).update_callbacks.capacity = 0 as size_t;
-        (*buf).update_callbacks.size = (*buf).update_callbacks.capacity;
-        (*buf).update_callbacks.items = ::core::ptr::null_mut::<BufUpdateCallbacks>();
+    buf.callbacks().set_len(j);
+    if buf.callbacks().len() == 0 {
+        buf.callbacks().destroy();
     }
 }
+
+// ---------------------------------------------------------------------------
+// The events
+
+/// `num_added` lines replaced `num_removed` lines starting at `firstline`.
+///
+/// # Safety
+/// `buf` must be a live buffer.
 pub unsafe extern "C" fn buf_updates_send_changes(
-    mut buf: *mut buf_T,
-    mut firstline: linenr_T,
-    mut num_added: int64_t,
-    mut num_removed: int64_t,
+    buf: *mut buf_T,
+    firstline: linenr_T,
+    num_added: int64_t,
+    num_removed: int64_t,
 ) {
-    let mut deleted_codepoints: size_t = 0;
-    let mut deleted_codeunits: size_t = 0;
-    let mut deleted_bytes: size_t =
-        ml_flush_deleted_bytes(buf, &raw mut deleted_codepoints, &raw mut deleted_codeunits);
-    if !buf_updates_active(buf) {
+    // SAFETY: the caller's promise.
+    let buf = unsafe { Buf::new(buf) };
+    send_changes(buf, firstline, num_added, num_removed);
+}
+
+fn send_changes(mut buf: Buf, firstline: linenr_T, num_added: int64_t, num_removed: int64_t) {
+    let deleted = flush_deleted_bytes(buf);
+
+    if !active(buf) {
         return;
     }
-    let mut send_tick: bool = !(cmdpreview.get() as ::core::ffi::c_int != 0 && buf == curbuf.get());
-    let mut badchannelid: uint64_t = 0 as uint64_t;
-    let mut arena: Arena = ARENA_EMPTY;
-    let mut linedata: Array = ARRAY_DICT_INIT;
-    if num_added > 0 as int64_t && (*buf).update_channels.size != 0 {
-        linedata = arena_array(&raw mut arena, num_added as size_t);
-        buf_collect_lines(
-            buf,
-            num_added as size_t,
-            firstline,
-            0 as ::core::ffi::c_int,
-            true_0 != 0,
-            &raw mut linedata,
-            ::core::ptr::null_mut::<lua_State>(),
-            &raw mut arena,
-        );
+
+    // Don't send b:changedtick during 'inccommand' preview if "buf" is the
+    // current buffer.
+    let send_tick = !(cmdpreview.get() && buf.raw() == curbuf.get());
+
+    // If one of the channels doesn't work, put its ID here so we can remove
+    // it later.
+    let mut badchannelid = 0;
+
+    let mut arena = ARENA_EMPTY;
+    let mut linedata = Array::EMPTY;
+    if num_added > 0 && buf.channels().len() != 0 {
+        let n = num_added as size_t;
+        linedata = collect_lines(buf, n, firstline, &mut arena);
     }
-    let mut i: size_t = 0 as size_t;
-    while i < (*buf).update_channels.size {
-        let mut channelid: uint64_t = *(*buf).update_channels.items.add(i);
-        let mut args: Array = ARRAY_DICT_INIT;
-        let mut args__items: [Object; 6] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 6];
-        args.capacity = 6 as size_t;
-        args.items = &raw mut args__items as *mut Object;
-        let c2rust_fresh13 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh13) = object {
-            type_0: kObjectTypeBuffer,
-            data: C2Rust_Unnamed {
-                integer: (*buf).handle as Integer,
-            },
-        };
-        let c2rust_fresh14 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh14) = if send_tick as ::core::ffi::c_int != 0 {
-            object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: buf_get_changedtick(buf),
-                },
-            }
-        } else {
-            object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }
-        };
-        let c2rust_fresh15 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh15) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (firstline - 1 as linenr_T) as Integer,
-            },
-        };
-        let c2rust_fresh16 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh16) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (firstline - 1 as linenr_T) as int64_t + num_removed,
-            },
-        };
-        let c2rust_fresh17 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh17) = object {
-            type_0: kObjectTypeArray,
-            data: C2Rust_Unnamed { array: linedata },
-        };
-        let c2rust_fresh18 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.add(c2rust_fresh18) = object {
-            type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed { boolean: false },
-        };
-        if !rpc_send_event(channelid, c"nvim_buf_lines_event".as_ptr(), args) {
+
+    // Notify each of the active channels.
+    let mut i = 0;
+    while i < buf.channels().len() {
+        let channelid = buf.channels().at(i);
+        let mut args = ArrayBuf::<6>::new();
+        args.push(Object::buffer(buf.handle));
+        args.push(tick_obj(buf, send_tick));
+        // The first line that changed (zero-indexed), then the last.
+        args.push(Object::integer((firstline - 1) as Integer));
+        args.push(Object::integer((firstline - 1) as int64_t + num_removed));
+        // Linedata of the lines being swapped in.
+        args.push(Object::array(linedata));
+        args.push(Object::boolean(false));
+        if !send_event(channelid, c"nvim_buf_lines_event", args.array()) {
+            // The channel can't be unregistered while this loop is walking
+            // the array, so remember it and do it at the end.
             badchannelid = channelid;
         }
-        i = i.wrapping_add(1);
+        i += 1;
     }
-    if badchannelid != 0 as uint64_t {
-        logmsg_c!(
-            LOGLVL_ERR,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            c"buf_updates_send_changes".as_ptr(),
-            258 as ::core::ffi::c_int,
-            true_0 != 0,
-            c"Disabling buffer updates for dead channel %lu".as_ptr(),
-            badchannelid,
-        );
-        buf_updates_unregister(buf, badchannelid);
+
+    // Only one dead channel goes per call. That is fine: the notifications
+    // are frequent enough that a pile of them clears quickly.
+    if badchannelid != 0 {
+        elog_dead_channel(badchannelid);
+        unregister(buf, badchannelid);
     }
-    arena_mem_free(arena_finish(&raw mut arena));
-    let mut j: size_t = 0 as size_t;
-    let mut i_0: size_t = 0 as size_t;
-    while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i_0);
-        let mut keep: bool = true_0 != 0;
-        if cb.on_lines != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview.get())
-        {
-            let mut args_0: Array = ARRAY_DICT_INIT;
-            let mut args__items_0: [Object; 8] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 8];
-            args_0.capacity = 8 as size_t;
-            args_0.items = &raw mut args__items_0 as *mut Object;
-            let c2rust_fresh19 = args_0.size;
-            args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.add(c2rust_fresh19) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed {
-                    integer: (*buf).handle as Integer,
-                },
-            };
-            let c2rust_fresh20 = args_0.size;
-            args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.add(c2rust_fresh20) = if send_tick as ::core::ffi::c_int != 0 {
-                object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: buf_get_changedtick(buf),
-                    },
-                }
-            } else {
-                object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed { boolean: false },
-                }
-            };
-            let c2rust_fresh21 = args_0.size;
-            args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.add(c2rust_fresh21) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (firstline - 1 as linenr_T) as Integer,
-                },
-            };
-            let c2rust_fresh22 = args_0.size;
-            args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.add(c2rust_fresh22) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (firstline - 1 as linenr_T) as int64_t + num_removed,
-                },
-            };
-            let c2rust_fresh23 = args_0.size;
-            args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.add(c2rust_fresh23) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (firstline - 1 as linenr_T) as int64_t + num_added,
-                },
-            };
-            let c2rust_fresh24 = args_0.size;
-            args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.add(c2rust_fresh24) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: deleted_bytes as Integer,
-                },
-            };
+
+    // The callbacks don't use linedata.
+    // SAFETY: the arena is this frame's, and `linedata` is not read again.
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+
+    // Notify each of the active callbacks.
+    let mut j = 0;
+    let mut i = 0;
+    while i < buf.callbacks().len() {
+        let cb = buf.callbacks().at(i);
+        let mut keep = true;
+        if cb.on_lines != LUA_NOREF && (cb.preview || !cmdpreview.get()) {
+            // Six arguments, or eight with the UTF sizes.
+            let mut args = ArrayBuf::<8>::new();
+            args.push(Object::buffer(buf.handle));
+            args.push(tick_obj(buf, send_tick));
+            // First changed line, last changed line, last line of the new
+            // range, then the byte count of the previous contents.
+            args.push(Object::integer((firstline - 1) as Integer));
+            args.push(Object::integer((firstline - 1) as int64_t + num_removed));
+            args.push(Object::integer((firstline - 1) as int64_t + num_added));
+            args.push(Object::integer(deleted.bytes as Integer));
             if cb.utf_sizes {
-                let c2rust_fresh25 = args_0.size;
-                args_0.size = args_0.size.wrapping_add(1);
-                *args_0.items.add(c2rust_fresh25) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: deleted_codepoints as Integer,
-                    },
-                };
-                let c2rust_fresh26 = args_0.size;
-                args_0.size = args_0.size.wrapping_add(1);
-                *args_0.items.add(c2rust_fresh26) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: deleted_codeunits as Integer,
-                    },
-                };
+                args.push(Object::integer(deleted.codepoints as Integer));
+                args.push(Object::integer(deleted.codeunits as Integer));
             }
-            let mut res: Object = Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
-            let save_cursor: pos_T = (*curwin.get()).w_cursor;
-            (*textlock.ptr()) += 1;
-            res = nlua_call_ref(
-                cb.on_lines,
-                c"lines".as_ptr(),
-                args_0,
-                kRetNilBool,
-                ::core::ptr::null_mut::<Arena>(),
-                ::core::ptr::null_mut::<Error>(),
-            );
-            (*textlock.ptr()) -= 1;
-            (*curwin.get()).w_cursor = save_cursor;
-            if res.type_0 as ::core::ffi::c_uint
-                == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                && res.data.boolean as ::core::ffi::c_int == true_0
-            {
-                buffer_update_callbacks_free(cb);
-                keep = false_0 != 0;
+            let res = call_ref(cb.on_lines, c"lines", args.array(), kRetNilBool);
+            if truthy(res) {
+                callbacks_free(cb);
+                keep = false;
             }
         }
         if keep {
-            let c2rust_fresh27 = j;
-            j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.add(c2rust_fresh27) =
-                *(*buf).update_callbacks.items.add(i_0);
+            let moved = buf.callbacks().at(i);
+            buf.callbacks().set_at(j, moved);
+            j += 1;
         }
-        i_0 = i_0.wrapping_add(1);
+        i += 1;
     }
-    (*buf).update_callbacks.size = j;
+    buf.callbacks().set_len(j);
 }
+
+/// `b:changedtick` when it is being sent, nil when 'inccommand' preview is
+/// suppressing it.
+fn tick_obj(buf: Buf, send_tick: bool) -> Object {
+    if send_tick {
+        Object::integer(changedtick(buf))
+    } else {
+        Object::NIL
+    }
+}
+
+/// A byte-level edit: `old_*` bytes at `start_*` became `new_*` bytes.
+/// Callbacks only — no RPC event carries this.
+///
+/// # Safety
+/// `buf` must be a live buffer.
 pub unsafe extern "C" fn buf_updates_send_splice(
-    mut buf: *mut buf_T,
-    mut start_row: ::core::ffi::c_int,
-    mut start_col: colnr_T,
-    mut start_byte: bcount_t,
-    mut old_row: ::core::ffi::c_int,
-    mut old_col: colnr_T,
-    mut old_byte: bcount_t,
-    mut new_row: ::core::ffi::c_int,
-    mut new_col: colnr_T,
-    mut new_byte: bcount_t,
+    buf: *mut buf_T,
+    start_row: c_int,
+    start_col: colnr_T,
+    start_byte: bcount_t,
+    old_row: c_int,
+    old_col: colnr_T,
+    old_byte: bcount_t,
+    new_row: c_int,
+    new_col: colnr_T,
+    new_byte: bcount_t,
 ) {
-    if !buf_updates_active(buf) || old_byte == 0 as bcount_t && new_byte == 0 as bcount_t {
+    // SAFETY: the caller's promise.
+    let buf = unsafe { Buf::new(buf) };
+    let start = Corner::new(start_row, start_col, start_byte);
+    let old = Corner::new(old_row, old_col, old_byte);
+    let new = Corner::new(new_row, new_col, new_byte);
+    send_splice(buf, start, old, new);
+}
+
+/// One corner of a splice, as `on_bytes` reports it: a row, a column, and a
+/// byte offset. Upstream spells the same three numbers as nine separate
+/// parameters.
+#[derive(Clone, Copy)]
+struct Corner {
+    row: c_int,
+    col: colnr_T,
+    byte: bcount_t,
+}
+
+impl Corner {
+    fn new(row: c_int, col: colnr_T, byte: bcount_t) -> Self {
+        Self { row, col, byte }
+    }
+}
+
+fn send_splice(mut buf: Buf, start: Corner, old: Corner, new: Corner) {
+    if !active(buf) || (old.byte == 0 && new.byte == 0) {
         return;
     }
-    let mut j: size_t = 0 as size_t;
-    let mut i: size_t = 0 as size_t;
-    while i < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i);
-        let mut keep: bool = true_0 != 0;
-        if cb.on_bytes != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview.get())
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 11] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 11];
-            args.capacity = 11 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh28 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh28) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed {
-                    integer: (*buf).handle as Integer,
-                },
-            };
-            let c2rust_fresh29 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh29) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: buf_get_changedtick(buf),
-                },
-            };
-            let c2rust_fresh30 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh30) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: start_row as Integer,
-                },
-            };
-            let c2rust_fresh31 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh31) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: start_col as Integer,
-                },
-            };
-            let c2rust_fresh32 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh32) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: start_byte as i64,
-                },
-            };
-            let c2rust_fresh33 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh33) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: old_row as Integer,
-                },
-            };
-            let c2rust_fresh34 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh34) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: old_col as Integer,
-                },
-            };
-            let c2rust_fresh35 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh35) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: old_byte as i64,
-                },
-            };
-            let c2rust_fresh36 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh36) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: new_row as Integer,
-                },
-            };
-            let c2rust_fresh37 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh37) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: new_col as Integer,
-                },
-            };
-            let c2rust_fresh38 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh38) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: new_byte as i64,
-                },
-            };
-            let mut res: Object = Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
-            let save_cursor: pos_T = (*curwin.get()).w_cursor;
-            (*textlock.ptr()) += 1;
-            res = nlua_call_ref(
-                cb.on_bytes,
-                c"bytes".as_ptr(),
-                args,
-                kRetNilBool,
-                ::core::ptr::null_mut::<Arena>(),
-                ::core::ptr::null_mut::<Error>(),
-            );
-            (*textlock.ptr()) -= 1;
-            (*curwin.get()).w_cursor = save_cursor;
-            if res.type_0 as ::core::ffi::c_uint
-                == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                && res.data.boolean as ::core::ffi::c_int == true_0
-            {
-                buffer_update_callbacks_free(cb);
-                keep = false_0 != 0;
+
+    // Notify each of the active callbacks.
+    let mut j = 0;
+    let mut i = 0;
+    while i < buf.callbacks().len() {
+        let cb = buf.callbacks().at(i);
+        let mut keep = true;
+        if cb.on_bytes != LUA_NOREF && (cb.preview || !cmdpreview.get()) {
+            let mut args = ArrayBuf::<11>::new();
+            args.push(Object::buffer(buf.handle));
+            args.push(Object::integer(changedtick(buf)));
+            for corner in [start, old, new] {
+                args.push(Object::integer(corner.row as Integer));
+                args.push(Object::integer(corner.col as Integer));
+                args.push(Object::integer(corner.byte as Integer));
+            }
+            let res = call_ref(cb.on_bytes, c"bytes", args.array(), kRetNilBool);
+            if truthy(res) {
+                callbacks_free(cb);
+                keep = false;
             }
         }
         if keep {
-            let c2rust_fresh39 = j;
-            j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.add(c2rust_fresh39) =
-                *(*buf).update_callbacks.items.add(i);
+            let moved = buf.callbacks().at(i);
+            buf.callbacks().set_at(j, moved);
+            j += 1;
         }
-        i = i.wrapping_add(1);
+        i += 1;
     }
-    (*buf).update_callbacks.size = j;
+    buf.callbacks().set_len(j);
 }
-pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
-    let mut i: size_t = 0 as size_t;
-    while i < (*buf).update_channels.size {
-        let mut channel_id: uint64_t = *(*buf).update_channels.items.add(i);
-        buf_updates_changedtick_single(buf, channel_id);
-        i = i.wrapping_add(1);
+
+/// `b:changedtick` moved without the text moving.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_updates_changedtick(buf: *mut buf_T) {
+    // SAFETY: the caller's promise.
+    changedtick_event(unsafe { Buf::new(buf) });
+}
+
+fn changedtick_event(mut buf: Buf) {
+    // Notify each of the active channels.
+    let mut i = 0;
+    while i < buf.channels().len() {
+        let channel_id = buf.channels().at(i);
+        changedtick_single(buf, channel_id);
+        i += 1;
     }
-    let mut j: size_t = 0 as size_t;
-    let mut i_0: size_t = 0 as size_t;
-    while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i_0);
-        let mut keep: bool = true_0 != 0;
+
+    let mut j = 0;
+    let mut i = 0;
+    while i < buf.callbacks().len() {
+        let cb = buf.callbacks().at(i);
+        let mut keep = true;
         if cb.on_changedtick != LUA_NOREF {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 2] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 2];
-            args.capacity = 2 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh40 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh40) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed {
-                    integer: (*buf).handle as Integer,
-                },
-            };
-            let c2rust_fresh41 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.add(c2rust_fresh41) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: buf_get_changedtick(buf),
-                },
-            };
-            let mut res: Object = Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
-            let save_cursor: pos_T = (*curwin.get()).w_cursor;
-            (*textlock.ptr()) += 1;
-            res = nlua_call_ref(
-                cb.on_changedtick,
-                c"changedtick".as_ptr(),
-                args,
-                kRetNilBool,
-                ::core::ptr::null_mut::<Arena>(),
-                ::core::ptr::null_mut::<Error>(),
-            );
-            (*textlock.ptr()) -= 1;
-            (*curwin.get()).w_cursor = save_cursor;
-            if res.type_0 as ::core::ffi::c_uint
-                == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                && res.data.boolean as ::core::ffi::c_int == true_0
-            {
-                buffer_update_callbacks_free(cb);
-                keep = false_0 != 0;
+            let mut args = ArrayBuf::<2>::new();
+            args.push(Object::buffer(buf.handle));
+            args.push(Object::integer(changedtick(buf)));
+            let res = call_ref(cb.on_changedtick, c"changedtick", args.array(), kRetNilBool);
+            if truthy(res) {
+                callbacks_free(cb);
+                keep = false;
             }
         }
         if keep {
-            let c2rust_fresh42 = j;
-            j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.add(c2rust_fresh42) =
-                *(*buf).update_callbacks.items.add(i_0);
+            let moved = buf.callbacks().at(i);
+            buf.callbacks().set_at(j, moved);
+            j += 1;
         }
-        i_0 = i_0.wrapping_add(1);
+        i += 1;
     }
-    (*buf).update_callbacks.size = j;
+    buf.callbacks().set_len(j);
 }
-pub unsafe extern "C" fn buf_updates_changedtick_single(
-    mut buf: *mut buf_T,
-    mut channel_id: uint64_t,
-) {
-    let mut args: Array = ARRAY_DICT_INIT;
-    let mut args__items: [Object; 2] = [Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    }; 2];
-    args.capacity = 2 as size_t;
-    args.items = &raw mut args__items as *mut Object;
-    let c2rust_fresh8 = args.size;
-    args.size = args.size.wrapping_add(1);
-    *args.items.add(c2rust_fresh8) = object {
-        type_0: kObjectTypeBuffer,
-        data: C2Rust_Unnamed {
-            integer: (*buf).handle as Integer,
-        },
-    };
-    let c2rust_fresh9 = args.size;
-    args.size = args.size.wrapping_add(1);
-    *args.items.add(c2rust_fresh9) = object {
-        type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: buf_get_changedtick(buf),
-        },
-    };
-    rpc_send_event(channel_id, c"nvim_buf_changedtick_event".as_ptr(), args);
+
+/// `nvim_buf_changedtick_event` for one channel.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn buf_updates_changedtick_single(buf: *mut buf_T, channel_id: uint64_t) {
+    // SAFETY: the caller's promise.
+    changedtick_single(unsafe { Buf::new(buf) }, channel_id);
 }
-pub unsafe extern "C" fn buffer_update_callbacks_free(mut cb: BufUpdateCallbacks) {
-    api_free_luaref(cb.on_lines);
-    api_free_luaref(cb.on_bytes);
-    api_free_luaref(cb.on_changedtick);
-    api_free_luaref(cb.on_reload);
-    api_free_luaref(cb.on_detach);
+
+fn changedtick_single(buf: Buf, channel_id: uint64_t) {
+    let mut args = ArrayBuf::<2>::new();
+    args.push(Object::buffer(buf.handle));
+    args.push(Object::integer(changedtick(buf)));
+    // Don't try and clean up dead channels here.
+    send_event(channel_id, c"nvim_buf_changedtick_event", args.array());
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// Release one attachment's Lua references.
+///
+/// # Safety
+/// The references must be ones the caller owns.
+pub unsafe extern "C" fn buffer_update_callbacks_free(cb: BufUpdateCallbacks) {
+    callbacks_free(cb);
+}
