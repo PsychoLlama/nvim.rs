@@ -24,11 +24,7 @@ use crate::src::nvim::winlayer::{Frame, Win};
 pub unsafe extern "C" fn win_equal(next_curwin: *mut win_T, current: bool, dir: c_int) {
     // SAFETY: the caller's promise -- a live window, or null for "the current
     // one".
-    let next = unsafe { Win::from_raw(next_curwin) };
-    equal(next, current, dir);
-    if !is_autocmd_window(next) {
-        fix_scroll(true);
-    }
+    equal(unsafe { Win::from_raw(next_curwin) }, current, dir);
 }
 
 /// Make all windows the same size, from `win_equal()`.
@@ -54,6 +50,9 @@ pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
         Columns.get(),
         topfr.fr_height,
     );
+    if !is_autocmd_window(next_curwin) {
+        fix_scroll(true);
+    }
 }
 
 /// Set frame `topfr` to a new position and size, spreading the room equally
