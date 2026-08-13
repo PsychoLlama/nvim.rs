@@ -47,11 +47,11 @@ unsafe fn get_buffer_info(buf: *mut buf_T) -> *mut dict_T {
 
     // List of windows displaying this buffer.
     let windows: *mut list_T = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-    for_all_tab_windows(|wp| {
+    for wp in tab_windows().map(Win::raw) {
         if (*wp).w_buffer == buf {
             tv_list_append_number(windows, (*wp).handle as varnumber_T);
         }
-    });
+    }
     tv_dict_add_list(dict, c"windows".as_ptr(), c"windows".count_bytes(), windows);
 
     if buf_has_signs(buf) {

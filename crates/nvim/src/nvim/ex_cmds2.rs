@@ -65,9 +65,9 @@ use crate::src::nvim::ex_getln::script_get;
 use crate::src::nvim::fileio::{buf_check_timestamp, check_timestamps};
 use crate::src::nvim::highlight_group::HLF_W;
 use crate::src::nvim::main::{
-    cmdline_row, cmdmod, curbuf, curtab, curwin, emsg_off, exiting, first_tabpage, firstbuf,
-    firstwin, msg_col, msg_didany, msg_didout, msg_row, no_check_timestamps, no_wait_return, p_aw,
-    p_awa, p_confirm, p_write, vgetc_busy,
+    cmdline_row, cmdmod, curbuf, curtab, curwin, emsg_off, exiting, firstbuf, msg_col, msg_didany,
+    msg_didout, msg_row, no_check_timestamps, no_wait_return, p_aw, p_awa, p_confirm, p_write,
+    vgetc_busy,
 };
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{
@@ -83,6 +83,7 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::goto_tabpage_win;
+use crate::src::nvim::winlayer::{Buf, Win, buffers as all_buffers, tabs, windows, windows_in_tab};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -136,61 +137,21 @@ mod flag {
 
 // -- List walks -------------------------------------------------------------
 //
-// The editor's buffer, window and tab page lists as iterators. Only for
-// walks nothing inside can invalidate; see the module docs.
+// `winlayer`'s walks are the editor's buffer, window and tab page lists; only
+// the tab-page-and-window PAIR has no spelling there, because nothing else in
+// the tree wants the tab page back. Use them only for walks nothing inside
+// can invalidate; see the module docs.
 
-/// Every buffer, oldest first.
+/// Every buffer, oldest first -- `FOR_ALL_BUFFERS`, as raw pointers, which is
+/// what the walks here hand straight to a still-transpiled neighbour.
 fn buffers() -> impl Iterator<Item = *mut buf_T> {
-    let mut next = firstbuf.get();
-    core::iter::from_fn(move || {
-        let buf = next;
-        if buf.is_null() {
-            return None;
-        }
-        // SAFETY: the buffer list is the editor's own and is live.
-        next = unsafe { (*buf).b_next };
-        Some(buf)
-    })
+    all_buffers().map(Buf::raw)
 }
 
-/// Every tab page, in order.
-fn tabpages() -> impl Iterator<Item = *mut tabpage_T> {
-    let mut next = first_tabpage.get();
-    core::iter::from_fn(move || {
-        let tp = next;
-        if tp.is_null() {
-            return None;
-        }
-        // SAFETY: the tab page list is the editor's own and is live.
-        next = unsafe { (*tp).tp_next };
-        Some(tp)
-    })
-}
-
-/// Every window of `tp`. The current tab page keeps its window list in
-/// `firstwin` rather than in the tab page struct, which is why this is not a
-/// plain walk of `tp_firstwin`.
-fn windows_in_tab(tp: *mut tabpage_T) -> impl Iterator<Item = *mut win_T> {
-    let mut next = if tp == curtab.get() {
-        firstwin.get()
-    } else {
-        // SAFETY: `tp` is a live tab page.
-        unsafe { (*tp).tp_firstwin }
-    };
-    core::iter::from_fn(move || {
-        let wp = next;
-        if wp.is_null() {
-            return None;
-        }
-        // SAFETY: the window list is the editor's own and is live.
-        next = unsafe { (*wp).w_next };
-        Some(wp)
-    })
-}
-
-/// Every window of every tab page, paired with the tab page holding it.
+/// Every window of every tab page, paired with the tab page holding it --
+/// `FOR_ALL_TAB_WINDOWS`, which is `tabs()` followed by `windows_in_tab()`.
 fn tab_windows() -> impl Iterator<Item = (*mut tabpage_T, *mut win_T)> {
-    tabpages().flat_map(|tp| windows_in_tab(tp).map(move |wp| (tp, wp)))
+    tabs().flat_map(|tp| windows_in_tab(tp).map(move |wp| (tp.raw(), wp.raw())))
 }
 
 // -- The script-host commands ----------------------------------------------
@@ -578,7 +539,7 @@ unsafe fn changed_check_order() -> Vec<c_int> {
     unsafe {
         let mut nrs = Vec::new();
         nrs.push((*curbuf.get()).handle as c_int);
-        for wp in windows_in_tab(curtab.get()) {
+        for wp in windows().map(Win::raw) {
             if (*wp).w_buffer != curbuf.get() {
                 push_unique(&mut nrs, (*(*wp).w_buffer).handle as c_int);
             }

@@ -82,14 +82,14 @@ pub(crate) unsafe fn set_buffer_lines(
             appended_lines_mark(append_lnum, added);
             // Only the current window of the current buffer follows the
             // insertion; the others keep looking at the line they were on.
-            for_all_tab_windows(|wp| {
+            for wp in tab_windows().map(Win::raw) {
                 if (*wp).w_buffer == buf
                     && ((*wp).w_buffer != curbuf.get() || wp == curwin.get())
                     && (*wp).w_cursor.lnum > append_lnum
                 {
                     (*wp).w_cursor.lnum += added as linenr_T;
                 }
-            });
+            }
             check_cursor_col(curwin.get());
             update_topline(curwin.get());
         }
@@ -292,7 +292,7 @@ pub unsafe extern "C" fn f_deletebufline(
         }
         // Pull every cursor that was inside or after the deleted range back
         // onto a line that still exists.
-        for_all_tab_windows(|wp| {
+        for wp in tab_windows().map(Win::raw) {
             if (*wp).w_buffer == buf {
                 if (*wp).w_cursor.lnum > last {
                     (*wp).w_cursor.lnum -= count as linenr_T;
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn f_deletebufline(
                     (*wp).w_cursor.lnum = (*(*wp).w_buffer).b_ml.ml_line_count;
                 }
             }
-        });
+        }
         check_cursor_col(curwin.get());
         deleted_lines_mark(first, count);
         (*rettv).vval.v_number = 0;

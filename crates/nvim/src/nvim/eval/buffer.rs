@@ -59,8 +59,8 @@ use core::mem;
 use core::ptr;
 
 use crate::src::nvim::main::{
-    VIsual_active, cmdwin_buf, curbuf, curtab, curwin, did_emsg, emsg_off, first_tabpage, firstbuf,
-    firstwin, swap_exists_action, u_sync_once,
+    VIsual_active, cmdwin_buf, curbuf, curtab, curwin, did_emsg, emsg_off, firstbuf, firstwin,
+    swap_exists_action, u_sync_once,
 };
 use crate::src::nvim::memline::{
     ml_append, ml_delete_flags, ml_get, ml_get_buf, ml_get_buf_len, ml_replace, ml_replace_buf,
@@ -78,6 +78,7 @@ pub const FAIL: c_int = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const ML_DEL_MESSAGE: c_uint = 1;
 use crate::src::nvim::undo::{bufIsChanged, u_clearallandblockfree, u_save, u_savesub, u_sync};
+use crate::src::nvim::winlayer::{Win, tab_windows};
 /// The editor state `change_other_buffer_prepare` saves so that
 /// `change_other_buffer_restore` can put it back.
 #[derive(Copy, Clone)]
@@ -86,23 +87,6 @@ struct SavedBufferState {
     aco: aco_save_T,
     using_aco: bool,
     save_visual_active: bool,
-}
-/// Visit every window of every tab page, in `FOR_ALL_TAB_WINDOWS` order: the
-/// current tab page reports the live window list rather than its saved one.
-unsafe fn for_all_tab_windows(mut visit: impl FnMut(*mut win_T)) {
-    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-    while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab.get() {
-            firstwin.get()
-        } else {
-            (*tp).tp_firstwin
-        };
-        while !wp.is_null() {
-            visit(wp);
-            wp = (*wp).w_next;
-        }
-        tp = (*tp).tp_next as *mut tabpage_T;
-    }
 }
 /// If there is a window for "curbuf", make it the current window.
 unsafe fn find_win_for_curbuf() {
