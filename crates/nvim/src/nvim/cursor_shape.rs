@@ -544,11 +544,9 @@ pub unsafe fn cursor_get_mode_idx() -> ShapeIdx {
     } else if state & MODE_INSERT != 0 {
         SHAPE_IDX_I
     } else if state & MODE_CMDLINE != 0 {
-        // SAFETY: the command line is live whenever MODE_CMDLINE is set.
-        if unsafe { cmdline_at_end() } {
+        if cmdline_at_end() {
             SHAPE_IDX_C
-        // SAFETY: as above.
-        } else if unsafe { cmdline_overstrike() } {
+        } else if cmdline_overstrike() {
             SHAPE_IDX_CR
         } else {
             SHAPE_IDX_CI
