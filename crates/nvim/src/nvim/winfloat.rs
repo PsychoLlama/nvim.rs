@@ -15,7 +15,7 @@
 //! `unsafe extern "C"` functions over raw pointers, and each is reached through
 //! exactly one wrapper below rather than through an `unsafe` at every call
 //! site; those wrappers are safe because their whole precondition is "a live
-//! window, tab page or buffer", which [`Win`], [`Tab`] and [`Buf`] carry.
+//! window, tab page or buffer", which [`Win`], [`TabPage`] and [`Buf`] carry.
 //!
 //! Original: `src/nvim/winfloat.c`, Vim/Neovim, Vim license.
 
@@ -23,7 +23,6 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::iter;
-use core::ops::Deref;
 use core::ptr::{self, NonNull};
 
 use crate::src::nvim::api::private::helpers::{
@@ -34,7 +33,7 @@ use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::src::nvim::grid::grid_adjust;
 use crate::src::nvim::main::{
-    Columns, Rows, cmdwin_win, curtab, e_cmdwin, firstwin, lastwin, p_ch, p_ls, prevwin,
+    Columns, Rows, cmdwin_win, e_cmdwin, firstwin, lastwin, p_ch, p_ls, prevwin,
 };
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::emsg;
@@ -58,7 +57,7 @@ use crate::src::nvim::window::{
     win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
     win_remove_status_line, win_set_buf, win_set_inner_size, win_valid, winframe_remove,
 };
-use crate::src::nvim::winlayer::{Buf, Win};
+use crate::src::nvim::winlayer::{Buf, TabPage, Win, windows_in_tab};
 
 /// Above this `zindex` a float is not capped by 'cmdheight'.
 const kZIndexMessages: c_int = 200;
@@ -122,65 +121,16 @@ const WIN_CONFIG_INIT: WinConfig = WinConfig {
 };
 
 // ---------------------------------------------------------------------------
-// The tab page, wrapped
-
-/// A tab page the caller has promised is live: the counterpart of [`Win`] for
-/// `tabpage_T`, construction being the unsafe step and [`Deref`] giving
-/// ordinary field access. Private, as `mouse/find.rs` and
-/// `statusline/status.rs` each keep a private `Frame`; the three belong in
-/// `winlayer.rs` together.
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct Tab(*mut tabpage_T);
-
-impl Deref for Tab {
-    type Target = tabpage_T;
-
-    fn deref(&self) -> &tabpage_T {
-        // SAFETY: the constructor's promise -- a live tab page.
-        unsafe { &*self.0 }
-    }
-}
-
-impl Tab {
-    /// # Safety
-    /// `tp` must stay a live tab page for as long as the value is used.
-    const unsafe fn new(tp: *mut tabpage_T) -> Self {
-        Self(tp)
-    }
-
-    /// The tab page `tp` names, `None` for null -- which is how window.rs
-    /// spells "the current one" throughout.
-    ///
-    /// # Safety
-    /// `tp` must be null or a live tab page.
-    const unsafe fn from_raw(tp: *mut tabpage_T) -> Option<Self> {
-        if tp.is_null() { None } else { Some(Self(tp)) }
-    }
-
-    fn raw(self) -> *mut tabpage_T {
-        self.0
-    }
-
-    /// Safe where [`Tab::deref`] is not: comparing two pointers reads neither.
-    fn is_current(self) -> bool {
-        self.0 == curtab.get()
-    }
-
-    /// This tab page as window.rs takes it in an argument: `None` when it is
-    /// the current one, which every list function reads as "no tab page".
-    fn into_other(self) -> Option<Self> {
-        (!self.is_current()).then_some(self)
-    }
-}
+// The tab page
 
 /// `NULL` for "the current tab page", as window.rs spells it.
-fn raw_tab(tp: Option<Tab>) -> *mut tabpage_T {
-    tp.map_or(ptr::null_mut(), Tab::raw)
+fn raw_tab(tp: Option<TabPage>) -> *mut tabpage_T {
+    tp.map_or(ptr::null_mut(), TabPage::raw)
 }
 
-fn current_tab() -> Tab {
+fn current_tab() -> TabPage {
     // SAFETY: `curtab` is set from startup to exit.
-    unsafe { Tab::new(curtab.get()) }
+    unsafe { TabPage::current() }
 }
 
 fn current_win() -> Win {
@@ -207,21 +157,6 @@ fn floats() -> impl Iterator<Item = Win> {
         next = win.w_prev;
         Some(win)
     })
-}
-
-/// Every window of tab page `tp`, in list order: `FOR_ALL_WINDOWS_IN_TAB`.
-/// The current tab page's windows hang off `firstwin`, not off its own
-/// `tp_firstwin`, which is stale while it is current -- that is what the
-/// macro's first arm reads.
-fn windows_in_tab(tp: Tab) -> impl Iterator<Item = Win> {
-    let first = if tp.is_current() {
-        firstwin.get()
-    } else {
-        tp.tp_firstwin
-    };
-    // SAFETY: a tab page's window list is live, and ends at a null `w_next`.
-    let first = (!first.is_null()).then(|| unsafe { Win::new(first) });
-    iter::successors(first, |wp| wp.next())
 }
 
 // ---------------------------------------------------------------------------
@@ -288,13 +223,13 @@ fn concat(old: *const c_char, tail: &'static CStr) -> *mut c_char {
 // every call site in this file is ordinary code. They collapse to nothing when
 // window.rs is itself rewritten.
 
-fn last_nofloat(tp: Option<Tab>) -> *mut win_T {
+fn last_nofloat(tp: Option<TabPage>) -> *mut win_T {
     // SAFETY: null, or a live tab page.
     unsafe { lastwin_nofloating(raw_tab(tp)) }
 }
-fn tabpage_of(win: Win) -> Option<Tab> {
+fn tabpage_of(win: Win) -> Option<TabPage> {
     // SAFETY: a live window; the answer is a live tab page or null.
-    unsafe { Tab::from_raw(win_find_tabpage(win.raw())) }
+    unsafe { TabPage::from_raw(win_find_tabpage(win.raw())) }
 }
 
 /// A fresh window appended after `after` (at the head when null), not hidden.
@@ -310,7 +245,7 @@ fn init_window(win: Win) {
 
 /// Take `win` out of `tp`'s frame tree, handing its space to a neighbour. The
 /// direction it answers is unused here, as it is upstream.
-fn remove_from_frame(win: Win, tp: Option<Tab>) {
+fn remove_from_frame(win: Win, tp: Option<TabPage>) {
     let mut dir: c_int = 0;
     // SAFETY: a live, non-floating window of `tp`; `dir` is a local.
     unsafe { winframe_remove(win.raw(), &raw mut dir, raw_tab(tp), ptr::null_mut()) };
@@ -322,15 +257,15 @@ fn free_frame(win: &mut Win) {
     unsafe { xfree(win.w_frame.cast::<c_void>()) };
     win.w_frame = ptr::null_mut();
 }
-fn remove_window(win: Win, tp: Option<Tab>) {
+fn remove_window(win: Win, tp: Option<TabPage>) {
     // SAFETY: a live window of `tp`.
     unsafe { win_remove(win.raw(), raw_tab(tp)) };
 }
-fn append_window(after: *mut win_T, win: Win, tp: Option<Tab>) {
+fn append_window(after: *mut win_T, win: Win, tp: Option<TabPage>) {
     // SAFETY: `after` is null or a live window of `tp`; `win` is in no list.
     unsafe { win_append(after, win.raw(), raw_tab(tp)) };
 }
-fn free_window(win: Win, tp: Option<Tab>) {
+fn free_window(win: Win, tp: Option<TabPage>) {
     // SAFETY: a live window, unlinked by `remove_window` just before.
     unsafe { win_free(win.raw(), raw_tab(tp)) };
 }
@@ -364,7 +299,7 @@ fn valid_window(win: *mut win_T) -> Option<Win> {
     // SAFETY: `win` is compared, never read, and one found in the list is live.
     unsafe { win_valid(win).then(|| Win::new(win)) }
 }
-fn valid_in_tab(tp: Tab, win: *mut win_T) -> Option<Win> {
+fn valid_in_tab(tp: TabPage, win: *mut win_T) -> Option<Win> {
     // SAFETY: a live tab page; `win` is compared, never read.
     unsafe { tabpage_win_valid(tp.raw(), win).then(|| Win::new(win)) }
 }
@@ -882,7 +817,7 @@ pub unsafe extern "C" fn win_float_find_altwin(
 ) -> *mut win_T {
     // `win` itself is only ever compared below, never read, so it stays raw.
     // SAFETY: the caller's promise -- null, or a live tab page.
-    let Some(tp) = (unsafe { Tab::from_raw(tp.cast_mut()) }) else {
+    let Some(tp) = (unsafe { TabPage::from_raw(tp.cast_mut()) }) else {
         let wp = valid_window(prevwin.get())
             .filter(|wp| wp.raw() != win.cast_mut())
             .filter(|wp| wp.w_config.focusable && !wp.w_config.hide);

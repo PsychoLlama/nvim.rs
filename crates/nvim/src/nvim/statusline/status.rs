@@ -14,7 +14,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
-use core::ops::Deref;
 
 #[allow(unused_imports)]
 use super::*;
@@ -26,8 +25,9 @@ use crate::src::nvim::main::{default_gridview, redraw_cmdline, wild_menu_showing
 use crate::src::nvim::memory::xstrlcpy;
 use crate::src::nvim::os::env::home_replace;
 use crate::src::nvim::types::ui::kUIWildmenu;
-use crate::src::nvim::types::{buf_T, frame_T, win_T};
+use crate::src::nvim::types::{buf_T, win_T};
 use crate::src::nvim::ui::ui_has;
+use crate::src::nvim::winlayer::Frame;
 
 /// Redraw the status line of window `wp`.
 ///
@@ -84,37 +84,6 @@ pub unsafe extern "C" fn win_redr_status(wp: *mut win_T) {
     BUSY.set(false);
 }
 
-/// A frame of the window layout tree the caller has promised is live.
-#[derive(Clone, Copy)]
-struct Frame(*mut frame_T);
-
-impl Deref for Frame {
-    type Target = frame_T;
-
-    fn deref(&self) -> &frame_T {
-        // SAFETY: the constructor's promise -- a live frame.
-        unsafe { &*self.0 }
-    }
-}
-
-impl Frame {
-    /// # Safety
-    /// `fr` must stay a live frame for as long as the value is used.
-    const unsafe fn new(fr: *mut frame_T) -> Self {
-        Frame(fr)
-    }
-
-    fn parent(self) -> Option<Self> {
-        let parent = self.fr_parent;
-        // SAFETY: a live frame's parent is live or null.
-        (!parent.is_null()).then(|| unsafe { Frame::new(parent) })
-    }
-
-    fn has_next(self) -> bool {
-        !self.fr_next.is_null()
-    }
-}
-
 /// Whether the status line of `wp` is connected to the status line of the
 /// window right of it -- as opposed to meeting a vertical separator there.
 ///
@@ -128,10 +97,10 @@ pub unsafe extern "C" fn stl_connected(wp: *mut win_T) -> bool {
     while let Some(parent) = fr.parent() {
         if c_int::from(parent.fr_layout) == FR_COL {
             // A row below this one ends the run.
-            if fr.has_next() {
+            if fr.next().is_some() {
                 break;
             }
-        } else if fr.has_next() {
+        } else if fr.next().is_some() {
             // Another window beside this one, at the same height.
             return true;
         }

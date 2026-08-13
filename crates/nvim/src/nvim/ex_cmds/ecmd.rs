@@ -24,7 +24,6 @@
 mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
-use super::lines::tab_windows;
 use super::{
     BF_CHECK_RO, BF_NEVERLOADED, BF_NOTEDITED, BFA_KEEP_UNDO, BL_FIX, BL_SOL, BL_WHITE, CCGD_AW,
     CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOCMD_VERBOSE, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT,
@@ -75,6 +74,7 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::src::nvim::window::{check_lnums, curwin_init, win_valid};
+use crate::src::nvim::winlayer::tab_windows;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -650,11 +650,9 @@ unsafe fn enter_new_buffer(
     // It's possible that all lines in the buffer changed.  Need to update
     // automatic folding for all windows where it's used.
     for win in tab_windows() {
-        // SAFETY: `win` is a live window.
-        unsafe {
-            if (*win).w_buffer == curbuf.get() {
-                foldUpdateAll(win);
-            }
+        if win.w_buffer == curbuf.get() {
+            // SAFETY: `win` is a live window.
+            unsafe { foldUpdateAll(win.raw()) };
         }
     }
 

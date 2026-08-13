@@ -17,8 +17,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
-use core::iter;
-use core::ops::Deref;
 use core::ptr;
 
 #[allow(unused_imports)]
@@ -26,58 +24,9 @@ use super::*;
 use crate::src::nvim::grid::get_win_by_grid_handle;
 use crate::src::nvim::main::{firstwin, msg_grid, msg_grid_pos, pum_grid, topframe};
 use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
-use crate::src::nvim::types::{CharsizeArg, frame_T, handle_T, linenr_T, win_T};
+use crate::src::nvim::types::{CharsizeArg, handle_T, linenr_T};
 use crate::src::nvim::ui_compositor::ui_comp_mouse_focus;
-
-// ---------------------------------------------------------------------------
-// The layout tree, wrapped
-
-/// A frame of the window layout tree the caller has promised is live.
-#[derive(Clone, Copy)]
-struct Frame(*mut frame_T);
-
-impl Deref for Frame {
-    type Target = frame_T;
-
-    fn deref(&self) -> &frame_T {
-        // SAFETY: the constructor's promise -- a live frame.
-        unsafe { &*self.0 }
-    }
-}
-
-impl Frame {
-    /// # Safety
-    /// `fp` must stay a live frame for as long as the value is used.
-    const unsafe fn new(fp: *mut frame_T) -> Self {
-        Self(fp)
-    }
-
-    /// This frame's first child, which every non-leaf frame has.
-    fn child(self) -> Option<Self> {
-        let child = self.fr_child;
-        (!child.is_null()).then_some(Self(child))
-    }
-
-    /// The frame beside this one, if it is not the last.
-    fn next(self) -> Option<Self> {
-        let next = self.fr_next;
-        (!next.is_null()).then_some(Self(next))
-    }
-}
-
-/// The windows of the current tab page, in layout order.
-///
-/// C spells this `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, whose `curtab == curtab`
-/// test always picks `firstwin`.
-///
-/// # Safety
-/// The window list must be live, which it is from startup to exit.
-unsafe fn windows_in_tab() -> impl Iterator<Item = Win> {
-    let first = firstwin.get();
-    // SAFETY: the caller's promise -- a live window list.
-    let first = (!first.is_null()).then(|| unsafe { Win::new(first) });
-    iter::successors(first, |wp| wp.next())
-}
+use crate::src::nvim::winlayer::{Frame, windows};
 
 /// The screen row the first window starts at: the tab page line's height.
 pub fn first_window_row() -> c_int {
@@ -129,8 +78,7 @@ pub fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
 
     // When using a timer that closes a window the window might not actually
     // exist.
-    // SAFETY: the window list is live from startup to exit.
-    let win = unsafe { windows_in_tab() }.find(|wp| wp.raw() == fp.fr_win)?;
+    let win = windows().find(|wp| wp.raw() == fp.fr_win)?;
     pos.row -= win.w_winbar_height;
     Some(win)
 }
@@ -176,8 +124,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
             // The popup menu doesn't have a window, so answer None.
             return None;
         }
-        // SAFETY: the window list is live from startup to exit.
-        for win in unsafe { windows_in_tab() } {
+        for win in windows() {
             if !ptr::eq(&raw const win.w_grid_alloc, grid) {
                 continue;
             }

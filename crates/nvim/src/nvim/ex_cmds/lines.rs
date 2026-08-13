@@ -17,8 +17,7 @@ use crate::src::nvim::cursor::check_pos;
 use crate::src::nvim::extmark::extmark_move_region;
 use crate::src::nvim::fold::foldMoveRange;
 use crate::src::nvim::main::{
-    VIsual, VIsual_active, cmdmod, curbuf, curtab, curwin, disable_fold_update, first_tabpage,
-    firstwin, global_busy, p_report,
+    VIsual, VIsual_active, cmdmod, curbuf, curwin, disable_fold_update, global_busy, p_report,
 };
 use crate::src::nvim::mark::mark_adjust_nofold;
 use crate::src::nvim::memline::{
@@ -28,8 +27,9 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::{emsg, msgmore};
 use crate::src::nvim::os::libc::{gettext, ngettext};
 use crate::src::nvim::strings::xstrnsave;
-use crate::src::nvim::types::{OptInt, bcount_t, int64_t, linenr_T, size_t, tabpage_T, win_T};
+use crate::src::nvim::types::{OptInt, bcount_t, int64_t, linenr_T, size_t};
 use crate::src::nvim::undo::u_save;
+use crate::src::nvim::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};
 use core::ptr;
 
@@ -266,7 +266,7 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 /// The three line numbers must be a `foldMoveRange` range of the current
 /// buffer.
 unsafe fn fold_move_range(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
-    for wp in tab_windows() {
+    for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
         unsafe {
             if (*wp).w_buffer == curbuf.get() {
@@ -293,34 +293,6 @@ pub(super) unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
         (*curbuf.get()).b_op_end.lnum = end;
         (*curbuf.get()).b_op_end.col = 0;
     }
-}
-
-/// Every window of every tab page, in `FOR_ALL_TAB_WINDOWS` order: the current
-/// tab page keeps its window list in `firstwin` rather than in its own struct.
-pub(super) fn tab_windows() -> impl Iterator<Item = *mut win_T> {
-    let mut tp: *mut tabpage_T = first_tabpage.get();
-    let mut wp: *mut win_T = ptr::null_mut();
-    core::iter::from_fn(move || {
-        loop {
-            if !wp.is_null() {
-                let found = wp;
-                // SAFETY: the window list is the editor's own and is live.
-                wp = unsafe { (*found).w_next };
-                return Some(found);
-            }
-            if tp.is_null() {
-                return None;
-            }
-            wp = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                // SAFETY: `tp` is a live tab page.
-                unsafe { (*tp).tp_firstwin }
-            };
-            // SAFETY: as above.
-            tp = unsafe { (*tp).tp_next };
-        }
-    })
 }
 
 /// `:copy` and `:t` -- copy lines `line1`..`line2` to below line `n`.

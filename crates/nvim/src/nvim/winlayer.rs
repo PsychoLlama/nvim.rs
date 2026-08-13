@@ -8,32 +8,41 @@
 //! `&mut` would invalidate a pointer the caller still holds.
 //!
 //! What does not have to stay raw is the *dereference*. [`Win`], [`Buf`],
-//! [`Pos`] and [`Line`] each wrap one pointer and make its **construction**
-//! the unsafe step; from there [`Deref`]/[`DerefMut`] give ordinary field
-//! access and the handful of accessors below give the projections a bare
-//! `&`/`&mut` cannot express — the buffer behind a window, a line of that
-//! buffer, the span of a fold. Every one of them rests on the single promise
-//! the constructor took, which each `pub unsafe fn` in a consumer restates in
-//! its own `# Safety` section.
+//! [`Frame`], [`TabPage`], [`Pos`] and [`Line`] each wrap one pointer and make
+//! its **construction** the unsafe step; from there [`Deref`]/[`DerefMut`] give
+//! ordinary field access and the handful of accessors below give the
+//! projections a bare `&`/`&mut` cannot express — the buffer behind a window, a
+//! line of that buffer, the span of a fold. Every one of them rests on the
+//! single promise the constructor took, which each `pub unsafe fn` in a
+//! consumer restates in its own `# Safety` section.
 //!
 //! Each family adds the wrappers it needs as its own `impl Win` block (an
 //! inherent impl may live in any module of the defining crate), so this module
 //! stays the shared minimum rather than growing a method per caller.
+//!
+//! The four walks at the bottom — [`windows`], [`windows_in_tab`],
+//! [`tab_windows`] and [`buffers`], plus [`tabs`] under them — are the C's
+//! `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS` and `FOR_ALL_BUFFERS`. The
+//! lists they walk are the editor's own and live from startup to exit, so the
+//! walks are safe functions; each is lazy, as the macro it replaces is.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_char;
+use core::iter;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
 use crate::src::nvim::drawscreen::redraw_later;
 use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
-use crate::src::nvim::main::{curbuf, curwin};
+use crate::src::nvim::main::{curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin};
 use crate::src::nvim::mark::mark_mb_adjustpos;
 use crate::src::nvim::mbyte::{utf_ptr2StrCharInfo, utfc_next};
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::src::nvim::plines::{getvcol, getvvcol};
-use crate::src::nvim::types::{StrCharInfo, buf_T, colnr_T, linenr_T, pos_T, win_T};
+use crate::src::nvim::types::{
+    StrCharInfo, buf_T, colnr_T, frame_T, linenr_T, pos_T, tabpage_T, win_T,
+};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -45,6 +54,18 @@ pub struct Win(*mut win_T);
 /// A buffer the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Buf(*mut buf_T);
+
+/// A frame of the window layout tree the caller has promised is live.
+///
+/// A frame is either a leaf holding one window (`fr_win`) or a row or column
+/// of child frames (`fr_child`, chained through `fr_next`); `fr_parent` walks
+/// back up. Which of the two a frame is, `fr_layout` says.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Frame(*mut frame_T);
+
+/// A tab page the caller has promised is live.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TabPage(*mut tabpage_T);
 
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -87,6 +108,42 @@ impl DerefMut for Buf {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut buf_T {
         // SAFETY: the constructor's promise — a live buffer.
+        unsafe { &mut *self.0 }
+    }
+}
+
+impl Deref for Frame {
+    type Target = frame_T;
+
+    #[inline(always)]
+    fn deref(&self) -> &frame_T {
+        // SAFETY: the constructor's promise — a live frame.
+        unsafe { &*self.0 }
+    }
+}
+
+impl DerefMut for Frame {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut frame_T {
+        // SAFETY: the constructor's promise — a live frame.
+        unsafe { &mut *self.0 }
+    }
+}
+
+impl Deref for TabPage {
+    type Target = tabpage_T;
+
+    #[inline(always)]
+    fn deref(&self) -> &tabpage_T {
+        // SAFETY: the constructor's promise — a live tab page.
+        unsafe { &*self.0 }
+    }
+}
+
+impl DerefMut for TabPage {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut tabpage_T {
+        // SAFETY: the constructor's promise — a live tab page.
         unsafe { &mut *self.0 }
     }
 }
@@ -314,6 +371,112 @@ impl Buf {
         // SAFETY: a live buffer and a live position in it.
         unsafe { mark_mb_adjustpos(self.0, pos.0) };
     }
+
+    /// The next buffer in the editor's buffer list, if any.
+    #[inline(always)]
+    pub fn next(self) -> Option<Self> {
+        // A live buffer's `b_next` is a live buffer or null.
+        let next = self.b_next;
+        (!next.is_null()).then_some(Self(next))
+    }
+}
+
+impl Frame {
+    /// # Safety
+    /// `fp` must stay a live frame for as long as the value is used.
+    #[inline(always)]
+    pub const unsafe fn new(fp: *mut frame_T) -> Self {
+        Self(fp)
+    }
+
+    #[inline(always)]
+    pub fn raw(self) -> *mut frame_T {
+        self.0
+    }
+
+    /// The frame this one is a child of — `None` only for the tab page's
+    /// `topframe`, the one frame with no parent.
+    #[inline(always)]
+    pub fn parent(self) -> Option<Self> {
+        // A live frame's `fr_parent` is a live frame or null.
+        let parent = self.fr_parent;
+        (!parent.is_null()).then_some(Self(parent))
+    }
+
+    /// This frame's first child, which every non-leaf frame has.
+    #[inline(always)]
+    pub fn child(self) -> Option<Self> {
+        // A live frame's `fr_child` is a live frame or null.
+        let child = self.fr_child;
+        (!child.is_null()).then_some(Self(child))
+    }
+
+    /// The frame beside this one, if it is not the last of its row or column.
+    #[inline(always)]
+    pub fn next(self) -> Option<Self> {
+        // A live frame's `fr_next` is a live frame or null.
+        let next = self.fr_next;
+        (!next.is_null()).then_some(Self(next))
+    }
+}
+
+impl TabPage {
+    /// # Safety
+    /// `tp` must stay a live tab page for as long as the value is used.
+    #[inline(always)]
+    pub const unsafe fn new(tp: *mut tabpage_T) -> Self {
+        Self(tp)
+    }
+
+    /// The tab page `tp` names, `None` for null — which is how the window
+    /// family spells "the current one" throughout.
+    ///
+    /// # Safety
+    /// `tp` must be null, or stay a live tab page for as long as the value is
+    /// used.
+    #[inline(always)]
+    pub const unsafe fn from_raw(tp: *mut tabpage_T) -> Option<Self> {
+        if tp.is_null() { None } else { Some(Self(tp)) }
+    }
+
+    /// The tab page the editor is working in.
+    ///
+    /// # Safety
+    /// `curtab` must be set, which it is from startup to exit.
+    #[inline(always)]
+    pub unsafe fn current() -> Self {
+        Self(curtab.get())
+    }
+
+    #[inline(always)]
+    pub fn raw(self) -> *mut tabpage_T {
+        self.0
+    }
+
+    /// Whether this is the tab page the editor is working in.
+    ///
+    /// Safe where [`TabPage::current`] is not: comparing the two pointers
+    /// reads neither of them.
+    #[inline(always)]
+    pub fn is_current(self) -> bool {
+        self.0 == curtab.get()
+    }
+
+    /// This tab page as the window family takes it in an argument: `None` when
+    /// it is the current one, which every such entry point reads as "no tab
+    /// page given, use the current".
+    #[inline(always)]
+    pub fn into_other(self) -> Option<Self> {
+        (!self.is_current()).then_some(self)
+    }
+
+    /// The next tab page in the editor's list, if any.
+    #[inline(always)]
+    pub fn next(self) -> Option<Self> {
+        // A live tab page's `tp_next` is a live tab page or null.
+        let next = self.tp_next;
+        (!next.is_null()).then_some(Self(next))
+    }
 }
 
 impl Pos {
@@ -383,4 +546,62 @@ impl Line {
     pub fn index_of(self, ci: StrCharInfo) -> ::core::ffi::c_int {
         ci.ptr.addr().wrapping_sub(self.0.addr()) as ::core::ffi::c_int
     }
+}
+
+// ---------------------------------------------------------------------------
+// The lists, walked
+//
+// Each of these is one of the C's `FOR_ALL_*` macros. The lists are the
+// editor's own: they are built before the first window is drawn and torn down
+// only at exit, and every link ends at a null, so producing the head and
+// stepping the chain needs no promise from the caller — which is what makes
+// these safe functions rather than `unsafe fn`s. A walk that its own body can
+// invalidate is a different matter and stays the caller's problem: none of
+// these re-reads the head, exactly as the macros do not.
+
+/// The windows hanging off `first`, in list order.
+fn win_chain(first: *mut win_T) -> impl Iterator<Item = Win> {
+    // The chain is a live window list ending at a null `w_next`.
+    iter::successors((!first.is_null()).then_some(Win(first)), |wp| wp.next())
+}
+
+/// Every window of the current tab page, in list order: the C's
+/// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, whose `curtab == curtab` test always
+/// picks `firstwin`.
+pub fn windows() -> impl Iterator<Item = Win> {
+    win_chain(firstwin.get())
+}
+
+/// Every window of tab page `tp`, in list order: `FOR_ALL_WINDOWS_IN_TAB`.
+///
+/// The current tab page's windows hang off the `firstwin` global rather than
+/// off its own `tp_firstwin`, which is stale while it is current — that is
+/// what the macro's first arm reads.
+pub fn windows_in_tab(tp: TabPage) -> impl Iterator<Item = Win> {
+    win_chain(if tp.is_current() {
+        firstwin.get()
+    } else {
+        tp.tp_firstwin
+    })
+}
+
+/// Every tab page, in list order: the C's `FOR_ALL_TABS`.
+pub fn tabs() -> impl Iterator<Item = TabPage> {
+    // The chain is the editor's tab page list, ending at a null `tp_next`.
+    let first = first_tabpage.get();
+    iter::successors((!first.is_null()).then_some(TabPage(first)), |tp| tp.next())
+}
+
+/// Every window of every tab page: `FOR_ALL_TAB_WINDOWS`, which is exactly
+/// [`tabs`] with [`windows_in_tab`] inside it. `tp_next` is read after the tab
+/// page's own windows are exhausted, as the macro's outer `for` reads it.
+pub fn tab_windows() -> impl Iterator<Item = Win> {
+    tabs().flat_map(windows_in_tab)
+}
+
+/// Every buffer, in list order: the C's `FOR_ALL_BUFFERS`.
+pub fn buffers() -> impl Iterator<Item = Buf> {
+    // The chain is the editor's buffer list, ending at a null `b_next`.
+    let first = firstbuf.get();
+    iter::successors((!first.is_null()).then_some(Buf(first)), |buf| buf.next())
 }
