@@ -45,19 +45,34 @@ struct Chrome {
 }
 
 /// A frame tree, kept alive as long as the `Frame`s handed out of it.
-#[expect(
-    clippy::vec_box,
-    reason = "the nodes need stable addresses: the tree points at them"
-)]
+///
+/// The nodes are `Box::into_raw`'d rather than kept as `Box`es: a raw pointer
+/// taken out of a live `Box` is invalidated as soon as the `Box` itself is
+/// used again (Miri's stacked borrows says so, and it is right), and the whole
+/// point here is that the tree points at them.
 struct Tree {
-    frames: Vec<Box<frame_T>>,
-    windows: Vec<Box<win_T>>,
+    nodes: Vec<*mut frame_T>,
+    windows: Vec<*mut win_T>,
+}
+
+impl Drop for Tree {
+    fn drop(&mut self) {
+        for &node in &self.nodes {
+            // SAFETY: each was `Box::into_raw`'d by this tree and is freed
+            // exactly once.
+            drop(unsafe { Box::from_raw(node) });
+        }
+        for &win in &self.windows {
+            // SAFETY: as above.
+            drop(unsafe { Box::from_raw(win) });
+        }
+    }
 }
 
 impl Tree {
     fn new() -> Self {
         Tree {
-            frames: Vec::new(),
+            nodes: Vec::new(),
             windows: Vec::new(),
         }
     }
@@ -65,9 +80,9 @@ impl Tree {
     fn zeroed_frame(&mut self) -> *mut frame_T {
         // SAFETY: `frame_T` is a plain C struct of integers and pointers, and
         // an all-zero one is what `xcalloc` hands `new_frame()`.
-        let mut node: Box<frame_T> = Box::new(unsafe { std::mem::zeroed() });
-        let ptr = &raw mut *node;
-        self.frames.push(node);
+        let node: Box<frame_T> = Box::new(unsafe { std::mem::zeroed() });
+        let ptr = Box::into_raw(node);
+        self.nodes.push(ptr);
         ptr
     }
 
@@ -75,16 +90,19 @@ impl Tree {
     /// `width` columns.
     fn leaf(&mut self, chrome: Chrome, height: c_int, width: c_int) -> *mut frame_T {
         // SAFETY: as above; `arith` reads only the four chrome fields.
-        let mut win: Box<win_T> = Box::new(unsafe { std::mem::zeroed() });
-        win.w_winbar_height = chrome.winbar;
-        win.w_hsep_height = chrome.hsep;
-        win.w_status_height = chrome.status;
-        win.w_vsep_width = chrome.vsep;
-        let wp = &raw mut *win;
-        self.windows.push(win);
+        let win: Box<win_T> = Box::new(unsafe { std::mem::zeroed() });
+        let wp = Box::into_raw(win);
+        self.windows.push(wp);
+        // SAFETY: the window was just allocated and outlives the tree.
+        unsafe {
+            (*wp).w_winbar_height = chrome.winbar;
+            (*wp).w_hsep_height = chrome.hsep;
+            (*wp).w_status_height = chrome.status;
+            (*wp).w_vsep_width = chrome.vsep;
+        }
 
         let fr = self.zeroed_frame();
-        // SAFETY: the node was just pushed and outlives every use.
+        // SAFETY: the node was just allocated and outlives every use.
         unsafe {
             (*fr).fr_layout = FR_LEAF;
             (*fr).fr_win = wp;
@@ -98,7 +116,7 @@ impl Tree {
     /// layout tree links them.
     fn branch(&mut self, layout: i8, children: &[*mut frame_T]) -> *mut frame_T {
         let parent = self.zeroed_frame();
-        // SAFETY: every node here was pushed by this `Tree` and outlives it.
+        // SAFETY: every node here was allocated by this `Tree` and outlives it.
         unsafe {
             (*parent).fr_layout = layout;
             (*parent).fr_child = children[0];
