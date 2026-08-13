@@ -34,7 +34,7 @@ use crate::src::nvim::buffer::{buflist_getfile, do_modelines, no_write_message};
 use crate::src::nvim::change::changed_lines;
 use crate::src::nvim::charset::{skipdigits, skipwhite, vim_isprintc};
 use crate::src::nvim::cursor::{check_cursor, coladvance};
-use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_later};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_buf_later};
 use crate::src::nvim::drawscreen::{redraw_curbuf_later, update_screen};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::typval::{
@@ -133,8 +133,7 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
 use crate::src::nvim::window::{
-    check_can_set_curbuf_forceit, check_lnums, tabline_height, win_setheight, win_setwidth,
-    win_split,
+    check_can_set_curbuf_forceit, check_lnums, win_setheight, win_split,
 };
 use crate::src::nvim::window::{goto_tabpage_win, win_close, win_enter, win_goto, win_valid};
 use core::ffi::{CStr, c_int, c_uint};

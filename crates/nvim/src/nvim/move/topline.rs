@@ -73,7 +73,7 @@ pub unsafe fn update_topline(wp: *mut win_T) {
 impl Win {
     /// Move `w_topline` so that the cursor is on the screen, with 'scrolloff'
     /// lines of context above and below it where the buffer allows.
-    pub(super) fn update_topline(self) {
+    pub(crate) fn update_topline(self) {
         update_topline_win(self);
     }
 }
