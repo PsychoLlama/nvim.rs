@@ -422,10 +422,14 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     } else if retval != FAIL && !read_stdin && !read_fifo {
         unchanged_now(buf, false, true);
     }
-    save_fileformat(buf); // keep this fileformat
+    // `changed()` notifies the `b:changedtick` watchers, which can re-enter
+    // Lua and leave another buffer current -- so from here on `curbuf` and
+    // `curwin` are re-read at each step, exactly as upstream reads the globals.
+    save_fileformat(cur_buf()); // keep this fileformat
 
     // Set last_changedtick to avoid triggering a TextChanged autocommand right
     // after it was added.
+    let mut buf = cur_buf();
     let tick = changedtick(buf);
     buf.b_last_changedtick = tick;
     buf.b_last_changedtick_i = tick;
@@ -433,15 +437,15 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
 
     // require "!" to overwrite the file, because it wasn't read completely
     if aborting_now() {
-        buf.b_flags |= BF_READERR;
+        cur_buf().b_flags |= BF_READERR;
     }
 
     // Need to update automatic folding.  Do this before the autocommands, they
     // may use the fold info.
-    let mut win = cur_win();
-    fold_update_all(win);
+    fold_update_all(cur_win());
 
     // need to set w_topline, unless some autocommand already did that.
+    let mut win = cur_win();
     if win.w_valid & VALID_TOPLINE == 0 {
         win.w_topline = 1 as linenr_T;
         win.w_topfill = 0;

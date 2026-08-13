@@ -295,9 +295,8 @@ fn leave_prevbuf(
         reset_syntax(cur_win());
     }
     // autocommands may have opened a new window with prevbuf, grr
-    // SAFETY: `prevbuf` was live when this call began; `close_windows` and
-    // `buf_hide` are only reached while it still is -- an autocommand that
-    // freed it would have failed `bufref_valid` in the caller's guard.
+    // SAFETY: the caller's guard has just said `prevbuf` is still the buffer
+    // it was -- either `BufLeave` ran nothing, or `bufref_valid` answered yes.
     let prevbuf = unsafe { Buf::new(prevraw) };
     if unload
         || prev_nwindows <= 1
@@ -307,9 +306,10 @@ fn leave_prevbuf(
     {
         close_all_windows(prevbuf, false);
     }
-    if !prevbufref.valid() || aborting_now() {
+    // `close_windows` fires `WinClosed` and `BufWinLeave`, so ask again.
+    let Some(prevbuf) = prevbufref.get().filter(|_| !aborting_now()) else {
         return;
-    }
+    };
     let previouswin = curwin.get();
 
     // Do not sync when in Insert mode and the buffer is open in another

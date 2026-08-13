@@ -583,8 +583,9 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     }
 
     // Go to the other buffer.
-    // SAFETY: `buf` has not been freed since it was located -- everything
-    // between here and there either left it alone or re-validated it.
+    // SAFETY: upstream's own assumption, recorded rather than fixed --
+    // `swbuf_goto_win_with_buf`, `win_split` and the `:confirm` dialog above
+    // all re-enter, and only the dialog re-validates `buf` afterwards.
     unsafe { set_curbuf(buf.raw(), action, update_jumplist) };
 
     if action == DOBUF_SPLIT as c_int {
