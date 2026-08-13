@@ -1,14 +1,15 @@
 {
   "files": {
     "crates/nvim/src/nvim/base64.rs": 2,
-    "crates/nvim/src/nvim/buffer.rs": 2,
+    "crates/nvim/src/nvim/buffer/open.rs": 1,
+    "crates/nvim/src/nvim/buffer/pos.rs": 1,
     "crates/nvim/src/nvim/drawscreen/mode.rs": 1,
     "crates/nvim/src/nvim/drawscreen/winupdate.rs": 1,
     "crates/nvim/src/nvim/eval/callback.rs": 1,
     "crates/nvim/src/nvim/eval/expr/index.rs": 1,
     "crates/nvim/src/nvim/eval/lval.rs": 1,
     "crates/nvim/src/nvim/ex_docmd/cmdline.rs": 1,
-    "crates/nvim/src/nvim/extmark.rs": 1,
+    "crates/nvim/src/nvim/extmark/del.rs": 1,
     "crates/nvim/src/nvim/main/remote.rs": 1,
     "crates/nvim/src/nvim/memfile.rs": 1,
     "crates/nvim/src/nvim/memline/block0.rs": 1,
@@ -37,7 +38,8 @@
     "crates/nvim/src/nvim/vterm/damage.rs": 1,
     "crates/nvim/src/nvim/vterm/mode.rs": 1,
     "crates/nvim/src/nvim/vterm/pen.rs": 1,
-    "crates/nvim/src/nvim/window.rs": 4,
+    "crates/nvim/src/nvim/window/alloc.rs": 1,
+    "crates/nvim/src/nvim/window/order.rs": 3,
     "crates/nvim/tests/unit/memory.rs": 2
   }
 }
