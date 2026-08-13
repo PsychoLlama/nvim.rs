@@ -301,8 +301,14 @@ fn register(mut buf: Buf, channel_id: uint64_t, cb: BufUpdateCallbacks, send_buf
     }
 
     if channel_id == LUA_INTERNAL_CALL {
+        // No duplicate check and no `send_buffer` — the Lua path returns
+        // before both. Attaching the same table twice really does mean two
+        // subscriptions (each carries its own refs), and `nvim_buf_attach`
+        // documents `send_buffer` as "Not for Lua callbacks".
         buf.callbacks().push(cb);
         if cb.utf_sizes {
+            // Sticky: nothing clears it when the callback detaches, so the
+            // buffer keeps counting codepoints for the rest of its life.
             buf.update_need_codepoints = true;
         }
         return true;
@@ -694,6 +700,11 @@ fn send_splice(mut buf: Buf, start: Corner, old: Corner, new: Corner) {
 }
 
 /// `b:changedtick` moved without the text moving.
+///
+/// The only event with no `cb.preview || !cmdpreview` guard on its
+/// callback, and it does not need one: its single caller is `u_undoredo`,
+/// and the 'inccommand' undo reaches that through `u_undo_and_forget(count,
+/// false)`, which suppresses the event outright.
 ///
 /// # Safety
 /// `buf` must be a live buffer.
