@@ -35,8 +35,6 @@
     "crates/nvim/src/nvim/vterm/damage.rs": 1,
     "crates/nvim/src/nvim/vterm/mode.rs": 1,
     "crates/nvim/src/nvim/vterm/pen.rs": 1,
-    "crates/nvim/src/nvim/window/alloc.rs": 1,
-    "crates/nvim/src/nvim/window/order.rs": 3,
     "crates/nvim/tests/unit/memory.rs": 2
   }
 }

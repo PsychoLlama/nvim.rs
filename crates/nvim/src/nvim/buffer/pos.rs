@@ -71,16 +71,21 @@ impl Entry {
         Entry(unsafe { xcalloc(1, size_of::<WinInfo>()) }.cast::<WinInfo>())
     }
 
+    #[inline(always)]
+    pub(crate) fn raw(self) -> *mut WinInfo {
+        self.0
+    }
+
     /// The window this entry belongs to, null for the entry `:badd` leaves.
-    fn window(self) -> *mut win_T {
+    pub(crate) fn window(self) -> *mut win_T {
         self.wi_win
     }
 
-    fn opt(&mut self) -> *mut winopt_T {
+    pub(crate) fn opt(&mut self) -> *mut winopt_T {
         &raw mut self.wi_opt
     }
 
-    fn folds(&mut self) -> *mut garray_T {
+    pub(crate) fn folds(&mut self) -> *mut garray_T {
         &raw mut self.wi_folds
     }
 }
@@ -116,7 +121,7 @@ impl<'a> WinInfos<'a> {
         unsafe { slice::from_raw_parts(self.items.cast::<Entry>(), *self.size) }
     }
 
-    fn entries_mut(&mut self) -> &mut [Entry] {
+    pub(crate) fn entries_mut(&mut self) -> &mut [Entry] {
         if *self.size == 0 {
             return &mut [];
         }
@@ -125,7 +130,7 @@ impl<'a> WinInfos<'a> {
     }
 
     /// `kv_shift(v, i, 1)`: drop entry `i`, closing the gap.
-    fn remove(&mut self, i: usize) {
+    pub(crate) fn remove(&mut self, i: usize) {
         self.entries_mut().copy_within(i + 1.., i);
         *self.size -= 1;
     }

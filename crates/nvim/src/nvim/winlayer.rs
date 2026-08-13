@@ -20,11 +20,12 @@
 //! inherent impl may live in any module of the defining crate), so this module
 //! stays the shared minimum rather than growing a method per caller.
 //!
-//! The four walks at the bottom — [`windows`], [`windows_in_tab`],
-//! [`tab_windows`] and [`buffers`], plus [`tabs`] under them — are the C's
-//! `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS` and `FOR_ALL_BUFFERS`. The
-//! lists they walk are the editor's own and live from startup to exit, so the
-//! walks are safe functions; each is lazy, as the macro it replaces is.
+//! The walks at the bottom — [`windows`], [`windows_in_tab`], [`tab_windows`],
+//! [`buffers`] and [`frames`], plus [`tabs`] and [`frames_back`] under them —
+//! are the C's `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS`,
+//! `FOR_ALL_BUFFERS` and `FOR_ALL_FRAMES`. The lists they walk are the
+//! editor's own and live from startup to exit, so the walks are safe
+//! functions; each is lazy, as the macro it replaces is.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -174,6 +175,16 @@ impl Win {
         Self(wp)
     }
 
+    /// The window `wp` names, `None` for null.
+    ///
+    /// # Safety
+    /// `wp` must be null, or stay a live window for as long as the value is
+    /// used.
+    #[inline(always)]
+    pub const unsafe fn from_raw(wp: *mut win_T) -> Option<Self> {
+        if wp.is_null() { None } else { Some(Self(wp)) }
+    }
+
     /// The window the editor is working in.
     ///
     /// # Safety
@@ -201,6 +212,14 @@ impl Win {
     pub fn buffer(self) -> Buf {
         // SAFETY: a live window's buffer is live.
         Buf(unsafe { (*self.0).w_buffer })
+    }
+
+    /// The leaf frame this window sits in. Every window has one, floats
+    /// included — a float's frame is simply not linked into the layout tree.
+    #[inline(always)]
+    pub fn frame(self) -> Frame {
+        // A live window's `w_frame` is a live frame.
+        Frame(self.w_frame)
     }
 
     #[inline(always)]
@@ -321,6 +340,16 @@ impl Buf {
         Self(buf)
     }
 
+    /// The buffer `buf` names, `None` for null.
+    ///
+    /// # Safety
+    /// `buf` must be null, or stay a live buffer for as long as the value is
+    /// used.
+    #[inline(always)]
+    pub const unsafe fn from_raw(buf: *mut buf_T) -> Option<Self> {
+        if buf.is_null() { None } else { Some(Self(buf)) }
+    }
+
     /// The buffer the editor is working in.
     ///
     /// # Safety
@@ -389,9 +418,28 @@ impl Frame {
         Self(fp)
     }
 
+    /// The frame `fp` names, `None` for null.
+    ///
+    /// # Safety
+    /// `fp` must be null, or stay a live frame for as long as the value is
+    /// used.
+    #[inline(always)]
+    pub const unsafe fn from_raw(fp: *mut frame_T) -> Option<Self> {
+        if fp.is_null() { None } else { Some(Self(fp)) }
+    }
+
     #[inline(always)]
     pub fn raw(self) -> *mut frame_T {
         self.0
+    }
+
+    /// The window this frame holds — `Some` exactly for a leaf.
+    #[inline(always)]
+    pub fn win(self) -> Option<Win> {
+        // A live leaf frame's `fr_win` is a live window; a row or column's is
+        // null.
+        let win = self.fr_win;
+        (!win.is_null()).then_some(Win(win))
     }
 
     /// The frame this one is a child of — `None` only for the tab page's
@@ -417,6 +465,21 @@ impl Frame {
         // A live frame's `fr_next` is a live frame or null.
         let next = self.fr_next;
         (!next.is_null()).then_some(Self(next))
+    }
+
+    /// The frame before this one, if it is not the first of its row or column.
+    #[inline(always)]
+    pub fn prev(self) -> Option<Self> {
+        // A live frame's `fr_prev` is a live frame or null.
+        let prev = self.fr_prev;
+        (!prev.is_null()).then_some(Self(prev))
+    }
+
+    /// This frame's children, first to last: the C's
+    /// `FOR_ALL_FRAMES(frp, topfrp->fr_child)`, which is empty for a leaf.
+    #[inline(always)]
+    pub fn children(self) -> impl Iterator<Item = Self> {
+        frames(self.child())
     }
 }
 
@@ -476,6 +539,17 @@ impl TabPage {
         // A live tab page's `tp_next` is a live tab page or null.
         let next = self.tp_next;
         (!next.is_null()).then_some(Self(next))
+    }
+
+    /// The root of this tab page's layout tree, `tp_topframe` verbatim.
+    ///
+    /// Unlike `tp_firstwin`, upstream reads this field for the current tab page
+    /// too (`min_rows`, `win_vert_neighbor`), so this does not switch to the
+    /// `topframe` global the way [`windows_in_tab`] switches to `firstwin`.
+    #[inline(always)]
+    pub fn topframe(self) -> Frame {
+        // A live tab page's top frame is live.
+        Frame(self.tp_topframe)
     }
 }
 
@@ -597,6 +671,18 @@ pub fn tabs() -> impl Iterator<Item = TabPage> {
 /// page's own windows are exhausted, as the macro's outer `for` reads it.
 pub fn tab_windows() -> impl Iterator<Item = Win> {
     tabs().flat_map(windows_in_tab)
+}
+
+/// `first` and every frame after it in its row or column: the C's
+/// `FOR_ALL_FRAMES(frp, first)`, whose head is usually a `fr_child`.
+pub fn frames(first: Option<Frame>) -> impl Iterator<Item = Frame> {
+    iter::successors(first, |fr| fr.next())
+}
+
+/// [`frames`] the other way, following `fr_prev`. The C spells this out as a
+/// `while` loop each time it needs it (`frame_setheight`'s second run, say).
+pub fn frames_back(first: Option<Frame>) -> impl Iterator<Item = Frame> {
+    iter::successors(first, |fr| fr.prev())
 }
 
 /// Every buffer, in list order: the C's `FOR_ALL_BUFFERS`.

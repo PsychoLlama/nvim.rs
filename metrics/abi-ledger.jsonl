@@ -329,7 +329,6 @@
 {"symbol":"win_col_off","kind":"fn","file":"crates/nvim/src/nvim/move.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"win_enter","kind":"fn","file":"crates/nvim/src/nvim/window/goto.rs","class":"internal","refs":[]}
 {"symbol":"win_goto","kind":"fn","file":"crates/nvim/src/nvim/window/goto.rs","class":"internal","refs":[]}
-{"symbol":"win_valid","kind":"fn","file":"crates/nvim/src/nvim/window.rs","class":"internal","refs":[]}
 {"symbol":"xcalloc","kind":"fn","file":"crates/nvim/src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"xfree","kind":"fn","file":"crates/nvim/src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"xmalloc","kind":"fn","file":"crates/nvim/src/nvim/memory.rs","class":"test","refs":["unit-specs"]}

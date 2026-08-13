@@ -1,395 +1,409 @@
 //! Moving a window within the layout -- exchange, rotate, and move to an
 //! edge.
 //!
-//! [`win_exchange`] swaps two windows in place (CTRL-W x), [`win_rotate`]
-//! cycles a row or column of them (CTRL-W r / CTRL-W R), [`win_splitmove`]
-//! takes a window out of the tree and re-inserts it somewhere else (CTRL-W
-//! H/J/K/L and `nvim_win_set_config`), and [`win_move_after`] reorders two
-//! windows in the same frame.  [`make_windows`] answers how many windows will
-//! fit, and opens that many.
+//! [`exchange`] swaps two windows in place (CTRL-W x), [`rotate`] cycles a row
+//! or column of them (CTRL-W r / CTRL-W R), [`win_splitmove`] takes a window
+//! out of the tree and re-inserts it somewhere else (CTRL-W H/J/K/L and
+//! `nvim_win_set_config`), and [`win_move_after`] reorders two windows in the
+//! same frame.  [`make_windows`] answers how many windows will fit, and opens
+//! that many, and [`max_wincount`] is the same question for one frame.
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int};
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
-use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later, redraw_later};
+use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
+use crate::src::nvim::drawscreen::UPD_NOT_VALID;
 use crate::src::nvim::ex_getln::text_or_buf_locked;
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::main::{
-    VIsual_active, curbuf, curwin, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_wmw,
+    VIsual_active, curbuf, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_wmw,
 };
 use crate::src::nvim::message::{emsg, iemsg};
 use crate::src::nvim::normal::reset_VIsual_and_resel;
-use crate::src::nvim::os::libc::gettext;
-use crate::src::nvim::types::{OptInt, frame_T, tabpage_T, win_T};
+use crate::src::nvim::types::{OptInt, frame_T, win_T};
+use crate::src::nvim::winlayer::{Frame, Win, frames};
 
-pub unsafe extern "C" fn make_windows(
-    mut count: ::core::ffi::c_int,
-    mut vertical: bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut maxcount: ::core::ffi::c_int = 0;
-        if vertical {
-            maxcount = (((*curwin.get()).w_width + (*curwin.get()).w_vsep_width) as OptInt
-                - (p_wiw.get() - p_wmw.get())) as ::core::ffi::c_int
-                / (p_wmw.get() as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
+pub unsafe extern "C" fn make_windows(count: c_int, vertical: bool) -> c_int {
+    let cur = cur_win();
+    // Each window needs at least 'winminheight' lines and a status line, and
+    // the current window wants 'winheight'.
+    let maxcount = if vertical {
+        ((cur.w_width + cur.w_vsep_width) as OptInt - (p_wiw.get() - p_wmw.get())) as c_int
+            / (p_wmw.get() as c_int + 1)
+    } else {
+        ((cur.w_height + cur.w_hsep_height + cur.w_status_height) as OptInt
+            - (p_wh.get() - p_wmh.get())) as c_int
+            / (p_wmh.get() as c_int + STATUS_HEIGHT as c_int + global_winbar_rows())
+    }
+    .max(2);
+    let count = count.min(maxcount);
+
+    // add status line now, otherwise first window will be too big
+    if count > 1 {
+        // SAFETY: reads the frame tree.
+        unsafe { last_status(true) };
+    }
+
+    // Don't execute autocommands while creating the windows: `curwin` and
+    // `curbuf` are not set up yet.
+    // SAFETY: matched by the `unblock_autocmds` below.
+    unsafe { block_autocmds() };
+    let mut todo = count - 1;
+    while todo > 0 {
+        let cur = cur_win();
+        let (size, flags) = if vertical {
+            let width = cur.w_width;
+            (
+                width - (width - todo) / (todo + 1) - 1,
+                WSP_VERT as c_int | WSP_ABOVE as c_int,
+            )
         } else {
-            maxcount = (((*curwin.get()).w_height
-                + (*curwin.get()).w_hsep_height
-                + (*curwin.get()).w_status_height) as OptInt
-                - (p_wh.get() - p_wmh.get())) as ::core::ffi::c_int
-                / (p_wmh.get() as ::core::ffi::c_int
-                    + STATUS_HEIGHT as ::core::ffi::c_int
-                    + global_winbar_height());
-        }
-        maxcount = if maxcount > 2 as ::core::ffi::c_int {
-            maxcount
-        } else {
-            2 as ::core::ffi::c_int
+            let height = cur.w_height;
+            let status = STATUS_HEIGHT as c_int;
+            (
+                height - (height - todo * status) / (todo + 1) - status,
+                WSP_ABOVE as c_int,
+            )
         };
-        count = if count < maxcount { count } else { maxcount };
-        if count > 1 as ::core::ffi::c_int {
-            last_status(true_0 != 0);
+        // SAFETY: splits the current window, which is live.
+        if unsafe { win_split(size, flags) } == FAIL {
+            break;
         }
-        block_autocmds();
-        let mut todo: ::core::ffi::c_int = 0;
-        todo = count - 1 as ::core::ffi::c_int;
-        while todo > 0 as ::core::ffi::c_int {
-            if vertical {
-                if win_split(
-                    (*curwin.get()).w_width
-                        - ((*curwin.get()).w_width - todo) / (todo + 1 as ::core::ffi::c_int)
-                        - 1 as ::core::ffi::c_int,
-                    WSP_VERT as ::core::ffi::c_int | WSP_ABOVE as ::core::ffi::c_int,
-                ) == FAIL
-                {
-                    break;
-                }
-            } else if win_split(
-                (*curwin.get()).w_height
-                    - ((*curwin.get()).w_height - todo * STATUS_HEIGHT as ::core::ffi::c_int)
-                        / (todo + 1 as ::core::ffi::c_int)
-                    - STATUS_HEIGHT as ::core::ffi::c_int,
-                WSP_ABOVE as ::core::ffi::c_int,
-            ) == FAIL
-            {
+        todo -= 1;
+    }
+    // SAFETY: matches the `block_autocmds` above.
+    unsafe { unblock_autocmds() };
+    // return actual number of windows
+    count - todo
+}
+
+pub(crate) unsafe extern "C" fn win_exchange(prenum: c_int) {
+    exchange(prenum);
+}
+
+/// Exchange the current window with the `prenum`th window of its row or
+/// column, or with the next one when `prenum` is zero.
+pub(crate) fn exchange(prenum: c_int) {
+    let mut cur = cur_win();
+    if cur.w_floating {
+        // SAFETY: a static message.
+        unsafe { emsg(&raw const e_floatexchange as *const c_char) };
+        return;
+    }
+    // SAFETY: beeps; reads no argument of ours.
+    if is_only_window(cur, None) || unsafe { text_or_buf_locked() } {
+        // SAFETY: as above.
+        unsafe { beep_flush() };
+        return;
+    }
+
+    let frame = cur.frame();
+    let parent = frame.parent().expect("not the only window");
+    let frp = if prenum != 0 {
+        let mut prenum = prenum;
+        let mut frp = parent.child();
+        while let Some(cur) = frp {
+            prenum -= 1;
+            if prenum <= 0 {
                 break;
             }
-            todo -= 1;
+            frp = cur.next();
         }
-        unblock_autocmds();
-        return count - todo;
+        frp
+    } else {
+        frame.next().or_else(|| frame.prev())
+    };
+    let Some(frp) = frp else {
+        return;
+    };
+    let Some(mut wp) = frp.win().filter(|w| *w != cur) else {
+        return;
+    };
+
+    // Remove `curwin` from the list, and put it in `wp`'s place; then do the
+    // same the other way round.
+    // SAFETY: a live window's `w_prev` is a live window or null.
+    let wp2 = unsafe { Win::from_raw(cur.w_prev) };
+    let frp2 = frame.prev();
+    if wp.w_prev != cur.raw() {
+        remove(cur, None);
+        frame_remove(frame);
+        // SAFETY: as above.
+        append(unsafe { Win::from_raw(wp.w_prev) }, cur, None);
+        frame_insert(frp, frame);
     }
+    if Some(wp) != wp2 {
+        remove(wp, None);
+        frame_remove(wp.frame());
+        append(wp2, wp, None);
+        match frp2 {
+            None => {
+                let first = wp
+                    .frame()
+                    .parent()
+                    .and_then(Frame::child)
+                    .expect("a linked frame has a parent with children");
+                frame_insert(first, wp.frame());
+            }
+            Some(frp2) => frame_append(frp2, wp.frame()),
+        }
+    }
+
+    // Exchange the chrome, which belongs to the position and not to the
+    // window.
+    core::mem::swap(&mut cur.w_status_height, &mut wp.w_status_height);
+    core::mem::swap(&mut cur.w_vsep_width, &mut wp.w_vsep_width);
+    core::mem::swap(&mut cur.w_hsep_height, &mut wp.w_hsep_height);
+    frame_fix_height(cur);
+    frame_fix_height(wp);
+    frame_fix_width(cur);
+    frame_fix_width(wp);
+    comp_positions();
+
+    if wp.w_buffer != curbuf.get() {
+        reset_VIsual_and_resel();
+    } else if VIsual_active.get() {
+        wp.w_cursor = cur.w_cursor;
+    }
+    // SAFETY: a live window; nothing derived from it is read afterwards.
+    unsafe { win_enter(wp.raw(), true) };
+    cur_win().redraw_later(UPD_NOT_VALID);
+    wp.redraw_later(UPD_NOT_VALID);
 }
 
-pub(crate) unsafe extern "C" fn win_exchange(mut Prenum: ::core::ffi::c_int) {
-    unsafe {
-        if (*curwin.get()).w_floating {
-            emsg(&raw const e_floatexchange as *const ::core::ffi::c_char);
-            return;
-        }
-        if one_window(curwin.get(), ::core::ptr::null_mut::<tabpage_T>()) {
-            beep_flush();
-            return;
-        }
-        if text_or_buf_locked() {
-            beep_flush();
-            return;
-        }
-        let mut frp: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-        if Prenum != 0 {
-            frp = (*(*(*curwin.get()).w_frame).fr_parent).fr_child;
-            while !frp.is_null() && {
-                Prenum -= 1;
-                Prenum > 0 as ::core::ffi::c_int
-            } {
-                frp = (*frp).fr_next;
-            }
-        } else if !(*(*curwin.get()).w_frame).fr_next.is_null() {
-            frp = (*(*curwin.get()).w_frame).fr_next;
+pub(crate) unsafe extern "C" fn win_rotate(upwards: bool, count: c_int) {
+    rotate(upwards, count);
+}
+
+/// Rotate the windows in the current row or column `count` places, upwards or
+/// downwards.
+pub(crate) fn rotate(upwards: bool, count: c_int) {
+    if cur_win().w_floating {
+        // SAFETY: a static message.
+        unsafe { emsg(&raw const e_floatexchange as *const c_char) };
+        return;
+    }
+    if count <= 0 || is_only_window(cur_win(), None) {
+        // SAFETY: beeps.
+        unsafe { beep_flush() };
+        return;
+    }
+    let parent = cur_win().frame().parent().expect("not the only window");
+    // Check that all frames in this row or column are leaves.
+    if parent.children().any(|frp| frp.win().is_none()) {
+        err(c"E443: Cannot rotate when another window is split".as_ptr());
+        return;
+    }
+
+    let mut wp1 = None;
+    let mut wp2 = None;
+    for _ in 0..count {
+        if upwards {
+            // First window becomes last window.
+            let frp = parent.child().expect("frp != NULL");
+            let w1 = frp.win().expect("a leaf frame holds a window");
+            remove(w1, None);
+            frame_remove(frp);
+            debug_assert!(parent.child().is_some(), "frp->fr_parent->fr_child");
+            // Find the last frame and append the removed window after it.
+            let last = frames(Some(frp)).last().expect("at least one");
+            append(last.win(), w1, None);
+            frame_append(last, w1.frame());
+            wp1 = Some(w1);
+            wp2 = last.win();
         } else {
-            frp = (*(*curwin.get()).w_frame).fr_prev;
+            // Last window becomes first window.
+            let frp = frames(Some(cur_win().frame()))
+                .last()
+                .expect("at least one");
+            let w1 = frp.win().expect("a leaf frame holds a window");
+            // SAFETY: a live window's `w_prev` is a live window or null.
+            wp2 = unsafe { Win::from_raw(w1.w_prev) };
+            remove(w1, None);
+            frame_remove(frp);
+            let first = parent.child().expect("frp->fr_parent->fr_child");
+            let head = first.win().expect("a leaf frame holds a window");
+            // SAFETY: as above.
+            append(unsafe { Win::from_raw(head.w_prev) }, w1, None);
+            frame_insert(first, frp);
+            wp1 = Some(w1);
         }
-        if frp.is_null() || (*frp).fr_win.is_null() || (*frp).fr_win == curwin.get() {
-            return;
-        }
-        let mut wp: *mut win_T = (*frp).fr_win;
-        let mut wp2: *mut win_T = (*curwin.get()).w_prev;
-        let mut frp2: *mut frame_T = (*(*curwin.get()).w_frame).fr_prev;
-        if (*wp).w_prev != curwin.get() {
-            win_remove(curwin.get(), ::core::ptr::null_mut::<tabpage_T>());
-            frame_remove((*curwin.get()).w_frame);
-            win_append(
-                (*wp).w_prev,
-                curwin.get(),
-                ::core::ptr::null_mut::<tabpage_T>(),
-            );
-            frame_insert(frp, (*curwin.get()).w_frame);
-        }
-        if wp != wp2 {
-            win_remove(wp, ::core::ptr::null_mut::<tabpage_T>());
-            frame_remove((*wp).w_frame);
-            win_append(wp2, wp, ::core::ptr::null_mut::<tabpage_T>());
-            if frp2.is_null() {
-                frame_insert((*(*(*wp).w_frame).fr_parent).fr_child, (*wp).w_frame);
-            } else {
-                frame_append(frp2, (*wp).w_frame);
-            }
-        }
-        let mut temp: ::core::ffi::c_int = (*curwin.get()).w_status_height;
-        (*curwin.get()).w_status_height = (*wp).w_status_height;
-        (*wp).w_status_height = temp;
-        temp = (*curwin.get()).w_vsep_width;
-        (*curwin.get()).w_vsep_width = (*wp).w_vsep_width;
-        (*wp).w_vsep_width = temp;
-        temp = (*curwin.get()).w_hsep_height;
-        (*curwin.get()).w_hsep_height = (*wp).w_hsep_height;
-        (*wp).w_hsep_height = temp;
-        frame_fix_height(curwin.get());
-        frame_fix_height(wp);
-        frame_fix_width(curwin.get());
-        frame_fix_width(wp);
-        win_comp_pos();
-        if (*wp).w_buffer != curbuf.get() {
-            reset_VIsual_and_resel();
-        } else if VIsual_active.get() {
-            (*wp).w_cursor = (*curwin.get()).w_cursor;
-        }
-        win_enter(wp, true_0 != 0);
-        redraw_later(curwin.get(), UPD_NOT_VALID);
-        redraw_later(wp, UPD_NOT_VALID);
+        let (Some(mut w1), Some(mut w2)) = (wp1, wp2) else {
+            continue;
+        };
+        // Exchange the chrome, which belongs to the position.
+        core::mem::swap(&mut w2.w_status_height, &mut w1.w_status_height);
+        core::mem::swap(&mut w2.w_hsep_height, &mut w1.w_hsep_height);
+        frame_fix_height(w1);
+        frame_fix_height(w2);
+        core::mem::swap(&mut w2.w_vsep_width, &mut w1.w_vsep_width);
+        frame_fix_width(w1);
+        frame_fix_width(w2);
+        comp_positions();
     }
+    if let Some(mut w1) = wp1 {
+        w1.w_pos_changed = true;
+    }
+    if let Some(mut w2) = wp2 {
+        w2.w_pos_changed = true;
+    }
+    redraw_all(UPD_NOT_VALID);
 }
 
-pub(crate) unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int) {
-    unsafe {
-        if (*curwin.get()).w_floating {
-            emsg(&raw const e_floatexchange as *const ::core::ffi::c_char);
-            return;
-        }
-        if count <= 0 as ::core::ffi::c_int
-            || one_window(curwin.get(), ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int
-                != 0
-        {
-            beep_flush();
-            return;
-        }
-        let mut frp: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-        frp = (*(*(*curwin.get()).w_frame).fr_parent).fr_child;
-        while !frp.is_null() {
-            if (*frp).fr_win.is_null() {
-                emsg(gettext(
-                    c"E443: Cannot rotate when another window is split".as_ptr(),
-                ));
-                return;
-            }
-            frp = (*frp).fr_next;
-        }
-        let mut wp1: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut wp2: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        loop {
-            let c2rust_fresh0 = count;
-            count = count - 1;
-            if c2rust_fresh0 == 0 {
-                break;
-            }
-            if upwards {
-                frp = (*(*(*curwin.get()).w_frame).fr_parent).fr_child;
-                debug_assert!(!frp.is_null(), "frp != NULL");
-                wp1 = (*frp).fr_win;
-                win_remove(wp1, ::core::ptr::null_mut::<tabpage_T>());
-                frame_remove(frp);
-                debug_assert!(
-                    !(*(*frp).fr_parent).fr_child.is_null(),
-                    "frp->fr_parent->fr_child"
-                );
-                while !(*frp).fr_next.is_null() {
-                    frp = (*frp).fr_next;
-                }
-                win_append((*frp).fr_win, wp1, ::core::ptr::null_mut::<tabpage_T>());
-                frame_append(frp, (*wp1).w_frame);
-                wp2 = (*frp).fr_win;
-            } else {
-                frp = (*curwin.get()).w_frame;
-                while !(*frp).fr_next.is_null() {
-                    frp = (*frp).fr_next;
-                }
-                wp1 = (*frp).fr_win;
-                wp2 = (*wp1).w_prev;
-                win_remove(wp1, ::core::ptr::null_mut::<tabpage_T>());
-                frame_remove(frp);
-                debug_assert!(
-                    !(*(*frp).fr_parent).fr_child.is_null(),
-                    "frp->fr_parent->fr_child"
-                );
-                win_append(
-                    (*(*(*(*frp).fr_parent).fr_child).fr_win).w_prev,
-                    wp1,
-                    ::core::ptr::null_mut::<tabpage_T>(),
-                );
-                frame_insert((*(*frp).fr_parent).fr_child, frp);
-            }
-            let mut n: ::core::ffi::c_int = (*wp2).w_status_height;
-            (*wp2).w_status_height = (*wp1).w_status_height;
-            (*wp1).w_status_height = n;
-            n = (*wp2).w_hsep_height;
-            (*wp2).w_hsep_height = (*wp1).w_hsep_height;
-            (*wp1).w_hsep_height = n;
-            frame_fix_height(wp1);
-            frame_fix_height(wp2);
-            n = (*wp2).w_vsep_width;
-            (*wp2).w_vsep_width = (*wp1).w_vsep_width;
-            (*wp1).w_vsep_width = n;
-            frame_fix_width(wp1);
-            frame_fix_width(wp2);
-            win_comp_pos();
-        }
-        (*wp1).w_pos_changed = true_0 != 0;
-        (*wp2).w_pos_changed = true_0 != 0;
-        redraw_all_later(UPD_NOT_VALID);
-    }
+pub unsafe extern "C" fn win_splitmove(wp: *mut win_T, size: c_int, flags: c_int) -> c_int {
+    // SAFETY: the caller's promise -- a live window.
+    splitmove(unsafe { Win::new(wp) }, size, flags)
 }
 
-pub unsafe extern "C" fn win_splitmove(
-    mut wp: *mut win_T,
-    mut size: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut dir: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut height: ::core::ffi::c_int = (*wp).w_height;
-        if one_window(wp, ::core::ptr::null_mut::<tabpage_T>()) {
-            return OK;
-        }
-        if is_aucmd_win(wp) as ::core::ffi::c_int != 0 || check_split_disallowed(wp) == FAIL {
-            return FAIL;
-        }
-        let mut unflat_altfr: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-        if (*wp).w_floating {
-            win_remove(wp, ::core::ptr::null_mut::<tabpage_T>());
-        } else {
-            winframe_remove(
-                wp,
-                &raw mut dir,
-                ::core::ptr::null_mut::<tabpage_T>(),
-                &raw mut unflat_altfr,
-            );
-            debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
-            win_remove(wp, ::core::ptr::null_mut::<tabpage_T>());
-            last_status(false_0 != 0);
-            win_comp_pos();
-        }
-        if win_split_ins(size, flags, wp, dir, unflat_altfr).is_null() {
-            if !(*wp).w_floating {
-                debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
-                winframe_restore(wp, dir, unflat_altfr);
-            }
-            win_append((*wp).w_prev, wp, ::core::ptr::null_mut::<tabpage_T>());
-            return FAIL;
-        }
-        if size == 0 as ::core::ffi::c_int
-            && flags & WSP_VERT as ::core::ffi::c_int == 0
-            && win_valid(wp) as ::core::ffi::c_int != 0
-            && !(*wp).w_floating
-        {
-            win_setheight_win(height, wp);
-            if p_ea.get() != 0 {
-                win_equal(curwin.get(), curwin.get() == wp, 'v' as ::core::ffi::c_int);
-            }
-        }
+/// Take `wp` out of the layout and put it back in as a split given by `flags`,
+/// from `win_splitmove()`. Restores the old layout on failure.
+fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
+    let height = wp.w_height;
+    if is_only_window(wp, None) {
         return OK;
     }
+    // SAFETY: a live window.
+    if is_autocmd_window(Some(wp)) || unsafe { check_split_disallowed(wp.raw()) } == FAIL {
+        return FAIL;
+    }
+
+    let mut dir = 0;
+    let mut unflat_altfr = ptr::null_mut::<frame_T>();
+    if wp.w_floating {
+        remove(wp, None);
+    } else {
+        // Remove the window and frame from the tree of frames, but leave the
+        // altframe unflattened so a failure can be undone.
+        let (d, alt) = (&raw mut dir, &raw mut unflat_altfr);
+        // SAFETY: a live window, and two out-parameters we own.
+        unsafe { winframe_remove(wp.raw(), d, ptr::null_mut(), alt) };
+        debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
+        remove(wp, None);
+        // SAFETY: reads the frame tree.
+        unsafe { last_status(false) };
+        comp_positions();
+    }
+
+    // SAFETY: a live window and the unflattened frame from above.
+    if unsafe { win_split_ins(size, flags, wp.raw(), dir, unflat_altfr) }.is_null() {
+        // Restore the window to its original position.
+        if !wp.w_floating {
+            debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
+            // SAFETY: as above.
+            unsafe { winframe_restore(wp.raw(), dir, unflat_altfr) };
+        }
+        // SAFETY: a live window's `w_prev` is a live window or null.
+        append(unsafe { Win::from_raw(wp.w_prev) }, wp, None);
+        return FAIL;
+    }
+
+    // Keep the window's height when it was moved horizontally.
+    // SAFETY: only compares the pointer against the window list.
+    if size == 0
+        && flags & WSP_VERT as c_int == 0
+        && unsafe { win_valid(wp.raw()) }
+        && !wp.w_floating
+    {
+        setheight_win(height, wp);
+        if p_ea.get() != 0 {
+            let cur = cur_win();
+            equal(Some(cur), cur == wp, 'v' as c_int);
+        }
+    }
+    OK
 }
 
-pub unsafe extern "C" fn win_move_after(mut win1: *mut win_T, mut win2: *mut win_T) {
-    unsafe {
-        if win1 == win2 {
+pub unsafe extern "C" fn win_move_after(win1: *mut win_T, win2: *mut win_T) {
+    // SAFETY: the caller's promise -- two live windows.
+    unsafe { move_after(Win::new(win1), Win::new(win2)) };
+}
+
+/// Move window `win1` to just after window `win2`, both in the same frame.
+fn move_after(win1: Win, win2: Win) {
+    let (mut win1, mut win2) = (win1, win2);
+    // Can't move the first window.
+    if win1 == win2 {
+        return;
+    }
+    if win2.w_next != win1.raw() {
+        if win1.frame().fr_parent != win2.frame().fr_parent {
+            // SAFETY: a static message.
+            unsafe { iemsg(c"INTERNAL: trying to move a window into another frame".as_ptr()) };
             return;
         }
-        if (*win2).w_next != win1 {
-            if (*(*win1).w_frame).fr_parent != (*(*win2).w_frame).fr_parent {
-                iemsg(c"INTERNAL: trying to move a window into another frame".as_ptr());
-                return;
+        // The last window has no separator or status line: exchange the chrome
+        // with whichever window is about to become last.
+        if win1.raw() == lastwin.get() {
+            // SAFETY: `win1` is not first, so `w_prev` is a live window.
+            let mut prev = unsafe { Win::new(win1.w_prev) };
+            core::mem::swap(&mut prev.w_status_height, &mut win1.w_status_height);
+            core::mem::swap(&mut prev.w_hsep_height, &mut win1.w_hsep_height);
+            if prev.w_vsep_width == 1 {
+                // The last window has no separator: give it to `win1`.
+                prev.w_vsep_width = 0;
+                prev.frame().fr_width -= 1;
+                win1.w_vsep_width = 1;
+                win1.frame().fr_width += 1;
             }
-            if win1 == lastwin.get() {
-                let mut height: ::core::ffi::c_int = (*(*win1).w_prev).w_status_height;
-                (*(*win1).w_prev).w_status_height = (*win1).w_status_height;
-                (*win1).w_status_height = height;
-                height = (*(*win1).w_prev).w_hsep_height;
-                (*(*win1).w_prev).w_hsep_height = (*win1).w_hsep_height;
-                (*win1).w_hsep_height = height;
-                if (*(*win1).w_prev).w_vsep_width == 1 as ::core::ffi::c_int {
-                    (*(*win1).w_prev).w_vsep_width = 0 as ::core::ffi::c_int;
-                    (*(*(*win1).w_prev).w_frame).fr_width -= 1 as ::core::ffi::c_int;
-                    (*win1).w_vsep_width = 1 as ::core::ffi::c_int;
-                    (*(*win1).w_frame).fr_width += 1 as ::core::ffi::c_int;
-                }
-            } else if win2 == lastwin.get() {
-                let mut height_0: ::core::ffi::c_int = (*win1).w_status_height;
-                (*win1).w_status_height = (*win2).w_status_height;
-                (*win2).w_status_height = height_0;
-                height_0 = (*win1).w_hsep_height;
-                (*win1).w_hsep_height = (*win2).w_hsep_height;
-                (*win2).w_hsep_height = height_0;
-                if (*win1).w_vsep_width == 1 as ::core::ffi::c_int {
-                    (*win2).w_vsep_width = 1 as ::core::ffi::c_int;
-                    (*(*win2).w_frame).fr_width += 1 as ::core::ffi::c_int;
-                    (*win1).w_vsep_width = 0 as ::core::ffi::c_int;
-                    (*(*win1).w_frame).fr_width -= 1 as ::core::ffi::c_int;
-                }
+        } else if win2.raw() == lastwin.get() {
+            core::mem::swap(&mut win1.w_status_height, &mut win2.w_status_height);
+            core::mem::swap(&mut win1.w_hsep_height, &mut win2.w_hsep_height);
+            if win1.w_vsep_width == 1 {
+                win2.w_vsep_width = 1;
+                win2.frame().fr_width += 1;
+                win1.w_vsep_width = 0;
+                win1.frame().fr_width -= 1;
             }
-            win_remove(win1, ::core::ptr::null_mut::<tabpage_T>());
-            frame_remove((*win1).w_frame);
-            win_append(win2, win1, ::core::ptr::null_mut::<tabpage_T>());
-            frame_append((*win2).w_frame, (*win1).w_frame);
-            win_comp_pos();
-            redraw_later(curwin.get(), UPD_NOT_VALID);
         }
-        (*win1).w_pos_changed = true_0 != 0;
-        (*win2).w_pos_changed = true_0 != 0;
-        win_enter(win1, false_0 != 0);
+        remove(win1, None);
+        frame_remove(win1.frame());
+        append(Some(win2), win1, None);
+        frame_append(win2.frame(), win1.frame());
+        comp_positions(); // recompute window positions
+        cur_win().redraw_later(UPD_NOT_VALID);
     }
+    win1.w_pos_changed = true;
+    win2.w_pos_changed = true;
+    // SAFETY: a live window; nothing derived from it is read afterwards.
+    unsafe { win_enter(win1.raw(), false) };
 }
 
-pub(crate) unsafe extern "C" fn get_maximum_wincount(
-    mut fr: *mut frame_T,
-    mut height: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        if (*fr).fr_layout as ::core::ffi::c_int != FR_COL {
-            return height
-                / (p_wmh.get() as ::core::ffi::c_int
-                    + STATUS_HEIGHT as ::core::ffi::c_int
-                    + (*frame2win(fr)).w_winbar_height);
-        } else if global_winbar_height() != 0 {
-            return height
-                / (p_wmh.get() as ::core::ffi::c_int
-                    + STATUS_HEIGHT as ::core::ffi::c_int
-                    + 1 as ::core::ffi::c_int);
-        }
-        let mut frp: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-        let mut total_wincount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        frp = (*fr).fr_child;
-        while !frp.is_null() {
-            let mut wp: *mut win_T = frame2win(frp);
-            if (height as OptInt)
-                < p_wmh.get()
-                    + STATUS_HEIGHT as ::core::ffi::c_int as OptInt
-                    + (*wp).w_winbar_height as OptInt
-            {
-                break;
-            }
-            height -= p_wmh.get() as ::core::ffi::c_int
-                + STATUS_HEIGHT as ::core::ffi::c_int
-                + (*wp).w_winbar_height;
-            total_wincount += 1 as ::core::ffi::c_int;
-            frp = (*frp).fr_next;
-        }
-        total_wincount +=
-            height / (p_wmh.get() as ::core::ffi::c_int + STATUS_HEIGHT as ::core::ffi::c_int);
-        return total_wincount;
+pub(crate) unsafe extern "C" fn get_maximum_wincount(fr: *mut frame_T, height: c_int) -> c_int {
+    // SAFETY: the caller's promise -- a live frame.
+    max_wincount(unsafe { Frame::new(fr) }, height)
+}
+
+/// How many windows would fit in `height` rows of frame `fr`, from
+/// `get_maximum_wincount()`: each costs `'winminheight'` plus a status line,
+/// plus its window bar where there is one.
+pub(crate) fn max_wincount(fr: Frame, height: c_int) -> c_int {
+    let per_win = p_wmh.get() as c_int + STATUS_HEIGHT as c_int;
+    if fr.fr_layout as c_int != FR_COL {
+        return height / (per_win + frame2window(fr).w_winbar_height);
     }
+    if global_winbar_rows() != 0 {
+        // If a window bar is globally enabled, no need to check each window.
+        return height / (per_win + 1);
+    }
+
+    // First, try to fit all child frames of "fr" into "height".
+    let mut height = height;
+    let mut total = 0;
+    for frp in fr.children() {
+        let cost = per_win + frame2window(frp).w_winbar_height;
+        if (height as OptInt) < cost as OptInt {
+            break;
+        }
+        height -= cost;
+        total += 1;
+    }
+    // With room left over, use the default window-bar height (which is zero)
+    // for however many more would fit.
+    total + height / per_win
 }

@@ -4,14 +4,19 @@
 //! moved: it redistributes the new room over the frame tree and recomputes
 //! every window's position.  The rest is the `WinScrolled`/`WinResized`
 //! machinery -- [`snapshot_windows_scroll_size`] records every window's view
-//! and size, [`check_window_scroll_resize`] compares the current state
-//! against that snapshot, and [`may_trigger_win_scrolled_resized`] fires the
-//! events with the `v:event` dict [`make_win_info_dict`] builds.
+//! and size, [`scan_windows`] compares the current state against that
+//! snapshot, and [`may_trigger_win_scrolled_resized`] fires the events with the
+//! `v:event` dict [`win_info_dict`] builds.
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int};
+use core::mem::size_of;
+use core::ptr;
+
+use super::arith::NextCurwin;
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::autocmd::{
@@ -26,570 +31,479 @@ use crate::src::nvim::eval::{get_v_event, restore_v_event};
 use crate::src::nvim::ex_getln::compute_cmdrow;
 use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{
-    Columns, Rows, curbuf, curtab, firstwin, p_ch, p_window, skip_win_fix_scroll, topframe,
-};
+use crate::src::nvim::main::{Columns, Rows, curbuf, p_ch, p_window, skip_win_fix_scroll};
 use crate::src::nvim::option::option_was_set;
 use crate::src::nvim::options::kOptWindow;
-use crate::src::nvim::os::libc::abs;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    OptInt, VAR_NUMBER, VAR_UNLOCKED, buf_T, bufref_T, dict_T, garray_T, hashitem_T, hashtab_T,
-    linenr_T, list_T, ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
-    win_T,
+    OptInt, VAR_NUMBER, VAR_UNLOCKED, buf_T, bufref_T, dict_T, garray_T, linenr_T, list_T,
+    ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::src::nvim::winfloat::win_reconfig_floats;
+use crate::src::nvim::winlayer::{Win, windows};
+
+/// The rows the frame tree has to itself: the screen minus the command line,
+/// the tab line and a global status line.
+fn frame_rows() -> c_int {
+    (Rows.get() as OptInt - p_ch.get() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
+        as c_int
+}
 
 pub unsafe extern "C" fn win_new_screensize() {
-    unsafe {
-        static old_Rows: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-        static old_Columns: GlobalCell<::core::ffi::c_int> =
-            GlobalCell::new(0 as ::core::ffi::c_int);
-        if old_Rows.get() != Rows.get() {
-            if p_window.get() == (old_Rows.get() - 1 as ::core::ffi::c_int) as OptInt
-                || old_Rows.get() == 0 as ::core::ffi::c_int && !option_was_set(kOptWindow)
-            {
-                p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
-            }
-            old_Rows.set(Rows.get());
-            win_new_screen_rows();
+    static old_Rows: GlobalCell<c_int> = GlobalCell::new(0);
+    static old_Columns: GlobalCell<c_int> = GlobalCell::new(0);
+    if old_Rows.get() != Rows.get() {
+        // If 'window' uses the whole screen, keep it using the whole screen.
+        if p_window.get() == (old_Rows.get() - 1) as OptInt
+            || (old_Rows.get() == 0 && !option_was_set(kOptWindow))
+        {
+            p_window.set((Rows.get() - 1) as OptInt);
         }
-        if old_Columns.get() != Columns.get() {
-            old_Columns.set(Columns.get());
-            win_new_screen_cols();
-        }
+        old_Rows.set(Rows.get());
+        new_screen_rows();
+    }
+    if old_Columns.get() != Columns.get() {
+        old_Columns.set(Columns.get());
+        new_screen_cols();
     }
 }
 
 pub unsafe extern "C" fn win_new_screen_rows() {
-    unsafe {
-        if (*firstwin.ptr()).is_null() {
-            return;
-        }
-        let mut h: ::core::ffi::c_int = if (Rows.get() as OptInt
-            - p_ch.get()
-            - tabline_height() as OptInt
-            - global_stl_height() as OptInt)
-            as ::core::ffi::c_int
-            > frame_minheight(topframe.get(), ::core::ptr::null_mut::<win_T>())
-        {
-            (Rows.get() as OptInt
-                - p_ch.get()
-                - tabline_height() as OptInt
-                - global_stl_height() as OptInt) as ::core::ffi::c_int
-        } else {
-            frame_minheight(topframe.get(), ::core::ptr::null_mut::<win_T>())
-        };
-        frame_new_height(topframe.get(), h, false_0 != 0, true_0 != 0, false_0 != 0);
-        if !frame_check_height(topframe.get(), h) {
-            frame_new_height(topframe.get(), h, false_0 != 0, false_0 != 0, false_0 != 0);
-        }
-        win_comp_pos();
-        win_reconfig_floats();
-        compute_cmdrow();
-        (*curtab.get()).tp_ch_used = p_ch.get();
-        if !skip_win_fix_scroll.get() {
-            win_fix_scroll(true_0 != 0);
-        }
+    new_screen_rows();
+}
+
+/// Give the windows the new number of screen rows.
+pub(crate) fn new_screen_rows() {
+    if windows().next().is_none() {
+        return; // not initialized yet
+    }
+    let top = current_topframe();
+    let h = frame_rows().max(minheight(top, NextCurwin::Unset));
+    // First try setting the heights of windows with 'winfixheight'; if that
+    // does not result in the right height, forget about that option.
+    new_height(top, h, false, true, false);
+    if !arith::frame_check_height(top, h) {
+        new_height(top, h, false, false, false);
+    }
+    comp_positions();
+    // SAFETY: reads the window list and re-places the floats on it.
+    unsafe { win_reconfig_floats() };
+    // SAFETY: recomputes the row the command line starts on.
+    unsafe { compute_cmdrow() };
+    cur_tab().tp_ch_used = p_ch.get();
+    if !skip_win_fix_scroll.get() {
+        fix_scroll(true);
     }
 }
 
 pub unsafe extern "C" fn win_new_screen_cols() {
-    unsafe {
-        if (*firstwin.ptr()).is_null() {
-            return;
-        }
-        frame_new_width(topframe.get(), Columns.get(), false_0 != 0, true_0 != 0);
-        if !frame_check_width(topframe.get(), Columns.get()) {
-            frame_new_width(topframe.get(), Columns.get(), false_0 != 0, false_0 != 0);
-        }
-        win_comp_pos();
-        win_reconfig_floats();
+    new_screen_cols();
+}
+
+/// Give the windows the new number of screen columns.
+pub(crate) fn new_screen_cols() {
+    if windows().next().is_none() {
+        return; // not initialized yet
+    }
+    let top = current_topframe();
+    // First try setting the widths of windows with 'winfixwidth'; if that does
+    // not result in the right width, forget about that option.
+    new_width(top, Columns.get(), false, true);
+    if !arith::frame_check_width(top, Columns.get()) {
+        new_width(top, Columns.get(), false, false);
+    }
+    comp_positions();
+    // SAFETY: reads the window list and re-places the floats on it.
+    unsafe { win_reconfig_floats() };
+}
+
+// ---------------------------------------------------------------------------
+// WinScrolled and WinResized
+
+pub unsafe extern "C" fn snapshot_windows_scroll_size() {
+    for mut wp in windows() {
+        snapshot_window(&mut wp);
     }
 }
 
-pub unsafe extern "C" fn snapshot_windows_scroll_size() {
-    unsafe {
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            (*wp).w_last_topline = (*wp).w_topline;
-            (*wp).w_last_topfill = (*wp).w_topfill;
-            (*wp).w_last_leftcol = (*wp).w_leftcol;
-            (*wp).w_last_skipcol = (*wp).w_skipcol;
-            (*wp).w_last_width = (*wp).w_width;
-            (*wp).w_last_height = (*wp).w_height;
-            wp = (*wp).w_next;
-        }
-    }
+/// Remember one window's view and size, so the next check can tell whether
+/// either moved.
+fn snapshot_window(wp: &mut Win) {
+    wp.w_last_topline = wp.w_topline;
+    wp.w_last_topfill = wp.w_topfill;
+    wp.w_last_leftcol = wp.w_leftcol;
+    wp.w_last_skipcol = wp.w_skipcol;
+    wp.w_last_width = wp.w_width;
+    wp.w_last_height = wp.w_height;
 }
 
 pub unsafe extern "C" fn may_make_initial_scroll_size_snapshot() {
-    unsafe {
-        if !did_initial_scroll_size_snapshot.get() {
-            did_initial_scroll_size_snapshot.set(true_0 != 0);
-            snapshot_windows_scroll_size();
-        }
+    if !did_initial_scroll_size_snapshot.get() {
+        did_initial_scroll_size_snapshot.set(true);
+        // SAFETY: reads the window list, which is live.
+        unsafe { snapshot_windows_scroll_size() };
     }
 }
 
-unsafe extern "C" fn make_win_info_dict(
-    mut width: ::core::ffi::c_int,
-    mut height: ::core::ffi::c_int,
-    mut topline: ::core::ffi::c_int,
-    mut topfill: ::core::ffi::c_int,
-    mut leftcol: ::core::ffi::c_int,
-    mut skipcol: ::core::ffi::c_int,
-) -> *mut dict_T {
-    unsafe {
-        let d: *mut dict_T = tv_dict_alloc();
-        (*d).dv_refcount = 1 as ::core::ffi::c_int;
-        let mut tv: typval_T = typval_T {
+/// A dictionary with the six numbers a `WinScrolled`/`WinResized` `v:event`
+/// entry carries, or null when one of them could not be added.
+fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
+    let d = new_dict();
+    let keys = [
+        c"width".to_bytes(),
+        c"height".to_bytes(),
+        c"topline".to_bytes(),
+        c"topfill".to_bytes(),
+        c"leftcol".to_bytes(),
+        c"skipcol".to_bytes(),
+    ];
+    for (key, value) in keys.iter().zip(deltas) {
+        let mut tv = typval_T {
             v_type: VAR_NUMBER,
             v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
+            vval: typval_vval_union {
+                v_number: value as varnumber_T,
+            },
         };
-        tv.vval.v_number = width as varnumber_T;
-        if tv_dict_add_tv(
-            d,
-            c"width".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-            &raw mut tv,
-        ) != FAIL
-        {
-            tv.vval.v_number = height as varnumber_T;
-            if tv_dict_add_tv(
-                d,
-                c"height".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-                &raw mut tv,
-            ) != FAIL
-            {
-                tv.vval.v_number = topline as varnumber_T;
-                if tv_dict_add_tv(
-                    d,
-                    c"topline".as_ptr(),
-                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-                    &raw mut tv,
-                ) != FAIL
-                {
-                    tv.vval.v_number = topfill as varnumber_T;
-                    if tv_dict_add_tv(
-                        d,
-                        c"topfill".as_ptr(),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                            .wrapping_sub(1 as size_t),
-                        &raw mut tv,
-                    ) != FAIL
-                    {
-                        tv.vval.v_number = leftcol as varnumber_T;
-                        if tv_dict_add_tv(
-                            d,
-                            c"leftcol".as_ptr(),
-                            ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                                .wrapping_sub(1 as size_t),
-                            &raw mut tv,
-                        ) != FAIL
-                        {
-                            tv.vval.v_number = skipcol as varnumber_T;
-                            if tv_dict_add_tv(
-                                d,
-                                c"skipcol".as_ptr(),
-                                ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                                    .wrapping_sub(1 as size_t),
-                                &raw mut tv,
-                            ) != FAIL
-                            {
-                                return d;
-                            }
-                        }
-                    }
-                }
-            }
+        let (name, len) = (key.as_ptr().cast::<c_char>(), key.len() as size_t);
+        // SAFETY: a live dictionary, a static key of the given length, and a
+        // value the dictionary takes over.
+        if unsafe { tv_dict_add_tv(d, name, len, &raw mut tv) } == FAIL {
+            unref_dict(d);
+            return ptr::null_mut::<dict_T>();
         }
-        tv_dict_unref(d);
-        return ::core::ptr::null_mut::<dict_T>();
+    }
+    d
+}
+
+/// A fresh dictionary with one reference held, which is how upstream's
+/// `v:event` entries start.
+fn new_dict() -> *mut dict_T {
+    // SAFETY: `tv_dict_alloc` answers a fresh live dictionary.
+    unsafe {
+        let d = tv_dict_alloc();
+        (*d).dv_refcount = 1;
+        d
     }
 }
 
-unsafe extern "C" fn check_window_scroll_resize(
-    mut size_count: *mut ::core::ffi::c_int,
-    mut first_scroll_win: *mut *mut win_T,
-    mut first_size_win: *mut *mut win_T,
-    mut winlist: *mut list_T,
-    mut v_event: *mut dict_T,
-) {
-    unsafe {
-        let mut tot_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut tot_height: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut tot_topline: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut tot_topfill: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut tot_leftcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut tot_skipcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).w_floating as ::core::ffi::c_int != 0 && (*wp).w_last_topline == 0 as linenr_T
-            {
-                (*wp).w_last_topline = (*wp).w_topline;
-                (*wp).w_last_topfill = (*wp).w_topfill;
-                (*wp).w_last_leftcol = (*wp).w_leftcol;
-                (*wp).w_last_skipcol = (*wp).w_skipcol;
-                (*wp).w_last_width = (*wp).w_width;
-                (*wp).w_last_height = (*wp).w_height;
-            } else {
-                let ignore_scroll: bool =
-                    event_ignored(EVENT_WINSCROLLED, (*wp).w_onebuf_opt.wo_eiw);
-                let size_changed: bool =
-                    !event_ignored(EVENT_WINRESIZED, (*wp).w_onebuf_opt.wo_eiw)
-                        && ((*wp).w_last_width != (*wp).w_width
-                            || (*wp).w_last_height != (*wp).w_height);
-                if size_changed {
-                    if !winlist.is_null() {
-                        let mut tv: typval_T = typval_T {
-                            v_type: VAR_NUMBER,
-                            v_lock: VAR_UNLOCKED,
-                            vval: typval_vval_union {
-                                v_number: (*wp).handle as varnumber_T,
-                            },
-                        };
-                        tv_list_append_owned_tv(winlist, tv);
-                    } else if !size_count.is_null() {
-                        debug_assert!(
-                            !first_size_win.is_null() && !first_scroll_win.is_null(),
-                            "first_size_win != NULL && first_scroll_win != NULL"
-                        );
-                        *size_count += 1;
-                        if (*first_size_win).is_null() {
-                            *first_size_win = wp;
-                        }
-                        if (*first_scroll_win).is_null() && !ignore_scroll {
-                            *first_scroll_win = wp;
-                        }
-                    }
-                }
-                let scroll_changed: bool = !ignore_scroll
-                    && ((*wp).w_last_topline != (*wp).w_topline
-                        || (*wp).w_last_topfill != (*wp).w_topfill
-                        || (*wp).w_last_leftcol != (*wp).w_leftcol
-                        || (*wp).w_last_skipcol != (*wp).w_skipcol);
-                if scroll_changed as ::core::ffi::c_int != 0
-                    && !first_scroll_win.is_null()
-                    && (*first_scroll_win).is_null()
-                {
-                    *first_scroll_win = wp;
-                }
-                if (size_changed as ::core::ffi::c_int != 0
-                    || scroll_changed as ::core::ffi::c_int != 0)
-                    && !v_event.is_null()
-                {
-                    let mut width: ::core::ffi::c_int = (*wp).w_width - (*wp).w_last_width;
-                    let mut height: ::core::ffi::c_int = (*wp).w_height - (*wp).w_last_height;
-                    let mut topline: ::core::ffi::c_int = (*wp).w_topline as ::core::ffi::c_int
-                        - (*wp).w_last_topline as ::core::ffi::c_int;
-                    let mut topfill: ::core::ffi::c_int = (*wp).w_topfill - (*wp).w_last_topfill;
-                    let mut leftcol: ::core::ffi::c_int = (*wp).w_leftcol as ::core::ffi::c_int
-                        - (*wp).w_last_leftcol as ::core::ffi::c_int;
-                    let mut skipcol: ::core::ffi::c_int = (*wp).w_skipcol as ::core::ffi::c_int
-                        - (*wp).w_last_skipcol as ::core::ffi::c_int;
-                    let mut d: *mut dict_T =
-                        make_win_info_dict(width, height, topline, topfill, leftcol, skipcol);
-                    if d.is_null() {
-                        break;
-                    }
-                    let mut winid: [::core::ffi::c_char; 65] = [0; 65];
-                    let mut key_len: ::core::ffi::c_int = vim_snprintf(
-                        &raw mut winid as *mut ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-                        c"%d".as_ptr(),
-                        (*wp).handle,
-                    );
-                    if tv_dict_add_dict(
-                        v_event,
-                        &raw mut winid as *mut ::core::ffi::c_char,
-                        key_len as size_t,
-                        d,
-                    ) == FAIL
-                    {
-                        tv_dict_unref(d);
-                        break;
-                    } else {
-                        (*d).dv_refcount -= 1;
-                        tot_width += abs(width);
-                        tot_height += abs(height);
-                        tot_topline += abs(topline);
-                        tot_topfill += abs(topfill);
-                        tot_leftcol += abs(leftcol);
-                        tot_skipcol += abs(skipcol);
-                    }
-                }
-            }
-            wp = (*wp).w_next;
+/// Give up one reference to a dictionary.
+fn unref_dict(d: *mut dict_T) {
+    // SAFETY: a live dictionary this file holds a reference to.
+    unsafe { tv_dict_unref(d) };
+}
+
+/// Give up the caller's reference once the dictionary has an owner.
+fn hand_over(d: *mut dict_T) {
+    // SAFETY: as [`unref_dict`]; the new owner holds the other reference.
+    unsafe { (*d).dv_refcount -= 1 };
+}
+
+/// What [`scan_windows`] is collecting on this pass: the counts and first
+/// windows `may_trigger_win_scrolled_resized` needs, the window list
+/// `WinResized` reports, or the per-window dictionary `WinScrolled` does.
+enum Scan<'a> {
+    /// The first pass: how many windows changed size, and the first window of
+    /// each kind.
+    Counts {
+        size_count: &'a mut c_int,
+        first_scroll: &'a mut Option<Win>,
+        first_size: &'a mut Option<Win>,
+    },
+    /// A list of the handles of every window that changed size.
+    Winlist(*mut list_T),
+    /// A dictionary of per-window deltas, plus an `all` entry.
+    Deltas(*mut dict_T),
+}
+
+/// Look for windows whose size or view has moved since the last snapshot, and
+/// record them the way `what` asks for.
+fn scan_windows(what: &mut Scan) {
+    let mut tot = [0 as c_int; 6];
+    for mut wp in windows() {
+        if wp.w_floating && wp.w_last_topline == 0 as linenr_T {
+            // A just-created float has no previous size to compare with.
+            snapshot_window(&mut wp);
+            continue;
         }
-        if !v_event.is_null() {
-            let mut alldict: *mut dict_T = make_win_info_dict(
-                tot_width,
-                tot_height,
-                tot_topline,
-                tot_topfill,
-                tot_leftcol,
-                tot_skipcol,
-            );
-            if !alldict.is_null() {
-                if tv_dict_add_dict(
-                    v_event,
-                    c"all".as_ptr(),
-                    ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-                    alldict,
-                ) == FAIL
-                {
-                    tv_dict_unref(alldict);
-                } else {
-                    (*alldict).dv_refcount -= 1;
+        // SAFETY: the window's own 'eventignorewin' string.
+        let eiw = wp.w_onebuf_opt.wo_eiw;
+        let ignore_scroll = unsafe { event_ignored(EVENT_WINSCROLLED, eiw) };
+        let ignore_resize = unsafe { event_ignored(EVENT_WINRESIZED, eiw) };
+        let size_changed =
+            !ignore_resize && (wp.w_last_width != wp.w_width || wp.w_last_height != wp.w_height);
+        if size_changed {
+            match what {
+                Scan::Winlist(list) => {
+                    let tv = typval_T {
+                        v_type: VAR_NUMBER,
+                        v_lock: VAR_UNLOCKED,
+                        vval: typval_vval_union {
+                            v_number: wp.handle as varnumber_T,
+                        },
+                    };
+                    // SAFETY: a live list, which takes ownership of `tv`.
+                    unsafe { tv_list_append_owned_tv(*list, tv) };
                 }
+                Scan::Counts {
+                    size_count,
+                    first_scroll,
+                    first_size,
+                } => {
+                    **size_count += 1;
+                    first_size.get_or_insert(wp);
+                    if !ignore_scroll {
+                        first_scroll.get_or_insert(wp);
+                    }
+                }
+                Scan::Deltas(_) => {}
             }
+        }
+        let scroll_changed = !ignore_scroll
+            && (wp.w_last_topline != wp.w_topline
+                || wp.w_last_topfill != wp.w_topfill
+                || wp.w_last_leftcol != wp.w_leftcol
+                || wp.w_last_skipcol != wp.w_skipcol);
+        if scroll_changed {
+            if let Scan::Counts { first_scroll, .. } = what {
+                first_scroll.get_or_insert(wp);
+            }
+        }
+        let Scan::Deltas(v_event) = what else {
+            continue;
+        };
+        if !size_changed && !scroll_changed {
+            continue;
+        }
+        let deltas = [
+            wp.w_width - wp.w_last_width,
+            wp.w_height - wp.w_last_height,
+            wp.w_topline as c_int - wp.w_last_topline as c_int,
+            wp.w_topfill - wp.w_last_topfill,
+            wp.w_leftcol as c_int - wp.w_last_leftcol as c_int,
+            wp.w_skipcol as c_int - wp.w_last_skipcol as c_int,
+        ];
+        let d = win_info_dict(deltas);
+        if d.is_null() {
+            break;
+        }
+        let mut winid = [0 as c_char; NUMBUFLEN as usize];
+        let name = (&raw mut winid).cast::<c_char>();
+        // SAFETY: `winid` is 65 bytes, which holds any window handle.
+        let key_len =
+            unsafe { vim_snprintf(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), wp.handle) };
+        // SAFETY: a live dictionary, and a live dictionary to add to it.
+        if unsafe { tv_dict_add_dict(*v_event, name, key_len as size_t, d) } == FAIL {
+            unref_dict(d);
+            break;
+        }
+        hand_over(d);
+        for (total, delta) in tot.iter_mut().zip(deltas) {
+            *total += delta.abs();
+        }
+    }
+    let Scan::Deltas(v_event) = what else {
+        return;
+    };
+    let alldict = win_info_dict(tot);
+    if alldict.is_null() {
+        return;
+    }
+    let (key, len) = (c"all".as_ptr(), 3 as size_t);
+    // SAFETY: two live dictionaries.
+    if unsafe { tv_dict_add_dict(*v_event, key, len, alldict) } == FAIL {
+        unref_dict(alldict);
+    } else {
+        hand_over(alldict);
+    }
+}
+
+/// The window whose id and buffer an event is reported against.
+struct Subject {
+    winid: [c_char; NUMBUFLEN as usize],
+    bufref: bufref_T,
+}
+
+impl Subject {
+    fn of(win: Win) -> Self {
+        let mut subject = Subject {
+            winid: [0; NUMBUFLEN as usize],
+            bufref: bufref_T::default(),
+        };
+        let name = (&raw mut subject.winid).cast::<c_char>();
+        // SAFETY: a 65-byte buffer, which holds any window handle.
+        unsafe { vim_snprintf(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), win.handle) };
+        // SAFETY: a live window and its live buffer.
+        unsafe { set_bufref(&raw mut subject.bufref, win.w_buffer) };
+        subject
+    }
+
+    fn name(&mut self) -> *mut c_char {
+        (&raw mut self.winid).cast::<c_char>()
+    }
+
+    /// The buffer to fire the event for: the window's own if it is still
+    /// there, the current one otherwise.
+    fn buffer(&mut self) -> *mut buf_T {
+        // SAFETY: `bufref_valid` only compares the saved pointer.
+        if unsafe { bufref_valid(&raw mut self.bufref) } {
+            self.bufref.br_buf
+        } else {
+            curbuf.get()
         }
     }
 }
 
 pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
-    unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        let do_resize: bool = has_event(EVENT_WINRESIZED);
-        let do_scroll: bool = has_event(EVENT_WINSCROLLED);
-        if recursive.get() as ::core::ffi::c_int != 0
-            || !(do_scroll as ::core::ffi::c_int != 0 || do_resize as ::core::ffi::c_int != 0)
-            || !did_initial_scroll_size_snapshot.get()
-        {
-            return;
-        }
-        let mut size_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut first_scroll_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut first_size_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        check_window_scroll_resize(
-            &raw mut size_count,
-            &raw mut first_scroll_win,
-            &raw mut first_size_win,
-            ::core::ptr::null_mut::<list_T>(),
-            ::core::ptr::null_mut::<dict_T>(),
-        );
-        let mut trigger_resize: bool =
-            do_resize as ::core::ffi::c_int != 0 && size_count > 0 as ::core::ffi::c_int;
-        let mut trigger_scroll: bool =
-            do_scroll as ::core::ffi::c_int != 0 && !first_scroll_win.is_null();
-        if !trigger_resize && !trigger_scroll {
-            return;
-        }
-        let mut windows_list: *mut list_T = ::core::ptr::null_mut::<list_T>();
-        if trigger_resize {
-            windows_list = tv_list_alloc(size_count as ptrdiff_t);
-            check_window_scroll_resize(
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                ::core::ptr::null_mut::<*mut win_T>(),
-                ::core::ptr::null_mut::<*mut win_T>(),
-                windows_list,
-                ::core::ptr::null_mut::<dict_T>(),
-            );
-        }
-        let mut scroll_dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-        if trigger_scroll {
-            scroll_dict = tv_dict_alloc();
-            (*scroll_dict).dv_refcount = 1 as ::core::ffi::c_int;
-            check_window_scroll_resize(
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                ::core::ptr::null_mut::<*mut win_T>(),
-                ::core::ptr::null_mut::<*mut win_T>(),
-                ::core::ptr::null_mut::<list_T>(),
-                scroll_dict,
-            );
-        }
-        snapshot_windows_scroll_size();
-        recursive.set(true_0 != 0);
-        let mut resize_winid: [::core::ffi::c_char; 65] = [0; 65];
-        let mut resize_bufref: bufref_T = bufref_T::default();
-        if trigger_resize {
-            vim_snprintf(
-                &raw mut resize_winid as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-                c"%d".as_ptr(),
-                (*first_size_win).handle,
-            );
-            set_bufref(&raw mut resize_bufref, (*first_size_win).w_buffer);
-        }
-        let mut scroll_winid: [::core::ffi::c_char; 65] = [0; 65];
-        let mut scroll_bufref: bufref_T = bufref_T::default();
-        if trigger_scroll {
-            vim_snprintf(
-                &raw mut scroll_winid as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-                c"%d".as_ptr(),
-                (*first_scroll_win).handle,
-            );
-            set_bufref(&raw mut scroll_bufref, (*first_scroll_win).w_buffer);
-        }
-        if trigger_resize {
-            let mut save_v_event: save_v_event_T = save_v_event_T {
-                sve_did_save: false,
-                sve_hashtab: hashtab_T {
-                    ht_mask: 0,
-                    ht_used: 0,
-                    ht_filled: 0,
-                    ht_changed: 0,
-                    ht_locked: 0,
-                    ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-                    ht_smallarray: [hashitem_T {
-                        hi_hash: 0,
-                        hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    }; 16],
-                },
-            };
-            let mut v_event: *mut dict_T = get_v_event(&raw mut save_v_event);
-            if tv_dict_add_list(
-                v_event,
-                c"windows".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-                windows_list,
-            ) == OK
-            {
-                tv_dict_set_keys_readonly(v_event);
-                let mut buf: *mut buf_T =
-                    if bufref_valid(&raw mut resize_bufref) as ::core::ffi::c_int != 0 {
-                        resize_bufref.br_buf
-                    } else {
-                        curbuf.get()
-                    };
-                apply_autocmds(
-                    EVENT_WINRESIZED,
-                    &raw mut resize_winid as *mut ::core::ffi::c_char,
-                    &raw mut resize_winid as *mut ::core::ffi::c_char,
-                    false_0 != 0,
-                    buf,
-                );
-            }
-            restore_v_event(v_event, &raw mut save_v_event);
-        }
-        if trigger_scroll {
-            let mut save_v_event_0: save_v_event_T = save_v_event_T {
-                sve_did_save: false,
-                sve_hashtab: hashtab_T {
-                    ht_mask: 0,
-                    ht_used: 0,
-                    ht_filled: 0,
-                    ht_changed: 0,
-                    ht_locked: 0,
-                    ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-                    ht_smallarray: [hashitem_T {
-                        hi_hash: 0,
-                        hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    }; 16],
-                },
-            };
-            let mut v_event_0: *mut dict_T = get_v_event(&raw mut save_v_event_0);
-            tv_dict_extend(v_event_0, scroll_dict, c"move".as_ptr());
-            tv_dict_set_keys_readonly(v_event_0);
-            tv_dict_unref(scroll_dict);
-            let mut buf_0: *mut buf_T =
-                if bufref_valid(&raw mut scroll_bufref) as ::core::ffi::c_int != 0 {
-                    scroll_bufref.br_buf
-                } else {
-                    curbuf.get()
-                };
-            apply_autocmds(
-                EVENT_WINSCROLLED,
-                &raw mut scroll_winid as *mut ::core::ffi::c_char,
-                &raw mut scroll_winid as *mut ::core::ffi::c_char,
-                false_0 != 0,
-                buf_0,
-            );
-            restore_v_event(v_event_0, &raw mut save_v_event_0);
-        }
-        recursive.set(false_0 != 0);
+    static recursive: GlobalCell<bool> = GlobalCell::new(false);
+    // SAFETY: reads the autocommand tables.
+    let (do_resize, do_scroll) =
+        unsafe { (has_event(EVENT_WINRESIZED), has_event(EVENT_WINSCROLLED)) };
+    if recursive.get() || !(do_scroll || do_resize) || !did_initial_scroll_size_snapshot.get() {
+        return;
+    }
+
+    let mut size_count = 0;
+    let mut first_scroll = None;
+    let mut first_size = None;
+    scan_windows(&mut Scan::Counts {
+        size_count: &mut size_count,
+        first_scroll: &mut first_scroll,
+        first_size: &mut first_size,
+    });
+    let trigger_resize = do_resize && size_count > 0;
+    let trigger_scroll = do_scroll && first_scroll.is_some();
+    if !trigger_resize && !trigger_scroll {
+        return;
+    }
+
+    let mut windows_list = ptr::null_mut::<list_T>();
+    if trigger_resize {
+        // SAFETY: a fresh list of the right size.
+        windows_list = unsafe { tv_list_alloc(size_count as ptrdiff_t) };
+        scan_windows(&mut Scan::Winlist(windows_list));
+    }
+    let mut scroll_dict = ptr::null_mut::<dict_T>();
+    if trigger_scroll {
+        scroll_dict = new_dict();
+        scan_windows(&mut Scan::Deltas(scroll_dict));
+    }
+
+    // Both events use the same snapshot, so take the new one before either
+    // fires.
+    // SAFETY: reads the window list.
+    unsafe { snapshot_windows_scroll_size() };
+    recursive.set(true);
+
+    let mut resize = first_size.map(Subject::of);
+    let mut scroll = first_scroll.map(Subject::of);
+    if let Some(resize) = resize.as_mut().filter(|_| trigger_resize) {
+        fire_resized(resize, windows_list);
+    }
+    if let Some(scroll) = scroll.as_mut().filter(|_| trigger_scroll) {
+        fire_scrolled(scroll, scroll_dict);
+    }
+    recursive.set(false);
+}
+
+/// Fire `WinResized` with `v:event.windows` set to the resized windows.
+fn fire_resized(resize: &mut Subject, windows_list: *mut list_T) {
+    let mut save = save_v_event_T::default();
+    // SAFETY: `get_v_event` hands back the dictionary it saved into `save`.
+    let v_event = unsafe { get_v_event(&raw mut save) };
+    let (key, len) = (c"windows".as_ptr(), 7 as size_t);
+    // SAFETY: a live dictionary, a static key, and a live list it takes over.
+    if unsafe { tv_dict_add_list(v_event, key, len, windows_list) } == OK {
+        let (name, buf) = (resize.name(), resize.buffer());
+        // SAFETY: a live dictionary, a NUL-terminated name and a live buffer.
+        unsafe { tv_dict_set_keys_readonly(v_event) };
+        // SAFETY: as above; this fires user autocommands.
+        unsafe { apply_autocmds(EVENT_WINRESIZED, name, name, false, buf) };
+    }
+    // SAFETY: the dictionary `get_v_event` saved into `save`.
+    unsafe { restore_v_event(v_event, &raw mut save) };
+}
+
+/// Fire `WinScrolled` with `v:event` holding the per-window deltas.
+fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut dict_T) {
+    let mut save = save_v_event_T::default();
+    // SAFETY: as [`fire_resized`]; `scroll_dict` is live and is unreferenced
+    // once its contents have been copied in.
+    let v_event = unsafe { get_v_event(&raw mut save) };
+    // SAFETY: two live dictionaries and a static key.
+    unsafe { tv_dict_extend(v_event, scroll_dict, c"move".as_ptr()) };
+    // SAFETY: a live dictionary.
+    unsafe { tv_dict_set_keys_readonly(v_event) };
+    unref_dict(scroll_dict);
+    let (name, buf) = (scroll.name(), scroll.buffer());
+    // SAFETY: a NUL-terminated name and a live buffer; fires autocommands.
+    unsafe { apply_autocmds(EVENT_WINSCROLLED, name, name, false, buf) };
+    // SAFETY: the dictionary `get_v_event` saved into `save`.
+    unsafe { restore_v_event(v_event, &raw mut save) };
+}
+
+// ---------------------------------------------------------------------------
+// Saving and restoring every window's size
+
+pub unsafe extern "C" fn win_size_save(gap: *mut garray_T) {
+    let room = windows().count() as c_int * 2 + 1;
+    // SAFETY: the caller's promise -- a growable array to initialise.
+    unsafe { ga_init(gap, size_of::<c_int>() as c_int, 1) };
+    // SAFETY: as above.
+    unsafe { ga_grow(gap, room) };
+    // The total number of rows first, so a restore can tell the screen did not
+    // change size in between.
+    let mut sizes = Sizes(gap);
+    sizes.push(frame_rows() + global_stl_rows() - last_stl_rows(false));
+    for wp in windows() {
+        sizes.push(wp.w_width + wp.w_vsep_width);
+        sizes.push(wp.w_height);
     }
 }
 
-pub unsafe extern "C" fn win_size_save(mut gap: *mut garray_T) {
-    unsafe {
-        ga_init(
-            gap,
-            ::core::mem::size_of::<::core::ffi::c_int>() as ::core::ffi::c_int,
-            1 as ::core::ffi::c_int,
-        );
-        ga_grow(
-            gap,
-            win_count() * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-        );
-        let c2rust_fresh3 = (*gap).ga_len;
-        (*gap).ga_len = (*gap).ga_len + 1;
-        *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh3 as isize) =
-            (Rows.get() as OptInt
-                - p_ch.get()
-                - tabline_height() as OptInt
-                - global_stl_height() as OptInt) as ::core::ffi::c_int
-                + global_stl_height()
-                - last_stl_height(false_0 != 0);
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            let c2rust_fresh4 = (*gap).ga_len;
-            (*gap).ga_len = (*gap).ga_len + 1;
-            *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh4 as isize) =
-                (*wp).w_width + (*wp).w_vsep_width;
-            let c2rust_fresh5 = (*gap).ga_len;
-            (*gap).ga_len = (*gap).ga_len + 1;
-            *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh5 as isize) =
-                (*wp).w_height;
-            wp = (*wp).w_next;
+pub unsafe extern "C" fn win_size_restore(gap: *mut garray_T) {
+    let sizes = Sizes(gap);
+    if windows().count() as c_int * 2 + 1 != sizes.len()
+        || sizes.at(0) as OptInt
+            != (frame_rows() + global_stl_rows() - last_stl_rows(false)) as OptInt
+    {
+        return;
+    }
+    // Do this twice to handle some window layouts properly.
+    for _ in 0..2 {
+        let mut i = 1;
+        for wp in windows() {
+            let (width, height) = (sizes.at(i), sizes.at(i + 1));
+            i += 2;
+            if !wp.w_floating {
+                set_frame_width(wp.frame(), width);
+                setheight_win(height, wp);
+            }
         }
     }
+    comp_positions();
 }
 
-pub unsafe extern "C" fn win_size_restore(mut gap: *mut garray_T) {
-    unsafe {
-        if win_count() * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int == (*gap).ga_len
-            && *((*gap).ga_data as *mut ::core::ffi::c_int).offset(0 as ::core::ffi::c_int as isize)
-                as OptInt
-                == Rows.get() as OptInt
-                    - p_ch.get()
-                    - tabline_height() as OptInt
-                    - global_stl_height() as OptInt
-                    + global_stl_height() as OptInt
-                    - last_stl_height(false_0 != 0) as OptInt
-        {
-            let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while j < 2 as ::core::ffi::c_int {
-                let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*curtab.get()).tp_firstwin
-                };
-                while !wp.is_null() {
-                    let c2rust_fresh6 = i;
-                    i = i + 1;
-                    let mut width: ::core::ffi::c_int =
-                        *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh6 as isize);
-                    let c2rust_fresh7 = i;
-                    i = i + 1;
-                    let mut height: ::core::ffi::c_int =
-                        *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh7 as isize);
-                    if !(*wp).w_floating {
-                        frame_setwidth((*wp).w_frame, width);
-                        win_setheight_win(height, wp);
-                    }
-                    wp = (*wp).w_next;
-                }
-                j += 1;
-            }
-            win_comp_pos();
-        }
+/// `gap`, read as the array of `int`s `win_size_save` fills it with.
+struct Sizes(*mut garray_T);
+
+impl Sizes {
+    fn len(&self) -> c_int {
+        // SAFETY: a live growable array.
+        unsafe { (*self.0).ga_len }
+    }
+
+    fn at(&self, i: c_int) -> c_int {
+        // SAFETY: a live array of `int`, and `i` is inside its length.
+        unsafe { *(*self.0).ga_data.cast::<c_int>().offset(i as isize) }
+    }
+
+    /// Append one size, which `ga_grow` has already made room for.
+    fn push(&mut self, value: c_int) {
+        let len = self.len();
+        // SAFETY: as above; the caller grew the array to fit every push.
+        unsafe { *(*self.0).ga_data.cast::<c_int>().offset(len as isize) = value };
+        // SAFETY: as above.
+        unsafe { (*self.0).ga_len = len + 1 };
     }
 }

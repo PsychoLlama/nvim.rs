@@ -14,6 +14,7 @@
 //! | [`frame`] | the frame tree: remove a leaf, give its room away |
 //! | [`framesize`] | frame arithmetic and the minimum sizes |
 //! | [`alloc`] | allocating windows and frames, and the lists they live on |
+//! | [`arith`] | the size arithmetic, with no pointer and no global in it |
 //! | [`tabpage`] | tab pages -- create, switch, close |
 //! | [`goto`] | entering a window, and the directional moves |
 //! | [`screensize`] | the screen resized, and `WinScrolled`/`WinResized` |
@@ -33,14 +34,19 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ptr;
+
 use crate::src::nvim::api::private::helpers::{api_clear_error, api_set_error};
+use crate::src::nvim::autocmd::is_aucmd_win;
+use crate::src::nvim::drawscreen::redraw_all_later;
 use crate::src::nvim::ex_getln::is_in_cmdwin;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     c_bytes, curtab, curwin, e_not_allowed_to_change_window_layout_in_this_autocmd,
-    e_winfixbuf_cannot_go_to_buffer, first_tabpage, firstwin, prevwin, swb_flags,
+    e_winfixbuf_cannot_go_to_buffer, first_tabpage, prevwin, swb_flags, topframe,
 };
 use crate::src::nvim::map::map_put_ref_int_ptr_t;
+use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::src::nvim::os::libc::gettext;
@@ -50,9 +56,11 @@ use crate::src::nvim::types::{
     cmd_addr_T, cmdidx_T, dobuf_action_values, dobuf_start_values, getf_values, handle_T,
     kErrorTypeException, kErrorTypeNone, ptr_t, size_t, tabpage_T, uint32_t, win_T,
 };
+use crate::src::nvim::winlayer::{Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
 
 // The carve of the transpiled module; see each child's docs.
 mod alloc;
+pub mod arith;
 mod close;
 mod cmd;
 mod config;
@@ -361,87 +369,122 @@ pub unsafe extern "C" fn swbuf_goto_win_with_buf(mut buf: *mut buf_T) -> *mut wi
     }
 }
 static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn win_valid(mut win: *const win_T) -> bool {
-    unsafe {
-        return tabpage_win_valid(curtab.get(), win);
-    }
+
+// ---------------------------------------------------------------------------
+// Is this window still there?
+//
+// These four take a raw `win_T *` and never dereference it, deliberately: they
+// are asked about a pointer an autocommand may already have freed, and the
+// whole answer is whether it is still on a list. Handing them a `Win` would
+// mean promising exactly what the caller is asking about. `valid_win` below is
+// the bridge back for a caller that wants to go on and use the window.
+
+pub unsafe extern "C" fn win_valid(win: *const win_T) -> bool {
+    // SAFETY: `win` is only compared, never read; `curtab` is always set.
+    unsafe { tabpage_win_valid(curtab.get(), win) }
 }
-pub unsafe extern "C" fn tabpage_win_valid(
-    mut tp: *const tabpage_T,
-    mut win: *const win_T,
-) -> bool {
-    unsafe {
-        if win.is_null() {
-            return false_0 != 0;
-        }
-        let mut wp: *mut win_T = if tp == curtab.get() as *const tabpage_T {
-            firstwin.get()
-        } else {
-            (*tp).tp_firstwin
-        };
-        while !wp.is_null() {
-            if wp == win as *mut win_T {
-                return true_0 != 0;
-            }
-            wp = (*wp).w_next;
-        }
-        return false_0 != 0;
+
+pub unsafe extern "C" fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool {
+    if win.is_null() {
+        return false;
     }
+    // SAFETY: the caller's promise -- a live tab page. `win` is only compared.
+    let tp = unsafe { TabPage::new(tp as *mut tabpage_T) };
+    windows_in_tab(tp).any(|wp| wp.raw() as *const win_T == win)
 }
-pub unsafe extern "C" fn win_find_by_handle(mut handle: handle_T) -> *mut win_T {
-    unsafe {
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).handle == handle {
-                return wp;
-            }
-            wp = (*wp).w_next;
-        }
-        return ::core::ptr::null_mut::<win_T>();
+
+pub unsafe extern "C" fn win_find_by_handle(handle: handle_T) -> *mut win_T {
+    windows()
+        .find(|wp| wp.handle == handle)
+        .map_or(ptr::null_mut(), Win::raw)
+}
+
+pub unsafe extern "C" fn win_valid_any_tab(win: *mut win_T) -> bool {
+    if win.is_null() {
+        return false;
     }
+    tab_windows().any(|wp| wp.raw() == win)
 }
-pub unsafe extern "C" fn win_valid_any_tab(mut win: *mut win_T) -> bool {
-    unsafe {
-        if win.is_null() {
-            return false_0 != 0;
-        }
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                if wp == win {
-                    return true_0 != 0;
-                }
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next as *mut tabpage_T;
-        }
-        return false_0 != 0;
-    }
-}
+
 pub unsafe extern "C" fn win_count() -> ::core::ffi::c_int {
-    unsafe {
-        let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            count += 1;
-            wp = (*wp).w_next;
-        }
-        return count;
-    }
+    windows().count() as ::core::ffi::c_int
+}
+
+/// The window `win` names, if it is still on the current tab page's list.
+///
+/// The one-line bridge from [`win_valid`]'s pointer answer to a value the rest
+/// of the family may dereference.
+fn valid_win(win: *mut win_T) -> Option<Win> {
+    // SAFETY: the walk only produced windows that are on the list.
+    windows().find(|wp| wp.raw() == win)
+}
+
+// ---------------------------------------------------------------------------
+// The neighbours more than one child reaches
+//
+// Everything the window family calls outside it is still `unsafe extern "C"`
+// over raw pointers, and all any of these needs is a live window or tab page --
+// which `Win` and `TabPage` already carry. Wrapping each *exit* once here, in
+// the module every child can see through `use super::*`, costs one unchecked
+// line per neighbour rather than one per call site.
+
+/// `emsg(_(msg))`, the family's only way of reporting a failure.
+fn err(msg: *const ::core::ffi::c_char) {
+    // SAFETY: every caller passes a static NUL-terminated message.
+    unsafe { emsg(gettext(msg)) };
+}
+
+/// Mark every window on the screen for redrawing at `redraw_type`.
+fn redraw_all(redraw_type: ::core::ffi::c_int) {
+    // SAFETY: reads the window list, which is live from startup to exit.
+    unsafe { redraw_all_later(redraw_type) };
+}
+
+/// Whether `win` is the only non-floating window of its tab page.
+fn is_only_window(win: Win, tp: Option<TabPage>) -> bool {
+    // SAFETY: a live window, and a live tab page or the null that means "the
+    // current one".
+    unsafe { one_window(win.raw(), tp.map_or(ptr::null_mut(), TabPage::raw)) }
+}
+
+/// Whether `win` is one of the hidden windows autocommands are executed in.
+fn is_autocmd_window(win: Option<Win>) -> bool {
+    // SAFETY: a live window, or the null the callers pass for "no window".
+    unsafe { is_aucmd_win(win.map_or(ptr::null_mut(), Win::raw)) }
+}
+
+/// `xfree`, for the frames and click definitions the family owns.
+fn free<T>(ptr: *mut T) {
+    // SAFETY: every caller passes a pointer from the `xmalloc` family, or null.
+    unsafe { xfree(ptr as *mut ::core::ffi::c_void) };
+}
+
+/// A tab page as the family's entry points take it: null for "the current one".
+fn raw_tab(tp: Option<TabPage>) -> *mut tabpage_T {
+    tp.map_or(ptr::null_mut(), TabPage::raw)
+}
+
+/// A window argument that may be absent, as the entry points take it.
+fn raw_win(win: Option<Win>) -> *mut win_T {
+    win.map_or(ptr::null_mut(), Win::raw)
+}
+
+/// The root of the current tab page's layout tree.
+fn current_topframe() -> Frame {
+    // SAFETY: `topframe` is set from startup to exit.
+    unsafe { Frame::new(topframe.get()) }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
+}
+
+/// The tab page the editor is working in.
+fn cur_tab() -> TabPage {
+    // SAFETY: `curtab` is set from startup to exit.
+    unsafe { TabPage::current() }
 }
 static command_frame_height: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
 static last_win_id: GlobalCell<::core::ffi::c_int> =

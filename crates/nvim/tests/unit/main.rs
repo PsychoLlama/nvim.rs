@@ -30,3 +30,4 @@ mod strings;
 mod terminfo;
 mod undo;
 mod unpacker;
+mod window;

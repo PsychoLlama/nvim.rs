@@ -86,7 +86,7 @@ const NO_ERROR: Error = Error {
 /// `WIN_CONFIG_INIT`, the config a float starts from before the caller sets
 /// the fields it cares about. (`popupmenu/draw.rs` keeps its own copy of the
 /// same C macro, for the border it draws without a window.)
-const WIN_CONFIG_INIT: WinConfig = WinConfig {
+pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
     window: 0,
     bufpos: lpos_T { lnum: -1, col: 0 },
     height: 0,
@@ -705,8 +705,12 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
         col += parent.w_wincol;
         adjust_for_grid(&mut parent, &mut row, &mut col);
         if win.w_config.bufpos.lnum >= 0 as linenr_T {
+            // Widened: `bufpos={2147483647, ...}` reaches here and the C's
+            // `lnum + 1` overflows before the clamp can catch it.
+            let lnum =
+                (win.w_config.bufpos.lnum as i64 + 1).min(parent.buffer().line_count() as i64);
             let mut pos = pos_T {
-                lnum: (win.w_config.bufpos.lnum + 1).min(parent.buffer().line_count()),
+                lnum: lnum as linenr_T,
                 col: win.w_config.bufpos.col,
                 coladd: 0 as colnr_T,
             };
