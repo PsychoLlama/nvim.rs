@@ -13,6 +13,8 @@
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use core::ffi::{c_int, c_long, c_uint, c_void};
 
 use crate::src::nvim::types::{
@@ -42,22 +44,25 @@ pub const CSI_ARG_MISSING: c_long = 2147483647;
 
 /// Splits a colour into its type byte and the payload that byte selects.
 fn color_parts(col: &VTermColor) -> (c_uint, ColorValue) {
-    // The type byte overlaps the first byte of every arm of the union, so it
-    // is initialised whichever arm was written last, and it names the only
-    // arm that may be read.
-    unsafe {
-        let flags = c_uint::from(col.type_0);
-        let value = if flags & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED {
-            ColorValue::Indexed(col.indexed.idx)
-        } else {
-            ColorValue::Rgb {
-                red: col.rgb.red,
-                green: col.rgb.green,
-                blue: col.rgb.blue,
-            }
-        };
-        (flags, value)
-    }
+    // SAFETY: the type byte overlaps the first byte of every arm of the
+    // union, so it is initialised whichever arm was written last.
+    let flags = c_uint::from(unsafe { col.type_0 });
+    // The type bit names the only arm that may be read: the indexed arm is
+    // two bytes where the RGB arm is four, so reading the wrong one would
+    // read past what was written.
+    let value = if flags & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED {
+        // SAFETY: the type byte says the indexed arm is the live one.
+        ColorValue::Indexed(unsafe { col.indexed.idx })
+    } else {
+        // SAFETY: the type byte says the RGB arm is the live one.
+        let rgb = unsafe { col.rgb };
+        ColorValue::Rgb {
+            red: rgb.red,
+            green: rgb.green,
+            blue: rgb.blue,
+        }
+    };
+    (flags, value)
 }
 
 /// Rebuilds a colour from a type byte and a payload. The payload owns the
@@ -152,7 +157,9 @@ pub fn init_pen(state: &mut VTermState) {
 /// Where a pen change is reported to.
 ///
 /// Captured before the change is made so that no borrow of the state is held
-/// across the callback, which is free to re-enter the terminal.
+/// across the callback, which is free to re-enter the terminal. Holding one
+/// *is* the promise that the callback table is live, which is why every
+/// report through it is then ordinary code and only [`PenSink::of`] is not.
 #[derive(Copy, Clone)]
 struct PenSink {
     callbacks: *const VTermStateCallbacks,
@@ -160,7 +167,13 @@ struct PenSink {
 }
 
 impl PenSink {
-    fn of(state: &VTermState) -> Self {
+    /// The sink `state` reports its pen changes to.
+    ///
+    /// # Safety
+    ///
+    /// The state's callback table and its data pointer must stay live for as
+    /// long as the returned sink is used.
+    unsafe fn of(state: &VTermState) -> Self {
         PenSink {
             callbacks: state.callbacks,
             cbdata: state.cbdata,
@@ -168,19 +181,20 @@ impl PenSink {
     }
 
     /// Reports one attribute's new value.
-    ///
-    /// # Safety
-    ///
-    /// The captured callback table and its data pointer must still be live.
-    unsafe fn set(self, attr: VTermAttr, val: VTermValue) {
-        let Some(callbacks) = self.callbacks.as_ref() else {
+    fn set(self, attr: VTermAttr, val: VTermValue) {
+        // SAFETY: constructing the sink promised the table is still live, so
+        // it is either null or a readable `VTermStateCallbacks`.
+        let Some(callbacks) = (unsafe { self.callbacks.as_ref() }) else {
             return;
         };
         let Some(setpenattr) = callbacks.setpenattr else {
             return;
         };
         let mut val = val;
-        setpenattr(attr, &raw mut val, self.cbdata);
+        // SAFETY: the consumer's own callback, taking the attribute, a
+        // pointer to a value that outlives the call, and the data it was
+        // registered with.
+        unsafe { setpenattr(attr, &raw mut val, self.cbdata) };
     }
 }
 
@@ -209,7 +223,13 @@ fn color(col: VTermColor) -> VTermValue {
 ///
 /// The state's callback table must still be live.
 pub unsafe fn reset_pen(state: &mut VTermState) {
-    let sink = PenSink::of(state);
+    // SAFETY: forwarded to this function's own caller.
+    let sink = unsafe { PenSink::of(state) };
+    reset_pen_to(state, sink);
+}
+
+/// [`reset_pen`] against a sink already in hand.
+fn reset_pen_to(state: &mut VTermState, sink: PenSink) {
     state.pen.set_bold(0);
     sink.set(VTERM_ATTR_BOLD, flag(false));
     state.pen.set_underline(VTERM_UNDERLINE_OFF);
@@ -254,7 +274,8 @@ pub fn save_pen(state: &mut VTermState) {
 ///
 /// The state's callback table must still be live.
 pub unsafe fn restore_pen(state: &mut VTermState) {
-    let sink = PenSink::of(state);
+    // SAFETY: forwarded to this function's own caller.
+    let sink = unsafe { PenSink::of(state) };
     state.pen = state.saved.pen;
     let pen = state.pen;
     sink.set(VTERM_ATTR_BOLD, flag(pen.bold() != 0));
@@ -275,12 +296,7 @@ pub unsafe fn restore_pen(state: &mut VTermState) {
 }
 
 /// Points the pen's foreground or background at an ANSI palette slot.
-///
-/// # Safety
-///
-/// The state's callback table must still be live.
-unsafe fn set_pen_col_ansi(state: &mut VTermState, attr: VTermAttr, index: c_long) {
-    let sink = PenSink::of(state);
+fn set_pen_col_ansi(state: &mut VTermState, sink: PenSink, attr: VTermAttr, index: c_long) {
     let col = plain_color(ColorValue::Indexed(index as u8));
     if attr == VTERM_ATTR_BACKGROUND {
         state.pen.bg = col;
@@ -305,25 +321,36 @@ pub unsafe fn set_pen_attr(
     if value_type != vterm_get_attr_type(attr) {
         return false;
     }
+    // One reader per arm of the union, so that only the arm the attribute's
+    // own value type named is ever read.
+    //
+    // SAFETY: `value_type` was just checked against that type, and the
+    // caller promised `val` holds the arm it names.
+    let boolean = || unsafe { val.boolean } as c_uint;
+    // SAFETY: as above.
+    let number = || unsafe { val.number };
+    // SAFETY: as above.
+    let color_of = || unsafe { val.color };
     match attr {
-        VTERM_ATTR_BOLD => state.pen.set_bold(val.boolean as c_uint),
-        VTERM_ATTR_UNDERLINE => state.pen.set_underline(val.number as c_uint),
-        VTERM_ATTR_ITALIC => state.pen.set_italic(val.boolean as c_uint),
-        VTERM_ATTR_BLINK => state.pen.set_blink(val.boolean as c_uint),
-        VTERM_ATTR_REVERSE => state.pen.set_reverse(val.boolean as c_uint),
-        VTERM_ATTR_CONCEAL => state.pen.set_conceal(val.boolean as c_uint),
-        VTERM_ATTR_STRIKE => state.pen.set_strike(val.boolean as c_uint),
-        VTERM_ATTR_FONT => state.pen.set_font(val.number as c_uint),
-        VTERM_ATTR_FOREGROUND => state.pen.fg = val.color,
-        VTERM_ATTR_BACKGROUND => state.pen.bg = val.color,
-        VTERM_ATTR_SMALL => state.pen.set_small(val.boolean as c_uint),
-        VTERM_ATTR_BASELINE => state.pen.set_baseline(val.number as c_uint),
-        VTERM_ATTR_URI => state.pen.uri = val.number,
-        VTERM_ATTR_DIM => state.pen.set_dim(val.boolean as c_uint),
-        VTERM_ATTR_OVERLINE => state.pen.set_overline(val.boolean as c_uint),
+        VTERM_ATTR_BOLD => state.pen.set_bold(boolean()),
+        VTERM_ATTR_UNDERLINE => state.pen.set_underline(number() as c_uint),
+        VTERM_ATTR_ITALIC => state.pen.set_italic(boolean()),
+        VTERM_ATTR_BLINK => state.pen.set_blink(boolean()),
+        VTERM_ATTR_REVERSE => state.pen.set_reverse(boolean()),
+        VTERM_ATTR_CONCEAL => state.pen.set_conceal(boolean()),
+        VTERM_ATTR_STRIKE => state.pen.set_strike(boolean()),
+        VTERM_ATTR_FONT => state.pen.set_font(number() as c_uint),
+        VTERM_ATTR_FOREGROUND => state.pen.fg = color_of(),
+        VTERM_ATTR_BACKGROUND => state.pen.bg = color_of(),
+        VTERM_ATTR_SMALL => state.pen.set_small(boolean()),
+        VTERM_ATTR_BASELINE => state.pen.set_baseline(number() as c_uint),
+        VTERM_ATTR_URI => state.pen.uri = number(),
+        VTERM_ATTR_DIM => state.pen.set_dim(boolean()),
+        VTERM_ATTR_OVERLINE => state.pen.set_overline(boolean()),
         _ => return false,
     }
-    PenSink::of(state).set(attr, *val);
+    // SAFETY: forwarded to this function's own caller.
+    unsafe { PenSink::of(state) }.set(attr, *val);
     true
 }
 
@@ -380,13 +407,14 @@ fn parse_sgr_color(palette: c_long, args: &[c_long]) -> (Option<ColorValue>, usi
 ///
 /// The state's callback table must still be live.
 pub unsafe fn apply_sgr(state: &mut VTermState, args: &[c_long]) {
-    let sink = PenSink::of(state);
+    // SAFETY: forwarded to this function's own caller.
+    let sink = unsafe { PenSink::of(state) };
     let mut argi = 0;
     while argi < args.len() {
         let raw = arg_at(args, argi);
         let arg = raw & c_long::from(CSI_ARG_MASK);
         match arg {
-            CSI_ARG_MISSING | 0 => reset_pen(state),
+            CSI_ARG_MISSING | 0 => reset_pen_to(state, sink),
             1 => {
                 // Bold. On a terminal that conflates bold with brightness,
                 // it also promotes one of the low eight palette colours.
@@ -399,7 +427,7 @@ pub unsafe fn apply_sgr(state: &mut VTermState, args: &[c_long]) {
                     && let ColorValue::Indexed(idx) = value
                     && idx < 8
                 {
-                    set_pen_col_ansi(state, VTERM_ATTR_FOREGROUND, c_long::from(idx) + 8);
+                    set_pen_col_ansi(state, sink, VTERM_ATTR_FOREGROUND, c_long::from(idx) + 8);
                 }
             }
             2 => {
@@ -484,7 +512,7 @@ pub unsafe fn apply_sgr(state: &mut VTermState, args: &[c_long]) {
                 if state.pen.bold() != 0 && state.bold_is_highbright != 0 {
                     slot += 8;
                 }
-                set_pen_col_ansi(state, VTERM_ATTR_FOREGROUND, slot);
+                set_pen_col_ansi(state, sink, VTERM_ATTR_FOREGROUND, slot);
             }
             38 | 48 => {
                 let (attr, foreground) = if arg == 38 {
@@ -515,7 +543,7 @@ pub unsafe fn apply_sgr(state: &mut VTermState, args: &[c_long]) {
                 state.pen.fg = state.default_fg;
                 sink.set(VTERM_ATTR_FOREGROUND, color(state.pen.fg));
             }
-            40..=47 => set_pen_col_ansi(state, VTERM_ATTR_BACKGROUND, arg - 40),
+            40..=47 => set_pen_col_ansi(state, sink, VTERM_ATTR_BACKGROUND, arg - 40),
             49 => {
                 state.pen.bg = state.default_bg;
                 sink.set(VTERM_ATTR_BACKGROUND, color(state.pen.bg));
@@ -539,8 +567,8 @@ pub unsafe fn apply_sgr(state: &mut VTermState, args: &[c_long]) {
                 sink.set(VTERM_ATTR_SMALL, number(state.pen.small()));
                 sink.set(VTERM_ATTR_BASELINE, number(state.pen.baseline()));
             }
-            90..=97 => set_pen_col_ansi(state, VTERM_ATTR_FOREGROUND, arg - 90 + 8),
-            100..=107 => set_pen_col_ansi(state, VTERM_ATTR_BACKGROUND, arg - 100 + 8),
+            90..=97 => set_pen_col_ansi(state, sink, VTERM_ATTR_FOREGROUND, arg - 90 + 8),
+            100..=107 => set_pen_col_ansi(state, sink, VTERM_ATTR_BACKGROUND, arg - 100 + 8),
             _ => {}
         }
         // Step past this parameter and any sub-parameters it carried.
