@@ -285,8 +285,7 @@ pub fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
     let ml_end = buf.line_count();
     for mut wp in windows_showing(buf) {
         if wp.is_current() && is_focused(term) {
-            // SAFETY: the current window shows this terminal's buffer.
-            unsafe { terminal_check_cursor(term) };
+            terminal_check_cursor(term);
             continue;
         }
         if ml_end == wp.w_cursor.lnum + added as linenr_T {

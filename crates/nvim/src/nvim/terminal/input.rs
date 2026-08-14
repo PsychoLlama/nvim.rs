@@ -19,7 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
+use crate::src::nvim::drawscreen::UPD_NOT_VALID;
 use crate::src::nvim::getchar::{ins_char_typebuf, ungetchars};
 use crate::src::nvim::keycodes::{
     Ctrl_AT, Ctrl_M, K_BS, K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_DEL, K_DOWN, K_END, K_F1,
@@ -50,14 +50,15 @@ use crate::src::nvim::options::{
     kOptTpfFlagHT,
 };
 use crate::src::nvim::types::{
-    String_0, Terminal, VTermKey, VTermModifier, cmdarg_T, oparg_T, size_t, win_T,
+    String_0, Terminal, VTermKey, VTermModifier, cmdarg_T, oparg_T, size_t,
 };
 use crate::src::nvim::vterm::keyboard::{
     vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
     vterm_keyboard_unichar,
 };
 use crate::src::nvim::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
-use core::ffi::c_int;
+use crate::src::nvim::winlayer::{Buf, Win};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::refresh::invalidate_terminal;
 use super::{Term, terminal_send};
@@ -243,18 +244,19 @@ fn convert_key(key: &mut c_int, state: &mut VTermModifier) -> VTermKey {
 ///
 /// A keycode with no vterm name is a codepoint, unless it is negative — one
 /// of the extras vterm has no equivalent for, which is simply dropped.
-pub(super) unsafe fn terminal_send_key(term: *mut Terminal, c: c_int) {
-    unsafe {
-        let mut state = VTERM_MOD_NONE;
-        // The editor spells NUL as an extra so it survives being a C
-        // string; vterm wants the control character back.
-        let mut key = if c == K_ZERO { Ctrl_AT } else { c };
-        let named = convert_key(&mut key, &mut state);
-        if named != VTERM_KEY_NONE {
-            vterm_keyboard_key((*term).vt, named, state);
-        } else if key >= 0 {
-            vterm_keyboard_unichar((*term).vt, key as u32, state);
-        }
+pub(super) fn terminal_send_key(term: Term, c: c_int) {
+    let mut state = VTERM_MOD_NONE;
+    // The editor spells NUL as an extra so it survives being a C string;
+    // vterm wants the control character back.
+    let mut key = if c == K_ZERO { Ctrl_AT } else { c };
+    let named = convert_key(&mut key, &mut state);
+    let vt = term.vt;
+    if named != VTERM_KEY_NONE {
+        // SAFETY: the terminal's own emulator.
+        unsafe { vterm_keyboard_key(vt, named, state) };
+    } else if key >= 0 {
+        // SAFETY: as above.
+        unsafe { vterm_keyboard_unichar(vt, key as u32, state) };
     }
 }
 
@@ -278,16 +280,24 @@ fn is_filter_char(c: c_int) -> bool {
 /// Open or close a bracketed paste that spans more than one `nvim_paste`
 /// call, so the child sees one paste rather than several.
 pub unsafe fn terminal_set_streamed_paste(term: *mut Terminal, streamed: bool) {
-    unsafe {
-        if (*term).streamed_paste != streamed {
-            if streamed {
-                vterm_keyboard_start_paste((*(*curbuf.get()).terminal).vt);
-            } else {
-                vterm_keyboard_end_paste((*(*curbuf.get()).terminal).vt);
-            }
+    // SAFETY: the caller hands over a live terminal.
+    let mut term = unsafe { Term::new(term) };
+    if term.streamed_paste != streamed {
+        // The current buffer's terminal, not `term`, exactly as the C had
+        // it; both callers pass one for the other.
+        //
+        // SAFETY: `curbuf` is set from startup to exit, and the paste
+        // machinery only reaches this while it has a terminal.
+        let vt = unsafe { Term::new(Buf::current().terminal) }.vt;
+        if streamed {
+            // SAFETY: a live emulator.
+            unsafe { vterm_keyboard_start_paste(vt) };
+        } else {
+            // SAFETY: as above.
+            unsafe { vterm_keyboard_end_paste(vt) };
         }
-        (*term).streamed_paste = streamed;
     }
+    term.streamed_paste = streamed;
 }
 
 /// Paste `y_array` into the current terminal `count` times.
@@ -295,39 +305,45 @@ pub unsafe fn terminal_set_streamed_paste(term: *mut Terminal, streamed: bool) {
 /// Bracketed unless the paste is already part of a stream, and filtered
 /// through `'termpastefilter'` a character at a time.
 pub unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size: size_t) {
-    unsafe {
-        if y_size == 0 {
-            return;
-        }
-        let term = (*curbuf.get()).terminal;
-        let bracket = !(*term).streamed_paste;
-        if bracket {
-            vterm_keyboard_start_paste((*term).vt);
-        }
-        let mut filtered: Vec<u8> = Vec::new();
-        for _ in 0..count {
-            for line in 0..y_size {
-                if line != 0 {
-                    terminal_send(Term::new(term), b"\n");
-                }
-                filtered.clear();
-                let mut src = (*y_array.add(line)).data;
-                while *src != 0 {
-                    let len = utf_ptr2len(src) as usize;
-                    if !is_filter_char(utf_ptr2char(src)) {
-                        filtered.extend_from_slice(::core::slice::from_raw_parts(
-                            src.cast::<u8>(),
-                            len,
-                        ));
-                    }
-                    src = src.add(len);
-                }
-                terminal_send(Term::new(term), &filtered);
+    if y_size == 0 {
+        return;
+    }
+    // SAFETY: the caller hands over `y_size` readable strings.
+    let lines = unsafe { ::core::slice::from_raw_parts(y_array, y_size) };
+    // SAFETY: `curbuf` is set from startup to exit, and a paste only
+    // reaches here while it has a terminal.
+    let term = unsafe { Term::new(Buf::current().terminal) };
+    let (bracket, vt) = (!term.streamed_paste, term.vt);
+    if bracket {
+        // SAFETY: the terminal's own emulator.
+        unsafe { vterm_keyboard_start_paste(vt) };
+    }
+    let mut filtered: Vec<u8> = Vec::new();
+    for _ in 0..count {
+        for (index, line) in lines.iter().enumerate() {
+            if index != 0 {
+                terminal_send(term, b"\n");
             }
+            filtered.clear();
+            // SAFETY: a register's line is NUL-terminated.
+            let bytes = unsafe { CStr::from_ptr(line.data) }.to_bytes();
+            let mut at = 0;
+            while at < bytes.len() {
+                let src = bytes[at..].as_ptr().cast::<c_char>();
+                // SAFETY: the tail of a NUL-terminated line, which is what
+                // both of these read; neither can run past the NUL.
+                let (len, c) = unsafe { (utf_ptr2len(src) as usize, utf_ptr2char(src)) };
+                if !is_filter_char(c) {
+                    filtered.extend_from_slice(&bytes[at..at + len]);
+                }
+                at += len;
+            }
+            terminal_send(term, &filtered);
         }
-        if bracket {
-            vterm_keyboard_end_paste((*term).vt);
-        }
+    }
+    if bracket {
+        // SAFETY: the terminal's own emulator.
+        unsafe { vterm_keyboard_end_paste(vt) };
     }
 }
 
@@ -377,24 +393,32 @@ fn scroll_direction(c: c_int) -> Option<c_int> {
 
 /// Scroll `mouse_win` as the editor would if the mouse were over an
 /// ordinary buffer.
-unsafe fn scroll_window(mouse_win: *mut win_T, key: c_int, direction: c_int) {
-    unsafe {
-        let save_curwin = curwin.get();
-        curwin.set(mouse_win);
-        curbuf.set((*curwin.get()).w_buffer);
+fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
+    // SAFETY: `curwin` is set from startup to exit.
+    let save_curwin = unsafe { Win::current() };
+    curwin.set(mouse_win.raw());
+    curbuf.set(mouse_win.buffer().raw());
 
-        let mut oa: oparg_T = ::core::mem::zeroed();
-        clear_oparg(&raw mut oa);
-        let mut cap: cmdarg_T = ::core::mem::zeroed();
-        cap.oap = &raw mut oa;
-        cap.cmdchar = key;
-        cap.arg = direction;
-        do_mousescroll(&raw mut cap);
+    // SAFETY: all-zeroes is what `clear_oparg` and the command argument
+    // start from; every field of both is a scalar or a pointer.
+    let (mut oa, mut cap): (oparg_T, cmdarg_T) = unsafe { ::core::mem::zeroed() };
+    // SAFETY: an operator argument of this frame's own.
+    unsafe { clear_oparg(&raw mut oa) };
+    cap.oap = &raw mut oa;
+    cap.cmdchar = key;
+    cap.arg = direction;
+    // SAFETY: a command argument of this frame's own, naming the operator
+    // above; it scrolls the window the two globals were just set to.
+    unsafe { do_mousescroll(&raw mut cap) };
 
-        (*curwin.get()).w_redr_status = true;
-        curwin.set(save_curwin);
-        curbuf.set((*curwin.get()).w_buffer);
-    }
+    // Whatever the scroll left as the current window, which need not be the
+    // one it started in.
+    //
+    // SAFETY: `curwin` is set from startup to exit.
+    let mut scrolled = unsafe { Win::current() };
+    scrolled.w_redr_status = true;
+    curwin.set(save_curwin.raw());
+    curbuf.set(save_curwin.buffer().raw());
 }
 
 /// Deal with a mouse event while a terminal has focus.
@@ -403,64 +427,74 @@ unsafe fn scroll_window(mouse_win: *mut win_T, key: c_int, direction: c_int) {
 /// the child gets the event, the editor scrolls the window under the
 /// pointer, or the event is pushed back for normal-mode processing (which
 /// is what makes clicking out of a terminal work).
-pub(super) unsafe fn send_mouse_event(term: *mut Terminal, c: c_int) -> bool {
-    unsafe {
-        let mut row = mouse_row.get();
-        let mut col = mouse_col.get();
-        let mut grid = mouse_grid.get();
-        let mouse_win = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
+pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
+    let mut row = mouse_row.get();
+    let mut col = mouse_col.get();
+    let mut grid = mouse_grid.get();
+    let (grid_out, row_out, col_out) = (&raw mut grid, &raw mut row, &raw mut col);
+    // SAFETY: three out-parameters of this frame's own; the window it
+    // answers is one of the editor's, or null.
+    let mouse_win = unsafe { Win::from_raw(mouse_find_win_inner(grid_out, row_out, col_out)) };
 
-        if !mouse_win.is_null() {
-            // An external grid is exactly the terminal's window, so the
-            // height and width checks below only apply to the shared one.
-            let offset = win_col_off(mouse_win);
-            let inside = row >= 0
-                && (grid > 1 || row + (*mouse_win).w_winbar_height < (*mouse_win).w_height)
-                && col >= offset
-                && (grid > 1 || col < (*mouse_win).w_width);
-            let forwarding = !(*term).suspended
-                && !(*term).closed
-                && (*term).forward_mouse
-                && (*(*mouse_win).w_buffer).terminal == term;
+    if let Some(mouse_win) = mouse_win {
+        // An external grid is exactly the terminal's window, so the height
+        // and width checks below only apply to the shared one.
+        //
+        // SAFETY: a live window.
+        let offset = unsafe { win_col_off(mouse_win.raw()) };
+        let inside = row >= 0
+            && (grid > 1 || row + mouse_win.w_winbar_height < mouse_win.w_height)
+            && col >= offset
+            && (grid > 1 || col < mouse_win.w_width);
+        let showing_term = mouse_win.buffer().terminal == term.raw();
+        let forwarding = !term.suspended && !term.closed && term.forward_mouse && showing_term;
 
-            if forwarding && inside {
-                let Some((button, pressed)) = mouse_button(c) else {
-                    return false;
-                };
-                let mut state = VTERM_MOD_NONE;
-                convert_modifiers(&mut { c }, &mut state);
-                vterm_mouse_move((*term).vt, row, col - offset, state);
-                if button != 0 {
-                    vterm_mouse_button((*term).vt, button, pressed, state);
-                }
+        if forwarding && inside {
+            let Some((button, pressed)) = mouse_button(c) else {
                 return false;
+            };
+            let mut state = VTERM_MOD_NONE;
+            convert_modifiers(&mut { c }, &mut state);
+            let vt = term.vt;
+            // SAFETY: the terminal's own emulator.
+            unsafe { vterm_mouse_move(vt, row, col - offset, state) };
+            if button != 0 {
+                // SAFETY: as above.
+                unsafe { vterm_mouse_button(vt, button, pressed, state) };
             }
-
-            if let Some(direction) = scroll_direction(c) {
-                scroll_window(mouse_win, c, direction);
-                redraw_later(mouse_win, UPD_NOT_VALID);
-                // The terminal's own window may have scrolled under it.
-                invalidate_terminal(Term::new(term), None);
-                // False when the user scrolled a different window, so that
-                // the editor gets a chance to leave terminal mode.
-                return mouse_win == curwin.get();
-            }
-        }
-
-        // A release inside the terminal's own window, and any bare move,
-        // are dropped: neither means anything to the editor here.
-        if (c == K_LEFTRELEASE && !mouse_win.is_null() && (*(*mouse_win).w_buffer).terminal == term)
-            || c == K_MOUSEMOVE
-        {
             return false;
         }
 
-        // Hand the event back for normal mode, then rewind the typeahead so
-        // that terminal mode ends before it is read.
-        let len = ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
-        if KeyTyped.get() {
-            ungetchars(len);
+        if let Some(direction) = scroll_direction(c) {
+            scroll_window(mouse_win, c, direction);
+            mouse_win.redraw_later(UPD_NOT_VALID);
+            // The terminal's own window may have scrolled under it.
+            invalidate_terminal(term, None);
+            // False when the user scrolled a different window, so that the
+            // editor gets a chance to leave terminal mode.
+            return mouse_win.is_current();
         }
-        true
+
+        // A release inside the terminal's own window is dropped: it means
+        // nothing to the editor here.
+        if c == K_LEFTRELEASE && showing_term {
+            return false;
+        }
     }
+
+    // A bare move is dropped for the same reason.
+    if c == K_MOUSEMOVE {
+        return false;
+    }
+
+    // Hand the event back for normal mode, then rewind the typeahead so
+    // that terminal mode ends before it is read.
+    let (c, mods) = (vgetc_char.get(), vgetc_mod_mask.get());
+    // SAFETY: pushes one key back onto the editor's own typeahead.
+    let len = unsafe { ins_char_typebuf(c, mods, true) };
+    if KeyTyped.get() {
+        // SAFETY: rewinds the typeahead over the key just pushed.
+        unsafe { ungetchars(len) };
+    }
+    true
 }
