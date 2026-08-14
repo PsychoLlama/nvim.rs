@@ -29,6 +29,18 @@ and this project adheres to [CalVer](https://calver.org/).
   `%@Func@` click definitions it records; `'guicursor'`; and the
   compositor that blends floating windows and the message grid onto the
   screen.
+- Rewrote windows and buffers over a shared safe layer: window splitting
+  and the frame tree behind every `CTRL-W` command, `:resize` and the
+  `'equalalways'`/`'winfix*'`/`'winmin*'` geometry rules, entering and
+  closing windows and tab pages along with the `Win*`/`Tab*`
+  autocommands they fire, and floating-window configuration —
+  `relative`, `anchor`, `zindex`, borders, titles and `bufpos`; the
+  buffer list behind `:ls`, `:buffer`, `:bdelete`/`:bwipeout` and
+  buffer-name completion, buffer creation, unloading and wiping with the
+  `Buf*` autocommands around them, modelines, `CTRL-G` and
+  `getbufinfo()`; the change notifications `nvim_buf_attach()` delivers;
+  and extmarks. Window, tab page, frame and buffer identity now travel
+  as typed handles instead of raw pointers.
 
 ## [2026.08.11-3d48beea07]
 
