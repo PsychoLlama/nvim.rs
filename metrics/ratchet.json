@@ -972,7 +972,7 @@
     "crates/nvim/src/nvim/viml/parser/expressions/parse.rs": {"unsafe_lines": 30},
     "crates/nvim/src/nvim/viml/parser/expressions/strings.rs": {"unsafe_lines": 38},
     "crates/nvim/src/nvim/viml/parser/parser.rs": {"unsafe_lines": 22},
-    "crates/nvim/src/nvim/vterm/encoding.rs": {"cell_ptr": 3, "no_mangle": 1, "unsafe_lines": 16},
+    "crates/nvim/src/nvim/vterm/encoding.rs": {"cell_ptr": 3, "no_mangle": 1, "unsafe_lines": 6},
     "crates/nvim/src/nvim/vterm/keyboard.rs": {"no_mangle": 4, "unsafe_lines": 9},
     "crates/nvim/src/nvim/vterm/mouse.rs": {"no_mangle": 2, "unsafe_lines": 7},
     "crates/nvim/src/nvim/vterm/parser.rs": {"no_mangle": 2, "unsafe_lines": 396},

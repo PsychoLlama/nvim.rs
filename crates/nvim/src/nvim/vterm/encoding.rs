@@ -179,25 +179,26 @@ fn decode_bridge<T>(
     bytelen: size_t,
     decode: impl FnOnce(&mut T, &[u8], &mut usize, &mut Codepoints),
 ) {
-    // SAFETY: the caller of a `VTermEncoding::decode` promises `cp` points at
-    // `cplen` writable codepoints, `bytes` at `bytelen` readable ones, `cpi`
-    // and `pos` at live scalars, and `scratch` at the `T` the matching `init`
-    // set up (or, for the stateless decoders, at something layout-compatible).
-    unsafe {
-        let mut sink = Codepoints {
-            out: slice::from_raw_parts_mut(cp, cplen.max(0) as usize),
-            len: (*cpi).max(0) as usize,
-        };
-        let mut at = *pos;
-        decode(
-            &mut *scratch.cast::<T>(),
-            slice::from_raw_parts(bytes.cast::<u8>(), bytelen),
-            &mut at,
-            &mut sink,
-        );
-        *cpi = sink.len as c_int;
-        *pos = at;
-    }
+    // The caller of a `VTermEncoding::decode` promises `cp` points at `cplen`
+    // writable codepoints, `bytes` at `bytelen` readable ones, `cpi` and `pos`
+    // at live scalars, and `scratch` at the `T` the matching `init` set up
+    // (or, for the stateless decoders, at something layout-compatible). Each
+    // region below is one of those four promises.
+    //
+    // SAFETY: `cp` and `cplen` are the caller's output array.
+    let out = unsafe { slice::from_raw_parts_mut(cp, cplen.max(0) as usize) };
+    // SAFETY: `bytes` and `bytelen` are the caller's input run.
+    let input = unsafe { slice::from_raw_parts(bytes.cast::<u8>(), bytelen) };
+    // SAFETY: `scratch` holds the `T` this decoder stored there.
+    let state = unsafe { &mut *scratch.cast::<T>() };
+    // SAFETY: `cpi` and `pos` are the caller's live scalars.
+    let (len, mut at) = unsafe { ((*cpi).max(0) as usize, *pos) };
+
+    let mut sink = Codepoints { out, len };
+    decode(state, input, &mut at, &mut sink);
+
+    // SAFETY: as above -- the same two scalars, written back.
+    unsafe { (*cpi, *pos) = (sink.len as c_int, at) };
 }
 
 extern "C" fn init_utf8(_enc: *mut VTermEncoding, scratch: *mut c_void) {
