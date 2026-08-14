@@ -7,14 +7,24 @@
 //! between calls is the small block in `VTerm::parser`, so a sequence split
 //! across two writes resumes where it left off.
 //!
+//! That block is reached through [`Parser`], whose *construction* carries the
+//! promise that the terminal and the callback table installed in it are live.
+//! The state machine built on top of it — accumulating a sequence's leader,
+//! parameters and payload, and reporting each completed event — is then
+//! ordinary checked code.
+//!
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::types::{
-    VTerm, VTermParserCallbacks, VTermParserState, VTermStringFragment, VTermTerminator, size_t,
+    VTerm, VTerm_parser, VTerm_parser_v_csi, VTerm_parser_v_dcs, VTerm_parser_v_osc,
+    VTermParserCallbacks, VTermParserState, VTermStringFragment, VTermTerminator, size_t,
 };
 use crate::src::nvim::vterm::vterm::{VTERM_TERMINATOR_BEL, VTERM_TERMINATOR_ST};
 use core::ffi::{c_char, c_int, c_long, c_void};
+use core::ops::{Deref, DerefMut};
 use core::slice;
 
 /// Intermediate bytes held for an escape or control sequence.
@@ -104,122 +114,246 @@ enum ParserEvent<'a> {
     Text(&'a [u8]),
 }
 
-/// Hand `event` to the callback registered for it, if there is one.
+/// The parser block of a live terminal, and the consumer's callback table.
 ///
-/// Returns how many bytes a [`ParserEvent::Text`] was consumed by; zero for
-/// every other event.
+/// Constructing one is where this file's unsafety collects: the promise that
+/// the terminal behind the pointer and the table installed in it stay live is
+/// made once, by [`Parser::of`], and every read and write of the block after
+/// that is plain field access through [`Deref`].
 ///
-/// # Safety
-///
-/// `vt` must point at a live terminal, and the callback table installed by
-/// [`vterm_parser_set_callbacks`] must still be valid.
-unsafe fn dispatch(vt: *mut VTerm, event: ParserEvent) -> usize {
-    let callbacks = (*vt).parser.callbacks.as_ref();
-    let cbdata = (*vt).parser.cbdata;
+/// A consumer callback is free to re-enter the terminal, and the calls out to
+/// one hand it pointers *into* the parser block, so no borrow of the block
+/// may be held across a report — which is what `&mut self` on
+/// [`Parser::dispatch`] enforces.
+struct Parser {
+    vt: *mut VTerm,
+}
 
-    match event {
-        ParserEvent::Control(control) => {
-            if let Some(f) = callbacks.and_then(|c| c.control) {
-                f(control, cbdata);
-            }
-        }
-        ParserEvent::Csi(command) => {
-            if let Some(f) = callbacks.and_then(|c| c.csi) {
-                let csi = &(*vt).parser.v.csi;
-                // A missing leader or intermediate is reported as NULL, not
-                // as an empty string.
-                let leader = if csi.leaderlen != 0 {
-                    csi.leader.as_ptr()
-                } else {
-                    core::ptr::null()
-                };
-                let intermed = if (*vt).parser.intermedlen != 0 {
-                    (*vt).parser.intermed.as_ptr()
-                } else {
-                    core::ptr::null()
-                };
-                f(
-                    leader,
-                    csi.args.as_ptr(),
-                    csi.argi,
-                    intermed,
-                    command as c_char,
-                    cbdata,
-                );
-            }
-        }
-        ParserEvent::Escape(command) => {
-            // The consumer sees the intermediates followed by the final byte,
-            // NUL-terminated.
-            let mut seq = [0 as c_char; INTERMED_MAX + 1];
-            let parser = &(*vt).parser;
-            let intermedlen = (parser.intermedlen.max(0) as usize).min(seq.len() - 1);
-            seq[..intermedlen].copy_from_slice(&parser.intermed[..intermedlen]);
-            seq[intermedlen] = command as c_char;
-            if let Some(f) = callbacks.and_then(|c| c.escape) {
-                f(seq.as_ptr(), intermedlen + 1, cbdata);
-            }
-        }
-        ParserEvent::StringFragment {
-            bytes,
-            last,
-            terminator,
-        } => {
-            let mut frag = VTermStringFragment {
-                str: bytes.as_ptr().cast::<c_char>(),
-                len_initial_final_0: [0; 4],
-                terminator,
-            };
-            frag.set_len(bytes.len());
-            frag.set_initial((*vt).parser.string_initial);
-            frag.set_final_0(last);
+impl Deref for Parser {
+    type Target = VTerm_parser;
 
-            match ParserState::from_raw((*vt).parser.state) {
-                ParserState::Osc => {
-                    if let Some(f) = callbacks.and_then(|c| c.osc) {
-                        f((*vt).parser.v.osc.command, frag, cbdata);
-                    }
-                }
-                ParserState::Dcs => {
-                    if let Some(f) = callbacks.and_then(|c| c.dcs) {
-                        let dcs = &(*vt).parser.v.dcs;
-                        f(
-                            dcs.command.as_ptr(),
-                            dcs.commandlen.max(0) as size_t,
-                            frag,
-                            cbdata,
-                        );
-                    }
-                }
-                ParserState::Apc => {
-                    if let Some(f) = callbacks.and_then(|c| c.apc) {
-                        f(frag, cbdata);
-                    }
-                }
-                ParserState::Pm => {
-                    if let Some(f) = callbacks.and_then(|c| c.pm) {
-                        f(frag, cbdata);
-                    }
-                }
-                ParserState::Sos => {
-                    if let Some(f) = callbacks.and_then(|c| c.sos) {
-                        f(frag, cbdata);
-                    }
-                }
-                // Nothing is open yet: the sequence's own command bytes are
-                // not a fragment of its payload.
-                _ => return 0,
-            }
-            // Only the first fragment of a string is the initial one.
-            (*vt).parser.string_initial = false;
-        }
-        ParserEvent::Text(text) => {
-            if let Some(f) = callbacks.and_then(|c| c.text) {
-                return f(text.as_ptr().cast::<c_char>(), text.len(), cbdata).max(0) as usize;
-            }
+    fn deref(&self) -> &VTerm_parser {
+        // SAFETY: the wrapper promised the terminal stays live, and it is the
+        // only one over this terminal, so no other reference to the block is
+        // outstanding.
+        unsafe { &(*self.vt).parser }
+    }
+}
+
+impl DerefMut for Parser {
+    fn deref_mut(&mut self) -> &mut VTerm_parser {
+        // SAFETY: as for `deref`, and `&mut self` rules out a second borrow
+        // through this wrapper.
+        unsafe { &mut (*self.vt).parser }
+    }
+}
+
+impl Parser {
+    /// The parser of the terminal `vt` points at.
+    ///
+    /// # Safety
+    ///
+    /// `vt` must point at a live terminal for as long as the wrapper is used,
+    /// and the callback table and data pointer installed through
+    /// [`vterm_parser_set_callbacks`] must stay valid for that long. No other
+    /// wrapper over the same terminal may exist at the same time.
+    unsafe fn of(vt: *mut VTerm) -> Self {
+        Parser { vt }
+    }
+
+    /// The consumer's callback table, if it installed one.
+    fn handlers(&self) -> Option<&VTermParserCallbacks> {
+        // SAFETY: constructing the wrapper promised the installed table is
+        // live, so the pointer is either null or a readable table.
+        unsafe { self.callbacks.as_ref() }
+    }
+
+    /// Whether an 8-bit C1 control byte is recognised as one. In UTF-8 mode
+    /// those bytes are continuation bytes and are left to the text callback.
+    fn c1_allowed(&self) -> bool {
+        // SAFETY: the wrapper promised the terminal stays live.
+        unsafe { (*self.vt).mode.utf8() == 0 }
+    }
+
+    /// The control-sequence arm of the per-sequence union, live from
+    /// `CsiLeader` until the sequence ends.
+    ///
+    /// Every arm of the union is integers, and the terminal was zeroed when
+    /// it was allocated, so reading the arm the parser is not in reads stale
+    /// values rather than uninitialised ones; which arm is *meaningful* is
+    /// what [`VTerm_parser::state`] says.
+    fn csi(&self) -> &VTerm_parser_v_csi {
+        // SAFETY: the arm is initialised whichever one was written last.
+        unsafe { &self.v.csi }
+    }
+
+    fn csi_mut(&mut self) -> &mut VTerm_parser_v_csi {
+        // SAFETY: as for `csi`.
+        unsafe { &mut self.v.csi }
+    }
+
+    /// The OSC arm, live from `OscCommand` until the string ends.
+    fn osc(&self) -> &VTerm_parser_v_osc {
+        // SAFETY: as for `csi`.
+        unsafe { &self.v.osc }
+    }
+
+    fn osc_mut(&mut self) -> &mut VTerm_parser_v_osc {
+        // SAFETY: as for `csi`.
+        unsafe { &mut self.v.osc }
+    }
+
+    /// The DCS arm, live from `DcsCommand` until the string ends.
+    fn dcs(&self) -> &VTerm_parser_v_dcs {
+        // SAFETY: as for `csi`.
+        unsafe { &self.v.dcs }
+    }
+
+    fn dcs_mut(&mut self) -> &mut VTerm_parser_v_dcs {
+        // SAFETY: as for `csi`.
+        unsafe { &mut self.v.dcs }
+    }
+
+    /// Collects one intermediate byte, if there is room; the last slot is
+    /// reserved for the NUL the consumer's escape callback is handed.
+    fn push_intermed(&mut self, c: u8) {
+        let len = self.intermedlen as usize;
+        if len < INTERMED_MAX - 1 {
+            self.intermed[len] = c as c_char;
+            self.intermedlen += 1;
         }
     }
-    0
+
+    /// NUL-terminates the intermediates ahead of reporting a sequence.
+    fn terminate_intermed(&mut self) {
+        let len = self.intermedlen as usize;
+        self.intermed[len] = 0;
+    }
+
+    /// Hands `event` to the callback registered for it, if there is one.
+    ///
+    /// Returns how many bytes a [`ParserEvent::Text`] was consumed by; zero
+    /// for every other event.
+    fn dispatch(&mut self, event: ParserEvent) -> usize {
+        let cbdata = self.cbdata;
+
+        match event {
+            ParserEvent::Control(control) => {
+                if let Some(f) = self.handlers().and_then(|c| c.control) {
+                    // SAFETY: the consumer's own callback, taking the control
+                    // byte and the data it registered with.
+                    unsafe { f(control, cbdata) };
+                }
+            }
+            ParserEvent::Csi(command) => {
+                if let Some(f) = self.handlers().and_then(|c| c.csi) {
+                    let csi = self.csi();
+                    // A missing leader or intermediate is reported as NULL,
+                    // not as an empty string.
+                    let leader = if csi.leaderlen != 0 {
+                        csi.leader.as_ptr()
+                    } else {
+                        core::ptr::null()
+                    };
+                    let args = csi.args.as_ptr();
+                    let argi = csi.argi;
+                    let intermed = if self.intermedlen != 0 {
+                        self.intermed.as_ptr()
+                    } else {
+                        core::ptr::null()
+                    };
+                    let command = command as c_char;
+                    // SAFETY: the consumer's own callback. The leader,
+                    // parameter and intermediate pointers are into the parser
+                    // block, which outlives the call, and nothing here holds
+                    // a borrow of that block across it.
+                    unsafe { f(leader, args, argi, intermed, command, cbdata) };
+                }
+            }
+            ParserEvent::Escape(command) => {
+                // The consumer sees the intermediates followed by the final
+                // byte, NUL-terminated.
+                let mut seq = [0 as c_char; INTERMED_MAX + 1];
+                let intermedlen = (self.intermedlen.max(0) as usize).min(seq.len() - 1);
+                seq[..intermedlen].copy_from_slice(&self.intermed[..intermedlen]);
+                seq[intermedlen] = command as c_char;
+                if let Some(f) = self.handlers().and_then(|c| c.escape) {
+                    // SAFETY: the consumer's own callback, taking `seq`,
+                    // which outlives the call, and its own data.
+                    unsafe { f(seq.as_ptr(), intermedlen + 1, cbdata) };
+                }
+            }
+            ParserEvent::StringFragment {
+                bytes,
+                last,
+                terminator,
+            } => {
+                let mut frag = VTermStringFragment {
+                    str: bytes.as_ptr().cast::<c_char>(),
+                    len_initial_final_0: [0; 4],
+                    terminator,
+                };
+                frag.set_len(bytes.len());
+                frag.set_initial(self.string_initial);
+                frag.set_final_0(last);
+
+                match ParserState::from_raw(self.state) {
+                    ParserState::Osc => {
+                        if let Some(f) = self.handlers().and_then(|c| c.osc) {
+                            let command = self.osc().command;
+                            // SAFETY: the consumer's own callback, taking the
+                            // fragment by value and its own data.
+                            unsafe { f(command, frag, cbdata) };
+                        }
+                    }
+                    ParserState::Dcs => {
+                        if let Some(f) = self.handlers().and_then(|c| c.dcs) {
+                            let dcs = self.dcs();
+                            let command = dcs.command.as_ptr();
+                            let commandlen = dcs.commandlen.max(0) as size_t;
+                            // SAFETY: the consumer's own callback. The
+                            // command pointer is into the parser block, which
+                            // outlives the call.
+                            unsafe { f(command, commandlen, frag, cbdata) };
+                        }
+                    }
+                    ParserState::Apc => {
+                        if let Some(f) = self.handlers().and_then(|c| c.apc) {
+                            // SAFETY: the consumer's own callback.
+                            unsafe { f(frag, cbdata) };
+                        }
+                    }
+                    ParserState::Pm => {
+                        if let Some(f) = self.handlers().and_then(|c| c.pm) {
+                            // SAFETY: the consumer's own callback.
+                            unsafe { f(frag, cbdata) };
+                        }
+                    }
+                    ParserState::Sos => {
+                        if let Some(f) = self.handlers().and_then(|c| c.sos) {
+                            // SAFETY: the consumer's own callback.
+                            unsafe { f(frag, cbdata) };
+                        }
+                    }
+                    // Nothing is open yet: the sequence's own command bytes
+                    // are not a fragment of its payload.
+                    _ => return 0,
+                }
+                // Only the first fragment of a string is the initial one.
+                self.string_initial = false;
+            }
+            ParserEvent::Text(text) => {
+                if let Some(f) = self.handlers().and_then(|c| c.text) {
+                    let bytes = text.as_ptr().cast::<c_char>();
+                    // SAFETY: the consumer's own callback, taking the text
+                    // this write is still holding and its own data.
+                    let eaten = unsafe { f(bytes, text.len(), cbdata) };
+                    return eaten.max(0) as usize;
+                }
+            }
+        }
+        0
+    }
 }
 
 /// The payload accumulated for the open string sequence, up to `pos`.
@@ -240,55 +374,57 @@ pub unsafe extern "C" fn vterm_input_write(
     bytes: *const c_char,
     len: size_t,
 ) -> size_t {
-    let input = slice::from_raw_parts(bytes.cast::<u8>(), len);
+    // SAFETY: the caller promises `bytes` points at `len` readable bytes that
+    // stay put for the call.
+    let input = unsafe { slice::from_raw_parts(bytes.cast::<u8>(), len) };
+    // SAFETY: the caller promises a live terminal, and the callback table it
+    // was given through `vterm_parser_set_callbacks` is still installed.
+    let mut parser = unsafe { Parser::of(vt) };
 
     // Index into `input` where the payload of the open string sequence
     // begins. A sequence left open by an earlier call resumes at byte zero.
-    let mut string_start = ParserState::from_raw((*vt).parser.state)
+    let mut string_start = ParserState::from_raw(parser.state)
         .is_string()
         .then_some(0usize);
     let mut pos = 0usize;
 
     while pos < input.len() {
         let mut c = input[pos];
-        let mut c1_allowed = (*vt).mode.utf8() == 0;
-        let mut state = ParserState::from_raw((*vt).parser.state);
+        let mut c1_allowed = parser.c1_allowed();
+        let mut state = ParserState::from_raw(parser.state);
 
         'byte: {
             // NUL and DEL are filler; they interrupt a string but never end it.
             if c == 0x00 || c == 0x7f {
                 if state.is_string() {
-                    dispatch(
-                        vt,
-                        ParserEvent::StringFragment {
-                            bytes: pending(input, string_start, pos),
-                            last: false,
-                            terminator: VTERM_TERMINATOR_ST,
-                        },
-                    );
+                    parser.dispatch(ParserEvent::StringFragment {
+                        bytes: pending(input, string_start, pos),
+                        last: false,
+                        terminator: VTERM_TERMINATOR_ST,
+                    });
                     string_start = Some(pos + 1);
                 }
-                if (*vt).parser.emit_nul {
-                    dispatch(vt, ParserEvent::Control(c));
+                if parser.emit_nul {
+                    parser.dispatch(ParserEvent::Control(c));
                 }
                 break 'byte;
             }
             // CAN and SUB abandon whatever was in progress.
             if c == 0x18 || c == 0x1a {
-                (*vt).parser.set_in_esc(false);
-                (*vt).parser.state = ParserState::Normal.raw();
+                parser.set_in_esc(false);
+                parser.state = ParserState::Normal.raw();
                 string_start = None;
-                if (*vt).parser.emit_nul {
-                    dispatch(vt, ParserEvent::Control(c));
+                if parser.emit_nul {
+                    parser.dispatch(ParserEvent::Control(c));
                 }
                 break 'byte;
             }
             if c == 0x1b {
-                (*vt).parser.intermedlen = 0;
+                parser.intermedlen = 0;
                 if !state.is_string() {
-                    (*vt).parser.state = ParserState::Normal.raw();
+                    parser.state = ParserState::Normal.raw();
                 }
-                (*vt).parser.set_in_esc(true);
+                parser.set_in_esc(true);
                 break 'byte;
             }
             // Inside a string BEL stands in for ST, so it is handled below
@@ -299,17 +435,14 @@ pub unsafe extern "C" fn vterm_input_write(
                     break 'byte;
                 }
                 if state.is_string() {
-                    dispatch(
-                        vt,
-                        ParserEvent::StringFragment {
-                            bytes: pending(input, string_start, pos),
-                            last: false,
-                            terminator: VTERM_TERMINATOR_ST,
-                        },
-                    );
+                    parser.dispatch(ParserEvent::StringFragment {
+                        bytes: pending(input, string_start, pos),
+                        last: false,
+                        terminator: VTERM_TERMINATOR_ST,
+                    });
                 }
-                dispatch(vt, ParserEvent::Control(c));
-                if ParserState::from_raw((*vt).parser.state).is_string() {
+                parser.dispatch(ParserEvent::Control(c));
+                if ParserState::from_raw(parser.state).is_string() {
                     string_start = Some(pos + 1);
                 }
                 break 'byte;
@@ -317,11 +450,11 @@ pub unsafe extern "C" fn vterm_input_write(
 
             let mut string_len = string_start.map_or(0, |start| pos.saturating_sub(start));
 
-            if (*vt).parser.in_esc() {
+            if parser.in_esc() {
                 // `ESC X` is the 7-bit spelling of the C1 control X + 0x40.
                 // Inside a string only `ESC \` (ST) is recognised, so that a
                 // stray ESC can't be mistaken for a new sequence.
-                if (*vt).parser.intermedlen == 0
+                if parser.intermedlen == 0
                     && (0x40..0x60).contains(&c)
                     && (!state.is_string() || c == 0x5c)
                 {
@@ -329,11 +462,11 @@ pub unsafe extern "C" fn vterm_input_write(
                     c1_allowed = true;
                     // The ESC itself is not part of the payload.
                     string_len = string_len.saturating_sub(1);
-                    (*vt).parser.set_in_esc(false);
+                    parser.set_in_esc(false);
                 } else {
                     string_start = None;
                     state = ParserState::Normal;
-                    (*vt).parser.state = state.raw();
+                    parser.state = state.raw();
                 }
             }
 
@@ -346,22 +479,22 @@ pub unsafe extern "C" fn vterm_input_write(
                     ParserState::CsiLeader => {
                         // Private-use markers, 0x3c to 0x3f.
                         if (0x3c..=0x3f).contains(&c) {
-                            let csi = &mut (*vt).parser.v.csi;
+                            let csi = parser.csi_mut();
                             if (csi.leaderlen as usize) < CSI_LEADER_MAX - 1 {
                                 csi.leader[csi.leaderlen as usize] = c as c_char;
                                 csi.leaderlen += 1;
                             }
                             break;
                         }
-                        let csi = &mut (*vt).parser.v.csi;
+                        let csi = parser.csi_mut();
                         csi.leader[csi.leaderlen as usize] = 0;
                         csi.argi = 0;
                         csi.args[0] = CSI_ARG_MISSING;
-                        (*vt).parser.state = ParserState::CsiArgs.raw();
+                        parser.state = ParserState::CsiArgs.raw();
                         section = ParserState::CsiArgs;
                     }
                     ParserState::CsiArgs => {
-                        let csi = &mut (*vt).parser.v.csi;
+                        let csi = parser.csi_mut();
                         let argi = csi.argi as usize;
                         if c.is_ascii_digit() {
                             if csi.args[argi] == CSI_ARG_MISSING {
@@ -392,31 +525,27 @@ pub unsafe extern "C" fn vterm_input_write(
                             break;
                         }
                         csi.argi = (csi.argi + 1).min(CSI_ARGS_MAX as c_int);
-                        (*vt).parser.intermedlen = 0;
-                        (*vt).parser.state = ParserState::CsiIntermed.raw();
+                        parser.intermedlen = 0;
+                        parser.state = ParserState::CsiIntermed.raw();
                         section = ParserState::CsiIntermed;
                     }
                     ParserState::CsiIntermed => {
                         if is_intermed(c) {
-                            let parser = &mut (*vt).parser;
-                            if (parser.intermedlen as usize) < INTERMED_MAX - 1 {
-                                parser.intermed[parser.intermedlen as usize] = c as c_char;
-                                parser.intermedlen += 1;
-                            }
+                            parser.push_intermed(c);
                             break;
                         }
                         // ESC cancels the sequence; a final byte completes it;
                         // anything else was malformed. All three end it.
                         if c != 0x1b && (0x40..=0x7e).contains(&c) {
-                            (*vt).parser.intermed[(*vt).parser.intermedlen as usize] = 0;
-                            dispatch(vt, ParserEvent::Csi(c));
+                            parser.terminate_intermed();
+                            parser.dispatch(ParserEvent::Csi(c));
                         }
-                        (*vt).parser.state = ParserState::Normal.raw();
+                        parser.state = ParserState::Normal.raw();
                         string_start = None;
                         break;
                     }
                     ParserState::OscCommand => {
-                        let osc = &mut (*vt).parser.v.osc;
+                        let osc = parser.osc_mut();
                         if c.is_ascii_digit() {
                             let base = if osc.command == -1 {
                                 0
@@ -427,25 +556,25 @@ pub unsafe extern "C" fn vterm_input_write(
                             break;
                         }
                         if c == b';' {
-                            (*vt).parser.state = ParserState::Osc.raw();
+                            parser.state = ParserState::Osc.raw();
                             string_start = Some(pos + 1);
                             break;
                         }
                         // No command digits at all: the payload starts here.
                         string_start = Some(pos);
                         string_len = 0;
-                        (*vt).parser.state = ParserState::Osc.raw();
+                        parser.state = ParserState::Osc.raw();
                         section = ParserState::Osc;
                     }
                     ParserState::DcsCommand => {
-                        let dcs = &mut (*vt).parser.v.dcs;
+                        let dcs = parser.dcs_mut();
                         if (dcs.commandlen as usize) < CSI_LEADER_MAX {
                             dcs.command[dcs.commandlen as usize] = c as c_char;
                             dcs.commandlen += 1;
                         }
                         if (0x40..=0x7e).contains(&c) {
                             string_start = Some(pos + 1);
-                            (*vt).parser.state = ParserState::Dcs.raw();
+                            parser.state = ParserState::Dcs.raw();
                         }
                         break;
                     }
@@ -456,35 +585,28 @@ pub unsafe extern "C" fn vterm_input_write(
                     | ParserState::Sos => {
                         if c == 0x07 || (c1_allowed && c == 0x9c) {
                             let start = string_start.unwrap_or(pos);
-                            dispatch(
-                                vt,
-                                ParserEvent::StringFragment {
-                                    bytes: &input[start..(start + string_len).min(input.len())],
-                                    last: true,
-                                    terminator: if c == 0x07 {
-                                        VTERM_TERMINATOR_BEL
-                                    } else {
-                                        VTERM_TERMINATOR_ST
-                                    },
+                            parser.dispatch(ParserEvent::StringFragment {
+                                bytes: &input[start..(start + string_len).min(input.len())],
+                                last: true,
+                                terminator: if c == 0x07 {
+                                    VTERM_TERMINATOR_BEL
+                                } else {
+                                    VTERM_TERMINATOR_ST
                                 },
-                            );
-                            (*vt).parser.state = ParserState::Normal.raw();
+                            });
+                            parser.state = ParserState::Normal.raw();
                             string_start = None;
                         }
                         break;
                     }
                     ParserState::Normal => {
-                        if (*vt).parser.in_esc() {
+                        if parser.in_esc() {
                             if is_intermed(c) {
-                                let parser = &mut (*vt).parser;
-                                if (parser.intermedlen as usize) < INTERMED_MAX - 1 {
-                                    parser.intermed[parser.intermedlen as usize] = c as c_char;
-                                    parser.intermedlen += 1;
-                                }
+                                parser.push_intermed(c);
                             } else if (0x30..0x7f).contains(&c) {
-                                dispatch(vt, ParserEvent::Escape(c));
-                                (*vt).parser.set_in_esc(false);
-                                (*vt).parser.state = ParserState::Normal.raw();
+                                parser.dispatch(ParserEvent::Escape(c));
+                                parser.set_in_esc(false);
+                                parser.state = ParserState::Normal.raw();
                                 string_start = None;
                             }
                             break;
@@ -493,51 +615,51 @@ pub unsafe extern "C" fn vterm_input_write(
                             match c {
                                 // DCS
                                 0x90 => {
-                                    (*vt).parser.string_initial = true;
-                                    (*vt).parser.v.dcs.commandlen = 0;
-                                    (*vt).parser.state = ParserState::DcsCommand.raw();
+                                    parser.string_initial = true;
+                                    parser.dcs_mut().commandlen = 0;
+                                    parser.state = ParserState::DcsCommand.raw();
                                     string_start = None;
                                 }
                                 // SOS
                                 0x98 => {
-                                    (*vt).parser.string_initial = true;
-                                    (*vt).parser.state = ParserState::Sos.raw();
+                                    parser.string_initial = true;
+                                    parser.state = ParserState::Sos.raw();
                                     string_start = Some(pos + 1);
                                 }
                                 // CSI
                                 0x9b => {
-                                    (*vt).parser.v.csi.leaderlen = 0;
-                                    (*vt).parser.state = ParserState::CsiLeader.raw();
+                                    parser.csi_mut().leaderlen = 0;
+                                    parser.state = ParserState::CsiLeader.raw();
                                     string_start = None;
                                 }
                                 // OSC
                                 0x9d => {
-                                    (*vt).parser.v.osc.command = -1;
-                                    (*vt).parser.string_initial = true;
-                                    (*vt).parser.state = ParserState::OscCommand.raw();
+                                    parser.osc_mut().command = -1;
+                                    parser.string_initial = true;
+                                    parser.state = ParserState::OscCommand.raw();
                                     string_start = None;
                                 }
                                 // PM
                                 0x9e => {
-                                    (*vt).parser.string_initial = true;
-                                    (*vt).parser.state = ParserState::Pm.raw();
+                                    parser.string_initial = true;
+                                    parser.state = ParserState::Pm.raw();
                                     string_start = Some(pos + 1);
                                 }
                                 // APC
                                 0x9f => {
-                                    (*vt).parser.string_initial = true;
-                                    (*vt).parser.state = ParserState::Apc.raw();
+                                    parser.string_initial = true;
+                                    parser.state = ParserState::Apc.raw();
                                     string_start = Some(pos + 1);
                                 }
                                 _ => {
-                                    dispatch(vt, ParserEvent::Control(c));
+                                    parser.dispatch(ParserEvent::Control(c));
                                 }
                             }
                             break;
                         }
                         // Plain text. The callback takes as much as it wants;
                         // if it takes nothing, force a byte of progress.
-                        let eaten = dispatch(vt, ParserEvent::Text(&input[pos..])).max(1);
+                        let eaten = parser.dispatch(ParserEvent::Text(&input[pos..])).max(1);
                         pos += eaten - 1;
                         break;
                     }
@@ -553,17 +675,14 @@ pub unsafe extern "C" fn vterm_input_write(
         if string_len > 0 {
             // A trailing ESC may yet turn out to be the ST that ends the
             // string, so it is not part of the payload.
-            if (*vt).parser.in_esc() {
+            if parser.in_esc() {
                 string_len -= 1;
             }
-            dispatch(
-                vt,
-                ParserEvent::StringFragment {
-                    bytes: &input[start..start + string_len],
-                    last: false,
-                    terminator: VTERM_TERMINATOR_ST,
-                },
-            );
+            parser.dispatch(ParserEvent::StringFragment {
+                bytes: &input[start..start + string_len],
+                last: false,
+                terminator: VTERM_TERMINATOR_ST,
+            });
         }
     }
 
@@ -576,8 +695,11 @@ pub unsafe extern "C" fn vterm_parser_set_callbacks(
     callbacks: *const VTermParserCallbacks,
     user: *mut c_void,
 ) {
-    (*vt).parser.callbacks = callbacks;
-    (*vt).parser.cbdata = user;
+    // SAFETY: the caller promises a live terminal. The table being installed
+    // is the one the wrapper's promise will then be about.
+    let mut parser = unsafe { Parser::of(vt) };
+    parser.callbacks = callbacks;
+    parser.cbdata = user;
 }
 
 #[cfg(test)]
