@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
 //! Rendering a key as text, for `termkey_strfkey`.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::tui::termkey::keynames;
 use crate::src::nvim::tui::termkey::termkey::{

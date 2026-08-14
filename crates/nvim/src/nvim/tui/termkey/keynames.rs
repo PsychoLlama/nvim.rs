@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
 //! The names of the symbolic keys.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::types::TermKeySym;
 use core::ffi::CStr;

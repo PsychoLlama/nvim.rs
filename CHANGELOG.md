@@ -17,9 +17,10 @@ and this project adheres to [CalVer](https://calver.org/).
   no longer corrupts the heap. Opening a terminal freed the variable's
   own string, so reading, reassigning or unsetting it afterwards was a
   double free; the palette is now read without taking ownership.
-- Restored libvterm's MIT notice, which the port had dropped: the ported
-  emulator now carries the attribution, `LICENSE.txt` names the files it
-  covers, and the notice is reproduced in `licenses/`.
+- Restored libvterm's and libtermkey's MIT notices, which the port had
+  dropped: the ported emulator and key reader now carry the attribution,
+  `LICENSE.txt` names the files each covers, and both notices are
+  reproduced in `licenses/`.
 
 ## [2026.08.14-954ee76f86]
 

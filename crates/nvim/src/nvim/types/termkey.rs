@@ -2,6 +2,10 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+//
+// These are libtermkey's types, Copyright (c) 2007-2011 Paul Evans, under
+// the MIT license; the notice is reproduced in
+// licenses/libtermkey-LICENSE.txt.
 use super::*;
 
 #[derive(Copy, Clone)]

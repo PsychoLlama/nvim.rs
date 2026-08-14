@@ -4,6 +4,9 @@
 //! for every key capability it knows about, and builds a trie of the escape
 //! sequences those capabilities named. Input is then matched against the trie
 //! before the generic CSI driver gets a look.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::tui::terminfo::caps::{KEYS, MAX_FUNCTION_KEY, key_slot};
 use crate::src::nvim::tui::termkey::termkey::{

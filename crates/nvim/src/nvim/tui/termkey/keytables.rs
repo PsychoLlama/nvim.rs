@@ -5,6 +5,9 @@
 //! Upstream filled four mutable globals at first use through a `register_keys`
 //! function of some 380 `register_*` calls, guarded by an "initialised" flag.
 //! Nothing ever registered a key at runtime, so they are constants here.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_KEYMOD_SHIFT, TERMKEY_SYM_BEGIN, TERMKEY_SYM_DELETE, TERMKEY_SYM_DOWN, TERMKEY_SYM_END,

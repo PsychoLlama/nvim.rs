@@ -2,6 +2,9 @@
 
 //! Packing of the terminal's report keys — mouse, cursor position and mode —
 //! into the four bytes `TermKeyKey::code` sets aside for them.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_MOUSE_DRAG, TERMKEY_MOUSE_PRESS, TERMKEY_MOUSE_RELEASE, TERMKEY_MOUSE_UNKNOWN,

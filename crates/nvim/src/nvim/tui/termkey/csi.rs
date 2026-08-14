@@ -4,6 +4,9 @@
 //!
 //! Everything here works on a byte slice of the input buffer and yields byte
 //! ranges, so the driver keeps the raw-pointer bookkeeping and this stays pure.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_EVENT_PRESS, TERMKEY_EVENT_RELEASE, TERMKEY_EVENT_REPEAT, TERMKEY_EVENT_UNKNOWN,

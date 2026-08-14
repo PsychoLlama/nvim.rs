@@ -5,6 +5,9 @@
 //! This is the editor's historical six-byte encoding (`utf_char2bytes`), not
 //! the four-byte one the standard settled on, because a key's `utf8` field is
 //! seven bytes and callers rely on being able to hold any of them.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use core::ffi::c_int;
 

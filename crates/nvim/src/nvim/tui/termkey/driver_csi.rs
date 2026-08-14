@@ -4,6 +4,9 @@
 //! It handles control sequences (`CSI ... final`), single-shift-three
 //! (`SS3 x`), and the control strings — DCS, OSC and APC — whose payload the
 //! consumer retrieves with `termkey_interpret_string`.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::tui::termkey::csi::{self, CSI_MAX_PARAMS, CsiSeq};

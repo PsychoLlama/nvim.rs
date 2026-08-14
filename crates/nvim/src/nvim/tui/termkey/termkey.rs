@@ -1,5 +1,8 @@
 //! libtermkey's core: the input buffer, the two drivers, and the translation
 //! of a byte run into a key.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::tui::termkey::driver_csi::{

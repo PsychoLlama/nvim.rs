@@ -6,6 +6,9 @@
 //! description, then matches the head of the input buffer against it. Upstream
 //! used a hand-rolled arena of 256-wide node arrays with a compaction pass;
 //! this is an index arena of sorted child maps, which needs neither.
+//!
+//! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 use crate::src::nvim::types::keyinfo;
 use std::collections::BTreeMap;
