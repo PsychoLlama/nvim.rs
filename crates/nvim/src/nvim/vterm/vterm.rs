@@ -7,6 +7,8 @@
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::src::nvim::memory::{xfree, xmalloc};
@@ -178,57 +180,88 @@ const VTERM_BUFFER_SIZE: size_t = 4096;
 ///
 /// The result is only valid until it is handed to [`vterm_dealloc`].
 pub unsafe fn vterm_alloc(size: size_t) -> *mut c_void {
-    let ptr = xmalloc(size);
+    // SAFETY: the allocator answers a run of `size` writable bytes -- it
+    // dies rather than return null, but the guard upstream wrote is kept.
+    let ptr = unsafe { xmalloc(size) };
     if !ptr.is_null() {
-        memset(ptr, 0, size);
+        // SAFETY: exactly the run just allocated.
+        unsafe { memset(ptr, 0, size) };
     }
     ptr
 }
 
 /// Releases storage from [`vterm_alloc`].
 pub unsafe fn vterm_dealloc(ptr: *mut c_void) {
-    xfree(ptr);
+    // SAFETY: forwarded to this function's own caller.
+    unsafe { xfree(ptr) };
 }
 
 /// A terminal `rows` by `cols`, with no state machine or screen yet — those
 /// are built on first ask by `vterm_obtain_state` and `vterm_obtain_screen`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_new(rows: c_int, cols: c_int) -> *mut VTerm {
-    let vt = vterm_alloc(::core::mem::size_of::<VTerm>()).cast::<VTerm>();
-    (*vt).rows = rows;
-    (*vt).cols = cols;
-    (*vt).parser.state = NORMAL;
-    (*vt).parser.callbacks = ::core::ptr::null();
-    (*vt).parser.cbdata = ::core::ptr::null_mut();
-    (*vt).parser.emit_nul = false;
-    (*vt).outfunc = None;
-    (*vt).outdata = ::core::ptr::null_mut();
-    (*vt).outbuffer_len = VTERM_BUFFER_SIZE;
-    (*vt).outbuffer_cur = 0;
-    (*vt).outbuffer = vterm_alloc(VTERM_BUFFER_SIZE).cast::<c_char>();
-    (*vt).tmpbuffer_len = VTERM_BUFFER_SIZE;
-    (*vt).tmpbuffer = vterm_alloc(VTERM_BUFFER_SIZE).cast::<c_char>();
+    // SAFETY: the allocator answers a zeroed `VTerm`-sized run, and all-zero
+    // is a valid `VTerm` -- every field is a scalar, a raw pointer, or a
+    // nullable function pointer -- so a reference to it is sound and the
+    // fields below are then ordinary assignments.
+    let vt = unsafe { vterm_alloc(::core::mem::size_of::<VTerm>()) }.cast::<VTerm>();
+    // SAFETY: as above.
+    let term = unsafe { &mut *vt };
+    term.rows = rows;
+    term.cols = cols;
+    term.parser.state = NORMAL;
+    term.parser.callbacks = ::core::ptr::null();
+    term.parser.cbdata = ::core::ptr::null_mut();
+    term.parser.emit_nul = false;
+    term.outfunc = None;
+    term.outdata = ::core::ptr::null_mut();
+    term.outbuffer_len = VTERM_BUFFER_SIZE;
+    term.outbuffer_cur = 0;
+    term.tmpbuffer_len = VTERM_BUFFER_SIZE;
+    // SAFETY: as above -- two more runs from the same allocator.
+    term.outbuffer = unsafe { vterm_alloc(VTERM_BUFFER_SIZE) }.cast::<c_char>();
+    // SAFETY: as above.
+    term.tmpbuffer = unsafe { vterm_alloc(VTERM_BUFFER_SIZE) }.cast::<c_char>();
     vt
 }
 
 pub unsafe extern "C" fn vterm_free(vt: *mut VTerm) {
-    if !(*vt).screen.is_null() {
-        vterm_screen_free((*vt).screen);
+    // Everything the terminal owns is read out before anything is freed, so
+    // that the last release -- the terminal itself -- has nothing left to
+    // invalidate.
+    //
+    // SAFETY: the caller hands over a terminal from `vterm_new` and does not
+    // use it again.
+    let term = unsafe { *vt };
+    if !term.screen.is_null() {
+        // SAFETY: a screen this terminal obtained, released exactly once.
+        unsafe { vterm_screen_free(term.screen) };
     }
-    if !(*vt).state.is_null() {
-        vterm_state_free((*vt).state);
+    if !term.state.is_null() {
+        // SAFETY: a state this terminal obtained, released exactly once.
+        unsafe { vterm_state_free(term.state) };
     }
-    vterm_dealloc((*vt).outbuffer.cast::<c_void>());
-    vterm_dealloc((*vt).tmpbuffer.cast::<c_void>());
-    vterm_dealloc(vt.cast::<c_void>());
+    // SAFETY: the three runs `vterm_new` allocated, each released exactly
+    // once, the terminal itself last.
+    unsafe { vterm_dealloc(term.outbuffer.cast::<c_void>()) };
+    // SAFETY: as above.
+    unsafe { vterm_dealloc(term.tmpbuffer.cast::<c_void>()) };
+    // SAFETY: as above.
+    unsafe { vterm_dealloc(vt.cast::<c_void>()) };
 }
 
 pub unsafe extern "C" fn vterm_get_size(vt: *const VTerm, rowsp: *mut c_int, colsp: *mut c_int) {
-    if !rowsp.is_null() {
-        *rowsp = (*vt).rows;
+    // SAFETY: the caller hands over a live terminal.
+    let (rows, cols) = unsafe { ((*vt).rows, (*vt).cols) };
+    // A null out-parameter means "don't report this one".
+    //
+    // SAFETY: a non-null one points at a writable `c_int`.
+    if let Some(slot) = unsafe { rowsp.as_mut() } {
+        *slot = rows;
     }
-    if !colsp.is_null() {
-        *colsp = (*vt).cols;
+    // SAFETY: as above.
+    if let Some(slot) = unsafe { colsp.as_mut() } {
+        *slot = cols;
     }
 }
 
@@ -239,17 +272,29 @@ pub unsafe extern "C" fn vterm_set_size(vt: *mut VTerm, rows: c_int, cols: c_int
     if rows < 1 || cols < 1 {
         return;
     }
-    (*vt).rows = rows;
-    (*vt).cols = cols;
-    if let Some(resize) = (*vt).parser.callbacks.as_ref().and_then(|c| c.resize) {
-        resize(rows, cols, (*vt).parser.cbdata);
+    // The consumer's resize callback is free to re-enter the terminal, so
+    // the borrow of it ends before the callback is reached.
+    //
+    // SAFETY: the caller hands over a live terminal, whose parser callback
+    // table is the consumer's own and live for as long as it is installed.
+    let (resize, cbdata) = unsafe {
+        let term = &mut *vt;
+        term.rows = rows;
+        term.cols = cols;
+        let resize = term.parser.callbacks.as_ref().and_then(|c| c.resize);
+        (resize, term.parser.cbdata)
+    };
+    if let Some(resize) = resize {
+        // SAFETY: the consumer's own callback, taking the data it registered.
+        unsafe { resize(rows, cols, cbdata) };
     }
 }
 
 /// Selects whether input bytes are decoded as UTF-8.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_set_utf8(vt: *mut VTerm, is_utf8: c_int) {
-    (*vt).mode.set_utf8(is_utf8 as c_uint);
+    // SAFETY: the caller hands over a live terminal.
+    unsafe { &mut *vt }.mode.set_utf8(is_utf8 as c_uint);
 }
 
 /// Installs the sink replies are written to. Without one they collect in the
@@ -260,8 +305,10 @@ pub unsafe extern "C" fn vterm_output_set_callback(
     func: Option<VTermOutputCallback>,
     user: *mut c_void,
 ) {
-    (*vt).outfunc = func;
-    (*vt).outdata = user;
+    // SAFETY: the caller hands over a live terminal.
+    let term = unsafe { &mut *vt };
+    term.outfunc = func;
+    term.outdata = user;
 }
 
 /// Writes a reply back to the host. With no sink installed and no room left
@@ -271,18 +318,30 @@ pub unsafe extern "C" fn vterm_push_output_bytes(
     bytes: *const c_char,
     len: size_t,
 ) {
-    if let Some(outfunc) = (*vt).outfunc {
-        outfunc(bytes, len, (*vt).outdata);
+    // The consumer's sink is free to re-enter the terminal, so it is reached
+    // with nothing borrowed.
+    //
+    // SAFETY: the caller hands over a live terminal.
+    let (outfunc, outdata) = unsafe { ((*vt).outfunc, (*vt).outdata) };
+    if let Some(outfunc) = outfunc {
+        // SAFETY: the consumer's own sink, taking the reply and the data it
+        // registered; `bytes` and `len` are the caller's, unchanged.
+        unsafe { outfunc(bytes, len, outdata) };
         return;
     }
-    if len > (*vt).outbuffer_len - (*vt).outbuffer_cur {
+    // SAFETY: the same live terminal; nothing below re-enters.
+    let term = unsafe { &mut *vt };
+    let room = term.outbuffer_len - term.outbuffer_cur;
+    if len > room {
         return;
     }
-    (*vt)
-        .outbuffer
-        .add((*vt).outbuffer_cur)
-        .copy_from_nonoverlapping(bytes, len);
-    (*vt).outbuffer_cur += len;
+    // SAFETY: `outbuffer_cur` bytes of the terminal's own buffer are in use,
+    // so that offset is in bounds of it.
+    let free = unsafe { term.outbuffer.add(term.outbuffer_cur) };
+    // SAFETY: `len` bytes fit in what is left, and the terminal's buffer is a
+    // separate allocation from the caller's `bytes`.
+    unsafe { free.copy_from_nonoverlapping(bytes, len) };
+    term.outbuffer_cur += len;
 }
 
 /// What a `VTermValue` accompanying `attr` holds.
@@ -375,13 +434,17 @@ pub unsafe extern "C" fn vterm_scroll_rect(
 ) {
     let erase = eraserect.expect("scrolling without a way to erase");
     let Some((dest, src)) = scroll_split(rect, downward, rightward) else {
-        erase(rect, 0, user);
+        // SAFETY: the consumer's own primitives, taking the data it passed in
+        // alongside them.
+        unsafe { erase(rect, 0, user) };
         return;
     };
     if let Some(moverect) = moverect {
-        moverect(dest, src, user);
+        // SAFETY: as above.
+        unsafe { moverect(dest, src, user) };
     }
-    erase(scroll_vacated(rect, downward, rightward), 0, user);
+    // SAFETY: as above.
+    unsafe { erase(scroll_vacated(rect, downward, rightward), 0, user) };
 }
 
 #[cfg(test)]
