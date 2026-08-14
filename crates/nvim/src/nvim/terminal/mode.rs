@@ -54,13 +54,14 @@ use crate::src::nvim::vterm::state::entry::{
     vterm_obtain_state, vterm_state_focus_in, vterm_state_focus_out,
 };
 use crate::src::nvim::window::{may_trigger_win_scrolled_resized, win_valid};
+use crate::src::nvim::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::input::{is_mouse_key, send_mouse_event, terminal_send_key};
 use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
-use super::{map_get_int_ptr_t, terminal_check_size, terminal_set_state};
+use super::{Term, map_get_int_ptr_t, terminal_check_size, terminal_set_state};
 use crate::src::nvim::keycodes::{
     Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, K_COMMAND, K_EVENT, K_IGNORE, K_LUA, K_NOP, K_PASTE_START,
 };
@@ -224,10 +225,10 @@ unsafe fn saved_winopts(s: *mut TerminalState) -> Option<*mut winopt_T> {
         if (*(*wp).w_buffer).handle != (*(*s).term).buf_handle {
             // The window went elsewhere; the terminal's buffer kept a copy
             // of the options this window had while it was showing it.
-            let buf = super::buf_for_handle((*(*s).term).buf_handle);
-            if buf.is_null() {
+            let Some(buf) = super::buf_for_handle((*(*s).term).buf_handle) else {
                 return None;
-            }
+            };
+            let buf = buf.raw();
             let mut i: size_t = 0;
             while i < (*buf).b_wininfo.size {
                 let wip: *mut WinInfo = *(*buf).b_wininfo.items.add(i);
@@ -278,7 +279,7 @@ pub unsafe fn terminal_enter() -> bool {
         RedrawingDisabled.set(0);
         set_terminal_winopts(s);
         (*(*s).term).pending.cursor = true;
-        adjust_topline_cursor((*s).term, buf, 0);
+        adjust_topline_cursor(Term::new((*s).term), Buf::new(buf), 0);
         showmode();
         ui_cursor_shape();
         terminal_focus((*s).term, true);
@@ -313,7 +314,7 @@ pub unsafe fn terminal_enter() -> bool {
         terminal_focus((*s).term, false);
         (*curbuf.get()).b_last_changedtick = buf_get_changedtick(curbuf.get());
         if (*curbuf.get()).terminal == (*s).term && !(*s).close {
-            terminal_check_cursor();
+            terminal_check_cursor(Term::new((*s).term));
         }
         if restart_edit.get() != 0 {
             showmode();
@@ -355,12 +356,12 @@ pub unsafe fn terminal_enter() -> bool {
 /// In terminal mode the cursor sits exactly on the emulator's column. In
 /// normal mode it has to sit *on* a character rather than after one, so it
 /// steps back — forward in a right-to-left window.
-pub(super) unsafe fn terminal_check_cursor() {
+pub(super) unsafe fn terminal_check_cursor(term: Term) {
     unsafe {
-        let term = (*curbuf.get()).terminal;
+        let term = term.raw();
         let win = curwin.get();
         let buf = curbuf.get();
-        let cursor_line = super::row_to_linenr(term, (*term).cursor.row) as linenr_T;
+        let cursor_line = super::row_to_linenr(Term::new(term), (*term).cursor.row) as linenr_T;
         (*win).w_cursor.lnum = (*buf).b_ml.ml_line_count.min(cursor_line);
 
         // Terminal windows always show the bottom of the buffer.
@@ -416,7 +417,7 @@ unsafe fn terminal_check_focus(s: *mut TerminalState) -> bool {
             }
             (*s).term = (*curbuf.get()).terminal;
             (*(*s).term).pending.cursor = true;
-            invalidate_terminal((*s).term, None);
+            invalidate_terminal(Term::new((*s).term), None);
             terminal_focus((*s).term, true);
         }
         true
@@ -436,7 +437,7 @@ unsafe extern "C" fn terminal_check(state: *mut VimState) -> c_int {
             return 0;
         }
         terminal_check_refresh();
-        terminal_check_cursor();
+        terminal_check_cursor(Term::new((*s).term));
         validate_cursor(curwin.get());
 
         // TextChangedT observers can close the terminal.
@@ -463,7 +464,7 @@ unsafe extern "C" fn terminal_check(state: *mut VimState) -> c_int {
         if !terminal_check_focus(s) {
             return 0;
         }
-        terminal_check_cursor();
+        terminal_check_cursor(Term::new((*s).term));
         validate_cursor(curwin.get());
         show_cursor_info_later(false);
         if must_redraw.get() != 0 {
@@ -475,7 +476,7 @@ unsafe extern "C" fn terminal_check(state: *mut VimState) -> c_int {
             }
         }
         setcursor();
-        refresh_cursor((*s).term, &mut (*s).cursor_visible);
+        refresh_cursor(Term::new((*s).term), &mut (*s).cursor_visible);
         ui_flush();
         1
     }

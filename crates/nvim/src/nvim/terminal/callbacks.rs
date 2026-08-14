@@ -28,9 +28,9 @@ use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::options::kOptBoFlagTerm;
 use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
-    Arena, Error, Event, Object, String_0, Terminal, VTermPos, VTermProp, VTermRect,
-    VTermScreenCallbacks, VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment,
-    VTermValue, buf_T, kErrorTypeNone, list_T, ptrdiff_t, ssize_t,
+    Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
+    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, kErrorTypeNone,
+    list_T, ptrdiff_t, ssize_t,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::vterm::vterm::{
@@ -40,8 +40,10 @@ use crate::src::nvim::vterm::vterm::{
 };
 use core::ffi::{c_char, c_int, c_void};
 
+use crate::src::nvim::winlayer::Buf;
+
 use super::refresh::invalidate_terminal;
-use super::{buf_for_handle, scrollback};
+use super::{Term, scrollback};
 
 pub static SCREEN_CALLBACKS: VTermScreenCallbacks = VTermScreenCallbacks {
     damage: Some(term_damage),
@@ -74,20 +76,20 @@ unsafe fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
 }
 
 unsafe extern "C" fn term_damage(rect: VTermRect, data: *mut c_void) -> c_int {
-    unsafe { invalidate_terminal(data as *mut Terminal, Some((rect.start_row, rect.end_row))) };
+    // SAFETY: vterm hands back the terminal registered alongside this table.
+    let term = unsafe { Term::new(data.cast()) };
+    invalidate_terminal(term, Some((rect.start_row, rect.end_row)));
     1
 }
 
 unsafe extern "C" fn term_moverect(dest: VTermRect, src: VTermRect, data: *mut c_void) -> c_int {
-    unsafe {
-        invalidate_terminal(
-            data as *mut Terminal,
-            Some((
-                dest.start_row.min(src.start_row),
-                dest.end_row.max(src.end_row),
-            )),
-        )
-    };
+    // SAFETY: as above.
+    let term = unsafe { Term::new(data.cast()) };
+    let rows = (
+        dest.start_row.min(src.start_row),
+        dest.end_row.max(src.end_row),
+    );
+    invalidate_terminal(term, Some(rows));
     1
 }
 
@@ -97,12 +99,11 @@ unsafe extern "C" fn term_movecursor(
     _visible: c_int,
     data: *mut c_void,
 ) -> c_int {
-    unsafe {
-        let term = data as *mut Terminal;
-        (*term).cursor.row = new_pos.row;
-        (*term).cursor.col = new_pos.col;
-        invalidate_terminal(term, None);
-    }
+    // SAFETY: as above.
+    let mut term = unsafe { Term::new(data.cast()) };
+    term.cursor.row = new_pos.row;
+    term.cursor.col = new_pos.col;
+    invalidate_terminal(term, None);
     1
 }
 
@@ -110,55 +111,58 @@ unsafe extern "C" fn term_movecursor(
 ///
 /// Does nothing when the buffer is gone, which happens if the child sets a
 /// title after its terminal buffer was wiped.
-pub unsafe fn buf_set_term_title(buf: *mut buf_T, title: &[u8]) {
-    unsafe {
-        if buf.is_null() {
-            return;
-        }
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut(),
-        };
-        // Setting a variable can run `BufModified`-ish machinery; the lock
-        // keeps that from touching the buffer's lines mid-update.
-        (*buf).b_locked += 1;
-        dict_set_var(
-            (*buf).b_vars,
-            static_cstring(c"term_title"),
-            Object::string(String_0 {
-                data: title.as_ptr().cast::<c_char>().cast_mut(),
-                size: title.len(),
-            }),
-            false,
-            false,
-            ::core::ptr::null_mut::<Arena>(),
-            &mut err,
-        );
-        (*buf).b_locked -= 1;
-        api_clear_error(&mut err);
-        status_redraw_buf(buf);
-    }
+pub fn buf_set_term_title(buf: Option<Buf>, title: &[u8]) {
+    let Some(mut buf) = buf else {
+        return;
+    };
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: ::core::ptr::null_mut(),
+    };
+    let title = Object::string(String_0 {
+        data: title.as_ptr().cast::<c_char>().cast_mut(),
+        size: title.len(),
+    });
+    let (vars, key, arena) = (
+        buf.b_vars,
+        static_cstring(c"term_title"),
+        ::core::ptr::null_mut(),
+    );
+    // Setting a variable can run `BufModified`-ish machinery; the lock
+    // keeps that from touching the buffer's lines mid-update.
+    buf.b_locked += 1;
+    // SAFETY: the buffer's own variable dictionary, and a string that
+    // outlives the call, which copies it.
+    unsafe { dict_set_var(vars, key, title, false, false, arena, &mut err) };
+    buf.b_locked -= 1;
+    // SAFETY: an error this function owns, cleared exactly once.
+    unsafe { api_clear_error(&mut err) };
+    // SAFETY: a live buffer, whose status line names the title.
+    unsafe { status_redraw_buf(buf.raw()) };
 }
 
 /// Accumulate a fragmented title, publishing it once the last fragment
 /// arrives.
-unsafe fn term_set_title(term: *mut Terminal, frag: &VTermStringFragment) {
-    unsafe {
-        let buf = buf_for_handle((*term).buf_handle);
-        if frag.initial() && frag.final_0() {
-            buf_set_term_title(buf, fragment_bytes(frag));
-            return;
-        }
-        if frag.initial() {
-            (*term).title.clear();
-        }
-        (*term).title.extend_from_slice(fragment_bytes(frag));
-        if frag.final_0() {
-            // Taken rather than borrowed: publishing reaches the editor,
-            // and the accumulator is done with either way.
-            let title = ::core::mem::take(&mut (*term).title);
-            buf_set_term_title(buf, &title);
-        }
+///
+/// # Safety
+/// `frag` must be a fragment vterm handed over, as [`fragment_bytes`] wants.
+unsafe fn term_set_title(mut term: Term, frag: &VTermStringFragment) {
+    // SAFETY: the caller's promise.
+    let bytes = unsafe { fragment_bytes(frag) };
+    let buf = term.buf();
+    if frag.initial() && frag.final_0() {
+        buf_set_term_title(buf, bytes);
+        return;
+    }
+    if frag.initial() {
+        term.title.clear();
+    }
+    term.title.extend_from_slice(bytes);
+    if frag.final_0() {
+        // Taken rather than borrowed: publishing reaches the editor, and
+        // the accumulator is done with either way.
+        let title = ::core::mem::take(&mut term.title);
+        buf_set_term_title(buf, &title);
     }
 }
 
@@ -167,79 +171,90 @@ unsafe extern "C" fn term_settermprop(
     val: *mut VTermValue,
     data: *mut c_void,
 ) -> c_int {
-    unsafe {
-        let term = data as *mut Terminal;
-        match prop {
-            VTERM_PROP_ALTSCREEN => (*term).in_altscreen = (*val).boolean != 0,
-            VTERM_PROP_CURSORVISIBLE => {
-                (*term).cursor.visible = (*val).boolean != 0;
-                invalidate_terminal(term, None);
-            }
-            VTERM_PROP_TITLE => term_set_title(term, &(*val).string),
-            VTERM_PROP_MOUSE => (*term).forward_mouse = (*val).number != 0,
-            VTERM_PROP_CURSORBLINK => {
-                (*term).cursor.blink = (*val).boolean != 0;
-                (*term).pending.cursor = true;
-                invalidate_terminal(term, None);
-            }
-            VTERM_PROP_CURSORSHAPE => {
-                (*term).cursor.shape = (*val).number;
-                (*term).pending.cursor = true;
-                invalidate_terminal(term, None);
-            }
-            VTERM_PROP_THEMEUPDATES => (*term).theme_updates = (*val).boolean != 0,
-            VTERM_PROP_SYNCOUTPUT => {
-                // While synchronized output is on, damage is recorded but
-                // not refreshed; leaving it owes the screen one flush.
-                (*term).synchronized_output = (*val).boolean != 0;
-                if (*val).boolean == 0 {
-                    (*term).sync_flush_pending = true;
-                }
-            }
-            _ => return 0,
-        }
-        1
+    // SAFETY: vterm hands back the terminal registered alongside this table.
+    let mut term = unsafe { Term::new(data.cast()) };
+    if prop == VTERM_PROP_TITLE {
+        // SAFETY: the value carries the arm the property's type names, and
+        // the fragment is vterm's own.
+        unsafe { term_set_title(term, &(*val).string) };
+        return 1;
     }
+    // SAFETY: as above; every property below is integer-typed, and
+    // `boolean` and `number` are the same `c_int` at offset 0.
+    let number = unsafe { (*val).number };
+    let flag = number != 0;
+    match prop {
+        VTERM_PROP_ALTSCREEN => term.in_altscreen = flag,
+        VTERM_PROP_CURSORVISIBLE => {
+            term.cursor.visible = flag;
+            invalidate_terminal(term, None);
+        }
+        VTERM_PROP_MOUSE => term.forward_mouse = flag,
+        VTERM_PROP_CURSORBLINK => {
+            term.cursor.blink = flag;
+            term.pending.cursor = true;
+            invalidate_terminal(term, None);
+        }
+        VTERM_PROP_CURSORSHAPE => {
+            term.cursor.shape = number;
+            term.pending.cursor = true;
+            invalidate_terminal(term, None);
+        }
+        VTERM_PROP_THEMEUPDATES => term.theme_updates = flag,
+        VTERM_PROP_SYNCOUTPUT => {
+            // While synchronized output is on, damage is recorded but not
+            // refreshed; leaving it owes the screen one flush.
+            term.synchronized_output = flag;
+            if !flag {
+                term.sync_flush_pending = true;
+            }
+        }
+        _ => return 0,
+    }
+    1
 }
 
 unsafe extern "C" fn term_bell(_data: *mut c_void) -> c_int {
+    // SAFETY: the editor's own beep, which takes no pointer.
     unsafe { vim_beep(kOptBoFlagTerm as ::core::ffi::c_uint) };
     1
 }
 
 /// Answer vterm's "is the background dark?" query from `'background'`.
 unsafe extern "C" fn term_theme(dark: *mut bool, _data: *mut c_void) -> c_int {
+    // SAFETY: vterm's own out-parameter, and `'background'` is a live
+    // option string.
     unsafe { *dark = *p_bg.get() == b'd' as c_char };
     1
 }
 
-/// Hand `data` to the clipboard provider. Runs on the main loop, because
-/// the provider is Vimscript.
 unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
-    unsafe {
-        let mask = (*argv.offset(0)).expose_provenance() as VTermSelectionMask;
-        // Allocated by `term_selection_set`; the list takes ownership.
-        let data = *argv.offset(1) as *mut c_char;
-        let mut regname = if mask == VTERM_SELECTION_PRIMARY {
-            b'*' as c_char
-        } else {
-            b'+' as c_char
-        };
-
-        let lines: *mut list_T = tv_list_alloc(1 as ptrdiff_t);
-        tv_list_append_allocated_string(lines, data);
-        let args: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-        tv_list_append_list(args, lines);
-        let regtype = b'v' as c_char;
-        tv_list_append_string(args, &raw const regtype, 1 as ssize_t);
-        tv_list_append_string(args, &raw mut regname, 1 as ssize_t);
-        eval_call_provider(
-            c"clipboard".as_ptr().cast_mut(),
-            c"set".as_ptr().cast_mut(),
-            args,
-            true,
-        );
-    }
+    // SAFETY: the event's own two arguments, as `term_selection_set` left
+    // them: a selection mask, and the string it allocated.
+    let (mask, data) = unsafe { ((*argv).expose_provenance(), *argv.add(1) as *mut c_char) };
+    let mut regname = if mask as VTermSelectionMask == VTERM_SELECTION_PRIMARY {
+        b'*' as c_char
+    } else {
+        b'+' as c_char
+    };
+    // SAFETY: a fresh list, which takes ownership of `data`.
+    let lines: *mut list_T = unsafe { tv_list_alloc(1 as ptrdiff_t) };
+    // SAFETY: as above.
+    unsafe { tv_list_append_allocated_string(lines, data) };
+    // SAFETY: a fresh list, which takes ownership of `lines`.
+    let args: *mut list_T = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    // SAFETY: as above.
+    unsafe { tv_list_append_list(args, lines) };
+    let regtype = b'v' as c_char;
+    // SAFETY: as above, over one byte of this frame each, which the list
+    // copies.
+    unsafe { tv_list_append_string(args, &raw const regtype, 1 as ssize_t) };
+    // SAFETY: as above.
+    unsafe { tv_list_append_string(args, &raw mut regname, 1 as ssize_t) };
+    let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
+    // SAFETY: two names of this crate's own, and the arguments built above.
+    // The provider is Vimscript, which is why this runs on the main loop.
+    unsafe { eval_call_provider(provider, method, args, true) };
 }
 
 /// Accumulate an OSC 52 clipboard write, queueing it once complete.
@@ -248,29 +263,27 @@ unsafe extern "C" fn term_selection_set(
     frag: VTermStringFragment,
     user: *mut c_void,
 ) -> c_int {
-    unsafe {
-        let term = user as *mut Terminal;
-        if frag.initial() {
-            (*term).selection.clear();
-        }
-        (*term).selection.extend_from_slice(fragment_bytes(&frag));
-        if frag.final_0() {
-            // The event handler hands this to a list, which frees it.
-            let data = xmemdupz(
-                (*term).selection.as_ptr().cast::<c_void>(),
-                (*term).selection.len(),
-            );
-            multiqueue_put_event(
-                main_loop_events(),
-                Event::new(
-                    Some(term_clipboard_set),
-                    [
-                        ::core::ptr::with_exposed_provenance_mut::<c_void>(mask as usize),
-                        data,
-                    ],
-                ),
-            );
-        }
-        1
+    // SAFETY: vterm hands back the terminal registered alongside this table.
+    let mut term = unsafe { Term::new(user.cast()) };
+    if frag.initial() {
+        term.selection.clear();
     }
+    // SAFETY: a fragment vterm handed over.
+    term.selection
+        .extend_from_slice(unsafe { fragment_bytes(&frag) });
+    if frag.final_0() {
+        let (bytes, len) = (
+            term.selection.as_ptr().cast::<c_void>(),
+            term.selection.len(),
+        );
+        // The event handler hands this to a list, which frees it.
+        //
+        // SAFETY: a slice of the terminal's own accumulator, copied.
+        let data = unsafe { xmemdupz(bytes, len) };
+        let mask = ::core::ptr::with_exposed_provenance_mut::<c_void>(mask as usize);
+        let event = Event::new(Some(term_clipboard_set), [mask, data]);
+        // SAFETY: the main loop's queue, live from startup to exit.
+        unsafe { multiqueue_put_event(main_loop_events(), event) };
+    }
+    1
 }

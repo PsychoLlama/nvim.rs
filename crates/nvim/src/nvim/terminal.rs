@@ -203,9 +203,7 @@ impl Term {
 
     /// The buffer this terminal draws into, `None` once it has been wiped.
     fn buf(self) -> Option<Buf> {
-        // SAFETY: the terminal's own handle; the map answers null, which
-        // `Buf::from_raw` takes, for a buffer since wiped.
-        unsafe { Buf::from_raw(buf_for_handle(self.buf_handle)) }
+        buf_for_handle(self.buf_handle)
     }
 
     /// The emulator's state machine.
@@ -259,17 +257,21 @@ unsafe fn map_get_int_ptr_t(map: *mut Map_int_ptr_t, key: c_int) -> ptr_t {
     unsafe { *(*map).values.add(slot as usize) }
 }
 
-/// The buffer a handle names, or null once it has been wiped.
-unsafe fn buf_for_handle(handle: handle_T) -> *mut buf_T {
-    // SAFETY: the handle map is the editor's own, live from startup to exit.
-    unsafe { map_get_int_ptr_t(buffer_handles.ptr(), handle) as *mut buf_T }
+/// The buffer a handle names, `None` once it has been wiped.
+fn buf_for_handle(handle: handle_T) -> Option<Buf> {
+    // SAFETY: the handle map is the editor's own, live from startup to
+    // exit, and the null it answers for a wiped buffer is what
+    // `Buf::from_raw` reads as `None`.
+    unsafe { Buf::from_raw(map_get_int_ptr_t(buffer_handles.ptr(), handle) as *mut buf_T) }
 }
 
 /// vterm's "here are bytes for the child" callback.
 unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_data: *mut c_void) {
     // SAFETY: vterm hands back the terminal registered alongside this
     // callback, and `s` points at `len` readable bytes.
-    unsafe { terminal_send(user_data as *mut Terminal, s, len) };
+    let bytes = unsafe { ::core::slice::from_raw_parts(s.cast::<u8>(), len) };
+    // SAFETY: as above.
+    terminal_send(unsafe { Term::new(user_data as *mut Terminal) }, bytes);
 }
 
 /// Create a terminal for `buf` and wire it to vterm.
@@ -365,20 +367,17 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
     assert!(!term.raw().is_null(), "terminal_open without a terminal");
     // SAFETY: the caller hands over a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
-    let raw = term.raw();
 
     // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
     let mut aco: aco_save_T = unsafe { ::core::mem::zeroed() };
     // SAFETY: paired with the `aucmd_restbuf` below.
     unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
     if term.sb.is_sized() {
-        // SAFETY: a live terminal and the buffer it draws into.
-        unsafe { refresh_scrollback(raw, buf.raw()) };
+        refresh_scrollback(term, buf);
     } else {
         debug_assert!(term.invalid_start >= 0);
     }
-    // SAFETY: as above.
-    unsafe { refresh::refresh_screen(raw, buf.raw()) };
+    refresh::refresh_screen(term, buf);
 
     // Locked because setting 'buftype' can run OptionSet, and the buffer's
     // lines are the emulator's to write.
@@ -400,8 +399,7 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
         // SAFETY: a non-null `b_ffname` is a NUL-terminated file name, read
         // before anything here can free it.
         let title = unsafe { ::core::slice::from_raw_parts(ffname.cast(), strlen(ffname)) };
-        // SAFETY: a live buffer and a slice of its own name.
-        unsafe { callbacks::buf_set_term_title(buf.raw(), title) };
+        callbacks::buf_set_term_title(Some(buf), title);
     }
     // Both would tie the terminal window's scroll position to another
     // window's, which fights the emulator for the topline.
@@ -426,8 +424,7 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
     if unsafe { (*termpp).is_null() } || term.buf_handle == 0 {
         return;
     }
-    // SAFETY: terminal and buffer both survived TermOpen.
-    if !unsafe { term_may_alloc_scrollback(raw, buf.raw()) } {
+    if !term_may_alloc_scrollback(term, Some(buf)) {
         // SAFETY: there is nothing to unwind; the scrollback could not be
         // sized and the buffer can no longer mirror the screen.
         unsafe { abort() };
@@ -476,7 +473,6 @@ pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     if term.destroy {
         return;
     }
-    let raw = term.raw();
     let buf = term.buf();
 
     // Closing an already-closed terminal leaves only the freeing half.
@@ -489,8 +485,7 @@ pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
             // refresh because mirroring into the buffer would otherwise run
             // Vimscript from here.
             unsafe { block_autocmds() };
-            // SAFETY: as above.
-            unsafe { refresh::refresh_terminal(raw) };
+            refresh::refresh_terminal(term);
             // SAFETY: as above.
             unsafe { unblock_autocmds() };
         }
@@ -523,9 +518,7 @@ pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
                 wp.w_redr_status = true;
             }
         }
-        let cursor_row = term.cursor.row;
-        // SAFETY: a live terminal.
-        pos = pos.min(unsafe { row_to_linenr(raw, cursor_row) });
+        pos = pos.min(row_to_linenr(term, term.cursor.row));
     }
 
     if only_destroy {
@@ -562,8 +555,9 @@ pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
 /// "suspended" marker is drawn.
 unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the buffer handle `terminal_set_state` put
-    // in it, and the map answers null for a buffer since wiped.
-    let buf = unsafe { Buf::from_raw(buf_for_handle((*argv).expose_provenance() as handle_T)) };
+    // in it.
+    let handle = unsafe { (*argv).expose_provenance() as handle_T };
+    let buf = buf_for_handle(handle);
     if let Some(buf) = buf
         && !buf.terminal.is_null()
     {
@@ -634,8 +628,7 @@ pub unsafe fn terminal_check_size(term: *mut Terminal) {
     unsafe { vterm_set_size(vt, height, width) };
     term.flush_damage();
     term.pending.resize = true;
-    // SAFETY: a live terminal.
-    unsafe { refresh::invalidate_terminal(term.raw(), None) };
+    refresh::invalidate_terminal(term, None);
 }
 
 /// Free the terminal, if nothing is still standing on it.
@@ -653,10 +646,9 @@ pub unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
         return;
     }
     let (raw, vt, events) = (term.raw(), term.vt, term.pending.events);
+    refresh::refresh_before_destroy(term);
     // SAFETY: the terminal is the last thing standing on all of these, and
     // each is released exactly once.
-    unsafe { refresh::refresh_before_destroy(raw) };
-    // SAFETY: as above.
     unsafe { vterm_free(vt) };
     // SAFETY: as above.
     unsafe { multiqueue_free(events) };
@@ -673,26 +665,25 @@ pub unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
 /// running.
 ///
 /// See [`TerminalPending::send`](crate::src::nvim::types::TerminalPending).
-unsafe fn terminal_send(term: *mut Terminal, data: *const c_char, size: size_t) {
-    // SAFETY: the caller hands over a live terminal.
-    let term = unsafe { Term::new(term) };
+fn terminal_send(term: Term, data: &[u8]) {
     if term.closed {
         return;
     }
     let held = term.pending.send;
     if !held.is_null() {
-        if size > 0 {
+        if !data.is_empty() {
             // SAFETY: the buffer is borrowed from the in-flight request,
-            // which outlives it, and `data` points at `size` readable bytes.
-            unsafe { (*held).extend_from_slice(::core::slice::from_raw_parts(data.cast(), size)) };
+            // which outlives it.
+            unsafe { (*held).extend_from_slice(data) };
         }
         return;
     }
     // Read out before the call: the channel's write callback may re-enter.
     let (write_cb, user) = (term.opts.write_cb, term.opts.data);
+    let (bytes, size) = (data.as_ptr().cast::<c_char>(), data.len());
     // SAFETY: the callback the channel registered, taking the data it
     // registered with it and the caller's own bytes.
-    unsafe { write_cb.expect("non-null function pointer")(data, size, user) };
+    unsafe { write_cb.expect("non-null function pointer")(bytes, size, user) };
 }
 
 /// Redraw after the child closed a synchronized-output frame.
@@ -701,18 +692,19 @@ unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
         return;
     }
     // SAFETY: the event carries the buffer handle `terminal_receive` put in
-    // it, and the map answers null for a buffer since wiped.
-    let buf = unsafe { Buf::from_raw(buf_for_handle((*argv).expose_provenance() as handle_T)) };
+    // it.
+    let handle = unsafe { (*argv).expose_provenance() as handle_T };
+    let buf = buf_for_handle(handle);
     let Some(buf) = buf.filter(|buf| !buf.terminal.is_null()) else {
         return;
     };
-    let term = buf.terminal;
-    // SAFETY: a live terminal, with autocommands blocked around the refresh
-    // because mirroring into the buffer would otherwise run Vimscript from
-    // the middle of the event loop.
+    // SAFETY: a buffer that still has its terminal.
+    let term = unsafe { Term::new(buf.terminal) };
+    // SAFETY: autocommands are blocked around the refresh because
+    // mirroring into the buffer would otherwise run Vimscript from the
+    // middle of the event loop; paired with the unblock below.
     unsafe { block_autocmds() };
-    // SAFETY: as above.
-    unsafe { refresh::refresh_terminal(term) };
+    refresh::refresh_terminal(term);
     // SAFETY: as above.
     unsafe { unblock_autocmds() };
 }
@@ -808,8 +800,7 @@ pub unsafe fn terminal_get_line_attributes(
     let state = term.state();
     debug_assert!(linenr != 0, "buffer line numbers are one-based");
 
-    // SAFETY: a live terminal.
-    let row = unsafe { linenr_to_row(term.raw(), linenr) };
+    let row = linenr_to_row(term, linenr);
     if row >= height {
         return;
     }
@@ -822,8 +813,7 @@ pub unsafe fn terminal_get_line_attributes(
         // SAFETY: all-zeroes is a valid cell — every field is a scalar or a
         // union of them — and `fetch_cell` fills it in whole either way.
         let mut cell: VTermScreenCell = unsafe { ::core::mem::zeroed() };
-        // SAFETY: a live terminal, and a cell of this function's own.
-        let color_valid = unsafe { fetch_cell(term.raw(), row, col, &raw mut cell) };
+        let color_valid = fetch_cell(term, row, col, &mut cell);
         let fg_default = !color_valid || color_type(&cell.fg) & VTERM_COLOR_DEFAULT_FG != 0;
         let bg_default = !color_valid || color_type(&cell.bg) & VTERM_COLOR_DEFAULT_BG != 0;
         let fg_indexed = color_type(&cell.fg) & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED;
@@ -914,30 +904,28 @@ pub unsafe fn terminal_notify_theme(term: *mut Terminal, dark: bool) {
         return;
     }
     let report: &[u8] = if dark { b"\x1b[997;1n" } else { b"\x1b[997;2n" };
-    // SAFETY: as above, and `report` is a slice of this crate's own bytes.
-    unsafe { terminal_send(term, report.as_ptr().cast::<c_char>(), report.len()) };
+    // SAFETY: as above.
+    terminal_send(unsafe { Term::new(term) }, report);
 }
 
 /// The buffer line an emulator row appears on, counting the scrollback
 /// above it. The "nothing invalid" sentinel passes through unchanged.
-unsafe fn row_to_linenr(term: *mut Terminal, row: c_int) -> c_int {
+fn row_to_linenr(term: Term, row: c_int) -> c_int {
     if row == c_int::MAX {
         return c_int::MAX;
     }
-    // SAFETY: the caller hands over a live terminal.
-    row + unsafe { Term::new(term) }.sb.len() as c_int + 1
+    row + term.sb.len() as c_int + 1
 }
 
 /// The inverse of [`row_to_linenr`]. Negative for a scrollback line.
-unsafe fn linenr_to_row(term: *mut Terminal, linenr: c_int) -> c_int {
-    // SAFETY: the caller hands over a live terminal.
-    linenr - unsafe { Term::new(term) }.sb.len() as c_int - 1
+fn linenr_to_row(term: Term, linenr: c_int) -> c_int {
+    linenr - term.sb.len() as c_int - 1
 }
 
 /// Whether the user is typing at this terminal right now.
-unsafe fn is_focused(term: *mut Terminal) -> bool {
+fn is_focused(term: Term) -> bool {
     // SAFETY: `curbuf` is set from startup to exit.
-    State.get() & MODE_TERMINAL != 0 && unsafe { Buf::current() }.terminal == term
+    State.get() & MODE_TERMINAL != 0 && unsafe { Buf::current() }.terminal == term.raw()
 }
 
 /// What `dict` holds under `key`, or nil.

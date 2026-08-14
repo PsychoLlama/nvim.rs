@@ -57,10 +57,10 @@ use crate::src::nvim::vterm::keyboard::{
     vterm_keyboard_unichar,
 };
 use crate::src::nvim::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::refresh::invalidate_terminal;
-use super::terminal_send;
+use super::{Term, terminal_send};
 // vterm's key names, from libvterm's `VTermKey`. Function keys are not
 // named individually: they are `FUNCTION_0 + n`, see [`function_key`].
 use crate::src::nvim::vterm::vterm::{
@@ -308,7 +308,7 @@ pub unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size: size_
         for _ in 0..count {
             for line in 0..y_size {
                 if line != 0 {
-                    terminal_send(term, c"\n".as_ptr(), 1);
+                    terminal_send(Term::new(term), b"\n");
                 }
                 filtered.clear();
                 let mut src = (*y_array.add(line)).data;
@@ -322,7 +322,7 @@ pub unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size: size_
                     }
                     src = src.add(len);
                 }
-                terminal_send(term, filtered.as_ptr().cast::<c_char>(), filtered.len());
+                terminal_send(Term::new(term), &filtered);
             }
         }
         if bracket {
@@ -440,7 +440,7 @@ pub(super) unsafe fn send_mouse_event(term: *mut Terminal, c: c_int) -> bool {
                 scroll_window(mouse_win, c, direction);
                 redraw_later(mouse_win, UPD_NOT_VALID);
                 // The terminal's own window may have scrolled under it.
-                invalidate_terminal(term, None);
+                invalidate_terminal(Term::new(term), None);
                 // False when the user scrolled a different window, so that
                 // the editor gets a chance to leave terminal mode.
                 return mouse_win == curwin.get();
