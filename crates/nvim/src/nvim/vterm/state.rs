@@ -21,6 +21,8 @@
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod entry;
 
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
@@ -51,11 +53,22 @@ pub const MOUSE_WANT_CLICK: c_int = 0x1;
 pub const MOUSE_WANT_DRAG: c_int = 0x2;
 pub const MOUSE_WANT_MOVE: c_int = 0x4;
 
-/// Primary Device Attributes (DA1) response. Exported so that the TUI tests
-/// can substitute another terminal's answer through FFI.
+/// Primary Device Attributes (DA1) response, `61;22;52` and its terminator.
+/// Exported so that the TUI tests can substitute another terminal's answer
+/// through FFI, which is why it is spelled as the `c_char` array the wire
+/// wants rather than as a byte string.
 #[unsafe(no_mangle)]
-pub static vterm_primary_device_attr: GlobalCell<[c_char; 9]> =
-    GlobalCell::new(unsafe { ::core::mem::transmute::<[u8; 9], [c_char; 9]>(*b"61;22;52\0") });
+pub static vterm_primary_device_attr: GlobalCell<[c_char; 9]> = GlobalCell::new([
+    b'6' as c_char,
+    b'1' as c_char,
+    b';' as c_char,
+    b'2' as c_char,
+    b'2' as c_char,
+    b';' as c_char,
+    b'5' as c_char,
+    b'2' as c_char,
+    0,
+]);
 
 /// A change to the pen that the consumer is told about.
 pub(super) enum PenChange<'a> {
@@ -72,6 +85,7 @@ pub(super) fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
     if frag.str.is_null() {
         return &[];
     }
+    // SAFETY: the parser promises a fragment's `str` points at `len` bytes.
     unsafe { slice::from_raw_parts(frag.str.cast::<u8>(), frag.len()) }
 }
 
@@ -83,6 +97,7 @@ pub(super) const BLANK_LINE: VTermLineInfo = VTermLineInfo {
 
 /// Whether `next` extends the grapheme that `prev` ended.
 pub(super) fn is_composing(prev: u32, next: u32, grapheme: &mut GraphemeState) -> bool {
+    // SAFETY: two codepoints and the caller's own grapheme scratch.
     unsafe { utf_iscomposing(prev as c_int, next as c_int, grapheme) }
 }
 
@@ -95,7 +110,11 @@ fn tabstop_bytes(cols: c_int) -> usize {
 
 impl VTermState {
     /// The terminal this state belongs to.
+    ///
+    /// A `VTerm` and its `VTermState` are separate allocations, made and
+    /// freed together, so a borrow of one never aliases the other.
     fn terminal(&self) -> &VTerm {
+        // SAFETY: `vt` is the terminal this state was made for.
         unsafe { &*self.vt }
     }
 
@@ -106,6 +125,7 @@ impl VTermState {
 
     /// Selects between the 7-bit and 8-bit forms of the C1 controls.
     pub(super) fn set_ctrl8bit(&mut self, eight_bit: bool) {
+        // SAFETY: as `terminal` above.
         unsafe { (*self.vt).mode.set_ctrl8bit(eight_bit as c_uint) };
     }
 
@@ -125,36 +145,55 @@ impl VTermState {
 
     /// Per-row double-width and double-height marks, one entry per screen row.
     pub(super) fn lineinfo(&self) -> &[VTermLineInfo] {
+        // SAFETY: `lineinfo` points at one of the two mark arrays, each of
+        // which is allocated and resized to hold exactly `rows` entries.
         unsafe { slice::from_raw_parts(self.lineinfo, self.rows.max(0) as usize) }
     }
 
     pub(super) fn lineinfo_mut(&mut self) -> &mut [VTermLineInfo] {
+        // SAFETY: as `lineinfo` above.
         unsafe { slice::from_raw_parts_mut(self.lineinfo, self.rows.max(0) as usize) }
     }
 
     /// The tab-stop bit vector, one bit per column.
     pub(super) fn tabstops_mut(&mut self) -> &mut [u8] {
+        // SAFETY: `tabstops` is allocated and resized to `tabstop_bytes(cols)`
+        // bytes, which is what is asked for here.
         unsafe { slice::from_raw_parts_mut(self.tabstops, tabstop_bytes(self.cols)) }
     }
 
-    /// The table of screen effects the consumer installed, if any.
-    fn callback_table(&self) -> Option<&VTermStateCallbacks> {
-        unsafe { self.callbacks.as_ref() }
+    /// One slot of the table of screen effects the consumer installed.
+    ///
+    /// The slot is read *out* of the table rather than handed back behind a
+    /// borrow: every one of these is a callback into the consumer, which may
+    /// re-enter this state machine, so nothing may still be borrowed when it
+    /// is called.
+    pub(super) fn consumer<T>(
+        &self,
+        pick: impl FnOnce(&VTermStateCallbacks) -> Option<T>,
+    ) -> Option<T> {
+        // SAFETY: the consumer promised its table outlives its installation.
+        unsafe { self.callbacks.as_ref() }.and_then(pick)
     }
 
-    /// The table the consumer installed for sequences this module does not
-    /// recognise, if any.
-    fn fallback_table(&self) -> Option<&VTermStateFallbacks> {
-        unsafe { self.fallbacks.as_ref() }
+    /// One slot of the table the consumer installed for sequences this module
+    /// does not recognise. Read out for the reason `consumer` gives.
+    pub(super) fn fallback<T>(
+        &self,
+        pick: impl FnOnce(&VTermStateFallbacks) -> Option<T>,
+    ) -> Option<T> {
+        // SAFETY: as `consumer` above.
+        unsafe { self.fallbacks.as_ref() }.and_then(pick)
     }
 
     /// Writes a reply back to the host. A sequence that outgrew its builder is
     /// dropped whole rather than truncated onto the wire.
     pub(super) fn reply(&mut self, seq: &EscapeSeq) {
         if let Some(bytes) = seq.finish() {
-            unsafe {
-                vterm_push_output_bytes(self.vt, bytes.as_ptr().cast::<c_char>(), bytes.len())
-            };
+            let (buf, len) = (bytes.as_ptr().cast::<c_char>(), bytes.len());
+            // SAFETY: `vt` is this state's terminal and `buf`/`len` is the
+            // finished sequence, which outlives the call.
+            unsafe { vterm_push_output_bytes(self.vt, buf, len) };
         }
     }
 
@@ -173,7 +212,7 @@ impl VTermState {
         info.set_dwl(line.doublewidth());
         info.set_dhl(line.doubleheight());
         let cbdata = self.cbdata;
-        if let Some(f) = self.callback_table().and_then(|c| c.putglyph) {
+        if let Some(f) = self.consumer(|c| c.putglyph) {
             unsafe { f(&raw mut info, pos, cbdata) };
         }
     }
@@ -194,7 +233,7 @@ impl VTermState {
     /// full reset needs so that the consumer redraws it.
     pub(super) fn force_cursor_report(&mut self, oldpos: VTermPos) {
         let (pos, visible, cbdata) = (self.pos, self.mode.cursor_visible() as c_int, self.cbdata);
-        if let Some(f) = self.callback_table().and_then(|c| c.movecursor) {
+        if let Some(f) = self.consumer(|c| c.movecursor) {
             unsafe { f(pos, oldpos, visible, cbdata) };
         }
     }
@@ -210,7 +249,7 @@ impl VTermState {
             }
         }
         let cbdata = self.cbdata;
-        if let Some(f) = self.callback_table().and_then(|c| c.erase) {
+        if let Some(f) = self.consumer(|c| c.erase) {
             unsafe { f(rect, selective as c_int, cbdata) };
         }
     }
@@ -248,15 +287,16 @@ impl VTermState {
         }
 
         let cbdata = self.cbdata;
-        if let Some(f) = self.callback_table().and_then(|c| c.scrollrect)
+        if let Some(f) = self.consumer(|c| c.scrollrect)
             && unsafe { f(rect, downward, rightward, cbdata) } != 0
         {
             return;
         }
         // The consumer did not take the scroll whole, so drive it out of the
         // move and erase primitives instead.
-        if let Some(table) = self.callback_table() {
-            let (moverect, erase) = (table.moverect, table.erase);
+        if let Some((moverect, erase)) = self.consumer(|c| Some((c.moverect, c.erase))) {
+            // SAFETY: both slots are the consumer's own, and `cbdata` is what
+            // it installed beside them; nothing here is borrowed.
             unsafe { vterm_scroll_rect(rect, downward, rightward, moverect, erase, cbdata) };
         }
     }
@@ -276,8 +316,8 @@ impl VTermState {
         info.set_doubleheight(doubleheight);
         let cbdata = self.cbdata;
         let mut accepted = false;
-        if let Some(f) = self.callback_table().and_then(|c| c.setlineinfo) {
-            let current = &raw const self.lineinfo()[row as usize];
+        if let Some(f) = self.consumer(|c| c.setlineinfo) {
+            let current = self.lineinfo.cast_const().wrapping_add(row as usize);
             accepted = unsafe { f(row, &raw const info, current, cbdata) } != 0;
         }
         if accepted || force {
@@ -288,7 +328,7 @@ impl VTermState {
     /// Rings the terminal bell.
     pub(super) fn bell(&mut self) {
         let cbdata = self.cbdata;
-        if let Some(f) = self.callback_table().and_then(|c| c.bell) {
+        if let Some(f) = self.consumer(|c| c.bell) {
             unsafe { f(cbdata) };
         }
     }
@@ -296,7 +336,7 @@ impl VTermState {
     /// Drops the scrollback, reporting whether the consumer took the request.
     pub(super) fn clear_scrollback(&mut self) -> bool {
         let cbdata = self.cbdata;
-        match self.callback_table().and_then(|c| c.sb_clear) {
+        match self.consumer(|c| c.sb_clear) {
             Some(f) => unsafe { f(cbdata) != 0 },
             None => false,
         }
@@ -306,7 +346,7 @@ impl VTermState {
     /// when it does not know.
     pub(super) fn theme_is_dark(&mut self) -> Option<bool> {
         let cbdata = self.cbdata;
-        let f = self.callback_table().and_then(|c| c.theme)?;
+        let f = self.consumer(|c| c.theme)?;
         let mut dark = false;
         (unsafe { f(&raw mut dark, cbdata) } != 0).then_some(dark)
     }
@@ -314,7 +354,7 @@ impl VTermState {
     /// Tells the consumer to return its own pen to the defaults.
     pub(super) fn init_consumer_pen(&mut self) {
         let cbdata = self.cbdata;
-        if let Some(f) = self.callback_table().and_then(|c| c.initpen) {
+        if let Some(f) = self.consumer(|c| c.initpen) {
             unsafe { f(cbdata) };
         }
     }
@@ -327,7 +367,7 @@ impl VTermState {
             lineinfos: self.lineinfos,
         };
         let cbdata = self.cbdata;
-        let Some(f) = self.callback_table().and_then(|c| c.resize) else {
+        let Some(f) = self.consumer(|c| c.resize) else {
             return;
         };
         unsafe { f(rows, cols, &raw mut fields, cbdata) };
@@ -356,12 +396,12 @@ impl VTermState {
             }
             stops.push(bits);
         }
-        unsafe {
-            let fresh = vterm_alloc(bytes).cast::<uint8_t>();
-            fresh.copy_from_nonoverlapping(stops.as_ptr(), bytes);
-            vterm_dealloc(self.tabstops.cast::<c_void>());
-            self.tabstops = fresh;
-        }
+        // SAFETY: a fresh allocation of `bytes` bytes, filled from a vector
+        // of exactly that length, replacing the array it succeeds.
+        let fresh = unsafe { vterm_alloc(bytes) }.cast::<uint8_t>();
+        unsafe { fresh.copy_from_nonoverlapping(stops.as_ptr(), bytes) };
+        unsafe { vterm_dealloc(self.tabstops.cast::<c_void>()) };
+        self.tabstops = fresh;
     }
 
     // -------------------------------------------------------------- the pen
@@ -369,12 +409,12 @@ impl VTermState {
     /// Makes one of the changes to the pen that are echoed to the consumer's
     /// raw `setpenattr` callback.
     pub(super) fn change_pen(&mut self, change: PenChange<'_>) {
-        unsafe {
-            match change {
-                PenChange::Sgr(args) => apply_sgr(self, args),
-                PenChange::Restore => restore_pen(self),
-                PenChange::Reset => reset_pen(self),
-            }
+        // SAFETY: each takes this state machine, whose consumer table is
+        // what the pen is echoed through.
+        match change {
+            PenChange::Sgr(args) => unsafe { apply_sgr(self, args) },
+            PenChange::Restore => unsafe { restore_pen(self) },
+            PenChange::Reset => unsafe { reset_pen(self) },
         }
     }
 
@@ -388,6 +428,7 @@ impl VTermState {
     /// here instead.
     pub(super) fn append_grapheme(&mut self, at: usize, codepoint: u32) -> usize {
         let mut encoded = [0 as c_char; 8];
+        // SAFETY: `encoded` is eight bytes, more than any encoding needs.
         let len = unsafe { utf_char2bytes(codepoint as c_int, encoded.as_mut_ptr()) } as usize;
         let len = len.min(self.grapheme_buf.len() - at);
         self.grapheme_buf[at..at + len].copy_from_slice(&encoded[..len]);
@@ -398,12 +439,9 @@ impl VTermState {
     /// and the handle the screen stores that grapheme under.
     pub(super) fn grapheme_metrics(&self, len: usize) -> (c_int, schar_T) {
         let buf = self.grapheme_buf.as_ptr();
-        unsafe {
-            (
-                utf_ptr2cells_len(buf, len as c_int),
-                schar_from_buf(buf, len),
-            )
-        }
+        // SAFETY: `len` bytes of the pending grapheme, which is this array.
+        let cells = unsafe { utf_ptr2cells_len(buf, len as c_int) };
+        (cells, unsafe { schar_from_buf(buf, len) })
     }
 
     // --------------------------------------------------------- character sets
@@ -436,16 +474,17 @@ impl VTermState {
     fn init_encoding(&mut self, slot: usize) {
         let enc = self.encoding[slot].enc;
         let data = (&raw mut self.encoding[slot].data).cast::<c_void>();
-        unsafe {
-            if let Some(init) = (*enc).init {
-                init(enc, data);
-            }
+        // SAFETY: `enc` is one of the encoding module's static tables, and
+        // `data` is this slot's own inline scratch.
+        if let Some(init) = unsafe { (*enc).init } {
+            unsafe { init(enc, data) };
         }
     }
 
     // ------------------------------------------------------- terminal properties
 
     fn set_termprop_value(&mut self, prop: VTermProp, mut val: VTermValue) -> bool {
+        // SAFETY: this state machine and a value of the arm `prop` calls for.
         unsafe { vterm_state_set_termprop(self, prop, &raw mut val) != 0 }
     }
 
@@ -464,6 +503,9 @@ impl VTermState {
 
     /// The bytes of a DECRQSS request gathered so far, NUL-terminated.
     pub(super) fn decrqss(&self) -> [c_char; 4] {
+        // SAFETY: the union is four bytes of request or a selection's
+        // progress, both plain data, so either arm reads what was written to
+        // whichever of them the state is part-way through.
         unsafe { self.tmp.decrqss }
     }
 
@@ -480,12 +522,13 @@ impl VTermState {
 
     /// Whether the consumer will take a selection at all.
     pub(super) fn selection_accepts_set(&self) -> bool {
-        self.selection_table().is_some_and(|c| c.set.is_some())
+        self.selection_slot(|c| c.set).is_some()
     }
 
     /// How far the OSC 52 decoder has got. It shares its storage with the
     /// DECRQSS request, so only one of the two can be part-way through.
     pub(super) fn selection_progress(&self) -> VTermState_tmp_selection {
+        // SAFETY: as `decrqss` above.
         unsafe { self.tmp.selection }
     }
 
@@ -493,8 +536,14 @@ impl VTermState {
         self.tmp.selection = progress;
     }
 
-    fn selection_table(&self) -> Option<&VTermSelectionCallbacks> {
-        unsafe { self.selection.callbacks.as_ref() }
+    /// One slot of the consumer's selection table, read out for the reason
+    /// [`VTermState::consumer`] gives.
+    fn selection_slot<T>(
+        &self,
+        pick: impl FnOnce(&VTermSelectionCallbacks) -> Option<T>,
+    ) -> Option<T> {
+        // SAFETY: the consumer promised its table outlives its installation.
+        unsafe { self.selection.callbacks.as_ref() }.and_then(pick)
     }
 
     /// The staging buffer selection data is decoded into, one chunk at a time.
@@ -502,9 +551,10 @@ impl VTermState {
         if self.selection.buffer.is_null() {
             return &mut [];
         }
-        unsafe {
-            slice::from_raw_parts_mut(self.selection.buffer.cast::<u8>(), self.selection.buflen)
-        }
+        let (buf, len) = (self.selection.buffer.cast::<u8>(), self.selection.buflen);
+        // SAFETY: the buffer and its length are what the consumer installed,
+        // or what `vterm_state_set_selection_callbacks` allocated for it.
+        unsafe { slice::from_raw_parts_mut(buf, len) }
     }
 
     /// Hands on the first `len` bytes of the staging buffer, or ends the
@@ -521,7 +571,7 @@ impl VTermState {
             None => selection::fragment(core::ptr::null(), 0, initial, true),
         };
         let user = self.selection.user;
-        if let Some(f) = self.selection_table().and_then(|c| c.set) {
+        if let Some(f) = self.selection_slot(|c| c.set) {
             unsafe { f(mask, frag, user) };
         }
     }
@@ -529,7 +579,7 @@ impl VTermState {
     /// Asks the consumer to report the current selection back to the host.
     pub(super) fn selection_query(&mut self, mask: VTermSelectionMask) {
         let user = self.selection.user;
-        if let Some(f) = self.selection_table().and_then(|c| c.query) {
+        if let Some(f) = self.selection_slot(|c| c.query) {
             unsafe { f(mask, user) };
         }
     }
