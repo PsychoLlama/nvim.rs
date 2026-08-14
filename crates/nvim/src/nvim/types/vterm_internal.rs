@@ -5,6 +5,8 @@
 //
 // These are libvterm's types, Copyright (c) 2008 Paul Evans, under the MIT
 // license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
+use core::mem::offset_of;
+
 use super::*;
 
 #[derive(Copy, Clone)]
@@ -78,3 +80,31 @@ crate::bitfield_accessors! {
         16..=16 => overline, set_overline: ::core::ffi::c_uint;
     }
 }
+
+// ---------------------------------------------------------------------------
+// The layout, asserted.
+//
+// These types cross a C ABI in three directions: the emulator hands them to
+// `terminal.rs`, the unit specs declare them through LuaJIT's FFI, and
+// `unit-fixtures.so` compiles C against those same declarations. `repr(C)`
+// fixes the *rules* the compiler lays them out by, not the answer, so a
+// field that widens or a pair that swaps stays a valid `repr(C)` type and
+// silently disagrees with everything on the other side of the boundary.
+//
+// The numbers are what x86-64 System V (and any other LP64 target) gives
+// libvterm's own declarations. They are the same sizes, alignments and
+// offsets the emulator's differential reads back out of a hand-written FFI
+// declaration of these types, so a change that moves one moves the other.
+// ---------------------------------------------------------------------------
+const _: () = {
+    assert!(size_of::<VTermPen>() == 16 && align_of::<VTermPen>() == 4);
+    assert!(size_of::<VTermEncodingInstance>() == 24 && align_of::<VTermEncodingInstance>() == 8);
+    assert!(size_of::<VTermKeyEncodingFlags>() == 1 && align_of::<VTermKeyEncodingFlags>() == 1);
+    assert!(size_of::<VTermKeyEncodingStack>() == 17 && align_of::<VTermKeyEncodingStack>() == 1);
+
+    assert!(offset_of!(VTermPen, fg) == 0);
+    assert!(offset_of!(VTermPen, bg) == 4);
+    assert!(offset_of!(VTermPen, uri) == 8);
+    assert!(offset_of!(VTermKeyEncodingStack, items) == 0);
+    assert!(offset_of!(VTermKeyEncodingStack, size) == 16);
+};

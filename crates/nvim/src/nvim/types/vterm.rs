@@ -5,6 +5,8 @@
 //
 // These are libvterm's types, Copyright (c) 2008 Paul Evans, under the MIT
 // license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
+use core::mem::offset_of;
+
 use super::*;
 
 #[derive(Copy, Clone)]
@@ -98,7 +100,8 @@ crate::bitfield_accessors! {
     }
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
+// align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
+#[repr(C, align(4))]
 pub struct VTermLineInfo {
     pub doublewidth_doubleheight_continuation: [u8; 1],
     pub c2rust_padding: [u8; 3],
@@ -273,7 +276,14 @@ pub struct VTermScreenCell {
     pub uri: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C, align(4))] // align(4): C declares these as `unsigned` bitfields (4-byte-aligned storage unit); c2rust emitted an align-1 byte array, shifting fg/bg/uri offsets in VTermScreenCell vs the C ABI.
+// align(4) is the C ABI, not a choice. Every field here is an `unsigned`
+// bitfield, so the C lays the struct out in 4-byte storage units and gives it
+// 4-byte alignment; c2rust turned the bits into a byte array, which aligns to
+// 1. The size is the same either way, so the mistake is invisible until the
+// struct is embedded in another -- here it shifted `fg`/`bg`/`uri` in
+// `VTermScreenCell`. Every bitfield-only struct below carries the same
+// attribute for the same reason.
+#[repr(C, align(4))]
 pub struct VTermScreenCellAttrs {
     pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
         [u8; 3],
@@ -484,7 +494,8 @@ pub struct VTermStateFields {
     pub lineinfos: [*mut VTermLineInfo; 2],
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
+// align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
+#[repr(C, align(4))]
 pub struct VTermState_mode {
     pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
         [u8; 3],
@@ -519,7 +530,8 @@ pub struct VTermState_saved {
     pub mode: VTermState_saved_mode,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
+// align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
+#[repr(C, align(4))]
 pub struct VTermState_saved_mode {
     pub cursor_visible_cursor_blink_cursor_shape: [u8; 1],
     pub c2rust_padding: [u8; 3],
@@ -585,7 +597,8 @@ pub union VTermValue {
 }
 pub type VTermValueType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
+// align(4): `unsigned` bitfields, as on `VTermScreenCellAttrs`.
+#[repr(C, align(4))]
 pub struct VTerm_mode {
     pub utf8_ctrl8bit: [u8; 1],
     pub c2rust_padding: [u8; 3],
@@ -641,3 +654,154 @@ pub struct VTerm_parser_v_dcs {
 pub struct VTerm_parser_v_osc {
     pub command: ::core::ffi::c_int,
 }
+
+// ---------------------------------------------------------------------------
+// The layout, asserted.
+//
+// These types cross a C ABI in three directions: the emulator hands them to
+// `terminal.rs`, the unit specs declare them through LuaJIT's FFI, and
+// `unit-fixtures.so` compiles C against those same declarations. `repr(C)`
+// fixes the *rules* the compiler lays them out by, not the answer, so a
+// field that widens or a pair that swaps stays a valid `repr(C)` type and
+// silently disagrees with everything on the other side of the boundary.
+//
+// The numbers are what x86-64 System V (and any other LP64 target) gives
+// libvterm's own declarations. They are the same sizes, alignments and
+// offsets the emulator's differential reads back out of a hand-written FFI
+// declaration of these types, so a change that moves one moves the other.
+// ---------------------------------------------------------------------------
+const _: () = {
+    assert!(size_of::<VTermPos>() == 8 && align_of::<VTermPos>() == 4);
+    assert!(size_of::<VTermRect>() == 16 && align_of::<VTermRect>() == 4);
+    assert!(size_of::<VTermColor>() == 4 && align_of::<VTermColor>() == 1);
+    assert!(size_of::<VTermColor_rgb>() == 4 && align_of::<VTermColor_rgb>() == 1);
+    assert!(size_of::<VTermColor_indexed>() == 2 && align_of::<VTermColor_indexed>() == 1);
+    assert!(size_of::<VTermStringFragment>() == 16 && align_of::<VTermStringFragment>() == 8);
+    assert!(size_of::<VTermValue>() == 16 && align_of::<VTermValue>() == 8);
+    assert!(size_of::<VTermGlyphInfo>() == 12 && align_of::<VTermGlyphInfo>() == 4);
+    assert!(size_of::<VTermLineInfo>() == 4 && align_of::<VTermLineInfo>() == 4);
+    assert!(size_of::<VTermScreenCellAttrs>() == 4 && align_of::<VTermScreenCellAttrs>() == 4);
+    assert!(size_of::<VTermScreenCell>() == 24 && align_of::<VTermScreenCell>() == 4);
+    assert!(size_of::<ScreenPen>() == 16 && align_of::<ScreenPen>() == 4);
+    assert!(size_of::<ScreenCell>() == 20 && align_of::<ScreenCell>() == 4);
+    assert!(size_of::<VTermState_mode>() == 4 && align_of::<VTermState_mode>() == 4);
+    assert!(size_of::<VTermState_saved_mode>() == 4 && align_of::<VTermState_saved_mode>() == 4);
+    assert!(size_of::<VTermState_saved>() == 28 && align_of::<VTermState_saved>() == 4);
+    assert!(
+        size_of::<VTermState_tmp_selection>() == 12 && align_of::<VTermState_tmp_selection>() == 4
+    );
+    assert!(size_of::<VTermState_tmp>() == 12 && align_of::<VTermState_tmp>() == 4);
+    assert!(size_of::<VTermState_selection>() == 32 && align_of::<VTermState_selection>() == 8);
+    assert!(size_of::<VTermStateFields>() == 24 && align_of::<VTermStateFields>() == 8);
+    assert!(size_of::<VTerm_mode>() == 4 && align_of::<VTerm_mode>() == 4);
+    assert!(size_of::<VTerm_parser_v_csi>() == 280 && align_of::<VTerm_parser_v_csi>() == 8);
+    assert!(size_of::<VTerm_parser_v_osc>() == 4 && align_of::<VTerm_parser_v_osc>() == 4);
+    assert!(size_of::<VTerm_parser_v_dcs>() == 20 && align_of::<VTerm_parser_v_dcs>() == 4);
+    assert!(size_of::<VTerm_parser_v>() == 280 && align_of::<VTerm_parser_v>() == 8);
+    assert!(size_of::<VTerm_parser>() == 336 && align_of::<VTerm_parser>() == 8);
+    assert!(size_of::<VTermParserCallbacks>() == 80 && align_of::<VTermParserCallbacks>() == 8);
+    assert!(size_of::<VTermStateCallbacks>() == 104 && align_of::<VTermStateCallbacks>() == 8);
+    assert!(size_of::<VTermStateFallbacks>() == 56 && align_of::<VTermStateFallbacks>() == 8);
+    assert!(size_of::<VTermScreenCallbacks>() == 80 && align_of::<VTermScreenCallbacks>() == 8);
+    assert!(
+        size_of::<VTermSelectionCallbacks>() == 16 && align_of::<VTermSelectionCallbacks>() == 8
+    );
+    assert!(size_of::<VTermState>() == 544 && align_of::<VTermState>() == 8);
+    assert!(size_of::<VTermScreen>() == 136 && align_of::<VTermScreen>() == 8);
+    assert!(size_of::<VTerm>() == 424 && align_of::<VTerm>() == 8);
+
+    assert!(offset_of!(VTermScreenCell, schar) == 0);
+    assert!(offset_of!(VTermScreenCell, width) == 4);
+    assert!(offset_of!(VTermScreenCell, attrs) == 8);
+    assert!(offset_of!(VTermScreenCell, fg) == 12);
+    assert!(offset_of!(VTermScreenCell, bg) == 16);
+    assert!(offset_of!(VTermScreenCell, uri) == 20);
+    assert!(offset_of!(ScreenCell, schar) == 0);
+    assert!(offset_of!(ScreenCell, pen) == 4);
+    assert!(offset_of!(ScreenPen, fg) == 0);
+    assert!(offset_of!(ScreenPen, bg) == 4);
+    assert!(offset_of!(ScreenPen, uri) == 8);
+    assert!(offset_of!(VTermGlyphInfo, schar) == 0);
+    assert!(offset_of!(VTermGlyphInfo, width) == 4);
+    assert!(offset_of!(VTermStringFragment, str) == 0);
+    assert!(offset_of!(VTermStringFragment, terminator) == 12);
+    assert!(offset_of!(VTermState, vt) == 0);
+    assert!(offset_of!(VTermState, callbacks) == 8);
+    assert!(offset_of!(VTermState, cbdata) == 16);
+    assert!(offset_of!(VTermState, fallbacks) == 24);
+    assert!(offset_of!(VTermState, fbdata) == 32);
+    assert!(offset_of!(VTermState, rows) == 40);
+    assert!(offset_of!(VTermState, cols) == 44);
+    assert!(offset_of!(VTermState, pos) == 48);
+    assert!(offset_of!(VTermState, at_phantom) == 56);
+    assert!(offset_of!(VTermState, scrollregion_top) == 60);
+    assert!(offset_of!(VTermState, scrollregion_bottom) == 64);
+    assert!(offset_of!(VTermState, scrollregion_left) == 68);
+    assert!(offset_of!(VTermState, scrollregion_right) == 72);
+    assert!(offset_of!(VTermState, tabstops) == 80);
+    assert!(offset_of!(VTermState, lineinfos) == 88);
+    assert!(offset_of!(VTermState, lineinfo) == 104);
+    assert!(offset_of!(VTermState, mouse_col) == 112);
+    assert!(offset_of!(VTermState, mouse_row) == 116);
+    assert!(offset_of!(VTermState, mouse_buttons) == 120);
+    assert!(offset_of!(VTermState, mouse_flags) == 124);
+    assert!(offset_of!(VTermState, mouse_protocol) == 128);
+    assert!(offset_of!(VTermState, grapheme_buf) == 132);
+    assert!(offset_of!(VTermState, grapheme_len) == 168);
+    assert!(offset_of!(VTermState, grapheme_last) == 176);
+    assert!(offset_of!(VTermState, grapheme_state) == 180);
+    assert!(offset_of!(VTermState, combine_width) == 184);
+    assert!(offset_of!(VTermState, combine_pos) == 188);
+    assert!(offset_of!(VTermState, mode) == 196);
+    assert!(offset_of!(VTermState, encoding) == 200);
+    assert!(offset_of!(VTermState, encoding_utf8) == 296);
+    assert!(offset_of!(VTermState, gl_set) == 320);
+    assert!(offset_of!(VTermState, gr_set) == 324);
+    assert!(offset_of!(VTermState, gsingle_set) == 328);
+    assert!(offset_of!(VTermState, pen) == 332);
+    assert!(offset_of!(VTermState, default_fg) == 348);
+    assert!(offset_of!(VTermState, default_bg) == 352);
+    assert!(offset_of!(VTermState, colors) == 356);
+    assert!(offset_of!(VTermState, bold_is_highbright) == 420);
+    assert!(offset_of!(VTermState, saved) == 428);
+    assert!(offset_of!(VTermState, tmp) == 456);
+    assert!(offset_of!(VTermState, selection) == 472);
+    assert!(offset_of!(VTermState, key_encoding_stacks) == 504);
+    assert!(offset_of!(VTermScreen, vt) == 0);
+    assert!(offset_of!(VTermScreen, state) == 8);
+    assert!(offset_of!(VTermScreen, callbacks) == 16);
+    assert!(offset_of!(VTermScreen, cbdata) == 24);
+    assert!(offset_of!(VTermScreen, damage_merge) == 32);
+    assert!(offset_of!(VTermScreen, damaged) == 36);
+    assert!(offset_of!(VTermScreen, pending_scrollrect) == 52);
+    assert!(offset_of!(VTermScreen, pending_scroll_downward) == 68);
+    assert!(offset_of!(VTermScreen, pending_scroll_rightward) == 72);
+    assert!(offset_of!(VTermScreen, rows) == 76);
+    assert!(offset_of!(VTermScreen, cols) == 80);
+    assert!(offset_of!(VTermScreen, buffers) == 88);
+    assert!(offset_of!(VTermScreen, buffer) == 104);
+    assert!(offset_of!(VTermScreen, sb_buffer) == 112);
+    assert!(offset_of!(VTermScreen, pen) == 120);
+    assert!(offset_of!(VTerm, rows) == 0);
+    assert!(offset_of!(VTerm, cols) == 4);
+    assert!(offset_of!(VTerm, mode) == 8);
+    assert!(offset_of!(VTerm, parser) == 16);
+    assert!(offset_of!(VTerm, outfunc) == 352);
+    assert!(offset_of!(VTerm, outdata) == 360);
+    assert!(offset_of!(VTerm, outbuffer) == 368);
+    assert!(offset_of!(VTerm, outbuffer_len) == 376);
+    assert!(offset_of!(VTerm, outbuffer_cur) == 384);
+    assert!(offset_of!(VTerm, tmpbuffer) == 392);
+    assert!(offset_of!(VTerm, tmpbuffer_len) == 400);
+    assert!(offset_of!(VTerm, state) == 408);
+    assert!(offset_of!(VTerm, screen) == 416);
+    assert!(offset_of!(VTerm_parser, state) == 0);
+    assert!(offset_of!(VTerm_parser, intermedlen) == 8);
+    assert!(offset_of!(VTerm_parser, intermed) == 12);
+    assert!(offset_of!(VTerm_parser, v) == 32);
+    assert!(offset_of!(VTerm_parser, callbacks) == 312);
+    assert!(offset_of!(VTerm_parser, cbdata) == 320);
+    assert!(offset_of!(VTermState_saved, pos) == 0);
+    assert!(offset_of!(VTermState_saved, pen) == 8);
+    assert!(offset_of!(VTermState_saved, mode) == 24);
+};
