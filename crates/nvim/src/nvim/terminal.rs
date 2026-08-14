@@ -58,7 +58,6 @@ use crate::src::nvim::highlight_group::name_to_color;
 use crate::src::nvim::main::{State, buffer_handles, curbuf, curwin, exiting};
 use crate::src::nvim::map::mh_get_int;
 use crate::src::nvim::memline::ml_delete_buf;
-use crate::src::nvim::memory::xfree;
 use crate::src::nvim::r#move::win_col_off;
 use crate::src::nvim::option::set_option_value;
 use crate::src::nvim::options::kOptBuftype;
@@ -302,7 +301,6 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
                 continue;
             }
             let rgb = name_to_color(CStr::from_ptr(name)).0;
-            xfree(name as *mut c_void);
             if rgb == -1 as RgbValue {
                 continue;
             }
@@ -749,7 +747,9 @@ unsafe fn is_focused(term: *mut Terminal) -> bool {
 
 /// `b:<key>`, falling back to `g:<key>`, if it is a string.
 ///
-/// The result is an owned C string the caller frees, or null.
+/// The result BORROWS the variable's own bytes, or is null. It must not be
+/// freed, and it stays valid only until something assigns to or unsets the
+/// variable.
 unsafe fn get_config_string(buf: *mut buf_T, key: *const c_char) -> *mut c_char {
     unsafe {
         // Neither lookup can fail in a way this caller could act on, so the
@@ -775,7 +775,10 @@ unsafe fn get_config_string(buf: *mut buf_T, key: *const c_char) -> *mut c_char 
             api_clear_error(&raw mut err);
         }
         if obj.type_0 == kObjectTypeString {
-            // The string outlives the object; the caller owns it now.
+            // `dict_get_value` converts with `reuse_strdata`, so the object's
+            // string data is the variable's own storage rather than a copy.
+            // There is nothing to free, and `api_free_object` would free the
+            // variable out from under Vimscript.
             return obj.data.string.data;
         }
         api_free_object(obj);

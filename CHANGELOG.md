@@ -13,6 +13,10 @@ and this project adheres to [CalVer](https://calver.org/).
   program inside it prints a double-width character. The terminal
   emulator wrote the second half of the glyph past the end of the row;
   it now truncates the glyph to the columns that exist.
+- Setting `g:terminal_color_0` .. `_15` (or the buffer-local equivalent)
+  no longer corrupts the heap. Opening a terminal freed the variable's
+  own string, so reading, reassigning or unsetting it afterwards was a
+  double free; the palette is now read without taking ownership.
 - Restored libvterm's MIT notice, which the port had dropped: the ported
   emulator now carries the attribution, `LICENSE.txt` names the files it
   covers, and the notice is reproduced in `licenses/`.

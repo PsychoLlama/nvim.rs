@@ -913,7 +913,7 @@
     "crates/nvim/src/nvim/tag/stack.rs": {"cell_ptr": 2, "unsafe_lines": 178},
     "crates/nvim/src/nvim/tag/tagfile.rs": {"unsafe_lines": 116},
     "crates/nvim/src/nvim/tag/tagfunc.rs": {"cell_ptr": 4, "unsafe_lines": 215},
-    "crates/nvim/src/nvim/terminal.rs": {"cell_ptr": 1, "unsafe_lines": 457},
+    "crates/nvim/src/nvim/terminal.rs": {"cell_ptr": 1, "unsafe_lines": 456},
     "crates/nvim/src/nvim/terminal/callbacks.rs": {"unsafe_lines": 136},
     "crates/nvim/src/nvim/terminal/input.rs": {"unsafe_lines": 114},
     "crates/nvim/src/nvim/terminal/mode.rs": {"cell_ptr": 2, "unsafe_lines": 344},
