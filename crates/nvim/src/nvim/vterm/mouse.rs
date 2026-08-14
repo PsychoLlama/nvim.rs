@@ -12,6 +12,8 @@
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::types::{VTerm, VTermModifier, VTermState};
 use crate::src::nvim::vterm::output::EscapeSeq;
 use crate::src::nvim::vterm::vterm::vterm_push_output_bytes;
@@ -125,6 +127,20 @@ fn button_code(button: c_int) -> Option<c_int> {
     }
 }
 
+/// Writes one mouse report back to the host, if the protocol could spell it.
+///
+/// # Safety
+///
+/// `vt` must point at a live terminal.
+unsafe fn send(vt: *mut VTerm, report: Option<EscapeSeq>) {
+    let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) else {
+        return;
+    };
+    // SAFETY: forwarded to this function's own caller; `bytes` outlives the
+    // call, which copies out of it.
+    unsafe { vterm_push_output_bytes(vt, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_mouse_move(
     vt: *mut VTerm,
@@ -132,7 +148,8 @@ pub unsafe extern "C" fn vterm_mouse_move(
     col: c_int,
     mod_0: VTermModifier,
 ) {
-    let state: &mut VTermState = &mut *(*vt).state;
+    // SAFETY: the caller hands over a live terminal that has a state.
+    let state: &mut VTermState = unsafe { &mut *(*vt).state };
     if col == state.mouse_col && row == state.mouse_row {
         return;
     }
@@ -146,11 +163,11 @@ pub unsafe extern "C" fn vterm_mouse_move(
     let Some(code) = drag_code(state.mouse_buttons) else {
         return;
     };
-    let ctrl8bit = (*vt).mode.ctrl8bit() != 0;
+    // SAFETY: `vt` is that same live terminal.
+    let ctrl8bit = unsafe { (*vt).mode }.ctrl8bit() != 0;
     let report = encode_mouse(state.mouse_protocol, ctrl8bit, code, true, mod_0, col, row);
-    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
-        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
-    }
+    // SAFETY: as above.
+    unsafe { send(vt, report) };
 }
 
 #[unsafe(no_mangle)]
@@ -160,7 +177,8 @@ pub unsafe extern "C" fn vterm_mouse_button(
     pressed: bool,
     mod_0: VTermModifier,
 ) {
-    let state: &mut VTermState = &mut *(*vt).state;
+    // SAFETY: the caller hands over a live terminal that has a state.
+    let state: &mut VTermState = unsafe { &mut *(*vt).state };
     let old_buttons = state.mouse_buttons;
     // The wheel (4-7) has no held state, so it never touches the mask.
     if matches!(button, 1..=3 | 8..=11) {
@@ -182,7 +200,8 @@ pub unsafe extern "C" fn vterm_mouse_button(
     let Some(code) = button_code(button) else {
         return;
     };
-    let ctrl8bit = (*vt).mode.ctrl8bit() != 0;
+    // SAFETY: `vt` is that same live terminal.
+    let ctrl8bit = unsafe { (*vt).mode }.ctrl8bit() != 0;
     let report = encode_mouse(
         state.mouse_protocol,
         ctrl8bit,
@@ -192,9 +211,8 @@ pub unsafe extern "C" fn vterm_mouse_button(
         state.mouse_col,
         state.mouse_row,
     );
-    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
-        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
-    }
+    // SAFETY: as above.
+    unsafe { send(vt, report) };
 }
 
 #[cfg(test)]
