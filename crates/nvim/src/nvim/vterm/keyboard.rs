@@ -12,6 +12,8 @@
 //! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::types::{
     VTerm, VTermKey, VTermKeyEncodingFlags, VTermModifier, VTermState, uint32_t,
 };
@@ -334,13 +336,26 @@ fn encode_unichar(c: u32, mod_0: VTermModifier, modes: KeyModes) -> Option<Escap
     Some(seq)
 }
 
+/// Writes a spelled key back to the host, if it spelled to anything.
+///
+/// # Safety
+///
+/// `vt` must point at a live terminal.
+unsafe fn send(vt: *mut VTerm, report: Option<EscapeSeq>) {
+    let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) else {
+        return;
+    };
+    // SAFETY: forwarded to this function's own caller; `bytes` outlives the
+    // call, which copies out of it.
+    unsafe { vterm_push_output_bytes(vt, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_keyboard_unichar(vt: *mut VTerm, c: uint32_t, mod_0: VTermModifier) {
-    let modes = KeyModes::read(&*vt, &*(*vt).state);
-    let report = encode_unichar(c, mod_0, modes);
-    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
-        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
-    }
+    // SAFETY: the caller hands over a live terminal that has a state.
+    let modes = unsafe { KeyModes::read(&*vt, &*(*vt).state) };
+    // SAFETY: `vt` is that same live terminal.
+    unsafe { send(vt, encode_unichar(c, mod_0, modes)) };
 }
 
 #[unsafe(no_mangle)]
@@ -348,11 +363,10 @@ pub unsafe extern "C" fn vterm_keyboard_key(vt: *mut VTerm, key: VTermKey, mod_0
     if key == VTERM_KEY_NONE {
         return;
     }
-    let modes = KeyModes::read(&*vt, &*(*vt).state);
-    let report = encode_key(key, mod_0, modes);
-    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
-        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
-    }
+    // SAFETY: the caller hands over a live terminal that has a state.
+    let modes = unsafe { KeyModes::read(&*vt, &*(*vt).state) };
+    // SAFETY: `vt` is that same live terminal.
+    unsafe { send(vt, encode_key(key, mod_0, modes)) };
 }
 
 /// The bracketed-paste brackets, sent only when the host turned the mode on.
@@ -365,20 +379,28 @@ fn paste_marker(state: &VTermState, ctrl8bit: bool, body: &[u8]) -> Option<Escap
     Some(seq)
 }
 
+/// Writes one bracketed-paste marker back to the host.
+///
+/// # Safety
+///
+/// `vt` must point at a live terminal that has a state.
+unsafe fn push_paste_marker(vt: *mut VTerm, body: &[u8]) {
+    // SAFETY: forwarded to this function's own caller.
+    let report = unsafe { paste_marker(&*(*vt).state, (*vt).mode.ctrl8bit() != 0, body) };
+    // SAFETY: `vt` is that same live terminal.
+    unsafe { send(vt, report) };
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_keyboard_start_paste(vt: *mut VTerm) {
-    let report = paste_marker(&*(*vt).state, (*vt).mode.ctrl8bit() != 0, b"200~");
-    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
-        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
-    }
+    // SAFETY: forwarded to this function's own caller.
+    unsafe { push_paste_marker(vt, b"200~") };
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_keyboard_end_paste(vt: *mut VTerm) {
-    let report = paste_marker(&*(*vt).state, (*vt).mode.ctrl8bit() != 0, b"201~");
-    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
-        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
-    }
+    // SAFETY: forwarded to this function's own caller.
+    unsafe { push_paste_marker(vt, b"201~") };
 }
 
 #[cfg(test)]
