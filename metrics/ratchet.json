@@ -1,7 +1,7 @@
 {
   "internal_exports": 6,
   "files_without_forbid_unsafe": 1026,
-  "files_without_deny_unsafe_op": 88,
+  "files_without_deny_unsafe_op": 86,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -977,8 +977,8 @@
     "crates/nvim/src/nvim/vterm/mouse.rs": {"no_mangle": 2, "unsafe_lines": 7},
     "crates/nvim/src/nvim/vterm/parser.rs": {"no_mangle": 2, "unsafe_lines": 22},
     "crates/nvim/src/nvim/vterm/pen.rs": {"unsafe_lines": 12},
-    "crates/nvim/src/nvim/vterm/screen.rs": {"cell_ptr": 1, "no_mangle": 8, "unsafe_lines": 490},
-    "crates/nvim/src/nvim/vterm/screen/resize.rs": {"unsafe_lines": 283},
+    "crates/nvim/src/nvim/vterm/screen.rs": {"cell_ptr": 1, "no_mangle": 8, "unsafe_lines": 70},
+    "crates/nvim/src/nvim/vterm/screen/resize.rs": {"unsafe_lines": 33},
     "crates/nvim/src/nvim/vterm/state.rs": {"no_mangle": 1, "unsafe_lines": 40},
     "crates/nvim/src/nvim/vterm/state/entry.rs": {"cell_ptr": 1, "no_mangle": 8, "unsafe_lines": 59},
     "crates/nvim/src/nvim/vterm/vterm.rs": {"no_mangle": 4, "unsafe_lines": 34},
