@@ -33,14 +33,28 @@ and this project adheres to [CalVer](https://calver.org/).
   and the frame tree behind every `CTRL-W` command, `:resize` and the
   `'equalalways'`/`'winfix*'`/`'winmin*'` geometry rules, entering and
   closing windows and tab pages along with the `Win*`/`Tab*`
-  autocommands they fire, and floating-window configuration —
-  `relative`, `anchor`, `zindex`, borders, titles and `bufpos`; the
-  buffer list behind `:ls`, `:buffer`, `:bdelete`/`:bwipeout` and
-  buffer-name completion, buffer creation, unloading and wiping with the
-  `Buf*` autocommands around them, modelines, `CTRL-G` and
-  `getbufinfo()`; the change notifications `nvim_buf_attach()` delivers;
-  and extmarks. Window, tab page, frame and buffer identity now travel
-  as typed handles instead of raw pointers.
+  autocommands they fire, and floating-window configuration:
+  `relative`, `anchor`, `zindex`, borders, titles and `bufpos`; the Ex
+  commands in front of all of it, from `:split`/`:vsplit`/`:new` and
+  `:tabnew`/`:tabnext`/`:tabmove`/`:tabs` to `:wincmd` and the preview
+  window's `:pedit`/`:psearch`/`:pbuffer`; the buffer list behind `:ls`,
+  `:buffer`, `:bdelete`/`:bwipeout` and buffer-name completion, buffer
+  creation, unloading and wiping with the `Buf*` autocommands around
+  them, modelines, `CTRL-G` and `getbufinfo()`; the change notifications
+  `nvim_buf_attach()` delivers; extmarks; the quickfix and location list
+  windows behind `:copen`/`:lopen`; and the command line's own buffer,
+  the text every `:` line is edited in. Window, tab page, frame and
+  buffer identity now travel as typed handles instead of raw pointers.
+
+### Fixed
+
+- `nvim_parse_expression()` no longer rescans the whole parse stack for
+  every token it reads. The check is one the original keeps to debug
+  builds; 8,000 nested parentheses parse in 28 ms instead of 1,658 ms,
+  and a release build no longer dies if the check ever fails.
+- `getmousepos()` no longer kills the editor after a click past column
+  2^31. The window column it reports is computed in the width the answer
+  carries, so it reads 2147483648 instead.
 
 ## [2026.08.11-3d48beea07]
 
