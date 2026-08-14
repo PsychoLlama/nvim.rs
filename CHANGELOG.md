@@ -7,6 +7,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored libvterm's MIT notice, which the port had dropped: the ported
+  emulator now carries the attribution, `LICENSE.txt` names the files it
+  covers, and the notice is reproduced in `licenses/`.
+
 ## [2026.08.14-954ee76f86]
 
 ### Changed

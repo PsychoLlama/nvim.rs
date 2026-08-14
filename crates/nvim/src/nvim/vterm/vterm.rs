@@ -3,6 +3,9 @@
 //!
 //! This is also where the vocabulary the rest of the subtree shares lives —
 //! the property, attribute and selection numbers, and the parser's states.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 use core::ffi::{c_char, c_int, c_uint, c_void};
 

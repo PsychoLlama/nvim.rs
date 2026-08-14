@@ -8,6 +8,9 @@
 //!
 //! The two entry points keep their C ABI — the unit specs call them through
 //! LuaJIT's FFI — but everything they call is safe and pointer-free.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 use crate::src::nvim::types::{VTerm, VTermModifier, VTermState};
 use crate::src::nvim::vterm::output::EscapeSeq;

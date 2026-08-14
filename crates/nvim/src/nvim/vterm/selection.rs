@@ -3,6 +3,9 @@
 //! A selection arrives base64-encoded and possibly split across several
 //! fragments, so the decoder keeps its partial sextets between calls and
 //! hands the consumer one buffer-sized chunk at a time.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

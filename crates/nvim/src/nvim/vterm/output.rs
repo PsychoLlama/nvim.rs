@@ -5,6 +5,9 @@
 //! same job on the stack: it fills to a fixed capacity, remembers whether
 //! anything was dropped, and refuses to hand out a sequence that did not fit,
 //! because half an escape sequence is worse on the wire than none.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

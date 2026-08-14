@@ -1,5 +1,8 @@
 //! Printable text and the sequences that are not control sequences: the
 //! C0/C1 controls and the two-byte escapes.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

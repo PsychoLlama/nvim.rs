@@ -1,5 +1,8 @@
 //! The terminal's modes: the ANSI ones, the DEC private ones, the kitty
 //! key-encoding stack, and the reset that puts them all back.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

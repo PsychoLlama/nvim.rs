@@ -6,6 +6,9 @@
 //! string-carrying sequences (OSC, DCS, APC, PM, SOS). The only state kept
 //! between calls is the small block in `VTerm::parser`, so a sequence split
 //! across two writes resumes where it left off.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 use crate::src::nvim::types::{
     VTerm, VTermParserCallbacks, VTermParserState, VTermStringFragment, VTermTerminator, size_t,

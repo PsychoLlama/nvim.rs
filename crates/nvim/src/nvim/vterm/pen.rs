@@ -9,6 +9,9 @@
 //! raw function pointer, so the mutating entry points pass that obligation
 //! on to their callers. Everything the callback is not involved in — colour
 //! arithmetic, parameter encoding — is a plain safe function.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 use core::ffi::{c_int, c_long, c_uint, c_void};
 

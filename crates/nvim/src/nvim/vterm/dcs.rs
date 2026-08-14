@@ -4,6 +4,9 @@
 //! The one DCS this terminal answers is DECRQSS, "report the setting this
 //! control sequence would have made", which is how a program reads back the
 //! pen, the margins, the cursor shape and the protection attribute.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

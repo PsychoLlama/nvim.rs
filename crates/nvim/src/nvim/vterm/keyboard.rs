@@ -8,6 +8,9 @@
 //!
 //! The four entry points keep their C ABI — the unit specs call them through
 //! LuaJIT's FFI — but the encoding itself is pure and pointer-free.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 use crate::src::nvim::types::{
     VTerm, VTermKey, VTermKeyEncodingFlags, VTermModifier, VTermState, uint32_t,

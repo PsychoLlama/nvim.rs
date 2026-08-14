@@ -4,6 +4,9 @@
 //! Every rectangle is half-open: `start_row`/`start_col` are inside it,
 //! `end_row`/`end_col` are one past. A `start_row` of [`NO_RECT`] is the
 //! "nothing pending" sentinel.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

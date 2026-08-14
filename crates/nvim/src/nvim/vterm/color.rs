@@ -8,6 +8,9 @@
 //! The C-facing `VTermColor` union stays out of this module. Everything here
 //! is expressed as a [`ColorValue`], the payload that union's type byte
 //! selects.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

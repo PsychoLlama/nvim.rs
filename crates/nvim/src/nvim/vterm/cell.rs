@@ -5,6 +5,9 @@
 //! reads back is a [`VTermScreenCell`], whose attributes are the same
 //! rendition minus the protection bit — and with the screen-wide reverse
 //! folded in, so that reversing the whole screen costs nothing per cell.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

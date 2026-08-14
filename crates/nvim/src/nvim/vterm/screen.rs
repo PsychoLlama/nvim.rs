@@ -10,6 +10,9 @@
 //! Anything reachable from the state's callback table takes the screen as a
 //! raw pointer rather than a reference: those callbacks re-enter the screen
 //! freely, and a live borrow across such a call would not hold.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 use core::ffi::{c_int, c_void};
 

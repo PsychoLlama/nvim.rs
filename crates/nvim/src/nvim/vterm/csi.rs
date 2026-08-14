@@ -3,6 +3,9 @@
 //! A sequence is identified by up to three bytes — an optional private-use
 //! leader, an optional intermediate, and the final byte that names the
 //! command — so the dispatch matches on that triple.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

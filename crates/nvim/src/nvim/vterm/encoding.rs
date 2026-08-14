@@ -6,6 +6,9 @@
 //! The unit specs call those function pointers directly through LuaJIT's FFI,
 //! so the vtable and the C signatures behind it are fixed; the decoding itself
 //! is ordinary Rust.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

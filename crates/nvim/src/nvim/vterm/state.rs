@@ -15,6 +15,9 @@
 //! properties, [`selection`] for OSC, [`dcs`] for the other control strings,
 //! and `geometry` for the shape of the screen — all of which are written
 //! against those methods and do no pointer work of their own.
+//!
+//! Ported from libvterm, Copyright (c) 2008 Paul Evans, under the MIT
+//! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 use core::slice;
