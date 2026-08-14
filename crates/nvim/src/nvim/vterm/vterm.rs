@@ -19,7 +19,7 @@ use crate::src::nvim::types::{
     VTermState_tmp_selection_state, VTermTerminator, VTermValueType, size_t,
 };
 use crate::src::nvim::vterm::screen::vterm_screen_free;
-use crate::src::nvim::vterm::state::vterm_state_free;
+use crate::src::nvim::vterm::state::entry::vterm_state_free;
 
 /// How much of the screen a single damaged cell is reported as.
 pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;

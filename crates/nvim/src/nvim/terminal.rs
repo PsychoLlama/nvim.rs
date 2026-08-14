@@ -79,7 +79,7 @@ use crate::src::nvim::vterm::screen::{
     vterm_screen_flush_damage, vterm_screen_reset, vterm_screen_set_callbacks,
     vterm_screen_set_damage_merge, vterm_screen_set_unrecognised_fallbacks,
 };
-use crate::src::nvim::vterm::state::{
+use crate::src::nvim::vterm::state::entry::{
     vterm_obtain_state, vterm_state_set_selection_callbacks, vterm_state_set_termprop,
 };
 use crate::src::nvim::vterm::vterm::{

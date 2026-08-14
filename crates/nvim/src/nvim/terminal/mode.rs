@@ -50,7 +50,7 @@ use crate::src::nvim::types::{
     win_T, winopt_T,
 };
 use crate::src::nvim::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
-use crate::src::nvim::vterm::state::{
+use crate::src::nvim::vterm::state::entry::{
     vterm_obtain_state, vterm_state_focus_in, vterm_state_focus_out,
 };
 use crate::src::nvim::window::{may_trigger_win_scrolled_resized, win_valid};

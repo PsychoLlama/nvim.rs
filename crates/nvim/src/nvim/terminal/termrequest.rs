@@ -29,7 +29,7 @@ use crate::src::nvim::types::{
     VTermValue, VV_TERMREQUEST, buf_T, exarg_T, handle_T, ptrdiff_t, size_t,
 };
 use crate::src::nvim::vterm::pen::set_pen_attr;
-use crate::src::nvim::vterm::state::vterm_obtain_state;
+use crate::src::nvim::vterm::state::entry::vterm_obtain_state;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{AUGROUP_ALL, buf_for_handle, row_to_linenr, terminal_send};
