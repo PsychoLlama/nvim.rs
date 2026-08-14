@@ -9,6 +9,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Fixed
 
+- A terminal window one column wide no longer crashes the editor when the
+  program inside it prints a double-width character. The terminal
+  emulator wrote the second half of the glyph past the end of the row;
+  it now truncates the glyph to the columns that exist.
 - Restored libvterm's MIT notice, which the port had dropped: the ported
   emulator now carries the attribution, `LICENSE.txt` names the files it
   covers, and the notice is reproduced in `licenses/`.
