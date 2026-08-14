@@ -19,6 +19,7 @@
 
 use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
 use crate::src::nvim::change::changed_lines;
+use crate::src::nvim::channel::main_loop_events;
 use crate::src::nvim::cursor_shape::SHAPE_VER;
 use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, update_shape_entry};
 use crate::src::nvim::event::multiqueue::{
@@ -67,7 +68,7 @@ pub unsafe fn terminal_init() {
             REFRESH_TIMER.ptr(),
             ::core::ptr::null_mut(),
         );
-        (*REFRESH_TIMER.ptr()).events = multiqueue_new_child((*main_loop.ptr()).events);
+        (*REFRESH_TIMER.ptr()).events = multiqueue_new_child(main_loop_events());
     }
 }
 
@@ -187,7 +188,7 @@ pub unsafe fn refresh_terminal(term: *mut Terminal) {
         }
         // Events the child's output produced were held back until the
         // buffer agreed with the screen; it does now.
-        multiqueue_move_events((*main_loop.ptr()).events, (*term).pending.events);
+        multiqueue_move_events(main_loop_events(), (*term).pending.events);
     }
 }
 

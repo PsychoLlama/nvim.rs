@@ -16,13 +16,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::api::private::helpers::{api_clear_error, dict_set_var};
+use crate::src::nvim::channel::main_loop_events;
 use crate::src::nvim::drawscreen::status_redraw_buf;
 use crate::src::nvim::eval::eval_call_provider;
 use crate::src::nvim::eval::typval::{
     tv_list_alloc, tv_list_append_allocated_string, tv_list_append_list, tv_list_append_string,
 };
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
-use crate::src::nvim::main::{main_loop, p_bg};
+use crate::src::nvim::main::p_bg;
 use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::options::kOptBoFlagTerm;
 use crate::src::nvim::types::builders::static_cstring;
@@ -260,7 +261,7 @@ unsafe extern "C" fn term_selection_set(
                 (*term).selection.len(),
             );
             multiqueue_put_event(
-                (*main_loop.ptr()).events,
+                main_loop_events(),
                 Event::new(
                     Some(term_clipboard_set),
                     [

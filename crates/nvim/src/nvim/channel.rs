@@ -129,8 +129,12 @@ pub(super) fn main_loop_ptr() -> *mut Loop {
     main_loop.ptr()
 }
 
-/// The main event queue, which is where deferred frees and autocommands go.
-fn main_events() -> *mut MultiQueue {
+/// The main event queue, which is where deferred frees, autocommands and
+/// anything else the caller must not run inline are put.
+///
+/// The tree's one reach for it, hence the visibility: `main_loop` itself
+/// lives in the transpiled globals header, which the line cap has frozen.
+pub(super) fn main_loop_events() -> *mut MultiQueue {
     // SAFETY: `main_loop` is a live, fully initialised `Loop` from
     // `event_init` until the process exits.
     unsafe { (*main_loop_ptr()).events }
@@ -328,7 +332,7 @@ pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
     debug_assert!(id <= i64::MAX as uint64_t);
     // SAFETY: the main queue is live, and `multiqueue_new_child` hands back a
     // queue this channel owns until `channel_destroy` frees it.
-    let events = unsafe { multiqueue_new_child(main_events()) };
+    let events = unsafe { multiqueue_new_child(main_loop_events()) };
     let chan = Box::into_raw(Box::new(blank_channel(id, type_0, events)));
     // SAFETY: the registry is live, and `id` is fresh, so the slot the map
     // hands back is this channel's alone.
@@ -384,7 +388,7 @@ pub unsafe fn channel_decref(chan: *mut Channel) {
         // SAFETY: the main queue is live and takes ownership of the event.
         unsafe {
             multiqueue_put_event(
-                main_events(),
+                main_loop_events(),
                 one_arg_event(Some(free_channel_event), chan.cast()),
             )
         };
@@ -444,7 +448,7 @@ pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
         (*chan).refcount -= 1;
         assert!((*chan).refcount == 0, "channel was already referenced");
         multiqueue_put_event(
-            main_events(),
+            main_loop_events(),
             one_arg_event(Some(free_channel_event), chan.cast()),
         );
     }

@@ -37,7 +37,7 @@ use crate::src::nvim::types::{
 use super::known::*;
 use super::{
     channel_decref, channel_incref, channel_map, channel_proc, channel_pty, empty_dict,
-    find_channel, main_events,
+    find_channel, main_loop_events,
 };
 
 /// The capacity of `IObuff`.
@@ -206,7 +206,7 @@ pub unsafe fn channel_info_changed(chan: *mut Channel, new_chan: bool) {
         channel_incref(chan);
         let mut ev = one_arg_event(Some(set_info_event), chan.cast());
         ev.argv[1] = ptr::with_exposed_provenance_mut::<c_void>(event as usize);
-        multiqueue_put_event(main_events(), ev);
+        multiqueue_put_event(main_loop_events(), ev);
     }
 }
 

@@ -42,6 +42,7 @@ use crate::src::nvim::autocmd::{
     aucmd_restbuf, block_autocmds, is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
 };
 use crate::src::nvim::change::deleted_lines_buf;
+use crate::src::nvim::channel::main_loop_events;
 use crate::src::nvim::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::src::nvim::drawscreen::redraw_buf_line_later;
 use crate::src::nvim::eval::typval::{tv_dict_add_nr, tv_dict_set_keys_readonly};
@@ -54,7 +55,7 @@ use crate::src::nvim::highlight::{
     hl_get_term_attr,
 };
 use crate::src::nvim::highlight_group::name_to_color;
-use crate::src::nvim::main::{State, buffer_handles, curbuf, curwin, exiting, main_loop};
+use crate::src::nvim::main::{State, buffer_handles, curbuf, curwin, exiting};
 use crate::src::nvim::map::mh_get_int;
 use crate::src::nvim::memline::ml_delete_buf;
 use crate::src::nvim::memory::xfree;
@@ -559,7 +560,7 @@ pub unsafe fn terminal_receive(term: *mut Terminal, data: *const c_char, len: si
             (*term).invalid_start = 0;
             (*term).invalid_end = height;
             multiqueue_put_event(
-                (*main_loop.ptr()).events,
+                main_loop_events(),
                 Event::new(
                     Some(on_sync_flush),
                     [::core::ptr::with_exposed_provenance_mut::<c_void>(

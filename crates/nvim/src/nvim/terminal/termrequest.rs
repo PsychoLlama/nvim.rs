@@ -19,10 +19,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::autocmd::{EVENT_TERMREQUEST, apply_autocmds_group, has_event};
+use crate::src::nvim::channel::main_loop_events;
 use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::highlight::hl_add_url;
-use crate::src::nvim::main::main_loop;
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
 use crate::src::nvim::types::{
     Event, Object, String_0, Terminal, VTermStateFallbacks, VTermStringFragment, VTermTerminator,
@@ -184,7 +184,7 @@ pub unsafe fn schedule_termrequest(term: *mut Terminal) {
         // thing it does.
         (*term).pending.send = &raw mut (*request).pending_send;
         multiqueue_put_event(
-            (*main_loop.ptr()).events,
+            main_loop_events(),
             Event::new(Some(emit_termrequest), [request as *mut c_void]),
         );
     }
