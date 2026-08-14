@@ -1,7 +1,7 @@
 {
   "internal_exports": 6,
   "files_without_forbid_unsafe": 1026,
-  "files_without_deny_unsafe_op": 86,
+  "files_without_deny_unsafe_op": 83,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -943,9 +943,9 @@
     "crates/nvim/src/nvim/tui/paint.rs": {"unsafe_lines": 40},
     "crates/nvim/src/nvim/tui/quirks.rs": {"unsafe_lines": 16},
     "crates/nvim/src/nvim/tui/terminfo.rs": {"no_mangle": 1, "unsafe_lines": 149},
-    "crates/nvim/src/nvim/tui/termkey/driver_csi.rs": {"no_mangle": 4, "unsafe_lines": 354},
-    "crates/nvim/src/nvim/tui/termkey/driver_ti.rs": {"unsafe_lines": 124},
-    "crates/nvim/src/nvim/tui/termkey/termkey.rs": {"no_mangle": 18, "unsafe_lines": 441},
+    "crates/nvim/src/nvim/tui/termkey/driver_csi.rs": {"no_mangle": 4, "unsafe_lines": 23},
+    "crates/nvim/src/nvim/tui/termkey/driver_ti.rs": {"unsafe_lines": 5},
+    "crates/nvim/src/nvim/tui/termkey/termkey.rs": {"no_mangle": 18, "unsafe_lines": 46},
     "crates/nvim/src/nvim/tui/tui.rs": {"cell_ptr": 3, "unsafe_lines": 388},
     "crates/nvim/src/nvim/ui.rs": {"cell_ptr": 6, "unsafe_lines": 157},
     "crates/nvim/src/nvim/ui/callbacks.rs": {"unsafe_lines": 48},

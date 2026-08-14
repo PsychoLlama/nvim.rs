@@ -8,6 +8,8 @@
 //! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::tui::terminfo::caps::{KEYS, MAX_FUNCTION_KEY, key_slot};
 use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_KEYMOD_SHIFT, TERMKEY_RES_AGAIN, TERMKEY_RES_KEY, TERMKEY_RES_NONE,
@@ -15,11 +17,11 @@ use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_SYM_END, TERMKEY_SYM_FIND, TERMKEY_SYM_HOME, TERMKEY_SYM_INSERT, TERMKEY_SYM_LEFT,
     TERMKEY_SYM_PAGEDOWN, TERMKEY_SYM_PAGEUP, TERMKEY_SYM_RIGHT, TERMKEY_SYM_SELECT,
     TERMKEY_SYM_SUSPEND, TERMKEY_SYM_TAB, TERMKEY_SYM_UNDO, TERMKEY_TYPE_FUNCTION,
-    TERMKEY_TYPE_KEYSYM,
+    TERMKEY_TYPE_KEYSYM, Tk,
 };
 use crate::src::nvim::tui::termkey::trie::{KeyTrie, Lookup};
 use crate::src::nvim::types::{
-    TermKey, TermKeyKey, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry, keyinfo, size_t,
+    TermKeyKey, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry, keyinfo, size_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -88,7 +90,19 @@ pub fn new_driver(entry: *mut TerminfoEntry) -> *mut c_void {
 }
 
 pub unsafe fn free_driver(info: *mut c_void) {
-    drop(Box::from_raw(info as *mut TerminfoDriver));
+    // SAFETY: the box `new_driver` leaked, reclaimed exactly once — the reader
+    // that owns it is destroyed once.
+    drop(unsafe { Box::from_raw(info as *mut TerminfoDriver) });
+}
+
+/// The driver state hanging off a reader.
+///
+/// `TermKey::ti` is the box `new_driver` leaked. The reader owns it for its
+/// whole life and nothing else reaches it, so handing out a reference rests on
+/// exactly the promise `Tk` already carries.
+fn driver_of<'a>(tk: Tk) -> &'a mut TerminfoDriver {
+    // SAFETY: as the doc comment says.
+    unsafe { &mut *(tk.ti as *mut TerminfoDriver) }
 }
 
 /// Read one capability, giving nvim's hook the final say.
@@ -97,22 +111,28 @@ pub unsafe fn free_driver(info: *mut c_void) {
 /// Terminfo spells absence two ways — a null pointer and the historical
 /// `(char *)-1` — and the hook may return either; an empty string is no
 /// sequence to match against.
-unsafe fn capability(tk: *mut TermKey, from_entry: *const c_char, name: &CStr) -> Option<&[u8]> {
+fn capability<'a>(tk: Tk, from_entry: *const c_char, name: &CStr) -> Option<&'a [u8]> {
     let mut value = from_entry;
-    if let Some(hook) = (*tk).ti_getstr_hook {
-        value = hook(name.as_ptr(), value, (*tk).ti_getstr_hook_data);
+    if let Some(hook) = tk.ti_getstr_hook {
+        // SAFETY: the hook nvim installed with `termkey_hook_terminfo_getstr`,
+        // called with a capability name and its own data, as it expects.
+        value = unsafe { hook(name.as_ptr(), value, tk.ti_getstr_hook_data) };
     }
-    if value.is_null() || value.addr() == usize::MAX || *value == 0 {
+    if value.is_null() || value.addr() == usize::MAX {
         return None;
     }
-    Some(CStr::from_ptr(value).to_bytes())
+    // SAFETY: a terminfo capability is a NUL-terminated string, whether it came
+    // from the terminal's description or from nvim's hook, and both outlive the
+    // trie built out of them.
+    let bytes = unsafe { CStr::from_ptr(value) }.to_bytes();
+    (!bytes.is_empty()).then_some(bytes)
 }
 
 /// Register a capability's sequence if the terminal has one. Reports whether it
 /// did, which is how the caller decides whether to bother with the shifted
 /// variant.
-unsafe fn register(
-    tk: *mut TermKey,
+fn register(
+    tk: Tk,
     trie: &mut KeyTrie,
     from_entry: *const c_char,
     name: &CStr,
@@ -128,14 +148,16 @@ unsafe fn register(
 }
 
 /// Build the trie from the terminal's description.
-unsafe fn load(tk: *mut TermKey, entry: *mut TerminfoEntry) -> KeyTrie {
+fn load(tk: Tk, entry: *mut TerminfoEntry) -> KeyTrie {
     let mut trie = KeyTrie::default();
+    // SAFETY: the description nvim handed to `termkey_new_abstract`, which
+    // outlives the reader; null when nothing was known about the terminal.
+    let entry = unsafe { entry.as_ref() };
     for key in &NAMED_KEYS {
         let cap = &KEYS[key.slot];
-        let (plain, shifted) = if entry.is_null() {
-            (core::ptr::null(), core::ptr::null())
-        } else {
-            ((*entry).keys[key.slot][0], (*entry).keys[key.slot][1])
+        let (plain, shifted) = match entry {
+            Some(entry) => (entry.keys[key.slot][0], entry.keys[key.slot][1]),
+            None => (core::ptr::null(), core::ptr::null()),
         };
         let loaded = register(
             tk,
@@ -171,10 +193,9 @@ unsafe fn load(tk: *mut TermKey, entry: *mut TerminfoEntry) -> KeyTrie {
     // number when the type is TERMKEY_TYPE_FUNCTION. The scan stops at the
     // first gap, so a terminal without `key_f1` gets no function keys at all.
     for number in 1..=MAX_FUNCTION_KEY {
-        let from_entry = if entry.is_null() {
-            core::ptr::null()
-        } else {
-            (*entry).f_keys[number - 1]
+        let from_entry = match entry {
+            Some(entry) => entry.f_keys[number - 1],
+            None => core::ptr::null(),
         };
         let name = CString::new(format!("key_f{number}")).expect("no interior NUL");
         let loaded = register(
@@ -203,8 +224,8 @@ unsafe fn load(tk: *mut TermKey, entry: *mut TerminfoEntry) -> KeyTrie {
 /// nvim feeds termkey through `termkey_push_bytes` and owns terminal output
 /// itself. Both paths were unreachable and are gone, along with the stop hook,
 /// which then had nothing left to do.
-pub unsafe fn load_keys(tk: *mut TermKey) {
-    let driver = &mut *((*tk).ti as *mut TerminfoDriver);
+pub fn load_keys(tk: Tk) {
+    let driver = driver_of(tk);
     if driver.keys.is_none() {
         let entry = driver.entry;
         driver.keys = Some(load(tk, entry));
@@ -212,18 +233,12 @@ pub unsafe fn load_keys(tk: *mut TermKey) {
 }
 
 /// Match the head of the input buffer against the terminal's key sequences.
-pub unsafe fn peek_key(
-    tk: *mut TermKey,
-    key: *mut TermKeyKey,
-    force: c_int,
-    nbytep: *mut size_t,
-) -> TermKeyResult {
-    if (*tk).buffcount == 0 {
+pub fn peek_key(tk: Tk, key: &mut TermKeyKey, force: c_int, nbytep: &mut size_t) -> TermKeyResult {
+    if tk.buffcount == 0 {
         return TERMKEY_RES_NONE;
     }
-    let driver = &*((*tk).ti as *mut TerminfoDriver);
-    let bytes = core::slice::from_raw_parts((*tk).buffer.add((*tk).buffstart), (*tk).buffcount);
-    let found = driver
+    let bytes = tk.buffered();
+    let found = driver_of(tk)
         .keys
         .as_ref()
         .map_or(Lookup::None, |t| t.lookup(bytes));
@@ -232,9 +247,9 @@ pub unsafe fn peek_key(
         // so upstream's branch handing a TERMKEY_TYPE_MOUSE hit to the mouse
         // decoder could never run and is gone.
         Lookup::Key { info, consumed } => {
-            (*key).type_0 = info.type_0;
-            (*key).code.sym = info.sym;
-            (*key).modifiers = info.modifier_set;
+            key.type_0 = info.type_0;
+            key.code.sym = info.sym;
+            key.modifiers = info.modifier_set;
             *nbytep = consumed;
             TERMKEY_RES_KEY
         }

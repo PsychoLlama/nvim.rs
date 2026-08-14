@@ -8,6 +8,8 @@
 //! Ported from libtermkey, Copyright (c) 2007-2011 Paul Evans, under the MIT
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::tui::termkey::csi::{self, CSI_MAX_PARAMS, CsiSeq};
 use crate::src::nvim::tui::termkey::keytables::{
@@ -15,10 +17,10 @@ use crate::src::nvim::tui::termkey::keytables::{
 };
 use crate::src::nvim::tui::termkey::report::{self, Payload};
 use crate::src::nvim::tui::termkey::termkey::{
-    TERMKEY_EVENT_UNKNOWN, TERMKEY_FLAG_CONVERTKP, TERMKEY_KEYMOD_ALT, TERMKEY_RES_AGAIN,
+    KeyCode, TERMKEY_EVENT_UNKNOWN, TERMKEY_FLAG_CONVERTKP, TERMKEY_KEYMOD_ALT, TERMKEY_RES_AGAIN,
     TERMKEY_RES_KEY, TERMKEY_RES_NONE, TERMKEY_SYM_UNKNOWN, TERMKEY_TYPE_APC, TERMKEY_TYPE_DCS,
     TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_MODEREPORT, TERMKEY_TYPE_MOUSE, TERMKEY_TYPE_OSC,
-    TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, emit_codepoint,
+    TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, Tk, emit_codepoint,
     peekkey_mouse,
 };
 use crate::src::nvim::types::{
@@ -55,32 +57,59 @@ use byte::{
     SS3_8BIT, STRING_TERMINATOR_8BIT,
 };
 
-pub unsafe fn new_driver() -> *mut TermKeyCsi {
-    // The struct is C-shaped and freed with xfree, so it is filled by hand.
-    let csi = xmalloc(size_of::<TermKeyCsi>()) as *mut TermKeyCsi;
-    (*csi).saved_string_id = 0;
-    (*csi).saved_string = core::ptr::null_mut();
+/// Allocate the driver's state.
+///
+/// It is `xmalloc`ed rather than boxed because it hangs off the `repr(C)`
+/// `TermKey` and `free_driver` releases it with `xfree`, as upstream did.
+pub fn new_driver() -> *mut TermKeyCsi {
+    // SAFETY: xmalloc returns a fresh allocation of the size asked for; it
+    // aborts rather than returning null.
+    let csi = unsafe { xmalloc(size_of::<TermKeyCsi>()) } as *mut TermKeyCsi;
+    let fresh = TermKeyCsi {
+        saved_string_id: 0,
+        saved_string: core::ptr::null_mut(),
+    };
+    // SAFETY: `csi` is a fresh allocation of exactly one `TermKeyCsi`.
+    unsafe { csi.write(fresh) };
     csi
 }
 
+/// # Safety
+///
+/// `csi` must be the state `new_driver` allocated, not yet freed and reachable
+/// from nowhere else.
 pub unsafe fn free_driver(csi: *mut TermKeyCsi) {
-    if !(*csi).saved_string.is_null() {
-        xfree((*csi).saved_string as *mut c_void);
+    // SAFETY: the caller's promise.
+    let saved = unsafe { (*csi).saved_string };
+    if !saved.is_null() {
+        // SAFETY: the payload this driver saved, freed exactly once.
+        unsafe { xfree(saved as *mut c_void) };
     }
-    xfree(csi as *mut c_void);
+    // SAFETY: the state itself, freed exactly once.
+    unsafe { xfree(csi as *mut c_void) };
 }
 
 /// The value of a CSI parameter, ignoring any sub-parameters. An omitted
 /// parameter reads as -1.
+///
+/// # Safety
+///
+/// `param` must be one `termkey_interpret_csi` wrote, still pointing into the
+/// reader's buffer.
 pub unsafe fn csi_param_value(param: TermKeyCsiParam) -> c_int {
-    csi::param_groups(param_bytes(param)).0
+    // SAFETY: the caller's promise, forwarded.
+    csi::param_groups(unsafe { param_bytes(param) }).0
 }
 
+/// # Safety
+///
+/// As `csi_param_value`.
 unsafe fn param_bytes<'a>(param: TermKeyCsiParam) -> Option<&'a [u8]> {
     if param.param.is_null() {
         None
     } else {
-        Some(core::slice::from_raw_parts(param.param, param.length))
+        // SAFETY: the caller's promise: `length` readable bytes at `param`.
+        Some(unsafe { core::slice::from_raw_parts(param.param, param.length) })
     }
 }
 
@@ -132,35 +161,30 @@ fn handle_csi_ss3(key: &mut TermKeyKey, command: u32, params: &Params) -> TermKe
 }
 
 /// `CSI N ~`, the numbered keys.
-unsafe fn handle_csi_func(
-    tk: *mut TermKey,
-    key: *mut TermKeyKey,
-    nparams: usize,
-    params: &Params,
-) -> TermKeyResult {
+fn handle_csi_func(tk: Tk, key: &mut TermKeyKey, nparams: usize, params: &Params) -> TermKeyResult {
     if nparams == 0 {
         return TERMKEY_RES_NONE;
     }
-    if modifiers_and_event(&mut *key, params[1]).is_none() {
+    if modifiers_and_event(key, params[1]).is_none() {
         return TERMKEY_RES_NONE;
     }
-    (*key).type_0 = TERMKEY_TYPE_KEYSYM;
+    key.type_0 = TERMKEY_TYPE_KEYSYM;
     let number = csi::param_groups(params[0]).0;
     if number == 27 && params[2].is_some() {
         // `CSI 27 ; mod ; codepoint ~` names a plain character with modifiers.
-        let modifiers = (*key).modifiers;
+        let modifiers = key.modifiers;
         emit_codepoint(tk, csi::param_groups(params[2]).0, key);
-        (*key).modifiers |= modifiers;
+        key.modifiers |= modifiers;
     } else if (0..CSI_FUNC_COUNT as c_int).contains(&number) {
         let info = CSI_FUNCS[number as usize];
-        (*key).type_0 = info.type_0;
-        (*key).code.sym = info.sym;
-        (*key).modifiers &= !info.modifier_mask;
-        (*key).modifiers |= info.modifier_set;
+        key.type_0 = info.type_0;
+        key.code.sym = info.sym;
+        key.modifiers &= !info.modifier_mask;
+        key.modifiers |= info.modifier_set;
     } else {
-        (*key).code.sym = TERMKEY_SYM_UNKNOWN;
+        key.code.sym = TERMKEY_SYM_UNKNOWN;
     }
-    if (*key).code.sym == TERMKEY_SYM_UNKNOWN {
+    if key.sym() == TERMKEY_SYM_UNKNOWN {
         TERMKEY_RES_NONE
     } else {
         TERMKEY_RES_KEY
@@ -168,24 +192,19 @@ unsafe fn handle_csi_func(
 }
 
 /// `CSI codepoint ; mod u`, the unambiguous encoding for any key.
-unsafe fn handle_csi_u(
-    tk: *mut TermKey,
-    key: *mut TermKeyKey,
-    command: u32,
-    params: &Params,
-) -> TermKeyResult {
+fn handle_csi_u(tk: Tk, key: &mut TermKeyKey, command: u32, params: &Params) -> TermKeyResult {
     // Upstream matched the whole packed command, so a private-use introducer
     // takes the sequence out of this encoding entirely.
     if command != b'u' as u32 {
         return TERMKEY_RES_NONE;
     }
-    if modifiers_and_event(&mut *key, params[1]).is_none() {
+    if modifiers_and_event(key, params[1]).is_none() {
         return TERMKEY_RES_NONE;
     }
-    let modifiers = (*key).modifiers;
-    (*key).type_0 = TERMKEY_TYPE_KEYSYM;
+    let modifiers = key.modifiers;
+    key.type_0 = TERMKEY_TYPE_KEYSYM;
     emit_codepoint(tk, csi::param_groups(params[0]).0, key);
-    (*key).modifiers |= modifiers;
+    key.modifiers |= modifiers;
     TERMKEY_RES_KEY
 }
 
@@ -292,29 +311,30 @@ pub unsafe extern "C" fn termkey_interpret_mouse(
     line: *mut c_int,
     col: *mut c_int,
 ) -> TermKeyResult {
-    if (*key).type_0 != TERMKEY_TYPE_MOUSE {
+    // SAFETY: the caller's key.
+    let key = unsafe { &*key };
+    if key.type_0 != TERMKEY_TYPE_MOUSE {
         return TERMKEY_RES_NONE;
     }
-    let payload: &Payload = &(*key).code.mouse;
-    let (packed_line, packed_col) = report::unpack_position(payload);
-    if !line.is_null() {
+    // SAFETY: the caller's four out-parameters, each null or writable.
+    let out = unsafe { (event.as_mut(), button.as_mut(), line.as_mut(), col.as_mut()) };
+    let (event, button, line, col) = out;
+    let payload = key.report();
+    let (packed_line, packed_col) = report::unpack_position(&payload);
+    if let Some(line) = line {
         *line = packed_line;
     }
-    if !col.is_null() {
+    if let Some(col) = col {
         *col = packed_col;
     }
     // Upstream zeroes the button before deciding whether it has an event to
     // report, so a caller asking only for the position gets button 0.
-    if !button.is_null() {
-        *button = 0;
+    let decoded = event.is_some().then(|| report::decode_mouse(&payload));
+    if let Some(button) = button {
+        *button = decoded.map_or(0, |(_, button)| button);
     }
-    if event.is_null() {
-        return TERMKEY_RES_KEY;
-    }
-    let (decoded_event, decoded_button) = report::decode_mouse(payload);
-    *event = decoded_event;
-    if !button.is_null() {
-        *button = decoded_button;
+    if let (Some(event), Some((decoded, _))) = (event, decoded) {
+        *event = decoded;
     }
     TERMKEY_RES_KEY
 }
@@ -326,14 +346,18 @@ pub unsafe extern "C" fn termkey_interpret_position(
     line: *mut c_int,
     col: *mut c_int,
 ) -> TermKeyResult {
-    if (*key).type_0 != TERMKEY_TYPE_POSITION {
+    // SAFETY: the caller's key.
+    let key = unsafe { &*key };
+    if key.type_0 != TERMKEY_TYPE_POSITION {
         return TERMKEY_RES_NONE;
     }
-    let (packed_line, packed_col) = report::unpack_position(&(*key).code.mouse);
-    if !line.is_null() {
+    // SAFETY: the caller's two out-parameters, each null or writable.
+    let (line, col) = unsafe { (line.as_mut(), col.as_mut()) };
+    let (packed_line, packed_col) = report::unpack_position(&key.report());
+    if let Some(line) = line {
         *line = packed_line;
     }
-    if !col.is_null() {
+    if let Some(col) = col {
         *col = packed_col;
     }
     TERMKEY_RES_KEY
@@ -347,17 +371,22 @@ pub unsafe extern "C" fn termkey_interpret_modereport(
     mode: *mut c_int,
     value: *mut c_int,
 ) -> TermKeyResult {
-    if (*key).type_0 != TERMKEY_TYPE_MODEREPORT {
+    // SAFETY: the caller's key.
+    let key = unsafe { &*key };
+    if key.type_0 != TERMKEY_TYPE_MODEREPORT {
         return TERMKEY_RES_NONE;
     }
-    let (packed_initial, packed_mode, packed_value) = report::unpack_mode(&(*key).code.mouse);
-    if !initial.is_null() {
+    // SAFETY: the caller's three out-parameters, each null or writable.
+    let out = unsafe { (initial.as_mut(), mode.as_mut(), value.as_mut()) };
+    let (initial, mode, value) = out;
+    let (packed_initial, packed_mode, packed_value) = report::unpack_mode(&key.report());
+    if let Some(initial) = initial {
         *initial = packed_initial;
     }
-    if !mode.is_null() {
+    if let Some(mode) = mode {
         *mode = packed_mode;
     }
-    if !value.is_null() {
+    if let Some(value) = value {
         *value = packed_value;
     }
     TERMKEY_RES_KEY
@@ -379,17 +408,22 @@ pub unsafe extern "C" fn termkey_interpret_csi(
     nparams: *mut size_t,
     cmd: *mut c_uint,
 ) -> TermKeyResult {
-    if (*tk).hightide == 0 || (*key).type_0 != TERMKEY_TYPE_UNKNOWN_CSI {
+    // SAFETY: the caller's reader and the key it is asking about.
+    let (tk, key) = unsafe { (Tk::of(tk), &*key) };
+    if tk.hightide == 0 || key.type_0 != TERMKEY_TYPE_UNKNOWN_CSI {
         return TERMKEY_RES_NONE;
     }
-    let bytes = buffered(tk);
+    let bytes = tk.buffered();
     let Some(seq) = csi::parse(bytes, 0) else {
         return TERMKEY_RES_AGAIN;
     };
-    for (i, param) in seq.params[..seq.nparams].iter().enumerate() {
-        *params.add(i) = match *param {
+    // SAFETY: `params` has room for CSI_MAX_PARAMS entries, which is this
+    // function's documented requirement.
+    let params = unsafe { core::slice::from_raw_parts_mut(params, CSI_MAX_PARAMS) };
+    for (slot, param) in params.iter_mut().zip(&seq.params[..seq.nparams]) {
+        *slot = match *param {
             Some((start, end)) => TermKeyCsiParam {
-                param: bytes.as_ptr().add(start),
+                param: bytes[start..end].as_ptr(),
                 length: end - start,
             },
             None => TermKeyCsiParam {
@@ -398,57 +432,56 @@ pub unsafe extern "C" fn termkey_interpret_csi(
             },
         };
     }
-    *nparams = seq.nparams;
-    *cmd = seq.command;
+    // SAFETY: the caller's two out-parameters.
+    unsafe {
+        *nparams = seq.nparams;
+        *cmd = seq.command;
+    }
     TERMKEY_RES_KEY
-}
-
-/// The unconsumed input, as a slice.
-unsafe fn buffered<'a>(tk: *mut TermKey) -> &'a [u8] {
-    core::slice::from_raw_parts((*tk).buffer.add((*tk).buffstart), (*tk).buffcount)
 }
 
 /// Run `f` with the buffer advanced past `consumed` bytes, then put it back and
 /// fold those bytes into the count `f` reported.
-unsafe fn with_buffer_advanced(
-    tk: *mut TermKey,
+fn with_buffer_advanced(
+    mut tk: Tk,
     consumed: usize,
-    nbytep: *mut size_t,
-    f: impl FnOnce(*mut TermKey) -> TermKeyResult,
+    nbytep: &mut size_t,
+    f: impl FnOnce(Tk, &mut size_t) -> TermKeyResult,
 ) -> TermKeyResult {
-    (*tk).buffstart += consumed;
-    (*tk).buffcount -= consumed;
-    let result = f(tk);
-    (*tk).buffstart -= consumed;
-    (*tk).buffcount += consumed;
+    tk.buffstart += consumed;
+    tk.buffcount -= consumed;
+    let result = f(tk, nbytep);
+    tk.buffstart -= consumed;
+    tk.buffcount += consumed;
     if result == TERMKEY_RES_KEY {
         *nbytep += consumed;
     }
     result
 }
 
-unsafe fn peek_csi(
-    tk: *mut TermKey,
+fn peek_csi(
+    mut tk: Tk,
     intro_len: usize,
-    key: *mut TermKeyKey,
+    key: &mut TermKeyKey,
     force: c_int,
-    nbytep: *mut size_t,
+    nbytep: &mut size_t,
 ) -> TermKeyResult {
-    let bytes = buffered(tk);
+    let bytes = tk.buffered();
     let Some(seq) = csi::parse(bytes, intro_len) else {
         if force == 0 {
             return TERMKEY_RES_AGAIN;
         }
         // Out of patience: the introducer was just Alt-[ after all.
         emit_codepoint(tk, CSI_7BIT as c_int, key);
-        (*key).modifiers |= TERMKEY_KEYMOD_ALT as c_int;
+        key.modifiers |= TERMKEY_KEYMOD_ALT as c_int;
         *nbytep = intro_len;
         return TERMKEY_RES_KEY;
     };
     // `CSI M` with fewer than three parameters is the X10 mouse protocol, whose
     // three payload bytes follow the sequence rather than sitting inside it.
     if seq.command == b'M' as u32 && seq.nparams < 3 {
-        return with_buffer_advanced(tk, seq.len, nbytep, |tk| peekkey_mouse(tk, key, nbytep));
+        let peek = |tk, nbytep: &mut size_t| peekkey_mouse(tk, key, nbytep);
+        return with_buffer_advanced(tk, seq.len, nbytep, peek);
     }
 
     let mut params: Params = [None; CSI_MAX_PARAMS];
@@ -460,10 +493,10 @@ unsafe fn peek_csi(
         // Nothing here recognises it. Report it whole, consuming only the
         // introducer, and let the consumer re-parse the rest with
         // `termkey_interpret_csi` before the next `peekkey` discards it.
-        (*key).type_0 = TERMKEY_TYPE_UNKNOWN_CSI;
-        (*key).code.number = seq.command as c_int;
-        (*key).modifiers = 0;
-        (*tk).hightide = seq.len - intro_len;
+        key.type_0 = TERMKEY_TYPE_UNKNOWN_CSI;
+        key.code.number = seq.command as c_int;
+        key.modifiers = 0;
+        tk.hightide = seq.len - intro_len;
         *nbytep = intro_len;
         return TERMKEY_RES_KEY;
     }
@@ -477,45 +510,41 @@ unsafe fn peek_csi(
 /// entries were fixed, and `R` was deliberately overwritten after the
 /// final-byte tables had claimed it — which is why the position handler falls
 /// back to them.
-unsafe fn dispatch(
-    tk: *mut TermKey,
-    key: *mut TermKeyKey,
-    seq: &CsiSeq,
-    params: &Params,
-) -> TermKeyResult {
+fn dispatch(tk: Tk, key: &mut TermKeyKey, seq: &CsiSeq, params: &Params) -> TermKeyResult {
     match (seq.command & 0xff) as u8 {
         b'u' => handle_csi_u(tk, key, seq.command, params),
-        b'M' | b'm' => handle_csi_mouse(&mut *key, seq.command, seq.nparams, params),
-        b'R' => handle_csi_position(&mut *key, seq.command, seq.nparams, params),
-        b'y' => handle_csi_mode(&mut *key, seq.command, seq.nparams, params),
+        b'M' | b'm' => handle_csi_mouse(key, seq.command, seq.nparams, params),
+        b'R' => handle_csi_position(key, seq.command, seq.nparams, params),
+        b'y' => handle_csi_mode(key, seq.command, seq.nparams, params),
         b'~' => handle_csi_func(tk, key, seq.nparams, params),
         // `csi::parse` only ever stops on a byte in the final-byte range, so
         // the index is in bounds.
         final_byte
             if CSI_SS3[(final_byte - CSI_FINAL_BASE) as usize].sym != TERMKEY_SYM_UNKNOWN =>
         {
-            handle_csi_ss3(&mut *key, seq.command, params)
+            handle_csi_ss3(key, seq.command, params)
         }
         _ => TERMKEY_RES_NONE,
     }
 }
 
-unsafe fn peek_ss3(
-    tk: *mut TermKey,
+fn peek_ss3(
+    tk: Tk,
     intro_len: usize,
-    key: *mut TermKeyKey,
+    key: &mut TermKeyKey,
     force: c_int,
-    nbytep: *mut size_t,
+    nbytep: &mut size_t,
 ) -> TermKeyResult {
-    let bytes = buffered(tk);
+    let bytes = tk.buffered();
     if bytes.len() < intro_len + 1 {
         if force == 0 {
             return TERMKEY_RES_AGAIN;
         }
         // Out of patience: the introducer was just Alt-O after all.
+        let len = bytes.len();
         emit_codepoint(tk, SS3_7BIT as c_int, key);
-        (*key).modifiers |= TERMKEY_KEYMOD_ALT as c_int;
-        *nbytep = bytes.len();
+        key.modifiers |= TERMKEY_KEYMOD_ALT as c_int;
+        *nbytep = len;
         return TERMKEY_RES_KEY;
     }
     let command = bytes[intro_len];
@@ -525,13 +554,14 @@ unsafe fn peek_ss3(
     let slot = (command - CSI_FINAL_BASE) as usize;
     let mut info = CSI_SS3[slot];
     if info.sym == TERMKEY_SYM_UNKNOWN {
-        if (*tk).flags & TERMKEY_FLAG_CONVERTKP as c_int != 0 && SS3_KEYPAD_ALT[slot] != 0 {
+        if tk.flags & TERMKEY_FLAG_CONVERTKP as c_int != 0 && SS3_KEYPAD_ALT[slot] != 0 {
             // The consumer wants keypad keys as the characters they stand for.
-            (*key).type_0 = TERMKEY_TYPE_UNICODE;
-            (*key).code.codepoint = SS3_KEYPAD_ALT[slot] as u8 as c_int;
-            (*key).modifiers = 0;
-            (*key).utf8[0] = (*key).code.codepoint as c_char;
-            (*key).utf8[1] = 0;
+            let codepoint = SS3_KEYPAD_ALT[slot] as u8 as c_int;
+            key.type_0 = TERMKEY_TYPE_UNICODE;
+            key.code.codepoint = codepoint;
+            key.modifiers = 0;
+            key.utf8[0] = codepoint as c_char;
+            key.utf8[1] = 0;
             *nbytep = intro_len + 1;
             return TERMKEY_RES_KEY;
         }
@@ -540,9 +570,9 @@ unsafe fn peek_ss3(
     if info.sym == TERMKEY_SYM_UNKNOWN {
         return TERMKEY_RES_NONE;
     }
-    (*key).type_0 = info.type_0;
-    (*key).code.sym = info.sym;
-    (*key).modifiers = info.modifier_set;
+    key.type_0 = info.type_0;
+    key.code.sym = info.sym;
+    key.modifiers = info.modifier_set;
     *nbytep = intro_len + 1;
     TERMKEY_RES_KEY
 }
@@ -550,14 +580,16 @@ unsafe fn peek_ss3(
 /// A control string — DCS, OSC or APC — whose payload runs to a BEL or a string
 /// terminator. The payload is kept aside for `termkey_interpret_string`, and the
 /// key carries a serial number so a stale key cannot read a newer payload.
-unsafe fn peek_control_string(
-    tk: *mut TermKey,
-    csi: *mut TermKeyCsi,
+fn peek_control_string(
+    tk: Tk,
     intro_len: usize,
-    key: *mut TermKeyKey,
-    nbytep: *mut size_t,
+    key: &mut TermKeyKey,
+    nbytep: &mut size_t,
 ) -> TermKeyResult {
-    let bytes = buffered(tk);
+    // Bound before the buffer is borrowed: reaching it through `tk` would be
+    // a second borrow of the reader.
+    let state = tk.csi;
+    let bytes = tk.buffered();
     let Some(end) = (intro_len..bytes.len()).find(|&i| {
         bytes[i] == BEL
             || bytes[i] == STRING_TERMINATOR_8BIT
@@ -569,39 +601,42 @@ unsafe fn peek_control_string(
     *nbytep = end + 1 + usize::from(bytes[end] == ESC);
 
     let payload = &bytes[intro_len..end];
-    if !(*csi).saved_string.is_null() {
-        xfree((*csi).saved_string as *mut c_void);
+    // SAFETY: the driver state allocated with this reader, which owns it for
+    // its whole life and shares it with nothing.
+    let csi = unsafe { &mut *state };
+    if !csi.saved_string.is_null() {
+        // SAFETY: the payload saved by the previous control string, freed
+        // exactly once — the field is overwritten immediately below.
+        unsafe { xfree(csi.saved_string as *mut c_void) };
     }
-    let saved = xmalloc(payload.len() + 1) as *mut u8;
-    core::ptr::copy_nonoverlapping(payload.as_ptr(), saved, payload.len());
-    *saved.add(payload.len()) = 0;
-    (*csi).saved_string = saved as *mut c_char;
-    (*csi).saved_string_id += 1;
+    // SAFETY: xmalloc returns a fresh allocation of the size asked for.
+    let saved = unsafe { xmalloc(payload.len() + 1) } as *mut u8;
+    // SAFETY: it holds the payload and its terminator, and nothing else
+    // refers to it yet.
+    let room = unsafe { core::slice::from_raw_parts_mut(saved, payload.len() + 1) };
+    room[..payload.len()].copy_from_slice(payload);
+    room[payload.len()] = 0;
+    csi.saved_string = saved as *mut c_char;
+    csi.saved_string_id += 1;
 
     // The introducer's low five bits distinguish the three string kinds, in
     // both their seven- and eight-bit spellings.
-    (*key).type_0 = match bytes[intro_len - 1] & 0x1f {
+    key.type_0 = match bytes[intro_len - 1] & 0x1f {
         0x10 => TERMKEY_TYPE_DCS,
         0x1d => TERMKEY_TYPE_OSC,
         0x1f => TERMKEY_TYPE_APC,
         other => unreachable!("control string introducer {other:#x}"),
     };
-    (*key).code.number = (*csi).saved_string_id;
-    (*key).modifiers = 0;
+    key.code.number = csi.saved_string_id;
+    key.modifiers = 0;
     TERMKEY_RES_KEY
 }
 
-pub unsafe fn peek_key(
-    tk: *mut TermKey,
-    csi: *mut TermKeyCsi,
-    key: *mut TermKeyKey,
-    force: c_int,
-    nbytep: *mut size_t,
-) -> TermKeyResult {
-    if (*tk).buffcount == 0 {
+pub fn peek_key(tk: Tk, key: &mut TermKeyKey, force: c_int, nbytep: &mut size_t) -> TermKeyResult {
+    if tk.buffcount == 0 {
         return TERMKEY_RES_NONE;
     }
-    let bytes = buffered(tk);
+    let bytes = tk.buffered();
     match bytes[0] {
         ESC => match bytes.get(1) {
             // Not enough to tell yet. Upstream reports NONE rather than AGAIN
@@ -610,12 +645,12 @@ pub unsafe fn peek_key(
             None => TERMKEY_RES_NONE,
             Some(&SS3_7BIT) => peek_ss3(tk, 2, key, force, nbytep),
             Some(&CSI_7BIT) => peek_csi(tk, 2, key, force, nbytep),
-            Some(&DCS_7BIT | &OSC_7BIT | &APC_7BIT) => peek_control_string(tk, csi, 2, key, nbytep),
+            Some(&DCS_7BIT | &OSC_7BIT | &APC_7BIT) => peek_control_string(tk, 2, key, nbytep),
             _ => TERMKEY_RES_NONE,
         },
         SS3_8BIT => peek_ss3(tk, 1, key, force, nbytep),
         CSI_8BIT => peek_csi(tk, 1, key, force, nbytep),
-        DCS_8BIT | OSC_8BIT => peek_control_string(tk, csi, 1, key, nbytep),
+        DCS_8BIT | OSC_8BIT => peek_control_string(tk, 1, key, nbytep),
         _ => TERMKEY_RES_NONE,
     }
 }
