@@ -7,6 +7,19 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the terminal emulator and the terminal buffer in front of it:
+  the escape-sequence parser and its state machine, every CSI and the
+  whole SGR alphabet, the mode table, the UTF-8 decoder and the charset
+  designators, OSC/DCS and the OSC 52 selection decoder, the mouse and
+  key encoders, and the cell grid with its damage merging, scrollback
+  and reflow; `:terminal` and `nvim_open_term()` on top of it, covering
+  the `g:terminal_color_*` palette, the scrollback ring and
+  `'scrollback'`, terminal-mode input and mouse handling, `TermRequest`
+  and the reply writer; and the key reader that decodes every escape
+  sequence the TUI receives.
+
 ### Fixed
 
 - A terminal window one column wide no longer crashes the editor when the
