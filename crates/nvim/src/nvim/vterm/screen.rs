@@ -137,7 +137,11 @@ unsafe extern "C" fn putglyph(
     if (*info).schar != 0 {
         (*cell).pen = (*screen).pen;
     }
-    for col in 1..(*info).width {
+    // A wide glyph can reach the last column with no cell to continue into:
+    // on a one-column grid there is no next column to wrap it away into
+    // first, so the glyph is placed and its continuation runs off the end.
+    // Stop at the edge — `getcell` answers null past the last column.
+    for col in 1..(*info).width.min((*screen).cols - pos.col) {
         (*getcell(screen, pos.row, pos.col + col)).schar = SCHAR_CONTINUATION;
     }
     (*cell).pen.set_protected_cell((*info).protected_cell());
