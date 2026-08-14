@@ -28,21 +28,22 @@ use crate::src::nvim::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{curwin, exiting, main_loop};
+use crate::src::nvim::main::{exiting, main_loop};
 use crate::src::nvim::mbyte::mb_check_adjust_col;
 use crate::src::nvim::memline::{ml_append_buf, ml_replace_buf};
 use crate::src::nvim::r#move::{curs_columns, set_topline};
 use crate::src::nvim::types::{
     MultiQueue, Terminal, TimeWatcher, WinInfo, buf_T, colnr_T, linenr_T, size_t, uint16_t,
-    uint64_t, win_T,
+    uint64_t,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::src::nvim::vterm::vterm::vterm_get_size;
+use crate::src::nvim::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_void};
 
 use super::mode::terminal_check_cursor;
 use super::scrollback::{fetch_row, refresh_scrollback};
-use super::{all_windows, buf_for_handle, is_focused, row_to_linenr};
+use super::{buf_for_handle, is_focused, row_to_linenr};
 
 /// How long to let damage accumulate before mirroring it into the buffer,
 /// in milliseconds.
@@ -177,10 +178,10 @@ pub unsafe fn refresh_terminal(term: *mut Terminal) {
         if resized {
             // The child now knows the width, so a window scrolled sideways
             // is showing a column that no longer means anything.
-            for wp in windows_showing(buf) {
-                if (*wp).w_leftcol != 0 {
-                    (*wp).w_leftcol = 0 as colnr_T;
-                    curs_columns(wp, 1);
+            for mut wp in windows_showing(buf) {
+                if wp.w_leftcol != 0 {
+                    wp.w_leftcol = 0 as colnr_T;
+                    curs_columns(wp.raw(), 1);
                 }
             }
         }
@@ -283,9 +284,8 @@ unsafe fn clear_invalid(term: *mut Terminal) {
 }
 
 /// Every window showing `buf`.
-unsafe fn windows_showing(buf: *mut buf_T) -> impl Iterator<Item = *mut win_T> {
-    // SAFETY: as `all_windows`; the predicate only reads `w_buffer`.
-    unsafe { all_windows().filter(move |&wp| (*wp).w_buffer == buf) }
+fn windows_showing(buf: *mut buf_T) -> impl Iterator<Item = Win> {
+    tab_windows().filter(move |wp| wp.w_buffer == buf)
 }
 
 /// Keep every window on `buf` looking at the bottom of the terminal.
@@ -296,21 +296,21 @@ unsafe fn windows_showing(buf: *mut buf_T) -> impl Iterator<Item = *mut win_T> {
 pub unsafe fn adjust_topline_cursor(term: *mut Terminal, buf: *mut buf_T, added: c_int) {
     unsafe {
         let ml_end = (*buf).b_ml.ml_line_count;
-        for wp in windows_showing(buf) {
-            if wp == curwin.get() && is_focused(term) {
+        for mut wp in windows_showing(buf) {
+            if wp.is_current() && is_focused(term) {
                 terminal_check_cursor();
                 continue;
             }
-            if ml_end == (*wp).w_cursor.lnum + added as linenr_T {
-                (*wp).w_cursor.lnum = ml_end;
+            if ml_end == wp.w_cursor.lnum + added as linenr_T {
+                wp.w_cursor.lnum = ml_end;
                 set_topline(
-                    wp,
-                    ((*wp).w_cursor.lnum - (*wp).w_view_height as linenr_T + 1).max(1),
+                    wp.raw(),
+                    (wp.w_cursor.lnum - wp.w_view_height as linenr_T + 1).max(1),
                 );
             } else {
-                (*wp).w_cursor.lnum = (*wp).w_cursor.lnum.min(ml_end);
+                wp.w_cursor.lnum = wp.w_cursor.lnum.min(ml_end);
             }
-            mb_check_adjust_col(wp as *mut c_void);
+            mb_check_adjust_col(wp.raw() as *mut c_void);
         }
 
         // Windows are not the only things remembering a line: the buffer's

@@ -54,9 +54,7 @@ use crate::src::nvim::highlight::{
     hl_get_term_attr,
 };
 use crate::src::nvim::highlight_group::name_to_color;
-use crate::src::nvim::main::{
-    State, buffer_handles, curbuf, curtab, curwin, exiting, first_tabpage, firstwin, main_loop,
-};
+use crate::src::nvim::main::{State, buffer_handles, curbuf, curwin, exiting, main_loop};
 use crate::src::nvim::map::mh_get_int;
 use crate::src::nvim::memline::ml_delete_buf;
 use crate::src::nvim::memory::xfree;
@@ -71,7 +69,7 @@ use crate::src::nvim::types::{
     OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
     VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, colnr_T,
     exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T,
-    ptr_t, save_v_event_T, size_t, tabpage_T, uint8_t, varnumber_T, win_T,
+    ptr_t, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::vterm::parser::vterm_input_write;
 use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -90,6 +88,7 @@ use crate::src::nvim::vterm::vterm::{
     VTERM_PROP_CURSORSHAPE_UNDERLINE, vterm_free, vterm_get_size, vterm_new,
     vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
 };
+use crate::src::nvim::winlayer::{tab_windows, windows};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
@@ -140,36 +139,6 @@ unsafe fn map_get_int_ptr_t(map: *mut Map_int_ptr_t, key: c_int) -> ptr_t {
 /// The buffer a handle names, or null once it has been wiped.
 unsafe fn buf_for_handle(handle: handle_T) -> *mut buf_T {
     unsafe { map_get_int_ptr_t(buffer_handles.ptr(), handle) as *mut buf_T }
-}
-
-/// Every window in every tabpage.
-///
-/// The current tabpage keeps its window list in `firstwin` rather than in
-/// the tabpage struct, which is why this is not a plain walk of
-/// `tp_firstwin`.
-unsafe fn all_windows() -> impl Iterator<Item = *mut win_T> {
-    let mut tp = first_tabpage.get() as *mut tabpage_T;
-    let mut wp: *mut win_T = ::core::ptr::null_mut();
-    ::core::iter::from_fn(move || {
-        // SAFETY: walking the editor's window lists on the main thread. No
-        // caller restructures them while iterating.
-        unsafe {
-            while wp.is_null() {
-                if tp.is_null() {
-                    return None;
-                }
-                wp = if tp == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tp).tp_firstwin
-                };
-                tp = (*tp).tp_next as *mut tabpage_T;
-            }
-            let found = wp;
-            wp = (*found).w_next;
-            Some(found)
-        }
-    })
 }
 
 /// vterm's "here are bytes for the child" callback.
@@ -395,12 +364,10 @@ pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
             }
         } else if !only_destroy {
             // The status line says "running"; it no longer is.
-            let mut wp = firstwin.get();
-            while !wp.is_null() {
-                if (*wp).w_buffer == buf {
-                    (*wp).w_redr_status = true;
+            for mut wp in windows() {
+                if wp.w_buffer == buf {
+                    wp.w_redr_status = true;
                 }
-                wp = (*wp).w_next;
             }
             pos = pos.min(row_to_linenr(term, (*term).cursor.row));
         }
@@ -475,16 +442,16 @@ pub unsafe fn terminal_check_size(term: *mut Terminal) {
 
         let mut width = 0;
         let mut height = 0;
-        for wp in all_windows() {
+        for wp in tab_windows() {
             // The autocommand window is a fiction with a nominal size.
-            if is_aucmd_win(wp) || (*wp).w_buffer.is_null() {
+            if is_aucmd_win(wp.raw()) {
                 continue;
             }
-            if (*(*wp).w_buffer).terminal != term {
+            if wp.buffer_or_none().is_none_or(|buf| buf.terminal != term) {
                 continue;
             }
-            width = width.max(((*wp).w_view_width - win_col_off(wp)).max(0));
-            height = height.max((*wp).w_view_height);
+            width = width.max((wp.w_view_width - win_col_off(wp.raw())).max(0));
+            height = height.max(wp.w_view_height);
         }
 
         // Zero means no window is showing it; keep whatever size it had.
