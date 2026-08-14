@@ -23,12 +23,6 @@ use crate::src::nvim::vterm::vterm::{
     VTERM_PROP_THEMEUPDATES, VTERM_VERSION_MAJOR, VTERM_VERSION_MINOR,
 };
 
-/// The version this terminal claims to be, for XTVERSION.
-
-/// The shapes `VTERM_PROP_CURSORSHAPE` can take.
-
-/// The pointer-tracking levels `VTERM_PROP_MOUSE` can take.
-
 /// The progressive-enhancement bits of the kitty keyboard protocol.
 /// <https://sw.kovidgoyal.net/kitty/keyboard-protocol/#progressive-enhancement>
 pub const KEY_ENCODING_DISAMBIGUATE: c_int = 0x1;

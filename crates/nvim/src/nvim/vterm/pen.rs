@@ -35,10 +35,6 @@ pub const CSI_ARG_MASK: c_uint = !((1 as c_uint) << 31);
 /// The value the parser leaves for an omitted parameter.
 pub const CSI_ARG_MISSING: c_long = 2147483647;
 
-/// Bit 0 of a colour's type byte says which representation is live.
-/// Bits 1-2 mark a colour as *being* the terminal's default foreground or
-/// background, which keeps it out of an SGR report entirely.
-
 // ---------------------------------------------------------------- colours
 
 /// Splits a colour into its type byte and the payload that byte selects.

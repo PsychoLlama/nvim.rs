@@ -101,9 +101,6 @@ pub use refresh::{
     on_scrollback_option_changed, terminal_check_refresh, terminal_init, terminal_teardown,
 };
 
-/// An `Error` that carries no error. The API calls made here cannot fail in
-/// a way any caller could act on, so their errors are cleared and dropped.
-
 /// "To the end of the buffer", for the mark adjustments.
 const NUL: c_int = 0;
 /// `ml_flags` bit meaning the buffer holds one empty line and nothing else.
@@ -120,14 +117,8 @@ const OPT_LOCAL: c_int = 2;
 /// The most columns [`terminal_get_line_attributes`] will resolve;
 /// `drawline` sizes its array to match.
 const TERM_ATTRS_MAX: c_int = 1024;
-/// `State` bit set while terminal mode is running.
-/// `redraw_later` levels.
+/// Every autocommand group, for the events dispatched from here.
 const AUGROUP_ALL: c_int = -3;
-
-/// vterm's cursor shapes, which are DECSCUSR's rather than the editor's.
-/// Merge damage reports up to a whole scrolled region before delivering
-/// them; the refresh works in row ranges anyway.
-/// An escape sequence ended with BEL rather than ST.
 
 /// One entry of an `int -> ptr` map, or null.
 ///
@@ -214,6 +205,8 @@ pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Ter
             &raw const termrequest::FALLBACKS,
             term as *mut c_void,
         );
+        // Merge damage reports up to a whole scrolled region before they are
+        // delivered; the refresh works in row ranges anyway.
         vterm_screen_set_damage_merge((*term).vts, VTERM_DAMAGE_SCROLL);
         vterm_screen_reset((*term).vts, 1);
         vterm_output_set_callback((*term).vt, Some(term_output_callback), term as *mut c_void);
@@ -229,6 +222,7 @@ pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Ter
         // terminal mode; it is free to change it.
         let shape = shape_entry(SHAPE_IDX_TERM);
         let mut cursor_shape = VTermValue { boolean: 0 };
+        // vterm's shapes are DECSCUSR's rather than the editor's.
         cursor_shape.number = match shape.shape {
             0 => VTERM_PROP_CURSORSHAPE_BLOCK,
             1 => VTERM_PROP_CURSORSHAPE_UNDERLINE,
@@ -790,6 +784,8 @@ unsafe fn is_focused(term: *mut Terminal) -> bool {
 /// The result is an owned C string the caller frees, or null.
 unsafe fn get_config_string(buf: *mut buf_T, key: *const c_char) -> *mut c_char {
     unsafe {
+        // Neither lookup can fail in a way this caller could act on, so the
+        // error is cleared and dropped after each.
         let mut err = Error {
             type_0: kErrorTypeNone,
             msg: ::core::ptr::null_mut(),

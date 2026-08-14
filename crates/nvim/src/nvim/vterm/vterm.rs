@@ -138,6 +138,10 @@ pub const VTERM_MOD_SHIFT: VTermModifier = 1;
 pub const VTERM_MOD_ALT: VTermModifier = 2;
 pub const VTERM_MOD_CTRL: VTermModifier = 4;
 /// How a `VTermColor` is to be read, and which default it stands for.
+///
+/// Bit 0 of the type byte says which representation is live. Bits 1-2 mark
+/// a colour as *being* the terminal's default foreground or background,
+/// which keeps it out of an SGR report entirely.
 pub const VTERM_COLOR_RGB: ::core::ffi::c_uint = 0;
 pub const VTERM_COLOR_INDEXED: ::core::ffi::c_uint = 1;
 pub const VTERM_COLOR_TYPE_MASK: ::core::ffi::c_uint = 1;

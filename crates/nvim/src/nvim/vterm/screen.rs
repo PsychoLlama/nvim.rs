@@ -38,8 +38,9 @@ use crate::src::nvim::vterm::vterm::{
     vterm_scroll_rect,
 };
 
-/// The terminal property that swaps the alternate screen buffer in and out.
-/// The terminal property that reverses the whole screen at once.
+/// Which of the screen's two cell buffers a call means: the one the child
+/// normally paints into, or the alternate one `VTERM_PROP_ALTSCREEN` swaps
+/// in.
 pub const BUFIDX_PRIMARY: usize = 0;
 pub const BUFIDX_ALTSCREEN: usize = 1;
 

@@ -17,8 +17,6 @@ use crate::src::nvim::vterm::vterm::{
 /// The `start_row` a screen's pending rectangle carries when there is none.
 pub const NO_RECT: c_int = -1;
 
-/// How much the screen batches up before telling the host.
-
 /// What a freshly damaged rectangle means for the host.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Damage {

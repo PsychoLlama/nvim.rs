@@ -61,6 +61,8 @@ use core::ffi::{c_char, c_int};
 
 use super::refresh::invalidate_terminal;
 use super::terminal_send;
+// vterm's key names, from libvterm's `VTermKey`. Function keys are not
+// named individually: they are `FUNCTION_0 + n`, see [`function_key`].
 use crate::src::nvim::vterm::vterm::{
     VTERM_KEY_BACKSPACE, VTERM_KEY_DEL, VTERM_KEY_DOWN, VTERM_KEY_END, VTERM_KEY_ENTER,
     VTERM_KEY_ESCAPE, VTERM_KEY_FUNCTION_0, VTERM_KEY_HOME, VTERM_KEY_INS, VTERM_KEY_KP_0,
@@ -70,10 +72,6 @@ use crate::src::nvim::vterm::vterm::{
     VTERM_KEY_NONE, VTERM_KEY_PAGEDOWN, VTERM_KEY_PAGEUP, VTERM_KEY_RIGHT, VTERM_KEY_TAB,
     VTERM_KEY_UP, VTERM_MOD_ALT, VTERM_MOD_CTRL, VTERM_MOD_NONE, VTERM_MOD_SHIFT,
 };
-
-// vterm's key names, from libvterm's `VTermKey`. Copies, as everything the
-// vendored emulator exports is: `vterm/keyboard.rs` keeps its own set.
-/// Function keys are `FUNCTION_0 + n`; see [`function_key`].
 
 const MOD_MASK_SHIFT: c_int = 0x2;
 const MOD_MASK_CTRL: c_int = 0x4;
@@ -86,8 +84,6 @@ const ESC: c_int = 27;
 const fn function_key(n: c_int) -> VTermKey {
     VTERM_KEY_FUNCTION_0 + n as VTermKey
 }
-
-/// `redraw_later` level: the window scrolled, so nothing on it holds.
 
 /// `do_mousescroll`'s directions.
 const MSCR_DOWN: c_int = 0;
