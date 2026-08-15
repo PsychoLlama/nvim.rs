@@ -75,7 +75,6 @@ static PROFILE_FNAME: GlobalCell<Option<CString>> = GlobalCell::new(None);
 /// Per-line counters of a profiled script, the element type of
 /// `scriptitem_T.sn_prl_ga`.
 #[derive(Copy, Clone)]
-#[repr(C)]
 struct sn_prl_T {
     snp_count: c_int,
     sn_prl_total: proftime_T,

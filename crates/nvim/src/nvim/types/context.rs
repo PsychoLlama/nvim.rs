@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Context {
     pub regs: String_0,
     pub jumps: String_0,

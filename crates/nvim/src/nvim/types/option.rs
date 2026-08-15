@@ -7,7 +7,6 @@ use super::*;
 pub type OptScope = ::core::ffi::c_uint;
 pub type OptScopeFlags = uint8_t;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct OptVal {
     pub type_0: OptValType,
     pub data: OptValData,
@@ -30,7 +29,6 @@ pub type opt_expand_cb_T = Option<
     ) -> ::core::ffi::c_int,
 >;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct optexpand_T {
     pub oe_varp: *mut ::core::ffi::c_char,
     pub oe_idx: OptIndex,
@@ -42,7 +40,6 @@ pub struct optexpand_T {
     pub oe_set_arg: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct optset_T {
     pub os_varp: *mut ::core::ffi::c_void,
     pub os_idx: OptIndex,
@@ -58,7 +55,6 @@ pub struct optset_T {
     pub os_buf: *mut ::core::ffi::c_void,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct vimoption_T {
     pub fullname: *mut ::core::ffi::c_char,
     pub shortname: *mut ::core::ffi::c_char,

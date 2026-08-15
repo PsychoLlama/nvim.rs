@@ -191,7 +191,6 @@ pub const DIP_ERR: ::core::ffi::c_uint = 4;
 pub const DIP_DIR: ::core::ffi::c_uint = 2;
 pub const DIP_ALL: ::core::ffi::c_uint = 1;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct source_cookie_T {
     pub fp: *mut FILE,
     pub nextline: *mut ::core::ffi::c_char,
@@ -207,14 +206,12 @@ pub struct source_cookie_T {
     pub conv: vimconv_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct RuntimeSearchPath {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut SearchPathItem,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct SearchPathItem {
     pub path: *mut ::core::ffi::c_char,
     pub after: bool,
@@ -223,14 +220,12 @@ pub struct SearchPathItem {
     pub pos_in_rtp: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CharVec {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct StringVec {
     pub size: size_t,
     pub capacity: size_t,
