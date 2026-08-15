@@ -9,6 +9,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote the mark tree: the interval tree that holds every extmark, sign,
+  inline virtual text, conceal and decoration the editor draws, covering
+  the node splitting, merging and rebalancing, the sets that record which
+  ranges cover a node, the plain, filtered and overlapping walks over
+  them, and the arithmetic that moves every mark as text is inserted,
+  deleted or moved.
 - Rewrote the terminal emulator and the terminal buffer in front of it:
   the escape-sequence parser and its state machine, every CSI and the
   whole SGR alphabet, the mode table, the UTF-8 decoder and the charset
