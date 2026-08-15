@@ -88,7 +88,6 @@ pub const CLASS_BACKSPACE: c_uint = 14;
 pub const CLASS_ALPHA: c_uint = 1;
 pub const CLASS_ALNUM: c_uint = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regexec_T {
     pub reg_match: *mut regmatch_T,
     pub reg_mmatch: *mut regmmatch_T,
@@ -118,7 +117,6 @@ pub struct regexec_T {
     pub nfa_has_zsubexpr: c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regsubmatch_T {
     pub sm_match: *mut regmatch_T,
     pub sm_mmatch: *mut regmmatch_T,
@@ -193,20 +191,17 @@ pub struct multipos {
     pub end_col: colnr_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regsub_T {
     pub in_use: c_int,
     pub list: CaptureSlots,
     pub orig_start_col: colnr_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regsubs_T {
     pub norm: regsub_T,
     pub synt: regsub_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct nfa_thread_T {
     pub state: *mut nfa_state_T,
     pub count: c_int,
@@ -215,7 +210,6 @@ pub struct nfa_thread_T {
 }
 pub type nfa_pim_T = nfa_pim_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct nfa_pim_S {
     pub result: c_int,
     pub state: *mut nfa_state_T,
@@ -376,7 +370,6 @@ pub const NFA_STAR: c_int = -1012;
 pub const NFA_OR: c_int = -1013;
 pub const NFA_CONCAT: c_int = -1014;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct parse_state_T {
     pub regparse: *mut c_char,
     pub prevchr_len: c_int,
@@ -392,7 +385,6 @@ pub const NFA_LAST_NL: c_int = -856;
 pub const NFA_FIRST_NL: c_int = -886;
 pub type regitem_T = regitem_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regitem_S {
     pub rs_state: regstate_T,
     pub rs_no: int16_t,
@@ -435,7 +427,6 @@ pub const RS_MOPEN: regstate_E = 1;
 pub const RS_NOPEN: regstate_E = 0;
 pub type regstar_T = regstar_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regstar_S {
     pub nextb: c_int,
     pub nextb_ic: c_int,
@@ -445,7 +436,6 @@ pub struct regstar_S {
 }
 pub type regbehind_T = regbehind_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regbehind_S {
     pub save_after: regsave_T,
     pub save_behind: regsave_T,
@@ -455,7 +445,6 @@ pub struct regbehind_S {
 }
 pub type backpos_T = backpos_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct backpos_S {
     pub bp_scan: *mut uint8_t,
     pub bp_pos: regsave_T,

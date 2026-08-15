@@ -17,7 +17,6 @@ pub struct regprog {
 pub type regengine_T = regengine;
 /// The vtable of a regexp engine (backtracking or NFA).
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct regengine {
     pub regcomp: Option<unsafe extern "C" fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T>,
     pub regfree: Option<unsafe extern "C" fn(*mut regprog_T) -> ()>,
@@ -40,7 +39,6 @@ pub struct regengine {
 pub type magic_T = ::core::ffi::c_uint;
 pub type optmagic_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct reg_extmatch_T {
     pub refcnt: int16_t,
     pub matches: [*mut uint8_t; 10],
