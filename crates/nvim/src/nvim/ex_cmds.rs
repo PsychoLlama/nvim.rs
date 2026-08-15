@@ -56,7 +56,7 @@ use crate::src::nvim::types::{
     CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMOD_BROWSE, CMOD_LOCKMARKS,
     ExtmarkOp, OptVal, OptValData, OptValType, String_0, UndoObjectType, VV_OLDFILES, bcount_t,
     bfa_values, bln_values, buf_T, dobuf_action_values, exarg_T, getf_retvalues, linenr_T, list_T,
-    listitem_T, lpos_T, regprog_T, size_t, uint8_t, win_T,
+    listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::src::nvim::window::{win_enter, win_split};
 use core::ptr;
@@ -82,9 +82,7 @@ pub use self::subst::*;
 pub use self::text::*;
 pub use self::write::*;
 
-unsafe extern "C" {
-    fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
-}
+use crate::src::nvim::regexp::re_multiline;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const kExtmarkMove: UndoObjectType = 1;

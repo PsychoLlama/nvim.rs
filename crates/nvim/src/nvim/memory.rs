@@ -361,8 +361,7 @@ pub type MergeSortCompareFunc = Option<unsafe extern "C" fn(*const c_void, *cons
 /// Bottom-up mergesort over an intrusive doubly-linked list, generic via
 /// accessor callbacks. All list knowledge lives behind the callbacks, so
 /// this stays a pointer-shuffling shim.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mergesort_list(
+pub unsafe fn mergesort_list(
     mut head: *mut c_void,
     get_next: MergeSortGetFunc,
     set_next: MergeSortSetFunc,

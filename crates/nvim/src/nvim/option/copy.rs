@@ -359,8 +359,7 @@ unsafe fn copy_sctx(buf: *mut buf_T, bv: BufOptIndex) {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
+pub unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
     let mut did_isk = false;
 
     // SAFETY: the caller's buffer, and every global read here is an option

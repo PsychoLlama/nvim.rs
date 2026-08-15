@@ -217,8 +217,7 @@ unsafe extern "C" fn vim_regexec_string(
 
 /// [`vim_regexec`] against a program the caller owns by pointer, so that
 /// the fall back to the backtracking engine can replace it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regexec_prog(
+pub unsafe fn vim_regexec_prog(
     prog: *mut *mut regprog_T,
     ignore_case: bool,
     line: *const c_char,
@@ -250,12 +249,7 @@ pub unsafe extern "C" fn vim_regexec(
 }
 
 /// [`vim_regexec`] with `$` allowed to match at the end of the string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regexec_nl(
-    rmp: *mut regmatch_T,
-    line: *const c_char,
-    col: colnr_T,
-) -> bool {
+pub unsafe fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool {
     // SAFETY: as `vim_regexec_string`.
     unsafe { vim_regexec_string(rmp, line, col, true) }
 }
@@ -263,8 +257,7 @@ pub unsafe extern "C" fn vim_regexec_nl(
 /// Run `rmp`'s program over `buf` starting at line `lnum`, column `col`.
 /// Returns the number of lines the match spans plus one, or 0 for no
 /// match; `tm`/`timed_out` bound how long the NFA engine may spend.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regexec_multi(
+pub unsafe fn vim_regexec_multi(
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,

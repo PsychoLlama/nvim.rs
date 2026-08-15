@@ -170,8 +170,7 @@ pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> c_int {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn re_multiline(prog: *const regprog_T) -> c_int {
+pub unsafe fn re_multiline(prog: *const regprog_T) -> c_int {
     (unsafe { (*prog).regflags } & RF_HASNL as u32) as c_int
 }
 

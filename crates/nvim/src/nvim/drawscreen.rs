@@ -102,7 +102,7 @@ use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Integer, OptInt,
     VirtText, VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T, hlf_T, int64_t,
-    linenr_T, pos_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t, varnumber_T, win_T,
+    linenr_T, pos_T, schar_T, size_t, spellvars_T, uint16_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
@@ -128,9 +128,7 @@ mod winupdate;
 pub(crate) use self::winupdate::*;
 mod winlines;
 pub use self::winlines::*;
-unsafe extern "C" {
-    fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
-}
+use crate::src::nvim::regexp::re_multiline;
 /// `'shortmess'` flags this module tests.
 pub const SHM_RECORDING: ::core::ffi::c_int = b'q' as ::core::ffi::c_int;
 pub const SHM_COMPLETIONMENU: ::core::ffi::c_int = b'c' as ::core::ffi::c_int;

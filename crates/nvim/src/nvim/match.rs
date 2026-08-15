@@ -60,9 +60,7 @@ pub use self::searchhl::*;
 mod vimscript;
 pub use self::vimscript::*;
 
-unsafe extern "C" {
-    fn re_multiline(prog: *const regprog_T) -> c_int;
-}
+use crate::src::nvim::regexp::re_multiline;
 
 pub const NUL: c_int = '\0' as c_int;
 pub const OK: c_int = 1;
