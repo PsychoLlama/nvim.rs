@@ -283,13 +283,11 @@ pub const kEOpLvlParens: ExprOpLvl = 2;
 pub const kEOpLvlComplexIdentifier: ExprOpLvl = 1;
 pub const kEOpLvlInvalid: ExprOpLvl = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct C2Rust_Unnamed_34 {
     pub lvl: ExprOpLvl,
     pub ass: ExprOpAssociativity,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct StringShift {
     pub start: size_t,
     pub orig_len: size_t,
