@@ -48,9 +48,9 @@ use crate::src::nvim::types::{
     DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ExtmarkInfoArray, ExtmarkType, Integer,
     KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider,
     KeyDict_set_extmark, KeySetLink, LuaRef, MHPutStatus, MTKey, MTPair, Map_String_int,
-    Map_uint32_t_uint32_t, MapHash, MarkTree, NS, Object, OptionalKeys, Set_ptr_t, Set_uint32_t,
-    String_0, UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T,
-    int32_t, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
+    Map_uint32_t_uint32_t, MapHash, NS, Object, OptionalKeys, Set_ptr_t, Set_uint32_t, String_0,
+    UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t,
+    int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
     kObjectTypeInteger, kObjectTypeString, linenr_T, ptr_t, schar_T, size_t, tabpage_T, uint8_t,
     uint16_t, uint32_t, virt_line, win_T,
 };

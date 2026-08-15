@@ -424,6 +424,6 @@ pub unsafe extern "C" fn nvim__buf_debug_extmarks(
         if b.is_null() {
             return NULL_STRING;
         }
-        return mt_inspect(&raw mut (*b).b_marktree as *mut MarkTree, keys, dot);
+        return mt_inspect(&mut (*b).b_marktree[0], keys, dot);
     }
 }
