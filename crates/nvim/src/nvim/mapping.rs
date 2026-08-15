@@ -112,7 +112,6 @@ pub const REPTERM_FROM_PART: C2Rust_Unnamed_20 = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub type MapArguments = map_arguments;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct map_arguments {
     pub buffer: bool,
     pub expr: bool,

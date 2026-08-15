@@ -86,7 +86,6 @@ pub use self::mode::*;
 
 /// One breakpoint or profiling point.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct debuggy {
     /// Breakpoint number, as `:breaklist` prints it.
     pub dbg_nr: c_int,

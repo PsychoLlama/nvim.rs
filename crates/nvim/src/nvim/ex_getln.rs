@@ -376,7 +376,6 @@ pub const kExprNodeMissing: ExprASTNodeType = 0;
 pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const MAX_CB_ERRORS: C2Rust_Unnamed_58 = 1;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CpInfo {
     pub win_info: C2Rust_Unnamed_50,
     pub buf_info: C2Rust_Unnamed_49,
@@ -385,14 +384,12 @@ pub struct CpInfo {
     pub save_view: garray_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct C2Rust_Unnamed_49 {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut CpBufInfo,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CpBufInfo {
     pub buf: *mut buf_T,
     pub save_b_p_ul: OptInt,
@@ -404,7 +401,6 @@ pub struct CpBufInfo {
     pub undo_info: CpUndoInfo,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CpUndoInfo {
     pub save_b_u_oldhead: *mut u_header_T,
     pub save_b_u_newhead: *mut u_header_T,
@@ -421,14 +417,12 @@ pub struct CpUndoInfo {
     pub save_b_u_line_colnr: colnr_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct C2Rust_Unnamed_50 {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut CpWinInfo,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CpWinInfo {
     pub win: *mut win_T,
     pub save_w_cursor: pos_T,

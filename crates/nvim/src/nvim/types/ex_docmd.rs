@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct save_state_T {
     pub save_msg_scroll: ::core::ffi::c_int,
     pub save_restart_edit: ::core::ffi::c_int,

@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ucmd_T {
     pub uc_name: *mut ::core::ffi::c_char,
     pub uc_argt: uint32_t,

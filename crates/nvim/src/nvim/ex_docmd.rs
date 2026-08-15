@@ -175,7 +175,6 @@ pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;
 /// An 'inccommand' preview callback, likewise.
 pub type ex_preview_func_T = Option<unsafe fn(*mut exarg_T, c_int, handle_T) -> c_int>;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CommandDefinition {
     pub cmd_name: *mut c_char,
     pub cmd_func: ex_func_T,
@@ -236,7 +235,6 @@ pub const VALID_PATH: C2Rust_Unnamed_53 = 1;
 pub type C2Rust_Unnamed_54 = c_uint;
 pub const DIALOG_MSG_SIZE: C2Rust_Unnamed_54 = 1000;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct dbg_stuff {
     pub trylevel: c_int,
     pub force_abort: c_int,
@@ -251,7 +249,6 @@ pub struct dbg_stuff {
     pub current_exception: *mut except_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct loop_cookie {
     pub lines_gap: *mut garray_T,
     pub current_line: c_int,
@@ -260,7 +257,6 @@ pub struct loop_cookie {
     pub cookie: *mut c_void,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct wcmd_T {
     pub line: *mut c_char,
     pub lnum: linenr_T,

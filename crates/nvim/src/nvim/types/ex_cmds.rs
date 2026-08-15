@@ -5,13 +5,11 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CmdParseInfo {
     pub cmdmod: cmdmod_T,
     pub magic: CmdParseInfo_magic,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CmdParseInfo_magic {
     pub file: bool,
     pub bar: bool,
@@ -29,7 +27,6 @@ pub type LineGetterFn = unsafe extern "C" fn(
 ) -> *mut ::core::ffi::c_char;
 pub type LineGetter = Option<LineGetterFn>;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct SubReplacementString {
     pub sub: *mut ::core::ffi::c_char,
     pub timestamp: Timestamp,

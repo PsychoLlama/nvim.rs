@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct mapblock {
     pub m_next: *mut mapblock_T,
     pub m_alt: *mut mapblock_T,

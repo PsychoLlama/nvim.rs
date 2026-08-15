@@ -155,7 +155,6 @@ pub const CCGD_MULTWIN: C2Rust_Unnamed_35 = 2;
 pub const CCGD_AW: C2Rust_Unnamed_35 = 1;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_36 = 2;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct SubResult {
     pub start: lpos_T,
     pub end: lpos_T,
@@ -170,7 +169,6 @@ pub struct PreviewLines {
     pub lines_needed: linenr_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct subflags_T {
     pub do_all: bool,
     pub do_ask: bool,
@@ -186,7 +184,6 @@ pub const kSubMatchCase: SubIgnoreType = 2;
 pub const kSubIgnoreCase: SubIgnoreType = 1;
 pub const kSubHonorOptions: SubIgnoreType = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LineData {
     pub start_col: ::core::ffi::c_int,
     pub start: lpos_T,

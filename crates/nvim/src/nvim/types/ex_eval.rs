@@ -6,13 +6,11 @@ use super::*;
 
 pub type cleanup_T = cleanup_stuff;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct cleanup_stuff {
     pub pending: ::core::ffi::c_int,
     pub exception: *mut except_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct cstack_T {
     pub cs_flags: [::core::ffi::c_int; 50],
     pub cs_pending: [::core::ffi::c_char; 50],
@@ -33,7 +31,6 @@ pub union cstack_T_cs_pend {
 }
 pub type eslist_T = eslist_elem;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct eslist_elem {
     pub saved_emsg_silent: ::core::ffi::c_int,
     pub next: *mut eslist_T,
@@ -41,7 +38,6 @@ pub struct eslist_elem {
 pub type except_T = vim_exception;
 pub type except_type_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct exception_state_S {
     pub estate_current_exception: *mut except_T,
     pub estate_did_throw: bool,
@@ -51,7 +47,6 @@ pub struct exception_state_S {
 }
 pub type exception_state_T = exception_state_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct msglist {
     pub next: *mut msglist_T,
     pub msg: *mut ::core::ffi::c_char,
@@ -62,7 +57,6 @@ pub struct msglist {
 }
 pub type msglist_T = msglist;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct vim_exception {
     pub type_0: except_type_T,
     pub value: *mut ::core::ffi::c_char,
