@@ -174,7 +174,6 @@ pub(crate) const DIFFIN_INIT: diffin_T = diffin_T {
 };
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct diffio_T {
     pub dio_orig: diffin_T,
     pub dio_new: diffin_T,
@@ -182,19 +181,16 @@ pub struct diffio_T {
     pub dio_internal: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct diffout_T {
     pub dout_fname: *mut ::core::ffi::c_char,
     pub dout_ga: garray_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct diffin_T {
     pub din_fname: *mut ::core::ffi::c_char,
     pub din_mmfile: mmfile_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct diffhunk_T {
     pub lnum_orig: linenr_T,
     pub count_orig: ::core::ffi::c_int,
@@ -207,7 +203,6 @@ pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
 pub const kShellOptFilter: ::core::ffi::c_int = 1;
 pub const OPT_LOCAL: ::core::ffi::c_int = 2;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct linemap_entry_T {
     pub byte_start: colnr_T,
     pub num_bytes: colnr_T,

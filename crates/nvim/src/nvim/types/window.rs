@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct switchwin_T {
     pub sw_curwin: *mut win_T,
     pub sw_curtab: *mut tabpage_T,
@@ -13,7 +12,6 @@ pub struct switchwin_T {
     pub sw_visual_active: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct win_execute_T {
     pub wp: *mut win_T,
     pub curpos: pos_T,

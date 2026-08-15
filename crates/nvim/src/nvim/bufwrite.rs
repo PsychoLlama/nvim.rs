@@ -202,7 +202,6 @@ pub(crate) unsafe fn conversion_failed(lnum: linenr_T) -> WriteError {
 }
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct bw_info {
     pub bw_fd: ::core::ffi::c_int,
     pub bw_buf: *mut ::core::ffi::c_char,

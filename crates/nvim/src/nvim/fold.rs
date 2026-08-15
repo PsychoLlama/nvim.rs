@@ -82,7 +82,6 @@ pub const DONE_FOLD: c_int = 2;
 pub type LevelGetter = Option<unsafe extern "C" fn(*mut fline_T) -> ()>;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct fold_T {
     /// First line of the fold; relative to the parent for a nested fold.
     pub fd_top: linenr_T,
@@ -100,7 +99,6 @@ pub struct fold_T {
 /// What the per-'foldmethod' level computations are handed, and what they
 /// answer in.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct fline_T {
     pub wp: *mut win_T,
     /// Current line number.

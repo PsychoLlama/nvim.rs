@@ -75,7 +75,6 @@ pub const kMTCharWise: MotionType = 0;
 /// One buffer line as the vertical scrolling walks it: the line, the filler
 /// lines drawn above it, and the screen lines it takes.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct lineoff_T {
     pub lnum: linenr_T,
     pub fill: c_int,

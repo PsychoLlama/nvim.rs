@@ -134,7 +134,6 @@ pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct C2Rust_Unnamed_20 {
     pub size: size_t,
     pub capacity: size_t,

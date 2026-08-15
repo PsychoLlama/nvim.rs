@@ -122,7 +122,6 @@ pub use write::u_write_undo;
 pub const UNDO_HASH_SIZE: c_int = 32;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct bufinfo_T {
     pub bi_buf: *mut buf_T,
     pub bi_fp: *mut FILE,

@@ -71,7 +71,6 @@ pub type WinStyle = ::core::ffi::c_uint;
 pub type bfa_values = ::core::ffi::c_uint;
 pub type bln_values = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct bufref_T {
     pub br_buf: *mut buf_T,
     pub br_fnum: ::core::ffi::c_int,
@@ -79,7 +78,6 @@ pub struct bufref_T {
 }
 pub type diff_T = diffblock_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct diffblock_S {
     pub df_next: *mut diff_T,
     pub df_lnum: [linenr_T; 8],
@@ -89,7 +87,6 @@ pub struct diffblock_S {
     pub df_changes: garray_T,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct diffline_S {
     pub changes: *mut diffline_change_T,
     pub num_changes: ::core::ffi::c_int,
@@ -98,7 +95,6 @@ pub struct diffline_S {
 }
 pub type diffline_T = diffline_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct diffline_change_S {
     pub dc_start: [colnr_T; 8],
     pub dc_end: [colnr_T; 8],
@@ -426,7 +422,6 @@ pub struct file_buffer_update_channels {
     pub items: *mut uint64_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct frame_S {
     pub fr_layout: ::core::ffi::c_char,
     pub fr_width: ::core::ffi::c_int,
@@ -463,14 +458,12 @@ pub struct lcs_chars_T {
     pub conceal: schar_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct llpos_T {
     pub lnum: linenr_T,
     pub col: colnr_T,
     pub len: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct match_T {
     pub rm: regmmatch_T,
     pub buf: *mut buf_T,
@@ -485,7 +478,6 @@ pub struct match_T {
     pub tm: proftime_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct matchitem {
     pub mit_next: *mut matchitem_T,
     pub mit_id: ::core::ffi::c_int,
@@ -566,7 +558,6 @@ pub struct synblock_T {
     pub b_syn_isk: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct tabpage_S {
     pub handle: handle_T,
     pub tp_next: *mut tabpage_T,
@@ -764,7 +755,6 @@ pub struct window_S {
     pub w_statuscol_click_defs_size: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct wininfo_S {
     pub wi_win: *mut win_T,
     pub wi_mark: fmark_T,
@@ -845,7 +835,6 @@ pub struct winopt_T {
     pub wo_script_ctx: [sctx_T; 51],
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct wline_T {
     pub wl_lnum: linenr_T,
     pub wl_size: uint16_t,

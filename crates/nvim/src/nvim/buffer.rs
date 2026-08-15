@@ -170,7 +170,6 @@ pub const BCO_ALWAYS: C2Rust_Unnamed_32 = 2;
 pub const ECMD_FORCEIT: C2Rust_Unnamed_27 = 8;
 pub const ECMD_ONE: C2Rust_Unnamed_28 = 1;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct bufmatch_T {
     pub buf: *mut buf_T,
     pub match_0: *mut ::core::ffi::c_char,
