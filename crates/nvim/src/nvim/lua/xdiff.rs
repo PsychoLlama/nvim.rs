@@ -24,7 +24,6 @@ pub type NluaXdiffMode = ::core::ffi::c_uint;
 pub const kNluaXdiffModeOnHunkCB: NluaXdiffMode = 1;
 pub const kNluaXdiffModeUnified: NluaXdiffMode = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct hunkpriv_t {
     pub lstate: *mut lua_State,
     pub err: *mut Error,

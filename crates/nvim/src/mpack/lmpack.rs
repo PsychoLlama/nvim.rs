@@ -86,7 +86,6 @@ pub struct Unpacker {
 }
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Packer {
     pub L: *mut lua_State,
     pub parser: *mut mpack_parser_t,
@@ -104,7 +103,6 @@ pub struct Packer {
 }
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Session {
     pub L: *mut lua_State,
     pub reg: c_int,
@@ -116,7 +114,6 @@ pub struct Session {
 
 /// The message [`session::receive`] is part way through.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Unpacked {
     pub type_0: c_int,
     pub msg: mpack_rpc_message_t,

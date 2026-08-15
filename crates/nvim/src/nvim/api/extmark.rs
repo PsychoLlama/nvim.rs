@@ -83,7 +83,6 @@ pub const kExtmarkVirtText: ExtmarkType = 8;
 pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct C2Rust_Unnamed_26 {
     pub name: *const ::core::ffi::c_char,
     pub source: *mut LuaRef,

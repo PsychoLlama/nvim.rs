@@ -104,7 +104,6 @@ const NIL: Object = Object {
 /// It owns the arena the arguments were decoded into: the handler reads them
 /// and the arena is released once the response has been packed.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct RequestEvent {
     pub type_0: MessageType,
     pub channel: *mut Channel,

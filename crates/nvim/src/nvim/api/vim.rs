@@ -164,7 +164,6 @@ pub const REPTERM_FROM_PART: C2Rust_Unnamed_36 = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct RuntimeCookie {
     pub rv: ArrayBuilder,
     pub arena: *mut Arena,

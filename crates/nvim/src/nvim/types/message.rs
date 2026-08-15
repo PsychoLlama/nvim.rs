@@ -12,7 +12,6 @@ pub struct HlMessageChunk {
 }
 pub type MessageData = msg_data;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct msg_data {
     pub source: String_0,
     pub percent: Integer,

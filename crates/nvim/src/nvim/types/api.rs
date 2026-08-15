@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct AdditionalDataBuilder {
     pub size: size_t,
     pub capacity: size_t,
@@ -27,7 +26,6 @@ pub struct Array {
     pub items: *mut Object,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ArrayBuilder {
     pub size: size_t,
     pub capacity: size_t,
@@ -82,7 +80,6 @@ pub struct HlMessage {
 }
 pub type Integer = int64_t;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct KeySetLink {
     pub str: *mut ::core::ffi::c_char,
     pub ptr_off: size_t,
@@ -112,7 +109,6 @@ pub const kObjectTypeBuffer: ObjectType = 8;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeTabpage: ObjectType = 10;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct OptKeySet {
     pub is_set_: OptionalKeys,
 }
