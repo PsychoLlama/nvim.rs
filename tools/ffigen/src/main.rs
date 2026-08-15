@@ -790,6 +790,26 @@ impl<'w> Emitter<'w> {
                 }
                 Some(CTy::Ptr(Box::new(inner), false))
             }
+            syn::Type::Reference(r) => {
+                // `&T` / `&mut T` is ABI-identical to `*const T` / `*mut T`,
+                // so it renders exactly like the Ptr arm above. Unsized
+                // referents are fat pointers and have no C spelling: `[T]`,
+                // `dyn Trait` and bare `str` all fall through to None (the
+                // first two have no arm; `str` is rejected here so it cannot
+                // reach the Path arm and be emitted as an opaque `str *`).
+                if let syn::Type::Path(tp) = &*r.elem {
+                    if tp.path.is_ident("str") {
+                        return None;
+                    }
+                }
+                let mut inner = self.cty(file, &r.elem)?;
+                if r.mutability.is_none() {
+                    if let CTy::Named { konst, .. } = &mut inner {
+                        *konst = true;
+                    }
+                }
+                Some(CTy::Ptr(Box::new(inner), false))
+            }
             syn::Type::Array(a) => {
                 let len = eval_const(self.world, file, &a.len, 0)? as u128;
                 Some(CTy::Arr(Box::new(self.cty(file, &a.elem)?), len))
@@ -1494,16 +1514,32 @@ fn main() {
         skipped_statics.len()
     );
     if !const_conflicts.is_empty() {
+        // `world.consts` is a HashMap, so this list arrives in hash order.
+        const_conflicts.sort();
         eprintln!(
             "ffigen: conflicting consts dropped: {}",
             const_conflicts.join(" ")
         );
     }
+    // A skipped export is not cosmetic: the symbol is exported by the binary
+    // but absent from the chunk, so the unit specs fail later with an opaque
+    // "unknown symbol" from LuaJIT rather than here, where the cause is known.
+    // Sorted so the warning is stable to diff across regenerations.
     if !skipped_fns.is_empty() {
-        eprintln!("ffigen: skipped fns: {}", skipped_fns.join(" "));
+        skipped_fns.sort();
+        eprintln!(
+            "ffigen: WARNING: {} exported fn(s) have no C rendering and are missing from the chunk (unit specs will not see them): {}",
+            skipped_fns.len(),
+            skipped_fns.join(" ")
+        );
     }
     if !skipped_statics.is_empty() {
-        eprintln!("ffigen: skipped statics: {}", skipped_statics.join(" "));
+        skipped_statics.sort();
+        eprintln!(
+            "ffigen: WARNING: {} exported static(s) have no C rendering and are missing from the chunk (unit specs will not see them): {}",
+            skipped_statics.len(),
+            skipped_statics.join(" ")
+        );
     }
     if !emitter.unknown.is_empty() {
         eprintln!(
