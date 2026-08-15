@@ -82,7 +82,6 @@ pub const VAR_TYPE_BLOB: VarTypeCode = 10;
 pub const VAR_SHORT_LEN: ::core::ffi::c_uint = 20;
 pub type blob_T = blobvar_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct blobvar_S {
     pub bv_ga: garray_T,
     pub bv_refcount: ::core::ffi::c_int,
@@ -104,7 +103,6 @@ pub struct dictvar_S {
     pub lua_table_ref: LuaRef,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct funccall_S {
     pub fc_func: *mut ufunc_T,
     pub fc_linenr: ::core::ffi::c_int,
@@ -136,7 +134,6 @@ pub struct funccall_S_fc_fixvar {
 }
 pub type funccall_T = funccall_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ht_stack_S {
     pub ht: *mut hashtab_T,
     pub prev: *mut ht_stack_S,
@@ -144,7 +141,6 @@ pub struct ht_stack_S {
 pub type ht_stack_T = ht_stack_S;
 pub type list_T = listvar_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct list_stack_S {
     pub list: *mut list_T,
     pub prev: *mut list_stack_S,

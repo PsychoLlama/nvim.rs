@@ -162,7 +162,6 @@ pub struct VimVarItem {
 
 /// One row of the `v:` table.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct VimVar {
     pub vv_name: *mut c_char,
     pub vv_di: VimVarItem,

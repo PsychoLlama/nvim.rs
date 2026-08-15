@@ -18,7 +18,6 @@ use super::*;
 
 /// One call recorded by `:defer`, to be made when the function returns.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct defer_T {
     pub dr_name: *mut c_char,
     pub dr_argvars: [typval_T; MAX_FUNC_ARGS as usize + 1],

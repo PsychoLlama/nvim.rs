@@ -101,13 +101,11 @@ pub const kMPConvPairs: MPConvStackValType = 2;
 pub const kMPConvList: MPConvStackValType = 1;
 pub const kMPConvDict: MPConvStackValType = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Join {
     pub s: String_0,
     pub tofree: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct sortinfo_T {
     pub item_compare_ic: ::core::ffi::c_int,
     pub item_compare_lc: bool,
@@ -120,7 +118,6 @@ pub struct sortinfo_T {
     pub item_compare_func_err: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ListSortItem {
     pub item: *mut listitem_T,
     pub idx: ::core::ffi::c_int,

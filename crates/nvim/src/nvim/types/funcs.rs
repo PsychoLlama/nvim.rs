@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct EvalFuncDef {
     pub name: *mut ::core::ffi::c_char,
     pub min_argc: uint8_t,

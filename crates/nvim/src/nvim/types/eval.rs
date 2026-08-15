@@ -117,7 +117,6 @@ pub struct evalarg_T {
 }
 pub type exprtype_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct lval_T {
     pub ll_name: *const ::core::ffi::c_char,
     pub ll_name_len: size_t,
@@ -135,13 +134,11 @@ pub struct lval_T {
     pub ll_blob: *mut blob_T,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct save_v_event_T {
     pub sve_did_save: bool,
     pub sve_hashtab: hashtab_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct timer_T {
     pub tw: TimeWatcher,
     pub timer_id: ::core::ffi::c_int,
