@@ -43,7 +43,7 @@
 {"symbol":"get_sts_value","kind":"fn","file":"crates/nvim/src/nvim/indent.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"getcell","kind":"fn","file":"crates/nvim/src/nvim/vterm/screen.rs","class":"test","refs":["unit-fixtures.so"]}
 {"symbol":"indent_size_ts","kind":"fn","file":"crates/nvim/src/nvim/indent.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"intersect_mov_test","kind":"fn","file":"crates/nvim/src/nvim/marktree.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"intersect_mov_test","kind":"fn","file":"crates/nvim/src/nvim/marktree/pair.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"invocation_path_tail","kind":"fn","file":"crates/nvim/src/nvim/path/names.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"json_decode_string","kind":"fn","file":"crates/nvim/src/nvim/eval/decode/json.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"kTVCstring","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
