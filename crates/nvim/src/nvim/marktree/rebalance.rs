@@ -52,9 +52,17 @@ use crate::src::nvim::marktree::pair::{intersect_node, pseudo_index_for_id, unin
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::types::{Intersection, MTKey, MTPos, MarkTree, uint64_t};
 
-/// The branch factor, as the index type the rest of this file counts in. A
-/// node splits at [`MAX_KEYS`] keys and each half keeps `T - 1` of them.
-const T: usize = MT_BRANCH_FACTOR as usize;
+/// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
+/// the same reason node.rs nests its own sizes.
+mod sizes {
+    use super::MT_BRANCH_FACTOR;
+
+    /// The branch factor, as the index type the rest of this file counts in. A
+    /// node splits at [`MAX_KEYS`](super::MAX_KEYS) keys and each half keeps
+    /// `T - 1` of them.
+    pub const T: usize = MT_BRANCH_FACTOR as usize;
+}
+use sizes::T;
 
 /// Record that `x` now holds the key at `i`, so a lookup by id finds it.
 fn rekey(b: &mut MarkTree, x: Node, i: usize) {

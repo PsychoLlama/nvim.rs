@@ -53,10 +53,7 @@ use core::ptr;
 use crate::src::nvim::api::private::helpers::ga_take_string;
 use crate::src::nvim::garray::{ga_concat, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::map::{
-    map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, map_put_ref_uint64_t_MTDamagePair,
-    mh_get_ptr_t,
-};
+use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, mh_get_ptr_t};
 use crate::src::nvim::marktree::intersect::*;
 use crate::src::nvim::marktree::key::*;
 use crate::src::nvim::marktree::meta::*;
@@ -65,12 +62,12 @@ pub use crate::src::nvim::marktree::{
     check::*, inspect::*, iter::*, pair::*, rebalance::*, splice::*,
 };
 use crate::src::nvim::memory::{xfree, xmemdup};
-use crate::src::nvim::os::libc::{memcmp, snprintf};
+use crate::src::nvim::os::libc::snprintf;
 use crate::src::nvim::types::{
-    DecorHighlightInline, DecorInlineData, MTDamage, MTDamagePair, MTKey, MTNode, MTPair, MTPos,
-    Map_ptr_t_ptr_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash, MarkTree,
-    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_2, MetaFilter, Set_ptr_t, Set_uint64_t,
-    String_0, colnr_T, garray_T, int32_t, ptr_t, size_t, uint16_t, uint32_t, uint64_t,
+    DecorHighlightInline, DecorInlineData, MTKey, MTNode, MTPair, MTPos, Map_ptr_t_ptr_t,
+    Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter,
+    MarkTreeIter_s as C2Rust_Unnamed_2, MetaFilter, Set_ptr_t, Set_uint64_t, String_0, garray_T,
+    int32_t, ptr_t, size_t, uint16_t, uint32_t, uint64_t,
 };
 
 /// What a splice recorded about pairs whose halves crossed while it ran.

@@ -1,7 +1,4 @@
-// Not graduated yet: the parent module denies `unsafe_op_in_unsafe_fn` and the
-// level is inherited, so these transpiled bodies opt back out until the
-// rewrite that narrows them. Remove this when the deny goes on.
-#![allow(unsafe_op_in_unsafe_fn)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 //! Adjusting every mark for a buffer edit.
 //!
@@ -23,632 +20,544 @@
 //! node whose span contains the whole edit before it starts rewriting anything.
 //!
 //! Collapsing a range can leave two marks in the wrong order, since the
-//! relative encoding cannot express a negative offset. `swap_keys` restores the
-//! order and `check_damage` records the pairs whose ends crossed, so
-//! `marktree_restore_pair` can put them back once the walk is done.
+//! relative encoding cannot express a negative offset. [`swap_keys`] restores
+//! the order and [`check_damage`] records the pairs whose ends crossed, so
+//! [`marktree_restore_pair`] can put them back once the walk is done.
+//!
+//! # How this file reaches the tree
+//!
+//! The walk is driven by a `MarkTreeIter`, which the sibling module still
+//! addresses by raw pointer, so the calls into it are wrapped once each in the
+//! small shims below rather than at every site. Two facts they all rest on:
+//! the iterators here are locals this file positioned itself, and a positioned
+//! iterator (`x` non-null — the loops all test that) names a live node of the
+//! tree it was positioned in. Those shims retire when `iter.rs` graduates.
 
-use super::*;
+use core::ffi::c_int;
+use core::ptr;
 
-pub unsafe extern "C" fn check_damage(
-    mut _b: *mut MarkTree,
-    mut damage: *mut MTDamageMap,
-    mut itr1: *mut MarkTreeIter,
-    mut itr2: *mut MarkTreeIter,
+use crate::src::nvim::map::map_put_ref_uint64_t_MTDamagePair;
+use crate::src::nvim::marktree::iter::{
+    marktree_itr_current, marktree_itr_get_ext, marktree_itr_next, marktree_itr_next_skip,
+    marktree_itr_pos, marktree_itr_prev, marktree_itr_set_node,
+};
+use crate::src::nvim::marktree::key::{
+    MARKTREE_END_FLAG, mt_end, mt_lookup_key_side, mt_paired, mt_right, pos_leq, relative,
+    unrelative,
+};
+use crate::src::nvim::marktree::meta::{meta_apply_delta, meta_describe_key};
+use crate::src::nvim::marktree::node::{Node, refkey};
+use crate::src::nvim::marktree::pair::{marktree_intersect_pair, marktree_restore_pair};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::types::{
+    MTDamage, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, Set_uint64_t, colnr_T, int32_t,
+    uint64_t,
+};
+
+use super::{MAPHASH_INIT, MTDamageMap, marktree_del_itr, marktree_lookup, marktree_put_key};
+
+/// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
+/// the same reason node.rs nests its own sizes.
+mod sizes {
+    /// The deepest the tree can get: the C's `MT_MAX_DEPTH`, which is also the
+    /// length of `MarkTreeIter::s` and so the range `MarkTreeIter::lvl`
+    /// indexes.
+    pub const MT_MAX_DEPTH: usize = 20;
+}
+use sizes::MT_MAX_DEPTH;
+
+/// An empty damage map, owning nothing — klib's `MAP_INIT`.
+const DAMAGE_INIT: MTDamageMap = MTDamageMap {
+    set: Set_uint64_t {
+        h: MAPHASH_INIT,
+        keys: ptr::null_mut(),
+    },
+    values: ptr::null_mut(),
+};
+
+// -- the iterator, which iter.rs still addresses by raw pointer --------------
+
+/// The key an iterator is parked on, still relative to its node.
+///
+/// # Safety
+/// `itr` must be positioned — `x` non-null — in a live tree.
+#[inline]
+unsafe fn rawkey(itr: &MarkTreeIter) -> MTKey {
+    // SAFETY: the caller promises `itr` is positioned in a live tree.
+    unsafe { Node::new(itr.x) }.key(itr.i as usize)
+}
+
+/// The two iterators are parked on the very same key.
+///
+/// This is `iter.rs`'s `itr_eq`, stated over the node and the index rather
+/// than over the key address the two compute: the addresses are equal exactly
+/// when both parts are.
+fn same_key(a: &MarkTreeIter, b: &MarkTreeIter) -> bool {
+    a.x == b.x && a.i == b.i
+}
+
+/// [`marktree_itr_get_ext`] with the two arguments this file never varies:
+/// right gravity, and no metadata filter.
+fn itr_get_ext(
+    b: &mut MarkTree,
+    p: MTPos,
+    itr: &mut MarkTreeIter,
+    last: bool,
+    oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
 ) {
-    let start_id: uint64_t = mt_lookup_key_side((*(*itr1).x).key[(*itr1).i as usize], false);
-    let mut p: *mut MTDamagePair = map_put_ref_uint64_t_MTDamagePair(
-        damage,
-        start_id,
-        ::core::ptr::null_mut::<*mut uint64_t>(),
-        ::core::ptr::null_mut::<bool>(),
-    );
-    let mut me: *mut MTDamage =
-        if mt_end((*(*itr1).x).key[(*itr1).i as usize]) as ::core::ffi::c_int != 0 {
-            &raw mut (*p).end
-        } else {
-            &raw mut (*p).start
-        };
-    debug_assert!((*me).new.is_null(), "me->new == NULL");
+    let oldbase = oldbase.map_or(ptr::null_mut(), |o| o.as_mut_ptr());
+    // SAFETY: `b` is a live tree and this is what positions `itr` in it;
+    // `oldbase`, where given, is a live array of `MT_MAX_DEPTH` positions.
+    unsafe { marktree_itr_get_ext(b, p, itr, last, true, oldbase, ptr::null()) };
+}
+
+/// Step to the next key, optionally skipping over whole subtrees and recording
+/// where each one used to be.
+fn itr_next_skip(
+    b: &mut MarkTree,
+    itr: &mut MarkTreeIter,
+    skip: bool,
+    oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
+) {
+    let oldbase = oldbase.map_or(ptr::null_mut(), |o| o.as_mut_ptr());
+    // SAFETY: `b` is a live tree and `itr` is positioned in it; `oldbase`,
+    // where given, is a live array of `MT_MAX_DEPTH` positions.
+    unsafe { marktree_itr_next_skip(b, itr, skip, false, oldbase, ptr::null()) };
+}
+
+/// Step to the next key.
+fn itr_next(b: &mut MarkTree, itr: &mut MarkTreeIter) {
+    // SAFETY: `b` is a live tree and `itr` is positioned in it.
+    unsafe { marktree_itr_next(b, itr) };
+}
+
+/// Park `itr` on key `i` of node `n`, which the damage map recorded earlier in
+/// this splice.
+fn itr_set_node(b: &mut MarkTree, itr: &mut MarkTreeIter, n: *mut MTNode, i: c_int) {
+    // SAFETY: `b` is a live tree and `n` one of its nodes: the damage map only
+    // ever holds nodes this splice found through `b`, and nothing between the
+    // two points frees a node.
+    unsafe { marktree_itr_set_node(b, itr, n, i) };
+}
+
+/// Find the mark `id` and park `itr` on it, or leave `itr.x` null.
+fn lookup(b: &mut MarkTree, id: uint64_t, itr: &mut MarkTreeIter) {
+    // SAFETY: `b` is a live tree; a lookup only writes the iterator it is
+    // handed, and answers a null `x` when there is no such mark.
+    unsafe { marktree_lookup(b, id, Some(itr)) };
+}
+
+/// Record — or, with `delete`, retract — the nodes the range `id` covers.
+fn intersect_pair(
+    b: &mut MarkTree,
+    id: uint64_t,
+    itr: &mut MarkTreeIter,
+    end_itr: &MarkTreeIter,
+    delete: bool,
+) {
+    // SAFETY: `b` is a live tree and both iterators are positioned in it.
+    unsafe { marktree_intersect_pair(b, id, itr, end_itr, delete) };
+}
+
+// -- the damage map ----------------------------------------------------------
+
+/// Record that the key `itr1` is on has swapped places with the one `itr2` is
+/// on, so that the pair it belongs to can be re-intersected once the walk is
+/// done. `key` is the key `itr1` is parked on.
+fn check_damage(damage: &mut MTDamageMap, key: MTKey, itr1: &MarkTreeIter, itr2: &MarkTreeIter) {
+    let start_id = mt_lookup_key_side(key, false);
+    let (init, fresh) = (ptr::null_mut(), ptr::null_mut());
+    // SAFETY: `damage` is a live map; the two nulls decline its optional
+    // "initial value" and "was it new" out-parameters, and `map_put_ref`
+    // answers a live slot of the map it was handed.
+    let p = unsafe { &mut *map_put_ref_uint64_t_MTDamagePair(damage, start_id, init, fresh) };
+    let me = if mt_end(key) {
+        &mut p.end
+    } else {
+        &mut p.start
+    };
+    debug_assert!(me.new.is_null(), "me->new == NULL");
     *me = MTDamage {
-        old: (*itr1).x,
-        new: (*itr2).x,
-        old_i: (*itr1).i,
-        new_i: (*itr2).i,
+        old: itr1.x,
+        new: itr2.x,
+        old_i: itr1.i,
+        new_i: itr2.i,
     };
 }
 
-pub unsafe extern "C" fn swap_keys(
-    mut b: *mut MarkTree,
-    mut itr1: *mut MarkTreeIter,
-    mut itr2: *mut MarkTreeIter,
-    mut damage: *mut MTDamageMap,
-) {
-    if (*(*itr1).x).level as ::core::ffi::c_int != 0 || (*itr1).x != (*itr2).x {
-        if mt_paired((*(*itr1).x).key[(*itr1).i as usize]) {
-            check_damage(b, damage, itr1, itr2);
+/// `map_destroy`: give back the map's three buffers and leave it empty.
+fn destroy_damage(damage: &mut MTDamageMap) {
+    let (keys, hash) = (damage.set.keys.cast(), damage.set.h.hash.cast());
+    let values = damage.values.cast();
+    // SAFETY: the key array is this map's own, and is `xfree`-able once.
+    unsafe { xfree(keys) };
+    // SAFETY: as above, for the hash table behind it.
+    unsafe { xfree(hash) };
+    // SAFETY: as above, for the values.
+    unsafe { xfree(values) };
+    *damage = DAMAGE_INIT;
+}
+
+// -- the splice itself -------------------------------------------------------
+
+/// Swap the keys two iterators are parked on, each keeping its own position.
+///
+/// The meta counts move with the keys, up to the two nodes' common ancestor,
+/// and any pair whose halves crossed is recorded in `damage`.
+fn swap_keys(b: &mut MarkTree, itr1: &MarkTreeIter, itr2: &MarkTreeIter, damage: &mut MTDamageMap) {
+    // SAFETY: both iterators are positioned in `b`.
+    let (x1, x2) = unsafe { (Node::new(itr1.x), Node::new(itr2.x)) };
+    let (i1, i2) = (itr1.i as usize, itr2.i as usize);
+    let (key1, key2) = (x1.key(i1), x2.key(i2));
+
+    if !x1.is_leaf() || x1 != x2 {
+        if mt_paired(key1) {
+            check_damage(damage, key1, itr1, itr2);
         }
-        if mt_paired((*(*itr2).x).key[(*itr2).i as usize]) {
-            check_damage(b, damage, itr2, itr1);
+        if mt_paired(key2) {
+            check_damage(damage, key2, itr2, itr1);
         }
     }
-    if (*itr1).x != (*itr2).x {
-        let mut meta_inc_1 = meta_describe_key((*(*itr1).x).key[(*itr1).i as usize]);
-        let mut meta_inc_2 = meta_describe_key((*(*itr2).x).key[(*itr2).i as usize]);
-        if memcmp(
-            &raw mut meta_inc_1 as *mut uint32_t as *const ::core::ffi::c_void,
-            &raw mut meta_inc_2 as *mut uint32_t as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<[uint32_t; 5]>(),
-        ) != 0 as ::core::ffi::c_int
-        {
-            let mut x1: *mut MTNode = (*itr1).x;
-            let mut x2: *mut MTNode = (*itr2).x;
-            while x1 != x2 {
-                if (*x1).level as ::core::ffi::c_int <= (*x2).level as ::core::ffi::c_int {
-                    meta_apply_delta(
-                        &mut (*inner((*x1).parent)).i_meta[(*x1).p_idx as usize],
-                        &meta_inc_2,
-                        &meta_inc_1,
-                    );
-                    x1 = (*x1).parent;
+
+    if x1 != x2 {
+        let meta_inc_1 = meta_describe_key(key1);
+        let meta_inc_2 = meta_describe_key(key2);
+        if meta_inc_1 != meta_inc_2 {
+            let (mut a, mut c) = (x1, x2);
+            while a != c {
+                if a.level() <= c.level() {
+                    // As the root uniquely has the highest level, `a` is not it.
+                    let p = a.parent().expect("a node below the root has a parent");
+                    let i = a.parent_index();
+                    p.update_child_meta(i, |m| meta_apply_delta(m, &meta_inc_2, &meta_inc_1));
+                    a = p;
                 }
-                if ((*x2).level as ::core::ffi::c_int) < (*x1).level as ::core::ffi::c_int {
-                    meta_apply_delta(
-                        &mut (*inner((*x2).parent)).i_meta[(*x2).p_idx as usize],
-                        &meta_inc_1,
-                        &meta_inc_2,
-                    );
-                    x2 = (*x2).parent;
+                if c.level() < a.level() {
+                    let p = c.parent().expect("a node below the root has a parent");
+                    let i = c.parent_index();
+                    p.update_child_meta(i, |m| meta_apply_delta(m, &meta_inc_1, &meta_inc_2));
+                    c = p;
                 }
             }
         }
     }
-    let mut key1: MTKey = (*(*itr1).x).key[(*itr1).i as usize];
-    let mut key2: MTKey = (*(*itr2).x).key[(*itr2).i as usize];
-    (*(*itr1).x).key[(*itr1).i as usize] = key2;
-    (*(*itr1).x).key[(*itr1).i as usize].pos = key1.pos;
-    (*(*itr2).x).key[(*itr2).i as usize] = key1;
-    (*(*itr2).x).key[(*itr2).i as usize].pos = key2.pos;
-    refkey(b, (*itr1).x, (*itr1).i);
-    refkey(b, (*itr2).x, (*itr2).i);
+
+    x1.set_key(
+        i1,
+        MTKey {
+            pos: key1.pos,
+            ..key2
+        },
+    );
+    x2.set_key(
+        i2,
+        MTKey {
+            pos: key2.pos,
+            ..key1
+        },
+    );
+    // SAFETY: `b` is a live tree and `x1` one of its nodes, now holding the
+    // key at `i1`.
+    unsafe { refkey(b, x1.as_ptr(), i1 as c_int) };
+    // SAFETY: as above, for `x2`.
+    unsafe { refkey(b, x2.as_ptr(), i2 as c_int) };
 }
 
+/// Apply a text change to every mark at or after `start_line`, `start_col`,
+/// and answer whether any of them moved.
+///
+/// # Safety
+/// `b` must be a live tree.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn marktree_splice(
-    mut b: *mut MarkTree,
-    mut start_line: int32_t,
-    mut start_col: ::core::ffi::c_int,
-    mut old_extent_line: ::core::ffi::c_int,
-    mut old_extent_col: ::core::ffi::c_int,
-    mut new_extent_line: ::core::ffi::c_int,
-    mut new_extent_col: ::core::ffi::c_int,
+    b: &mut MarkTree,
+    start_line: int32_t,
+    start_col: c_int,
+    old_extent_line: c_int,
+    old_extent_col: c_int,
+    new_extent_line: c_int,
+    new_extent_col: c_int,
 ) -> bool {
-    let mut start: MTPos = MTPos {
+    let start = MTPos {
         row: start_line,
-        col: start_col as int32_t,
+        col: start_col,
     };
-    let mut old_extent: MTPos = MTPos {
-        row: old_extent_line as int32_t,
-        col: old_extent_col as int32_t,
+    let mut old_extent = MTPos {
+        row: old_extent_line,
+        col: old_extent_col,
     };
-    let mut new_extent: MTPos = MTPos {
-        row: new_extent_line as int32_t,
-        col: new_extent_col as int32_t,
+    let mut new_extent = MTPos {
+        row: new_extent_line,
+        col: new_extent_col,
     };
-    let mut may_delete: bool = old_extent.row != 0 as int32_t || old_extent.col != 0 as int32_t;
-    let mut same_line: bool = old_extent.row == 0 as int32_t && new_extent.row == 0 as int32_t;
+
+    let mut may_delete = old_extent.row != 0 || old_extent.col != 0;
+    let same_line = old_extent.row == 0 && new_extent.row == 0;
     unrelative(start, &mut old_extent);
     unrelative(start, &mut new_extent);
-    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
-        pos: MTPos {
-            row: 0 as int32_t,
-            col: 0,
-        },
-        lvl: 0,
-        x: ::core::ptr::null_mut::<MTNode>(),
-        i: 0,
-        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
-        intersect_idx: 0,
-        intersect_pos: MTPos { row: 0, col: 0 },
-        intersect_pos_x: MTPos { row: 0, col: 0 },
-    }];
-    let mut enditr: [MarkTreeIter; 1] = [MarkTreeIter {
-        pos: MTPos {
-            row: 0 as int32_t,
-            col: 0,
-        },
-        lvl: 0,
-        x: ::core::ptr::null_mut::<MTNode>(),
-        i: 0,
-        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
-        intersect_idx: 0,
-        intersect_pos: MTPos { row: 0, col: 0 },
-        intersect_pos_x: MTPos { row: 0, col: 0 },
-    }];
-    let mut oldbase: [MTPos; 20] = [
-        MTPos {
-            row: 0 as int32_t,
-            col: 0,
-        },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-        MTPos { row: 0, col: 0 },
-    ];
-    marktree_itr_get_ext(
-        b,
-        start,
-        &raw mut itr as *mut MarkTreeIter,
-        false,
-        true,
-        &raw mut oldbase as *mut MTPos,
-        ::core::ptr::null::<uint32_t>(),
-    );
-    if (*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
+    let mut itr = MarkTreeIter::default();
+    let mut enditr = MarkTreeIter::default();
+    let mut oldbase = [MTPos::default(); MT_MAX_DEPTH];
+
+    itr_get_ext(b, start, &mut itr, false, Some(&mut oldbase));
+    if itr.x.is_null() {
+        // den e FÄRDIG
         return false;
     }
-    let mut delta: MTPos = MTPos {
+    let delta = MTPos {
         row: new_extent.row - old_extent.row,
         col: new_extent.col - old_extent.col,
     };
+
     if may_delete {
-        let mut ipos: MTPos = marktree_itr_pos(&raw mut itr as *mut MarkTreeIter);
+        // SAFETY: `itr` was just positioned in `b`, and is not past the end.
+        let (ipos, key) = unsafe { (marktree_itr_pos(&mut itr), rawkey(&itr)) };
         if !pos_leq(old_extent, ipos)
-            || old_extent.row == ipos.row
-                && old_extent.col == ipos.col
-                && !mt_right(
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize],
-                )
+            || (old_extent.row == ipos.row && old_extent.col == ipos.col && !mt_right(key))
         {
-            marktree_itr_get_ext(
-                b,
-                old_extent,
-                &raw mut enditr as *mut MarkTreeIter,
-                true,
-                true,
-                ::core::ptr::null_mut::<MTPos>(),
-                ::core::ptr::null::<uint32_t>(),
-            );
-            debug_assert!(
-                !(*(&raw mut enditr as *mut MarkTreeIter)).x.is_null(),
-                "enditr->x"
-            );
+            itr_get_ext(b, old_extent, &mut enditr, true, None);
+            debug_assert!(!enditr.x.is_null(), "enditr->x");
+            // "assert" (itr <= enditr)
         } else {
             may_delete = false;
         }
     }
-    let mut past_right: bool = false;
-    let mut moved: bool = false;
-    let mut damage: MTDamageMap = Map_uint64_t_MTDamagePair {
-        set: Set_uint64_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<uint64_t>(),
-        },
-        values: ::core::ptr::null_mut::<MTDamagePair>(),
-    };
+
+    let mut past_right = false;
+    let mut moved = false;
+    let mut damage = DAMAGE_INIT;
+
+    // Follow the general strategy of messing things up and fixing them later.
+    // `oldbase` carries what is needed to work out a child's old position.
     if may_delete {
-        's_214: while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() && !past_right {
-            let mut loc_start: MTPos = start;
-            let mut loc_old: MTPos = old_extent;
-            relative((*(&mut itr as *mut MarkTreeIter)).pos, &mut loc_start);
-            relative(
-                oldbase[(*(&mut itr as *mut MarkTreeIter)).lvl as usize],
-                &mut loc_old,
-            );
+        'collapse: while !itr.x.is_null() && !past_right {
+            let mut loc_start = start;
+            let mut loc_old = old_extent;
+            relative(itr.pos, &mut loc_start);
+            relative(oldbase[itr.lvl as usize], &mut loc_old);
+
             loop {
-                if !pos_leq(
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                        .pos,
-                    loc_old,
-                ) {
-                    break 's_214;
+                // SAFETY: the loop guard checked `itr` is still positioned.
+                let x = unsafe { Node::new(itr.x) };
+                let i = itr.i as usize;
+                // NB: strictly should be less than the right gravity of
+                // loc_old, but the iterator comparison below will already
+                // break on that.
+                if !pos_leq(x.key(i).pos, loc_old) {
+                    break 'collapse;
                 }
-                if mt_right(
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize],
-                ) {
-                    while !itr_eq(
-                        &raw mut itr as *mut MarkTreeIter,
-                        &raw mut enditr as *mut MarkTreeIter,
-                    ) && mt_right(
-                        (*(*(&raw mut enditr as *mut MarkTreeIter)).x).key
-                            [(*(&raw mut enditr as *mut MarkTreeIter)).i as usize],
-                    ) as ::core::ffi::c_int
-                        != 0
-                    {
-                        marktree_itr_prev(b, &raw mut enditr as *mut MarkTreeIter);
+
+                if mt_right(x.key(i)) {
+                    // SAFETY: `may_delete` means the lookup above positioned
+                    // `enditr` in `b`; stepping back leaves it positioned.
+                    while !same_key(&itr, &enditr) && mt_right(unsafe { rawkey(&enditr) }) {
+                        // SAFETY: as above.
+                        unsafe { marktree_itr_prev(b, &mut enditr) };
                     }
-                    if !mt_right(
-                        (*(*(&raw mut enditr as *mut MarkTreeIter)).x).key
-                            [(*(&raw mut enditr as *mut MarkTreeIter)).i as usize],
-                    ) {
-                        swap_keys(
-                            b,
-                            &raw mut itr as *mut MarkTreeIter,
-                            &raw mut enditr as *mut MarkTreeIter,
-                            &raw mut damage,
-                        );
+                    // SAFETY: as above.
+                    if !mt_right(unsafe { rawkey(&enditr) }) {
+                        swap_keys(b, &itr, &enditr, &mut damage);
                     } else {
                         past_right = true;
-                        break 's_214;
+                        break 'collapse;
                     }
                 }
-                if itr_eq(
-                    &raw mut itr as *mut MarkTreeIter,
-                    &raw mut enditr as *mut MarkTreeIter,
-                ) {
+
+                if same_key(&itr, &enditr) {
+                    // Actually, will be past_right after this key.
                     past_right = true;
                 }
+
                 moved = true;
-                if (*(*(&raw mut itr as *mut MarkTreeIter)).x).level != 0 {
-                    oldbase[((*(&raw mut itr as *mut MarkTreeIter)).lvl + 1 as ::core::ffi::c_int)
-                        as usize] = (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                        .pos;
-                    unrelative(
-                        oldbase[(*(&mut itr as *mut MarkTreeIter)).lvl as usize],
-                        &mut oldbase[((*(&mut itr as *mut MarkTreeIter)).lvl + 1) as usize],
-                    );
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                        .pos = loc_start;
-                    marktree_itr_next_skip(
-                        b,
-                        &raw mut itr as *mut MarkTreeIter,
-                        false,
-                        false,
-                        &raw mut oldbase as *mut MTPos,
-                        ::core::ptr::null::<uint32_t>(),
-                    );
+                if !x.is_leaf() {
+                    let lvl = itr.lvl as usize;
+                    oldbase[lvl + 1] = x.key(i).pos;
+                    let base = oldbase[lvl];
+                    unrelative(base, &mut oldbase[lvl + 1]);
+                    x.update_key(i, |k| k.pos = loc_start);
+                    itr_next_skip(b, &mut itr, false, Some(&mut oldbase));
                     break;
-                } else {
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                        .pos = loc_start;
-                    if ((*(&raw mut itr as *mut MarkTreeIter)).i as int32_t)
-                        < (*(*(&raw mut itr as *mut MarkTreeIter)).x).n - 1 as int32_t
-                    {
-                        (*(&raw mut itr as *mut MarkTreeIter)).i += 1;
-                        if past_right {
-                            break;
-                        }
-                    } else {
-                        marktree_itr_next(b, &raw mut itr as *mut MarkTreeIter);
+                }
+                x.update_key(i, |k| k.pos = loc_start);
+                if i + 1 < x.key_count() {
+                    itr.i += 1;
+                    if past_right {
                         break;
                     }
+                } else {
+                    itr_next(b, &mut itr);
+                    break;
                 }
             }
         }
-        's_289: while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
-            let mut loc_new: MTPos = new_extent;
-            relative((*(&mut itr as *mut MarkTreeIter)).pos, &mut loc_new);
-            let mut limit: MTPos = old_extent;
-            relative(
-                oldbase[(*(&mut itr as *mut MarkTreeIter)).lvl as usize],
-                &mut limit,
-            );
+
+        'shift: while !itr.x.is_null() {
+            let mut loc_new = new_extent;
+            relative(itr.pos, &mut loc_new);
+            let mut limit = old_extent;
+            relative(oldbase[itr.lvl as usize], &mut limit);
+
             loop {
-                if pos_leq(
-                    limit,
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                        .pos,
-                ) {
-                    break 's_289;
+                // SAFETY: the loop guard checked `itr` is still positioned.
+                let x = unsafe { Node::new(itr.x) };
+                let i = itr.i as usize;
+                if pos_leq(limit, x.key(i).pos) {
+                    break 'shift;
                 }
-                let mut oldpos: MTPos = (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                    [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                    .pos;
-                (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                    [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                    .pos = loc_new;
+
+                let oldpos = x.key(i).pos;
+                x.update_key(i, |k| k.pos = loc_new);
                 moved = true;
-                if (*(*(&raw mut itr as *mut MarkTreeIter)).x).level != 0 {
-                    oldbase[((*(&raw mut itr as *mut MarkTreeIter)).lvl + 1 as ::core::ffi::c_int)
-                        as usize] = oldpos;
-                    unrelative(
-                        oldbase[(*(&mut itr as *mut MarkTreeIter)).lvl as usize],
-                        &mut oldbase[((*(&mut itr as *mut MarkTreeIter)).lvl + 1) as usize],
-                    );
-                    marktree_itr_next_skip(
-                        b,
-                        &raw mut itr as *mut MarkTreeIter,
-                        false,
-                        false,
-                        &raw mut oldbase as *mut MTPos,
-                        ::core::ptr::null::<uint32_t>(),
-                    );
+                if !x.is_leaf() {
+                    let lvl = itr.lvl as usize;
+                    oldbase[lvl + 1] = oldpos;
+                    let base = oldbase[lvl];
+                    unrelative(base, &mut oldbase[lvl + 1]);
+                    itr_next_skip(b, &mut itr, false, Some(&mut oldbase));
                     break;
-                } else if ((*(&raw mut itr as *mut MarkTreeIter)).i as int32_t)
-                    < (*(*(&raw mut itr as *mut MarkTreeIter)).x).n - 1 as int32_t
-                {
-                    (*(&raw mut itr as *mut MarkTreeIter)).i += 1;
+                } else if i + 1 < x.key_count() {
+                    itr.i += 1;
                 } else {
-                    marktree_itr_next(b, &raw mut itr as *mut MarkTreeIter);
+                    itr_next(b, &mut itr);
                     break;
                 }
             }
         }
     }
-    while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
-        unrelative(
-            oldbase[(*(&mut itr as *mut MarkTreeIter)).lvl as usize],
-            &mut (*(&mut (*(*(&mut itr as *mut MarkTreeIter)).x).key as *mut MTKey)
-                .offset((*(&mut itr as *mut MarkTreeIter)).i as isize))
-            .pos,
-        );
-        let mut realrow: ::core::ffi::c_int = (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-            [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-            .pos
-            .row as ::core::ffi::c_int;
-        debug_assert!(
-            realrow as int32_t >= old_extent.row,
-            "realrow >= old_extent.row"
-        );
-        let mut done: bool = false;
-        if realrow as int32_t == old_extent.row {
+
+    while !itr.x.is_null() {
+        // SAFETY: the loop guard checked `itr` is still positioned.
+        let x = unsafe { Node::new(itr.x) };
+        let i = itr.i as usize;
+        let base = oldbase[itr.lvl as usize];
+        x.update_key(i, |k| unrelative(base, &mut k.pos));
+        let realrow = x.key(i).pos.row;
+        debug_assert!(realrow >= old_extent.row, "realrow >= old_extent.row");
+        let mut done = false;
+        if realrow == old_extent.row {
             if delta.col != 0 {
-                (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                    [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                    .pos
-                    .col += delta.col;
+                x.update_key(i, |k| k.pos.col += delta.col);
             }
         } else if same_line {
+            // Optimization: a column-only adjustment can skip the rest of the
+            // rows.
             done = true;
         }
         if delta.row != 0 {
-            (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                .pos
-                .row += delta.row;
+            x.update_key(i, |k| k.pos.row += delta.row);
             moved = true;
         }
-        relative(
-            (*(&mut itr as *mut MarkTreeIter)).pos,
-            &mut (*(&mut (*(*(&mut itr as *mut MarkTreeIter)).x).key as *mut MTKey)
-                .offset((*(&mut itr as *mut MarkTreeIter)).i as isize))
-            .pos,
-        );
+        let base = itr.pos;
+        x.update_key(i, |k| relative(base, &mut k.pos));
         if done {
             break;
         }
-        marktree_itr_next_skip(
-            b,
-            &raw mut itr as *mut MarkTreeIter,
-            true,
-            false,
-            ::core::ptr::null_mut::<MTPos>(),
-            ::core::ptr::null::<uint32_t>(),
-        );
+        itr_next_skip(b, &mut itr, true, None);
     }
-    let mut start_id: uint64_t = 0;
-    let mut d: MTDamagePair = MTDamagePair {
-        start: MTDamage {
-            old: ::core::ptr::null_mut::<MTNode>(),
-            new: ::core::ptr::null_mut::<MTNode>(),
-            old_i: 0,
-            new_i: 0,
-        },
-        end: MTDamage {
-            old: ::core::ptr::null_mut::<MTNode>(),
-            new: ::core::ptr::null_mut::<MTNode>(),
-            old_i: 0,
-            new_i: 0,
-        },
-    };
-    let mut __i: uint32_t = 0;
-    __i = 0 as uint32_t;
-    while __i < damage.set.h.n_keys {
-        start_id = *damage.set.keys.offset(__i as isize);
-        d = *damage.values.offset(__i as isize);
+
+    let (keys, values) = (damage.set.keys, damage.values);
+    for idx in 0..damage.set.h.n_keys as usize {
+        // SAFETY: klib's `map_foreach` — the map's `n_keys` leading entries of
+        // `keys` and `values` are live and parallel, and nothing in the body
+        // touches the map.
+        let (start_id, d) = unsafe { (*keys.add(idx), *values.add(idx)) };
         if !d.start.old.is_null() && !d.end.old.is_null() {
-            marktree_itr_set_node(
-                b,
-                &raw mut itr as *mut MarkTreeIter,
-                d.start.old,
-                d.start.old_i,
-            );
-            marktree_itr_set_node(
-                b,
-                &raw mut enditr as *mut MarkTreeIter,
-                d.end.old,
-                d.end.old_i,
-            );
-            marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], true);
-            marktree_itr_set_node(
-                b,
-                &raw mut itr as *mut MarkTreeIter,
-                d.start.new,
-                d.start.new_i,
-            );
-            marktree_itr_set_node(
-                b,
-                &raw mut enditr as *mut MarkTreeIter,
-                d.end.new,
-                d.end.new_i,
-            );
-            marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], false);
+            // Both ends of the pair moved.
+            itr_set_node(b, &mut itr, d.start.old, d.start.old_i);
+            itr_set_node(b, &mut enditr, d.end.old, d.end.old_i);
+            intersect_pair(b, start_id, &mut itr, &enditr, true);
+            itr_set_node(b, &mut itr, d.start.new, d.start.new_i);
+            itr_set_node(b, &mut enditr, d.end.new, d.end.new_i);
+            intersect_pair(b, start_id, &mut itr, &enditr, false);
         } else if !d.start.old.is_null() {
-            let mut endpos: [MarkTreeIter; 1] = [MarkTreeIter {
-                pos: MTPos { row: 0, col: 0 },
-                lvl: 0,
-                x: ::core::ptr::null_mut::<MTNode>(),
-                i: 0,
-                s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
-                intersect_idx: 0,
-                intersect_pos: MTPos { row: 0, col: 0 },
-                intersect_pos_x: MTPos { row: 0, col: 0 },
-            }; 1];
-            marktree_lookup(
-                &mut *b,
-                start_id | 1 as ::core::ffi::c_int as uint64_t,
-                Some(&mut endpos[0]),
-            );
-            if !(*(&raw mut endpos as *mut MarkTreeIter)).x.is_null() {
-                marktree_itr_set_node(
-                    b,
-                    &raw mut itr as *mut MarkTreeIter,
-                    d.start.old,
-                    d.start.old_i,
-                );
-                *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos as *mut MarkTreeIter);
-                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], true);
-                marktree_itr_set_node(
-                    b,
-                    &raw mut itr as *mut MarkTreeIter,
-                    d.start.new,
-                    d.start.new_i,
-                );
-                *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos as *mut MarkTreeIter);
-                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], false);
+            // Only the start moved.
+            let mut endpos = MarkTreeIter::default();
+            lookup(b, start_id | MARKTREE_END_FLAG, &mut endpos);
+            if !endpos.x.is_null() {
+                itr_set_node(b, &mut itr, d.start.old, d.start.old_i);
+                enditr = endpos;
+                intersect_pair(b, start_id, &mut itr, &enditr, true);
+                itr_set_node(b, &mut itr, d.start.new, d.start.new_i);
+                enditr = endpos;
+                intersect_pair(b, start_id, &mut itr, &enditr, false);
             }
         } else if !d.end.old.is_null() {
-            let mut startpos: [MarkTreeIter; 1] = [MarkTreeIter {
-                pos: MTPos { row: 0, col: 0 },
-                lvl: 0,
-                x: ::core::ptr::null_mut::<MTNode>(),
-                i: 0,
-                s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
-                intersect_idx: 0,
-                intersect_pos: MTPos { row: 0, col: 0 },
-                intersect_pos_x: MTPos { row: 0, col: 0 },
-            }; 1];
-            marktree_lookup(&mut *b, start_id, Some(&mut startpos[0]));
-            if !(*(&raw mut startpos as *mut MarkTreeIter)).x.is_null() {
-                *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos as *mut MarkTreeIter);
-                marktree_itr_set_node(
-                    b,
-                    &raw mut enditr as *mut MarkTreeIter,
-                    d.end.old,
-                    d.end.old_i,
-                );
-                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], true);
-                *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos as *mut MarkTreeIter);
-                marktree_itr_set_node(
-                    b,
-                    &raw mut enditr as *mut MarkTreeIter,
-                    d.end.new,
-                    d.end.new_i,
-                );
-                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], false);
+            // Only the end moved.
+            let mut startpos = MarkTreeIter::default();
+            lookup(b, start_id, &mut startpos);
+            if !startpos.x.is_null() {
+                itr = startpos;
+                itr_set_node(b, &mut enditr, d.end.old, d.end.old_i);
+                intersect_pair(b, start_id, &mut itr, &enditr, true);
+                itr = startpos;
+                itr_set_node(b, &mut enditr, d.end.new, d.end.new_i);
+                intersect_pair(b, start_id, &mut itr, &enditr, false);
             }
         }
-        __i = __i.wrapping_add(1);
     }
-    xfree(damage.set.keys as *mut ::core::ffi::c_void);
-    xfree(damage.set.h.hash as *mut ::core::ffi::c_void);
-    damage.set = Set_uint64_t {
-        h: MAPHASH_INIT,
-        keys: ::core::ptr::null_mut::<uint64_t>(),
-    };
-    let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut damage.values as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return moved;
+    destroy_damage(&mut damage);
+
+    moved
 }
 
-pub unsafe extern "C" fn marktree_move_region(
-    mut b: *mut MarkTree,
-    mut start_row: ::core::ffi::c_int,
-    mut start_col: colnr_T,
-    mut extent_row: ::core::ffi::c_int,
-    mut extent_col: colnr_T,
-    mut new_row: ::core::ffi::c_int,
-    mut new_col: colnr_T,
+/// Move the marks in a region elsewhere, as `:move` does.
+///
+/// The marks inside the region are lifted out, the two splices shift
+/// everything else, and then they go back in at the destination.
+pub fn marktree_move_region(
+    b: &mut MarkTree,
+    start_row: c_int,
+    start_col: colnr_T,
+    extent_row: c_int,
+    extent_col: colnr_T,
+    new_row: c_int,
+    new_col: colnr_T,
 ) {
-    let mut start: MTPos = MTPos {
-        row: start_row as int32_t,
-        col: start_col as int32_t,
+    let start = MTPos {
+        row: start_row,
+        col: start_col,
     };
-    let mut size: MTPos = MTPos {
-        row: extent_row as int32_t,
-        col: extent_col as int32_t,
+    let size = MTPos {
+        row: extent_row,
+        col: extent_col,
     };
-    let mut end: MTPos = size;
+    let mut end = size;
     unrelative(start, &mut end);
-    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
-        pos: MTPos {
-            row: 0 as int32_t,
-            col: 0,
-        },
-        lvl: 0,
-        x: ::core::ptr::null_mut::<MTNode>(),
-        i: 0,
-        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
-        intersect_idx: 0,
-        intersect_pos: MTPos { row: 0, col: 0 },
-        intersect_pos_x: MTPos { row: 0, col: 0 },
-    }];
-    marktree_itr_get_ext(
-        b,
-        start,
-        &raw mut itr as *mut MarkTreeIter,
-        false,
-        true,
-        ::core::ptr::null_mut::<MTPos>(),
-        ::core::ptr::null::<uint32_t>(),
-    );
-    // The marks inside the moved region, lifted out and re-inserted at the
-    // destination once the two splices have shifted everything else.
+    let mut itr = MarkTreeIter::default();
+    itr_get_ext(b, start, &mut itr, false, None);
+
     let mut saved: Vec<MTKey> = Vec::new();
-    while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
-        let mut k: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
-        if !pos_leq(k.pos, end)
-            || k.pos.row == end.row
-                && k.pos.col == end.col
-                && mt_right(k) as ::core::ffi::c_int != 0
-        {
+    while !itr.x.is_null() {
+        // SAFETY: the loop guard checked `itr` is still positioned in `b`.
+        let mut k = unsafe { marktree_itr_current(&mut itr) };
+        if !pos_leq(k.pos, end) || (k.pos.row == end.row && k.pos.col == end.col && mt_right(k)) {
             break;
         }
         relative(start, &mut k.pos);
         saved.push(k);
-        marktree_del_itr(&mut *b, &mut itr[0], false);
+        // SAFETY: `b` is live and `itr` is positioned on one of its keys;
+        // deleting leaves it on the next one.
+        unsafe { marktree_del_itr(b, &mut itr, false) };
     }
-    marktree_splice(
-        b,
-        start.row,
-        start.col as ::core::ffi::c_int,
-        size.row as ::core::ffi::c_int,
-        size.col as ::core::ffi::c_int,
-        0 as ::core::ffi::c_int,
-        0 as ::core::ffi::c_int,
-    );
-    let mut new: MTPos = MTPos {
-        row: new_row as int32_t,
-        col: new_col as int32_t,
+
+    // SAFETY: `b` is a live tree; the extents are plain numbers.
+    unsafe { marktree_splice(b, start.row, start.col, size.row, size.col, 0, 0) };
+    let new = MTPos {
+        row: new_row,
+        col: new_col,
     };
-    marktree_splice(
-        b,
-        new.row,
-        new.col as ::core::ffi::c_int,
-        0 as ::core::ffi::c_int,
-        0 as ::core::ffi::c_int,
-        size.row as ::core::ffi::c_int,
-        size.col as ::core::ffi::c_int,
-    );
+    // SAFETY: as above.
+    unsafe { marktree_splice(b, new.row, new.col, 0, 0, size.row, size.col) };
+
     for mut item in saved {
         unrelative(new, &mut item.pos);
-        marktree_put_key(&mut *b, item);
+        // SAFETY: `b` is a live tree.
+        unsafe { marktree_put_key(b, item) };
         if mt_paired(item) {
-            marktree_restore_pair(&mut *b, item);
+            // The other end might be later in `saved`; this bails out safely
+            // then, and runs again for it.
+            // SAFETY: as above.
+            unsafe { marktree_restore_pair(b, item) };
         }
     }
 }

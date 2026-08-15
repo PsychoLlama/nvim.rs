@@ -158,7 +158,7 @@ impl Tree {
     /// `new`, both extents being (rows, cols) relative to the start.
     fn splice(&mut self, start: (i32, i32), old: (i32, i32), new: (i32, i32)) {
         unsafe {
-            marktree_splice(self.ptr(), start.0, start.1, old.0, old.1, new.0, new.1);
+            marktree_splice(&mut self.tree, start.0, start.1, old.0, old.1, new.0, new.1);
         }
         shadow_splice(&mut self.shadow, start, old, new);
     }

@@ -227,12 +227,9 @@ fn tree_move_region(
     new_row: c_int,
     new_col: colnr_T,
 ) {
-    // SAFETY: as [`tree_splice`].
-    unsafe {
-        marktree_move_region(
-            tree, start.row, start.col, extent_row, extent_col, new_row, new_col,
-        )
-    }
+    marktree_move_region(
+        tree, start.row, start.col, extent_row, extent_col, new_row, new_col,
+    )
 }
 
 fn itr_get(tree: &mut MarkTree, row: int32_t, col: c_int, itr: &mut MarkTreeIter) -> bool {
