@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct color_name_table_T {
     pub name: *mut ::core::ffi::c_char,
     pub color: RgbValue,

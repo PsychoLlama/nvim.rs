@@ -33,7 +33,6 @@ pub union DecorInlineData {
 pub type DecorPriority = uint16_t;
 pub type DecorPriorityInternal = uint32_t;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct DecorProvider {
     pub ns_id: NS,
     pub state: DecorProvider_state,
@@ -134,7 +133,6 @@ pub struct DecorState {
     pub itr_valid: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct DecorVirtText {
     pub flags: uint8_t,
     pub hl_mode: uint8_t,
@@ -152,7 +150,6 @@ pub union DecorVirtText_data {
     pub virt_lines: VirtLines,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct VirtTextChunk {
     pub text: *mut ::core::ffi::c_char,
     pub hl_id: ::core::ffi::c_int,

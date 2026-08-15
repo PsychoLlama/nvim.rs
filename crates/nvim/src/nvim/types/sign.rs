@@ -5,19 +5,16 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct SignItem {
     pub sh: *mut DecorSignHighlight,
     pub id: uint32_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct SignTextAttrs {
     pub text: [schar_T; 2],
     pub hl_id: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct sign_T {
     pub sn_name: *mut ::core::ffi::c_char,
     pub sn_icon: *mut ::core::ffi::c_char,

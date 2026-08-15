@@ -152,7 +152,6 @@ pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_
 /// `do_source` flag: this is not a plugin or a package.
 pub const DOSO_NONE: ::core::ffi::c_uint = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct stateitem_T {
     pub si_idx: ::core::ffi::c_int,
     pub si_id: ::core::ffi::c_int,
@@ -174,7 +173,6 @@ pub struct stateitem_T {
     pub si_extmatch: *mut reg_extmatch_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct synpat_T {
     pub sp_type: ::core::ffi::c_char,
     pub sp_syncing: bool,
@@ -195,14 +193,12 @@ pub struct synpat_T {
     pub sp_time: syn_time_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct syn_cluster_T {
     pub scl_name: *mut ::core::ffi::c_char,
     pub scl_name_u: *mut ::core::ffi::c_char,
     pub scl_list: *mut int16_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct syn_opt_arg_T {
     pub flags: ::core::ffi::c_int,
     pub keyword: bool,

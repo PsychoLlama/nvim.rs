@@ -14,7 +14,6 @@ pub struct bufstate_T {
     pub bs_extmatch: *mut reg_extmatch_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct syn_state {
     pub sst_next: *mut synstate_T,
     pub sst_lnum: linenr_T,

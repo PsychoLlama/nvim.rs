@@ -30,7 +30,6 @@ use super::*;
 /// names the type — but the field order is upstream's and is left alone so the
 /// C can still be read beside it.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct WinLineVars {
     /// Buffer line being drawn.
     pub lnum: linenr_T,

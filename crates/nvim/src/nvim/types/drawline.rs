@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct WinExtmark {
     pub ns_id: NS,
     pub mark_id: uint64_t,
@@ -13,7 +12,6 @@ pub struct WinExtmark {
     pub win_col: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct spellvars_T {
     pub spv_has_spell: bool,
     pub spv_unchanged: bool,
