@@ -59,12 +59,11 @@ use crate::src::nvim::marktree::node::*;
 pub use crate::src::nvim::marktree::{
     check::*, inspect::*, iter::*, pair::*, rebalance::*, splice::*,
 };
-use crate::src::nvim::memory::{xfree, xmemdup};
+use crate::src::nvim::memory::xfree;
 use crate::src::nvim::types::{
     DecorHighlightInline, DecorInlineData, MTKey, MTNode, MTPair, MTPos, Map_ptr_t_ptr_t,
-    Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter,
-    MarkTreeIter_s as C2Rust_Unnamed_2, MetaFilter, Set_ptr_t, Set_uint64_t, int32_t, ptr_t,
-    size_t, uint16_t, uint32_t, uint64_t,
+    Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter, MetaFilter,
+    Set_uint64_t, int32_t, ptr_t, size_t, uint16_t, uint32_t, uint64_t,
 };
 
 /// What a splice recorded about pairs whose halves crossed while it ran.

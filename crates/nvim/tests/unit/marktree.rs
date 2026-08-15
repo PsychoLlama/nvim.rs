@@ -93,7 +93,18 @@ impl Tree {
         self.next_id += 1;
         let id = self.next_id;
         unsafe {
-            marktree_put_test(self.ptr(), NS, id, row, col, right, -1, -1, false, false);
+            marktree_put_test(
+                &mut self.tree,
+                NS,
+                id,
+                row,
+                col,
+                right,
+                -1,
+                -1,
+                false,
+                false,
+            );
         }
         self.shadow.push(Shadow {
             id,
@@ -111,7 +122,7 @@ impl Tree {
         let id = self.next_id;
         unsafe {
             marktree_put_test(
-                self.ptr(),
+                &mut self.tree,
                 NS,
                 id,
                 row,
@@ -150,7 +161,7 @@ impl Tree {
     }
 
     fn del_pair(&mut self, id: u32) {
-        unsafe { marktree_del_pair_test(self.ptr(), NS, id) };
+        unsafe { marktree_del_pair_test(&mut self.tree, NS, id) };
         self.shadow.retain(|s| s.id != id);
     }
 
@@ -166,8 +177,8 @@ impl Tree {
     /// Assert the tree's own invariants and that an in-order walk matches the
     /// shadow. Answers the ids in tree order.
     fn check(&mut self) -> Vec<u32> {
-        unsafe { marktree_check(self.ptr()) };
-        assert!(unsafe { marktree_check_intersections(self.ptr()) });
+        unsafe { marktree_check(&mut self.tree) };
+        assert!(unsafe { marktree_check_intersections(&mut self.tree) });
 
         let mut expected = self.shadow.clone();
         expected.sort_by_key(|s| (s.row, s.col, s.right));

@@ -1,7 +1,7 @@
 {
   "internal_exports": 6,
   "files_without_forbid_unsafe": 1027,
-  "files_without_deny_unsafe_op": 77,
+  "files_without_deny_unsafe_op": 76,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -581,7 +581,7 @@
     "crates/nvim/src/nvim/mark/shada.rs": {"cell_ptr": 6, "unsafe_lines": 170},
     "crates/nvim/src/nvim/mark/show.rs": {"cell_ptr": 14, "unsafe_lines": 364},
     "crates/nvim/src/nvim/marktree.rs": {"no_mangle": 4, "unsafe_lines": 45},
-    "crates/nvim/src/nvim/marktree/check.rs": {"no_mangle": 5, "unsafe_lines": 327},
+    "crates/nvim/src/nvim/marktree/check.rs": {"no_mangle": 5, "unsafe_lines": 29},
     "crates/nvim/src/nvim/marktree/inspect.rs": {"no_mangle": 1, "unsafe_lines": 2},
     "crates/nvim/src/nvim/marktree/intersect.rs": {"unsafe_lines": 15},
     "crates/nvim/src/nvim/marktree/iter.rs": {"no_mangle": 8, "unsafe_lines": 579},
