@@ -585,7 +585,7 @@
     "crates/nvim/src/nvim/marktree/inspect.rs": {"cell_ptr": 14, "no_mangle": 1, "unsafe_lines": 233},
     "crates/nvim/src/nvim/marktree/intersect.rs": {"unsafe_lines": 15},
     "crates/nvim/src/nvim/marktree/iter.rs": {"no_mangle": 8, "unsafe_lines": 579},
-    "crates/nvim/src/nvim/marktree/node.rs": {"unsafe_lines": 28},
+    "crates/nvim/src/nvim/marktree/node.rs": {"unsafe_lines": 27},
     "crates/nvim/src/nvim/marktree/pair.rs": {"no_mangle": 1, "unsafe_lines": 19},
     "crates/nvim/src/nvim/marktree/rebalance.rs": {"unsafe_lines": 6},
     "crates/nvim/src/nvim/marktree/splice.rs": {"no_mangle": 1, "unsafe_lines": 28},

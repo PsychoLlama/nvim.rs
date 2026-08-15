@@ -451,15 +451,6 @@ pub unsafe fn meta_describe_node(x: *mut MTNode) -> MetaCount {
     unsafe { Node::new(x) }.meta()
 }
 
-/// See [`Node::pseudo_index`].
-///
-/// # Safety
-/// `x` must be a live node. Prefer the method where a [`Node`] is at hand.
-pub unsafe fn pseudo_index(x: *mut MTNode, i: c_int) -> uint64_t {
-    // SAFETY: the caller promises `x` is a live node.
-    unsafe { Node::new(x) }.pseudo_index(i)
-}
-
 /// Where key `k` belongs among `keys`, which are sorted.
 ///
 /// Answers the index of the last key that is not greater than `k`, and whether
