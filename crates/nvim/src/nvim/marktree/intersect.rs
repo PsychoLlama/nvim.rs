@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 //! The intersection sets that make range queries local.
 //!
 //! A node records the ids of every paired mark whose range covers the *whole*
@@ -42,11 +44,15 @@ impl IdSet {
 
     /// `size`, `capacity` and `items` in one read.
     fn parts(&self) -> (usize, usize, *mut uint64_t) {
+        // SAFETY: `self.set` names a live `Intersection` per `IdSet::new`, so
+        // its three header fields are initialised.
         unsafe { ((*self.set).size, (*self.set).capacity, (*self.set).items) }
     }
 
     /// The struct's own inline array, freshly derived.
     fn inline_array(&self) -> *mut uint64_t {
+        // SAFETY: `self.set` is live, so `init_array` is a field of it; this
+        // only takes its address.
         unsafe { (&raw mut (*self.set).init_array).cast() }
     }
 
@@ -62,17 +68,23 @@ impl IdSet {
     }
 
     fn set_len(&self, len: usize) {
+        // SAFETY: `self.set` is live and no other view of it is in use.
         unsafe { (*self.set).size = len };
+    }
+
+    /// Point the set at `items`, which holds room for `capacity` ids.
+    fn set_storage(&self, items: *mut uint64_t, capacity: usize) {
+        // SAFETY: `self.set` is live and no other view of it is in use.
+        unsafe { (*self.set).items = items };
+        // SAFETY: as above.
+        unsafe { (*self.set).capacity = capacity };
     }
 
     /// `kvi_init`: empty the set and point it at its own inline array. Only
     /// valid where the containing struct will stay put.
     pub fn init(&self) {
-        unsafe {
-            (*self.set).size = 0;
-            (*self.set).capacity = INTERSECT_INLINE;
-            (*self.set).items = (&raw mut (*self.set).init_array).cast();
-        }
+        self.set_storage(self.inline_array(), INTERSECT_INLINE);
+        self.set_len(0);
     }
 
     /// Still living in the containing struct's own array, not on the heap.
@@ -94,6 +106,8 @@ impl IdSet {
         if len == 0 {
             return &[];
         }
+        // SAFETY: `base` names `len` initialised, contiguous ids — either the
+        // live struct's own inline array or the heap buffer `reserve` grew.
         unsafe { slice::from_raw_parts(self.base(), len) }
     }
 
@@ -103,6 +117,8 @@ impl IdSet {
         if len == 0 {
             return &mut [];
         }
+        // SAFETY: as `as_slice`, and `IdSet::new` promises no other view of the
+        // same set is in use, so this is the only slice over those ids.
         unsafe { slice::from_raw_parts_mut(self.base(), len) }
     }
 
@@ -120,24 +136,27 @@ impl IdSet {
         }
         let bytes = grown * size_of::<uint64_t>();
         let base = self.base();
-        let inline = self.inline_array();
-        unsafe {
-            let moved: *mut uint64_t = if items == inline {
-                let heap = xmalloc(bytes).cast::<uint64_t>();
-                ptr::copy_nonoverlapping(base, heap, len);
-                heap
-            } else {
-                xrealloc(base.cast(), bytes).cast()
-            };
-            (*self.set).items = moved;
-            (*self.set).capacity = grown;
-        }
+        let moved: *mut uint64_t = if items == self.inline_array() {
+            // SAFETY: `xmalloc` hands back `bytes` of suitably aligned storage
+            // and never returns null.
+            let heap = unsafe { xmalloc(bytes) }.cast::<uint64_t>();
+            // SAFETY: `base` holds `len` ids and the fresh buffer is at least
+            // `needed >= len` ids wide; the two cannot overlap.
+            unsafe { ptr::copy_nonoverlapping(base, heap, len) };
+            heap
+        } else {
+            // SAFETY: `base` is this set's own heap buffer, so `xrealloc` may
+            // grow it in place or move it, and it never returns null.
+            unsafe { xrealloc(base.cast(), bytes) }.cast()
+        };
+        self.set_storage(moved, grown);
     }
 
     /// Append, without regard for the ordering.
     pub fn push(&self, id: uint64_t) {
         self.reserve(1);
         let len = self.len();
+        // SAFETY: `reserve` left room for one more id past the `len` in use.
         unsafe { self.base().add(len).write(id) };
         self.set_len(len + 1);
     }
@@ -147,9 +166,12 @@ impl IdSet {
             return;
         }
         self.reserve(ids.len());
-        let len = self.len();
-        unsafe { ptr::copy_nonoverlapping(ids.as_ptr(), self.base().add(len), ids.len()) };
-        self.set_len(len + ids.len());
+        let end = self.base().wrapping_add(self.len());
+        // SAFETY: `reserve` left room for `ids.len()` more ids at `end`; `ids`
+        // is a live slice and every caller passes another set's ids, so the
+        // two ranges do not overlap.
+        unsafe { ptr::copy_nonoverlapping(ids.as_ptr(), end, ids.len()) };
+        self.set_len(self.len() + ids.len());
     }
 
     /// Insert at `at`, shifting the tail up.
@@ -187,18 +209,18 @@ impl IdSet {
     /// to stop using.
     pub fn move_from(&self, src: &IdSet) {
         let (len, capacity, items) = src.parts();
-        let (src_inline, dest) = (src.inline_array(), self.inline_array());
-        let src_base = src.base();
-        unsafe {
-            (*self.set).size = len;
-            (*self.set).capacity = capacity;
-            if items == src_inline {
-                ptr::copy_nonoverlapping(src_base, dest, len);
-                (*self.set).items = dest;
-            } else {
-                (*self.set).items = items;
-            }
-        }
+        let dest = self.inline_array();
+        let items = if items == src.inline_array() {
+            // SAFETY: `src`'s ids live in its own inline array, which holds at
+            // most `INTERSECT_INLINE` of them — so does this set's, and the two
+            // structs are distinct, so the ranges do not overlap.
+            unsafe { ptr::copy_nonoverlapping(src.base(), dest, len) };
+            dest
+        } else {
+            items
+        };
+        self.set_storage(items, capacity);
+        self.set_len(len);
     }
 
     /// Is `id` in the set? Bails at the first larger id, as the C did — the
