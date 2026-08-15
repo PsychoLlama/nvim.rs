@@ -59,7 +59,7 @@ use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz,
 };
 use crate::src::nvim::message::{emsg, iemsg, internal_error};
-use crate::src::nvim::mouse::{is_mouse_key, mouse_comp_pos, mouse_find_win_inner};
+use crate::src::nvim::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::src::nvim::r#move::{validate_cursor, win_col_off};
 use crate::src::nvim::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::src::nvim::ops::clear_oparg;
@@ -79,8 +79,8 @@ use crate::src::nvim::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
     MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, TriState, VV_MOUSE_COL,
     VV_MOUSE_LNUM, VV_MOUSE_WIN, VV_MOUSE_WINID, buffblock, buffblock_T, buffheader_T, colnr_T,
-    flush_buffers_T, garray_T, kFalse, kNone, linenr_T, mapblock_T, oparg_T, ptrdiff_t,
-    save_redo_T, size_t, tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
+    flush_buffers_T, garray_T, kFalse, kNone, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t,
+    tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;

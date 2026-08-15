@@ -247,21 +247,19 @@ pub(crate) unsafe fn pum_compute_horizontal_placement(
 /// `pum_size`, `pum_height` and `pum_base_width` must already describe the
 /// menu being shown.
 pub(crate) unsafe fn pum_position_at_mouse(min_width: c_int) {
-    // SAFETY: `get_win_by_grid_handle` answers a live window or null, and
-    // `mouse_find_win_outer` writes through the three locals below.
+    // SAFETY: `get_win_by_grid_handle` answers a live window or null.
     unsafe {
         let (min_row, min_col) = (0, 0);
         let mut max_row = Rows.get();
         let mut max_col = Columns.get();
-        let mut grid = mouse_grid.get();
-        let mut row = mouse_row.get();
-        let mut col = mouse_col.get();
+        let mut pos = MousePos::current();
         pum_win_row_offset.set(0);
         pum_win_col_offset.set(0);
 
-        if ui_has(kUIMultigrid) && grid == 0 {
-            mouse_find_win_outer(&raw mut grid, &raw mut row, &raw mut col);
+        if ui_has(kUIMultigrid) && pos.grid == 0 {
+            find_win_outer(&mut pos);
         }
+        let (grid, mut row, mut col) = (pos.grid, pos.row, pos.col);
         if grid > 1 {
             let wp = get_win_by_grid_handle(grid as handle_T);
             if !wp.is_null() {

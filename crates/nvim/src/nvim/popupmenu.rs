@@ -51,7 +51,7 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::src::nvim::message::emsg;
-use crate::src::nvim::mouse::mouse_find_win_outer;
+use crate::src::nvim::mouse::{MousePos, find_win_outer};
 use crate::src::nvim::r#move::{
     update_topline, validate_cheight, validate_cursor, validate_cursor_col,
 };

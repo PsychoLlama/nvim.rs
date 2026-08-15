@@ -159,32 +159,28 @@ unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_
 /// Callable at any time.
 unsafe fn set_mouse_vars() {
     unsafe {
-        let mut row = mouse_row.get();
-        let mut col = mouse_col.get();
-        let mut grid = mouse_grid.get();
-        if row < 0 || col < 0 {
+        let mut pos = MousePos::current();
+        if pos.row < 0 || pos.col < 0 {
             return;
         }
 
         // Find the window under the mouse and turn the coordinates into a
         // text position.
-        let win = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
-        if win.is_null() {
+        let Some(win) = find_win_inner(&mut pos) else {
             return;
-        }
-        let mut lnum: linenr_T = 0;
-        mouse_comp_pos(win, &raw mut row, &raw mut col, &raw mut lnum);
+        };
+        let (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
 
         let mut winnr = 1;
         let mut wp = firstwin.get();
-        while wp != win {
+        while wp != win.raw() {
             winnr += 1;
             wp = (*wp).w_next;
         }
         set_vim_var_nr(VV_MOUSE_WIN, winnr as varnumber_T);
         set_vim_var_nr(VV_MOUSE_WINID, (*wp).handle as varnumber_T);
         set_vim_var_nr(VV_MOUSE_LNUM, lnum as varnumber_T);
-        set_vim_var_nr(VV_MOUSE_COL, (col + 1) as varnumber_T);
+        set_vim_var_nr(VV_MOUSE_COL, (pos.col + 1) as varnumber_T);
     }
 }
 

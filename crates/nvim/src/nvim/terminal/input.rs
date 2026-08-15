@@ -38,11 +38,10 @@ use crate::src::nvim::keycodes::{
     K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_ZERO,
 };
 use crate::src::nvim::main::{
-    KeyTyped, curbuf, curwin, mod_mask, mouse_col, mouse_grid, mouse_row, tpf_flags, vgetc_char,
-    vgetc_mod_mask,
+    KeyTyped, curbuf, curwin, mod_mask, tpf_flags, vgetc_char, vgetc_mod_mask,
 };
 use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::mouse::{do_mousescroll, mouse_find_win_inner};
+use crate::src::nvim::mouse::{MousePos, do_mousescroll, find_win_inner};
 use crate::src::nvim::r#move::win_col_off;
 use crate::src::nvim::ops::clear_oparg;
 use crate::src::nvim::options::{
@@ -428,13 +427,9 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
 /// pointer, or the event is pushed back for normal-mode processing (which
 /// is what makes clicking out of a terminal work).
 pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
-    let mut row = mouse_row.get();
-    let mut col = mouse_col.get();
-    let mut grid = mouse_grid.get();
-    let (grid_out, row_out, col_out) = (&raw mut grid, &raw mut row, &raw mut col);
-    // SAFETY: three out-parameters of this frame's own; the window it
-    // answers is one of the editor's, or null.
-    let mouse_win = unsafe { Win::from_raw(mouse_find_win_inner(grid_out, row_out, col_out)) };
+    let mut pos = MousePos::current();
+    let mouse_win = find_win_inner(&mut pos);
+    let MousePos { grid, row, col } = pos;
 
     if let Some(mouse_win) = mouse_win {
         // An external grid is exactly the terminal's window, so the height

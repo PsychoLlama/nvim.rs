@@ -3,8 +3,8 @@
 //!
 //! Nothing here touches the editor's memory, so the module forbids `unsafe`
 //! outright.  [`MousePos`] is the value the C passes as three `int *` -- a
-//! grid handle plus a row and column that `mouse_find_win_*` rewrite from
-//! screen coordinates into window-relative ones.
+//! grid handle plus a row and column that `find_win_inner`/`find_win_outer`
+//! rewrite from screen coordinates into window-relative ones.
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
@@ -28,8 +28,8 @@ use crate::src::nvim::types::{colnr_T, varnumber_T};
 
 /// Where a mouse event landed: a grid handle, and a row and column within it.
 ///
-/// The C carries these as three `int *` because [`super::mouse_find_win_inner`]
-/// and friends rewrite them in place, from screen coordinates into coordinates
+/// The C carries these as three `int *` because [`super::find_win_inner`] and
+/// friends rewrite them in place, from screen coordinates into coordinates
 /// relative to the window they found.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MousePos {
@@ -125,7 +125,7 @@ pub fn button_name(which_button: c_int) -> &'static CStr {
 }
 
 /// Screen lines of the top line that `'smoothscroll'` has clipped away, which
-/// [`super::mouse_comp_pos`] must not count when walking down the window.
+/// [`super::comp_pos`] must not count when walking down the window.
 ///
 /// A similar formula is used in `curs_columns()`; see `move/arith.rs`.
 pub fn skipped_top_lines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {

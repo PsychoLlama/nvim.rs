@@ -1,16 +1,16 @@
 //! Which window, row and column a screen position names --
 //! `mouse_find_win()` and `mouse_comp_pos()`.
 //!
-//! [`mouse_comp_pos`] converts a window-relative row into a buffer line,
-//! walking wrapped lines, folds and diff filler; [`mouse_find_win_inner`] and
-//! [`mouse_find_win_outer`] walk the frame tree for the window containing a
+//! [`comp_pos`] converts a window-relative row into a buffer line, walking
+//! wrapped lines, folds and diff filler; [`find_win_inner`] and
+//! [`find_win_outer`] walk the frame tree for the window containing a
 //! screen position (the outer form counts the status line and separator as
 //! belonging to the window above/left of them); `find_grid_win` is the
 //! `ext_multigrid` half that maps a grid handle plus coordinates onto both.
-//! [`vcol2col`] is the column half.
+//! [`vcol_to_col`] is the column half.
 //!
-//! Each of the four is a safe function over a [`MousePos`] with a raw shim on
-//! top of it, because the C's three `int *` out-parameters are one value.
+//! The C's three `int *` out-parameters are one value, so the finders take a
+//! [`MousePos`] and rewrite it in place.
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
@@ -246,74 +246,7 @@ pub fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, colnr_T
 }
 
 // ---------------------------------------------------------------------------
-// The raw entry points the rest of the editor still calls
-
-/// [`comp_pos`], through the C's four pointers.
-///
-/// # Safety
-/// `win` must be a live window and the three out-parameters must be writable.
-pub unsafe extern "C" fn mouse_comp_pos(
-    win: *mut win_T,
-    rowp: *mut c_int,
-    colp: *mut c_int,
-    lnump: *mut linenr_T,
-) -> bool {
-    // SAFETY: the caller's promise.
-    let (lnum, below_last) = unsafe { comp_pos(Win::new(win), &mut *rowp, &mut *colp) };
-    // SAFETY: as above.
-    unsafe { *lnump = lnum };
-    below_last
-}
-
-/// [`find_win_inner`], through the C's three pointers.
-///
-/// # Safety
-/// The three parameters must be readable and writable.
-pub unsafe fn mouse_find_win_inner(
-    gridp: *mut c_int,
-    rowp: *mut c_int,
-    colp: *mut c_int,
-) -> *mut win_T {
-    // SAFETY: the caller's promise.
-    unsafe { with_raw_pos(gridp, rowp, colp, find_win_inner) }
-}
-
-/// [`find_win_outer`], through the C's three pointers.
-///
-/// # Safety
-/// The three parameters must be readable and writable.
-pub unsafe fn mouse_find_win_outer(
-    gridp: *mut c_int,
-    rowp: *mut c_int,
-    colp: *mut c_int,
-) -> *mut win_T {
-    // SAFETY: the caller's promise.
-    unsafe { with_raw_pos(gridp, rowp, colp, find_win_outer) }
-}
-
-/// Run one of the finders over three `int *`, as the C passes them.
-///
-/// # Safety
-/// The three parameters must be readable and writable.
-unsafe fn with_raw_pos(
-    gridp: *mut c_int,
-    rowp: *mut c_int,
-    colp: *mut c_int,
-    find: impl FnOnce(&mut MousePos) -> Option<Win>,
-) -> *mut win_T {
-    // SAFETY: the caller's promise.
-    let mut pos = unsafe {
-        MousePos {
-            grid: *gridp,
-            row: *rowp,
-            col: *colp,
-        }
-    };
-    let win = find(&mut pos);
-    // SAFETY: as above.
-    unsafe { (*gridp, *rowp, *colp) = (pos.grid, pos.row, pos.col) };
-    win.map_or(ptr::null_mut(), Win::raw)
-}
+// The raw entry point the rest of the editor still calls
 
 /// [`vcol_to_col`], writing the leftover columns through `coladdp`.
 ///
