@@ -1413,7 +1413,6 @@ pub static p_tgc: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_ttimeout: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_ttm: GlobalCell<OptInt> = GlobalCell::new(0);
 pub static p_tf: GlobalCell<c_int> = GlobalCell::new(0);
-#[unsafe(no_mangle)]
 pub static p_udir: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_udf: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_ul: GlobalCell<OptInt> = GlobalCell::new(0);

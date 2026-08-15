@@ -79,8 +79,7 @@ pub unsafe fn change_warning(buf: *mut buf_T, col: c_int) {
 ///
 /// # Safety
 /// `buf` must be a live buffer. May trigger autocommands that reload it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn changed(buf: *mut buf_T) {
+pub unsafe fn changed(buf: *mut buf_T) {
     unsafe {
         if (*buf).b_changed == 0 {
             let save_msg_scroll = msg_scroll.get();

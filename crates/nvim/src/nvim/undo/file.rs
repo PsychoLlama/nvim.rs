@@ -6,8 +6,7 @@ use super::tree::*;
 use super::*;
 use crate::semsg_c;
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint8_t) {
+pub unsafe fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint8_t) {
     let mut ctx = Sha256::new();
     let mut lnum: linenr_T = 1;
     while lnum <= (*buf).b_ml.ml_line_count {
@@ -18,11 +17,7 @@ pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint
     }
     ::core::slice::from_raw_parts_mut(hash, SHA256_SUM_SIZE).copy_from_slice(&ctx.finish());
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn u_get_undo_file_name(
-    buf_ffname: *const c_char,
-    reading: bool,
-) -> *mut c_char {
+pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> *mut c_char {
     let mut ffname: *const c_char = buf_ffname;
     if ffname.is_null() {
         return ptr::null_mut();

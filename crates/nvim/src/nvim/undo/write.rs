@@ -5,8 +5,7 @@ use super::format::*;
 use super::*;
 use crate::{semsg_c, smsg_c};
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn u_write_undo(
+pub unsafe fn u_write_undo(
     name: *const c_char,
     forceit: bool,
     buf: *mut buf_T,
