@@ -6,14 +6,12 @@ use super::*;
 
 pub type SpellAddType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct fromto_T {
     pub ft_from: *mut ::core::ffi::c_char,
     pub ft_to: *mut ::core::ffi::c_char,
 }
 pub type idx_T = ::core::ffi::c_int;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct langp_T {
     pub lp_slang: *mut slang_T,
     pub lp_sallang: *mut slang_T,
@@ -22,7 +20,6 @@ pub struct langp_T {
 }
 pub type salfirst_T = ::core::ffi::c_int;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct salitem_T {
     pub sm_lead: *mut ::core::ffi::c_char,
     pub sm_leadlen: ::core::ffi::c_int,
@@ -34,7 +31,6 @@ pub struct salitem_T {
     pub sm_to_w: *mut ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct slang_S {
     pub sl_next: *mut slang_T,
     pub sl_name: *mut ::core::ffi::c_char,
@@ -91,7 +87,6 @@ pub struct slang_S {
 pub type slang_T = slang_S;
 pub type smt_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct spelltab_T {
     pub st_isw: [bool; 256],
     pub st_isu: [bool; 256],

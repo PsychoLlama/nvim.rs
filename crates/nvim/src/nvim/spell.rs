@@ -187,7 +187,6 @@ pub const WC_KEY_OFF: ::core::ffi::c_ulong = 2;
 /// compound recursion can pass it around in one piece rather than a dozen
 /// arguments.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct matchinf_T {
     /// The language being tried.
     pub mi_lp: *mut langp_T,
@@ -229,7 +228,6 @@ pub struct matchinf_T {
 /// One `SYLLABLE` item: a short sequence of characters counting as one
 /// syllable.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct syl_item_T {
     pub sy_chars: [c_char; SY_MAXLEN as usize],
     pub sy_len: c_int,
@@ -237,7 +235,6 @@ pub struct syl_item_T {
 
 /// The cookie `do_in_runtimepath` carries while loading a language.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct spelload_T {
     /// The language name, truncated when an error is found.
     pub sl_lang: [c_char; MAXWLEN + 1],

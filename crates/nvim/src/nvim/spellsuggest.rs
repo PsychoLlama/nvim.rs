@@ -199,7 +199,6 @@ pub const SPS_FAST: c_int = 2;
 pub const SPS_DOUBLE: c_int = 4;
 
 /// What is known while looking for suggestions.
-#[repr(C)]
 pub struct suginfo_T {
     /// The suggestions found so far, a garray of [`suggest_T`].
     pub su_ga: garray_T,
@@ -231,7 +230,6 @@ pub struct suginfo_T {
 
 /// One suggestion.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct suggest_T {
     /// The suggested word, an allocated string this entry owns.
     pub st_word: *mut c_char,

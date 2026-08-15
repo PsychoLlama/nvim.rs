@@ -693,7 +693,6 @@ const MAPTYPE_UNMAP: c_int = 1;
 
 /// One `:loadkeymap` entry: heap C strings owned by the buffer's
 /// `b_kmap_ga` (freed by [`keymap_ga_clear`]).
-#[repr(C)]
 struct kmap_T {
     from: *mut c_char,
     to: *mut c_char,
