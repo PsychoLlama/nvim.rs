@@ -65,13 +65,12 @@ pub use crate::src::nvim::marktree::{
     check::*, inspect::*, iter::*, pair::*, rebalance::*, splice::*,
 };
 use crate::src::nvim::memory::{xfree, xmemdup};
-use crate::src::nvim::os::libc::{memcmp, memcpy, memmove, snprintf};
+use crate::src::nvim::os::libc::{memcmp, snprintf};
 use crate::src::nvim::types::{
-    DecorHighlightInline, DecorInlineData, Intersection, MTDamage, MTDamagePair, MTKey, MTNode,
-    MTPair, MTPos, Map_ptr_t_ptr_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_2, MetaFilter, Set_ptr_t,
-    Set_uint64_t, String_0, colnr_T, garray_T, int16_t, int32_t, ptr_t, size_t, uint16_t, uint32_t,
-    uint64_t,
+    DecorHighlightInline, DecorInlineData, MTDamage, MTDamagePair, MTKey, MTNode, MTPair, MTPos,
+    Map_ptr_t_ptr_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash, MarkTree,
+    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_2, MetaFilter, Set_ptr_t, Set_uint64_t,
+    String_0, colnr_T, garray_T, int32_t, ptr_t, size_t, uint16_t, uint32_t, uint64_t,
 };
 
 /// What a splice recorded about pairs whose halves crossed while it ran.
@@ -211,15 +210,12 @@ pub unsafe fn marktree_put_key(b: &mut MarkTree, mut k: MTKey) {
         s.set_child_meta(0, b.meta_root);
         r.set_parent(Some(s));
         r.set_parent_index(0);
-        // SAFETY: `b` is live and `s` is its new internal root, whose only
-        // child is the full node to split.
-        unsafe { split_node(b, s.as_ptr(), 0, k) };
+        split_node(b, s, 0, k);
         r = s;
     }
 
     let meta_inc = meta_describe_key(k);
-    // SAFETY: `b` is live and `r` is its root, which is now not full.
-    unsafe { marktree_putp_aux(b, r.as_ptr(), k, &meta_inc) };
+    marktree_putp_aux(b, r, k, &meta_inc);
     meta_add(&mut b.meta_root, &meta_inc);
     b.n_keys = b.n_keys.wrapping_add(1);
 }
@@ -451,13 +447,11 @@ pub unsafe extern "C" fn marktree_del_itr(
             lasti.bump(itr, 1);
             itr_dirty = true;
             // Steal one key from the left neighbour.
-            // SAFETY: `b` is live and `p` is one of its internal nodes.
-            unsafe { pivot_right(b, ppos, p.as_ptr(), pi - 1) };
+            pivot_right(b, ppos, p, pi as usize - 1);
             break;
         } else if pi < p.key_count() as c_int && p.child(pi as usize + 1).key_count() > min_keys {
             // Steal one key from the right neighbour.
-            // SAFETY: as above.
-            unsafe { pivot_left(b, ppos, p.as_ptr(), pi) };
+            pivot_left(b, ppos, p, pi as usize);
             break;
         } else if pi > 0 {
             assert!(
@@ -466,8 +460,7 @@ pub unsafe extern "C" fn marktree_del_itr(
             );
             // Merge with the left neighbour.
             lasti.bump(itr, MT_BRANCH_FACTOR as c_int);
-            // SAFETY: as above.
-            x = unsafe { Node::new(merge_node(b, p.as_ptr(), pi - 1)) };
+            x = merge_node(b, p, pi as usize - 1);
             if lasti == Lasti::Cur {
                 // TRICKY: we merged the node the iterator was on.
                 itr.x = x.as_ptr();
@@ -479,8 +472,8 @@ pub unsafe extern "C" fn marktree_del_itr(
                 pi < p.key_count() as c_int && p.child(pi as usize + 1).key_count() == min_keys,
                 "pi < p->n && p->ptr[pi + 1]->n == T - 1"
             );
-            // SAFETY: as above. No iterator adjustment is needed.
-            unsafe { merge_node(b, p.as_ptr(), pi) };
+            // No iterator adjustment is needed.
+            merge_node(b, p, pi as usize);
         }
         lasti = Lasti::Level(rlvl as usize);
         rlvl -= 1;
