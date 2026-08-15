@@ -624,7 +624,7 @@ unsafe fn buf_mod_sign(
             return 0;
         }
         let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
-        let mark = marktree_lookup_ns(tree, ns as uint32_t, *id, false, ::core::ptr::null_mut());
+        let mark = marktree_lookup_ns(&mut *tree, ns as uint32_t, *id, false, None);
         if mark.pos.row >= 0 {
             buf_set_sign(buf, id, group, prio, mark.pos.row + 1, sp);
         }
@@ -646,15 +646,10 @@ unsafe fn buf_findsign(buf: *mut buf_T, id: c_int, group: *mut c_char) -> c_int 
             return 0;
         }
         let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
-        marktree_lookup_ns(
-            tree,
-            ns as uint32_t,
-            id as uint32_t,
-            false,
-            ::core::ptr::null_mut(),
-        )
-        .pos
-        .row + 1
+        marktree_lookup_ns(&mut *tree, ns as uint32_t, id as uint32_t, false, None)
+            .pos
+            .row
+            + 1
     }
 }
 

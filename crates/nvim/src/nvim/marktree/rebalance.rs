@@ -1,3 +1,8 @@
+// Not graduated yet: the parent module denies `unsafe_op_in_unsafe_fn` and the
+// level is inherited, so these transpiled bodies opt back out until the
+// rewrite that narrows them. Remove this when the deny goes on.
+#![allow(unsafe_op_in_unsafe_fn)]
+
 //! Keeping the tree balanced across an insertion or a deletion.
 //!
 //! A node holds between `MT_BRANCH_FACTOR - 1` and `2 * MT_BRANCH_FACTOR - 1`
@@ -39,12 +44,12 @@ pub unsafe extern "C" fn split_node(
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while j < MT_BRANCH_FACTOR as ::core::ffi::c_int {
             let mut k: MTKey = (*y).key[j as usize];
-            let mut pi_end: uint64_t = pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, true), true);
+            let mut pi_end = pseudo_index_for_id(&mut *b, mt_lookup_id(k.ns, k.id, true), true);
             if mt_start(k) as ::core::ffi::c_int != 0
                 && pi_end > pi
                 && mt_lookup_key(k) != last_start
             {
-                intersect_node(z, mt_lookup_id(k.ns, k.id, false));
+                intersect_node(Node::new(z), mt_lookup_id(k.ns, k.id, false));
             }
             j += 1;
         }
@@ -55,10 +60,10 @@ pub unsafe extern "C" fn split_node(
                 - 1 as ::core::ffi::c_int
         {
             let mut k_0: MTKey = (*y).key[j_0 as usize];
-            let mut pi_start: uint64_t =
-                pseudo_index_for_id(b, mt_lookup_id(k_0.ns, k_0.id, false), true);
+            let mut pi_start =
+                pseudo_index_for_id(&mut *b, mt_lookup_id(k_0.ns, k_0.id, false), true);
             if mt_end(k_0) as ::core::ffi::c_int != 0 && pi_start > 0 as uint64_t && pi_start < pi {
-                intersect_node(y, mt_lookup_id(k_0.ns, k_0.id, false));
+                intersect_node(Node::new(y), mt_lookup_id(k_0.ns, k_0.id, false));
             }
             j_0 += 1;
         }
@@ -225,7 +230,7 @@ pub unsafe extern "C" fn merge_node(
         let mut k_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (k_0 as int32_t) < (*x).n + 1 as int32_t {
             for &id in ix(x).as_slice() {
-                intersect_node((*inner(x)).i_ptr[k_0 as usize], id);
+                intersect_node(Node::new((*inner(x)).i_ptr[k_0 as usize]), id);
             }
             k_0 += 1;
         }
@@ -236,7 +241,7 @@ pub unsafe extern "C" fn merge_node(
             (*(*inner(x)).i_ptr[k_1 as usize]).parent = x;
             (*(*inner(x)).i_ptr[k_1 as usize]).p_idx = k_1 as int16_t;
             for &id in ix(y).as_slice() {
-                intersect_node((*inner(x)).i_ptr[k_1 as usize], id);
+                intersect_node(Node::new((*inner(x)).i_ptr[k_1 as usize]), id);
             }
             ky += 1;
         }
@@ -385,14 +390,14 @@ pub unsafe extern "C" fn pivot_right(
         if mt_end((*p).key[i as usize]) {
             let mut pi: uint64_t = pseudo_index(x, 0 as ::core::ffi::c_int);
             let mut start_id: uint64_t = mt_lookup_key_side((*p).key[i as usize], false);
-            let mut pi_start: uint64_t = pseudo_index_for_id(b, start_id, true);
+            let mut pi_start = pseudo_index_for_id(&mut *b, start_id, true);
             if pi_start > 0 as uint64_t && pi_start < pi {
-                intersect_node(x, start_id);
+                intersect_node(Node::new(x), start_id);
             }
         }
         if mt_start((*y).key[0 as ::core::ffi::c_int as usize]) {
             unintersect_node(
-                y,
+                Node::new(y),
                 mt_lookup_key((*y).key[0 as ::core::ffi::c_int as usize]),
                 false,
             );
@@ -508,14 +513,14 @@ pub unsafe extern "C" fn pivot_left(
         if mt_start((*p).key[i as usize]) {
             let mut pi: uint64_t = pseudo_index(y, 0 as ::core::ffi::c_int);
             let mut end_id: uint64_t = mt_lookup_key_side((*p).key[i as usize], true);
-            let mut pi_end: uint64_t = pseudo_index_for_id(b, end_id, true);
+            let mut pi_end = pseudo_index_for_id(&mut *b, end_id, true);
             if pi_end > pi {
-                intersect_node(y, mt_lookup_key((*p).key[i as usize]));
+                intersect_node(Node::new(y), mt_lookup_key((*p).key[i as usize]));
             }
         }
         if mt_end((*x).key[((*x).n - 1 as int32_t) as usize]) {
             unintersect_node(
-                x,
+                Node::new(x),
                 mt_lookup_key_side((*x).key[((*x).n - 1 as int32_t) as usize], false),
                 false,
             );

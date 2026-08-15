@@ -1,3 +1,8 @@
+// Not graduated yet: the parent module denies `unsafe_op_in_unsafe_fn` and the
+// level is inherited, so these transpiled bodies opt back out until the
+// rewrite that narrows them. Remove this when the deny goes on.
+#![allow(unsafe_op_in_unsafe_fn)]
+
 //! Rendering a tree for a human: `:lua vim.api.nvim__buf_debug_extmarks()`.
 //!
 //! Two formats. The default is a nested parenthesised dump, one node per line,

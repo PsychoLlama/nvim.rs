@@ -151,11 +151,6 @@ fn itr_rawkey(itr: &mut MarkTreeIter) -> &mut MTKey {
     unsafe { &mut (*itr.x).key[itr.i as usize] }
 }
 
-/// `itr ? itr : NULL`, for the entry points that take an optional iterator.
-fn itr_ptr(itr: Option<&mut MarkTreeIter>) -> *mut MarkTreeIter {
-    itr.map_or(ptr::null_mut(), |itr| itr)
-}
-
 fn tree_put(tree: &mut MarkTree, key: MTKey, end_row: c_int, end_col: c_int, end_right: bool) {
     // SAFETY: a live tree, and a key the caller has filled in.
     unsafe { marktree_put(tree, key, end_row, end_col, end_right) }
@@ -168,7 +163,7 @@ fn tree_del_itr(tree: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> uint6
 
 fn tree_lookup(tree: &mut MarkTree, id: uint64_t, itr: Option<&mut MarkTreeIter>) -> MTKey {
     // SAFETY: a live tree; the iterator is optional and is written, not read.
-    unsafe { marktree_lookup(tree, id, itr_ptr(itr)) }
+    unsafe { marktree_lookup(tree, id, itr) }
 }
 
 fn tree_lookup_ns(
@@ -179,17 +174,17 @@ fn tree_lookup_ns(
     itr: Option<&mut MarkTreeIter>,
 ) -> MTKey {
     // SAFETY: as [`tree_lookup`].
-    unsafe { marktree_lookup_ns(tree, ns, id, end, itr_ptr(itr)) }
+    unsafe { marktree_lookup_ns(tree, ns, id, end, itr) }
 }
 
 fn tree_get_alt(tree: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTKey {
     // SAFETY: as [`tree_lookup`]; `mark` is a key read out of this tree.
-    unsafe { marktree_get_alt(tree, mark, itr_ptr(itr)) }
+    unsafe { marktree_get_alt(tree, mark, itr) }
 }
 
 fn tree_get_altpos(tree: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTPos {
     // SAFETY: as [`tree_get_alt`].
-    unsafe { marktree_get_altpos(tree, mark, itr_ptr(itr)) }
+    unsafe { marktree_get_altpos(tree, mark, itr) }
 }
 
 fn tree_move(tree: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int, col: c_int) {

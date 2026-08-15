@@ -1,3 +1,8 @@
+// Not graduated yet: the parent module denies `unsafe_op_in_unsafe_fn` and the
+// level is inherited, so these transpiled bodies opt back out until the
+// rewrite that narrows them. Remove this when the deny goes on.
+#![allow(unsafe_op_in_unsafe_fn)]
+
 //! Adjusting every mark for a buffer edit.
 //!
 //! `marktree_splice` is given the start of the edited region, the extent that
@@ -465,13 +470,7 @@ pub unsafe extern "C" fn marktree_splice(
                 d.end.old,
                 d.end.old_i,
             );
-            marktree_intersect_pair(
-                b,
-                start_id,
-                &raw mut itr as *mut MarkTreeIter,
-                &raw mut enditr as *mut MarkTreeIter,
-                true,
-            );
+            marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], true);
             marktree_itr_set_node(
                 b,
                 &raw mut itr as *mut MarkTreeIter,
@@ -484,13 +483,7 @@ pub unsafe extern "C" fn marktree_splice(
                 d.end.new,
                 d.end.new_i,
             );
-            marktree_intersect_pair(
-                b,
-                start_id,
-                &raw mut itr as *mut MarkTreeIter,
-                &raw mut enditr as *mut MarkTreeIter,
-                false,
-            );
+            marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], false);
         } else if !d.start.old.is_null() {
             let mut endpos: [MarkTreeIter; 1] = [MarkTreeIter {
                 pos: MTPos { row: 0, col: 0 },
@@ -503,9 +496,9 @@ pub unsafe extern "C" fn marktree_splice(
                 intersect_pos_x: MTPos { row: 0, col: 0 },
             }; 1];
             marktree_lookup(
-                b,
+                &mut *b,
                 start_id | 1 as ::core::ffi::c_int as uint64_t,
-                &raw mut endpos as *mut MarkTreeIter,
+                Some(&mut endpos[0]),
             );
             if !(*(&raw mut endpos as *mut MarkTreeIter)).x.is_null() {
                 marktree_itr_set_node(
@@ -515,13 +508,7 @@ pub unsafe extern "C" fn marktree_splice(
                     d.start.old_i,
                 );
                 *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos as *mut MarkTreeIter);
-                marktree_intersect_pair(
-                    b,
-                    start_id,
-                    &raw mut itr as *mut MarkTreeIter,
-                    &raw mut enditr as *mut MarkTreeIter,
-                    true,
-                );
+                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], true);
                 marktree_itr_set_node(
                     b,
                     &raw mut itr as *mut MarkTreeIter,
@@ -529,13 +516,7 @@ pub unsafe extern "C" fn marktree_splice(
                     d.start.new_i,
                 );
                 *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos as *mut MarkTreeIter);
-                marktree_intersect_pair(
-                    b,
-                    start_id,
-                    &raw mut itr as *mut MarkTreeIter,
-                    &raw mut enditr as *mut MarkTreeIter,
-                    false,
-                );
+                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], false);
             }
         } else if !d.end.old.is_null() {
             let mut startpos: [MarkTreeIter; 1] = [MarkTreeIter {
@@ -548,7 +529,7 @@ pub unsafe extern "C" fn marktree_splice(
                 intersect_pos: MTPos { row: 0, col: 0 },
                 intersect_pos_x: MTPos { row: 0, col: 0 },
             }; 1];
-            marktree_lookup(b, start_id, &raw mut startpos as *mut MarkTreeIter);
+            marktree_lookup(&mut *b, start_id, Some(&mut startpos[0]));
             if !(*(&raw mut startpos as *mut MarkTreeIter)).x.is_null() {
                 *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos as *mut MarkTreeIter);
                 marktree_itr_set_node(
@@ -557,13 +538,7 @@ pub unsafe extern "C" fn marktree_splice(
                     d.end.old,
                     d.end.old_i,
                 );
-                marktree_intersect_pair(
-                    b,
-                    start_id,
-                    &raw mut itr as *mut MarkTreeIter,
-                    &raw mut enditr as *mut MarkTreeIter,
-                    true,
-                );
+                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], true);
                 *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos as *mut MarkTreeIter);
                 marktree_itr_set_node(
                     b,
@@ -571,13 +546,7 @@ pub unsafe extern "C" fn marktree_splice(
                     d.end.new,
                     d.end.new_i,
                 );
-                marktree_intersect_pair(
-                    b,
-                    start_id,
-                    &raw mut itr as *mut MarkTreeIter,
-                    &raw mut enditr as *mut MarkTreeIter,
-                    false,
-                );
+                marktree_intersect_pair(&mut *b, start_id, &mut itr[0], &enditr[0], false);
             }
         }
         __i = __i.wrapping_add(1);
@@ -651,7 +620,7 @@ pub unsafe extern "C" fn marktree_move_region(
         }
         relative(start, &mut k.pos);
         saved.push(k);
-        marktree_del_itr(b, &raw mut itr as *mut MarkTreeIter, false);
+        marktree_del_itr(&mut *b, &mut itr[0], false);
     }
     marktree_splice(
         b,
@@ -677,9 +646,9 @@ pub unsafe extern "C" fn marktree_move_region(
     );
     for mut item in saved {
         unrelative(new, &mut item.pos);
-        marktree_put_key(b, item);
+        marktree_put_key(&mut *b, item);
         if mt_paired(item) {
-            marktree_restore_pair(b, item);
+            marktree_restore_pair(&mut *b, item);
         }
     }
 }

@@ -1,3 +1,8 @@
+// Not graduated yet: the parent module denies `unsafe_op_in_unsafe_fn` and the
+// level is inherited, so these transpiled bodies opt back out until the
+// rewrite that narrows them. Remove this when the deny goes on.
+#![allow(unsafe_op_in_unsafe_fn)]
+
 //! Whole-tree invariant checks, and the entry points the unit spec drives.
 //!
 //! `test/unit/marktree_spec.lua` builds trees of thousands of random marks and
@@ -220,14 +225,14 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
                 intersect_pos_x: MTPos { row: 0, col: 0 },
             }; 1];
             let mut end_id: uint64_t = mt_lookup_id(mark.ns, mark.id, true);
-            let mut k: MTKey = marktree_lookup(b, end_id, &raw mut end_itr as *mut MarkTreeIter);
+            let mut k: MTKey = marktree_lookup(&mut *b, end_id, Some(&mut end_itr[0]));
             if k.pos.row >= 0 as int32_t {
                 *(&raw mut start_itr as *mut MarkTreeIter) = *(&raw mut itr as *mut MarkTreeIter);
                 marktree_intersect_pair(
-                    b,
+                    &mut *b,
                     mt_lookup_key(mark),
-                    &raw mut start_itr as *mut MarkTreeIter,
-                    &raw mut end_itr as *mut MarkTreeIter,
+                    &mut start_itr[0],
+                    &end_itr[0],
                     false,
                 );
             }
@@ -352,7 +357,7 @@ pub unsafe extern "C" fn marktree_put_test(
             hl: DECOR_HIGHLIGHT_INLINE_INIT,
         },
     };
-    marktree_put(b, key, end_row, end_col, end_right);
+    marktree_put(&mut *b, key, end_row, end_col, end_right);
 }
 
 #[unsafe(no_mangle)]
@@ -376,9 +381,9 @@ pub unsafe extern "C" fn marktree_del_pair_test(
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
     }; 1];
-    marktree_lookup_ns(b, ns, id, false, &raw mut itr as *mut MarkTreeIter);
-    let mut other: uint64_t = marktree_del_itr(b, &raw mut itr as *mut MarkTreeIter, false);
+    marktree_lookup_ns(&mut *b, ns, id, false, Some(&mut itr[0]));
+    let mut other: uint64_t = marktree_del_itr(&mut *b, &mut itr[0], false);
     debug_assert!(other != 0, "other");
-    marktree_lookup(b, other, &raw mut itr as *mut MarkTreeIter);
-    marktree_del_itr(b, &raw mut itr as *mut MarkTreeIter, false);
+    marktree_lookup(&mut *b, other, Some(&mut itr[0]));
+    marktree_del_itr(&mut *b, &mut itr[0], false);
 }

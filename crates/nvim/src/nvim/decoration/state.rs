@@ -593,7 +593,7 @@ pub unsafe fn decor_redraw_col_impl(
             }
 
             if !mt_invalid(mark) && !mt_end(mark) && mt_decor_any(mark) && ns_in_win(mark.ns, wp) {
-                let endpos: MTPos = marktree_get_altpos(tree, mark, ptr::null_mut());
+                let endpos: MTPos = marktree_get_altpos(&mut *tree, mark, None);
                 decor_range_add_from_inline(
                     state,
                     mark.pos.row,

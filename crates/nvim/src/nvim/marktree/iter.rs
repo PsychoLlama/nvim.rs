@@ -1,3 +1,8 @@
+// Not graduated yet: the parent module denies `unsafe_op_in_unsafe_fn` and the
+// level is inherited, so these transpiled bodies opt back out until the
+// rewrite that narrows them. Remove this when the deny goes on.
+#![allow(unsafe_op_in_unsafe_fn)]
+
 //! Walking the tree.
 //!
 //! `MarkTreeIter` is a cursor: the node and index it currently names, plus the
@@ -495,12 +500,8 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
             let id = ix((*itr).x).as_slice()[(*itr).intersect_idx];
             (*itr).intersect_idx += 1;
             *pair = mtpair_from(
-                marktree_lookup(b, id, ::core::ptr::null_mut::<MarkTreeIter>()),
-                marktree_lookup(
-                    b,
-                    id | MARKTREE_END_FLAG,
-                    ::core::ptr::null_mut::<MarkTreeIter>(),
-                ),
+                marktree_lookup(&mut *b, id, None),
+                marktree_lookup(&mut *b, id | MARKTREE_END_FLAG, None),
             );
             return true;
         }
@@ -556,11 +557,7 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
         if !mt_start(k_0) {
             continue;
         }
-        let mut end: MTKey = marktree_lookup(
-            b,
-            mt_lookup_id(k_0.ns, k_0.id, true),
-            ::core::ptr::null_mut::<MarkTreeIter>(),
-        );
+        let mut end = marktree_lookup(&mut *b, mt_lookup_id(k_0.ns, k_0.id, true), None);
         if pos_less(end.pos, (*itr).intersect_pos) {
             continue;
         }
@@ -580,7 +577,7 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
             continue;
         }
         unrelative((*itr).pos, &mut k_1.pos);
-        let mut start: MTKey = marktree_lookup(b, id_0, ::core::ptr::null_mut::<MarkTreeIter>());
+        let mut start: MTKey = marktree_lookup(&mut *b, id_0, None);
         if pos_leq((*itr).intersect_pos, start.pos) {
             continue;
         }

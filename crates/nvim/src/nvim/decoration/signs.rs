@@ -347,7 +347,7 @@ pub unsafe fn buf_signcols_count_range(
                 && !mt_invalid(mark)
                 && !mt_end(mark)
             {
-                let end: MTPos = marktree_get_altpos(tree, mark, ptr::null_mut());
+                let end: MTPos = marktree_get_altpos(&mut *tree, mark, None);
                 for i in mark.pos.row..=row2.min(end.row) {
                     count[(i - row1) as usize] += 1;
                 }

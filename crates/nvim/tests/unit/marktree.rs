@@ -142,8 +142,8 @@ impl Tree {
     fn del(&mut self, id: u32) {
         let mut itr = zeroed_iter();
         unsafe {
-            marktree_lookup_ns(self.ptr(), NS, id, false, &raw mut itr);
-            marktree_del_itr(self.ptr(), &raw mut itr, false);
+            marktree_lookup_ns(&mut self.tree, NS, id, false, Some(&mut itr));
+            marktree_del_itr(&mut self.tree, &mut itr, false);
         }
         let at = self.shadow.iter().position(|s| s.id == id).unwrap();
         self.shadow.remove(at);
@@ -212,7 +212,8 @@ impl Tree {
             if want.right {
                 continue;
             }
-            let k = unsafe { marktree_lookup_ns(self.ptr(), NS, want.id, false, &raw mut itr) };
+            let k =
+                unsafe { marktree_lookup_ns(&mut self.tree, NS, want.id, false, Some(&mut itr)) };
             assert_eq!(
                 (k.pos.row, k.pos.col),
                 (want.row, want.col),
@@ -226,7 +227,7 @@ impl Tree {
 
 impl Drop for Tree {
     fn drop(&mut self) {
-        unsafe { marktree_clear(self.ptr()) };
+        unsafe { marktree_clear(&mut self.tree) };
     }
 }
 
@@ -434,7 +435,7 @@ fn clearing_a_tree_leaves_it_reusable() {
     for i in 0..scale(30, 300) as i32 {
         t.put(i, i, false);
     }
-    unsafe { marktree_clear(t.ptr()) };
+    unsafe { marktree_clear(&mut t.tree) };
     t.shadow.clear();
     assert_eq!(t.tree.n_keys, 0);
     assert_eq!(t.tree.n_nodes, 0);
