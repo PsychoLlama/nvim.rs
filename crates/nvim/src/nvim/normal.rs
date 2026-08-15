@@ -102,7 +102,6 @@ pub const FIND_EVAL: c_uint = 4;
 pub const FIND_STRING: c_uint = 2;
 pub const FIND_IDENT: c_uint = 1;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub(crate) struct nv_cmd {
     pub cmd_char: c_int,
     pub cmd_func: nv_func_T,

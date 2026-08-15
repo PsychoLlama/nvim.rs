@@ -263,7 +263,6 @@ pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct AutoCmdEvent {
     pub event: event_T,
     pub fname: *mut ::core::ffi::c_char,
@@ -274,7 +273,6 @@ pub struct AutoCmdEvent {
     pub data: *mut Object,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct C2Rust_Unnamed_30 {
     pub size: size_t,
     pub capacity: size_t,

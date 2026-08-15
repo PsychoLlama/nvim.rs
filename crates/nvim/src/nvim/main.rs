@@ -80,7 +80,6 @@ pub(crate) const kOptValTypeString: OptValType = 2;
 pub(crate) const kOptValTypeNumber: OptValType = 1;
 pub(crate) const kOptValTypeBoolean: OptValType = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct AucmdWinVec {
     pub size: size_t,
     pub capacity: size_t,
@@ -140,7 +139,6 @@ pub(crate) const EDIT_FILE: c_uint = 1;
 pub(crate) const EDIT_TAG: c_uint = 3;
 pub(crate) const EDIT_NONE: c_uint = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct PumWant {
     pub active: bool,
     pub item: c_int,

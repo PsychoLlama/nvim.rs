@@ -123,7 +123,6 @@ pub const RM_NONE: C2Rust_Unnamed_36 = 1;
 pub const RM_YES: C2Rust_Unnamed_36 = 0;
 pub const RM_ABBR: C2Rust_Unnamed_36 = 4;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct gotchars_state_T {
     pub buf: [uint8_t; 67],
     pub prev_c: ::core::ffi::c_int,

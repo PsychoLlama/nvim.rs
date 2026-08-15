@@ -257,7 +257,6 @@ pub struct InsertState {
     pub nomove: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ReplaceStack {
     pub size: size_t,
     pub capacity: size_t,

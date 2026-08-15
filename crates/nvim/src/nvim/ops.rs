@@ -179,7 +179,6 @@ pub const SIN_CHANGED: ::core::ffi::c_int = 1;
 
 /// The Visual area a `.` replays -- see `pending::REDO_VISUAL`.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct redo_VIsual_T {
     /// `v`, `V` or CTRL-V.
     pub rv_mode: ::core::ffi::c_int,

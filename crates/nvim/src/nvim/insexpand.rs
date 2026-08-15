@@ -192,7 +192,6 @@ pub const CTRL_X_REGISTER: C2Rust_Unnamed_36 = 19;
 pub const CTRL_X_BUFNAMES: C2Rust_Unnamed_36 = 18;
 pub type compl_T = compl_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct compl_S {
     pub cp_next: *mut compl_T,
     pub cp_prev: *mut compl_T,
@@ -220,7 +219,6 @@ pub const CPT_KIND: C2Rust_Unnamed_26 = 1;
 pub const CPT_MENU: C2Rust_Unnamed_26 = 2;
 pub const CPT_ABBR: C2Rust_Unnamed_26 = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct cpt_source_T {
     pub cs_refresh_always: bool,
     pub cs_startcol: ::core::ffi::c_int,
@@ -230,7 +228,6 @@ pub struct cpt_source_T {
 }
 pub const CP_EQUAL: C2Rust_Unnamed_37 = 8;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ins_compl_next_state_T {
     pub e_cpt_copy: *mut ::core::ffi::c_char,
     pub e_cpt: *mut ::core::ffi::c_char,
