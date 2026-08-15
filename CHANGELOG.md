@@ -9,12 +9,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- Rewrote the mark tree: the interval tree that holds every extmark, sign,
-  inline virtual text, conceal and decoration the editor draws, covering
-  the node splitting, merging and rebalancing, the sets that record which
-  ranges cover a node, the plain, filtered and overlapping walks over
-  them, and the arithmetic that moves every mark as text is inserted,
-  deleted or moved.
+- Rewrote the mark tree, the interval tree behind every extmark, sign,
+  inline virtual text, conceal and decoration the editor draws, along
+  with the arithmetic that moves them all as text is inserted, deleted
+  or moved.
 - Rewrote the terminal emulator and the terminal buffer in front of it:
   the escape-sequence parser and its state machine, every CSI and the
   whole SGR alphabet, the mode table, the UTF-8 decoder and the charset
@@ -36,10 +34,6 @@ and this project adheres to [CalVer](https://calver.org/).
   no longer corrupts the heap. Opening a terminal freed the variable's
   own string, so reading, reassigning or unsetting it afterwards was a
   double free; the palette is now read without taking ownership.
-- Restored libvterm's and libtermkey's MIT notices, which the port had
-  dropped: the ported emulator and key reader now carry the attribution,
-  `LICENSE.txt` names the files each covers, and both notices are
-  reproduced in `licenses/`.
 
 ## [2026.08.14-954ee76f86]
 
@@ -223,8 +217,6 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [2026.08.06-eb75350b02]
 
-Ongoing migration of the transpiled code toward safe, idiomatic Rust.
-
 ### Changed
 
 - Rewrote the input layer, covering key codes, the typeahead and its
@@ -281,8 +273,6 @@ Ongoing migration of the transpiled code toward safe, idiomatic Rust.
 
 ## [2026.08.02-af6bcec290]
 
-Ongoing migration of the transpiled code toward safe, idiomatic Rust.
-
 ### Changed
 
 - Rewrote the screen pipeline, covering the cell grid, screen-line
@@ -304,8 +294,6 @@ Ongoing migration of the transpiled code toward safe, idiomatic Rust.
   comes from `:sign define` or an extmark's `sign_text`.
 
 ## [2026.07.30-4b9dee25d3]
-
-Ongoing migration of the transpiled code toward safe, idiomatic Rust.
 
 ### Changed
 
@@ -341,8 +329,6 @@ Ongoing migration of the transpiled code toward safe, idiomatic Rust.
   that visits enough distinct back edges.
 
 ## [2026.07.27-dd16441f3f]
-
-Ongoing migration of the transpiled code toward safe, idiomatic Rust.
 
 ### Changed
 
@@ -385,8 +371,6 @@ Ongoing migration of the transpiled code toward safe, idiomatic Rust.
 - Patched several UB gaps identified by new aggressive analysis tools.
 
 ## [2026.07.23-95cd63254c]
-
-Ongoing migration of the transpiled code toward safe, idiomatic Rust.
 
 ### Changed
 
