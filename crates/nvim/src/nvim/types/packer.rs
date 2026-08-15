@@ -7,7 +7,6 @@ use super::*;
 pub type PackerBuffer = packer_buffer_t;
 pub type PackerBufferFlush = Option<unsafe extern "C" fn(*mut PackerBuffer) -> ()>;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct packer_buffer_t {
     pub startptr: *mut ::core::ffi::c_char,
     pub ptr: *mut ::core::ffi::c_char,

@@ -9,7 +9,6 @@ pub type LineFlags = ::core::ffi::c_int;
 pub const kLineFlagWrap: LineFlags = 1;
 pub const kLineFlagInvalid: LineFlags = 2;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct RemoteUI {
     pub rgb: bool,
     pub override_0: bool,

@@ -39,7 +39,6 @@ pub struct Unpacker {
 }
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CallbackReader {
     pub cb: Callback,
     pub self_0: *mut dict_T,
@@ -67,7 +66,6 @@ pub struct Channel {
     pub callback_scheduled: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ChannelCallFrame {
     pub request_id: uint32_t,
     pub returned: bool,

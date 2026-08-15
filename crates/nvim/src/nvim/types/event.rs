@@ -43,7 +43,6 @@ pub type WBuffer = wbuffer;
 pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct loop_0 {
     pub uv: uv_loop_t,
     pub events: *mut MultiQueue,
@@ -129,7 +128,6 @@ pub type socket_cb = Option<
 pub type socket_close_cb =
     Option<unsafe extern "C" fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct socket_watcher {
     pub addr: [::core::ffi::c_char; 256],
     pub uv: socket_watcher_uv,
@@ -240,7 +238,6 @@ impl time_watcher {
     };
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct wbuffer {
     pub size: size_t,
     pub refcount: size_t,

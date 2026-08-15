@@ -31,7 +31,6 @@ pub struct TermKey {
     pub csi: *mut TermKeyCsi,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TermKeyCsi {
     pub saved_string_id: ::core::ffi::c_int,
     pub saved_string: *mut ::core::ffi::c_char,

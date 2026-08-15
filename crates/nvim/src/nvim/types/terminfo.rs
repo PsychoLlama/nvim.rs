@@ -10,7 +10,6 @@ pub struct TPVAR {
     pub string: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TerminfoEntry {
     pub bce: bool,
     pub has_Tc_or_RGB: bool,

@@ -28,7 +28,6 @@ const DEFAULT_MAXMEM: size_t = 1024 * 1024 * 2000;
 /// One queued `uv_write`. libuv is handed `&uv_req` and finds its way back
 /// through that request's `data` field, which points at the whole `WRequest`.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct WRequest {
     pub stream: *mut Stream,
     pub buffer: *mut WBuffer,

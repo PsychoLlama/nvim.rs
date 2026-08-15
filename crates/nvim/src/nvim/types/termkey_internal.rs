@@ -9,7 +9,6 @@
 use super::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(C)]
 pub struct keyinfo {
     pub type_0: TermKeyType,
     pub sym: TermKeySym,

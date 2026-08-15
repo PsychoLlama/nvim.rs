@@ -52,7 +52,6 @@ impl Codepoints<'_> {
 /// Lives in `VTermEncodingInstance::data`, a 16-byte inline buffer, so the
 /// layout is dictated by that.
 #[derive(Copy, Clone)]
-#[repr(C)]
 struct Utf8Decoder {
     /// Continuation bytes still expected for the sequence in progress.
     bytes_remaining: c_int,
