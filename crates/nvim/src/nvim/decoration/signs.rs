@@ -206,8 +206,8 @@ pub unsafe fn decor_redraw_signs(
         let mut signs: Vec<SignItem> = Vec::new();
 
         let mut pair: MTPair = mem::zeroed();
-        marktree_itr_get_overlap(tree, row, 0, &raw mut itr);
-        while marktree_itr_step_overlap(tree, &raw mut itr, &raw mut pair) {
+        marktree_itr_get_overlap(&mut *tree, row, 0, &mut itr);
+        while marktree_itr_step_overlap(&mut *tree, &mut itr, &mut pair) {
             if !mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, wp)
             {
                 let sh = decor_find_sign(mt_decor(pair.start));
@@ -218,9 +218,9 @@ pub unsafe fn decor_redraw_signs(
             }
         }
 
-        marktree_itr_step_out_filter(tree, &raw mut itr, sign_filter());
+        marktree_itr_step_out_filter(&mut *tree, &mut itr, sign_filter());
         while !itr.x.is_null() {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if mark.pos.row != row {
                 break;
             }
@@ -228,7 +228,7 @@ pub unsafe fn decor_redraw_signs(
                 let sh = decor_find_sign(mt_decor(mark));
                 signs.push(SignItem { sh, id: mark.id });
             }
-            marktree_itr_next_filter(tree, &raw mut itr, row + 1, 0, sign_filter());
+            marktree_itr_next_filter(&mut *tree, &mut itr, row + 1, 0, sign_filter());
         }
 
         // How many of them have sign *text*; the rest only carry highlights.
@@ -327,8 +327,8 @@ pub unsafe fn buf_signcols_count_range(
         let mut pair: MTPair = mem::zeroed();
 
         // Signs that start before `row1` but reach into the range.
-        marktree_itr_get_overlap(tree, row1, 0, &raw mut itr);
-        while marktree_itr_step_overlap(tree, &raw mut itr, &raw mut pair) {
+        marktree_itr_get_overlap(&mut *tree, row1, 0, &mut itr);
+        while marktree_itr_step_overlap(&mut *tree, &mut itr, &mut pair) {
             if pair.start.flags as c_int & MT_FLAG_DECOR_SIGNTEXT != 0 && !mt_invalid(pair.start) {
                 for i in row1..=row2.min(pair.end_pos.row) {
                     count[(i - row1) as usize] += 1;
@@ -337,9 +337,9 @@ pub unsafe fn buf_signcols_count_range(
         }
 
         // Then everything that starts inside it, up to `row2`.
-        marktree_itr_step_out_filter(tree, &raw mut itr, signtext_filter());
+        marktree_itr_step_out_filter(&mut *tree, &mut itr, signtext_filter());
         while !itr.x.is_null() {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if mark.pos.row > row2 {
                 break;
             }
@@ -352,7 +352,7 @@ pub unsafe fn buf_signcols_count_range(
                     count[(i - row1) as usize] += 1;
                 }
             }
-            marktree_itr_next_filter(tree, &raw mut itr, row2 + 1, 0, signtext_filter());
+            marktree_itr_next_filter(&mut *tree, &mut itr, row2 + 1, 0, signtext_filter());
         }
 
         for &rowcount in &count {

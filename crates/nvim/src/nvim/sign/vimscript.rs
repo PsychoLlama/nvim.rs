@@ -144,13 +144,13 @@ pub unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T {
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
         let mut itr = MarkTreeIter::default();
-        marktree_itr_get(tree, 0, 0, &raw mut itr);
+        marktree_itr_get(&mut *tree, 0, 0, &mut itr);
         while !itr.x.is_null() {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if !mt_end(mark) && mt_decor_sign(mark) {
                 tv_list_append_dict(l, sign_get_placed_info_dict(mark));
             }
-            marktree_itr_next(tree, &raw mut itr);
+            marktree_itr_next(&mut *tree, &mut itr);
         }
         l
     }
@@ -188,10 +188,10 @@ unsafe fn sign_get_placed_in_buf(
         let mut itr = MarkTreeIter::default();
         let mut signs: Vec<MTKey> = Vec::new();
         let first_row = if lnum != 0 { lnum - 1 } else { 0 };
-        marktree_itr_get(tree, first_row, 0, &raw mut itr);
+        marktree_itr_get(&mut *tree, first_row, 0, &mut itr);
 
         while !itr.x.is_null() {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if lnum != 0 && mark.pos.row >= lnum {
                 break;
             }
@@ -206,7 +206,7 @@ unsafe fn sign_get_placed_in_buf(
             {
                 signs.push(mark);
             }
-            marktree_itr_next(tree, &raw mut itr);
+            marktree_itr_next(&mut *tree, &mut itr);
         }
 
         sort_signs(&mut signs);

@@ -85,10 +85,6 @@ impl Tree {
         }
     }
 
-    fn ptr(&mut self) -> *mut MarkTree {
-        &raw mut *self.tree
-    }
-
     fn put(&mut self, row: i32, col: i32, right: bool) -> u32 {
         self.next_id += 1;
         let id = self.next_id;
@@ -186,9 +182,9 @@ impl Tree {
         let mut itr = zeroed_iter();
         let mut seen: Vec<Shadow> = Vec::new();
         let mut order: Vec<u32> = Vec::new();
-        if unsafe { marktree_itr_first(self.ptr(), &raw mut itr) } {
+        if unsafe { marktree_itr_first(&mut self.tree, &mut itr) } {
             loop {
-                let k: MTKey = unsafe { marktree_itr_current(&raw mut itr) };
+                let k: MTKey = unsafe { marktree_itr_current(&mut itr) };
                 seen.push(Shadow {
                     id: k.id,
                     row: k.pos.row,
@@ -196,7 +192,7 @@ impl Tree {
                     right: unsafe { mt_right_test(k) },
                 });
                 order.push(k.id);
-                if !unsafe { marktree_itr_next(self.ptr(), &raw mut itr) } {
+                if !unsafe { marktree_itr_next(&mut self.tree, &mut itr) } {
                     break;
                 }
             }
@@ -416,17 +412,17 @@ fn an_iterator_positioned_by_coordinates_lands_on_the_first_mark_at_or_after_it(
     t.check();
 
     let mut itr = zeroed_iter();
-    unsafe { marktree_itr_get(t.ptr(), 0, 0, &raw mut itr) };
-    let k = unsafe { marktree_itr_current(&raw mut itr) };
+    unsafe { marktree_itr_get(&mut t.tree, 0, 0, &mut itr) };
+    let k = unsafe { marktree_itr_current(&mut itr) };
     assert_eq!((k.pos.row, k.pos.col), (0, 5));
 
     // Between two marks: lands on the later one.
-    unsafe { marktree_itr_get(t.ptr(), 1, 0, &raw mut itr) };
-    let k = unsafe { marktree_itr_current(&raw mut itr) };
+    unsafe { marktree_itr_get(&mut t.tree, 1, 0, &mut itr) };
+    let k = unsafe { marktree_itr_current(&mut itr) };
     assert_eq!((k.pos.row, k.pos.col), (2, 5));
 
     // Past the end: the iterator is exhausted.
-    unsafe { marktree_itr_get(t.ptr(), 1 << 20, 0, &raw mut itr) };
+    unsafe { marktree_itr_get(&mut t.tree, 1 << 20, 0, &mut itr) };
     assert!(itr.x.is_null());
 }
 
@@ -434,7 +430,7 @@ fn an_iterator_positioned_by_coordinates_lands_on_the_first_mark_at_or_after_it(
 fn an_empty_tree_has_nothing_to_walk() {
     let mut t = Tree::new();
     let mut itr = zeroed_iter();
-    assert!(!unsafe { marktree_itr_first(t.ptr(), &raw mut itr) });
+    assert!(!unsafe { marktree_itr_first(&mut t.tree, &mut itr) });
     assert_eq!(t.check(), Vec::<u32>::new());
 }
 

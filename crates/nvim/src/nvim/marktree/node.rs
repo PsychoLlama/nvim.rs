@@ -362,11 +362,14 @@ impl Node {
 
 /// The child pointers and per-child meta counts of an internal node.
 ///
+/// Private: [`Node::child`] and its neighbours are how the rest of the family
+/// reaches the tail, and they keep the index within the node's own count.
+///
 /// # Safety
 /// `x` must be a live internal node — one allocated with [`ILEN`] bytes, i.e.
 /// one whose `level` is non-zero.
 #[inline]
-pub unsafe fn inner(x: *mut MTNode) -> *mut mtnode_inner_s {
+unsafe fn inner(x: *mut MTNode) -> *mut mtnode_inner_s {
     // SAFETY: the caller promises `x` is a live internal node, so the tail is
     // within the allocation and `s` names its first byte.
     unsafe { (&raw mut (*x).s).cast() }
@@ -442,15 +445,6 @@ pub unsafe fn id2node(b: *mut MarkTree, id: uint64_t) -> *mut MTNode {
     unsafe { (*(*map).values.add(k as usize)).cast() }
 }
 
-/// Recompute a node's own meta counts from its keys and its children's counts.
-///
-/// # Safety
-/// `x` must be a live node. Prefer [`Node::meta`] where a [`Node`] is at hand.
-pub unsafe fn meta_describe_node(x: *mut MTNode) -> MetaCount {
-    // SAFETY: the caller promises `x` is a live node.
-    unsafe { Node::new(x) }.meta()
-}
-
 /// Where key `k` belongs among `keys`, which are sorted.
 ///
 /// Answers the index of the last key that is not greater than `k`, and whether
@@ -476,16 +470,6 @@ pub fn find_key(keys: &[MTKey], k: MTKey) -> (c_int, bool) {
     }
     let found = key_cmp(k, keys[begin]) == 0;
     (begin as c_int - c_int::from(!found), found)
-}
-
-/// The keys a node currently holds.
-///
-/// # Safety
-/// `x` must be a live node. Prefer [`Node::keys`] where a [`Node`] is at hand.
-#[inline]
-pub unsafe fn node_keys<'a>(x: *const MTNode) -> &'a [MTKey] {
-    // SAFETY: the caller promises `x` is a live node.
-    unsafe { Node::new(x.cast_mut()) }.keys()
 }
 
 #[cfg(test)]

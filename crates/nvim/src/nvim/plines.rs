@@ -36,9 +36,8 @@ use crate::src::nvim::option::get_showbreak_value;
 use crate::src::nvim::pos::{MAXCOL, lt, ltoreq};
 use crate::src::nvim::state::{MODE_NORMAL, virtual_active};
 use crate::src::nvim::types::{
-    CharSize, CharsizeArg, CharsizeKind, MarkTree, MarkTreeIter, MetaFilter, MetaIndex,
-    StrCharInfo, VirtLines, buf_T, colnr_T, foldinfo_T, int32_t, int64_t, linenr_T, pos_T,
-    uint32_t, win_T,
+    CharSize, CharsizeArg, CharsizeKind, MarkTreeIter, MetaFilter, MetaIndex, StrCharInfo,
+    VirtLines, buf_T, colnr_T, foldinfo_T, int32_t, int64_t, linenr_T, pos_T, uint32_t, win_T,
 };
 
 use ::core::ffi::{c_char, c_int, c_long};
@@ -175,13 +174,13 @@ pub unsafe fn init_charsize_arg(
 
         if lnum > 0
             && marktree_itr_get_filter(
-                &raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree,
+                &mut (*(*wp).w_buffer).b_marktree[0],
                 lnum - 1,
                 0,
                 lnum,
                 0,
                 inline_filter(),
-                (&raw mut csarg.iter).cast::<MarkTreeIter>(),
+                &mut csarg.iter[0],
             )
         {
             csarg.virt_row = lnum - 1;
@@ -358,7 +357,7 @@ unsafe fn add_inline_virt_text(
         let iter = (&raw mut csarg.iter).cast::<MarkTreeIter>();
 
         loop {
-            let mark = marktree_itr_current(iter);
+            let mark = marktree_itr_current(&mut *iter);
             if mark.pos.row != csarg.virt_row || mark.pos.col > col {
                 break;
             }
@@ -391,8 +390,8 @@ unsafe fn add_inline_virt_text(
                 }
             }
             marktree_itr_next_filter(
-                &raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree,
-                iter,
+                &mut (*(*wp).w_buffer).b_marktree[0],
+                &mut *iter,
                 csarg.virt_row + 1,
                 0,
                 inline_filter(),

@@ -61,16 +61,16 @@ pub(crate) unsafe fn sign_list_placed(rbuf: *mut buf_T, group: *mut c_char) {
                 let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
                 let mut itr = MarkTreeIter::default();
                 let mut signs: Vec<MTKey> = Vec::new();
-                marktree_itr_get(tree, 0, 0, &raw mut itr);
+                marktree_itr_get(&mut *tree, 0, 0, &mut itr);
                 while !itr.x.is_null() {
-                    let mark = marktree_itr_current(&raw mut itr);
+                    let mark = marktree_itr_current(&mut itr);
                     if !mt_end(mark)
                         && mt_decor_sign(mark)
                         && (ns == ALL_GROUPS || ns == mark.ns as int64_t)
                     {
                         signs.push(mark);
                     }
-                    marktree_itr_next(tree, &raw mut itr);
+                    marktree_itr_next(&mut *tree, &mut itr);
                 }
 
                 if !signs.is_empty() {

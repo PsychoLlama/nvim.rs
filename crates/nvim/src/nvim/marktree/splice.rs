@@ -26,20 +26,22 @@
 //!
 //! # How this file reaches the tree
 //!
-//! The walk is driven by a `MarkTreeIter`, which the sibling module still
-//! addresses by raw pointer, so the calls into it are wrapped once each in the
-//! small shims below rather than at every site. Two facts they all rest on:
-//! the iterators here are locals this file positioned itself, and a positioned
-//! iterator (`x` non-null — the loops all test that) names a live node of the
-//! tree it was positioned in. Those shims retire when `iter.rs` graduates.
+//! The walk is driven by a `MarkTreeIter`. `iter.rs` takes that by reference
+//! now, but its entry points are still `unsafe` — a reference cannot say that
+//! an iterator is positioned in the tree handed alongside it — so the calls
+//! are wrapped once each in the small shims below rather than at every site.
+//! Two facts they all rest on: the iterators here are locals this file
+//! positioned itself, and a positioned iterator (`x` non-null — the loops all
+//! test that) names a live node of the tree it was positioned in. The shims
+//! also fix the arguments this file never varies, which is most of them.
 
 use core::ffi::c_int;
 use core::ptr;
 
 use crate::src::nvim::map::map_put_ref_uint64_t_MTDamagePair;
 use crate::src::nvim::marktree::iter::{
-    marktree_itr_current, marktree_itr_get_ext, marktree_itr_next, marktree_itr_next_skip,
-    marktree_itr_pos, marktree_itr_prev, marktree_itr_set_node,
+    MT_MAX_DEPTH, marktree_itr_current, marktree_itr_get_ext, marktree_itr_next,
+    marktree_itr_next_skip, marktree_itr_pos, marktree_itr_prev, marktree_itr_set_node,
 };
 use crate::src::nvim::marktree::key::{
     MARKTREE_END_FLAG, mt_end, mt_lookup_key_side, mt_paired, mt_right, pos_leq, relative,
@@ -55,16 +57,6 @@ use crate::src::nvim::types::{
 };
 
 use super::{MAPHASH_INIT, MTDamageMap, marktree_del_itr, marktree_lookup, marktree_put_key};
-
-/// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
-/// the same reason node.rs nests its own sizes.
-mod sizes {
-    /// The deepest the tree can get: the C's `MT_MAX_DEPTH`, which is also the
-    /// length of `MarkTreeIter::s` and so the range `MarkTreeIter::lvl`
-    /// indexes.
-    pub const MT_MAX_DEPTH: usize = 20;
-}
-use sizes::MT_MAX_DEPTH;
 
 /// An empty damage map, owning nothing — klib's `MAP_INIT`.
 const DAMAGE_INIT: MTDamageMap = MTDamageMap {
@@ -105,10 +97,8 @@ fn itr_get_ext(
     last: bool,
     oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
 ) {
-    let oldbase = oldbase.map_or(ptr::null_mut(), |o| o.as_mut_ptr());
-    // SAFETY: `b` is a live tree and this is what positions `itr` in it;
-    // `oldbase`, where given, is a live array of `MT_MAX_DEPTH` positions.
-    unsafe { marktree_itr_get_ext(b, p, itr, last, true, oldbase, ptr::null()) };
+    // SAFETY: `b` is a live tree and this is what positions `itr` in it.
+    unsafe { marktree_itr_get_ext(b, p, itr, last, true, oldbase, None) };
 }
 
 /// Step to the next key, optionally skipping over whole subtrees and recording
@@ -119,10 +109,8 @@ fn itr_next_skip(
     skip: bool,
     oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
 ) {
-    let oldbase = oldbase.map_or(ptr::null_mut(), |o| o.as_mut_ptr());
-    // SAFETY: `b` is a live tree and `itr` is positioned in it; `oldbase`,
-    // where given, is a live array of `MT_MAX_DEPTH` positions.
-    unsafe { marktree_itr_next_skip(b, itr, skip, false, oldbase, ptr::null()) };
+    // SAFETY: `b` is a live tree and `itr` is positioned in it.
+    unsafe { marktree_itr_next_skip(b, itr, skip, false, oldbase, None) };
 }
 
 /// Step to the next key.
@@ -137,7 +125,7 @@ fn itr_set_node(b: &mut MarkTree, itr: &mut MarkTreeIter, n: *mut MTNode, i: c_i
     // SAFETY: `b` is a live tree and `n` one of its nodes: the damage map only
     // ever holds nodes this splice found through `b`, and nothing between the
     // two points frees a node.
-    unsafe { marktree_itr_set_node(b, itr, n, i) };
+    unsafe { marktree_itr_set_node(b, Some(itr), Node::new(n), i) };
 }
 
 /// Find the mark `id` and park `itr` on it, or leave `itr.x` null.
@@ -311,7 +299,7 @@ pub unsafe extern "C" fn marktree_splice(
 
     if may_delete {
         // SAFETY: `itr` was just positioned in `b`, and is not past the end.
-        let (ipos, key) = unsafe { (marktree_itr_pos(&mut itr), rawkey(&itr)) };
+        let (ipos, key) = unsafe { (marktree_itr_pos(&itr), rawkey(&itr)) };
         if !pos_leq(old_extent, ipos)
             || (old_extent.row == ipos.row && old_extent.col == ipos.col && !mt_right(key))
         {

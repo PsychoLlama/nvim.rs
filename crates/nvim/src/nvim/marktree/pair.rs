@@ -119,7 +119,7 @@ pub unsafe fn marktree_intersect_pair(
         }
         // SAFETY: `b` is live and `itr` is positioned in it; neither optional
         // out-parameter is wanted.
-        unsafe { marktree_itr_next_skip(b, itr, skip, true, ptr::null_mut(), ptr::null()) };
+        unsafe { marktree_itr_next_skip(b, itr, skip, true, None, None) };
     }
 }
 

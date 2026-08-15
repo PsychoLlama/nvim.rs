@@ -242,7 +242,7 @@ fn itr_get(tree: &mut MarkTree, row: int32_t, col: c_int, itr: &mut MarkTreeIter
 fn itr_get_ext(tree: &mut MarkTree, p: MTPos, itr: &mut MarkTreeIter) -> bool {
     // SAFETY: as [`itr_get`]; both optional out-parameters are NULL, which
     // the callee tests for.
-    unsafe { marktree_itr_get_ext(tree, p, itr, false, false, ptr::null_mut(), ptr::null()) }
+    unsafe { marktree_itr_get_ext(tree, p, itr, false, false, None, None) }
 }
 
 fn itr_get_overlap(tree: &mut MarkTree, row: c_int, col: c_int, itr: &mut MarkTreeIter) -> bool {

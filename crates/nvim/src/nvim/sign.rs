@@ -709,22 +709,22 @@ unsafe fn buf_delete_signs(
 
         if atlnum > 0 {
             // Signs that *started* above this row but still cover it.
-            if !marktree_itr_get_overlap(tree, row, 0, &raw mut itr) {
+            if !marktree_itr_get_overlap(&mut *tree, row, 0, &mut itr) {
                 return FAIL;
             }
             let mut pair: MTPair = ::core::mem::zeroed();
-            while marktree_itr_step_overlap(tree, &raw mut itr, &raw mut pair) {
+            while marktree_itr_step_overlap(&mut *tree, &mut itr, &mut pair) {
                 if (ns == ALL_GROUPS || ns == pair.start.ns as int64_t) && mt_decor_sign(pair.start)
                 {
                     signs.push(pair.start);
                 }
             }
         } else {
-            marktree_itr_get(tree, 0, 0, &raw mut itr);
+            marktree_itr_get(&mut *tree, 0, 0, &mut itr);
         }
 
         while !itr.x.is_null() {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if row != 0 && mark.pos.row > row {
                 break;
             }
@@ -740,7 +740,7 @@ unsafe fn buf_delete_signs(
             if wanted {
                 signs.push(mark);
             }
-            marktree_itr_next(tree, &raw mut itr);
+            marktree_itr_next(&mut *tree, &mut itr);
         }
 
         if signs.is_empty() {

@@ -52,7 +52,6 @@ use core::ptr;
 
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, mh_get_ptr_t};
-use crate::src::nvim::marktree::intersect::*;
 use crate::src::nvim::marktree::key::*;
 use crate::src::nvim::marktree::meta::*;
 use crate::src::nvim::marktree::node::*;
@@ -61,9 +60,8 @@ pub use crate::src::nvim::marktree::{
 };
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::types::{
-    DecorHighlightInline, DecorInlineData, MTKey, MTNode, MTPair, MTPos, Map_ptr_t_ptr_t,
-    Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter, MetaFilter,
-    Set_uint64_t, int32_t, ptr_t, size_t, uint16_t, uint32_t, uint64_t,
+    MTKey, MTPos, Map_ptr_t_ptr_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash,
+    MarkTree, MarkTreeIter, Set_uint64_t, ptr_t, uint16_t, uint32_t, uint64_t,
 };
 
 /// What a splice recorded about pairs whose halves crossed while it ran.
@@ -109,19 +107,6 @@ unsafe fn map_get_ptr_t_ptr_t(map: *mut Map_ptr_t_ptr_t, key: ptr_t) -> ptr_t {
     }
     // SAFETY: a hash index the set answered is in bounds of `map.values`.
     unsafe { *(*map).values.add(k as usize) }
-}
-
-/// The set of paired-mark ids whose ranges cover the whole of node `x`.
-///
-/// Superseded by [`Node::intersection`], and kept only for the sibling modules
-/// that still address nodes as raw pointers. It retires with the last of them.
-///
-/// # Safety
-/// `x` must be a live node.
-#[inline]
-unsafe fn ix(x: *mut MTNode) -> IdSet {
-    // SAFETY: the caller promises `x` is a live node.
-    unsafe { Node::new(x) }.intersection()
 }
 
 /// Insert `key`, and — where `end_row` is non-negative — the end key that makes
@@ -710,12 +695,11 @@ pub unsafe fn marktree_lookup(
         }
         return MT_INVALID_KEY;
     };
-    let itr = itr.map_or(ptr::null_mut(), |itr| itr as *mut MarkTreeIter);
     for i in 0..n.key_count() {
         if mt_lookup_key(n.key(i)) == id {
             // SAFETY: `b` is live, `n` is one of its nodes and holds a key at
             // `i`; `itr` is null or the caller's iterator.
-            return unsafe { marktree_itr_set_node(b, itr, n.as_ptr(), i as c_int) };
+            return unsafe { marktree_itr_set_node(b, itr, n, i as c_int) };
         }
     }
     // The id map named a node that does not hold the key, so the tree is

@@ -215,12 +215,12 @@ pub unsafe fn decor_redraw_start(wp: *mut win_T, top_row: c_int, state: *mut Dec
         (*state).itr_valid = true;
 
         let itr: *mut MarkTreeIter = (&raw mut (*state).itr).cast();
-        if !marktree_itr_get_overlap(tree, top_row, 0, itr) {
+        if !marktree_itr_get_overlap(&mut *tree, top_row, 0, &mut *itr) {
             return false;
         }
 
         let mut pair: MTPair = mem::zeroed();
-        while marktree_itr_step_overlap(tree, itr, &raw mut pair) {
+        while marktree_itr_step_overlap(&mut *tree, &mut *itr, &mut pair) {
             let m = pair.start;
             if mt_invalid(m) || !mt_decor_any(m) {
                 continue;
@@ -278,7 +278,7 @@ pub unsafe fn decor_redraw_line(wp: *mut win_T, row: c_int, state: *mut DecorSta
             decor_redraw_start(wp, row, state);
         } else if !(*state).itr_valid {
             let tree: *mut MarkTree = (&raw mut (*(*wp).w_buffer).b_marktree).cast();
-            marktree_itr_get(tree, row, 0, (&raw mut (*state).itr).cast());
+            marktree_itr_get(&mut *tree, row, 0, &mut (*state).itr[0]);
             (*state).itr_valid = true;
         }
 
@@ -298,7 +298,7 @@ pub unsafe fn decor_has_more_decorations(state: *mut DecorState, row: c_int) -> 
         if (*state).current_end != 0 || (*state).future_begin != decor_range_count(state) {
             return true;
         }
-        let k = marktree_itr_current((&raw mut (*state).itr).cast());
+        let k = marktree_itr_current(&mut (*state).itr[0]);
         k.pos.row >= 0 && k.pos.row <= row
     }
 }
@@ -584,7 +584,7 @@ pub unsafe fn decor_redraw_col_impl(
 
         loop {
             // TODO(bfredl): check duplicate entry in "intersection" branch
-            let mark = marktree_itr_current(itr);
+            let mark = marktree_itr_current(&mut *itr);
             if mark.pos.row < 0 || mark.pos.row > row {
                 break;
             } else if mark.pos.row == row && mark.pos.col > col {
@@ -606,7 +606,7 @@ pub unsafe fn decor_redraw_col_impl(
                     mark.id,
                 );
             }
-            marktree_itr_next(tree, itr);
+            marktree_itr_next(&mut *tree, &mut *itr);
         }
 
         // Raw pointers into the two vectors for the rest of the function, as

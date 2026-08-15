@@ -106,9 +106,9 @@ pub unsafe fn decor_find_virttext(
     unsafe {
         let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
         let mut itr = new_iter();
-        marktree_itr_get(tree, row, 0, &raw mut itr);
+        marktree_itr_get(&mut *tree, row, 0, &mut itr);
         loop {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if mark.pos.row < 0 || mark.pos.row > row {
                 return ptr::null_mut();
             }
@@ -121,7 +121,7 @@ pub unsafe fn decor_find_virttext(
                     return decor;
                 }
             }
-            marktree_itr_next(tree, &raw mut itr);
+            marktree_itr_next(&mut *tree, &mut itr);
         }
     }
 }
@@ -160,23 +160,23 @@ pub unsafe fn decor_conceal_line(wp: *mut win_T, row: c_int, check_cursor: bool)
         let mut itr = new_iter();
         let mut pair: MTPair = mem::zeroed();
 
-        marktree_itr_get_overlap(tree, row, 0, &raw mut itr);
-        while marktree_itr_step_overlap(tree, &raw mut itr, &raw mut pair) {
+        marktree_itr_get_overlap(&mut *tree, row, 0, &mut itr);
+        while marktree_itr_step_overlap(&mut *tree, &mut itr, &mut pair) {
             if mt_conceal_lines(pair.start) && ns_in_win(pair.start.ns, wp) {
                 return true;
             }
         }
 
-        marktree_itr_step_out_filter(tree, &raw mut itr, conceal_filter());
+        marktree_itr_step_out_filter(&mut *tree, &mut itr, conceal_filter());
         while !itr.x.is_null() {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if mark.pos.row > row {
                 break;
             }
             if mt_conceal_lines(mark) && ns_in_win(mark.ns, wp) {
                 return true;
             }
-            marktree_itr_next_filter(tree, &raw mut itr, row + 1, 0, conceal_filter());
+            marktree_itr_next_filter(&mut *tree, &mut itr, row + 1, 0, conceal_filter());
         }
 
         decor_providers_invoke_conceal_line(wp, row)
@@ -224,13 +224,13 @@ pub unsafe fn decor_virt_lines(
         let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
         let mut itr = new_iter();
         if !marktree_itr_get_filter(
-            tree,
+            &mut *tree,
             (start_row - 1).max(0),
             0,
             end_row,
             0,
             lines_filter(),
-            &raw mut itr,
+            &mut itr,
         ) {
             return 0;
         }
@@ -238,7 +238,7 @@ pub unsafe fn decor_virt_lines(
 
         let mut virt_lines = 0;
         loop {
-            let mark = marktree_itr_current(&raw mut itr);
+            let mark = marktree_itr_current(&mut itr);
             if !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
                 let mut vt = mt_decor_virt(mark);
                 while !vt.is_null() {
@@ -274,7 +274,7 @@ pub unsafe fn decor_virt_lines(
                 }
             }
 
-            if !marktree_itr_next_filter(tree, &raw mut itr, end_row, 0, lines_filter()) {
+            if !marktree_itr_next_filter(&mut *tree, &mut itr, end_row, 0, lines_filter()) {
                 return virt_lines;
             }
         }
