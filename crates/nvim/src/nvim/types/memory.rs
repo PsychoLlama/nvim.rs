@@ -4,7 +4,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct consumed_blk {
     pub prev: *mut consumed_blk,
 }

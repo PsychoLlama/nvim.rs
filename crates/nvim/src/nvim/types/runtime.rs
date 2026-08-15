@@ -17,7 +17,6 @@ pub type DoInRuntimepathCBFn = unsafe extern "C" fn(
 ) -> bool;
 pub type DoInRuntimepathCB = Option<DoInRuntimepathCBFn>;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct estack_T {
     pub es_lnum: linenr_T,
     pub es_name: *mut ::core::ffi::c_char,
@@ -35,7 +34,6 @@ pub union estack_T_es_info {
 pub type estack_arg_T = ::core::ffi::c_uint;
 pub type etype_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct scriptitem_T {
     pub sn_vars: *mut scriptvar_T,
     pub sn_name: *mut ::core::ffi::c_char,
@@ -57,7 +55,6 @@ pub struct scriptitem_T {
     pub sn_prl_execed: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct scriptvar_T {
     pub sv_var: ScopeDictDictItem,
     pub sv_dict: dict_T,

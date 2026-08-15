@@ -19,7 +19,6 @@ pub enum CharsizeKind {
     Fast = 1,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct CharSize {
     pub width: ::core::ffi::c_int,
     pub head: ::core::ffi::c_int,
@@ -31,7 +30,6 @@ pub struct CharSize {
 /// exists only so callers can declare one without spelling out the marktree
 /// iterator, which is what c2rust made them do.
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct CharsizeArg {
     pub win: *mut win_T,
     pub line: *mut ::core::ffi::c_char,

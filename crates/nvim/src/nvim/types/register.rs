@@ -6,7 +6,6 @@ use super::*;
 
 pub type GRegFlags = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct block_def {
     pub startspaces: ::core::ffi::c_int,
     pub endspaces: ::core::ffi::c_int,
@@ -53,7 +52,6 @@ impl Default for block_def {
     }
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct yankreg_T {
     pub y_array: *mut String_0,
     pub y_size: size_t,

@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct AutoCmd {
     pub pat: *mut AutoPat,
     pub id: int64_t,
@@ -17,7 +16,6 @@ pub struct AutoCmd {
     pub nested: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct AutoPat {
     pub refcount: size_t,
     pub pat: *mut ::core::ffi::c_char,
@@ -29,7 +27,6 @@ pub struct AutoPat {
 }
 pub type AutoPatCmd = AutoPatCmd_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct AutoPatCmd_S {
     pub lastpat: *mut AutoPat,
     pub auidx: size_t,
@@ -46,7 +43,6 @@ pub struct AutoPatCmd_S {
     pub next: *mut AutoPatCmd,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct aco_save_T {
     pub use_aucmd_win_idx: ::core::ffi::c_int,
     pub save_curwin_handle: handle_T,
@@ -82,7 +78,6 @@ impl Default for aco_save_T {
 }
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct aucmdwin_T {
     pub auc_win: *mut win_T,
     pub auc_win_used: bool,

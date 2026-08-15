@@ -22,7 +22,6 @@ pub union EvalFuncData {
 }
 pub type Loop = loop_0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct MTDamage {
     pub old: *mut MTNode,
     pub new: *mut MTNode,
@@ -30,7 +29,6 @@ pub struct MTDamage {
     pub new_i: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct MTDamagePair {
     pub start: MTDamage,
     pub end: MTDamage,

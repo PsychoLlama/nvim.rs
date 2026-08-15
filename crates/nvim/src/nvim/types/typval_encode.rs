@@ -6,7 +6,6 @@ use super::*;
 
 pub type MPConvPartialStage = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct MPConvStackVal {
     pub type_0: MPConvStackValType,
     pub tv: *mut typval_T,

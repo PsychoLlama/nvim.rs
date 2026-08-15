@@ -12,7 +12,6 @@ pub type qf_info_T = qf_info_S;
 /// shared by reference between windows and freed at the last reference.
 /// Callers hold `*mut qf_info_T` throughout, because an autocommand can
 /// reach the same stack while a command is walking it.
-#[repr(C)]
 pub struct qf_info_S {
     /// How many windows point at this stack. Meaningless for the quickfix
     /// stack, which is never freed.
@@ -58,7 +57,6 @@ pub const QFLT_LOCATION: qfltype_T = 1;
 pub const QFLT_QUICKFIX: qfltype_T = 0;
 /// One quickfix list within a stack.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct qf_list_T {
     pub qf_id: ::core::ffi::c_uint,
     pub qfl_type: qfltype_T,
@@ -93,7 +91,6 @@ pub struct DirStack {
 pub type qfline_T = qfline_S;
 /// One entry in a quickfix list.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct qfline_S {
     pub qf_next: *mut qfline_T,
     pub qf_prev: *mut qfline_T,

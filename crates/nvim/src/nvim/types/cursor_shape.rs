@@ -5,7 +5,6 @@
 
 pub type CursorShape = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct cursorentry_T {
     pub full_name: *mut ::core::ffi::c_char,
     pub shape: CursorShape,

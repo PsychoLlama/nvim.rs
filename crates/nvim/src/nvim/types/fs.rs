@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct Directory {
     pub request: uv_fs_t,
     pub ent: uv_dirent_t,

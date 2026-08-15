@@ -6,7 +6,6 @@ use super::*;
 
 pub type RemapValues = ::core::ffi::c_int;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct buffblock {
     pub b_next: *mut buffblock,
     pub b_strlen: size_t,
@@ -14,7 +13,6 @@ pub struct buffblock {
 }
 pub type buffblock_T = buffblock;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct buffheader_T {
     pub bh_first: buffblock_T,
     pub bh_curr: *mut buffblock_T,
@@ -24,13 +22,11 @@ pub struct buffheader_T {
 }
 pub type flush_buffers_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct save_redo_T {
     pub sr_redobuff: buffheader_T,
     pub sr_old_redobuff: buffheader_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct tasave_T {
     pub save_typebuf: typebuf_T,
     pub typebuf_valid: bool,
@@ -41,7 +37,6 @@ pub struct tasave_T {
     pub save_inputbuf: String_0,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct typebuf_T {
     pub tb_buf: *mut uint8_t,
     pub tb_noremap: *mut uint8_t,

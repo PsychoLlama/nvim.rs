@@ -4,7 +4,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct tagname_T {
     pub tn_tags: *mut ::core::ffi::c_char,
     pub tn_np: *mut ::core::ffi::c_char,

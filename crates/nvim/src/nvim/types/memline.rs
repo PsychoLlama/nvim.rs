@@ -5,13 +5,11 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct chunksize_T {
     pub mlcs_numlines: ::core::ffi::c_int,
     pub mlcs_totalsize: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct infoptr_T {
     pub ip_bnum: blocknr_T,
     pub ip_low: linenr_T,

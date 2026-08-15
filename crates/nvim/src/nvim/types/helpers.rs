@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TryState {
     pub current_exception: *mut except_T,
     pub private_msg_list: *mut msglist_T,

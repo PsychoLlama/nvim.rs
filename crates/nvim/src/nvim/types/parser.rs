@@ -5,14 +5,12 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ParserHighlightChunk {
     pub start: ParserPosition,
     pub end_col: size_t,
     pub group: *const ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ParserInputReader {
     pub get_line: ParserLineGetter,
     pub cookie: *mut ::core::ffi::c_void,
@@ -20,7 +18,6 @@ pub struct ParserInputReader {
     pub conv: vimconv_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ParserInputReader_lines {
     pub size: size_t,
     pub capacity: size_t,
@@ -28,7 +25,6 @@ pub struct ParserInputReader_lines {
     pub init_array: [ParserLine; 4],
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ParserLine {
     pub data: *const ::core::ffi::c_char,
     pub size: size_t,
@@ -43,7 +39,6 @@ pub struct ParserPosition {
     pub col: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ParserState {
     pub reader: ParserInputReader,
     pub pos: ParserPosition,
@@ -52,7 +47,6 @@ pub struct ParserState {
     pub can_continuate: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ParserStateItem {
     pub type_0: ParserStateItem_type_0,
     pub data: ParserStateItem_data,
@@ -70,7 +64,6 @@ pub struct ParserStateItem_data_expr {
 pub type ParserStateItem_data_expr_type_0 = ::core::ffi::c_uint;
 pub type ParserStateItem_type_0 = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ParserState_stack {
     pub size: size_t,
     pub capacity: size_t,

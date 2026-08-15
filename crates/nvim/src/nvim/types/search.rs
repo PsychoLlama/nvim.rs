@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct SearchOffset {
     pub dir: ::core::ffi::c_char,
     pub line: bool,
@@ -13,7 +12,6 @@ pub struct SearchOffset {
     pub off: int64_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct SearchPattern {
     pub pat: *mut ::core::ffi::c_char,
     pub patlen: size_t,
@@ -24,7 +22,6 @@ pub struct SearchPattern {
     pub additional_data: *mut AdditionalData,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct searchit_arg_T {
     pub sa_stop_lnum: linenr_T,
     pub sa_tm: *mut proftime_T,

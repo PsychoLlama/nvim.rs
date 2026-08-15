@@ -4,7 +4,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct VimMenu {
     pub modes: ::core::ffi::c_int,
     pub enabled: ::core::ffi::c_int,

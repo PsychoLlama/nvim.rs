@@ -4,7 +4,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct fuzmatch_str_T {
     pub idx: ::core::ffi::c_int,
     pub str: *mut ::core::ffi::c_char,
