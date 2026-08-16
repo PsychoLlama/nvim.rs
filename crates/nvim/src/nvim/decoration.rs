@@ -45,17 +45,20 @@ use crate::src::nvim::types::{
     DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
     DecorSignHighlight, DecorVirtText, HlMode, MTKey, MetaIndex, VirtLines, VirtText,
     VirtTextChunk, VirtTextPos, buf_T, colnr_T, linenr_T, lpos_T, uint8_t, uint16_t, uint32_t,
-    virt_line, win_T,
+    virt_line,
 };
+use crate::src::nvim::winlayer::Win;
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
 
 mod dict;
+mod handles;
 mod query;
 mod signs;
 mod state;
 
 pub use self::dict::*;
+pub use self::handles::*;
 pub use self::query::*;
 pub use self::signs::*;
 pub use self::state::*;
@@ -177,9 +180,9 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
 
 /// The virtual-text chain of `mark`, or null if it has no `ext` decoration.
 ///
-/// # Safety
-/// `mark` must be a live marktree key.
-pub(crate) unsafe fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
+/// Safe: the flag decides which branch of the union is read, and the answer
+/// is a pointer, which dereferencing is what needs a promise.
+pub(crate) fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
     if mark.flags as c_int & MT_FLAG_DECOR_EXT != 0 {
         // SAFETY: the flag says the union holds the `ext` branch.
         unsafe { mark.decor_data.ext.vt }
@@ -192,17 +195,14 @@ pub(crate) unsafe fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
 /// not window-local is visible everywhere, a window-local one only where it
 /// was opted into.
 ///
-/// # Safety
-/// `wp` must point to a live window.
 #[inline]
-pub unsafe fn ns_in_win(ns_id: uint32_t, wp: *mut win_T) -> bool {
-    // SAFETY: the caller's window and the editor's namespace table.
-    unsafe {
-        if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
-            return true;
-        }
-        set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id)
+pub fn ns_in_win(ns_id: uint32_t, mut wp: Win) -> bool {
+    // SAFETY: the editor's own namespace table, live from startup to exit.
+    if !unsafe { set_has_uint32_t(namespace_localscope.ptr(), ns_id) } {
+        return true;
     }
+    // SAFETY: a live window's `w_ns_set` is one of its own fields.
+    unsafe { set_has_uint32_t(&raw mut wp.w_ns_set, ns_id) }
 }
 
 // ---------------------------------------------------------------------------

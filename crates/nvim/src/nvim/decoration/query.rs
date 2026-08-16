@@ -7,53 +7,51 @@
 //! drawer of virtual text walks its chunks with.
 //!
 //! `plines.rs` and `move.rs` call into here on paths that run per line of a
-//! redraw, so each entry point starts with a `buf_meta_total` test: a buffer
-//! with no marks of the kind in question does not touch the marktree at all.
+//! redraw, so each entry point starts with a [`Buf::meta_total`] test: a
+//! buffer with no marks of the kind in question does not touch the marktree
+//! at all.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{mt_decor_virt, ns_in_win};
-use crate::src::nvim::buffer::buf_meta_total;
-use crate::src::nvim::decoration::{kMTMetaConcealLines, kMTMetaLines, kVTIsLines, kVTLinesAbove};
+use super::{mark_virt_chain, ns_in_win};
+use crate::src::nvim::decoration::{kMTMetaConcealLines, kMTMetaLines};
 use crate::src::nvim::decoration_provider::decor_providers_invoke_conceal_line;
 use crate::src::nvim::drawscreen::conceal_cursor_line;
-use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::hl_combine_attr;
 use crate::src::nvim::highlight_group::syn_id2attr;
-use crate::src::nvim::main::curwin;
+use crate::src::nvim::marktree::cursor::Cursor;
 use crate::src::nvim::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
-use crate::src::nvim::marktree::{
-    marktree_itr_current, marktree_itr_get, marktree_itr_get_filter, marktree_itr_get_overlap,
-    marktree_itr_next, marktree_itr_next_filter, marktree_itr_step_out_filter,
-    marktree_itr_step_overlap,
-};
+use crate::src::nvim::marktree::meta::MetaCount;
 use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::os::libc::memcpy;
 use crate::src::nvim::types::{
-    DecorVirtText, MTPair, MarkTree, MarkTreeIter, MetaFilter, OptInt, VirtLines, VirtText, buf_T,
-    linenr_T, size_t, uint32_t, uint64_t, virt_line, win_T,
+    DecorVirtText, MarkTreeIter, OptInt, VirtLines, VirtText, buf_T, linenr_T, size_t, uint64_t,
+    virt_line, win_T,
 };
+use crate::src::nvim::winlayer::{Buf, Win};
 use ::core::ffi::{c_char, c_int};
-use ::core::{mem, ptr};
+use ::core::{mem, ptr, slice};
 
 /// Marktree filters, indexed by `MetaIndex`: `kMTMetaLines` is 1 and
 /// `kMTMetaConcealLines` 4.
-static LINES_FILTER: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, kMTFilterSelect, 0, 0, 0]);
-static CONCEAL_FILTER: GlobalCell<[uint32_t; 5]> = GlobalCell::new([0, 0, 0, 0, kMTFilterSelect]);
+static LINES_FILTER: MetaCount = [0, kMTFilterSelect, 0, 0, 0];
+static CONCEAL_FILTER: MetaCount = [0, 0, 0, 0, kMTFilterSelect];
 
-fn lines_filter() -> MetaFilter {
-    LINES_FILTER.ptr().cast::<uint32_t>()
-}
+impl Win {
+    /// Whether `'concealcursor'` says the cursor line conceals too.
+    fn conceals_cursor_line(self) -> bool {
+        // SAFETY: a live window.
+        unsafe { conceal_cursor_line(self.raw()) }
+    }
 
-fn conceal_filter() -> MetaFilter {
-    CONCEAL_FILTER.ptr().cast::<uint32_t>()
-}
-
-/// A zeroed marktree iterator, which is the state a walk starts from.
-fn new_iter() -> MarkTreeIter {
-    // SAFETY: `MarkTreeIter` is plain data and all-zero is its initial state.
-    unsafe { mem::zeroed() }
+    /// Asks every decoration provider to place `row`'s conceal marks, and
+    /// answers whether one of them says the row is concealed.
+    ///
+    /// Runs Lua, which can place and delete marks.
+    fn providers_conceal_line(self, row: c_int) -> bool {
+        // SAFETY: a live window.
+        unsafe { decor_providers_invoke_conceal_line(self.raw(), row) }
+    }
 }
 
 /// The text of the next chunk of `vt`, or null when there are no more.
@@ -73,22 +71,28 @@ pub unsafe fn next_virt_text_chunk(
     pos: *mut size_t,
     attr: *mut c_int,
 ) -> *mut c_char {
-    // SAFETY: the caller's virtual text and out-parameters.
-    unsafe {
-        let mut text: *mut c_char = ptr::null_mut();
-        while text.is_null() && *pos < vt.size {
-            let chunk = *vt.items.add(*pos);
-            text = chunk.text;
-            if chunk.hl_id >= 0 {
-                *attr = (*attr).max(0);
-                if chunk.hl_id > 0 {
-                    *attr = hl_combine_attr(*attr, syn_id2attr(chunk.hl_id));
-                }
-            }
-            *pos += 1;
-        }
-        text
+    if vt.size == 0 {
+        return ptr::null_mut();
     }
+    // SAFETY: a non-empty kvec's `items` is its own allocation, `size` long.
+    let chunks = unsafe { slice::from_raw_parts(vt.items, vt.size) };
+    // SAFETY: the caller's out-parameters.
+    let (pos, attr) = unsafe { (&mut *pos, &mut *attr) };
+
+    let mut text: *mut c_char = ptr::null_mut();
+    while text.is_null() && *pos < chunks.len() {
+        let chunk = chunks[*pos];
+        text = chunk.text;
+        if chunk.hl_id >= 0 {
+            *attr = (*attr).max(0);
+            if chunk.hl_id > 0 {
+                // SAFETY: the highlight tables are the editor's own.
+                *attr = unsafe { hl_combine_attr(*attr, syn_id2attr(chunk.hl_id)) };
+            }
+        }
+        *pos += 1;
+    }
+    text
 }
 
 /// The first virtual *text* on `row` — skipping virtual *lines*, which are a
@@ -102,27 +106,22 @@ pub unsafe fn decor_find_virttext(
     row: c_int,
     ns_id: uint64_t,
 ) -> *mut DecorVirtText {
-    // SAFETY: the caller's buffer and the editor's own marktree.
-    unsafe {
-        let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
-        let mut itr = new_iter();
-        marktree_itr_get(&mut *tree, row, 0, &mut itr);
-        loop {
-            let mark = marktree_itr_current(&mut itr);
-            if mark.pos.row < 0 || mark.pos.row > row {
-                return ptr::null_mut();
-            }
-            if !mt_invalid(mark) {
-                let mut decor = mt_decor_virt(mark);
-                while !decor.is_null() && (*decor).flags as c_int & kVTIsLines as c_int != 0 {
-                    decor = (*decor).next;
-                }
-                if (ns_id == 0 || ns_id == uint64_t::from(mark.ns)) && !decor.is_null() {
-                    return decor;
-                }
-            }
-            marktree_itr_next(&mut *tree, &mut itr);
+    // SAFETY: the caller's buffer.
+    let buf = unsafe { Buf::new(buf) };
+    let mut itr = MarkTreeIter::default();
+    let mut walk = Cursor::in_buffer(buf, &mut itr);
+    walk.seek(row, 0);
+    loop {
+        let mark = walk.current();
+        if mark.pos.row < 0 || mark.pos.row > row {
+            return ptr::null_mut();
         }
+        if !mt_invalid(mark) && (ns_id == 0 || ns_id == uint64_t::from(mark.ns)) {
+            if let Some(vt) = mark_virt_chain(mark).find(|vt| !vt.is_lines()) {
+                return vt.raw();
+            }
+        }
+        walk.next();
     }
 }
 
@@ -139,48 +138,47 @@ pub unsafe fn decor_find_virttext(
 /// # Safety
 /// `wp` must point to a live window; runs Lua through the providers.
 pub unsafe fn decor_conceal_line(wp: *mut win_T, row: c_int, check_cursor: bool) -> bool {
-    // SAFETY: the caller's window and the editor's own marktree.
-    unsafe {
-        if row < 0
-            || (*wp).w_onebuf_opt.wo_cole < 2 as OptInt
-            || (!check_cursor
-                && wp == curwin.get()
-                && row as linenr_T + 1 == (*wp).w_cursor.lnum
-                && !conceal_cursor_line(wp))
-        {
-            return false;
-        }
-
-        // No need to scan the marktree if there are no conceal_line marks.
-        if buf_meta_total((*wp).w_buffer, kMTMetaConcealLines) == 0 {
-            return decor_providers_invoke_conceal_line(wp, row);
-        }
-
-        let tree: *mut MarkTree = (&raw mut (*(*wp).w_buffer).b_marktree).cast();
-        let mut itr = new_iter();
-        let mut pair: MTPair = mem::zeroed();
-
-        marktree_itr_get_overlap(&mut *tree, row, 0, &mut itr);
-        while marktree_itr_step_overlap(&mut *tree, &mut itr, &mut pair) {
-            if mt_conceal_lines(pair.start) && ns_in_win(pair.start.ns, wp) {
-                return true;
-            }
-        }
-
-        marktree_itr_step_out_filter(&mut *tree, &mut itr, conceal_filter());
-        while !itr.x.is_null() {
-            let mark = marktree_itr_current(&mut itr);
-            if mark.pos.row > row {
-                break;
-            }
-            if mt_conceal_lines(mark) && ns_in_win(mark.ns, wp) {
-                return true;
-            }
-            marktree_itr_next_filter(&mut *tree, &mut itr, row + 1, 0, conceal_filter());
-        }
-
-        decor_providers_invoke_conceal_line(wp, row)
+    // SAFETY: the caller's window.
+    let wp = unsafe { Win::new(wp) };
+    if row < 0
+        || wp.w_onebuf_opt.wo_cole < 2 as OptInt
+        || (!check_cursor
+            && wp.is_current()
+            && row as linenr_T + 1 == wp.w_cursor.lnum
+            && !wp.conceals_cursor_line())
+    {
+        return false;
     }
+
+    // No need to scan the marktree if there are no conceal_line marks.
+    let buf = wp.buffer();
+    if buf.meta_total(kMTMetaConcealLines) == 0 {
+        return wp.providers_conceal_line(row);
+    }
+
+    let mut itr = MarkTreeIter::default();
+    let mut walk = Cursor::in_buffer(buf, &mut itr);
+
+    walk.seek_overlap(row, 0);
+    while let Some(pair) = walk.step_overlap() {
+        if mt_conceal_lines(pair.start) && ns_in_win(pair.start.ns, wp) {
+            return true;
+        }
+    }
+
+    walk.step_out_filter(&CONCEAL_FILTER);
+    while !walk.is_empty() {
+        let mark = walk.current();
+        if mark.pos.row > row {
+            break;
+        }
+        if mt_conceal_lines(mark) && ns_in_win(mark.ns, wp) {
+            return true;
+        }
+        walk.next_filter(row + 1, 0, &CONCEAL_FILTER);
+    }
+
+    wp.providers_conceal_line(row)
 }
 
 /// Whether `wp` may have folded or concealed lines at all — the cheap test
@@ -190,7 +188,8 @@ pub unsafe fn decor_conceal_line(wp: *mut win_T, row: c_int, check_cursor: bool)
 /// `wp` must point to a live window.
 pub unsafe fn win_lines_concealed(wp: *mut win_T) -> bool {
     // SAFETY: the caller's window.
-    unsafe { hasAnyFolding(wp) != 0 || (*wp).w_onebuf_opt.wo_cole >= 2 as OptInt }
+    let wp = unsafe { Win::new(wp) };
+    wp.has_any_folding() || wp.w_onebuf_opt.wo_cole >= 2 as OptInt
 }
 
 /// How many virtual lines fall in the window rows `start_row..end_row`.
@@ -212,72 +211,65 @@ pub unsafe fn decor_virt_lines(
     lines: *mut VirtLines,
     apply_folds: bool,
 ) -> c_int {
-    // SAFETY: the caller's window and out-parameters.
-    unsafe {
-        let buf = (*wp).w_buffer;
-        // Only pay for what you use: in a buffer with no virt_lines the
-        // layout code does not reach the marktree at all.
-        if buf_meta_total(buf, kMTMetaLines) == 0 {
-            return 0;
-        }
+    // SAFETY: the caller's window and out-parameters, null or writable.
+    let (wp, mut lines, mut num_below) =
+        unsafe { (Win::new(wp), lines.as_mut(), num_below.as_mut()) };
+    let buf = wp.buffer();
+    // Only pay for what you use: in a buffer with no virt_lines the layout
+    // code does not reach the marktree at all.
+    if buf.meta_total(kMTMetaLines) == 0 {
+        return 0;
+    }
 
-        let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
-        let mut itr = new_iter();
-        if !marktree_itr_get_filter(
-            &mut *tree,
-            (start_row - 1).max(0),
-            0,
-            end_row,
-            0,
-            lines_filter(),
-            &mut itr,
-        ) {
-            return 0;
-        }
-        debug_assert!(start_row >= 0);
+    let mut itr = MarkTreeIter::default();
+    let mut walk = Cursor::in_buffer(buf, &mut itr);
+    if !walk.seek_filter((start_row - 1).max(0), 0, end_row, 0, &LINES_FILTER) {
+        return 0;
+    }
+    debug_assert!(start_row >= 0);
 
-        let mut virt_lines = 0;
-        loop {
-            let mark = marktree_itr_current(&mut itr);
-            if !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
-                let mut vt = mt_decor_virt(mark);
-                while !vt.is_null() {
-                    if (*vt).flags as c_int & kVTIsLines as c_int != 0 {
-                        let above = (*vt).flags as c_int & kVTLinesAbove as c_int != 0;
-                        let mrow = mark.pos.row;
-                        let draw_row = mrow + c_int::from(!above);
-                        // The fold and conceal tests stay inside the `&&`
-                        // chain: `decor_conceal_line` runs the providers'
-                        // Lua, so asking it for a row that is out of range
-                        // would be a new side effect, not just extra work.
-                        if draw_row >= start_row
-                            && draw_row < end_row
-                            && (!apply_folds
-                                || !(hasFolding(
-                                    wp,
-                                    mrow as linenr_T + 1,
-                                    ptr::null_mut(),
-                                    ptr::null_mut(),
-                                ) || decor_conceal_line(wp, mrow, false)))
-                        {
-                            let block = (*vt).data.virt_lines;
-                            virt_lines += block.size as c_int;
-                            if !lines.is_null() {
-                                append_virt_lines(&mut *lines, block);
-                            }
-                            if !num_below.is_null() && !above {
-                                *num_below += block.size as c_int;
-                            }
-                        }
+    let mut virt_lines = 0;
+    loop {
+        let mark = walk.current();
+        if !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
+            for vt in mark_virt_chain(mark).filter(|vt| vt.is_lines()) {
+                let above = vt.lines_above();
+                let mrow = mark.pos.row;
+                let draw_row = mrow + c_int::from(!above);
+                // The fold and conceal tests stay inside the `&&` chain:
+                // `decor_conceal_line` runs the providers' Lua, so asking it
+                // for a row that is out of range would be a new side effect,
+                // not just extra work.
+                if draw_row >= start_row
+                    && draw_row < end_row
+                    && (!apply_folds
+                        || !(wp.fold_span(mrow as linenr_T + 1).0 || wp.conceal_line(mrow, false)))
+                {
+                    let block = vt.lines();
+                    virt_lines += block.size as c_int;
+                    if let Some(lines) = lines.as_deref_mut() {
+                        // SAFETY: a live growable vector, and `block` is the
+                        // decoration's own live one.
+                        unsafe { append_virt_lines(lines, block) };
                     }
-                    vt = (*vt).next;
+                    if let (false, Some(num_below)) = (above, num_below.as_deref_mut()) {
+                        *num_below += block.size as c_int;
+                    }
                 }
             }
-
-            if !marktree_itr_next_filter(&mut *tree, &mut itr, end_row, 0, lines_filter()) {
-                return virt_lines;
-            }
         }
+
+        if !walk.next_filter(end_row, 0, &LINES_FILTER) {
+            return virt_lines;
+        }
+    }
+}
+
+impl Win {
+    /// [`decor_conceal_line`] for a window already promised live.
+    fn conceal_line(self, row: c_int, check_cursor: bool) -> bool {
+        // SAFETY: a live window. Runs Lua through the providers.
+        unsafe { decor_conceal_line(self.raw(), row, check_cursor) }
     }
 }
 
@@ -293,20 +285,19 @@ unsafe fn append_virt_lines(dst: &mut VirtLines, src: VirtLines) {
     if src.size == 0 {
         return;
     }
-    // SAFETY: `dst` is the caller's growable vector and `src` its source.
-    unsafe {
-        let wanted = dst.size + src.size;
-        if dst.capacity < wanted {
-            dst.capacity = wanted.next_power_of_two();
-            dst.items =
-                xrealloc(dst.items.cast(), mem::size_of::<virt_line>() * dst.capacity).cast();
-        }
-        assert!(!dst.items.is_null());
-        memcpy(
-            dst.items.add(dst.size).cast(),
-            src.items.cast(),
-            mem::size_of::<virt_line>() * src.size,
-        );
-        dst.size = wanted;
+    let wanted = dst.size + src.size;
+    if dst.capacity < wanted {
+        dst.capacity = wanted.next_power_of_two();
+        // SAFETY: `dst` owns `items`, which `xrealloc` grows in place.
+        dst.items =
+            unsafe { xrealloc(dst.items.cast(), mem::size_of::<virt_line>() * dst.capacity) }
+                .cast();
     }
+    assert!(!dst.items.is_null());
+    let bytes = mem::size_of::<virt_line>() * src.size;
+    let end = dst.items.wrapping_add(dst.size).cast();
+    // SAFETY: `dst` now has room for `src`'s entries, and the two vectors
+    // never overlap — `src` belongs to a decoration, `dst` to the caller.
+    unsafe { memcpy(end, src.items.cast(), bytes) };
+    dst.size = wanted;
 }

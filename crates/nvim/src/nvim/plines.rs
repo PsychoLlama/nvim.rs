@@ -39,6 +39,7 @@ use crate::src::nvim::types::{
     CharSize, CharsizeArg, CharsizeKind, MarkTreeIter, MetaFilter, MetaIndex, StrCharInfo,
     VirtLines, buf_T, colnr_T, foldinfo_T, int32_t, int64_t, linenr_T, pos_T, uint32_t, win_T,
 };
+use crate::src::nvim::winlayer::Win;
 
 use ::core::ffi::{c_char, c_int, c_long};
 
@@ -361,7 +362,7 @@ unsafe fn add_inline_virt_text(
             if mark.pos.row != csarg.virt_row || mark.pos.col > col {
                 break;
             }
-            if mark.pos.col == col && !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
+            if mark.pos.col == col && !mt_invalid(mark) && ns_in_win(mark.ns, Win::new(wp)) {
                 let decor = mt_decor(mark);
                 let mut vt = if decor.ext {
                     decor.data.ext.vt

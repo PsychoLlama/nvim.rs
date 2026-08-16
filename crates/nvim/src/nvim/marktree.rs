@@ -37,6 +37,7 @@
 //! and reads their fields directly.
 
 pub mod check;
+pub mod cursor;
 pub mod inspect;
 pub mod intersect;
 pub mod iter;

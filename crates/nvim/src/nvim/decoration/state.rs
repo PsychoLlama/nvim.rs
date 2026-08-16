@@ -53,6 +53,7 @@ use crate::src::nvim::types::{
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, MTPair,
     MTPos, MarkTree, MarkTreeIter, VirtTextPos, buf_T, kFalse, kNone, kTrue, uint32_t, win_T,
 };
+use crate::src::nvim::winlayer::Win;
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
 
@@ -581,6 +582,7 @@ pub unsafe fn decor_redraw_col_impl(
         let row = (*state).row;
         let mut col_last = max_col_last;
         let itr: *mut MarkTreeIter = (&raw mut (*state).itr).cast();
+        let win = Win::new(wp);
 
         loop {
             // TODO(bfredl): check duplicate entry in "intersection" branch
@@ -592,7 +594,7 @@ pub unsafe fn decor_redraw_col_impl(
                 break;
             }
 
-            if !mt_invalid(mark) && !mt_end(mark) && mt_decor_any(mark) && ns_in_win(mark.ns, wp) {
+            if !mt_invalid(mark) && !mt_end(mark) && mt_decor_any(mark) && ns_in_win(mark.ns, win) {
                 let endpos: MTPos = marktree_get_altpos(&mut *tree, mark, None);
                 decor_range_add_from_inline(
                     state,

@@ -33,6 +33,7 @@ use crate::src::nvim::types::{
     DecorInline, DecorSignHighlight, MTPair, MTPos, MarkTree, MarkTreeIter, MetaFilter, SignItem,
     SignTextAttrs, TriState, buf_T, kFalse, kNone, kTrue, linenr_T, tabpage_T, uint32_t, win_T,
 };
+use crate::src::nvim::winlayer::Win;
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
 
@@ -199,6 +200,7 @@ pub unsafe fn decor_redraw_signs(
         if !buf_has_signs(buf) {
             return;
         }
+        let win = Win::new(wp);
 
         let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
         let mut itr = new_iter();
@@ -208,7 +210,7 @@ pub unsafe fn decor_redraw_signs(
         let mut pair: MTPair = mem::zeroed();
         marktree_itr_get_overlap(&mut *tree, row, 0, &mut itr);
         while marktree_itr_step_overlap(&mut *tree, &mut itr, &mut pair) {
-            if !mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, wp)
+            if !mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, win)
             {
                 let sh = decor_find_sign(mt_decor(pair.start));
                 signs.push(SignItem {
@@ -224,7 +226,8 @@ pub unsafe fn decor_redraw_signs(
             if mark.pos.row != row {
                 break;
             }
-            if !mt_invalid(mark) && !mt_end(mark) && mt_decor_sign(mark) && ns_in_win(mark.ns, wp) {
+            if !mt_invalid(mark) && !mt_end(mark) && mt_decor_sign(mark) && ns_in_win(mark.ns, win)
+            {
                 let sh = decor_find_sign(mt_decor(mark));
                 signs.push(SignItem { sh, id: mark.id });
             }
