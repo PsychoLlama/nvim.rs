@@ -730,7 +730,7 @@
     "crates/nvim/src/nvim/path/glob.rs": {"cell_ptr": 2, "unsafe_lines": 265},
     "crates/nvim/src/nvim/path/names.rs": {"no_mangle": 7, "unsafe_lines": 122},
     "crates/nvim/src/nvim/path/unique.rs": {"no_mangle": 2, "unsafe_lines": 259},
-    "crates/nvim/src/nvim/plines.rs": {"cell_ptr": 1, "unsafe_lines": 369},
+    "crates/nvim/src/nvim/plines.rs": {"unsafe_lines": 56},
     "crates/nvim/src/nvim/plines/lines.rs": {"unsafe_lines": 240},
     "crates/nvim/src/nvim/plines/vcol.rs": {"unsafe_lines": 139},
     "crates/nvim/src/nvim/popupmenu.rs": {"cell_ptr": 14, "unsafe_lines": 255},
