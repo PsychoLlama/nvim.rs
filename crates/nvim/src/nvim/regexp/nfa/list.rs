@@ -44,10 +44,12 @@ const ADDSTATE_MAX_DEPTH: c_int = 5000;
 
 /// The opcode a state carries.
 ///
-/// SAFETY: every state this module is handed is a state of the running
-/// program.
+/// SAFETY: every state the engine is handed is a state of the running
+/// program, which is one allocation holding all of them and outlives the
+/// match. These three are how the rest of the engine reads a state without
+/// an `unsafe` block of its own.
 #[inline(always)]
-fn op(state: *mut nfa_state_T) -> c_int {
+pub(crate) fn op(state: *const nfa_state_T) -> c_int {
     unsafe { (*state).c }
 }
 
@@ -55,8 +57,16 @@ fn op(state: *mut nfa_state_T) -> c_int {
 ///
 /// SAFETY: as `op`.
 #[inline(always)]
-fn out_of(state: *mut nfa_state_T) -> *mut nfa_state_T {
+pub(crate) fn out_of(state: *const nfa_state_T) -> *mut nfa_state_T {
     unsafe { (*state).out }
+}
+
+/// A state's second continuation, which only the branching opcodes have.
+///
+/// SAFETY: as `op`.
+#[inline(always)]
+pub(crate) fn out1_of(state: *const nfa_state_T) -> *mut nfa_state_T {
+    unsafe { (*state).out1 }
 }
 
 /// A state's identity, which is what tells two threads on it apart from
@@ -462,9 +472,7 @@ fn follow(
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
-    let (c, out) = (op(state), out_of(state));
-    // SAFETY: `state` is a live state of the running program.
-    let out1 = unsafe { (*state).out1 };
+    let (c, out, out1) = (op(state), out_of(state), out1_of(state));
     match c {
         NFA_SPLIT => {
             walk(l, out, subs, pim, off_arg, depth + 1)

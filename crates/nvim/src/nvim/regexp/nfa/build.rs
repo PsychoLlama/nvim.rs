@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::list::{op, out_of, out1_of};
 use core::ffi::c_int;
 
 use super::run::failure_chance;
@@ -172,74 +173,73 @@ fn nfa_max_width(startstate: *mut nfa_state_T, depth: c_int) -> c_int {
     let mut len = 0;
     let mut state = startstate;
     // SAFETY: the walk stays inside the program `startstate` belongs to.
-    unsafe {
-        while !state.is_null() {
-            match (*state).c {
-                // The end of the lookbehind's own pattern.
-                NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG => return len,
-                NFA_SPLIT => {
-                    let l = nfa_max_width((*state).out, depth + 1);
-                    let r = nfa_max_width((*state).out1, depth + 1);
-                    if l < 0 || r < 0 {
+
+    while !state.is_null() {
+        match op(state) {
+            // The end of the lookbehind's own pattern.
+            NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG => return len,
+            NFA_SPLIT => {
+                let l = nfa_max_width(out_of(state), depth + 1);
+                let r = nfa_max_width(out1_of(state), depth + 1);
+                if l < 0 || r < 0 {
+                    return -1;
+                }
+                return len + l.max(r);
+            }
+            // Any character, so as wide as a character gets. A
+            // collection continues past its `NFA_END_COLL`, which is
+            // where `out1` points.
+            c @ (NFA_ANY | NFA_START_COLL | NFA_START_NEG_COLL) => {
+                len += MB_MAXBYTES as c_int;
+                if c != NFA_ANY {
+                    if out1_of(state).is_null() || out_of(out1_of(state)).is_null() {
                         return -1;
                     }
-                    return len + l.max(r);
-                }
-                // Any character, so as wide as a character gets. A
-                // collection continues past its `NFA_END_COLL`, which is
-                // where `out1` points.
-                c @ (NFA_ANY | NFA_START_COLL | NFA_START_NEG_COLL) => {
-                    len += MB_MAXBYTES as c_int;
-                    if c != NFA_ANY {
-                        if (*state).out1.is_null() || (*(*state).out1).out.is_null() {
-                            return -1;
-                        }
-                        state = (*(*state).out1).out;
-                        continue;
-                    }
-                }
-                // The ASCII-only classes are one byte.
-                NFA_DIGIT | NFA_WHITE | NFA_HEX | NFA_OCTAL => len += 1,
-                // The rest can match a multibyte character, which upstream
-                // bounds at three bytes rather than `MB_MAXBYTES`.
-                NFA_IDENT..=NFA_NUPPER_IC | NFA_ANY_COMPOSING => len += 3,
-                // A nested lookaround matches no input of its own; step
-                // over it to what follows.
-                NFA_START_INVISIBLE
-                | NFA_START_INVISIBLE_NEG
-                | NFA_START_INVISIBLE_BEFORE
-                | NFA_START_INVISIBLE_BEFORE_NEG => {
-                    state = (*(*state).out1).out;
+                    state = out_of(out1_of(state));
                     continue;
                 }
-                // A back-reference is as wide as whatever it captured, and a
-                // line break or a skip is unbounded.
-                NFA_BACKREF1..=NFA_ZREF9 | NFA_NEWL | NFA_SKIP => return -1,
-                // Zero width.
-                NFA_BOL..=NFA_EOF
-                | NFA_MOPEN..=NFA_ZCLOSE9
-                | NFA_NOPEN..=NFA_NCLOSE
-                | NFA_CURSOR..=NFA_VISUAL
-                | NFA_ZSTART..=NFA_ZEND
-                | NFA_OPT_CHARS
-                | NFA_EMPTY
-                | NFA_START_PATTERN
-                | NFA_END_PATTERN
-                | NFA_COMPOSING
-                | NFA_END_COMPOSING => {}
-                // A literal character; any opcode not named above is one
-                // this walk cannot reason about.
-                c => {
-                    if c < 0 {
-                        return -1;
-                    }
-                    len += utf_char2len(c);
-                }
             }
-            state = (*state).out;
+            // The ASCII-only classes are one byte.
+            NFA_DIGIT | NFA_WHITE | NFA_HEX | NFA_OCTAL => len += 1,
+            // The rest can match a multibyte character, which upstream
+            // bounds at three bytes rather than `MB_MAXBYTES`.
+            NFA_IDENT..=NFA_NUPPER_IC | NFA_ANY_COMPOSING => len += 3,
+            // A nested lookaround matches no input of its own; step
+            // over it to what follows.
+            NFA_START_INVISIBLE
+            | NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_BEFORE
+            | NFA_START_INVISIBLE_BEFORE_NEG => {
+                state = out_of(out1_of(state));
+                continue;
+            }
+            // A back-reference is as wide as whatever it captured, and a
+            // line break or a skip is unbounded.
+            NFA_BACKREF1..=NFA_ZREF9 | NFA_NEWL | NFA_SKIP => return -1,
+            // Zero width.
+            NFA_BOL..=NFA_EOF
+            | NFA_MOPEN..=NFA_ZCLOSE9
+            | NFA_NOPEN..=NFA_NCLOSE
+            | NFA_CURSOR..=NFA_VISUAL
+            | NFA_ZSTART..=NFA_ZEND
+            | NFA_OPT_CHARS
+            | NFA_EMPTY
+            | NFA_START_PATTERN
+            | NFA_END_PATTERN
+            | NFA_COMPOSING
+            | NFA_END_COMPOSING => {}
+            // A literal character; any opcode not named above is one
+            // this walk cannot reason about.
+            c => {
+                if c < 0 {
+                    return -1;
+                }
+                len += utf_char2len(c);
+            }
         }
-        -1
+        state = out_of(state);
     }
+    -1
 }
 
 /// Run the postfix program.

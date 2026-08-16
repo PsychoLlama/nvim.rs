@@ -11,10 +11,10 @@ use core::ffi::c_int;
 use super::assertions::{at_col, at_cursor, at_line, at_mark, at_vcol, in_visual};
 use super::classes::class_matches;
 use super::composing::matches_composing;
-use super::list::{ThreadList, addstate_here};
+use super::list::{ThreadList, addstate_here, op, out_of, out1_of};
 use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch};
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
-use crate::src::nvim::mbyte::{mb_get_class_tab, utf_fold, utf_iscomposing_legacy, utf_ptr2len};
+use crate::src::nvim::mbyte::{mb_get_class_tab, utf_fold, utf_iscomposing_legacy};
 use crate::src::nvim::regexp::{
     FAIL, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
     NFA_COL, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_END_COLL, NFA_END_INVISIBLE,
@@ -94,15 +94,14 @@ pub(crate) struct Run<'a> {
 /// for the thread to survive?
 fn is_negated(state: *mut nfa_state_T) -> bool {
     // SAFETY: `state` is a live state of the running program.
-    unsafe {
-        matches!(
-            (*state).c,
-            NFA_START_INVISIBLE_NEG
-                | NFA_START_INVISIBLE_NEG_FIRST
-                | NFA_START_INVISIBLE_BEFORE_NEG
-                | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
-        )
-    }
+
+    matches!(
+        op(state),
+        NFA_START_INVISIBLE_NEG
+            | NFA_START_INVISIBLE_NEG_FIRST
+            | NFA_START_INVISIBLE_BEFORE_NEG
+            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+    )
 }
 
 /// Did a sub-match come out the way its lookaround wanted?
@@ -147,169 +146,165 @@ pub(crate) unsafe fn step(
     clen: &mut c_int,
     go_to_nextline: &mut bool,
 ) -> Step {
-    unsafe {
-        let idx = *listidx as usize;
-        let state = thislist.thread(idx).state;
-        let out = (*state).out;
-        match (*state).c {
-            NFA_MATCH => {
-                // Not in the middle of a grapheme: a match may not stop
-                // between a base character and its combining marks.
-                if !rex.reg_icombine() && rex.input() != rex.line() && utf_iscomposing_legacy(curc)
-                {
-                    return Step::Dead;
-                }
-                nfa_match.set(1);
-                copy_both(rex, &mut *run.submatch, &thislist.thread(idx).subs);
-                if nextlist.len() == 0 {
-                    *clen = 0;
-                }
-                Step::Matched
+    let idx = *listidx as usize;
+    let state = thislist.thread(idx).state;
+    let out = out_of(state);
+    match op(state) {
+        NFA_MATCH => {
+            // Not in the middle of a grapheme: a match may not stop
+            // between a base character and its combining marks.
+            if !rex.reg_icombine() && !rex.at_bol() && utf_iscomposing_legacy(curc) {
+                return Step::Dead;
             }
-
-            NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG | NFA_END_PATTERN => {
-                // The lookaround's own match has to end exactly where the
-                // outer match asked it to.
-                if !at_sub_match_end(rex) {
-                    return Step::Dead;
-                }
-                // A negated lookaround discards what it captured: it only
-                // has to have matched, and its groups did not really match.
-                if (*state).c != NFA_END_INVISIBLE_NEG {
-                    copy_both(rex, &mut *run.m, &thislist.thread(idx).subs);
-                }
-                nfa_match.set(1);
-                if nextlist.len() == 0 {
-                    *clen = 0;
-                }
-                Step::Matched
+            nfa_match.set(1);
+            // SAFETY: `run.submatch` is the caller's capture set.
+            let submatch = unsafe { &mut *run.submatch };
+            copy_both(rex, submatch, &thislist.thread(idx).subs);
+            if nextlist.len() == 0 {
+                *clen = 0;
             }
+            Step::Matched
+        }
 
-            NFA_START_INVISIBLE..=NFA_START_INVISIBLE_BEFORE_NEG_FIRST => {
-                start_lookaround(rex, thislist, idx, listidx, run)
+        NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG | NFA_END_PATTERN => {
+            // The lookaround's own match has to end exactly where the
+            // outer match asked it to.
+            if !unsafe { at_sub_match_end(rex) } {
+                return Step::Dead;
             }
-
-            NFA_START_PATTERN => start_pattern(rex, thislist, nextlist, idx, run, *clen),
-
-            NFA_BOL => Step::zero_width(rex.at_bol(), out),
-            NFA_EOL => Step::zero_width(curc == NUL, out),
-            NFA_BOW => Step::zero_width(at_word_start(rex, curc), out),
-            NFA_EOW => Step::zero_width(at_word_end(rex), out),
-            NFA_BOF => Step::zero_width(
-                rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() == 1),
-                out,
-            ),
-            NFA_EOF => Step::zero_width(rex.lnum() == rex.reg_maxline() && curc == NUL, out),
-
-            NFA_COMPOSING => {
-                let matched = matches_composing(rex, out, curc, *clen);
-                // The group's end, and what follows it, hang off `out1`.
-                Step::consuming(matched, (*(*state).out1).out, *clen)
+            // A negated lookaround discards what it captured: it only
+            // has to have matched, and its groups did not really match.
+            if op(state) != NFA_END_INVISIBLE_NEG {
+                // SAFETY: `run.m` is the caller's capture set.
+                let m = unsafe { &mut *run.m };
+                copy_both(rex, m, &thislist.thread(idx).subs);
             }
-
-            NFA_NEWL => {
-                if curc == NUL
-                    && !rex.reg_line_lbr()
-                    && rex.multi()
-                    && rex.lnum() <= rex.reg_maxline()
-                {
-                    // A real line break: the next list starts on the next
-                    // line, so it is added at offset -1.
-                    *go_to_nextline = true;
-                    Step::next(out, -1)
-                } else if curc == b'\n' as c_int && rex.reg_line_lbr() {
-                    // A string match with 'linebreak' semantics: the break
-                    // is just a byte.
-                    Step::next(out, 1)
-                } else {
-                    Step::Dead
-                }
+            nfa_match.set(1);
+            if nextlist.len() == 0 {
+                *clen = 0;
             }
+            Step::Matched
+        }
 
-            NFA_START_COLL | NFA_START_NEG_COLL => {
-                if curc == NUL {
-                    return Step::Dead;
-                }
-                let matched = collection_matches(rex, state, curc, *clen);
-                Step::consuming(matched, (*(*state).out1).out, *clen)
+        NFA_START_INVISIBLE..=NFA_START_INVISIBLE_BEFORE_NEG_FIRST => unsafe {
+            start_lookaround(rex, thislist, idx, listidx, run)
+        },
+
+        NFA_START_PATTERN => unsafe { start_pattern(rex, thislist, nextlist, idx, run, *clen) },
+
+        NFA_BOL => Step::zero_width(rex.at_bol(), out),
+        NFA_EOL => Step::zero_width(curc == NUL, out),
+        NFA_BOW => Step::zero_width(unsafe { at_word_start(rex, curc) }, out),
+        NFA_EOW => Step::zero_width(unsafe { at_word_end(rex) }, out),
+        NFA_BOF => Step::zero_width(
+            rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() == 1),
+            out,
+        ),
+        NFA_EOF => Step::zero_width(rex.lnum() == rex.reg_maxline() && curc == NUL, out),
+
+        NFA_COMPOSING => {
+            let matched = unsafe { matches_composing(rex, out, curc, *clen) };
+            // The group's end, and what follows it, hang off `out1`.
+            Step::consuming(matched, out_of(out1_of(state)), *clen)
+        }
+
+        NFA_NEWL => {
+            if curc == NUL && !rex.reg_line_lbr() && rex.multi() && rex.lnum() <= rex.reg_maxline()
+            {
+                // A real line break: the next list starts on the next
+                // line, so it is added at offset -1.
+                *go_to_nextline = true;
+                Step::next(out, -1)
+            } else if curc == b'\n' as c_int && rex.reg_line_lbr() {
+                // A string match with 'linebreak' semantics: the break
+                // is just a byte.
+                Step::next(out, 1)
+            } else {
+                Step::Dead
             }
+        }
 
-            NFA_ANY => Step::consuming(curc > 0, out, *clen),
-
-            NFA_ANY_COMPOSING => {
-                // `\%C`: a combining character is consumed, anything else
-                // leaves the position alone for the group that follows.
-                if utf_iscomposing_legacy(curc) {
-                    Step::next(out, *clen)
-                } else {
-                    Step::Here(out)
-                }
+        NFA_START_COLL | NFA_START_NEG_COLL => {
+            if curc == NUL {
+                return Step::Dead;
             }
+            let matched = unsafe { collection_matches(rex, state, curc, *clen) };
+            Step::consuming(matched, out_of(out1_of(state)), *clen)
+        }
 
-            c @ NFA_IDENT..=NFA_NUPPER_IC => {
-                Step::consuming(class_matches(rex, c, curc), out, *clen)
+        NFA_ANY => Step::consuming(curc > 0, out, *clen),
+
+        NFA_ANY_COMPOSING => {
+            // `\%C`: a combining character is consumed, anything else
+            // leaves the position alone for the group that follows.
+            if utf_iscomposing_legacy(curc) {
+                Step::next(out, *clen)
+            } else {
+                Step::Here(out)
             }
+        }
 
-            c @ (NFA_BACKREF1..=NFA_BACKREF9 | NFA_ZREF1..=NFA_ZREF9) => {
-                let mut bytelen = 0;
-                let matched = if (NFA_BACKREF1..=NFA_BACKREF9).contains(&c) {
-                    match_backref(
-                        rex,
-                        &thislist.thread(idx).subs.norm,
-                        c - NFA_BACKREF1 + 1,
-                        &mut bytelen,
-                    )
-                } else {
-                    match_zref(rex, c - NFA_ZREF1 + 1, &mut bytelen)
-                };
-                if !matched {
-                    return Step::Dead;
-                }
-                // What it matched may be longer than one character, in
-                // which case the thread waits behind an `NFA_SKIP`.
-                spanning(out, bytelen, *clen)
+        c @ NFA_IDENT..=NFA_NUPPER_IC => Step::consuming(class_matches(rex, c, curc), out, *clen),
+
+        c @ (NFA_BACKREF1..=NFA_BACKREF9 | NFA_ZREF1..=NFA_ZREF9) => {
+            let mut bytelen = 0;
+            let matched = if (NFA_BACKREF1..=NFA_BACKREF9).contains(&c) {
+                match_backref(
+                    rex,
+                    &thislist.thread(idx).subs.norm,
+                    c - NFA_BACKREF1 + 1,
+                    &mut bytelen,
+                )
+            } else {
+                match_zref(rex, c - NFA_ZREF1 + 1, &mut bytelen)
+            };
+            if !matched {
+                return Step::Dead;
             }
+            // What it matched may be longer than one character, in
+            // which case the thread waits behind an `NFA_SKIP`.
+            spanning(out, bytelen, *clen)
+        }
 
-            NFA_SKIP => {
-                // Consume the bytes a back-reference still owes.
-                let owed = thislist.thread(idx).count - *clen;
-                if owed <= 0 {
-                    Step::next(out, *clen)
-                } else {
-                    Step::Next {
-                        state,
-                        off: 0,
-                        count: owed,
-                    }
+        NFA_SKIP => {
+            // Consume the bytes a back-reference still owes.
+            let owed = thislist.thread(idx).count - *clen;
+            if owed <= 0 {
+                Step::next(out, *clen)
+            } else {
+                Step::Next {
+                    state,
+                    off: 0,
+                    count: owed,
                 }
             }
+        }
 
-            NFA_LNUM..=NFA_LNUM_LT => Step::zero_width(at_line(rex, state), out),
-            NFA_COL..=NFA_COL_LT => Step::zero_width(at_col(rex, state), out),
-            NFA_VCOL..=NFA_VCOL_LT => Step::zero_width(at_vcol(rex, state), out),
-            NFA_MARK..=NFA_MARK_LT => Step::zero_width(at_mark(rex, state), out),
-            NFA_CURSOR => Step::zero_width(at_cursor(rex), out),
-            NFA_VISUAL => Step::zero_width(in_visual(rex), out),
+        NFA_LNUM..=NFA_LNUM_LT => Step::zero_width(at_line(rex, state), out),
+        NFA_COL..=NFA_COL_LT => Step::zero_width(at_col(rex, state), out),
+        NFA_VCOL..=NFA_VCOL_LT => Step::zero_width(at_vcol(rex, state), out),
+        NFA_MARK..=NFA_MARK_LT => Step::zero_width(at_mark(rex, state), out),
+        NFA_CURSOR => Step::zero_width(at_cursor(rex), out),
+        NFA_VISUAL => Step::zero_width(in_visual(rex), out),
 
-            // The capture brackets are recorded by `addstate` as it walks
-            // past them, so a thread sitting on one has nothing to do.
-            // `NFA_MOPEN` itself is deliberately absent: upstream leaves it
-            // to the literal-character arm below, which never matches it.
-            NFA_MOPEN1..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_NOPEN | NFA_ZSTART => Step::Dead,
+        // The capture brackets are recorded by `addstate` as it walks
+        // past them, so a thread sitting on one has nothing to do.
+        // `NFA_MOPEN` itself is deliberately absent: upstream leaves it
+        // to the literal-character arm below, which never matches it.
+        NFA_MOPEN1..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_NOPEN | NFA_ZSTART => Step::Dead,
 
-            // A literal character.
-            c => {
-                let mut matched = c == curc;
-                if !matched && rex.reg_ic() {
-                    matched = utf_fold(c) == utf_fold(curc);
-                }
-                if matched && !rex.reg_icombine() {
-                    // The pattern named the base character only, so the
-                    // combining marks after it are not consumed with it.
-                    *clen = utf_ptr2len(rex.input_str());
-                }
-                Step::consuming(matched, out, *clen)
+        // A literal character.
+        c => {
+            let mut matched = c == curc;
+            if !matched && rex.reg_ic() {
+                matched = utf_fold(c) == utf_fold(curc);
             }
+            if matched && !rex.reg_icombine() {
+                // The pattern named the base character only, so the
+                // combining marks after it are not consumed with it.
+                *clen = rex.base_len();
+            }
+            Step::consuming(matched, out, *clen)
         }
     }
 }
@@ -402,7 +397,7 @@ unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, cle
         let member_wins = (*start).c == NFA_START_COLL;
         let mut state = (*start).out;
         loop {
-            let c = (*state).c;
+            let c = op(state);
             if c == NFA_COMPOSING {
                 // A member that is a whole grapheme.
                 return matches_composing(rex, (*(*start).out).out, curc, clen) == member_wins;
@@ -413,7 +408,7 @@ unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, cle
             }
             if c == NFA_RANGE_MIN {
                 let mut lo = (*state).val;
-                state = (*state).out;
+                state = out_of(state);
                 let hi = (*state).val;
                 if (lo..=hi).contains(&curc) {
                     return member_wins;
@@ -439,7 +434,7 @@ unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, cle
                     return member_wins;
                 }
             }
-            state = (*state).out;
+            state = out_of(state);
         }
     }
 }
@@ -464,7 +459,7 @@ unsafe fn start_lookaround(
         // thread that already carries one runs it now.
         let run_now = thislist.thread(idx).pim.result != NFA_PIM_UNUSED
             || matches!(
-                (*state).c,
+                op(state),
                 NFA_START_INVISIBLE_FIRST
                     | NFA_START_INVISIBLE_NEG_FIRST
                     | NFA_START_INVISIBLE_BEFORE_FIRST
@@ -493,7 +488,7 @@ unsafe fn start_lookaround(
             }
             if !addstate_here(
                 thislist,
-                (*(*state).out1).out,
+                out_of(out1_of(state)),
                 run.here,
                 Some(&pim),
                 listidx,
@@ -524,7 +519,7 @@ unsafe fn start_lookaround(
             copy_both_off(rex, &mut thislist.thread_mut(idx).subs, &*run.m);
             // `\ze` inside the lookaround may have moved the match's end.
             copy_ze_off(rex, &mut thislist.thread_mut(idx).subs.norm, &(*run.m).norm);
-            Step::Here((*(*state).out1).out)
+            Step::Here(out_of(out1_of(state)))
         } else {
             Step::Dead
         };
@@ -548,7 +543,7 @@ unsafe fn start_pattern(
 ) -> Step {
     unsafe {
         let state = thislist.thread(idx).state;
-        let after = (*(*state).out1).out;
+        let after = out_of(out1_of(state));
         // If the state this would land on is already queued with the same
         // captures, running the sub-match again would prove nothing.
         let subs = &thislist.thread(idx).subs;

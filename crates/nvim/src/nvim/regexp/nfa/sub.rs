@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::list::{op, out_of, out1_of};
 use core::ffi::c_int;
 
 use crate::src::nvim::regexp::{
@@ -269,35 +270,34 @@ pub(crate) fn match_follows(startstate: *const nfa_state_T, depth: c_int) -> boo
     }
     // SAFETY: `startstate` and everything reachable from it are states of the
     // running program.
-    unsafe {
-        let mut state = startstate;
-        while !state.is_null() {
-            match (*state).c {
-                NFA_MATCH
-                | NFA_MCLOSE
-                | NFA_END_INVISIBLE
-                | NFA_END_INVISIBLE_NEG
-                | NFA_END_PATTERN => return true,
-                NFA_SPLIT => {
-                    return match_follows((*state).out, depth + 1)
-                        || match_follows((*state).out1, depth + 1);
-                }
-                // A lookaround or a grapheme group: what follows it hangs off
-                // the end state `out1` points at.
-                NFA_START_INVISIBLE..=NFA_START_INVISIBLE_BEFORE_NEG_FIRST | NFA_COMPOSING => {
-                    state = (*(*state).out1).out;
-                }
-                // Anything that consumes input means the pattern goes on.
-                NFA_ANY
-                | NFA_ANY_COMPOSING
-                | NFA_IDENT..=NFA_NUPPER_IC
-                | NFA_START_COLL
-                | NFA_START_NEG_COLL
-                | NFA_NEWL => return false,
-                c if c > 0 => return false,
-                _ => state = (*state).out,
+
+    let mut state = startstate;
+    while !state.is_null() {
+        match op(state) {
+            NFA_MATCH
+            | NFA_MCLOSE
+            | NFA_END_INVISIBLE
+            | NFA_END_INVISIBLE_NEG
+            | NFA_END_PATTERN => return true,
+            NFA_SPLIT => {
+                return match_follows(out_of(state), depth + 1)
+                    || match_follows(out1_of(state), depth + 1);
             }
+            // A lookaround or a grapheme group: what follows it hangs off
+            // the end state `out1` points at.
+            NFA_START_INVISIBLE..=NFA_START_INVISIBLE_BEFORE_NEG_FIRST | NFA_COMPOSING => {
+                state = out_of(out1_of(state));
+            }
+            // Anything that consumes input means the pattern goes on.
+            NFA_ANY
+            | NFA_ANY_COMPOSING
+            | NFA_IDENT..=NFA_NUPPER_IC
+            | NFA_START_COLL
+            | NFA_START_NEG_COLL
+            | NFA_NEWL => return false,
+            c if c > 0 => return false,
+            _ => state = out_of(state),
         }
-        false
     }
+    false
 }

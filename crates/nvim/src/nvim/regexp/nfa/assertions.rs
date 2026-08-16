@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::list::op;
 use core::ffi::{c_char, c_int};
 
 use super::run::nfa_re_num_cmp;
@@ -50,7 +51,7 @@ pub(crate) fn at_line(rex: Rex, state: *mut nfa_state_T) -> bool {
             want >= 0 && rex.buf_lnum() >= 0,
             "line assertion out of range"
         );
-        rex.multi() && nfa_re_num_cmp(want as u64, (*state).c - NFA_LNUM, lnum(rex) as u64)
+        rex.multi() && nfa_re_num_cmp(want as u64, op(state) - NFA_LNUM, lnum(rex) as u64)
     }
 }
 
@@ -62,7 +63,7 @@ pub(crate) fn at_col(rex: Rex, state: *mut nfa_state_T) -> bool {
         assert!(rex.input() >= rex.line(), "input before the line");
         nfa_re_num_cmp(
             (*state).val as u64,
-            (*state).c - NFA_COL,
+            op(state) - NFA_COL,
             col(rex) as u64 + 1,
         )
     }
@@ -74,7 +75,7 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut nfa_state_T) -> bool {
     // SAFETY: as `at_line`; `reg_getline` re-reads the line because
     // `win_linetabsize` can move the memline's buffer.
     unsafe {
-        let op = (*state).c - NFA_VCOL;
+        let op = op(state) - NFA_VCOL;
         let want = (*state).val;
         let col = col(rex);
         // A virtual column is never smaller than the byte column divided by
@@ -131,7 +132,7 @@ pub(crate) fn at_mark(rex: Rex, state: *mut nfa_state_T) -> bool {
         } else {
             pos.col
         };
-        let want = (*state).c;
+        let want = op(state);
         if pos.lnum == here {
             if pos_col == col {
                 want == NFA_MARK

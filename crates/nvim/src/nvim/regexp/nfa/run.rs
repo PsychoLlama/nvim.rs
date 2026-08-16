@@ -4,6 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::list::{op, out_of, out1_of};
 use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_ushort};
 
@@ -234,7 +235,7 @@ pub(crate) fn recursive_regmatch(
         };
         let mut endposp = core::ptr::null_mut::<save_se_T>();
         if matches!(
-            (*state).c,
+            op(state),
             NFA_START_INVISIBLE_BEFORE
                 | NFA_START_INVISIBLE_BEFORE_FIRST
                 | NFA_START_INVISIBLE_BEFORE_NEG
@@ -275,7 +276,7 @@ pub(crate) fn recursive_regmatch(
         }
 
         nfa_endp.set(endposp);
-        let result = nfa_regmatch(rex, prog, (*state).out, submatch, m);
+        let result = nfa_regmatch(rex, prog, out_of(state), submatch, m);
         if need_restore {
             nfa_restore_listids(prog, listids);
         } else {
@@ -358,15 +359,15 @@ pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
     }
     // SAFETY: the walk stays inside the program `state` belongs to.
     unsafe {
-        match (*state).c {
+        match op(state) {
             NFA_SPLIT => {
                 // A split of splits is a long alternation; do not try to
                 // reason about it.
-                if (*(*state).out).c == NFA_SPLIT || (*(*state).out1).c == NFA_SPLIT {
+                if (*out_of(state)).c == NFA_SPLIT || (*out1_of(state)).c == NFA_SPLIT {
                     return 1;
                 }
-                let l = failure_chance((*state).out, depth + 1);
-                let r = failure_chance((*state).out1, depth + 1);
+                let l = failure_chance(out_of(state), depth + 1);
+                let r = failure_chance(out1_of(state), depth + 1);
                 l.min(r)
             }
             // `.` matches nearly anything.
@@ -380,7 +381,7 @@ pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
             NFA_BOW | NFA_EOW => 90,
             // A bracket matches nothing itself: ask what is inside it.
             NFA_MOPEN..=NFA_ZCLOSE9 | NFA_NOPEN..=NFA_NCLOSE => {
-                failure_chance((*state).out, depth + 1)
+                failure_chance(out_of(state), depth + 1)
             }
             NFA_BACKREF1..=NFA_ZREF9 => 94,
             NFA_LNUM => 90,

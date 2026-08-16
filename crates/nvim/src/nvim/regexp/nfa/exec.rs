@@ -23,15 +23,16 @@ use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::iemsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::regexp::{
-    FAIL, NFA_TOO_EXPENSIVE, NUL, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, cleanup_subexpr,
-    cleanup_zsubexpr, init_regexec, init_regexec_multi, make_extmatch, nfa_re_flags, nfa_regengine,
-    nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, nfa_timed_out, nstate, re_has_z,
-    reg_getline, regflags, regnpar, regsubs_T, state_ptr, unref_extmatch,
+    FAIL, NFA_TOO_EXPENSIVE, NSUBEXP, NUL, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex,
+    cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi, make_extmatch,
+    nfa_re_flags, nfa_regengine, nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit,
+    nfa_timed_out, nstate, re_has_z, reg_getline, regflags, regnpar, regsubs_T, state_ptr,
+    unref_extmatch,
 };
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::types::{
-    buf_T, colnr_T, linenr_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T,
-    uint8_t, win_T,
+    buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    regprog_T, uint8_t, win_T,
 };
 
 /// Try to match at column `col` of the current line.
@@ -90,52 +91,66 @@ fn nfa_regtry(
 ///
 /// SAFETY: the match context holds the caller's position arrays.
 fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
-    unsafe {
-        for i in 0..subs.norm.in_use as isize {
-            let m = subs.norm.list.multi[i as usize];
-            let start = rex.reg_startpos().offset(i);
-            let end = rex.reg_endpos().offset(i);
-            (*start).lnum = m.start_lnum;
-            (*start).col = m.start_col;
-            (*end).lnum = m.end_lnum;
-            (*end).col = m.end_col;
-        }
-        if !rex.reg_mmatch().is_null() {
-            (*rex.reg_mmatch()).rmm_matchcol = subs.norm.orig_start_col;
-        }
-        // A `\zs` before the start, or a `\ze` before the end, can leave
-        // group 0 unset; it then covers what the machine actually walked.
-        let start = rex.reg_startpos();
-        let end = rex.reg_endpos();
-        if (*start).lnum < 0 {
-            (*start).lnum = 0;
-            (*start).col = col;
-        }
-        if (*end).lnum < 0 {
-            (*end).lnum = rex.lnum();
-            (*end).col = rex.col();
-        } else {
-            rex.set_lnum((*end).lnum);
-        }
+    // SAFETY: a buffer match's context holds the caller's position arrays,
+    // `NSUBEXP` slots each, and `subs.norm`'s live arm is `multi` because the
+    // match is a buffer one.
+    let (starts, ends, multi) = unsafe {
+        (
+            core::slice::from_raw_parts_mut(rex.reg_startpos(), NSUBEXP as usize),
+            core::slice::from_raw_parts_mut(rex.reg_endpos(), NSUBEXP as usize),
+            &subs.norm.list.multi,
+        )
+    };
+    for i in 0..subs.norm.in_use as usize {
+        starts[i] = lpos_T {
+            lnum: multi[i].start_lnum,
+            col: multi[i].start_col,
+        };
+        ends[i] = lpos_T {
+            lnum: multi[i].end_lnum,
+            col: multi[i].end_col,
+        };
+    }
+    if !rex.reg_mmatch().is_null() {
+        // SAFETY: a non-null `reg_mmatch` is the caller's match structure.
+        unsafe { (*rex.reg_mmatch()).rmm_matchcol = subs.norm.orig_start_col };
+    }
+    // A `\zs` before the start, or a `\ze` before the end, can leave group 0
+    // unset; it then covers what the machine actually walked.
+    if starts[0].lnum < 0 {
+        starts[0] = lpos_T { lnum: 0, col };
+    }
+    if ends[0].lnum < 0 {
+        ends[0] = lpos_T {
+            lnum: rex.lnum(),
+            col: rex.col(),
+        };
+    } else {
+        rex.set_lnum(ends[0].lnum);
     }
 }
 
 /// As [`report_buffer_match`], for a match over a plain string.
-///
-/// SAFETY: the match context holds the caller's pointer arrays.
 fn report_string_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
-    unsafe {
-        for i in 0..subs.norm.in_use as isize {
-            let l = subs.norm.list.line[i as usize];
-            *rex.reg_startp().offset(i) = l.start;
-            *rex.reg_endp().offset(i) = l.end;
-        }
-        if (*rex.reg_startp()).is_null() {
-            *rex.reg_startp() = rex.line().offset(col as isize);
-        }
-        if (*rex.reg_endp()).is_null() {
-            *rex.reg_endp() = rex.input();
-        }
+    // SAFETY: as `report_buffer_match`; a string match's slots are pointers
+    // and `subs.norm`'s live arm is `line`.
+    let (starts, ends, lines) = unsafe {
+        (
+            core::slice::from_raw_parts_mut(rex.reg_startp(), NSUBEXP as usize),
+            core::slice::from_raw_parts_mut(rex.reg_endp(), NSUBEXP as usize),
+            &subs.norm.list.line,
+        )
+    };
+    for i in 0..subs.norm.in_use as usize {
+        starts[i] = lines[i].start;
+        ends[i] = lines[i].end;
+    }
+    if starts[0].is_null() {
+        // SAFETY: `col` is a byte offset into the line being matched.
+        starts[0] = unsafe { rex.line().offset(col as isize) };
+    }
+    if ends[0].is_null() {
+        ends[0] = rex.input();
     }
 }
 
