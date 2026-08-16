@@ -169,7 +169,7 @@
     "crates/nvim/src/nvim/decoration/handles.rs": {"unsafe_lines": 17},
     "crates/nvim/src/nvim/decoration/query.rs": {"unsafe_lines": 13},
     "crates/nvim/src/nvim/decoration/signs.rs": {"unsafe_lines": 11},
-    "crates/nvim/src/nvim/decoration/state.rs": {"unsafe_lines": 416},
+    "crates/nvim/src/nvim/decoration/state.rs": {"unsafe_lines": 45},
     "crates/nvim/src/nvim/decoration_provider.rs": {"cell_ptr": 9, "unsafe_lines": 299},
     "crates/nvim/src/nvim/diff/block.rs": {"unsafe_lines": 376},
     "crates/nvim/src/nvim/diff/compare.rs": {"unsafe_lines": 50},
