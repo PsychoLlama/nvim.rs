@@ -44,7 +44,7 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memory::xmemcpyz;
 use crate::src::nvim::os::libc::{strcpy, strlen};
-use crate::src::nvim::spell::{spell_casefold, spell_soundfold, spelltab};
+use crate::src::nvim::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab};
 use crate::src::nvim::spellsuggest::{
     MAXWLEN, NUL, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suggest_T,
@@ -52,10 +52,6 @@ use crate::src::nvim::spellsuggest::{
 };
 use crate::src::nvim::types::{MB_MAXCHAR, hashitem_T, size_t, slang_T, wordcount_T};
 use core::ffi::{c_char, c_int};
-
-/// Where the inline word sits inside a `wordcount_T`; the word-count table
-/// keys on that field, so the record is recovered by stepping back.
-const WC_KEY_OFF: usize = core::mem::offset_of!(wordcount_T, wc_word);
 
 /// A sound-folded word and the room around it, as the callers keep it.
 pub type SoundBuf = [c_char; MAXWLEN];

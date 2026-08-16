@@ -180,8 +180,11 @@ pub const SY_MAXLEN: c_int = 30;
 pub const SPL_FNAME_TMPL: [c_char; 10] =
     unsafe { ::core::mem::transmute::<[u8; 10], [c_char; 10]>(*b"%s.%s.spl\0") };
 /// A `wordcount_T`'s key starts this far into it, so a hash item's key
-/// pointer can be walked back to the struct.
-pub const WC_KEY_OFF: ::core::ffi::c_ulong = 2;
+/// pointer can be walked back to the struct. Derived from the type rather
+/// than spelled out: the word-count table stores the record and hashes on
+/// the inline `wc_word`, so a wrong value here is a wild pointer.
+pub const WC_KEY_OFF: usize =
+    ::core::mem::offset_of!(crate::src::nvim::types::wordcount_T, wc_word);
 
 /// State threaded through one word's lookup, so that the tree walk and the
 /// compound recursion can pass it around in one piece rather than a dozen
