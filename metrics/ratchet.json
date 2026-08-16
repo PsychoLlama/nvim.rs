@@ -832,7 +832,7 @@
     "crates/nvim/src/nvim/shada/read.rs": {"unsafe_lines": 435},
     "crates/nvim/src/nvim/shada/unpack.rs": {"unsafe_lines": 259},
     "crates/nvim/src/nvim/shada/write.rs": {"unsafe_lines": 512},
-    "crates/nvim/src/nvim/sign.rs": {"cell_ptr": 1, "unsafe_lines": 408},
+    "crates/nvim/src/nvim/sign.rs": {"cell_ptr": 1, "unsafe_lines": 156},
     "crates/nvim/src/nvim/sign/command.rs": {"unsafe_lines": 337},
     "crates/nvim/src/nvim/sign/complete.rs": {"unsafe_lines": 72},
     "crates/nvim/src/nvim/sign/vimscript.rs": {"unsafe_lines": 443},
