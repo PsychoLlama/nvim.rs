@@ -11,12 +11,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::os::uv_error::UV_EINVAL;
 use ::core::ffi::{CStr, c_char, c_double, c_int, c_void};
 use ::core::ptr;
 
 use super::{
-    LIBUV_SUCCESS, NO_LOOP, R_OK, UV_EINVAL, UV_STAT_T_INIT, W_OK, fs_ok, fs_request, fs_result,
-    os_isdir,
+    LIBUV_SUCCESS, NO_LOOP, R_OK, UV_STAT_T_INIT, W_OK, fs_ok, fs_request, fs_result, os_isdir,
 };
 use crate::src::nvim::event::libuv::{
     uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_fchown, uv_fs_fstat, uv_fs_lstat, uv_fs_stat,

@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
+use crate::src::nvim::os::uv_error::UV_ENOTSUP;
 use core::ffi::{c_char, c_int, c_uint};
 
 #[allow(unused_imports)]

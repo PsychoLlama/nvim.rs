@@ -38,6 +38,7 @@ use crate::src::nvim::os::fs::{os_dirname, os_realpath};
 use crate::src::nvim::os::libc::{
     environ, getpid, strcasecmp, strchr, strcmp, strcpy, strlen, strncmp, strpbrk,
 };
+use crate::src::nvim::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::src::nvim::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::src::nvim::strings::striequal;
 use crate::src::nvim::types::{expand_T, int64_t, size_t};
@@ -62,10 +63,6 @@ pub struct utsname {
 
 // The libuv error codes this file distinguishes, retyped from the `c_int`
 // anonymous enum c2rust emitted.
-const UV_ENOENT: c_int = -2;
-const UV_EINVAL: c_int = -22;
-const UV_ENOBUFS: c_int = -105;
-const UV_UNKNOWN: c_int = -4094;
 
 const MAXPATHL: usize = 4096;
 const IOSIZE: usize = 1024 + 1;

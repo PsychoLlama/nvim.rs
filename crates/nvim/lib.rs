@@ -167,6 +167,7 @@ pub mod src {
             pub mod stdpaths;
             pub mod time;
             pub mod users;
+            pub mod uv_error;
         } // mod os
         pub mod r#match;
         pub mod r#move;

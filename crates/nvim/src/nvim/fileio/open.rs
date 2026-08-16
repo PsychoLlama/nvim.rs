@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::os::uv_error::{UV_EFBIG, UV_ENOENT};
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::bufwrite::translate;

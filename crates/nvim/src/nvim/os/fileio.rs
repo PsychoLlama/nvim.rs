@@ -22,6 +22,7 @@ use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::fs::{
     os_close, os_file_mkdir, os_fsync, os_open, os_open_stdin_fd, os_read, os_readv, os_write,
 };
+use crate::src::nvim::os::uv_error::{UV_EINVAL, UV_EIO, UV_ENOTSUP, UV_EROFS};
 use crate::src::nvim::types::{FileDescriptor, iovec, ptrdiff_t, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -29,11 +30,6 @@ use core::slice;
 
 /// Size of the arena block a `FileDescriptor` buffers through.
 const ARENA_BLOCK_SIZE: usize = 4096;
-
-const UV_EINVAL: c_int = -22;
-const UV_EIO: c_int = -5;
-const UV_EROFS: c_int = -30;
-const UV_ENOTSUP: c_int = -95;
 
 /// `open(2)` flags, spelled out rather than pulled from libc so the numbers
 /// stay the ones `os_open` hands to libuv.

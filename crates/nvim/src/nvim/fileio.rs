@@ -128,8 +128,6 @@ unsafe extern "C" {
 }
 pub type DIR = __dirstream;
 pub type C2Rust_Unnamed_5 = ::core::ffi::c_int;
-pub const UV_ENOENT: C2Rust_Unnamed_5 = -2;
-pub const UV_EFBIG: C2Rust_Unnamed_5 = -27;
 pub const kOptValTypeString: OptValType = 2;
 pub const BLN_DUMMY: bln_values = 4;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;

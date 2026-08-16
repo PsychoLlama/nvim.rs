@@ -5,7 +5,8 @@
 //! `uv_run` returns; `thread_events` is the mutex-guarded inbox other threads
 //! post to, moved into `fast_events` by the async handle.
 
-use core::ffi::{c_int, c_void};
+use crate::src::nvim::os::uv_error::UV_EBUSY;
+use core::ffi::c_void;
 use core::ptr;
 
 use crate::src::nvim::event::libuv::{
@@ -28,8 +29,6 @@ use crate::src::nvim::types::{
 const UV_RUN_DEFAULT: uv_run_mode = 0;
 const UV_RUN_ONCE: uv_run_mode = 1;
 const UV_RUN_NOWAIT: uv_run_mode = 2;
-
-const UV_EBUSY: c_int = -16;
 
 unsafe extern "C" {
     fn uv_walk(

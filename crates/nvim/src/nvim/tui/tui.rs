@@ -37,6 +37,7 @@ use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_
 use crate::src::nvim::os::env::{os_getenv, os_getenv_noalloc};
 use crate::src::nvim::os::input::os_isatty;
 use crate::src::nvim::os::libc::{abort, kill, sscanf};
+use crate::src::nvim::os::uv_error::UV_EINTR;
 use crate::src::nvim::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
 use crate::src::nvim::tui::input::{tinput_destroy, tinput_init, tinput_start, tinput_stop};
 use crate::src::nvim::tui::negotiate::{
@@ -75,7 +76,6 @@ unsafe extern "C" {
 // ----------------------------------------------------------- the constants
 
 const UV_RUN_DEFAULT: core::ffi::c_uint = 0;
-const UV_EINTR: c_int = -4;
 const UV_TTY_MODE_IO: uv_tty_mode_t = 2;
 
 const SIGSTOP: c_int = 19;

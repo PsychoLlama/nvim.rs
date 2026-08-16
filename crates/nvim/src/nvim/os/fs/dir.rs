@@ -8,12 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::os::uv_error::UV_EOF;
 use ::core::ffi::{CStr, c_char, c_int};
 use ::core::ptr;
 
 use super::{
-    LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_EOF, UV_STAT_T_INIT, fs_ok,
-    fs_request, fs_result, os_isdir, os_stat,
+    LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_STAT_T_INIT, fs_ok, fs_request,
+    fs_result, os_isdir, os_stat,
 };
 use crate::semsg_c;
 use crate::src::nvim::event::libuv::{

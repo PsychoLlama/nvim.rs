@@ -10,6 +10,7 @@
 
 pub mod address;
 
+use crate::src::nvim::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -35,11 +36,6 @@ use crate::src::nvim::types::{
 };
 
 const UV_TCP: uv_handle_type = 12;
-
-const UV_EINVAL: c_int = -22;
-const UV_ENOENT: c_int = -2;
-const UV_EACCES: c_int = -13;
-const UV_EADDRINUSE: c_int = -98;
 
 const AF_UNSPEC: c_int = 0;
 const SOCK_STREAM: c_int = 1;

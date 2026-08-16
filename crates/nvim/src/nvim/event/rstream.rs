@@ -23,6 +23,7 @@ use crate::src::nvim::event::stream::{stream_close_handle, stream_init, stream_m
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg_c};
 use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::libc::memmove;
+use crate::src::nvim::os::uv_error::{UV_ENOBUFS, UV_EOF};
 use crate::src::nvim::types::{
     Event, Loop, RStream, Stream, size_t, ssize_t, stream_read_cb, uv_buf_t, uv_fs_t, uv_handle_t,
     uv_handle_type, uv_idle_t, uv_stream_t,
@@ -31,8 +32,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 const UV_TTY: uv_handle_type = 14;
-const UV_ENOBUFS: c_int = -105;
-const UV_EOF: c_int = -4095;
 
 /// The size of the arena block an `RStream` reads into.
 const ARENA_BLOCK_SIZE: usize = 4096;

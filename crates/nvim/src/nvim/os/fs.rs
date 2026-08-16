@@ -21,6 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_EINVAL, UV_UNKNOWN};
 use ::core::ffi::{CStr, c_char, c_int, c_void};
 use ::core::{ptr, slice};
 
@@ -52,25 +53,6 @@ pub mod meta;
 
 pub use dir::*;
 pub use meta::*;
-
-/// The libuv error codes this family answers with. Negated `errno` values,
-/// except the two libuv invents.
-///
-/// Public because `test/unit/os/fs_spec.lua` and `test/unit/file_spec.lua`
-/// name them: the FFI declarations the unit suite compiles against are
-/// generated from this crate's `pub const`s (`tools/ffigen`), so a code the
-/// specs assert on has to be exported even when no Rust caller reads it.
-pub const UV_EMLINK: c_int = -31;
-pub const UV_EOF: c_int = -4095;
-pub const UV_UNKNOWN: c_int = -4094;
-pub const UV_ENOENT: c_int = -2;
-pub const UV_ELOOP: c_int = -40;
-pub const UV_EISDIR: c_int = -21;
-pub const UV_EINVAL: c_int = -22;
-pub const UV_EINTR: c_int = -4;
-pub const UV_EEXIST: c_int = -17;
-pub const UV_EBADF: c_int = -9;
-pub const UV_EAGAIN: c_int = -11;
 
 /// Many `uv_fs_*` functions answer this on success.
 const LIBUV_SUCCESS: c_int = 0;

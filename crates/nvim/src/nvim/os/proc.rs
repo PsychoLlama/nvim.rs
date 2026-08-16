@@ -14,14 +14,13 @@
 
 use crate::src::nvim::event::libuv::uv_kill;
 use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
+use crate::src::nvim::os::uv_error::UV_ESRCH;
 use core::ffi::c_int;
 use core::ptr;
 use std::ffi::CString;
 
 const SIGKILL: c_int = 9;
 const SIGTERM: c_int = 15;
-/// `uv_kill` reporting ESRCH: no such process.
-const UV_ESRCH: c_int = -3;
 
 /// Kill the process group led by `pid`, which is what nvim's spawned jobs
 /// are set up as. `sig` must be SIGTERM or SIGKILL.

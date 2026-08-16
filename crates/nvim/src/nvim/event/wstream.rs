@@ -12,15 +12,13 @@
 
 use crate::src::nvim::event::libuv::{uv_fs_req_cleanup, uv_fs_write, uv_write};
 use crate::src::nvim::event::stream::{stream_close_handle, stream_init};
+use crate::src::nvim::os::uv_error::{UV_ENOMEM, UV_UNKNOWN};
 use crate::src::nvim::types::{
     Loop, Stream, WBuffer, size_t, stream_write_cb, uv_buf_t, uv_fs_t, uv_write_t,
     wbuffer_data_finalizer,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
-
-const UV_UNKNOWN: c_int = -4094;
-const UV_ENOMEM: c_int = -12;
 
 /// How much unwritten payload a stream may hold before writes are refused.
 const DEFAULT_MAXMEM: size_t = 1024 * 1024 * 2000;

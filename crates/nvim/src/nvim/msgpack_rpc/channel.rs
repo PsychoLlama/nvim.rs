@@ -13,6 +13,7 @@
 //! [`unpacker`]: crate::src::nvim::msgpack_rpc::unpacker
 //! [`packer`]: crate::src::nvim::msgpack_rpc::packer
 
+use crate::src::nvim::os::uv_error::UV_EPIPE;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -84,7 +85,6 @@ mod known {
     pub const LOGLVL_ERR: c_int = 4;
 
     /// libuv's "the peer hung up" error.
-    pub const UV_EPIPE: c_int = -32;
     /// The arena block size the RPC packer writes into.
     pub const ARENA_BLOCK_SIZE: usize = 4096;
 }
