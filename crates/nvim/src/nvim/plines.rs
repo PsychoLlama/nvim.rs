@@ -67,10 +67,13 @@ static INLINE_FILTER: MetaCount = [kMTFilterSelect, 0, 0, 0, 0];
 // ---------------------------------------------------------------------------
 
 impl Win {
-    /// The 'showbreak' in effect here, window-local or global.
-    fn showbreak(self) -> *mut c_char {
+    /// The 'showbreak' in effect here — window-local or global — and whether
+    /// it is non-empty, which is the only thing most callers ask.
+    fn showbreak(self) -> (*mut c_char, bool) {
         // SAFETY: a live window.
-        unsafe { get_showbreak_value(self.raw()) }
+        let sbr = unsafe { get_showbreak_value(self.raw()) };
+        // SAFETY: 'showbreak' is a NUL-terminated option string.
+        (sbr, unsafe { byte_at(sbr) } != NUL as c_int)
     }
 
     /// Cells 'breakindent' adds to a wrapped screen line of `line`.
@@ -256,9 +259,7 @@ pub unsafe fn init_charsize_arg(
         csarg.virt_row = lnum - 1;
     }
 
-    let sbr = wp.showbreak();
-    // SAFETY: 'showbreak' is a NUL-terminated option string.
-    let has_sbr = unsafe { byte_at(sbr) } != NUL as c_int;
+    let has_sbr = wp.showbreak().1;
     let needs_regular = csarg.virt_row >= 0
         || (wp.w_onebuf_opt.wo_wrap != 0
             && (wp.w_onebuf_opt.wo_lbr != 0 || wp.w_onebuf_opt.wo_bri != 0 || has_sbr));
@@ -482,10 +483,15 @@ unsafe fn breaks_here(csarg: &CharsizeArg, cur: *mut c_char) -> bool {
     if wp.w_onebuf_opt.wo_lbr == 0 || wp.w_onebuf_opt.wo_wrap == 0 || wp.w_view_width == 0 {
         return false;
     }
-    // SAFETY: `cur` points into a NUL-terminated line, so the byte after it
-    // is in the line too — the terminating NUL at worst, which is no break.
-    let (here, next) = unsafe { (byte_at(cur), byte_at(cur.offset(1))) };
-    if !vim_isbreak(here) || vim_isbreak(next) {
+    // SAFETY: `cur` points into a NUL-terminated line.
+    if !vim_isbreak(unsafe { byte_at(cur) }) {
+        return false;
+    }
+    // SAFETY: `cur` is a break character, so it is NOT the line's terminating
+    // NUL and the byte after it is still inside the line. Reading it
+    // unconditionally walks off the end of the allocation, which is why
+    // upstream's `||` chain tests this one second.
+    if vim_isbreak(unsafe { byte_at(cur.offset(1)) }) {
         return false;
     }
     // 'linebreak' is only needed when not in leading whitespace.
@@ -592,9 +598,7 @@ pub unsafe fn charsize_regular(
         mb_added = 1;
     }
 
-    let sbr = wp.showbreak();
-    // SAFETY: 'showbreak' is a NUL-terminated option string.
-    let has_sbr = unsafe { byte_at(sbr) } != NUL as c_int;
+    let (sbr, has_sbr) = wp.showbreak();
     let mut head = mb_added;
     // When "size" is 0 no new screen line is started, so nothing to add.
     if size > 0 && wp.w_onebuf_opt.wo_wrap != 0 && (has_sbr || wp.w_onebuf_opt.wo_bri != 0) {
