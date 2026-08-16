@@ -174,9 +174,6 @@ pub const ESTACK_SFILE: estack_arg_T = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 /// `gen_expand_wildcards` flags: what a wildcard expansion may return.
-pub const EW_NOBREAK: ::core::ffi::c_int = 262144;
-pub const EW_FILE: ::core::ffi::c_int = 2;
-pub const EW_DIR: ::core::ffi::c_int = 1;
 /// `do_source`'s `is_vimrc`: whether the file being sourced is the vimrc.
 pub const DOSO_VIMRC: ::core::ffi::c_int = 1;
 pub const DOSO_NONE: ::core::ffi::c_int = 0;

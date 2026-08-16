@@ -87,7 +87,11 @@ unsafe extern "C" fn pstrcmp(a: *const c_void, b: *const c_void) -> c_int {
 /// # Safety
 /// `path` must be a NUL-terminated string and `gap` an initialised array of
 /// allocated strings.
-pub(crate) unsafe fn path_expand(gap: *mut garray_T, path: *const c_char, flags: c_int) -> usize {
+pub(crate) unsafe fn path_expand(
+    gap: *mut garray_T,
+    path: *const c_char,
+    flags: ExpandFlags,
+) -> usize {
     unsafe { do_path_expand(gap, path, 0, flags, false) }
 }
 
@@ -156,13 +160,13 @@ struct Split {
 unsafe fn split_wild_component(
     pattern: &[u8],
     wildoff: usize,
-    flags: c_int,
+    flags: ExpandFlags,
     buf: &mut [u8],
 ) -> Split {
     unsafe {
         // With every letter a wildcard, a name that differs only in case is
         // still a match.
-        let icase = p_fic.get() == 0 && flags & EW_ICASE as c_int != 0;
+        let icase = p_fic.get() == 0 && flags.has(ExpandFlags::ICASE);
         // Where the component starts, and whether a wildcard has turned up
         // in it yet.
         let mut comp = 0;
@@ -254,14 +258,14 @@ pub(crate) unsafe fn do_path_expand(
     gap: *mut garray_T,
     path: *const c_char,
     wildoff: usize,
-    flags: c_int,
+    flags: ExpandFlags,
     didstar: bool,
 ) -> usize {
     unsafe {
         let start_len = (*gap).ga_len;
 
         // Expanding "**" may take a long time; let CTRL-C out of it.
-        if STARDEPTH.get() > 0 && flags & EW_NOBREAK as c_int == 0 {
+        if STARDEPTH.get() > 0 && !flags.has(ExpandFlags::NOBREAK) {
             os_breakcheck();
             if got_int.get() {
                 return 0;
@@ -290,20 +294,20 @@ pub(crate) unsafe fn do_path_expand(
         let mut regmatch = regmatch_T {
             // Ignore case if given 'wildignorecase', else respect
             // 'fileignorecase'.
-            rm_ic: flags & EW_ICASE as c_int != 0 || p_fic.get() != 0,
+            rm_ic: flags.has(ExpandFlags::ICASE) || p_fic.get() != 0,
             ..Default::default()
         };
-        let silent = flags & (EW_NOERROR as c_int | EW_NOTWILD as c_int) != 0;
+        let silent = flags.has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD);
         if silent {
             *emsg_silent.ptr() += 1;
         }
-        let nobreak = flags & EW_NOBREAK as c_int != 0;
+        let nobreak = flags.has(ExpandFlags::NOBREAK);
         regmatch.regprog = vim_regcomp(pat, RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 });
         if silent {
             *emsg_silent.ptr() -= 1;
         }
         xfree(pat.cast());
-        if regmatch.regprog.is_null() && flags & EW_NOTWILD as c_int == 0 {
+        if regmatch.regprog.is_null() && !flags.has(ExpandFlags::NOTWILD) {
             return 0;
         }
         // A "**" by itself also matches no directory at all, so the
@@ -371,7 +375,7 @@ pub(crate) unsafe fn do_path_expand(
                         backslash_halve(buf.as_mut_ptr().add(len + 1).cast());
                     }
                     let mut file_info = FileInfo::default();
-                    let found = if flags & EW_ALLLINKS as c_int != 0 {
+                    let found = if flags.has(ExpandFlags::ALLLINKS) {
                         os_fileinfo_link(buf.as_ptr().cast(), &raw mut file_info)
                     } else {
                         os_path_exists(buf.as_ptr().cast())
@@ -405,16 +409,16 @@ pub(crate) unsafe fn do_path_expand(
 
 /// Is `name` one the walk should even try to match? A name starting with a
 /// dot is hidden unless the pattern starts with one too, and `.` and `..`
-/// are only ever answered for [`EW_DODOT`].
-fn name_is_wanted(name: &[u8], starts_with_dot: bool, flags: c_int) -> bool {
+/// are only ever answered for [`ExpandFlags::DODOT`].
+fn name_is_wanted(name: &[u8], starts_with_dot: bool, flags: ExpandFlags) -> bool {
     if name.first() != Some(&b'.') || starts_with_dot {
         return true;
     }
-    flags & EW_DODOT as c_int != 0 && name != b"." && name != b".."
+    flags.has(ExpandFlags::DODOT) && name != b"." && name != b".."
 }
 
 /// Does `name` match the component? Either the compiled pattern says so, or
-/// [`EW_NOTWILD`] asked for the component's own text, `comp_len` bytes of
+/// [`ExpandFlags::NOTWILD`] asked for the component's own text, `comp_len` bytes of
 /// `comp`, to be compared literally.
 ///
 /// # Safety
@@ -422,7 +426,7 @@ fn name_is_wanted(name: &[u8], starts_with_dot: bool, flags: c_int) -> bool {
 unsafe fn name_matches(
     regmatch: &mut regmatch_T,
     name: &[u8],
-    flags: c_int,
+    flags: ExpandFlags,
     comp: &[u8],
     comp_len: usize,
 ) -> bool {
@@ -430,7 +434,7 @@ unsafe fn name_matches(
         if !regmatch.regprog.is_null() && vim_regexec(regmatch, name.as_ptr().cast(), 0) {
             return true;
         }
-        flags & EW_NOTWILD as c_int != 0
+        flags.has(ExpandFlags::NOTWILD)
             && path_fnamencmp(
                 comp.as_ptr().cast(),
                 name.as_ptr().cast(),
@@ -446,7 +450,7 @@ unsafe fn name_matches(
 ///
 /// # Safety
 /// `p` must be a NUL-terminated string.
-pub(crate) unsafe fn has_special_wildchar(p: *mut c_char, flags: c_int) -> bool {
+pub(crate) unsafe fn has_special_wildchar(p: *mut c_char, flags: ExpandFlags) -> bool {
     // SAFETY: the caller's promise.
     let bytes = unsafe { CStr::from_ptr(p) }.to_bytes();
     let mut at = 0;
@@ -466,7 +470,7 @@ pub(crate) unsafe fn has_special_wildchar(p: *mut c_char, flags: c_int) -> bool 
             let claimed = match c {
                 // Braces are the shell's only when they can invent names,
                 // and only when they are closed.
-                b'{' => flags & EW_NOTFOUND as c_int != 0 && rest.contains(&b'}'),
+                b'{' => flags.has(ExpandFlags::NOTFOUND) && rest.contains(&b'}'),
                 // A quote or backtick has to be matched by another.
                 _ => rest[1..].contains(&c),
             };
@@ -486,27 +490,27 @@ pub(crate) unsafe fn has_special_wildchar(p: *mut c_char, flags: c_int) -> bool 
 /// # Safety
 /// `f` must be a NUL-terminated string and `gap` an initialised array of
 /// allocated strings.
-pub unsafe fn addfile(gap: *mut garray_T, f: *mut c_char, flags: c_int) {
+pub unsafe fn addfile(gap: *mut garray_T, f: *mut c_char, flags: ExpandFlags) {
     unsafe {
         let mut file_info = FileInfo::default();
-        let exists = if flags & EW_ALLLINKS as c_int != 0 {
+        let exists = if flags.has(ExpandFlags::ALLLINKS) {
             os_fileinfo_link(f, &raw mut file_info)
         } else {
             os_path_exists(f)
         };
-        if flags & EW_NOTFOUND as c_int == 0 && !exists {
+        if !flags.has(ExpandFlags::NOTFOUND) && !exists {
             return;
         }
 
         let isdir = os_isdir(f);
-        if isdir && flags & EW_DIR as c_int == 0 || !isdir && flags & EW_FILE as c_int == 0 {
+        if isdir && !flags.has(ExpandFlags::DIR) || !isdir && !flags.has(ExpandFlags::FILE) {
             return;
         }
         // Directories are accepted whether or not they are executable. When
         // this is `expand_shellcmd` looking, do not use $PATH.
         if !isdir
-            && flags & EW_EXEC as c_int != 0
-            && !os_can_exe(f, core::ptr::null_mut(), flags & EW_SHELLCMD as c_int == 0)
+            && flags.has(ExpandFlags::EXEC)
+            && !os_can_exe(f, core::ptr::null_mut(), !flags.has(ExpandFlags::SHELLCMD))
         {
             return;
         }
@@ -515,7 +519,7 @@ pub unsafe fn addfile(gap: *mut garray_T, f: *mut c_char, flags: c_int) {
         let name = CStr::from_ptr(f).to_bytes_with_nul();
         let p: *mut c_char = xmalloc(name.len() + usize::from(isdir)).cast();
         core::ptr::copy_nonoverlapping(name.as_ptr().cast(), p, name.len());
-        if isdir && flags & EW_ADDSLASH as c_int != 0 {
+        if isdir && flags.has(ExpandFlags::ADDSLASH) {
             add_pathsep(p);
         }
         ga_grow(gap, 1);

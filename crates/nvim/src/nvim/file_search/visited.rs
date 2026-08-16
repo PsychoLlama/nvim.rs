@@ -10,9 +10,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::memory::xmalloc;
+#[allow(unused_imports)]
+use crate::src::nvim::path::ExpandFlags;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use core::slice;
@@ -32,7 +33,7 @@ impl FileList {
     ///
     /// # Safety
     /// `pat` must hold `num_pat` NUL-terminated strings.
-    pub(crate) unsafe fn expand(num_pat: c_int, pat: *mut *mut c_char, flags: c_int) -> Self {
+    pub(crate) unsafe fn expand(num_pat: c_int, pat: *mut *mut c_char, flags: ExpandFlags) -> Self {
         let mut list = FileList {
             names: ptr::null_mut(),
             len: 0,

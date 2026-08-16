@@ -40,6 +40,7 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{abort, gettext, strcpy, strlen, strncmp};
+use crate::src::nvim::path::ExpandFlags;
 use crate::src::nvim::path::{
     FreeWild, FullName_save, after_pathsep, expand_wildcards, path_fnamecmp, path_fnamencmp,
     path_has_drive_letter, path_is_url, path_shorten_fname, path_tail, path_tail_with_sep,
@@ -82,11 +83,15 @@ pub const FNAME_INCL: c_int = 8;
 pub const FNAME_REL: c_int = 16;
 pub const FNAME_UNESC: c_int = 32;
 
-pub const EW_DIR: c_int = 1;
-pub const EW_ADDSLASH: c_int = 8;
-pub const EW_SILENT: c_int = 32;
-pub const EW_NOTWILD: c_int = 1024;
 pub const OPT_LOCAL: c_int = 2;
+
+/// The directories `ff_get_next` walks into. `NOTWILD` is there — a bit of a
+/// hack, upstream says — because the already-expanded path may hold wildcard
+/// characters that are to be taken literally from here on.
+const LITERAL_DIR: ExpandFlags = ExpandFlags::DIR
+    .or(ExpandFlags::ADDSLASH)
+    .or(ExpandFlags::SILENT)
+    .or(ExpandFlags::NOTWILD);
 
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
@@ -445,13 +450,10 @@ impl FindContext {
             let files = if path_with_url(dirptrs[0]) != 0 {
                 FileList::of_one(dirptrs[0], file_path.len)
             } else {
-                // Add EW_NOTWILD because the expanded path may contain
-                // wildcard characters that are to be taken literally.
-                // This is a bit of a hack.
                 FileList::expand(
                     if dirptrs[1].is_null() { 1 } else { 2 },
                     dirptrs.as_mut_ptr(),
-                    EW_DIR | EW_ADDSLASH | EW_SILENT | EW_NOTWILD,
+                    LITERAL_DIR,
                 )
             };
             frame.files = Some(files);

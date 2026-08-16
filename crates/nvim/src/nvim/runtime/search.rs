@@ -13,12 +13,13 @@
 //!
 //! The pattern walk itself lives in [`expand_name_patterns`], which the cached
 //! path shares: the two searches differ in where the directory list comes from
-//! and in one `EW_NOBREAK`, not in what they do with `{name}`.
+//! and in one `ExpandFlags::NOBREAK`, not in what they do with `{name}`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::path::ExpandFlags;
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -243,16 +244,16 @@ impl Visitor {
     }
 }
 
-/// The `EW_*` flags a `DIP_*` set asks a wildcard expansion for.
-pub(crate) fn wildcard_flags(flags: c_int) -> c_int {
+/// The [`ExpandFlags`] a `DIP_*` set asks a wildcard expansion for.
+pub(crate) fn wildcard_flags(flags: c_int) -> ExpandFlags {
     (if flags & DIP_DIR as c_int != 0 {
-        EW_DIR
+        ExpandFlags::DIR
     } else {
-        EW_FILE
+        ExpandFlags::FILE
     }) | (if flags & DIP_DIRFILE as c_int != 0 {
-        EW_DIR | EW_FILE
+        ExpandFlags::DIR | ExpandFlags::FILE
     } else {
-        0
+        ExpandFlags::NONE
     })
 }
 
@@ -280,7 +281,7 @@ pub(crate) unsafe fn expand_name_patterns(
     buf: *mut c_char,
     tail: *mut c_char,
     name: *mut c_char,
-    ew_flags: c_int,
+    ew_flags: ExpandFlags,
     do_all: bool,
     did_one: &mut bool,
     visitor: Visitor,
@@ -852,7 +853,7 @@ pub unsafe extern "C" fn source_in_path_vim_lua(
 pub(crate) unsafe fn gen_expand_wildcards_and_cb(
     num_pat: c_int,
     pats: *mut *mut c_char,
-    flags: c_int,
+    flags: ExpandFlags,
     all: bool,
     visitor: Visitor,
 ) -> c_int {

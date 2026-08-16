@@ -10,6 +10,7 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::semsg_c;
+use crate::src::nvim::path::ExpandFlags;
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::types::{CMD_helpgrep, CMD_lhelpgrep};
 use core::ffi::{c_char, c_int};
@@ -133,7 +134,7 @@ unsafe fn hgr_search_files_in_dir(
             &raw mut arg,
             &raw mut fcount,
             &raw mut fnames,
-            (EW_FILE | EW_SILENT) as c_int,
+            ExpandFlags::FILE | ExpandFlags::SILENT,
         ) != OK
             || fcount <= 0
         {

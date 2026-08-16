@@ -72,6 +72,13 @@ macro_rules! flag_set {
                 self.0 & flags.0 != 0
             }
 
+            /// Both sets of flags — `|`, in a `const` context, where the
+            /// operator trait cannot be called.
+            #[inline]
+            pub const fn or(self, flags: Self) -> Self {
+                Self(self.0 | flags.0)
+            }
+
             /// Every flag of `self` that is not in `flags`: C's `& ~FOO`.
             #[inline]
             pub const fn without(self, flags: Self) -> Self {
@@ -89,7 +96,7 @@ macro_rules! flag_set {
 
             #[inline]
             fn bitor(self, rhs: Self) -> Self {
-                Self(self.0 | rhs.0)
+                self.or(rhs)
             }
         }
 

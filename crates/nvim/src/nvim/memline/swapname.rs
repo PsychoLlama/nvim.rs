@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
+use crate::src::nvim::path::ExpandFlags;
 use core::ffi::{c_char, c_int, c_uint};
 
 #[allow(unused_imports)]
@@ -706,7 +707,7 @@ pub unsafe fn recover_names(
                     names.as_mut_ptr(),
                     &raw mut num_files,
                     &raw mut files,
-                    (EW_KEEPALL | EW_FILE | EW_SILENT) as c_int,
+                    ExpandFlags::KEEPALL | ExpandFlags::FILE | ExpandFlags::SILENT,
                 ) == FAIL
             {
                 num_files = 0;

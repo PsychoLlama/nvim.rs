@@ -111,7 +111,7 @@ pub(crate) unsafe fn expand_path_option(
 }
 
 /// Expand `pattern` under every directory the `'path'` (or, for
-/// [`EW_CDPATH`], the `'cdpath'`) names, adding the matches to `gap`.
+/// [`ExpandFlags::CDPATH`], the `'cdpath'`) names, adding the matches to `gap`.
 ///
 /// Answers how many names `gap` holds in total.
 ///
@@ -121,7 +121,7 @@ pub(crate) unsafe fn expand_path_option(
 pub(crate) unsafe fn expand_in_path(
     gap: *mut garray_T,
     pattern: *mut c_char,
-    flags: c_int,
+    flags: ExpandFlags,
 ) -> c_int {
     unsafe {
         let mut curdir = vec![0 as c_char; MAXPATHL as usize];
@@ -129,7 +129,7 @@ pub(crate) unsafe fn expand_in_path(
 
         let mut path_ga = garray_T::default();
         ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1);
-        let path_option = if flags & EW_CDPATH as c_int != 0 {
+        let path_option = if flags.has(ExpandFlags::CDPATH) {
             p_cdpath.get()
         } else {
             buffer_path()
@@ -143,10 +143,10 @@ pub(crate) unsafe fn expand_in_path(
         ga_clear_strings(&raw mut path_ga);
 
         let mut glob_flags = 0;
-        if flags & EW_ICASE as c_int != 0 {
+        if flags.has(ExpandFlags::ICASE) {
             glob_flags |= WILD_ICASE as c_int;
         }
-        if flags & EW_ADDSLASH as c_int != 0 {
+        if flags.has(ExpandFlags::ADDSLASH) {
             glob_flags |= WILD_ADD_SLASH as c_int;
         }
         globpath(
@@ -154,7 +154,7 @@ pub(crate) unsafe fn expand_in_path(
             pattern,
             gap,
             glob_flags,
-            flags & EW_CDPATH as c_int != 0,
+            flags.has(ExpandFlags::CDPATH),
         );
         xfree(paths.cast());
 
@@ -206,9 +206,13 @@ pub(crate) unsafe fn has_env_var(p: *mut c_char) -> bool {
 ///
 /// # Safety
 /// `p` must be a NUL-terminated string.
-unsafe fn wants_path_search(p: *const c_char, flags: c_int) -> bool {
+/// Either of the two flags that send the expansion looking down a search
+/// list rather than the pattern's own directory.
+const SEARCH_LIST: ExpandFlags = ExpandFlags::PATH.or(ExpandFlags::CDPATH);
+
+unsafe fn wants_path_search(p: *const c_char, flags: ExpandFlags) -> bool {
     unsafe {
-        if flags & (EW_PATH as c_int | EW_CDPATH as c_int) == 0 || path_is_absolute(p) {
+        if !flags.has(SEARCH_LIST) || path_is_absolute(p) {
             return false;
         }
         let here = *p == b'.' as c_char
@@ -237,7 +241,7 @@ pub unsafe fn gen_expand_wildcards(
     pat: *mut *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
-    flags: c_int,
+    flags: ExpandFlags,
 ) -> c_int {
     unsafe {
         // `expand_env` is called below to expand things like "~user". If
@@ -282,7 +286,7 @@ pub unsafe fn gen_expand_wildcards(
                 }
             } else {
                 // Environment variables, "~/" and "~user/" first.
-                if has_env_var(p) && flags & EW_NOTENV as c_int == 0 || *p == b'~' as c_char {
+                if has_env_var(p) && !flags.has(ExpandFlags::NOTENV) || *p == b'~' as c_char {
                     let expanded = expand_env_save_opt(p, true);
                     if !expanded.is_null() {
                         if has_env_var(expanded) || *expanded == b'~' as c_char {
@@ -296,7 +300,7 @@ pub unsafe fn gen_expand_wildcards(
                                 pat,
                                 num_file,
                                 file,
-                                flags | EW_KEEPDOLLAR as c_int,
+                                flags | ExpandFlags::KEEPDOLLAR,
                             );
                             RECURSIVE.set(false);
                             return ret;
@@ -305,7 +309,7 @@ pub unsafe fn gen_expand_wildcards(
                     }
                 }
 
-                if path_has_exp_wildcard(p) || flags & EW_ICASE as c_int != 0 {
+                if path_has_exp_wildcard(p) || flags.has(ExpandFlags::ICASE) {
                     // A recursive `gen_expand_wildcards` can only happen from
                     // an event handler in `os_breakcheck`, where it is fine.
                     RECURSIVE.set(false);
@@ -322,12 +326,12 @@ pub unsafe fn gen_expand_wildcards(
                 }
             }
 
-            if add_pat == -1 || add_pat == 0 && flags & EW_NOTFOUND as c_int != 0 {
+            if add_pat == -1 || add_pat == 0 && flags.has(ExpandFlags::NOTFOUND) {
                 let t = backslash_halve_save(p);
-                // With EW_NOTFOUND always add files and directories: that is
+                // With ExpandFlags::NOTFOUND always add files and directories: that is
                 // what makes "vim c:/" work.
-                if flags & EW_NOTFOUND as c_int != 0 {
-                    addfile(&raw mut ga, t, flags | EW_DIR as c_int | EW_FILE as c_int);
+                if flags.has(ExpandFlags::NOTFOUND) {
+                    addfile(&raw mut ga, t, flags | ExpandFlags::DIR | ExpandFlags::FILE);
                 } else {
                     addfile(&raw mut ga, t, flags);
                 }
@@ -336,7 +340,7 @@ pub unsafe fn gen_expand_wildcards(
                 }
             }
 
-            if did_expand_in_path && ga.ga_len > 0 && flags & (EW_PATH | EW_CDPATH) as c_int != 0 {
+            if did_expand_in_path && ga.ga_len > 0 && flags.has(SEARCH_LIST) {
                 RECURSIVE.set(false);
                 uniquefy_paths(&raw mut ga, p, path_option);
                 RECURSIVE.set(true);
@@ -351,7 +355,7 @@ pub unsafe fn gen_expand_wildcards(
         *file = ga.ga_data.cast();
         RECURSIVE.set(false);
 
-        if flags & EW_EMPTYOK as c_int != 0 || !ga.ga_data.is_null() {
+        if flags.has(ExpandFlags::EMPTYOK) || !ga.ga_data.is_null() {
             OK
         } else {
             FAIL
@@ -393,7 +397,11 @@ pub(crate) unsafe fn vim_backtick(p: *mut c_char) -> bool {
 /// # Safety
 /// `pat` must be a NUL-terminated string of at least two characters, and
 /// `gap` an initialised array of allocated strings.
-pub(crate) unsafe fn expand_backtick(gap: *mut garray_T, pat: *mut c_char, flags: c_int) -> c_int {
+pub(crate) unsafe fn expand_backtick(
+    gap: *mut garray_T,
+    pat: *mut c_char,
+    flags: ExpandFlags,
+) -> c_int {
     unsafe {
         // The command is the pattern without its backticks.
         let quoted = CStr::from_ptr(pat).to_bytes();
@@ -402,7 +410,7 @@ pub(crate) unsafe fn expand_backtick(gap: *mut garray_T, pat: *mut c_char, flags
             // `={expr}`: expand an expression.
             eval_to_string(cmd.add(1), true, false)
         } else {
-            let opts = if flags & EW_SILENT as c_int != 0 {
+            let opts = if flags.has(ExpandFlags::SILENT) {
                 ShellOpts::SILENT
             } else {
                 ShellOpts::NONE
@@ -458,7 +466,7 @@ pub unsafe fn expand_wildcards_eval(
     pat: *mut *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
-    flags: c_int,
+    flags: ExpandFlags,
 ) -> c_int {
     unsafe {
         let mut ret = FAIL;
@@ -522,11 +530,11 @@ pub unsafe fn expand_wildcards(
     pat: *mut *mut c_char,
     num_files: *mut c_int,
     files: *mut *mut *mut c_char,
-    flags: c_int,
+    flags: ExpandFlags,
 ) -> c_int {
     unsafe {
         let retval = gen_expand_wildcards(num_pat, pat, num_files, files, flags);
-        if flags & EW_KEEPALL as c_int != 0 || retval == FAIL {
+        if flags.has(ExpandFlags::KEEPALL) || retval == FAIL {
             return retval;
         }
 

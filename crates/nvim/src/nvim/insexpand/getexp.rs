@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::path::ExpandFlags;
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
@@ -359,7 +360,7 @@ pub(crate) unsafe fn get_next_filename_completion() {
             &raw mut (*compl_pattern.ptr()).data,
             &raw mut num_matches,
             &raw mut matches,
-            EW_FILE | EW_DIR | EW_ADDSLASH | EW_SILENT,
+            ExpandFlags::FILE | ExpandFlags::DIR | ExpandFlags::ADDSLASH | ExpandFlags::SILENT,
         ) != OK
         {
             return;

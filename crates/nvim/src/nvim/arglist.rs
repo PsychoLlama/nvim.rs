@@ -48,6 +48,7 @@ use crate::src::nvim::normal::reset_VIsual_and_resel;
 use crate::src::nvim::option::magic_isset;
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{memmove, strlen};
+use crate::src::nvim::path::ExpandFlags;
 use crate::src::nvim::path::{
     FullName_save, expand_wildcards, fix_fname, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
@@ -91,13 +92,6 @@ mod flag {
     pub const ECMD_FORCEIT: c_uint = 8;
     pub const ECMD_ONE: c_int = 1;
     pub const ECMD_LAST: c_int = -1;
-
-    /// `expand_wildcards`/`gen_expand_wildcards` flags.
-    pub const EW_DIR: c_uint = 1;
-    pub const EW_FILE: c_uint = 2;
-    pub const EW_NOTFOUND: c_uint = 4;
-    pub const EW_ADDSLASH: c_uint = 8;
-    pub const EW_NOTWILD: c_uint = 1024;
 
     /// `path_full_compare` result bit meaning "the same file".
     pub const kEqualFiles: file_comparison = 1;
@@ -456,13 +450,22 @@ unsafe fn get_arglist(gap: *mut garray_T, str: *mut c_char, escaped: bool) {
 ///
 /// `str` must be a NUL-terminated writable string; `fcountp` and `fnamesp`
 /// must be valid out-parameters.
+/// Everything a name can be, with a directory marked by its separator and
+/// a pattern that matched nothing answered as itself.
+const ANY_NAME: ExpandFlags = ExpandFlags::DIR
+    .or(ExpandFlags::FILE)
+    .or(ExpandFlags::ADDSLASH)
+    .or(ExpandFlags::NOTFOUND);
+
 pub unsafe fn get_arglist_exp(
     str: *mut c_char,
     fcountp: *mut c_int,
     fnamesp: *mut *mut *mut c_char,
     wig: bool,
 ) -> c_int {
-    const EXPAND: c_int = EW_FILE as c_int | EW_NOTFOUND as c_int | EW_NOTWILD as c_int;
+    const EXPAND: ExpandFlags = ExpandFlags::FILE
+        .or(ExpandFlags::NOTFOUND)
+        .or(ExpandFlags::NOTWILD);
     let mut ga = EMPTY_GARRAY;
     // SAFETY: caller contract; `ga` holds pointers into `str`, which outlives
     // the expansion, and the garray is cleared before returning.
@@ -706,7 +709,7 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
                 new_ga.ga_data as *mut *mut c_char,
                 &raw mut exp_count,
                 &raw mut exp_files,
-                EW_DIR as c_int | EW_FILE as c_int | EW_ADDSLASH as c_int | EW_NOTFOUND as c_int,
+                ANY_NAME,
             );
             ga_clear(&raw mut new_ga);
             result != FAIL && exp_count != 0

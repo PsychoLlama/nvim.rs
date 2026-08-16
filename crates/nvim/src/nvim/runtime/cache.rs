@@ -25,8 +25,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::path::ExpandFlags;
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -171,7 +172,7 @@ pub(crate) unsafe fn do_in_cached_path(
     // SAFETY: `ref_0` is this frame's borrow token, released below.
     let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };
     let do_all = flags & DIP_ALL as c_int != 0;
-    let ew_flags = wildcard_flags(flags) | EW_NOBREAK;
+    let ew_flags = wildcard_flags(flags) | ExpandFlags::NOBREAK;
     let mut did_one = false;
 
     for j in 0..path.size {
@@ -309,7 +310,7 @@ unsafe fn expand_rtp_entry(
             pat.as_mut_ptr(),
             &raw mut num_files,
             &raw mut files,
-            EW_DIR | EW_NOBREAK,
+            ExpandFlags::DIR | ExpandFlags::NOBREAK,
         ) != OK
         {
             return;

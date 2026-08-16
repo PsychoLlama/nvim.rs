@@ -85,10 +85,6 @@ mod flag {
     pub const ECMD_SET_HELP: c_uint = 2;
     pub const ECMD_LASTL: c_int = 0;
 
-    /// `gen_expand_wildcards` flags.
-    pub const EW_FILE: c_uint = 2;
-    pub const EW_SILENT: c_uint = 32;
-
     /// `ExpandOne` context and flags.
     pub const EXPAND_DIRECTORIES: c_int = 3;
     pub const WILD_LIST_NOTFOUND: c_uint = 1;

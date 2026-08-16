@@ -68,25 +68,52 @@ pub const WILD_ICASE: C2Rust_Unnamed_18 = 256;
 pub const WILD_ADD_SLASH: C2Rust_Unnamed_18 = 16;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const EW_NOBREAK: C2Rust_Unnamed_20 = 262144;
-pub const EW_CDPATH: C2Rust_Unnamed_20 = 131072;
-pub const EW_NOTENV: C2Rust_Unnamed_20 = 65536;
-pub const EW_EMPTYOK: C2Rust_Unnamed_20 = 32768;
-pub const EW_DODOT: C2Rust_Unnamed_20 = 16384;
-pub const EW_SHELLCMD: C2Rust_Unnamed_20 = 8192;
-pub const EW_ALLLINKS: C2Rust_Unnamed_20 = 4096;
-pub const EW_KEEPDOLLAR: C2Rust_Unnamed_20 = 2048;
-pub const EW_NOTWILD: C2Rust_Unnamed_20 = 1024;
-pub const EW_NOERROR: C2Rust_Unnamed_20 = 512;
-pub const EW_ICASE: C2Rust_Unnamed_20 = 256;
-pub const EW_PATH: C2Rust_Unnamed_20 = 128;
-pub const EW_EXEC: C2Rust_Unnamed_20 = 64;
-pub const EW_SILENT: C2Rust_Unnamed_20 = 32;
-pub const EW_KEEPALL: C2Rust_Unnamed_20 = 16;
-pub const EW_ADDSLASH: C2Rust_Unnamed_20 = 8;
-pub const EW_NOTFOUND: C2Rust_Unnamed_20 = 4;
-pub const EW_FILE: C2Rust_Unnamed_20 = 2;
-pub const EW_DIR: C2Rust_Unnamed_20 = 1;
+
+crate::flag_set! {
+    /// What a wildcard expansion should look for, and what it should do with
+    /// what it finds — upstream's `EW_*` family, the `flags` argument
+    /// [`expand_wildcards`] and everything under it thread.
+    pub struct ExpandFlags;
+
+    /// Include directories in the matches.
+    const DIR = 1;
+    /// Include plain files in the matches.
+    const FILE = 2;
+    /// Answer a pattern that matched nothing as itself, rather than failing.
+    const NOTFOUND = 4;
+    /// Append a path separator to every directory answered.
+    const ADDSLASH = 8;
+    /// Keep the matches `'wildignore'` and `'suffixes'` would drop.
+    const KEEPALL = 16;
+    /// Do not report a failure to the user.
+    const SILENT = 32;
+    /// Only executables, and only together with [`Self::FILE`].
+    const EXEC = 64;
+    /// Search `'path'` as well as the pattern's own directory.
+    const PATH = 128;
+    /// Match without regard to case, whatever `'fileignorecase'` says.
+    const ICASE = 256;
+    /// Do not report a pattern that could not be expanded at all.
+    const NOERROR = 512;
+    /// The pattern is a literal name, not a wildcard.
+    const NOTWILD = 1024;
+    /// Leave `$var` alone when escaping the pattern for the shell.
+    const KEEPDOLLAR = 2048;
+    /// Answer a dangling symbolic link as a match.
+    const ALLLINKS = 4096;
+    /// Look the pattern up in `$PATH`, as `:!` would.
+    const SHELLCMD = 8192;
+    /// Answer `.` and `..` as matches.
+    const DODOT = 16384;
+    /// Answer OK for a pattern that expanded to nothing at all.
+    const EMPTYOK = 32768;
+    /// Do not expand environment variables in the pattern.
+    const NOTENV = 65536;
+    /// Search `'cdpath'` rather than `'path'`.
+    const CDPATH = 131072;
+    /// Do not let CTRL-C out of the `**` walk.
+    const NOBREAK = 262144;
+}
 pub const kEqualFileNames: file_comparison = 7;
 pub const kOneFileMissing: file_comparison = 6;
 pub const kBothFilesMissing: file_comparison = 4;

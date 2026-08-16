@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::path::ExpandFlags;
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
@@ -101,7 +102,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                             &raw mut buf,
                             &raw mut count,
                             &raw mut files,
-                            EW_FILE | EW_SILENT,
+                            ExpandFlags::FILE | ExpandFlags::SILENT,
                         ) != OK
                     {
                         count = 0;

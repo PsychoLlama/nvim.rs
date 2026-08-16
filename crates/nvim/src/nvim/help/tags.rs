@@ -36,6 +36,7 @@ use crate::src::nvim::os::libc::{
     fclose, fprintf, fputs, gettext, memcpy, putc, snprintf, strcasecmp, strchr, strcmp, strlen,
     strncmp,
 };
+use crate::src::nvim::path::ExpandFlags;
 use crate::src::nvim::path::{FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
 use crate::src::nvim::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
@@ -44,8 +45,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::flag::{
-    EW_FILE, EW_SILENT, EXPAND_DIRECTORIES, FAIL, IOSIZE, MAXPATHL, NUL, WILD_EXPAND_FREE,
-    WILD_LIST_NOTFOUND, WILD_SILENT, kEqualFiles,
+    EXPAND_DIRECTORIES, FAIL, IOSIZE, MAXPATHL, NUL, WILD_EXPAND_FREE, WILD_LIST_NOTFOUND,
+    WILD_SILENT, kEqualFiles,
 };
 
 /// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
@@ -264,7 +265,7 @@ unsafe fn expand_help_files(pattern: *mut c_char) -> Option<Wildcards> {
             list.as_mut_ptr(),
             &raw mut count,
             &raw mut names,
-            (EW_FILE | EW_SILENT) as c_int,
+            ExpandFlags::FILE | ExpandFlags::SILENT,
         )
     };
     if res == FAIL {

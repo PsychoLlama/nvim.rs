@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::path::ExpandFlags;
+#[allow(unused_imports)]
 use crate::src::nvim::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -36,7 +37,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
     pathlen: size_t,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-    flags: c_int,
+    flags: ExpandFlags,
     ht: *mut hashtab_T,
     gap: *mut garray_T,
 ) {
@@ -83,12 +84,12 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
 ///
 /// `filepat` is a pattern to match with command names; `matches` and
 /// `numMatches` return the answer, with `*matches` either NULL or allocated.
-/// `flagsarg` is a combination of `EW_*` flags.
+/// `flagsarg` is the caller's [`ExpandFlags`] set.
 pub(crate) unsafe fn expand_shellcmd(
     filepat: *mut c_char,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-    flagsarg: c_int,
+    flagsarg: ExpandFlags,
 ) {
     unsafe {
         let buf = xmalloc(MAXPATHL as size_t) as *mut c_char;
@@ -118,7 +119,7 @@ pub(crate) unsafe fn expand_shellcmd(
         }
         patlen = e.offset_from(pat) as size_t;
 
-        flags |= EW_FILE | EW_EXEC | EW_SHELLCMD;
+        flags |= ExpandFlags::FILE | ExpandFlags::EXEC | ExpandFlags::SHELLCMD;
 
         let mut mustfree = false; // Track memory allocation for `path`.
         let mut path;
@@ -167,7 +168,7 @@ pub(crate) unsafe fn expand_shellcmd(
 
                 // Find directories in the current directory, path is empty.
                 did_curdir = true;
-                flags |= EW_DIR;
+                flags |= ExpandFlags::DIR;
 
                 e = s;
                 pathlen = 0;
@@ -181,10 +182,10 @@ pub(crate) unsafe fn expand_shellcmd(
                 pathlen = e.offset_from(s) as size_t;
                 if strncmp(s, c".".as_ptr(), pathlen) == 0 {
                     did_curdir = true;
-                    flags |= EW_DIR;
+                    flags |= ExpandFlags::DIR;
                 } else {
                     // Do not match directories inside a $PATH item.
-                    flags &= !EW_DIR;
+                    flags = flags.without(ExpandFlags::DIR);
                 }
 
                 seplen = if after_pathsep(s, e) == 0 {

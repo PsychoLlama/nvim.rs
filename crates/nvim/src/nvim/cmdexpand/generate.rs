@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::path::ExpandFlags;
+#[allow(unused_imports)]
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -20,12 +21,17 @@ use crate::src::nvim::types::{ArrayBuf, kErrorTypeNone, static_cstring};
 /// For `":set path="` and `":set tags="` the escaped spaces have to be
 /// un-escaped first, which is what `xp_backslash` records — and that has to
 /// happen on a copy, because the caller still owns `pat`.
+/// A context that wants directories and not plain files.
+const fn dirs_only(flags: ExpandFlags) -> ExpandFlags {
+    flags.without(ExpandFlags::FILE).or(ExpandFlags::DIR)
+}
+
 pub(crate) unsafe fn expand_files_and_dirs(
     xp: *mut expand_T,
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-    flags: c_int,
+    flags: ExpandFlags,
     options: c_int,
 ) -> c_int {
     unsafe {
@@ -75,13 +81,13 @@ pub(crate) unsafe fn expand_files_and_dirs(
             expand_findfunc(pat, matches, numMatches)
         } else {
             flags = match (*xp).xp_context {
-                EXPAND_FILES => flags | EW_FILE,
-                EXPAND_FILES_IN_PATH => flags | EW_FILE | EW_PATH,
-                EXPAND_DIRS_IN_CDPATH => (flags | EW_DIR | EW_CDPATH) & !EW_FILE,
-                _ => (flags | EW_DIR) & !EW_FILE,
+                EXPAND_FILES => flags | ExpandFlags::FILE,
+                EXPAND_FILES_IN_PATH => flags | ExpandFlags::FILE | ExpandFlags::PATH,
+                EXPAND_DIRS_IN_CDPATH => dirs_only(flags) | ExpandFlags::CDPATH,
+                _ => dirs_only(flags),
             };
             if options & WILD_ICASE != 0 {
-                flags |= EW_ICASE;
+                flags |= ExpandFlags::ICASE;
             }
             // Expand wildcards, supporting %:h and the like.
             expand_wildcards_eval(&raw mut pat, numMatches, matches, flags)

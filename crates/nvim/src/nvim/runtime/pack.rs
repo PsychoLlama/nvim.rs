@@ -17,8 +17,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::path::ExpandFlags;
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -492,7 +493,7 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
         };
 
         vim_snprintf(pat, len, PLUGIN_PATTERN.as_ptr(), ffname);
-        gen_expand_wildcards_and_cb(1, &raw mut pat, EW_FILE, true, visitor);
+        gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor);
 
         // When runtime/filetype.lua has not been loaded yet, these scripts
         // are found when it is.
@@ -500,7 +501,7 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
         if opt && eval_to_number(cmd, false) > 0 {
             do_cmdline_cmd(c"augroup filetypedetect".as_ptr());
             vim_snprintf(pat, len, FTDETECT_PATTERN.as_ptr(), ffname);
-            gen_expand_wildcards_and_cb(1, &raw mut pat, EW_FILE, true, visitor);
+            gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor);
             do_cmdline_cmd(c"augroup END".as_ptr());
         }
         xfree(cmd.cast());
@@ -640,7 +641,7 @@ unsafe fn pack_has_entries(buf: *mut c_char) -> bool {
             pat.as_mut_ptr(),
             &raw mut num_files,
             &raw mut files,
-            EW_DIR,
+            ExpandFlags::DIR,
         ) == OK
         {
             FreeWild(num_files, files);

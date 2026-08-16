@@ -20,19 +20,11 @@ use crate::src::nvim::message::{emsg, msg, msg_putchar, msg_start};
 use crate::src::nvim::os::fs::{os_can_exe, os_isdir, os_path_exists, os_remove};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::os::time::os_delay;
-use crate::src::nvim::path::{add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
+use crate::src::nvim::path::{
+    ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildcard, path_tail,
+};
 use crate::src::nvim::strings::vim_strchr;
 use core::ops::Range;
-
-/// `EW_*`, the subset [`os_expand_wildcards`] reads. `expand_wildcards()`
-/// owns the rest.
-pub const EW_DIR: c_int = 1;
-pub const EW_FILE: c_int = 2;
-pub const EW_NOTFOUND: c_int = 4;
-pub const EW_SILENT: c_int = 32;
-pub const EW_EXEC: c_int = 64;
-pub const EW_KEEPDOLLAR: c_int = 2048;
-pub const EW_SHELLCMD: c_int = 8192;
 
 /// The `vimglob()` shell function, for a POSIX shell.
 const SH_VIMGLOB_FUNC: &str =
@@ -77,7 +69,8 @@ enum Separator {
 }
 
 /// Copy the patterns through unexpanded — what happens when there is nothing
-/// to expand, and what `EW_NOTFOUND` asks for when the expansion finds
+/// to expand, and what [`ExpandFlags::NOTFOUND`] asks for when the expansion
+/// finds
 /// nothing.
 ///
 /// # Safety
@@ -163,7 +156,7 @@ fn is_fish_shell() -> bool {
 
 /// Escape one pattern into the shell command, backslashing
 /// [`SHELL_SPECIAL`] outside backticks.
-fn push_escaped_pattern(command: &mut Vec<u8>, pat: &[u8], flags: c_int) {
+fn push_escaped_pattern(command: &mut Vec<u8>, pat: &[u8], flags: ExpandFlags) {
     let mut intick = false;
     let mut at = 0;
     while at < pat.len() {
@@ -182,9 +175,11 @@ fn push_escaped_pattern(command: &mut Vec<u8>, pat: &[u8], flags: c_int) {
             command.push(pat[at]);
             at += 1;
             continue;
-        } else if !intick && (flags & EW_KEEPDOLLAR == 0 || b != b'$') && SHELL_SPECIAL.contains(&b)
+        } else if !intick
+            && (!flags.has(ExpandFlags::KEEPDOLLAR) || b != b'$')
+            && SHELL_SPECIAL.contains(&b)
         {
-            // Not inside backticks, and not `$var` when EW_KEEPDOLLAR is set.
+            // Not inside backticks, and not `$var` under KEEPDOLLAR.
             command.push(b'\\');
         }
         command.push(b);
@@ -202,7 +197,7 @@ unsafe fn build_command(
     num_pat: c_int,
     pat: *mut *mut c_char,
     tempname: &[u8],
-    flags: c_int,
+    flags: ExpandFlags,
 ) -> (Vec<u8>, bool) {
     let fish = is_fish_shell();
     let mut command: Vec<u8> = Vec::new();
@@ -238,7 +233,7 @@ unsafe fn build_command(
         if style == ShellStyle::Glob {
             // `nonomatch` is only valid on csh-likes; elsewhere it would set
             // the positional parameters.
-            command.extend_from_slice(if flags & EW_NOTFOUND != 0 {
+            command.extend_from_slice(if flags.has(ExpandFlags::NOTFOUND) {
                 b"set nonomatch; ".as_slice()
             } else {
                 b"unset nonomatch; ".as_slice()
@@ -341,7 +336,8 @@ static did_find_nul: GlobalCell<bool> = GlobalCell::new(false);
 /// `num_file` and `file` receive the count and a newly allocated array of
 /// newly allocated names; whatever `*file` held is not freed. `flags` is a
 /// combination of `EW_*` as `expand_wildcards()` uses them — when matching
-/// fails but `EW_NOTFOUND` is set, or there was nothing to expand, the
+/// fails but [`ExpandFlags::NOTFOUND`] is set, or there was nothing to expand,
+/// the
 /// patterns themselves are copied through instead.
 ///
 /// Answers `OK` or `FAIL`; on `FAIL`, `*file` is NULL.
@@ -354,7 +350,7 @@ pub unsafe fn os_expand_wildcards(
     pat: *mut *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
-    flags: c_int,
+    flags: ExpandFlags,
 ) -> c_int {
     // SAFETY: the caller's contract, for the whole body. Every pattern is
     // read as a `CStr`, and every pointer written out is freshly allocated.
@@ -398,7 +394,7 @@ pub unsafe fn os_expand_wildcards(
         let command = CString::new(command).expect("no interior NUL in a shell command");
 
         let mut shellopts = ShellOpts::EXPAND | ShellOpts::SILENT;
-        if flags & EW_SILENT != 0 {
+        if flags.has(ExpandFlags::SILENT) {
             shellopts |= ShellOpts::HIDE_MESS;
         }
         // With zsh -G a pattern that matches nothing is dropped from the
@@ -422,14 +418,14 @@ pub unsafe fn os_expand_wildcards(
             os_remove(tempname);
             xfree(tempname.cast());
             // With interactive completion the message is not printed.
-            if flags & EW_SILENT == 0 {
+            if !flags.has(ExpandFlags::SILENT) {
                 msg_putchar('\n' as c_int); // clear the bottom line quickly
                 cmdline_row.set(Rows.get() - 1); // continue on the last line
                 msg(gettext((&raw const e_wildexpand).cast()), 0);
                 msg_start(); // do not overwrite this message
             }
             // A failed `cmd` expansion must not list `cmd` as a match, even
-            // under EW_NOTFOUND.
+            // under NOTFOUND.
             if style == ShellStyle::Backtick {
                 return FAIL;
             }
@@ -490,17 +486,17 @@ pub unsafe fn os_expand_wildcards(
             let name = buffer[entry.start..].as_ptr().cast::<c_char>();
 
             // Require the file to exist; helps when using /bin/sh.
-            if flags & EW_NOTFOUND == 0 && !os_path_exists(name) {
+            if !flags.has(ExpandFlags::NOTFOUND) && !os_path_exists(name) {
                 continue;
             }
             let dir = os_isdir(name);
-            if (dir && flags & EW_DIR == 0) || (!dir && flags & EW_FILE == 0) {
+            if (dir && !flags.has(ExpandFlags::DIR)) || (!dir && !flags.has(ExpandFlags::FILE)) {
                 continue;
             }
             // Skip what is not executable, when that is being checked for.
             if !dir
-                && flags & EW_EXEC != 0
-                && !os_can_exe(name, ptr::null_mut(), flags & EW_SHELLCMD == 0)
+                && flags.has(ExpandFlags::EXEC)
+                && !os_can_exe(name, ptr::null_mut(), !flags.has(ExpandFlags::SHELLCMD))
             {
                 continue;
             }
@@ -528,7 +524,8 @@ pub unsafe fn os_expand_wildcards(
 
 /// How reading the shell's temp file turned out. The two failures are not
 /// interchangeable: a file that would not open falls back to the patterns
-/// under `EW_NOTFOUND`, while one that would not seek or read is a hard
+/// under [`ExpandFlags::NOTFOUND`], while one that would not seek or read is a
+/// hard
 /// `FAIL`. `tempname` is freed on every path but the successful one.
 enum Read {
     Content(Vec<u8>),
@@ -540,14 +537,14 @@ enum Read {
 ///
 /// # Safety
 /// `tempname` must be a NUL-terminated path this owns nothing of.
-unsafe fn read_temp_file(tempname: *mut c_char, flags: c_int) -> Read {
+unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
     // SAFETY: the caller's contract; `fd` is closed on every path out.
     unsafe {
         let fd = fopen(tempname, READBIN.as_ptr());
         if fd.is_null() {
             // Something went wrong — perhaps a file name with a special
             // character in it.
-            if flags & EW_SILENT == 0 {
+            if !flags.has(ExpandFlags::SILENT) {
                 msg(gettext((&raw const e_wildexpand).cast()), 0);
                 msg_start(); // do not overwrite this message
             }
@@ -581,7 +578,7 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: c_int) -> Read {
     }
 }
 
-/// Upstream's `notfound:` label: under `EW_NOTFOUND` the patterns themselves
+/// Upstream's `notfound:` label: under `ExpandFlags::NOTFOUND` the patterns themselves
 /// become the answer.
 ///
 /// # Safety
@@ -591,9 +588,9 @@ unsafe fn not_found(
     pat: *mut *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
-    flags: c_int,
+    flags: ExpandFlags,
 ) -> c_int {
-    if flags & EW_NOTFOUND == 0 {
+    if !flags.has(ExpandFlags::NOTFOUND) {
         return FAIL;
     }
     // SAFETY: the caller's contract.

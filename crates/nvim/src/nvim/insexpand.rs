@@ -243,10 +243,6 @@ pub struct ins_compl_next_state_T {
     pub func_cb: *mut Callback,
 }
 pub const NUM_REGISTERS: C2Rust_Unnamed_29 = 39;
-pub const EW_SILENT: C2Rust_Unnamed_28 = 32;
-pub const EW_ADDSLASH: C2Rust_Unnamed_28 = 8;
-pub const EW_DIR: C2Rust_Unnamed_28 = 1;
-pub const EW_FILE: C2Rust_Unnamed_28 = 2;
 pub const TAG_MANY: C2Rust_Unnamed_35 = 300;
 pub const TAG_VERBOSE: C2Rust_Unnamed_35 = 32;
 pub const TAG_INS_COMP: C2Rust_Unnamed_35 = 64;
