@@ -180,7 +180,7 @@ pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
     // `utf_head_off` walks back no further than `line`.
     unsafe {
         let line = rex.line() as *mut c_char;
-        let input = rex.input() as *mut c_char;
+        let input = rex.input_str();
         if input <= line {
             return -1;
         }
@@ -232,11 +232,11 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
             )
         };
 
-        let lnum = rex.lnum() + rex.reg_firstlnum();
+        let lnum = rex.buf_lnum();
         if lnum < top.lnum || lnum > bot.lnum {
             return false;
         }
-        let col = rex.input().offset_from(rex.line()) as colnr_T;
+        let col = rex.col();
         if mode == 'v' as c_int {
             // 'selection' decides whether the last character is included.
             let inclusive = (*p_sel.get() as u8 != b'e') as colnr_T;
@@ -261,7 +261,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
             let line = reg_getline(rex, rex.lnum()) as *mut uint8_t;
             rex.set_line(line);
             rex.set_input(line.offset(col as isize));
-            let lnum = rex.reg_firstlnum() + rex.lnum();
+            let lnum = rex.buf_lnum();
             let cols = win_linetabsize(wp, lnum, line as *mut c_char, col);
             cols >= start && cols <= end - (*p_sel.get() as u8 == b'e') as colnr_T
         } else {
@@ -414,7 +414,7 @@ pub(crate) fn match_with_backref(
                 reg_getline_len(rex, clnum) - ccol
             };
             let captured = p.offset(ccol as isize);
-            let input = rex.input() as *mut c_char;
+            let input = rex.input_str();
             // `cstrncmp` can shorten `len` when a fold changed the encoded
             // length, and the caller is told how far to advance from it.
             let differs = if rex.reg_ic() {

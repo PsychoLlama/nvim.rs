@@ -8,7 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::src::nvim::mbyte::{utf_char2len, utf_iscomposing_legacy, utf_ptr2char};
 use crate::src::nvim::regexp::{NFA_END_COMPOSING, Rex, nfa_state_T};
@@ -56,7 +56,7 @@ pub(crate) unsafe fn matches_composing(
         let mut marks = [0; MAX_MCO as usize];
         let mut count = 0;
         while len < clen {
-            mc = utf_ptr2char((rex.input() as *mut c_char).offset(len as isize));
+            mc = utf_ptr2char((rex.input_str()).offset(len as isize));
             marks[count] = mc;
             count += 1;
             len += utf_char2len(mc);

@@ -334,7 +334,7 @@ unsafe fn star(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, status: 
                     if rst.count < rst.minval {
                         break;
                     }
-                    if rex.input() == rex.line() {
+                    if rex.at_bol() {
                         // Back over a line break, which a `\_x` may have
                         // consumed.
                         if rex.lnum() == 0 {
@@ -371,8 +371,8 @@ unsafe fn star(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, status: 
             // The byte the pattern needs next is known; positions that
             // cannot supply it are skipped without re-entering the walk.
             if !(rst.nextb == NUL
-                || *rex.input() as c_int == rst.nextb
-                || *rex.input() as c_int == rst.nextb_ic)
+                || rex.byte() as c_int == rst.nextb
+                || rex.byte() as c_int == rst.nextb_ic)
             {
                 continue;
             }

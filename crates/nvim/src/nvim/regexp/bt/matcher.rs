@@ -22,7 +22,7 @@ use super::single::match_one;
 use super::state::{RegStack, regstack};
 use crate::src::nvim::garray::ga_append_via_ptr;
 use crate::src::nvim::main::{e_re_corr, got_int};
-use crate::src::nvim::mbyte::{mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::src::nvim::message::{iemsg, internal_error};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::profile::profile_passed_limit;
@@ -119,7 +119,7 @@ pub(crate) fn regmatch(
 
                 // A `\_x` sitting at the end of the line consumes the line
                 // break and stays on the same node.
-                let at_line_end = *rex.input() as c_int == NUL;
+                let at_line_end = rex.byte() as c_int == NUL;
                 if !rex.reg_line_lbr()
                     && crosses_lines(op)
                     && rex.multi()
@@ -129,16 +129,16 @@ pub(crate) fn regmatch(
                     reg_nextline(rex);
                 } else if rex.reg_line_lbr()
                     && crosses_lines(op)
-                    && *rex.input() as c_int == '\n' as c_int
+                    && rex.byte() as c_int == '\n' as c_int
                 {
                     // With 'reg_line_lbr' the break is a real newline byte.
-                    rex.set_input(rex.input().add(utfc_ptr2len(rex.input().cast()) as usize));
+                    rex.advance_char();
                 } else {
                     // Past the line break, a `\_x` behaves as its plain form.
                     if crosses_lines(op) {
                         op -= ADD_NL;
                     }
-                    let c = utf_ptr2char(rex.input().cast());
+                    let c = rex.char_here();
                     status = match match_one(rex, op, scan, next, c) {
                         Some(status) => status,
                         None => push_frame(rex, stack, op, scan, &mut next),

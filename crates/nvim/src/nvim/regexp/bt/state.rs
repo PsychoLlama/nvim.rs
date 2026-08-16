@@ -38,7 +38,7 @@ use crate::src::nvim::regexp::{
     Rex, SavedPos, reg_getline, regbehind_T, regitem_T, regsave_T, regstar_T, regstate_T,
     save_se_T,
 };
-use crate::src::nvim::types::{colnr_T, garray_T, lpos_T, uint8_t};
+use crate::src::nvim::types::{garray_T, lpos_T, uint8_t};
 
 /// A frame as it goes on the stack; the pusher fills in the rest.
 const BLANK_FRAME: regitem_T = regitem_T {
@@ -249,7 +249,7 @@ pub(crate) fn reg_save(rex: Rex, save: &mut regsave_T, gap: *mut garray_T) {
     // SAFETY: `gap` is the backpos garray and `rex` a live match.
     unsafe {
         if rex.multi() {
-            save.rs_u.pos.col = rex.input().offset_from(rex.line()) as colnr_T;
+            save.rs_u.pos.col = rex.col();
             save.rs_u.pos.lnum = rex.lnum();
         } else {
             save.rs_u.ptr = rex.input();
@@ -279,11 +279,11 @@ pub(crate) fn reg_restore(rex: Rex, save: &regsave_T, gap: *mut garray_T) {
 /// Is the input exactly where `save` recorded? The `backpos` length is not
 /// part of the comparison.
 pub(crate) fn reg_save_equal(rex: Rex, save: &regsave_T) -> bool {
-    // SAFETY: as `reg_save`.
+    // SAFETY: `regsave_T` is a union whose live arm is the one the match's
+    // own kind picks, as `reg_save` wrote it.
     unsafe {
         if rex.multi() {
-            rex.lnum() == save.rs_u.pos.lnum
-                && rex.input() == rex.line().add(save.rs_u.pos.col as usize)
+            rex.lnum() == save.rs_u.pos.lnum && rex.col() == save.rs_u.pos.col
         } else {
             rex.input() == save.rs_u.ptr
         }
@@ -297,7 +297,7 @@ pub(crate) fn save_se_multi(rex: Rex, savep: &mut save_se_T, posp: *mut lpos_T) 
     unsafe {
         savep.se_u.pos = *posp;
         (*posp).lnum = rex.lnum();
-        (*posp).col = rex.input().offset_from(rex.line()) as colnr_T;
+        (*posp).col = rex.col();
     }
 }
 

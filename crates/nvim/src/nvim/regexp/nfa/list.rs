@@ -445,7 +445,7 @@ fn past_line_start(rex: Rex) -> bool {
     unsafe {
         let endp = nfa_endp.get();
         rex.input() > rex.line()
-            && *rex.input() as c_int != NUL
+            && rex.byte() as c_int != NUL
             && (endp.is_null() || !rex.multi() || rex.lnum() == (*endp).se_u.pos.lnum)
     }
 }

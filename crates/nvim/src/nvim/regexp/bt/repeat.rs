@@ -245,7 +245,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                 {
                     count += 1;
                     if rex.reg_line_lbr() {
-                        rex.set_input(rex.input().add(utfc_ptr2len(rex.input().cast()) as usize));
+                        rex.advance_char();
                     } else {
                         reg_nextline(rex);
                     }

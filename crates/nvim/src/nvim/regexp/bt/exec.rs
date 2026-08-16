@@ -80,7 +80,7 @@ fn regtry(
             }
             if (*end).lnum < 0 {
                 (*end).lnum = rex.lnum();
-                (*end).col = rex.input().offset_from(rex.line()) as colnr_T;
+                (*end).col = rex.col();
             } else {
                 rex.set_lnum((*end).lnum);
             }

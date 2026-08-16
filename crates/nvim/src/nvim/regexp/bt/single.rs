@@ -8,7 +8,7 @@ use core::ffi::c_int;
 
 use super::exec::re_num_cmp;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordp_buf};
+use crate::src::nvim::charset::{vim_isIDc, vim_isfilec, vim_isprintc};
 use crate::src::nvim::main::{curwin, re_extmatch_in};
 use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
@@ -31,7 +31,7 @@ use crate::src::nvim::regexp::{
     RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, kMarkBufLocal,
 };
 use crate::src::nvim::types::{
-    GraphemeState, colnr_T, fmark_T, linenr_T, size_t, uint8_t, uint32_t, uint64_t,
+    GraphemeState, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t,
 };
 
 const BACKREF_1: c_int = BACKREF + 1;
@@ -51,143 +51,148 @@ pub(crate) fn match_one(
     next: *mut uint8_t,
     c: c_int,
 ) -> Option<c_int> {
-    // SAFETY: `scan` and `next` are nodes in the compiled program, so their
-    // opcode and operand bytes are readable; `rex.input` points into the
-    // current line, which is NUL-terminated, and every advance below is by
-    // the encoded length of a character that starts there.
-    unsafe {
-        // Step over the character at the cursor when `ok`, else fail.
-        let take = |ok: bool| {
-            if !ok {
-                return Some(RA_NOMATCH);
+    // Step over the character at the cursor when `ok`, else fail.
+    let take = |ok: bool| {
+        if !ok {
+            return Some(RA_NOMATCH);
+        }
+        rex.advance_char();
+        Some(RA_CONT)
+    };
+    // The `RI_*` byte classes only classify Latin-1.
+    let ri = |mask: c_int| c < 0x100 && RI_FLAGS[c as usize] as c_int & mask != 0;
+    // The `S`-prefixed classes reject a leading digit.
+    let digit_here = || ascii_isdigit(rex.byte() as c_int);
+
+    let status = match op {
+        BOL => nomatch_unless(rex.at_bol()),
+        EOL => nomatch_unless(c == NUL),
+        RE_BOF => nomatch_unless(
+            rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() <= 1),
+        ),
+        RE_EOF => nomatch_unless(rex.lnum() == rex.reg_maxline() && c == NUL),
+        CURSOR => nomatch_unless(match cursor_of(rex) {
+            Some(cursor) => rex.buf_lnum() == cursor.lnum && rex.col() == cursor.col,
+            None => false,
+        }),
+        RE_MARK => at_mark(rex, scan),
+        RE_VISUAL => nomatch_unless(reg_match_visual(rex)),
+
+        // `\%23l`, `\%23c`, `\%23v` and their `<`/`>` forms. A line
+        // number only means something in a multi-line match.
+        RE_LNUM => nomatch_unless(rex.multi() && re_num_cmp(rex.buf_lnum() as uint32_t, scan)),
+        RE_COL => nomatch_unless(re_num_cmp((rex.col() as uint32_t).wrapping_add(1), scan)),
+        RE_VCOL => nomatch_unless(re_num_cmp(virtual_column(rex).wrapping_add(1), scan)),
+
+        // `\<` and `\>`: a change of character class, with the classes
+        // below 2 (whitespace and punctuation) never starting a word.
+        BOW => {
+            if c == NUL {
+                RA_NOMATCH
+            } else {
+                let this = char_class(rex);
+                nomatch_unless(this > 1 && reg_prev_class(rex) != this)
             }
-            rex.set_input(rex.input().add(utfc_ptr2len(rex.input().cast()) as usize));
-            Some(RA_CONT)
-        };
-        // The `RI_*` byte classes only classify Latin-1.
-        let ri = |mask: c_int| c < 0x100 && RI_FLAGS[c as usize] as c_int & mask != 0;
-        // The `S`-prefixed classes reject a leading digit.
-        let digit_here = || ascii_isdigit(*rex.input() as c_int);
-        let column = || rex.input().offset_from(rex.line()) as colnr_T;
+        }
+        EOW => {
+            if rex.at_bol() {
+                RA_NOMATCH
+            } else {
+                let this = char_class(rex);
+                let prev = reg_prev_class(rex);
+                nomatch_unless(this != prev && prev != 0 && prev != 1)
+            }
+        }
 
-        let status = match op {
-            BOL => nomatch_unless(rex.input() == rex.line()),
-            EOL => nomatch_unless(c == NUL),
-            RE_BOF => nomatch_unless(
-                rex.lnum() == 0
-                    && rex.input() == rex.line()
-                    && (!rex.multi() || rex.reg_firstlnum() <= 1),
-            ),
-            RE_EOF => nomatch_unless(rex.lnum() == rex.reg_maxline() && c == NUL),
-            CURSOR => nomatch_unless(
-                !rex.reg_win().is_null()
-                    && rex.lnum() + rex.reg_firstlnum() == (*rex.reg_win()).w_cursor.lnum
-                    && column() == (*rex.reg_win()).w_cursor.col,
-            ),
-            RE_MARK => at_mark(rex, scan),
-            RE_VISUAL => nomatch_unless(reg_match_visual(rex)),
+        ANY => return take(c != NUL),
+        IDENT => return take(is_ident_char(c)),
+        SIDENT => return take(!digit_here() && is_ident_char(c)),
+        KWORD => return take(rex.iswordp()),
+        SKWORD => return take(!digit_here() && rex.iswordp()),
+        FNAME => return take(is_file_char(c)),
+        SFNAME => return take(!digit_here() && is_file_char(c)),
+        PRINT => return take(is_printable(rex.char_here())),
+        SPRINT => return take(!digit_here() && is_printable(rex.char_here())),
+        WHITE => return take(ascii_iswhite(c)),
+        NWHITE => return take(c != NUL && !ascii_iswhite(c)),
+        DIGIT => return take(ri(RI_DIGIT)),
+        NDIGIT => return take(c != NUL && !ri(RI_DIGIT)),
+        HEX => return take(ri(RI_HEX)),
+        NHEX => return take(c != NUL && !ri(RI_HEX)),
+        OCTAL => return take(ri(RI_OCTAL)),
+        NOCTAL => return take(c != NUL && !ri(RI_OCTAL)),
+        WORD => return take(ri(RI_WORD)),
+        NWORD => return take(c != NUL && !ri(RI_WORD)),
+        HEAD => return take(ri(RI_HEAD)),
+        NHEAD => return take(c != NUL && !ri(RI_HEAD)),
+        ALPHA => return take(ri(RI_ALPHA)),
+        NALPHA => return take(c != NUL && !ri(RI_ALPHA)),
+        LOWER => return take(ri(RI_LOWER)),
+        NLOWER => return take(c != NUL && !ri(RI_LOWER)),
+        UPPER => return take(ri(RI_UPPER)),
+        NUPPER => return take(c != NUL && !ri(RI_UPPER)),
 
-            // `\%23l`, `\%23c`, `\%23v` and their `<`/`>` forms. A line
-            // number only means something in a multi-line match.
-            RE_LNUM => nomatch_unless(
-                rex.multi() && re_num_cmp((rex.lnum() + rex.reg_firstlnum()) as uint32_t, scan),
-            ),
-            RE_COL => nomatch_unless(re_num_cmp((column() as uint32_t).wrapping_add(1), scan)),
-            RE_VCOL => nomatch_unless(re_num_cmp(virtual_column(rex).wrapping_add(1), scan)),
+        EXACTLY => exactly(rex, scan, next),
+        ANYOF | ANYBUT => collection(rex, scan, c, op == ANYOF),
+        MULTIBYTECODE => multibyte(rex, scan),
 
-            // `\<` and `\>`: a change of character class, with the classes
-            // below 2 (whitespace and punctuation) never starting a word.
-            BOW => {
-                if c == NUL {
-                    RA_NOMATCH
+        // `\%C`: swallow any combining characters, matching nothing else.
+        RE_COMPOSING => {
+            while utf_iscomposing_legacy(rex.char_here()) {
+                rex.advance(rex.base_len());
+            }
+            RA_CONT
+        }
+        NOTHING => RA_CONT,
+
+        BACKREF_1..=BACKREF_9 => back_reference(rex, op - BACKREF),
+        ZREF_1..=ZREF_9 => external_reference(rex, op - ZREF),
+
+        // The position a `\@<=` look-behind has to end at.
+        // SAFETY: `behind_pos` is this engine's own saved position.
+        BHPOS => nomatch_unless(reg_save_equal(rex, unsafe { &*behind_pos.ptr() })),
+
+        NEWL => {
+            let lbr = rex.reg_line_lbr();
+            let at_break = c == NUL && rex.multi() && rex.lnum() <= rex.reg_maxline() && !lbr;
+            if !at_break && !(c == '\n' as c_int && lbr) {
+                RA_NOMATCH
+            } else {
+                if lbr {
+                    rex.advance_char();
                 } else {
-                    let this = char_class(rex);
-                    nomatch_unless(this > 1 && reg_prev_class(rex) != this)
-                }
-            }
-            EOW => {
-                if rex.input() == rex.line() {
-                    RA_NOMATCH
-                } else {
-                    let this = char_class(rex);
-                    let prev = reg_prev_class(rex);
-                    nomatch_unless(this != prev && prev != 0 && prev != 1)
-                }
-            }
-
-            ANY => return take(c != NUL),
-            IDENT => return take(vim_isIDc(c)),
-            SIDENT => return take(!digit_here() && vim_isIDc(c)),
-            KWORD => {
-                return take(vim_iswordp_buf(rex.input().cast(), rex.reg_buf()));
-            }
-            SKWORD => {
-                return take(!digit_here() && vim_iswordp_buf(rex.input().cast(), rex.reg_buf()));
-            }
-            FNAME => return take(vim_isfilec(c)),
-            SFNAME => return take(!digit_here() && vim_isfilec(c)),
-            PRINT => return take(vim_isprintc(utf_ptr2char(rex.input().cast()))),
-            SPRINT => {
-                return take(!digit_here() && vim_isprintc(utf_ptr2char(rex.input().cast())));
-            }
-            WHITE => return take(ascii_iswhite(c)),
-            NWHITE => return take(c != NUL && !ascii_iswhite(c)),
-            DIGIT => return take(ri(RI_DIGIT)),
-            NDIGIT => return take(c != NUL && !ri(RI_DIGIT)),
-            HEX => return take(ri(RI_HEX)),
-            NHEX => return take(c != NUL && !ri(RI_HEX)),
-            OCTAL => return take(ri(RI_OCTAL)),
-            NOCTAL => return take(c != NUL && !ri(RI_OCTAL)),
-            WORD => return take(ri(RI_WORD)),
-            NWORD => return take(c != NUL && !ri(RI_WORD)),
-            HEAD => return take(ri(RI_HEAD)),
-            NHEAD => return take(c != NUL && !ri(RI_HEAD)),
-            ALPHA => return take(ri(RI_ALPHA)),
-            NALPHA => return take(c != NUL && !ri(RI_ALPHA)),
-            LOWER => return take(ri(RI_LOWER)),
-            NLOWER => return take(c != NUL && !ri(RI_LOWER)),
-            UPPER => return take(ri(RI_UPPER)),
-            NUPPER => return take(c != NUL && !ri(RI_UPPER)),
-
-            EXACTLY => exactly(rex, scan, next),
-            ANYOF | ANYBUT => collection(rex, scan, c, op == ANYOF),
-            MULTIBYTECODE => multibyte(rex, scan),
-
-            // `\%C`: swallow any combining characters, matching nothing else.
-            RE_COMPOSING => {
-                while utf_iscomposing_legacy(utf_ptr2char(rex.input().cast())) {
-                    rex.set_input(rex.input().add(utf_ptr2len(rex.input().cast()) as usize));
+                    reg_nextline(rex);
                 }
                 RA_CONT
             }
-            NOTHING => RA_CONT,
+        }
 
-            BACKREF_1..=BACKREF_9 => back_reference(rex, op - BACKREF),
-            ZREF_1..=ZREF_9 => external_reference(rex, op - ZREF),
+        END => RA_MATCH,
+        _ => return None,
+    };
+    Some(status)
+}
 
-            // The position a `\@<=` look-behind has to end at.
-            BHPOS => nomatch_unless(reg_save_equal(rex, &*behind_pos.ptr())),
+/// The cursor of the window the match runs in, if it runs in one. `\%#`
+/// needs a window and a string match has none.
+fn cursor_of(rex: Rex) -> Option<pos_T> {
+    let win = rex.reg_win();
+    // SAFETY: a non-null `reg_win` is the live window the match runs in.
+    (!win.is_null()).then(|| unsafe { (*win).w_cursor })
+}
 
-            NEWL => {
-                let lbr = rex.reg_line_lbr();
-                let at_break = c == NUL && rex.multi() && rex.lnum() <= rex.reg_maxline() && !lbr;
-                if !at_break && !(c == '\n' as c_int && lbr) {
-                    RA_NOMATCH
-                } else {
-                    if lbr {
-                        rex.set_input(rex.input().add(utfc_ptr2len(rex.input().cast()) as usize));
-                    } else {
-                        reg_nextline(rex);
-                    }
-                    RA_CONT
-                }
-            }
+/// `vim_isIDc`, `vim_isfilec` and `vim_isprintc` are pure tests on a code
+/// point that read only option state.
+fn is_ident_char(c: c_int) -> bool {
+    unsafe { vim_isIDc(c) }
+}
 
-            END => RA_MATCH,
-            _ => return None,
-        };
-        Some(status)
-    }
+fn is_file_char(c: c_int) -> bool {
+    unsafe { vim_isfilec(c) }
+}
+
+fn is_printable(c: c_int) -> bool {
+    unsafe { vim_isprintc(c) }
 }
 
 fn nomatch_unless(ok: bool) -> c_int {
@@ -198,95 +203,84 @@ fn nomatch_unless(ok: bool) -> c_int {
 /// 'iskeyword'.
 fn char_class(rex: Rex) -> c_int {
     // SAFETY: `rex.input` points into the current line and `reg_buf` is the
-    // buffer being matched.
+    // buffer being matched, so it has a 'iskeyword' table.
     unsafe {
-        mb_get_class_tab(
-            rex.input().cast(),
-            (&raw mut (*rex.reg_buf()).b_chartab).cast::<uint64_t>(),
-        )
+        let chartab = (&raw mut (*rex.reg_buf()).b_chartab).cast::<uint64_t>();
+        mb_get_class_tab(rex.input_str(), chartab)
     }
 }
 
 /// `\%23v` compares against this: the screen column the cursor sits in.
 fn virtual_column(rex: Rex) -> uint32_t {
-    // SAFETY: `wp` is a live window and `rex.line` the line being matched.
-    unsafe {
-        let wp = if rex.reg_win().is_null() {
-            curwin.get()
-        } else {
-            rex.reg_win()
-        };
-        let mut lnum: linenr_T = if rex.multi() {
-            rex.reg_firstlnum() + rex.lnum()
-        } else {
-            1
-        };
-        // A string match has no line numbers, and a multi-line match may be
-        // running over a line that has since been deleted.
-        if rex.multi() && (lnum <= 0 || lnum > (*(*wp).w_buffer).b_ml.ml_line_count) {
-            lnum = 1;
-        }
-        win_linetabsize(
-            wp,
-            lnum,
-            rex.line().cast(),
-            rex.input().offset_from(rex.line()) as colnr_T,
-        ) as uint32_t
+    let wp = if rex.reg_win().is_null() {
+        curwin.get()
+    } else {
+        rex.reg_win()
+    };
+    let mut lnum: linenr_T = if rex.multi() { rex.buf_lnum() } else { 1 };
+    // A string match has no line numbers, and a multi-line match may be
+    // running over a line that has since been deleted.
+    // SAFETY: `wp` is a live window, so it has a buffer.
+    if rex.multi() && (lnum <= 0 || lnum > unsafe { (*(*wp).w_buffer).b_ml.ml_line_count }) {
+        lnum = 1;
     }
+    // SAFETY: `rex.line` is the line being matched, NUL-terminated, and the
+    // cursor is a byte offset into it.
+    unsafe { win_linetabsize(wp, lnum, rex.line().cast(), rex.col()) as uint32_t }
 }
 
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?
 fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     // SAFETY: `scan` is an `RE_MARK` node, whose operand is the mark name and
     // the comparison character.
-    unsafe {
-        let mark = *scan.add(3) as c_int;
-        let cmp = *scan.add(4) as c_int;
-        let col: size_t = if rex.multi() {
-            rex.input().offset_from(rex.line()) as size_t
-        } else {
-            0
-        };
-        let fm = mark_get(
+    let (mark, cmp) = unsafe { (*scan.add(3) as c_int, *scan.add(4) as c_int) };
+    let col = if rex.multi() { rex.col() } else { 0 };
+    // SAFETY: `reg_buf` is the buffer being matched and `curwin` the current
+    // window; a null `fmark_T` asks for the buffer's own mark list.
+    let fm = unsafe {
+        mark_get(
             rex.reg_buf(),
             curwin.get(),
             core::ptr::null_mut::<fmark_T>(),
             kMarkBufLocal,
             mark,
-        );
-        // `mark_get` can move the buffer's line pointers, so re-anchor.
-        if rex.multi() {
-            rex.set_line(reg_getline(rex, rex.lnum()).cast());
-            rex.set_input(rex.line().add(col));
-        }
-        if fm.is_null() || (*fm).mark.lnum <= 0 {
-            return RA_NOMATCH;
-        }
-        let pos = (*fm).mark;
-        let here_lnum = rex.lnum() + rex.reg_firstlnum();
-        // A mark at MAXCOL sits at the end of its line.
-        let pos_col = if pos.lnum == here_lnum && pos.col == MAXCOL as c_int {
-            reg_getline_len(rex, pos.lnum - rex.reg_firstlnum())
-        } else {
-            pos.col
-        };
-        let here_col = rex.input().offset_from(rex.line()) as colnr_T;
-        // Upstream's condition is the *failure* condition, kept as such.
-        let fails = if pos.lnum == here_lnum {
-            if pos_col == here_col {
-                cmp == '<' as c_int || cmp == '>' as c_int
-            } else if pos_col < here_col {
-                cmp != '>' as c_int
-            } else {
-                cmp != '<' as c_int
-            }
-        } else if pos.lnum < here_lnum {
+        )
+    };
+    // `mark_get` can move the buffer's line pointers, so re-anchor.
+    if rex.multi() {
+        rex.seek(reg_getline(rex, rex.lnum()).cast(), col);
+    }
+    if fm.is_null() {
+        return RA_NOMATCH;
+    }
+    // SAFETY: a non-null `mark_get` result is a live mark.
+    let pos = unsafe { (*fm).mark };
+    if pos.lnum <= 0 {
+        return RA_NOMATCH;
+    }
+    let here_lnum = rex.buf_lnum();
+    // A mark at MAXCOL sits at the end of its line.
+    let pos_col = if pos.lnum == here_lnum && pos.col == MAXCOL as c_int {
+        reg_getline_len(rex, pos.lnum - rex.reg_firstlnum())
+    } else {
+        pos.col
+    };
+    let here_col = rex.col();
+    // Upstream's condition is the *failure* condition, kept as such.
+    let fails = if pos.lnum == here_lnum {
+        if pos_col == here_col {
+            cmp == '<' as c_int || cmp == '>' as c_int
+        } else if pos_col < here_col {
             cmp != '>' as c_int
         } else {
             cmp != '<' as c_int
-        };
-        if fails { RA_NOMATCH } else { RA_CONT }
-    }
+        }
+    } else if pos.lnum < here_lnum {
+        cmp != '>' as c_int
+    } else {
+        cmp != '<' as c_int
+    };
+    if fails { RA_NOMATCH } else { RA_CONT }
 }
 
 /// A literal string. The operand is NUL-terminated, so an empty one always
@@ -296,7 +290,7 @@ fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
     // string; `rex.input` is NUL-terminated too, so `cstrncmp` stops.
     unsafe {
         let opnd = scan.add(3);
-        if *opnd as c_int != *rex.input() as c_int && !rex.reg_ic() {
+        if *opnd as c_int != rex.byte() as c_int && !rex.reg_ic() {
             return RA_NOMATCH;
         }
         if *opnd as c_int == NUL {
@@ -318,14 +312,14 @@ fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
         // says to ignore combining characters.
         if utf_composinglike(
             rex.input().cast(),
-            rex.input().cast::<core::ffi::c_char>().add(len as usize),
+            rex.input_str().add(len as usize),
             core::ptr::null_mut::<GraphemeState>(),
         ) && !rex.reg_icombine()
             && *next as c_int != RE_COMPOSING
         {
             return RA_NOMATCH;
         }
-        rex.set_input(rex.input().add(len as usize));
+        rex.advance(len);
         RA_CONT
     }
 }
@@ -346,7 +340,7 @@ fn collection(rex: Rex, scan: *mut uint8_t, c: c_int, positive: bool) -> c_int {
         // The set entry may itself be a grapheme; its combining part has to
         // match the input's byte for byte.
         let combining = utfc_ptr2len(q.cast()) - utf_ptr2len(q.cast());
-        rex.set_input(rex.input().add(utf_ptr2len(rex.input().cast()) as usize));
+        rex.advance(rex.base_len());
         q = q.add(utf_ptr2len(q.cast()) as usize);
         let mut status = RA_CONT;
         if combining != 0 {
@@ -358,7 +352,7 @@ fn collection(rex: Rex, scan: *mut uint8_t, c: c_int, positive: bool) -> c_int {
             }
             // Upstream advances even when the tail did not match; the status
             // is what decides the outcome.
-            rex.set_input(rex.input().add(combining as usize));
+            rex.advance(combining);
         }
         status
     }
@@ -382,7 +376,7 @@ fn multibyte(rex: Rex, scan: *mut uint8_t) -> c_int {
             let mut status = RA_NOMATCH;
             let mut i = 0;
             while *rex.input().add(i as usize) as c_int != NUL {
-                let at = rex.input().cast::<core::ffi::c_char>().add(i as usize);
+                let at = rex.input_str().add(i as usize);
                 let inpc = utf_ptr2char(at);
                 if !utf_iscomposing_legacy(inpc) {
                     // The base character is allowed to be the first thing
@@ -401,13 +395,13 @@ fn multibyte(rex: Rex, scan: *mut uint8_t) -> c_int {
                 i += utf_ptr2len(at);
             }
             // Upstream advances whether or not it found the character.
-            rex.set_input(rex.input().add(len as usize));
+            rex.advance(len);
             return status;
         }
         if cstrncmp(rex, opnd.cast(), rex.input().cast(), &mut len) != 0 {
             return RA_NOMATCH;
         }
-        rex.set_input(rex.input().add(len as usize));
+        rex.advance(len);
         RA_CONT
     }
 }
@@ -463,7 +457,7 @@ fn back_reference(rex: Rex, no: c_int) -> c_int {
             }
         }
         // Upstream advances by whatever `len` ended up as, match or not.
-        rex.set_input(rex.input().add(len as usize));
+        rex.advance(len);
         status
     }
 }
@@ -485,7 +479,7 @@ fn external_reference(rex: Rex, no: c_int) -> c_int {
         if cstrncmp(rex, text.cast(), rex.input().cast(), &mut len) != 0 {
             return RA_NOMATCH;
         }
-        rex.set_input(rex.input().add(len as usize));
+        rex.advance(len);
         RA_CONT
     }
 }

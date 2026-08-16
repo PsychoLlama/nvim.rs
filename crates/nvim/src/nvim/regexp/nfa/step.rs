@@ -6,7 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::assertions::{at_col, at_cursor, at_line, at_mark, at_vcol, in_visual};
 use super::classes::class_matches;
@@ -191,14 +191,12 @@ pub(crate) unsafe fn step(
 
             NFA_START_PATTERN => start_pattern(rex, thislist, nextlist, idx, run, *clen),
 
-            NFA_BOL => Step::zero_width(rex.input() == rex.line(), out),
+            NFA_BOL => Step::zero_width(rex.at_bol(), out),
             NFA_EOL => Step::zero_width(curc == NUL, out),
             NFA_BOW => Step::zero_width(at_word_start(rex, curc), out),
             NFA_EOW => Step::zero_width(at_word_end(rex), out),
             NFA_BOF => Step::zero_width(
-                rex.lnum() == 0
-                    && rex.input() == rex.line()
-                    && (!rex.multi() || rex.reg_firstlnum() == 1),
+                rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() == 1),
                 out,
             ),
             NFA_EOF => Step::zero_width(rex.lnum() == rex.reg_maxline() && curc == NUL, out),
@@ -308,7 +306,7 @@ pub(crate) unsafe fn step(
                 if matched && !rex.reg_icombine() {
                     // The pattern named the base character only, so the
                     // combining marks after it are not consumed with it.
-                    *clen = utf_ptr2len(rex.input() as *mut c_char);
+                    *clen = utf_ptr2len(rex.input_str());
                 }
                 Step::consuming(matched, out, *clen)
             }
@@ -367,7 +365,7 @@ unsafe fn at_word_start(rex: Rex, curc: c_int) -> bool {
             return false;
         }
         let this_class = mb_get_class_tab(
-            rex.input() as *mut c_char,
+            rex.input_str(),
             &raw mut (*rex.reg_buf()).b_chartab as *mut u64,
         );
         this_class > 1 && reg_prev_class(rex) != this_class
@@ -381,11 +379,11 @@ unsafe fn at_word_start(rex: Rex, curc: c_int) -> bool {
 /// The match context must be live.
 unsafe fn at_word_end(rex: Rex) -> bool {
     unsafe {
-        if rex.input() == rex.line() {
+        if rex.at_bol() {
             return false;
         }
         let this_class = mb_get_class_tab(
-            rex.input() as *mut c_char,
+            rex.input_str(),
             &raw mut (*rex.reg_buf()).b_chartab as *mut u64,
         );
         let prev_class = reg_prev_class(rex);

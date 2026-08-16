@@ -22,7 +22,7 @@ use crate::src::nvim::types::{MB_MAXBYTES, colnr_T, fmark_T, linenr_T, uint8_t, 
 /// The column the match has reached, in bytes from the start of the line.
 fn col(rex: Rex) -> colnr_T {
     // SAFETY: `input` and `line` bound the same line.
-    unsafe { rex.input().offset_from(rex.line()) as colnr_T }
+    rex.col()
 }
 
 /// The buffer line the match has reached.
@@ -47,7 +47,7 @@ pub(crate) fn at_line(rex: Rex, state: *mut nfa_state_T) -> bool {
     unsafe {
         let want = (*state).val;
         assert!(
-            want >= 0 && rex.lnum() + rex.reg_firstlnum() >= 0,
+            want >= 0 && rex.buf_lnum() >= 0,
             "line assertion out of range"
         );
         rex.multi() && nfa_re_num_cmp(want as u64, (*state).c - NFA_LNUM, lnum(rex) as u64)

@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::list::{ThreadList, addstate, addstate_here};
 use super::run::nfa_did_time_out;
@@ -28,7 +28,6 @@ use crate::src::nvim::regexp::{
     regsubs_T,
 };
 use crate::src::nvim::regexp::{recursive_regmatch, skip_to_start};
-use crate::src::nvim::types::colnr_T;
 
 /// How many characters may pass between two checks of the caller's time
 /// limit.
@@ -103,7 +102,7 @@ pub(crate) fn nfa_regmatch(
 unsafe fn record_match_start(rex: Rex, m: *mut regsubs_T, off: c_int) {
     unsafe {
         if rex.multi() {
-            let col = rex.input().offset_from(rex.line()) as colnr_T + off;
+            let col = rex.col() + off;
             (*m).norm.list.multi[0].start_lnum = rex.lnum();
             (*m).norm.list.multi[0].start_col = col;
             // The column a `:substitute` resumes scanning from.
@@ -133,8 +132,8 @@ unsafe fn scan(
         let mut go_to_nextline = false;
 
         loop {
-            let curc = utf_ptr2char(rex.input() as *mut c_char);
-            let mut clen = utfc_ptr2len(rex.input() as *mut c_char);
+            let curc = utf_ptr2char(rex.input_str());
+            let mut clen = utfc_ptr2len(rex.input_str());
             if curc == NUL {
                 clen = 0;
                 go_to_nextline = false;
@@ -205,7 +204,7 @@ unsafe fn scan(
             }
 
             if clen != 0 {
-                rex.set_input(rex.input().offset(clen as isize));
+                rex.advance(clen);
             } else {
                 // At the end of a line: carry on only if something still
                 // wants the next one.
@@ -395,13 +394,13 @@ unsafe fn restart(
             if nextlist.len() == 0 {
                 // Nothing is alive, so jump the input straight to the next
                 // place that character occurs.
-                let mut col = rex.input().offset_from(rex.line()) as colnr_T + clen;
+                let mut col = rex.col() + clen;
                 if skip_to_start(rex, (*prog).regstart, &mut col) == FAIL {
                     return false;
                 }
                 rex.set_input(rex.line().offset(col as isize).offset(-(clen as isize)));
             } else {
-                let next = utf_ptr2char((rex.input() as *mut c_char).offset(clen as isize));
+                let next = utf_ptr2char((rex.input_str()).offset(clen as isize));
                 if next != (*prog).regstart
                     && (!rex.reg_ic() || utf_fold(next) != utf_fold((*prog).regstart))
                 {
@@ -449,8 +448,7 @@ unsafe fn wants_restart(rex: Rex, toplevel: bool, clen: c_int) -> bool {
         if toplevel
             && rex.lnum() == 0
             && clen != 0
-            && (rex.reg_maxcol() == 0
-                || (rex.input().offset_from(rex.line()) as colnr_T) < rex.reg_maxcol())
+            && (rex.reg_maxcol() == 0 || (rex.col()) < rex.reg_maxcol())
         {
             return true;
         }

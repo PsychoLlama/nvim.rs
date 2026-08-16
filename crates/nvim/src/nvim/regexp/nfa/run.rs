@@ -106,7 +106,7 @@ pub(crate) fn match_backref(rex: Rex, sub: &regsub_T, subidx: c_int, bytelen: &m
                 // Wholly on this line: a plain comparison.
                 let mut len = m.end_col - m.start_col;
                 let captured = (rex.line() as *mut c_char).offset(m.start_col as isize);
-                if cstrncmp(rex, captured, rex.input() as *mut c_char, &mut len) == 0 {
+                if cstrncmp(rex, captured, rex.input_str(), &mut len) == 0 {
                     *bytelen = len;
                     return true;
                 }
@@ -128,13 +128,7 @@ pub(crate) fn match_backref(rex: Rex, sub: &regsub_T, subidx: c_int, bytelen: &m
                 return true;
             }
             let mut len = l.end.offset_from(l.start) as c_int;
-            if cstrncmp(
-                rex,
-                l.start as *mut c_char,
-                rex.input() as *mut c_char,
-                &mut len,
-            ) == 0
-            {
+            if cstrncmp(rex, l.start as *mut c_char, rex.input_str(), &mut len) == 0 {
                 *bytelen = len;
                 return true;
             }
@@ -156,7 +150,7 @@ pub(crate) fn match_zref(rex: Rex, subidx: c_int, bytelen: &mut c_int) -> bool {
         }
         let captured = (*captures).matches[subidx as usize] as *mut c_char;
         let mut len = strlen(captured) as c_int;
-        if cstrncmp(rex, captured, rex.input() as *mut c_char, &mut len) == 0 {
+        if cstrncmp(rex, captured, rex.input_str(), &mut len) == 0 {
             *bytelen = len;
             return true;
         }
@@ -251,7 +245,7 @@ pub(crate) fn recursive_regmatch(
                 endpos.se_u.pos = if pim.is_null() {
                     crate::src::nvim::types::lpos_T {
                         lnum: rex.lnum(),
-                        col: rex.input().offset_from(rex.line()) as colnr_T,
+                        col: rex.col(),
                     }
                 } else {
                     (*pim).end.pos
@@ -345,9 +339,10 @@ unsafe fn start_lookbehind(rex: Rex, state: *mut nfa_state_T) {
         if rex.input().offset_from(rex.line()) as c_int >= val {
             rex.set_input(rex.input().offset(-(val as isize)));
             // Land on a character boundary, not inside one.
-            rex.set_input(rex.input().offset(
-                -(utf_head_off(rex.line() as *mut c_char, rex.input() as *mut c_char) as isize),
-            ));
+            rex.set_input(
+                rex.input()
+                    .offset(-(utf_head_off(rex.line() as *mut c_char, rex.input_str()) as isize)),
+            );
         } else {
             rex.set_input(rex.line());
         }
