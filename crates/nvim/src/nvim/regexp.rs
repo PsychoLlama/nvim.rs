@@ -41,6 +41,7 @@ mod equi_class;
 mod mbyte;
 mod nfa;
 mod parse;
+mod rex;
 mod submatch;
 mod substitute;
 
@@ -51,6 +52,7 @@ pub use self::context::*;
 pub(crate) use self::mbyte::*;
 pub(crate) use self::nfa::*;
 pub use self::parse::*;
+pub(crate) use self::rex::*;
 pub(crate) use self::submatch::*;
 pub(crate) use self::substitute::*;
 pub const _ISalnum: c_uint = 8;

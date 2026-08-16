@@ -24,9 +24,9 @@ use core::ffi::{c_char, c_int};
 use super::api::with_rex;
 use super::submatch::{clear_submatch_list, fill_submatch_list};
 use super::{
-    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, TAB,
-    can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub, reg_prev_sublen,
-    regsubmatch_T, rex, rsm,
+    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, Rex,
+    TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub,
+    reg_prev_sublen, regsubmatch_T, rsm,
 };
 use crate::src::nvim::eval::typval::{tv_clear, tv_get_string_buf_chk, tv_list_len};
 use crate::src::nvim::eval::userfunc::call_func;
@@ -328,19 +328,19 @@ pub(crate) unsafe fn vim_regsub(
     destlen: c_int,
     flags: c_int,
 ) -> c_int {
-    // SAFETY: the arguments are the caller's; `rex` is ours for the call.
+    // SAFETY: the arguments are the caller's; `with_rex` makes the context
+    // ours for the call and restores any outer match's after it.
     unsafe {
         with_rex(|| {
-            rex.with_mut(|r| {
-                r.reg_match = rmp;
-                r.reg_mmatch = core::ptr::null_mut();
-                r.reg_maxline = 0;
-                r.reg_buf = curbuf.get();
-                // A string replacement has no lines to cross, so a `\n` in it
-                // is a literal newline rather than a line break.
-                r.reg_line_lbr = true;
-            });
-            vim_regsub_both(source, expr, dest, destlen, flags)
+            let rex = Rex::acquire();
+            rex.set_reg_match(rmp);
+            rex.set_reg_mmatch(core::ptr::null_mut());
+            rex.set_reg_maxline(0);
+            rex.set_reg_buf(curbuf.get());
+            // A string replacement has no lines to cross, so a `\n` in it
+            // is a literal newline rather than a line break.
+            rex.set_reg_line_lbr(true);
+            vim_regsub_both(rex, source, expr, dest, destlen, flags)
         })
     }
 }
@@ -358,15 +358,14 @@ pub(crate) unsafe fn vim_regsub_multi(
     // SAFETY: as `vim_regsub`. A buffer match always works on `curbuf`.
     unsafe {
         with_rex(|| {
-            rex.with_mut(|r| {
-                r.reg_match = core::ptr::null_mut();
-                r.reg_mmatch = rmp;
-                r.reg_buf = curbuf.get();
-                r.reg_firstlnum = lnum;
-                r.reg_maxline = (*curbuf.get()).b_ml.ml_line_count - lnum;
-                r.reg_line_lbr = false;
-            });
-            vim_regsub_both(source, core::ptr::null_mut(), dest, destlen, flags)
+            let rex = Rex::acquire();
+            rex.set_reg_match(core::ptr::null_mut());
+            rex.set_reg_mmatch(rmp);
+            rex.set_reg_buf(curbuf.get());
+            rex.set_reg_firstlnum(lnum);
+            rex.set_reg_maxline((*curbuf.get()).b_ml.ml_line_count - lnum);
+            rex.set_reg_line_lbr(false);
+            vim_regsub_both(rex, source, core::ptr::null_mut(), dest, destlen, flags)
         })
     }
 }
@@ -374,6 +373,7 @@ pub(crate) unsafe fn vim_regsub_multi(
 /// The expansion itself, against whatever match `rex` currently describes.
 /// Returns the size of the result including its NUL, or 0 on an error.
 unsafe fn vim_regsub_both(
+    rex: Rex,
     source: *mut c_char,
     expr: *mut typval_T,
     dest: *mut c_char,
@@ -387,7 +387,7 @@ unsafe fn vim_regsub_both(
             emsg(gettext(&raw const e_null as *const c_char));
             return 0;
         }
-        if prog_magic_wrong() != 0 {
+        if prog_magic_wrong(rex) != 0 {
             return 0;
         }
         if NESTING.get() == MAX_REGSUB_NESTING {
@@ -401,10 +401,10 @@ unsafe fn vim_regsub_both(
         let outcome = if !expr.is_null()
             || (*source == b'\\' as c_char && *source.offset(1) == b'=' as c_char)
         {
-            eval_replacement(source, expr, flags, &mut out);
+            eval_replacement(rex, source, expr, flags, &mut out);
             Outcome::Done
         } else {
-            expand_replacement(source, flags, &mut out)
+            expand_replacement(rex, source, flags, &mut out)
         };
 
         match outcome {
@@ -427,7 +427,13 @@ unsafe fn vim_regsub_both(
 /// Only the measuring pass evaluates. It stashes the text in `EVAL_RESULT`
 /// and the copying pass takes it from there, so the expression runs once
 /// per substitution however many passes the caller makes.
-unsafe fn eval_replacement(source: *mut c_char, expr: *mut typval_T, flags: c_int, out: &mut Out) {
+unsafe fn eval_replacement(
+    rex: Rex,
+    source: *mut c_char,
+    expr: *mut typval_T,
+    flags: c_int,
+    out: &mut Out,
+) {
     // SAFETY: `source` is the caller's replacement text and `expr` its
     // callable, both live for the call. Nothing raw is held across the
     // evaluation below, which can run arbitrary Vimscript.
@@ -461,11 +467,11 @@ unsafe fn eval_replacement(source: *mut c_char, expr: *mut typval_T, flags: c_in
         let outer_rsm = outer_can_f_submatch.then(|| rsm.get());
         can_f_submatch.set(true);
         rsm.set(regsubmatch_T {
-            sm_match: (*rex.ptr()).reg_match,
-            sm_mmatch: (*rex.ptr()).reg_mmatch,
-            sm_firstlnum: (*rex.ptr()).reg_firstlnum,
-            sm_maxline: (*rex.ptr()).reg_maxline,
-            sm_line_lbr: (*rex.ptr()).reg_line_lbr as c_int,
+            sm_match: rex.reg_match(),
+            sm_mmatch: rex.reg_mmatch(),
+            sm_firstlnum: rex.reg_firstlnum(),
+            sm_maxline: rex.reg_maxline(),
+            sm_line_lbr: rex.reg_line_lbr() as c_int,
         });
 
         NESTING.set(nested as c_int + 1);
@@ -592,7 +598,12 @@ unsafe fn line_breaks_to_cr(text: *mut c_char) -> bool {
 
 /// The ordinary replacement: copy `source` into `out`, expanding the
 /// capture references and the escapes as they come.
-unsafe fn expand_replacement(source: *mut c_char, flags: c_int, out: &mut Out) -> Outcome {
+unsafe fn expand_replacement(
+    rex: Rex,
+    source: *mut c_char,
+    flags: c_int,
+    out: &mut Out,
+) -> Outcome {
     // SAFETY: `source` is NUL-terminated, and `rex` describes a live match
     // whose captures point into text that has not moved.
     unsafe {
@@ -636,7 +647,7 @@ unsafe fn expand_replacement(source: *mut c_char, flags: c_int, out: &mut Out) -
             }
 
             if no >= 0 {
-                match copy_capture(no, &mut case, backslash, out) {
+                match copy_capture(rex, no, &mut case, backslash, out) {
                     Outcome::Done => continue,
                     stopped => return stopped,
                 }
@@ -710,11 +721,17 @@ unsafe fn expand_replacement(source: *mut c_char, flags: c_int, out: &mut Out) -
 
 /// Copy what capture `no` matched. For a buffer match that can span lines,
 /// in which case the line breaks are written as carriage returns.
-unsafe fn copy_capture(no: c_int, case: &mut Case, backslash: bool, out: &mut Out) -> Outcome {
+unsafe fn copy_capture(
+    rex: Rex,
+    no: c_int,
+    case: &mut Case,
+    backslash: bool,
+    out: &mut Out,
+) -> Outcome {
     // SAFETY: `rex` describes a live match; `no` is a single digit and both
     // capture arrays hold `NSUBEXP` = 10 slots.
     unsafe {
-        let multi = (*rex.ptr()).reg_match.is_null();
+        let multi = rex.multi();
         let no = no as usize;
 
         // Where the capture starts, how much of it is on that line, and —
@@ -722,7 +739,7 @@ unsafe fn copy_capture(no: c_int, case: &mut Case, backslash: bool, out: &mut Ou
         let mut clnum: linenr_T = 0;
         let mut len: c_int = 0;
         let mut s = if multi {
-            let mmatch = (*rex.ptr()).reg_mmatch;
+            let mmatch = rex.reg_mmatch();
             clnum = (*mmatch).startpos[no].lnum;
             if clnum < 0 || (*mmatch).endpos[no].lnum < 0 {
                 core::ptr::null_mut()
@@ -730,12 +747,12 @@ unsafe fn copy_capture(no: c_int, case: &mut Case, backslash: bool, out: &mut Ou
                 len = if (*mmatch).endpos[no].lnum == clnum {
                     (*mmatch).endpos[no].col - (*mmatch).startpos[no].col
                 } else {
-                    reg_getline_len(clnum) - (*mmatch).startpos[no].col
+                    reg_getline_len(rex, clnum) - (*mmatch).startpos[no].col
                 };
-                reg_getline(clnum).offset((*mmatch).startpos[no].col as isize)
+                reg_getline(rex, clnum).offset((*mmatch).startpos[no].col as isize)
             }
         } else {
-            let match_ = (*rex.ptr()).reg_match;
+            let match_ = rex.reg_match();
             let start = (*match_).startp[no];
             if (*match_).endp[no].is_null() {
                 core::ptr::null_mut()
@@ -751,7 +768,7 @@ unsafe fn copy_capture(no: c_int, case: &mut Case, backslash: bool, out: &mut Ou
 
         loop {
             if len == 0 {
-                let mmatch = (*rex.ptr()).reg_mmatch;
+                let mmatch = rex.reg_mmatch();
                 if !multi || (*mmatch).endpos[no].lnum == clnum {
                     return Outcome::Done;
                 }
@@ -761,11 +778,11 @@ unsafe fn copy_capture(no: c_int, case: &mut Case, backslash: bool, out: &mut Ou
                 }
                 out.push(CAR as c_char);
                 clnum += 1;
-                s = reg_getline(clnum);
+                s = reg_getline(rex, clnum);
                 len = if (*mmatch).endpos[no].lnum == clnum {
                     (*mmatch).endpos[no].col
                 } else {
-                    reg_getline_len(clnum)
+                    reg_getline_len(rex, clnum)
                 };
                 continue;
             }

@@ -17,7 +17,7 @@ use crate::src::nvim::regexp::{
     NFA_ANY, NFA_ANY_COMPOSING, NFA_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG,
     NFA_END_PATTERN, NFA_IDENT, NFA_MATCH, NFA_MCLOSE, NFA_NEWL, NFA_NUPPER_IC, NFA_PIM_UNUSED,
     NFA_SPLIT, NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE_NEG_FIRST,
-    NFA_START_NEG_COLL, NSUBEXP, linepos, multipos, nfa_pim_T, nfa_state_T, regsub_T, rex,
+    NFA_START_NEG_COLL, NSUBEXP, Rex, linepos, multipos, nfa_pim_T, nfa_state_T, regsub_T,
 };
 
 /// How far [`match_follows`] follows the machine before giving up.
@@ -41,42 +41,38 @@ const NO_LINEPOS: linepos = linepos {
 /// Does this match run over a range of buffer lines rather than over one
 /// string?
 #[inline(always)]
-pub(crate) fn multi_line() -> bool {
-    // SAFETY: `rex` describes a match that is set up and running.
-    unsafe { (*rex.ptr()).reg_match.is_null() }
+pub(crate) fn multi_line(rex: Rex) -> bool {
+    rex.multi()
 }
 
 /// Does the pattern have `\z(` groups? They are carried in a second capture
 /// set beside the ordinary one, and only copied when there are any.
 #[inline(always)]
-pub(crate) fn has_zsubexpr() -> bool {
-    // SAFETY: as `multi_line`.
-    unsafe { (*rex.ptr()).nfa_has_zsubexpr != 0 }
+pub(crate) fn has_zsubexpr(rex: Rex) -> bool {
+    rex.nfa_has_zsubexpr() != 0
 }
 
 /// Does the pattern have a back-reference? It is the only thing that reads a
 /// capture's end while the match is still running, and so the only thing that
 /// can tell two threads on one state apart by their ends.
 #[inline(always)]
-pub(crate) fn has_backref() -> bool {
-    // SAFETY: as `multi_line`.
-    unsafe { (*rex.ptr()).nfa_has_backref != 0 }
+pub(crate) fn has_backref(rex: Rex) -> bool {
+    rex.nfa_has_backref() != 0
 }
 
 /// How many captures the pattern can fill.
-fn nsubexpr() -> usize {
-    // SAFETY: as `multi_line`.
-    let n = unsafe { (*rex.ptr()).nfa_nsubexpr } as usize;
+fn nsubexpr(rex: Rex) -> usize {
+    let n = rex.nfa_nsubexpr() as usize;
     n.min(NSUBEXP as usize)
 }
 
 /// Forget every capture in `sub`.
-pub(crate) fn clear_sub(sub: &mut regsub_T) {
-    let n = nsubexpr();
+pub(crate) fn clear_sub(rex: Rex, sub: &mut regsub_T) {
+    let n = nsubexpr(rex);
     // SAFETY: which arm of the union is live is `multi_line`, and the same
     // answer holds for every capture set of one match.
     unsafe {
-        if multi_line() {
+        if multi_line(rex) {
             sub.list.multi[..n].fill(NO_MULTIPOS);
         } else {
             sub.list.line[..n].fill(NO_LINEPOS);
@@ -87,7 +83,7 @@ pub(crate) fn clear_sub(sub: &mut regsub_T) {
 
 /// Copy the captures `from` has in use over `to`'s.
 #[inline(always)]
-pub(crate) fn copy_sub(to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_sub(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
     to.in_use = from.in_use;
     if from.in_use <= 0 {
         return;
@@ -98,7 +94,7 @@ pub(crate) fn copy_sub(to: &mut regsub_T, from: &regsub_T) {
     // than the copy. This runs once per thread put on a list.
     // SAFETY: as `clear_sub`.
     unsafe {
-        if multi_line() {
+        if multi_line(rex) {
             for i in 0..n {
                 to.list.multi[i] = from.list.multi[i];
             }
@@ -115,7 +111,7 @@ pub(crate) fn copy_sub(to: &mut regsub_T, from: &regsub_T) {
 
 /// [`copy_sub`] without group 0: a lookaround may report what its own groups
 /// matched, but must not move the whole match's start or end.
-pub(crate) fn copy_sub_off(to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_sub_off(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
     if to.in_use < from.in_use {
         to.in_use = from.in_use;
     }
@@ -125,7 +121,7 @@ pub(crate) fn copy_sub_off(to: &mut regsub_T, from: &regsub_T) {
     let n = from.in_use as usize;
     // SAFETY: as `clear_sub`.
     unsafe {
-        if multi_line() {
+        if multi_line(rex) {
             for i in 1..n {
                 to.list.multi[i] = from.list.multi[i];
             }
@@ -139,13 +135,13 @@ pub(crate) fn copy_sub_off(to: &mut regsub_T, from: &regsub_T) {
 
 /// Carry group 0's *end* over, which is the one thing a `\ze` inside a
 /// lookaround is allowed to move.
-pub(crate) fn copy_ze_off(to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_ze_off(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
     // SAFETY: as `clear_sub`; `nfa_has_zend` is read from the running match.
     unsafe {
-        if (*rex.ptr()).nfa_has_zend == 0 {
+        if rex.nfa_has_zend() == 0 {
             return;
         }
-        if multi_line() {
+        if multi_line(rex) {
             if from.list.multi[0].end_lnum >= 0 {
                 to.list.multi[0].end_lnum = from.list.multi[0].end_lnum;
                 to.list.multi[0].end_col = from.list.multi[0].end_col;
@@ -161,8 +157,8 @@ pub(crate) fn copy_ze_off(to: &mut regsub_T, from: &regsub_T) {
 /// A capture past a set's `in_use` counts as unset, so the comparison runs to
 /// the longer of the two. Ends only count when the pattern has a
 /// back-reference, which is the only thing that reads them mid-match.
-pub(crate) fn sub_equal(sub1: &regsub_T, sub2: &regsub_T) -> bool {
-    let ends_matter = has_backref();
+pub(crate) fn sub_equal(rex: Rex, sub1: &regsub_T, sub2: &regsub_T) -> bool {
+    let ends_matter = has_backref(rex);
     let (n1, n2) = (sub1.in_use, sub2.in_use);
     let todo = n1.max(n2) as usize;
     // Written as a plain loop over the fields rather than over a helper that
@@ -171,7 +167,7 @@ pub(crate) fn sub_equal(sub1: &regsub_T, sub2: &regsub_T) -> bool {
     // call per element.
     // SAFETY: as `clear_sub`.
     unsafe {
-        if multi_line() {
+        if multi_line(rex) {
             for i in 0..todo {
                 let a = if (i as c_int) < n1 {
                     sub1.list.multi[i]
@@ -224,19 +220,19 @@ pub(crate) fn sub_equal(sub1: &regsub_T, sub2: &regsub_T) -> bool {
 }
 
 /// Copy a postponed lookaround, captures and all.
-pub(crate) fn copy_pim(to: &mut nfa_pim_T, from: &nfa_pim_T) {
+pub(crate) fn copy_pim(rex: Rex, to: &mut nfa_pim_T, from: &nfa_pim_T) {
     to.result = from.result;
     to.state = from.state;
-    copy_sub(&mut to.subs.norm, &from.subs.norm);
-    if has_zsubexpr() {
-        copy_sub(&mut to.subs.synt, &from.subs.synt);
+    copy_sub(rex, &mut to.subs.norm, &from.subs.norm);
+    if has_zsubexpr(rex) {
+        copy_sub(rex, &mut to.subs.synt, &from.subs.synt);
     }
     to.end = from.end;
 }
 
 /// Are two threads carrying the same postponed lookaround? A lookaround that
 /// has already been decided, or none at all, counts as "no lookaround".
-pub(crate) fn pim_equal(one: Option<&nfa_pim_T>, two: Option<&nfa_pim_T>) -> bool {
+pub(crate) fn pim_equal(rex: Rex, one: Option<&nfa_pim_T>, two: Option<&nfa_pim_T>) -> bool {
     let unused = |p: Option<&nfa_pim_T>| p.is_none_or(|p| p.result == NFA_PIM_UNUSED);
     let (Some(one), Some(two)) = (one, two) else {
         return unused(one) && unused(two);
@@ -253,7 +249,7 @@ pub(crate) fn pim_equal(one: Option<&nfa_pim_T>, two: Option<&nfa_pim_T>) -> boo
         if (*one.state).id != (*two.state).id {
             return false;
         }
-        if multi_line() {
+        if multi_line(rex) {
             one.end.pos.lnum == two.end.pos.lnum && one.end.pos.col == two.end.pos.col
         } else {
             one.end.ptr == two.end.ptr

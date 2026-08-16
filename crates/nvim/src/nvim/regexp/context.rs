@@ -20,9 +20,9 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, bt_regprog_T, cstrncmp,
+    MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, Rex, bt_regprog_T, cstrncmp,
     nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp, reg_startzpos,
-    reg_tofree, reg_tofreelen, rex, rsm,
+    reg_tofree, reg_tofreelen, rsm,
 };
 use crate::semsg;
 use crate::src::nvim::charset::vim_iswordc_buf;
@@ -47,20 +47,17 @@ use crate::src::nvim::types::{
 /// Let the user interrupt a long match, unless the caller asked for an
 /// uninterruptible one (`RE_NOBREAK`, for matches run where input cannot
 /// be read).
-pub(crate) fn reg_breakcheck() {
-    // SAFETY: reads `rex` and polls input state on the main thread.
-    unsafe {
-        if !(*rex.ptr()).reg_nobreak {
-            fast_breakcheck();
-        }
+pub(crate) fn reg_breakcheck(rex: Rex) {
+    if !rex.reg_nobreak() {
+        fast_breakcheck();
     }
 }
 
 /// Is `c` a keyword character? 'iskeyword' is buffer-local and the buffer
 /// being matched is not always the current one.
-pub(crate) fn reg_iswordc(c: c_int) -> bool {
+pub(crate) fn reg_iswordc(rex: Rex, c: c_int) -> bool {
     // SAFETY: `reg_buf` is the buffer the match was set up against.
-    unsafe { vim_iswordc_buf(c, (*rex.ptr()).reg_buf) }
+    unsafe { vim_iswordc_buf(c, rex.reg_buf()) }
 }
 
 /// Which line numbering to resolve against: the running match, or the
@@ -93,43 +90,43 @@ fn locate(lnum: linenr_T, first: linenr_T, maxline: linenr_T) -> Located {
 /// The text `lnum` lines into the match: NULL above the buffer, an empty
 /// string past the match's last line. Note that a submatch line comes from
 /// `rex`'s buffer even though its numbering comes from `rsm`.
-pub(crate) fn reg_line(lnum: linenr_T, origin: LineOrigin) -> *mut c_char {
+pub(crate) fn reg_line(rex: Rex, lnum: linenr_T, origin: LineOrigin) -> *mut c_char {
     // SAFETY: reads the match context; `locate` establishes the line is in
     // the buffer before it is fetched.
     unsafe {
         let (first, maxline) = match origin {
-            LineOrigin::Exec => ((*rex.ptr()).reg_firstlnum, (*rex.ptr()).reg_maxline),
+            LineOrigin::Exec => (rex.reg_firstlnum(), rex.reg_maxline()),
             LineOrigin::Submatch => ((*rsm.ptr()).sm_firstlnum, (*rsm.ptr()).sm_maxline),
         };
         match locate(lnum, first, maxline) {
             Located::Before => core::ptr::null_mut(),
             Located::Past => c"".as_ptr().cast_mut(),
-            Located::At(lnum) => ml_get_buf((*rex.ptr()).reg_buf, lnum),
+            Located::At(lnum) => ml_get_buf(rex.reg_buf(), lnum),
         }
     }
 }
 
 /// The length of [`reg_line`]'s text; 0 for either stand-in.
-pub(crate) fn reg_line_len(lnum: linenr_T, origin: LineOrigin) -> colnr_T {
+pub(crate) fn reg_line_len(rex: Rex, lnum: linenr_T, origin: LineOrigin) -> colnr_T {
     // SAFETY: as `reg_line`.
     unsafe {
         let (first, maxline) = match origin {
-            LineOrigin::Exec => ((*rex.ptr()).reg_firstlnum, (*rex.ptr()).reg_maxline),
+            LineOrigin::Exec => (rex.reg_firstlnum(), rex.reg_maxline()),
             LineOrigin::Submatch => ((*rsm.ptr()).sm_firstlnum, (*rsm.ptr()).sm_maxline),
         };
         match locate(lnum, first, maxline) {
             Located::Before | Located::Past => 0,
-            Located::At(lnum) => ml_get_buf_len((*rex.ptr()).reg_buf, lnum),
+            Located::At(lnum) => ml_get_buf_len(rex.reg_buf(), lnum),
         }
     }
 }
 
-pub(crate) fn reg_getline(lnum: linenr_T) -> *mut c_char {
-    reg_line(lnum, LineOrigin::Exec)
+pub(crate) fn reg_getline(rex: Rex, lnum: linenr_T) -> *mut c_char {
+    reg_line(rex, lnum, LineOrigin::Exec)
 }
 
-pub(crate) fn reg_getline_len(lnum: linenr_T) -> colnr_T {
-    reg_line_len(lnum, LineOrigin::Exec)
+pub(crate) fn reg_getline_len(rex: Rex, lnum: linenr_T) -> colnr_T {
+    reg_line_len(rex, lnum, LineOrigin::Exec)
 }
 
 /// A fresh `\z1`..`\z9` capture set, refcounted because a syntax item
@@ -178,38 +175,35 @@ pub unsafe fn unref_extmatch(em: *mut reg_extmatch_T) {
 
 /// The character class of the character before the cursor, or -1 at the
 /// start of the line. Backs `\<` and `\>`.
-pub(crate) fn reg_prev_class() -> c_int {
+pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
     // SAFETY: `input` and `line` point into the line being matched, and
     // `utf_head_off` walks back no further than `line`.
     unsafe {
-        let line = (*rex.ptr()).line as *mut c_char;
-        let input = (*rex.ptr()).input as *mut c_char;
+        let line = rex.line() as *mut c_char;
+        let input = rex.input() as *mut c_char;
         if input <= line {
             return -1;
         }
         let prev = input.sub(1);
         mb_get_class_tab(
             prev.sub(utf_head_off(line, prev) as usize),
-            &raw mut (*(*rex.ptr()).reg_buf).b_chartab as *mut u64,
+            &raw mut (*rex.reg_buf()).b_chartab as *mut u64,
         )
     }
 }
 
 /// Is the position being matched inside the Visual area? Backs `\%V`.
-pub(crate) fn reg_match_visual() -> bool {
+pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     // SAFETY: reads window and buffer state on the main thread; every
     // pointer is `curwin`/`curbuf` or the match's own window.
     unsafe {
-        let wp = match (*rex.ptr()).reg_win {
+        let wp = match rex.reg_win() {
             w if w.is_null() => curwin.get(),
             w => w,
         };
         // `\%V` is a buffer-position test, so it only applies to a
         // multi-line match in the current buffer.
-        if (*rex.ptr()).reg_buf != curbuf.get()
-            || (*VIsual.ptr()).lnum == 0
-            || !(*rex.ptr()).reg_match.is_null()
-        {
+        if rex.reg_buf() != curbuf.get() || (*VIsual.ptr()).lnum == 0 || !rex.multi() {
             return false;
         }
 
@@ -238,11 +232,11 @@ pub(crate) fn reg_match_visual() -> bool {
             )
         };
 
-        let lnum = (*rex.ptr()).lnum + (*rex.ptr()).reg_firstlnum;
+        let lnum = rex.lnum() + rex.reg_firstlnum();
         if lnum < top.lnum || lnum > bot.lnum {
             return false;
         }
-        let col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T;
+        let col = rex.input().offset_from(rex.line()) as colnr_T;
         if mode == 'v' as c_int {
             // 'selection' decides whether the last character is included.
             let inclusive = (*p_sel.get() as u8 != b'e') as colnr_T;
@@ -264,10 +258,10 @@ pub(crate) fn reg_match_visual() -> bool {
                 end = MAXCOL as c_int;
             }
             // `getvvcol` can have moved the line out from under the match.
-            let line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
-            (*rex.ptr()).line = line;
-            (*rex.ptr()).input = line.offset(col as isize);
-            let lnum = (*rex.ptr()).reg_firstlnum + (*rex.ptr()).lnum;
+            let line = reg_getline(rex, rex.lnum()) as *mut uint8_t;
+            rex.set_line(line);
+            rex.set_input(line.offset(col as isize));
+            let lnum = rex.reg_firstlnum() + rex.lnum();
             let cols = win_linetabsize(wp, lnum, line as *mut c_char, col);
             cols >= start && cols <= end - (*p_sel.get() as u8 == b'e') as colnr_T
         } else {
@@ -278,13 +272,13 @@ pub(crate) fn reg_match_visual() -> bool {
 
 /// Does the running program belong to the backtracking engine, and has its
 /// magic number survived? Only that engine's programs carry one.
-pub(crate) fn prog_magic_wrong() -> c_int {
+pub(crate) fn prog_magic_wrong(rex: Rex) -> c_int {
     // SAFETY: a running match holds a live program.
     unsafe {
-        let prog: *mut regprog_T = if (*rex.ptr()).reg_match.is_null() {
-            (*(*rex.ptr()).reg_mmatch).regprog
+        let prog: *mut regprog_T = if rex.multi() {
+            (*rex.reg_mmatch()).regprog
         } else {
-            (*(*rex.ptr()).reg_match).regprog
+            (*rex.reg_match()).regprog
         };
         if (*prog).engine == nfa_regengine.ptr() {
             return 0;
@@ -301,27 +295,27 @@ pub(crate) fn prog_magic_wrong() -> c_int {
 /// live in this module's own arrays rather than in the caller's match
 /// structure. Lazy: an engine only pays for this if a match reaches a
 /// back-reference.
-fn cleanup(z: bool) {
+fn cleanup(rex: Rex, z: bool) {
     // SAFETY: the caller's match structure and this module's own arrays
     // both hold NSUBEXP of each.
     unsafe {
         let need = if z {
-            (*rex.ptr()).need_clear_zsubexpr
+            rex.need_clear_zsubexpr()
         } else {
-            (*rex.ptr()).need_clear_subexpr
+            rex.need_clear_subexpr()
         };
         if need == 0 {
             return;
         }
         // A buffer match records positions and marks a slot unset with -1;
         // a string match records pointers and marks it unset with NULL.
-        let multi = (*rex.ptr()).reg_match.is_null();
+        let multi = rex.multi();
         let n = NSUBEXP as usize;
         if multi {
             let (starts, ends) = if z {
                 (reg_startzpos.ptr().cast(), reg_endzpos.ptr().cast())
             } else {
-                ((*rex.ptr()).reg_startpos, (*rex.ptr()).reg_endpos)
+                (rex.reg_startpos(), rex.reg_endpos())
             };
             blank(
                 core::slice::from_raw_parts_mut(starts, n),
@@ -335,7 +329,7 @@ fn cleanup(z: bool) {
             let (starts, ends) = if z {
                 (reg_startzp.ptr().cast(), reg_endzp.ptr().cast())
             } else {
-                ((*rex.ptr()).reg_startp, (*rex.ptr()).reg_endp)
+                (rex.reg_startp(), rex.reg_endp())
             };
             blank(
                 core::slice::from_raw_parts_mut(starts, n),
@@ -347,9 +341,9 @@ fn cleanup(z: bool) {
             );
         }
         if z {
-            (*rex.ptr()).need_clear_zsubexpr = 0;
+            rex.set_need_clear_zsubexpr(0);
         } else {
-            (*rex.ptr()).need_clear_subexpr = 0;
+            rex.set_need_clear_subexpr(0);
         }
     }
 }
@@ -358,23 +352,20 @@ fn blank<T: Copy>(slots: &mut [T], unset: T) {
     slots.fill(unset);
 }
 
-pub(crate) fn cleanup_subexpr() {
-    cleanup(false);
+pub(crate) fn cleanup_subexpr(rex: Rex) {
+    cleanup(rex, false);
 }
 
-pub(crate) fn cleanup_zsubexpr() {
-    cleanup(true);
+pub(crate) fn cleanup_zsubexpr(rex: Rex) {
+    cleanup(rex, true);
 }
 
 /// Step the match on to the next line.
-pub(crate) fn reg_nextline() {
-    // SAFETY: reads and advances the match context.
-    unsafe {
-        (*rex.ptr()).lnum += 1;
-        (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
-        (*rex.ptr()).input = (*rex.ptr()).line;
-    }
-    reg_breakcheck();
+pub(crate) fn reg_nextline(rex: Rex) {
+    rex.set_lnum(rex.lnum() + 1);
+    rex.set_line(reg_getline(rex, rex.lnum()).cast());
+    rex.set_input(rex.line());
+    reg_breakcheck(rex);
 }
 
 /// Match the text a back-reference captured, which may span lines. On
@@ -382,6 +373,7 @@ pub(crate) fn reg_nextline() {
 /// what the caller advances by.
 ///
 pub(crate) fn match_with_backref(
+    rex: Rex,
     start_lnum: linenr_T,
     start_col: colnr_T,
     end_lnum: linenr_T,
@@ -401,39 +393,34 @@ pub(crate) fn match_with_backref(
             // it can invalidate the line being matched. Take a private
             // copy first, growing the scratch buffer when it no longer
             // fits.
-            if (*rex.ptr()).line != reg_tofree.get() {
-                let mut len = strlen((*rex.ptr()).line as *mut c_char) as c_int;
+            if rex.line() != reg_tofree.get() {
+                let mut len = strlen(rex.line() as *mut c_char) as c_int;
                 if reg_tofree.get().is_null() || len >= reg_tofreelen.get() as c_int {
                     len += 50;
                     xfree(reg_tofree.get().cast());
                     reg_tofree.set(xmalloc(len as usize) as *mut uint8_t);
                     reg_tofreelen.set(len as u32);
                 }
-                strcpy(
-                    reg_tofree.get() as *mut c_char,
-                    (*rex.ptr()).line as *mut c_char,
-                );
-                (*rex.ptr()).input = reg_tofree
-                    .get()
-                    .offset((*rex.ptr()).input.offset_from((*rex.ptr()).line));
-                (*rex.ptr()).line = reg_tofree.get();
+                strcpy(reg_tofree.get() as *mut c_char, rex.line() as *mut c_char);
+                rex.set_input(reg_tofree.get().offset(rex.input().offset_from(rex.line())));
+                rex.set_line(reg_tofree.get());
             }
 
-            let p = reg_getline(clnum);
+            let p = reg_getline(rex, clnum);
             debug_assert!(!p.is_null(), "p");
             let mut len = if clnum == end_lnum {
                 end_col - ccol
             } else {
-                reg_getline_len(clnum) - ccol
+                reg_getline_len(rex, clnum) - ccol
             };
             let captured = p.offset(ccol as isize);
-            let input = (*rex.ptr()).input as *mut c_char;
+            let input = rex.input() as *mut c_char;
             // `cstrncmp` can shorten `len` when a fold changed the encoded
             // length, and the caller is told how far to advance from it.
-            let differs = if (*rex.ptr()).reg_ic {
+            let differs = if rex.reg_ic() {
                 mb_strnicmp(captured, input, len as usize) != 0
             } else {
-                cstrncmp(captured, input, &mut len) != 0
+                cstrncmp(rex, captured, input, &mut len) != 0
             };
             if differs {
                 return RA_NOMATCH;
@@ -444,12 +431,12 @@ pub(crate) fn match_with_backref(
             if clnum == end_lnum {
                 return RA_MATCH;
             }
-            if (*rex.ptr()).lnum >= (*rex.ptr()).reg_maxline {
+            if rex.lnum() >= rex.reg_maxline() {
                 return RA_NOMATCH;
             }
             // The capture continues on the next line, so the match must
             // too, and `*bytelen` restarts from that line's column 0.
-            reg_nextline();
+            reg_nextline(rex);
             if let Some(n) = bytelen.as_deref_mut() {
                 *n = 0;
             }
@@ -472,29 +459,51 @@ pub(crate) fn re_mult_next(what: &str) -> bool {
     true
 }
 
-/// Point `rex` at a buffer match about to run.
+/// Point the context at a string match about to run. `line_lbr` says the
+/// text holds newlines to be matched rather than ends of line.
+///
+/// `rmp` must be live, with a compiled program, for the match's duration.
+pub(crate) fn init_regexec(rex: Rex, rmp: *mut regmatch_T, line_lbr: bool) {
+    rex.set_reg_match(rmp);
+    rex.set_reg_mmatch(core::ptr::null_mut::<regmmatch_T>());
+    rex.set_reg_maxline(0);
+    rex.set_reg_line_lbr(line_lbr);
+    // A string match has no buffer of its own, but `\k` and friends still
+    // need an 'iskeyword' to read.
+    rex.set_reg_buf(curbuf.get());
+    rex.set_reg_win(core::ptr::null_mut::<win_T>());
+    // SAFETY: the caller's match structure, live with a program.
+    unsafe {
+        rex.set_reg_ic((*rmp).rm_ic);
+        rex.set_reg_nobreak((*(*rmp).regprog).re_flags & RE_NOBREAK as u32 != 0);
+    }
+    rex.set_reg_icombine(false);
+    rex.set_reg_maxcol(0);
+}
+
+/// Point the context at a buffer match about to run.
 ///
 /// `rmp` must be live, with a compiled program, for the match's duration,
 /// and `buf` must be the buffer it runs over.
 pub(crate) fn init_regexec_multi(
+    rex: Rex,
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,
     lnum: linenr_T,
 ) {
+    rex.set_reg_match(core::ptr::null_mut::<regmatch_T>());
+    rex.set_reg_mmatch(rmp);
+    rex.set_reg_buf(buf);
+    rex.set_reg_win(win);
+    rex.set_reg_firstlnum(lnum);
+    rex.set_reg_line_lbr(false);
+    rex.set_reg_icombine(false);
     // SAFETY: the caller's match structure and buffer, live for the match.
     unsafe {
-        let r = &mut *rex.ptr();
-        r.reg_match = core::ptr::null_mut::<regmatch_T>();
-        r.reg_mmatch = rmp;
-        r.reg_buf = buf;
-        r.reg_win = win;
-        r.reg_firstlnum = lnum;
-        r.reg_maxline = (*buf).b_ml.ml_line_count - lnum;
-        r.reg_line_lbr = false;
-        r.reg_ic = (*rmp).rmm_ic != 0;
-        r.reg_icombine = false;
-        r.reg_nobreak = (*(*rmp).regprog).re_flags & RE_NOBREAK as u32 != 0;
-        r.reg_maxcol = (*rmp).rmm_maxcol;
+        rex.set_reg_maxline((*buf).b_ml.ml_line_count - lnum);
+        rex.set_reg_ic((*rmp).rmm_ic != 0);
+        rex.set_reg_nobreak((*(*rmp).regprog).re_flags & RE_NOBREAK as u32 != 0);
+        rex.set_reg_maxcol((*rmp).rmm_maxcol);
     }
 }

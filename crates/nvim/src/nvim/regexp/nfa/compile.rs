@@ -21,7 +21,7 @@ use crate::src::nvim::regexp::{
     NFA_HEX, NFA_LOWER_IC, NFA_MATCH, NFA_MCLOSE, NFA_MOPEN, NFA_MOPEN9, NFA_NALPHA, NFA_NDIGIT,
     NFA_NHEAD, NFA_NHEX, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NOPEN, NFA_NUPPER_IC, NFA_NWORD, NFA_OCTAL,
     NFA_SPLIT, NFA_UPPER_IC, NFA_VISUAL, NFA_WORD, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART,
-    NUL, istate, nfa_state_T, nstate, regcomp_start, rex, wants_nfa,
+    NUL, Rex, istate, nfa_state_T, nstate, regcomp_start, wants_nfa,
 };
 use crate::src::nvim::types::uint8_t;
 
@@ -30,18 +30,15 @@ use crate::src::nvim::types::uint8_t;
 /// # Safety
 ///
 /// `expr` must be the NUL-terminated pattern about to be parsed.
-pub(crate) unsafe fn nfa_regcomp_start(expr: *mut uint8_t, re_flags: c_int) {
+pub(crate) unsafe fn nfa_regcomp_start(rex: Rex, expr: *mut uint8_t, re_flags: c_int) {
     nstate.set(0);
     istate.set(0);
     // SAFETY: the caller's NUL-terminated pattern.
     postfix::start(unsafe { strlen(expr.cast()) });
     wants_nfa.set(false);
-    // SAFETY: `rex` is the match context, live for the whole compile.
-    unsafe {
-        (*rex.ptr()).nfa_has_zend = 0;
-        (*rex.ptr()).nfa_has_backref = 0;
-        regcomp_start(expr, re_flags);
-    }
+    rex.set_nfa_has_zend(0);
+    rex.set_nfa_has_backref(0);
+    regcomp_start(expr, re_flags);
 }
 
 /// How far the walks below follow a `NFA_SPLIT` before giving up.

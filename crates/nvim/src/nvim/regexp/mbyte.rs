@@ -6,7 +6,7 @@
 
 use core::ffi::{c_char, c_int};
 
-use super::rex;
+use super::Rex;
 use crate::src::nvim::mbyte::{
     mb_ptr2char_adv, utf_fold, utf_ptr2char, utf_strnicmp, utfc_ptr2len,
 };
@@ -85,9 +85,9 @@ pub(crate) fn decompose(c: c_int) -> [c_int; 3] {
 /// # Safety
 ///
 /// `s1` and `s2` must point to NUL-terminated strings.
-pub(crate) unsafe fn cstrncmp(s1: *mut c_char, s2: *mut c_char, n: &mut c_int) -> c_int {
+pub(crate) unsafe fn cstrncmp(rex: Rex, s1: *mut c_char, s2: *mut c_char, n: &mut c_int) -> c_int {
     unsafe {
-        let mut result = if !(*rex.ptr()).reg_ic {
+        let mut result = if !rex.reg_ic() {
             strncmp(s1, s2, *n as usize)
         } else {
             // Count the characters `*n` bytes of s1 spans, then measure how
@@ -119,7 +119,7 @@ pub(crate) unsafe fn cstrncmp(s1: *mut c_char, s2: *mut c_char, n: &mut c_int) -
 
         // `\Z`: differences that are only in the composing characters, or
         // that decomposition erases, don't count.
-        if result != 0 && (*rex.ptr()).reg_icombine {
+        if result != 0 && rex.reg_icombine() {
             let mut str1: *const c_char = s1;
             let mut str2: *const c_char = s2;
             let mut c1 = 0;
@@ -127,12 +127,12 @@ pub(crate) unsafe fn cstrncmp(s1: *mut c_char, s2: *mut c_char, n: &mut c_int) -
             while str1.offset_from(s1) < *n as isize {
                 c1 = mb_ptr2char_adv(&raw mut str1);
                 c2 = mb_ptr2char_adv(&raw mut str2);
-                if c1 == c2 || ((*rex.ptr()).reg_ic && utf_fold(c1) == utf_fold(c2)) {
+                if c1 == c2 || (rex.reg_ic() && utf_fold(c1) == utf_fold(c2)) {
                     continue;
                 }
                 c1 = decompose(c1)[0];
                 c2 = decompose(c2)[0];
-                if c1 != c2 && (!(*rex.ptr()).reg_ic || utf_fold(c1) != utf_fold(c2)) {
+                if c1 != c2 && (!rex.reg_ic() || utf_fold(c1) != utf_fold(c2)) {
                     break;
                 }
             }
@@ -152,9 +152,9 @@ pub(crate) unsafe fn cstrncmp(s1: *mut c_char, s2: *mut c_char, n: &mut c_int) -
 ///
 /// `s` must point to a NUL-terminated string.
 #[inline(always)]
-pub(crate) unsafe fn cstrchr(s: *const c_char, c: c_int) -> *mut c_char {
+pub(crate) unsafe fn cstrchr(rex: Rex, s: *const c_char, c: c_int) -> *mut c_char {
     unsafe {
-        if !(*rex.ptr()).reg_ic {
+        if !rex.reg_ic() {
             return vim_strchr(s, c);
         }
         // `cc` is the other case of `c`, `lc` the folded form to compare

@@ -9,14 +9,14 @@
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordp_buf};
+use crate::src::nvim::charset::{vim_isIDc, vim_isfilec, vim_isprintc};
 use crate::src::nvim::mbyte::utf_ptr2char;
 use crate::src::nvim::regexp::{
     NFA_ALPHA, NFA_DIGIT, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER,
     NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC,
     NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME,
     NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD, NUL,
-    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, rex,
+    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex,
 };
 
 /// Is `c` in the Latin-1 class `flag` names? The table only covers the
@@ -28,24 +28,21 @@ fn ri(c: c_int, flag: c_int) -> bool {
 /// The character at the input, which for the keyword and file-name classes
 /// has to be read from the text rather than taken as a code point: they are
 /// buffer-option-driven and look at the bytes.
-fn input() -> *mut c_char {
-    // SAFETY: `rex.input` points into the line being matched.
-    unsafe { (*rex.ptr()).input as *mut c_char }
+fn input(rex: Rex) -> *mut c_char {
+    rex.input_str()
 }
 
-fn is_word_char() -> bool {
-    // SAFETY: `reg_buf` is the buffer whose 'iskeyword' applies.
-    unsafe { vim_iswordp_buf(input(), (*rex.ptr()).reg_buf) }
+fn is_word_char(rex: Rex) -> bool {
+    rex.iswordp()
 }
 
-fn is_printable() -> bool {
-    // SAFETY: as `input`.
-    unsafe { vim_isprintc(utf_ptr2char(input())) }
+fn is_printable(rex: Rex) -> bool {
+    // SAFETY: the cursor is inside the line being matched.
+    unsafe { vim_isprintc(utf_ptr2char(input(rex))) }
 }
 
-fn ignoring_case() -> bool {
-    // SAFETY: reads the match context.
-    unsafe { (*rex.ptr()).reg_ic }
+fn ignoring_case(rex: Rex) -> bool {
+    rex.reg_ic()
 }
 
 /// `vim_isIDc` and `vim_isfilec` are pure tests on a code point that read
@@ -64,16 +61,16 @@ fn is_file_char(c: c_int) -> bool {
 ///
 /// The negated forms all also require a character to be there: at the end of
 /// a line there is nothing for `\I` to match.
-pub(crate) fn class_matches(c: c_int, curc: c_int) -> bool {
+pub(crate) fn class_matches(rex: Rex, c: c_int, curc: c_int) -> bool {
     match c {
         NFA_IDENT => is_ident_char(curc),
         NFA_SIDENT => !ascii_isdigit(curc) && is_ident_char(curc),
-        NFA_KWORD => is_word_char(),
-        NFA_SKWORD => !ascii_isdigit(curc) && is_word_char(),
+        NFA_KWORD => is_word_char(rex),
+        NFA_SKWORD => !ascii_isdigit(curc) && is_word_char(rex),
         NFA_FNAME => is_file_char(curc),
         NFA_SFNAME => !ascii_isdigit(curc) && is_file_char(curc),
-        NFA_PRINT => is_printable(),
-        NFA_SPRINT => !ascii_isdigit(curc) && is_printable(),
+        NFA_PRINT => is_printable(rex),
+        NFA_SPRINT => !ascii_isdigit(curc) && is_printable(rex),
         NFA_WHITE => ascii_iswhite(curc),
         NFA_NWHITE => curc != NUL && !ascii_iswhite(curc),
         NFA_DIGIT => ri(curc, RI_DIGIT),
@@ -95,18 +92,18 @@ pub(crate) fn class_matches(c: c_int, curc: c_int) -> bool {
         // The `_IC` forms are what a `[a-z]` collection recognised as a
         // class compiles to, and they honour 'ignorecase' where the bare
         // `\l`/`\u` do not.
-        NFA_LOWER_IC => lower_ic(curc),
-        NFA_NLOWER_IC => curc != NUL && !lower_ic(curc),
-        NFA_UPPER_IC => upper_ic(curc),
-        NFA_NUPPER_IC => curc != NUL && !upper_ic(curc),
+        NFA_LOWER_IC => lower_ic(rex, curc),
+        NFA_NLOWER_IC => curc != NUL && !lower_ic(rex, curc),
+        NFA_UPPER_IC => upper_ic(rex, curc),
+        NFA_NUPPER_IC => curc != NUL && !upper_ic(rex, curc),
         _ => false,
     }
 }
 
-fn lower_ic(curc: c_int) -> bool {
-    ri(curc, RI_LOWER) || (ignoring_case() && ri(curc, RI_UPPER))
+fn lower_ic(rex: Rex, curc: c_int) -> bool {
+    ri(curc, RI_LOWER) || (ignoring_case(rex) && ri(curc, RI_UPPER))
 }
 
-fn upper_ic(curc: c_int) -> bool {
-    ri(curc, RI_UPPER) || (ignoring_case() && ri(curc, RI_LOWER))
+fn upper_ic(rex: Rex, curc: c_int) -> bool {
+    ri(curc, RI_UPPER) || (ignoring_case(rex) && ri(curc, RI_LOWER))
 }

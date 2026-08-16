@@ -11,7 +11,7 @@
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::mbyte::{utf_char2len, utf_iscomposing_legacy, utf_ptr2char};
-use crate::src::nvim::regexp::{NFA_END_COMPOSING, nfa_state_T, rex};
+use crate::src::nvim::regexp::{NFA_END_COMPOSING, Rex, nfa_state_T};
 use crate::src::nvim::types::MAX_MCO;
 
 /// Does the grapheme at the input match the group whose first member state
@@ -22,6 +22,7 @@ use crate::src::nvim::types::MAX_MCO;
 /// `sta` must be a member state of a live `NFA_COMPOSING` group, and the
 /// match context must be live.
 pub(crate) unsafe fn matches_composing(
+    rex: Rex,
     mut sta: *mut nfa_state_T,
     curc: c_int,
     clen: c_int,
@@ -35,7 +36,7 @@ pub(crate) unsafe fn matches_composing(
             len += utf_char2len(mc);
         }
 
-        if (*rex.ptr()).reg_icombine && len == 0 {
+        if rex.reg_icombine() && len == 0 {
             // 'regexpengine' combining-insensitive: only the base character
             // has to match, and the marks are skipped over.
             let matched = (*sta).c == curc;
@@ -55,7 +56,7 @@ pub(crate) unsafe fn matches_composing(
         let mut marks = [0; MAX_MCO as usize];
         let mut count = 0;
         while len < clen {
-            mc = utf_ptr2char(((*rex.ptr()).input as *mut c_char).offset(len as isize));
+            mc = utf_ptr2char((rex.input() as *mut c_char).offset(len as isize));
             marks[count] = mc;
             count += 1;
             len += utf_char2len(mc);

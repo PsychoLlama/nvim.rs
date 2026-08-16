@@ -29,8 +29,8 @@ use crate::src::nvim::regexp::{
     EXACTLY, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
     MAGIC_ON, MATCH, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, NOT_MULTI, NOTHING, NSUBEXP,
     NUL, PLUS, RE_BOF, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL,
-    RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, STAR, SUBPAT, WORST, ZCLOSE,
-    ZOPEN, bt_regengine, bt_regprog_T, curchr, getchr, getdecchrs, gethexchrs, getoctchrs,
+    RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, Rex, SIMPLE, SPSTART, STAR, SUBPAT, WORST,
+    ZCLOSE, ZOPEN, bt_regengine, bt_regprog_T, curchr, getchr, getdecchrs, gethexchrs, getoctchrs,
     had_endbrace, had_eol, magic, magic_prefix, num_complex_braces, peekchr, re_has_z,
     re_multi_type, read_limits, reg_magic, reg_toolong, regcode, regflags, regnpar, regnzpar,
     regparse, regsize, skipchr, skipchr_keepstart, unmagic,
@@ -70,9 +70,9 @@ macro_rules! fail {
 /// backtracks into itself — gets a single `STAR`/`PLUS`/`BRACE_SIMPLE` node
 /// the matcher can run as a counted loop. Anything else has to be wired up
 /// as an explicit branch-and-back loop in the program.
-pub(crate) fn regpiece(flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn regpiece(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     let mut flags = 0;
-    let ret = regatom(&mut flags);
+    let ret = regatom(rex, &mut flags);
     if ret.is_null() {
         return core::ptr::null_mut();
     }
@@ -207,7 +207,7 @@ pub(crate) fn regpiece(flagp: &mut c_int) -> *mut uint8_t {
 /// A run of pieces, plus the `\c`/`\C`/`\Z` and `\v`/`\m`/`\M`/`\V` switches,
 /// which are not atoms at all: they change how the rest of the pattern is
 /// read and emit nothing.
-pub(crate) fn regconcat(flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn regconcat(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     let mut first: *mut uint8_t = core::ptr::null_mut();
     let mut chain: *mut uint8_t = core::ptr::null_mut();
     *flagp = WORST;
@@ -240,7 +240,7 @@ pub(crate) fn regconcat(flagp: &mut c_int) -> *mut uint8_t {
             M_V_UPPER => set_magic(MAGIC_NONE),
             _ => {
                 let mut flags = 0;
-                let latest = regpiece(&mut flags);
+                let latest = regpiece(rex, &mut flags);
                 if latest.is_null() || reg_toolong.get() != 0 {
                     return core::ptr::null_mut();
                 }
@@ -271,14 +271,14 @@ fn finish_concat(first: *mut uint8_t) -> *mut uint8_t {
 
 /// The concatenations of one alternative, joined by `\&`: all of them have to
 /// match at this position, and the last one's match is the alternative's.
-pub(crate) fn regbranch(flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn regbranch(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     let mut chain: *mut uint8_t = core::ptr::null_mut();
     *flagp = WORST | HASNL;
     let ret = regnode(BRANCH);
 
     loop {
         let mut flags = 0;
-        let latest = regconcat(&mut flags);
+        let latest = regconcat(rex, &mut flags);
         if latest.is_null() {
             return core::ptr::null_mut();
         }
@@ -306,7 +306,7 @@ pub(crate) fn regbranch(flagp: &mut c_int) -> *mut uint8_t {
 /// `paren` says which bracket we are inside, and therefore which capture
 /// node pair wraps the branches: `\(`..`\)`, `\z(`..`\)`, `\%(`..`\)` or
 /// nothing at all for the outermost call.
-pub(crate) fn reg(paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn reg(rex: Rex, paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
     let mut parno = 0;
     *flagp = HASWIDTH;
 
@@ -333,7 +333,7 @@ pub(crate) fn reg(paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
     };
 
     let mut flags = 0;
-    let mut br = regbranch(&mut flags);
+    let mut br = regbranch(rex, &mut flags);
     if br.is_null() {
         return core::ptr::null_mut();
     }
@@ -352,7 +352,7 @@ pub(crate) fn reg(paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
 
     while peekchr() == M_BAR {
         skipchr();
-        br = regbranch(&mut flags);
+        br = regbranch(rex, &mut flags);
         if br.is_null() || reg_toolong.get() != 0 {
             return core::ptr::null_mut();
         }
@@ -432,11 +432,17 @@ pub(crate) unsafe extern "C" fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) 
             return core::ptr::null_mut();
         }
 
+        // The compiler consults the match context for what `\k` and friends
+        // mean in the buffer being compiled against.
+        // SAFETY: compiling, so no match is reading the context; `vim_regcomp`
+        // pointed `reg_buf` at a buffer before calling in.
+        let rex = Rex::acquire();
+
         let mut flags = 0;
         regcomp_start(expr, re_flags);
         regcode.set(JUST_CALC_SIZE);
         regc(REGMAGIC);
-        if reg(REG_NOPAREN, &mut flags).is_null() {
+        if reg(rex, REG_NOPAREN, &mut flags).is_null() {
             return core::ptr::null_mut();
         }
 
@@ -449,7 +455,7 @@ pub(crate) unsafe extern "C" fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) 
         regcomp_start(expr, re_flags);
         regcode.set((&raw mut (*r).program).cast());
         regc(REGMAGIC);
-        if reg(REG_NOPAREN, &mut flags).is_null() || reg_toolong.get() != 0 {
+        if reg(rex, REG_NOPAREN, &mut flags).is_null() || reg_toolong.get() != 0 {
             xfree(r.cast());
             if reg_toolong.get() != 0 {
                 semsg!("E339: Pattern too long");

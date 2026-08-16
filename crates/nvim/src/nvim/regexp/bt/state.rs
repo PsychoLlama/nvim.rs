@@ -35,7 +35,7 @@ use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::regexp::{
     E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, FrameSave, InputPos, NSUBEXP, REGSTACK_INITIAL,
-    SavedPos, reg_getline, regbehind_T, regitem_T, regsave_T, regstar_T, regstate_T, rex,
+    Rex, SavedPos, reg_getline, regbehind_T, regitem_T, regsave_T, regstar_T, regstate_T,
     save_se_T,
 };
 use crate::src::nvim::types::{colnr_T, garray_T, lpos_T, uint8_t};
@@ -245,14 +245,14 @@ impl RegStack {
 
 /// Record the current input position, and how much of `gap` — always
 /// `backpos` — belongs to it.
-pub(crate) fn reg_save(save: &mut regsave_T, gap: *mut garray_T) {
+pub(crate) fn reg_save(rex: Rex, save: &mut regsave_T, gap: *mut garray_T) {
     // SAFETY: `gap` is the backpos garray and `rex` a live match.
     unsafe {
-        if (*rex.ptr()).reg_match.is_null() {
-            save.rs_u.pos.col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T;
-            save.rs_u.pos.lnum = (*rex.ptr()).lnum;
+        if rex.multi() {
+            save.rs_u.pos.col = rex.input().offset_from(rex.line()) as colnr_T;
+            save.rs_u.pos.lnum = rex.lnum();
         } else {
-            save.rs_u.ptr = (*rex.ptr()).input;
+            save.rs_u.ptr = rex.input();
         }
         save.rs_len = (*gap).ga_len;
     }
@@ -260,17 +260,17 @@ pub(crate) fn reg_save(save: &mut regsave_T, gap: *mut garray_T) {
 
 /// Put the input position back to what [`reg_save`] recorded, refetching the
 /// line if the match has moved off it since.
-pub(crate) fn reg_restore(save: &regsave_T, gap: *mut garray_T) {
+pub(crate) fn reg_restore(rex: Rex, save: &regsave_T, gap: *mut garray_T) {
     // SAFETY: as `reg_save`.
     unsafe {
-        if (*rex.ptr()).reg_match.is_null() {
-            if (*rex.ptr()).lnum != save.rs_u.pos.lnum {
-                (*rex.ptr()).lnum = save.rs_u.pos.lnum;
-                (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum).cast();
+        if rex.multi() {
+            if rex.lnum() != save.rs_u.pos.lnum {
+                rex.set_lnum(save.rs_u.pos.lnum);
+                rex.set_line(reg_getline(rex, rex.lnum()).cast());
             }
-            (*rex.ptr()).input = (*rex.ptr()).line.add(save.rs_u.pos.col as usize);
+            rex.set_input(rex.line().add(save.rs_u.pos.col as usize));
         } else {
-            (*rex.ptr()).input = save.rs_u.ptr;
+            rex.set_input(save.rs_u.ptr);
         }
         (*gap).ga_len = save.rs_len;
     }
@@ -278,35 +278,35 @@ pub(crate) fn reg_restore(save: &regsave_T, gap: *mut garray_T) {
 
 /// Is the input exactly where `save` recorded? The `backpos` length is not
 /// part of the comparison.
-pub(crate) fn reg_save_equal(save: &regsave_T) -> bool {
+pub(crate) fn reg_save_equal(rex: Rex, save: &regsave_T) -> bool {
     // SAFETY: as `reg_save`.
     unsafe {
-        if (*rex.ptr()).reg_match.is_null() {
-            (*rex.ptr()).lnum == save.rs_u.pos.lnum
-                && (*rex.ptr()).input == (*rex.ptr()).line.add(save.rs_u.pos.col as usize)
+        if rex.multi() {
+            rex.lnum() == save.rs_u.pos.lnum
+                && rex.input() == rex.line().add(save.rs_u.pos.col as usize)
         } else {
-            (*rex.ptr()).input == save.rs_u.ptr
+            rex.input() == save.rs_u.ptr
         }
     }
 }
 
 /// Move the current position into the capture slot `posp`, keeping what was
 /// there in `savep`. The multi-line half of the pair.
-pub(crate) fn save_se_multi(savep: &mut save_se_T, posp: *mut lpos_T) {
+pub(crate) fn save_se_multi(rex: Rex, savep: &mut save_se_T, posp: *mut lpos_T) {
     // SAFETY: `posp` is a capture slot of the running match.
     unsafe {
         savep.se_u.pos = *posp;
-        (*posp).lnum = (*rex.ptr()).lnum;
-        (*posp).col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T;
+        (*posp).lnum = rex.lnum();
+        (*posp).col = rex.input().offset_from(rex.line()) as colnr_T;
     }
 }
 
 /// [`save_se_multi`] for a string match, where a capture is a pointer.
-pub(crate) fn save_se_one(savep: &mut save_se_T, pp: *mut *mut uint8_t) {
+pub(crate) fn save_se_one(rex: Rex, savep: &mut save_se_T, pp: *mut *mut uint8_t) {
     // SAFETY: as `save_se_multi`.
     unsafe {
         savep.se_u.ptr = *pp;
-        *pp = (*rex.ptr()).input;
+        *pp = rex.input();
     }
 }
 
@@ -315,41 +315,41 @@ pub(crate) fn save_se_one(savep: &mut save_se_T, pp: *mut *mut uint8_t) {
 ///
 /// `need_clear_subexpr` means the captures have not been touched yet this
 /// match, and then there is nothing to copy — the flag alone restores them.
-pub(crate) fn save_subexpr(bp: &mut regbehind_T) {
+pub(crate) fn save_subexpr(rex: Rex, bp: &mut regbehind_T) {
     // SAFETY: the capture arrays the match context holds have `NSUBEXP`
     // slots.
     unsafe {
-        bp.save_need_clear_subexpr = (*rex.ptr()).need_clear_subexpr;
-        if (*rex.ptr()).need_clear_subexpr != 0 {
+        bp.save_need_clear_subexpr = rex.need_clear_subexpr();
+        if rex.need_clear_subexpr() != 0 {
             return;
         }
         for i in 0..NSUBEXP as usize {
-            if (*rex.ptr()).reg_match.is_null() {
-                bp.save_start[i].se_u.pos = *(*rex.ptr()).reg_startpos.add(i);
-                bp.save_end[i].se_u.pos = *(*rex.ptr()).reg_endpos.add(i);
+            if rex.multi() {
+                bp.save_start[i].se_u.pos = *rex.reg_startpos().add(i);
+                bp.save_end[i].se_u.pos = *rex.reg_endpos().add(i);
             } else {
-                bp.save_start[i].se_u.ptr = *(*rex.ptr()).reg_startp.add(i);
-                bp.save_end[i].se_u.ptr = *(*rex.ptr()).reg_endp.add(i);
+                bp.save_start[i].se_u.ptr = *rex.reg_startp().add(i);
+                bp.save_end[i].se_u.ptr = *rex.reg_endp().add(i);
             }
         }
     }
 }
 
 /// Undo [`save_subexpr`].
-pub(crate) fn restore_subexpr(bp: &regbehind_T) {
+pub(crate) fn restore_subexpr(rex: Rex, bp: &regbehind_T) {
     // SAFETY: as `save_subexpr`.
     unsafe {
-        (*rex.ptr()).need_clear_subexpr = bp.save_need_clear_subexpr;
-        if (*rex.ptr()).need_clear_subexpr != 0 {
+        rex.set_need_clear_subexpr(bp.save_need_clear_subexpr);
+        if rex.need_clear_subexpr() != 0 {
             return;
         }
         for i in 0..NSUBEXP as usize {
-            if (*rex.ptr()).reg_match.is_null() {
-                *(*rex.ptr()).reg_startpos.add(i) = bp.save_start[i].se_u.pos;
-                *(*rex.ptr()).reg_endpos.add(i) = bp.save_end[i].se_u.pos;
+            if rex.multi() {
+                *rex.reg_startpos().add(i) = bp.save_start[i].se_u.pos;
+                *rex.reg_endpos().add(i) = bp.save_end[i].se_u.pos;
             } else {
-                *(*rex.ptr()).reg_startp.add(i) = bp.save_start[i].se_u.ptr;
-                *(*rex.ptr()).reg_endp.add(i) = bp.save_end[i].se_u.ptr;
+                *rex.reg_startp().add(i) = bp.save_start[i].se_u.ptr;
+                *rex.reg_endp().add(i) = bp.save_end[i].se_u.ptr;
             }
         }
     }

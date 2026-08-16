@@ -17,14 +17,14 @@ use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::regexp::{
     BRANCH, CURSOR, EXACTLY, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MCLOSE, MOPEN,
     MULTIBYTECODE, NOTHING, NUL, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL,
-    RE_VISUAL, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, SIMPLE, SPSTART, ZREF, at_start, getchr,
-    getdecchrs, gethexchrs, getoctchrs, magic_prefix, one_exactly, pat_byte, re_has_z,
+    RE_VISUAL, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, SIMPLE, SPSTART, ZREF, at_start,
+    getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix, one_exactly, pat_byte, re_has_z,
     re_mult_next, reg_toolong, ungetchr, unmagic,
 };
 use crate::src::nvim::types::{colnr_T, int64_t, uint8_t, uint32_t};
 
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
-pub(crate) fn z_atom(flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn z_atom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     match unmagic(getchr()) as u8 {
         b'(' => {
             // Only a syntax pattern may *define* an external submatch.
@@ -37,7 +37,7 @@ pub(crate) fn z_atom(flagp: &mut c_int) -> *mut uint8_t {
                 return core::ptr::null_mut();
             }
             let mut flags = 0;
-            let ret = reg(REG_ZPAREN, &mut flags);
+            let ret = reg(rex, REG_ZPAREN, &mut flags);
             if ret.is_null() {
                 return ret;
             }
@@ -87,7 +87,7 @@ pub(crate) fn z_atom(flagp: &mut c_int) -> *mut uint8_t {
 /// `save_prev_at_start` is `prev_at_start` from before this atom was read:
 /// `\%23l` and friends consume no input, so a `^` after one is still at the
 /// start of the pattern.
-pub(crate) fn percent_atom(flagp: &mut c_int, save_prev_at_start: c_int) -> *mut uint8_t {
+pub(crate) fn percent_atom(rex: Rex, flagp: &mut c_int, save_prev_at_start: c_int) -> *mut uint8_t {
     let c = unmagic(getchr());
     match c as u8 {
         b'(' => {
@@ -95,7 +95,7 @@ pub(crate) fn percent_atom(flagp: &mut c_int, save_prev_at_start: c_int) -> *mut
                 return core::ptr::null_mut();
             }
             let mut flags = 0;
-            let ret = reg(REG_NPAREN, &mut flags);
+            let ret = reg(rex, REG_NPAREN, &mut flags);
             if !ret.is_null() {
                 *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
             }
@@ -116,7 +116,7 @@ pub(crate) fn percent_atom(flagp: &mut c_int, save_prev_at_start: c_int) -> *mut
         }
         b'V' => regnode(RE_VISUAL),
         b'C' => regnode(RE_COMPOSING),
-        b'[' => optional_sequence(flagp),
+        b'[' => optional_sequence(rex, flagp),
         b'd' | b'o' | b'x' | b'u' | b'U' => character_escape(flagp, c),
         _ => position_atom(c, save_prev_at_start),
     }
@@ -128,7 +128,7 @@ pub(crate) fn percent_atom(flagp: &mut c_int, save_prev_at_start: c_int) -> *mut
 /// Built as a chain of branches: each member's branch falls through to the
 /// next, and every branch's tail lands on the same trailing `NOTHING`, so
 /// stopping early is always an option.
-fn optional_sequence(flagp: &mut c_int) -> *mut uint8_t {
+fn optional_sequence(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     if denied_in_optional_sequence() {
         return core::ptr::null_mut();
     }
@@ -159,7 +159,7 @@ fn optional_sequence(flagp: &mut c_int) -> *mut uint8_t {
         // Each member is exactly one atom; `one_exactly` is what stops a
         // literal run from swallowing the rest of the sequence.
         one_exactly.set(1);
-        lastnode = regatom(flagp);
+        lastnode = regatom(rex, flagp);
         one_exactly.set(0);
         if lastnode.is_null() {
             return core::ptr::null_mut();

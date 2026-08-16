@@ -15,7 +15,7 @@ use core::ffi::{c_char, c_int};
 
 use super::{
     AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, REX_ALL,
-    bt_regengine, nfa_regengine, nfa_regprog_T, regexp_engine, rex, rex_in_use,
+    Rex, bt_regengine, nfa_regengine, nfa_regprog_T, regexp_engine, rex_in_use,
 };
 use crate::src::nvim::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
 use crate::src::nvim::memory::{xfree, xstrdup};
@@ -31,12 +31,12 @@ use crate::src::nvim::types::{
 /// nesting is real: `:s/…/\=…/` can evaluate an expression that searches.
 pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
     let outer = rex_in_use.get();
-    let saved = outer.then(|| rex.get());
+    let saved = outer.then(|| super::rex.get());
     rex_in_use.set(true);
     let result = run();
     rex_in_use.set(outer);
     if let Some(saved) = saved {
-        rex.set(saved);
+        super::rex.set(saved);
     }
     result
 }
@@ -69,8 +69,10 @@ pub unsafe extern "C" fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -
             }
         }
         // The pattern can name a buffer-local thing (`\k`, say) while it is
-        // being compiled, so point `rex` at a buffer.
-        rex.with_mut(|r| r.reg_buf = curbuf.get());
+        // being compiled, so point the context at a buffer.
+        // SAFETY: nothing is matching, so nothing else holds the context;
+        // only `reg_buf` is touched, which needs no line set up.
+        Rex::acquire().set_reg_buf(curbuf.get());
 
         let called_emsg_before = called_emsg.get();
         let mut prog = if regexp_engine.get() != BACKTRACKING_ENGINE as c_int {
@@ -182,12 +184,12 @@ unsafe extern "C" fn vim_regexec_string(
         let result = with_rex(|| {
             (*(*rmp).regprog).re_in_use = true;
             // A string match has no position slots, only pointer ones.
-            rex.with_mut(|r| {
-                r.reg_startp = core::ptr::null_mut();
-                r.reg_endp = core::ptr::null_mut();
-                r.reg_startpos = core::ptr::null_mut();
-                r.reg_endpos = core::ptr::null_mut();
-            });
+            // SAFETY: `with_rex` reserved the context for this match.
+            let rex = Rex::acquire();
+            rex.set_reg_startp(core::ptr::null_mut());
+            rex.set_reg_endp(core::ptr::null_mut());
+            rex.set_reg_startpos(core::ptr::null_mut());
+            rex.set_reg_endpos(core::ptr::null_mut());
             let exec = |rmp: *mut regmatch_T| {
                 (*(*(*rmp).regprog).engine)
                     .regexec_nl

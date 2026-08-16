@@ -17,13 +17,13 @@ use crate::src::nvim::regexp::{
     FAIL, INT32_MAX, NFA_ANY_COMPOSING, NFA_BOF, NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_CURSOR,
     NFA_EOF, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NOPEN,
     NFA_OPT_CHARS, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZEND, NFA_ZREF1, NFA_ZSTART,
-    NUL, OK, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, at_start, getchr, getdecchrs, gethexchrs,
-    getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, rex, unmagic,
+    NUL, OK, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs,
+    gethexchrs, getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,
 };
 use crate::src::nvim::types::{MB_MAXBYTES, colnr_T};
 
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
-pub(crate) fn z_atom() -> c_int {
+pub(crate) fn z_atom(rex: Rex) -> c_int {
     let c = unmagic(getchr());
     // `u8::try_from` rather than `as u8`: a multibyte character after `\z`
     // must reach the default arm rather than alias one of these bytes.
@@ -38,8 +38,7 @@ pub(crate) fn z_atom() -> c_int {
             postfix::emit(NFA_ZEND);
             // The match end moves, so the matcher has to keep group 0's
             // end position rather than take it from where it stopped.
-            // SAFETY: `rex` is the match context, live for the compile.
-            unsafe { (*rex.ptr()).nfa_has_zend = 1 };
+            rex.set_nfa_has_zend(1);
             if !re_mult_next("\\ze") {
                 return FAIL;
             }
@@ -62,7 +61,7 @@ pub(crate) fn z_atom() -> c_int {
                 rc_did_emsg.set(true);
                 return FAIL;
             }
-            if nfa_reg(REG_ZPAREN) == FAIL {
+            if nfa_reg(rex, REG_ZPAREN) == FAIL {
                 return FAIL;
             }
             re_has_z.set(REX_SET);
@@ -82,12 +81,12 @@ pub(crate) fn z_atom() -> c_int {
 /// `save_prev_at_start` is the "still at the start of the pattern" flag from
 /// before this atom was read; `\%23l` restores it, because a position
 /// assertion consumes nothing and so does not move the start.
-pub(crate) fn percent_atom(save_prev_at_start: c_int) -> c_int {
+pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> c_int {
     let c = unmagic(getchr());
     // `u8::try_from` rather than `as u8`: see `z_atom`.
     match u8::try_from(c) {
         Ok(b'(') => {
-            if nfa_reg(REG_NPAREN) == FAIL {
+            if nfa_reg(rex, REG_NPAREN) == FAIL {
                 return FAIL;
             }
             postfix::emit(NFA_NOPEN);
@@ -108,7 +107,7 @@ pub(crate) fn percent_atom(save_prev_at_start: c_int) -> c_int {
         }
         Ok(b'V') => postfix::emit(NFA_VISUAL),
         Ok(b'C') => postfix::emit(NFA_ANY_COMPOSING),
-        Ok(b'[') => return optional_sequence(),
+        Ok(b'[') => return optional_sequence(rex),
         _ => return position_atom(c, save_prev_at_start),
     }
     OK
@@ -140,7 +139,7 @@ fn character_escape(escape: u8) -> c_int {
 ///
 /// Each member is one atom, and `NFA_OPT_CHARS` carries how many of them
 /// there were.
-fn optional_sequence() -> c_int {
+fn optional_sequence(rex: Rex) -> c_int {
     let mut n = 0;
     loop {
         let c = peekchr();
@@ -153,7 +152,7 @@ fn optional_sequence() -> c_int {
             rc_did_emsg.set(true);
             return FAIL;
         }
-        if nfa_regatom() == FAIL {
+        if nfa_regatom(rex) == FAIL {
             return FAIL;
         }
         n += 1;

@@ -21,7 +21,7 @@ use crate::semsg;
 use crate::src::nvim::main::rc_did_emsg;
 use crate::src::nvim::regexp::{
     FAIL, NFA_ADD_NL, NFA_BOL, NFA_BOW, NFA_EOL, NFA_EOW, NFA_NEWL, NL, NUL, OK, REG_PAREN,
-    RF_HASNL, getchr, had_eol, magic, prev_at_start, reg_string, regflags, unmagic,
+    RF_HASNL, Rex, getchr, had_eol, magic, prev_at_start, reg_string, regflags, unmagic,
 };
 
 const M_AMP: c_int = magic(b'&');
@@ -48,7 +48,7 @@ const M_1: c_int = magic(b'1');
 const M_9: c_int = magic(b'9');
 
 /// Parse one atom and append it to the postfix program.
-pub(crate) fn nfa_regatom() -> c_int {
+pub(crate) fn nfa_regatom(rex: Rex) -> c_int {
     // `\%23l` restores the "still at the start of the pattern" flag, because
     // a position assertion consumes no input; [`percent_atom`] needs the
     // value from before this atom was read.
@@ -113,7 +113,7 @@ pub(crate) fn nfa_regatom() -> c_int {
             OK
         }
 
-        M_PAREN_OPEN => nfa_reg(REG_PAREN),
+        M_PAREN_OPEN => nfa_reg(rex, REG_PAREN),
 
         // The first three end an alternative, so `nfa_regconcat` should
         // already have stopped; reaching one here means the parser lost
@@ -125,9 +125,9 @@ pub(crate) fn nfa_regatom() -> c_int {
         }
 
         M_TILDE => previous_substitute(),
-        M_1..=M_9 => back_reference(c),
-        M_Z => z_atom(),
-        M_PERCENT => percent_atom(save_prev_at_start),
+        M_1..=M_9 => back_reference(rex, c),
+        M_Z => z_atom(rex),
+        M_PERCENT => percent_atom(rex, save_prev_at_start),
         M_BRACKET => bracketed(0, atom_start, c),
 
         // `\d`, `\w`, `\s`, … in their magic form.

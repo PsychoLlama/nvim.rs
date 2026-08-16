@@ -23,9 +23,9 @@ use crate::src::nvim::main::got_int;
 use crate::src::nvim::mbyte::{utf_fold, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::regexp::{
     AUTOMATIC_ENGINE, FAIL, NFA_MAX_STATES, NFA_MOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH,
-    NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_TOO_EXPENSIVE, NUL, nfa_endp, nfa_match, nfa_pim_T,
+    NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_TOO_EXPENSIVE, NUL, Rex, nfa_endp, nfa_match, nfa_pim_T,
     nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, reg_breakcheck, reg_nextline,
-    regsubs_T, rex,
+    regsubs_T,
 };
 use crate::src::nvim::regexp::{recursive_regmatch, skip_to_start};
 use crate::src::nvim::types::colnr_T;
@@ -40,12 +40,13 @@ const TIME_CHECK_INTERVAL: c_int = 20;
 /// scratch set the threads carry. Returns 1 on a match, 0 on none, or
 /// `NFA_TOO_EXPENSIVE` when the pattern outgrew the automatic engine.
 pub(crate) fn nfa_regmatch(
+    rex: Rex,
     prog: *mut nfa_regprog_T,
     start: *mut nfa_state_T,
     submatch: *mut regsubs_T,
     m: *mut regsubs_T,
 ) -> c_int {
-    reg_breakcheck();
+    reg_breakcheck(rex);
     if got_int.get() || nfa_did_time_out() {
         return 0;
     }
@@ -55,7 +56,10 @@ pub(crate) fn nfa_regmatch(
     // lists below are owned by this call.
     unsafe {
         let capacity = ((*prog).nstate + 1) as usize;
-        let mut list = [ThreadList::new(capacity), ThreadList::new(capacity)];
+        let mut list = [
+            ThreadList::new(rex, capacity),
+            ThreadList::new(rex, capacity),
+        ];
 
         let mut listids: Vec<c_int> = Vec::new();
         // Scratch for the one call that may not hand `addstate` a capture set
@@ -73,9 +77,9 @@ pub(crate) fn nfa_regmatch(
         // machine's own entry the match's start is recorded here rather
         // than by walking into it.
         let toplevel = (*start).c == NFA_MOPEN;
-        list[0].id = (*rex.ptr()).nfa_listid + 1;
+        list[0].id = rex.nfa_listid() + 1;
         let seeded = if toplevel {
-            record_match_start(m, 0);
+            record_match_start(rex, m, 0);
             (*m).norm.in_use = 1;
             addstate(&mut list[0], (*start).out, &mut *m, None, 0)
         } else {
@@ -85,7 +89,7 @@ pub(crate) fn nfa_regmatch(
         if !seeded {
             nfa_match.set(NFA_TOO_EXPENSIVE);
         } else {
-            scan(&mut list, prog, start, toplevel, &mut run);
+            scan(rex, &mut list, prog, start, toplevel, &mut run);
         }
         nfa_match.get()
     }
@@ -96,16 +100,16 @@ pub(crate) fn nfa_regmatch(
 /// # Safety
 ///
 /// `m` must be a live capture set and the match context live.
-unsafe fn record_match_start(m: *mut regsubs_T, off: c_int) {
+unsafe fn record_match_start(rex: Rex, m: *mut regsubs_T, off: c_int) {
     unsafe {
-        if (*rex.ptr()).reg_match.is_null() {
-            let col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T + off;
-            (*m).norm.list.multi[0].start_lnum = (*rex.ptr()).lnum;
+        if rex.multi() {
+            let col = rex.input().offset_from(rex.line()) as colnr_T + off;
+            (*m).norm.list.multi[0].start_lnum = rex.lnum();
             (*m).norm.list.multi[0].start_col = col;
             // The column a `:substitute` resumes scanning from.
             (*m).norm.orig_start_col = col;
         } else {
-            (*m).norm.list.line[0].start = (*rex.ptr()).input.offset(off as isize);
+            (*m).norm.list.line[0].start = rex.input().offset(off as isize);
         }
     }
 }
@@ -116,6 +120,7 @@ unsafe fn record_match_start(m: *mut regsubs_T, off: c_int) {
 ///
 /// Every pointer must belong to the running match.
 unsafe fn scan(
+    rex: Rex,
     list: &mut [ThreadList; 2],
     prog: *mut nfa_regprog_T,
     start: *mut nfa_state_T,
@@ -128,8 +133,8 @@ unsafe fn scan(
         let mut go_to_nextline = false;
 
         loop {
-            let curc = utf_ptr2char((*rex.ptr()).input as *mut c_char);
-            let mut clen = utfc_ptr2len((*rex.ptr()).input as *mut c_char);
+            let curc = utf_ptr2char(rex.input() as *mut c_char);
+            let mut clen = utfc_ptr2len(rex.input() as *mut c_char);
             if curc == NUL {
                 clen = 0;
                 go_to_nextline = false;
@@ -146,13 +151,13 @@ unsafe fn scan(
 
             // Every position gets a fresh generation, which is how a state
             // knows whether it is already on a list.
-            (*rex.ptr()).nfa_listid += 1;
-            if (*prog).re_engine == AUTOMATIC_ENGINE && (*rex.ptr()).nfa_listid >= NFA_MAX_STATES {
+            rex.set_nfa_listid(rex.nfa_listid() + 1);
+            if (*prog).re_engine == AUTOMATIC_ENGINE && rex.nfa_listid() >= NFA_MAX_STATES {
                 nfa_match.set(NFA_TOO_EXPENSIVE);
                 return;
             }
-            thislist.id = (*rex.ptr()).nfa_listid;
-            nextlist.id = (*rex.ptr()).nfa_listid + 1;
+            thislist.id = rex.nfa_listid();
+            nextlist.id = rex.nfa_listid() + 1;
             if thislist.len() == 0 {
                 // Nothing alive: the match is over.
                 return;
@@ -161,11 +166,12 @@ unsafe fn scan(
             let mut matched = false;
             let mut listidx: c_int = 0;
             while (listidx as usize) < thislist.len() {
-                reg_breakcheck();
+                reg_breakcheck(rex);
                 if got_int.get() || out_of_time() {
                     break;
                 }
                 let outcome = step(
+                    rex,
                     thislist,
                     nextlist,
                     &mut listidx,
@@ -185,7 +191,7 @@ unsafe fn scan(
                         return;
                     }
                     add => {
-                        if !deliver(thislist, nextlist, &mut listidx, run, clen, add) {
+                        if !deliver(rex, thislist, nextlist, &mut listidx, run, clen, add) {
                             nfa_match.set(NFA_TOO_EXPENSIVE);
                             return;
                         }
@@ -194,21 +200,21 @@ unsafe fn scan(
                 listidx += 1;
             }
 
-            if !matched && !restart(prog, start, toplevel, nextlist, run, clen) {
+            if !matched && !restart(rex, prog, start, toplevel, nextlist, run, clen) {
                 return;
             }
 
             if clen != 0 {
-                (*rex.ptr()).input = (*rex.ptr()).input.offset(clen as isize);
+                rex.set_input(rex.input().offset(clen as isize));
             } else {
                 // At the end of a line: carry on only if something still
                 // wants the next one.
-                if !go_to_nextline && !sub_match_spans_lines() {
+                if !go_to_nextline && !sub_match_spans_lines(rex) {
                     return;
                 }
-                reg_nextline();
+                reg_nextline(rex);
             }
-            reg_breakcheck();
+            reg_breakcheck(rex);
             if got_int.get() || out_of_time() {
                 return;
             }
@@ -235,12 +241,10 @@ fn out_of_time() -> bool {
 /// # Safety
 ///
 /// The match context must be live.
-unsafe fn sub_match_spans_lines() -> bool {
+unsafe fn sub_match_spans_lines(rex: Rex) -> bool {
     unsafe {
         let endp = nfa_endp.get();
-        !endp.is_null()
-            && (*rex.ptr()).reg_match.is_null()
-            && (*rex.ptr()).lnum < (*endp).se_u.pos.lnum
+        !endp.is_null() && rex.multi() && rex.lnum() < (*endp).se_u.pos.lnum
     }
 }
 
@@ -255,6 +259,7 @@ unsafe fn sub_match_spans_lines() -> bool {
 /// Every pointer must belong to the running match, and `*listidx` index
 /// `thislist`.
 unsafe fn deliver(
+    rex: Rex,
     thislist: &mut ThreadList,
     nextlist: &mut ThreadList,
     listidx: &mut c_int,
@@ -280,6 +285,7 @@ unsafe fn deliver(
             let pim_state = t.pim.state;
             let result = if t.pim.result == NFA_PIM_TODO {
                 let result = recursive_regmatch(
+                    rex,
                     pim_state,
                     &raw mut t.pim,
                     run.prog,
@@ -295,9 +301,9 @@ unsafe fn deliver(
                 if lookaround_held(pim_state, result) {
                     // Keep what the lookaround captured, but not its idea
                     // of where the whole match starts.
-                    copy_sub_off(&mut t.pim.subs.norm, &(*run.m).norm);
-                    if has_zsubexpr() {
-                        copy_sub_off(&mut t.pim.subs.synt, &(*run.m).synt);
+                    copy_sub_off(rex, &mut t.pim.subs.norm, &(*run.m).norm);
+                    if has_zsubexpr(rex) {
+                        copy_sub_off(rex, &mut t.pim.subs.synt, &(*run.m).synt);
                     }
                 }
                 result
@@ -310,9 +316,9 @@ unsafe fn deliver(
                 // added anywhere.
                 return true;
             }
-            copy_sub_off(&mut t.subs.norm, &t.pim.subs.norm);
-            if has_zsubexpr() {
-                copy_sub_off(&mut t.subs.synt, &t.pim.subs.synt);
+            copy_sub_off(rex, &mut t.subs.norm, &t.pim.subs.norm);
+            if has_zsubexpr(rex) {
+                copy_sub_off(rex, &mut t.subs.synt, &t.pim.subs.synt);
             }
             carries_pim = false;
         }
@@ -331,11 +337,11 @@ unsafe fn deliver(
         if add_here {
             // `addstate_here` rewrites the list this thread lives in, so it
             // may not be handed a capture set that lives in it.
-            let has_z = has_zsubexpr();
+            let has_z = has_zsubexpr(rex);
             let t = thislist.thread(idx);
-            copy_sub(&mut run.here.norm, &t.subs.norm);
+            copy_sub(rex, &mut run.here.norm, &t.subs.norm);
             if has_z {
-                copy_sub(&mut run.here.synt, &t.subs.synt);
+                copy_sub(rex, &mut run.here.synt, &t.subs.synt);
             }
             addstate_here(thislist, add_state, run.here, pim, listidx)
         } else {
@@ -366,6 +372,7 @@ unsafe fn deliver(
 ///
 /// Every pointer must belong to the running match.
 unsafe fn restart(
+    rex: Rex,
     prog: *mut nfa_regprog_T,
     start: *mut nfa_state_T,
     toplevel: bool,
@@ -374,7 +381,7 @@ unsafe fn restart(
     clen: c_int,
 ) -> bool {
     unsafe {
-        if nfa_match.get() != 0 || !wants_restart(toplevel, clen) {
+        if nfa_match.get() != 0 || !wants_restart(rex, toplevel, clen) {
             return true;
         }
         if !toplevel {
@@ -388,18 +395,15 @@ unsafe fn restart(
             if nextlist.len() == 0 {
                 // Nothing is alive, so jump the input straight to the next
                 // place that character occurs.
-                let mut col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T + clen;
-                if skip_to_start((*prog).regstart, &mut col) == FAIL {
+                let mut col = rex.input().offset_from(rex.line()) as colnr_T + clen;
+                if skip_to_start(rex, (*prog).regstart, &mut col) == FAIL {
                     return false;
                 }
-                (*rex.ptr()).input = (*rex.ptr())
-                    .line
-                    .offset(col as isize)
-                    .offset(-(clen as isize));
+                rex.set_input(rex.line().offset(col as isize).offset(-(clen as isize)));
             } else {
-                let next = utf_ptr2char(((*rex.ptr()).input as *mut c_char).offset(clen as isize));
+                let next = utf_ptr2char((rex.input() as *mut c_char).offset(clen as isize));
                 if next != (*prog).regstart
-                    && (!(*rex.ptr()).reg_ic || utf_fold(next) != utf_fold((*prog).regstart))
+                    && (!rex.reg_ic() || utf_fold(next) != utf_fold((*prog).regstart))
                 {
                     return true;
                 }
@@ -407,7 +411,7 @@ unsafe fn restart(
         }
         // Only reachable on the match's first line, where `rex.lnum` is
         // still what the seeding call recorded.
-        record_match_start(run.m, clen);
+        record_match_start(rex, run.m, clen);
         seed(nextlist, (*start).out, run, clen)
     }
 }
@@ -438,16 +442,15 @@ unsafe fn seed(
 /// # Safety
 ///
 /// The match context must be live.
-unsafe fn wants_restart(toplevel: bool, clen: c_int) -> bool {
+unsafe fn wants_restart(rex: Rex, toplevel: bool, clen: c_int) -> bool {
     unsafe {
         // The outer match may start at any column of the first line, up to
         // 'reg_maxcol' where the caller set one.
         if toplevel
-            && (*rex.ptr()).lnum == 0
+            && rex.lnum() == 0
             && clen != 0
-            && ((*rex.ptr()).reg_maxcol == 0
-                || ((*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T)
-                    < (*rex.ptr()).reg_maxcol)
+            && (rex.reg_maxcol() == 0
+                || (rex.input().offset_from(rex.line()) as colnr_T) < rex.reg_maxcol())
         {
             return true;
         }
@@ -457,13 +460,12 @@ unsafe fn wants_restart(toplevel: bool, clen: c_int) -> bool {
         if endp.is_null() {
             return false;
         }
-        if (*rex.ptr()).reg_match.is_null() {
-            (*rex.ptr()).lnum < (*endp).se_u.pos.lnum
-                || ((*rex.ptr()).lnum == (*endp).se_u.pos.lnum
-                    && ((*rex.ptr()).input.offset_from((*rex.ptr()).line) as c_int)
-                        < (*endp).se_u.pos.col)
+        if rex.multi() {
+            rex.lnum() < (*endp).se_u.pos.lnum
+                || (rex.lnum() == (*endp).se_u.pos.lnum
+                    && (rex.input().offset_from(rex.line()) as c_int) < (*endp).se_u.pos.col)
         } else {
-            (*rex.ptr()).input < (*endp).se_u.ptr
+            rex.input() < (*endp).se_u.ptr
         }
     }
 }

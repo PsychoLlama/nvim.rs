@@ -18,7 +18,7 @@ use crate::semsg;
 use crate::src::nvim::main::rc_did_emsg;
 use crate::src::nvim::regexp::{
     ADD_NL, BACKREF, BOL, BOW, EOL, EOW, EXACTLY, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON,
-    NEWL, NL, NUL, REG_PAREN, SIMPLE, SPSTART, WORST, getchr, had_eol, magic, magic_prefix,
+    NEWL, NL, NUL, REG_PAREN, Rex, SIMPLE, SPSTART, WORST, getchr, had_eol, magic, magic_prefix,
     one_exactly, prev_at_start, reg_magic, reg_string, unmagic,
 };
 use crate::src::nvim::types::uint8_t;
@@ -63,7 +63,7 @@ pub(crate) fn denied_in_optional_sequence() -> bool {
 /// Parse one atom, emit its nodes and describe it in `*flagp`.
 ///
 /// Returns null when an error has already been reported.
-pub(crate) fn regatom(flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn regatom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     // `\%23l` restores the "still at the start of the pattern" flag, because
     // a position assertion consumes no input; [`percent_atom`] needs the
     // value from before this atom was read.
@@ -84,7 +84,7 @@ pub(crate) fn regatom(flagp: &mut c_int) -> *mut uint8_t {
             _ => {
                 *flagp |= HASNL;
                 if c == b'[' as c_int {
-                    bracketed(flagp, ADD_NL, c)
+                    bracketed(rex, flagp, ADD_NL, c)
                 } else {
                     class_shorthand(flagp, c, ADD_NL)
                 }
@@ -122,7 +122,7 @@ pub(crate) fn regatom(flagp: &mut c_int) -> *mut uint8_t {
                 return core::ptr::null_mut();
             }
             let mut flags = 0;
-            let ret = reg(REG_PAREN, &mut flags);
+            let ret = reg(rex, REG_PAREN, &mut flags);
             if !ret.is_null() {
                 *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
             }
@@ -167,9 +167,9 @@ pub(crate) fn regatom(flagp: &mut c_int) -> *mut uint8_t {
             regnode(BACKREF + refnum)
         }
 
-        M_Z => z_atom(flagp),
-        M_PERCENT => percent_atom(flagp, save_prev_at_start),
-        M_BRACKET => bracketed(flagp, 0, c),
+        M_Z => z_atom(rex, flagp),
+        M_PERCENT => percent_atom(rex, flagp, save_prev_at_start),
+        M_BRACKET => bracketed(rex, flagp, 0, c),
 
         // `\d`, `\w`, `\s`, … in their magic form.
         c if is_class_shorthand(c) => class_shorthand(flagp, c, 0),
@@ -181,8 +181,8 @@ pub(crate) fn regatom(flagp: &mut c_int) -> *mut uint8_t {
 /// A `[` that may open a collection. If it does not close, it is an ordinary
 /// character — unless 'regexpengine' strictness is on, where the missing `]`
 /// is an error.
-fn bracketed(flagp: &mut c_int, extra: c_int, c: c_int) -> *mut uint8_t {
-    match collection(flagp, extra) {
+fn bracketed(rex: Rex, flagp: &mut c_int, extra: c_int, c: c_int) -> *mut uint8_t {
+    match collection(rex, flagp, extra) {
         Collection::Node(node) => node,
         Collection::Failed => core::ptr::null_mut(),
         Collection::NotACollection => literal_run(flagp, c),

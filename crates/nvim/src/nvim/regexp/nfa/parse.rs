@@ -19,8 +19,8 @@ use crate::src::nvim::regexp::{
     NFA_PREV_ATOM_LIKE_PATTERN, NFA_PREV_ATOM_NO_WIDTH, NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_QUEST,
     NFA_QUEST_NONGREEDY, NFA_STAR, NFA_STAR_NONGREEDY, NFA_ZOPEN, NOT_MULTI, NSUBEXP, NUL, OK,
     RE_AUTO, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
-    curchr, getchr, getdecchrs, had_endbrace, magic, magic_prefix, nfa_re_flags, parse_state_T,
-    peekchr, re_multi_type, read_limits, reg_magic, regflags, regnpar, regnzpar,
+    Rex, curchr, getchr, getdecchrs, had_endbrace, magic, magic_prefix, nfa_re_flags,
+    parse_state_T, peekchr, re_multi_type, read_limits, reg_magic, regflags, regnpar, regnzpar,
     restore_parse_state, save_parse_state, skipchr, skipchr_keepstart, unmagic, wants_nfa,
 };
 
@@ -117,7 +117,7 @@ enum Repeat {
 ///
 /// `atom_start` is where the atom's own items begin; the first pass is
 /// thrown away and re-emitted from there.
-fn counted_repeat(before_atom: &parse_state_T, atom_start: usize) -> Repeat {
+fn counted_repeat(rex: Rex, before_atom: &parse_state_T, atom_start: usize) -> Repeat {
     // `\{-n,m}` asks for the shortest match.
     let mut greedy = true;
     let c = peekchr();
@@ -167,7 +167,7 @@ fn counted_repeat(before_atom: &parse_state_T, atom_start: usize) -> Repeat {
     while i < maxval {
         restore_parse_state(before_atom);
         let copy_start = postfix::len();
-        if regatom() == FAIL {
+        if regatom(rex) == FAIL {
             return Repeat::Failed;
         }
         if i + 1 > minval {
@@ -194,14 +194,14 @@ fn counted_repeat(before_atom: &parse_state_T, atom_start: usize) -> Repeat {
 }
 
 /// One atom and the repeat that follows it, if any.
-pub(crate) fn nfa_regpiece() -> c_int {
+pub(crate) fn nfa_regpiece(rex: Rex) -> c_int {
     // `\+` and `\{n,m}` re-parse the atom, so the cursor as it stood before
     // it has to be recoverable.
     let mut before_atom = no_state();
     save_parse_state(&mut before_atom);
     let atom_start = postfix::len();
 
-    if regatom() == FAIL {
+    if regatom(rex) == FAIL {
         return FAIL;
     }
     let op = peekchr();
@@ -217,7 +217,7 @@ pub(crate) fn nfa_regpiece() -> c_int {
         M_PLUS => {
             restore_parse_state(&before_atom);
             curchr.set(-1);
-            if regatom() == FAIL {
+            if regatom(rex) == FAIL {
                 return FAIL;
             }
             postfix::emit(NFA_STAR);
@@ -230,7 +230,7 @@ pub(crate) fn nfa_regpiece() -> c_int {
             }
         }
         M_QUESTION | M_EQUAL => postfix::emit(NFA_QUEST),
-        M_BRACE => match counted_repeat(&before_atom, atom_start) {
+        M_BRACE => match counted_repeat(rex, &before_atom, atom_start) {
             Repeat::Emitted => {}
             Repeat::Erased => return OK,
             Repeat::Failed => return FAIL,
@@ -251,7 +251,7 @@ pub(crate) fn nfa_regpiece() -> c_int {
 /// `\c`, `\v` and friends match nothing; they change how the rest of the
 /// pattern is read, which is why they are handled here rather than in the
 /// atom parser.
-pub(crate) fn nfa_regconcat() -> c_int {
+pub(crate) fn nfa_regconcat(rex: Rex) -> c_int {
     let mut first = true;
     loop {
         match peekchr() {
@@ -276,7 +276,7 @@ pub(crate) fn nfa_regconcat() -> c_int {
             M_M_UPPER => set_magic(MAGIC_OFF),
             M_V_UPPER => set_magic(MAGIC_NONE),
             _ => {
-                if nfa_regpiece() == FAIL {
+                if nfa_regpiece(rex) == FAIL {
                     return FAIL;
                 }
                 if first {
@@ -301,9 +301,9 @@ fn set_magic(level: crate::src::nvim::types::magic_T) {
 /// `a\&b` compiles as "b, with a as a zero-width lookahead in front of it",
 /// which is why each concatenation but the last is wrapped in
 /// `NFA_NOPEN` + `NFA_PREV_ATOM_NO_WIDTH`.
-pub(crate) fn nfa_regbranch() -> c_int {
+pub(crate) fn nfa_regbranch(rex: Rex) -> c_int {
     let mut concat_start = postfix::len();
-    if nfa_regconcat() == FAIL {
+    if nfa_regconcat(rex) == FAIL {
         return FAIL;
     }
     while peekchr() == M_AMP {
@@ -316,7 +316,7 @@ pub(crate) fn nfa_regbranch() -> c_int {
         postfix::emit(NFA_NOPEN);
         postfix::emit(NFA_PREV_ATOM_NO_WIDTH);
         concat_start = postfix::len();
-        if nfa_regconcat() == FAIL {
+        if nfa_regconcat(rex) == FAIL {
             return FAIL;
         }
         if concat_start == postfix::len() {
@@ -373,18 +373,18 @@ fn unbalanced(paren: c_int) -> c_int {
 ///
 /// `paren` says which bracket the caller opened, and hence what has to close
 /// it and which capture group the result becomes.
-pub(crate) fn nfa_reg(paren: c_int) -> c_int {
+pub(crate) fn nfa_reg(rex: Rex, paren: c_int) -> c_int {
     let parno = match open_bracket(paren) {
         Ok(parno) => parno,
         Err(fail) => return fail,
     };
 
-    if nfa_regbranch() == FAIL {
+    if nfa_regbranch(rex) == FAIL {
         return FAIL;
     }
     while peekchr() == magic(b'|') {
         skipchr();
-        if nfa_regbranch() == FAIL {
+        if nfa_regbranch(rex) == FAIL {
             return FAIL;
         }
         postfix::emit(NFA_OR);
@@ -422,8 +422,8 @@ pub(crate) fn nfa_reg(paren: c_int) -> c_int {
 ///
 /// The trailing `NFA_MOPEN` is capture group 0 — the whole match — which
 /// `post2nfa` turns into the machine's entry and exit states.
-pub(crate) fn re2post() -> c_int {
-    if nfa_reg(REG_NOPAREN) == FAIL {
+pub(crate) fn re2post(rex: Rex) -> c_int {
+    if nfa_reg(rex, REG_NOPAREN) == FAIL {
         return FAIL;
     }
     postfix::emit(NFA_MOPEN);

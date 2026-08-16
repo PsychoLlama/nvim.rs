@@ -20,8 +20,8 @@ use crate::src::nvim::regexp::{
     NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER, NFA_NALPHA, NFA_NDIGIT,
     NFA_NEWL, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NOCTAL, NFA_NOPEN, NFA_NUPPER, NFA_NWHITE,
     NFA_NWORD, NFA_OCTAL, NFA_OR, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT,
-    NFA_UPPER, NFA_WHITE, NFA_WORD, NUL, OK, RF_HASNL, getchr, magic, peekchr, reg_prev_sub,
-    regflags, rex, seen_endbrace, unmagic,
+    NFA_UPPER, NFA_WHITE, NFA_WORD, NUL, OK, RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub,
+    regflags, seen_endbrace, unmagic,
 };
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
@@ -106,15 +106,14 @@ pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> c_int {
 }
 
 /// `\1` .. `\9`: match what that capture group matched.
-pub(crate) fn back_reference(c: c_int) -> c_int {
+pub(crate) fn back_reference(rex: Rex, c: c_int) -> c_int {
     let refnum = unmagic(c) - b'1' as c_int;
     // A back-reference to a group that has not been closed yet cannot work.
     if !seen_endbrace(refnum + 1) {
         return FAIL;
     }
     postfix::emit(NFA_BACKREF1 + refnum);
-    // SAFETY: `rex` is the match context, live for the compile.
-    unsafe { (*rex.ptr()).nfa_has_backref = 1 };
+    rex.set_nfa_has_backref(1);
     OK
 }
 

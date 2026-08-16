@@ -24,9 +24,9 @@ use crate::src::nvim::regexp::{
     CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE, CLASS_FNAME,
     CLASS_GRAPH, CLASS_IDENT, CLASS_KEYWORD, CLASS_LOWER, CLASS_NONE, CLASS_PRINT, CLASS_PUNCT,
     CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, ESC, HASNL, HASWIDTH, INT_MAX,
-    JUST_CALC_SIZE, MAGIC_OFF, NUL, REGEXP_ABBR, REGEXP_INRANGE, SIMPLE, backslash_abbr, pat_byte,
-    pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit, reg_iswordc, reg_magic, reg_strict,
-    regparse, skip_anyof, skipchr, take_bracketed, take_char_class,
+    JUST_CALC_SIZE, MAGIC_OFF, NUL, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE, backslash_abbr,
+    pat_byte, pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit, reg_iswordc, reg_magic,
+    reg_strict, regparse, skip_anyof, skipchr, take_bracketed, take_char_class,
 };
 use crate::src::nvim::types::uint8_t;
 
@@ -40,7 +40,7 @@ pub(crate) enum Collection {
 }
 
 /// Parse a collection whose `[` has already been consumed.
-pub(crate) fn collection(flagp: &mut c_int, extra: c_int) -> Collection {
+pub(crate) fn collection(rex: Rex, flagp: &mut c_int, extra: c_int) -> Collection {
     if !collection_closes() {
         if reg_strict.get() != 0 {
             // Not `magic_prefix`: this one wants the backslash whenever `[`
@@ -89,7 +89,7 @@ pub(crate) fn collection(flagp: &mut c_int, extra: c_int) -> Collection {
                     return failed;
                 }
             }
-            b'[' => bracketed_item(&mut startc),
+            b'[' => bracketed_item(rex, &mut startc),
             _ => {
                 // An ordinary character, plus any combining marks: they are
                 // emitted as-is so that the set holds the whole grapheme.
@@ -237,11 +237,11 @@ fn escaped(
 
 /// A `[` inside the collection: a `[:alpha:]` class, a `[=a=]` equivalence
 /// class, a `[.a.]` collation element, or a literal `[`.
-fn bracketed_item(startc: &mut c_int) {
+fn bracketed_item(rex: Rex, startc: &mut c_int) {
     let class = take_cursor_char_class();
     *startc = -1;
     if class != CLASS_NONE as c_int {
-        emit_char_class(class);
+        emit_char_class(rex, class);
         return;
     }
     let equi = take_cursor_bracketed(b'=');
@@ -288,7 +288,7 @@ fn class_ceiling(class: c_uint) -> Option<c_int> {
 }
 
 /// Is `c` a member of `class`?
-fn in_class(class: c_uint, c: c_int) -> bool {
+fn in_class(rex: Rex, class: c_uint, c: c_int) -> bool {
     // SAFETY: every predicate here is a pure test on a code point, reading
     // only locale or option state; the ctype table is indexable over the
     // range `class_ceiling` allows.
@@ -308,7 +308,7 @@ fn in_class(class: c_uint, c: c_int) -> bool {
             CLASS_UPPER => mb_isupper(c),
             CLASS_XDIGIT => ascii_isxdigit(c),
             CLASS_IDENT => vim_isIDc(c),
-            CLASS_KEYWORD => reg_iswordc(c),
+            CLASS_KEYWORD => reg_iswordc(rex, c),
             CLASS_FNAME => vim_isfilec(c),
             _ => false,
         }
@@ -316,11 +316,11 @@ fn in_class(class: c_uint, c: c_int) -> bool {
 }
 
 /// Write out every character of a `[:name:]` class.
-fn emit_char_class(class: c_int) {
+fn emit_char_class(rex: Rex, class: c_int) {
     let class = class as c_uint;
     if let Some(hi) = class_ceiling(class) {
         for c in 1..=hi {
-            if in_class(class, c) {
+            if in_class(rex, class, c) {
                 regmbc(c);
             }
         }

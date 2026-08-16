@@ -33,8 +33,8 @@ use crate::src::nvim::regexp::{
     ADDSTATE_HERE_OFFSET, CaptureSlots, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, NFA_BOF,
     NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN9,
     NFA_NCLOSE, NFA_NOPEN, NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND,
-    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NUL, PimEnd, multipos, nfa_endp, nfa_ll_index, nfa_pim_T,
-    nfa_state_T, nfa_thread_T, regsub_T, regsubs_T, rex,
+    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NUL, PimEnd, Rex, multipos, nfa_endp, nfa_ll_index,
+    nfa_pim_T, nfa_state_T, nfa_thread_T, regsub_T, regsubs_T,
 };
 use crate::src::nvim::types::{colnr_T, linenr_T, uint8_t};
 
@@ -122,17 +122,22 @@ pub(crate) struct ThreadList {
     /// Does any thread carry a postponed lookaround? Threads that do cannot
     /// be deduplicated on their state alone.
     pub(crate) has_pim: bool,
+    /// The match this list belongs to. A list is built for one match and
+    /// discarded with it, so the context is the list's, not each walk's.
+    pub(crate) rex: Rex,
 }
 
 impl ThreadList {
-    /// A list that can hold `slots` threads before it has to grow.
-    pub(crate) fn new(slots: usize) -> ThreadList {
+    /// A list for the match `rex` describes, holding `slots` threads before
+    /// it has to grow.
+    pub(crate) fn new(rex: Rex, slots: usize) -> ThreadList {
         ThreadList {
             threads: Vec::with_capacity(slots),
             n: 0,
             slots,
             id: 0,
             has_pim: false,
+            rex,
         }
     }
 
@@ -187,22 +192,23 @@ impl ThreadList {
     ///
     /// The caller has already made room.
     fn push(&mut self, state: *mut nfa_state_T, subs: &regsubs_T, pim: Option<&nfa_pim_T>) {
+        let rex = self.rex;
         if self.n == self.threads.len() {
             // The first character to reach this far pays for the slot; every
             // later one writes only the fields below.
             self.threads.push(BLANK_THREAD);
         }
-        let has_z = has_zsubexpr();
+        let has_z = has_zsubexpr(rex);
         self.has_pim |= pim.is_some();
         let thread = &mut self.threads[self.n];
         thread.state = state;
         match pim {
             None => thread.pim.result = NFA_PIM_UNUSED,
-            Some(pim) => copy_pim(&mut thread.pim, pim),
+            Some(pim) => copy_pim(rex, &mut thread.pim, pim),
         }
-        copy_sub(&mut thread.subs.norm, &subs.norm);
+        copy_sub(rex, &mut thread.subs.norm, &subs.norm);
         if has_z {
-            copy_sub(&mut thread.subs.synt, &subs.synt);
+            copy_sub(rex, &mut thread.subs.synt, &subs.synt);
         }
         self.n += 1;
     }
@@ -213,9 +219,10 @@ impl ThreadList {
     /// back-reference, when two threads on the same state may still differ in
     /// what they captured.
     pub(crate) fn holds(&self, state: *mut nfa_state_T, subs: &regsubs_T) -> bool {
+        let rex = self.rex;
         // SAFETY: `state` is a live state of the running program.
         let seen = unsafe { (*state).lastlist[nfa_ll_index.get() as usize] == self.id };
-        seen && (!has_backref() || self.holds_with(state, subs, None))
+        seen && (!has_backref(rex) || self.holds_with(state, subs, None))
     }
 
     /// Is `state` on this list with exactly these captures and this postponed
@@ -226,7 +233,8 @@ impl ThreadList {
         subs: &regsubs_T,
         pim: Option<&nfa_pim_T>,
     ) -> bool {
-        let has_z = has_zsubexpr();
+        let rex = self.rex;
+        let has_z = has_zsubexpr(rex);
         let id = id_of(state);
         // A plain index walk: at opt-level 0 the iterator adaptors are a
         // handful of calls per thread, and this is the match loop's innermost
@@ -234,9 +242,9 @@ impl ThreadList {
         for i in 0..self.n {
             let thread = &self.threads[i];
             if id_of(thread.state) == id
-                && sub_equal(&thread.subs.norm, &subs.norm)
-                && (!has_z || sub_equal(&thread.subs.synt, &subs.synt))
-                && pim_equal(Some(&thread.pim), pim)
+                && sub_equal(rex, &thread.subs.norm, &subs.norm)
+                && (!has_z || sub_equal(rex, &thread.subs.synt, &subs.synt))
+                && pim_equal(rex, Some(&thread.pim), pim)
             {
                 return true;
             }
@@ -326,6 +334,7 @@ fn walk(
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
+    let rex = l.rex;
     if depth >= ADDSTATE_MAX_DEPTH {
         return false;
     }
@@ -355,7 +364,7 @@ fn walk(
     if !transparent {
         // `^` and `\%^` in the middle of a line can never match, and a thread
         // sitting on one would only be walked to be thrown away.
-        if matches!(c, NFA_BOL | NFA_BOF) && past_line_start() {
+        if matches!(c, NFA_BOL | NFA_BOF) && past_line_start(rex) {
             return true;
         }
         match place(l, state, subs, pim, add_here, listindex) {
@@ -387,11 +396,12 @@ fn place(
     add_here: bool,
     listindex: usize,
 ) -> Place {
+    let rex = l.rex;
     // SAFETY: `state` is a live state of the running program.
     let c = op(state);
     // SAFETY: `state` is a live state of the running program.
     let seen = unsafe { (*state).lastlist[nfa_ll_index.get() as usize] == l.id };
-    let has_backref = has_backref();
+    let has_backref = has_backref(rex);
 
     // `NFA_SKIP` counts down the bytes a back-reference still owes, so two
     // threads on it are not the same thread.
@@ -429,16 +439,14 @@ fn place(
 ///
 /// The extra condition is upstream's: inside a multi-line lookaround the
 /// `^` may belong to a later line than the one the lookaround started on.
-fn past_line_start() -> bool {
+fn past_line_start(rex: Rex) -> bool {
     // SAFETY: `rex` describes a live match and `nfa_endp` the position a
     // lookaround was told to stop at, when there is one.
     unsafe {
         let endp = nfa_endp.get();
-        (*rex.ptr()).input > (*rex.ptr()).line
-            && *(*rex.ptr()).input as c_int != NUL
-            && (endp.is_null()
-                || !(*rex.ptr()).reg_match.is_null()
-                || (*rex.ptr()).lnum == (*endp).se_u.pos.lnum)
+        rex.input() > rex.line()
+            && *rex.input() as c_int != NUL
+            && (endp.is_null() || !rex.multi() || rex.lnum() == (*endp).se_u.pos.lnum)
     }
 }
 
@@ -453,6 +461,7 @@ fn follow(
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
+    let rex = l.rex;
     let (c, out) = (op(state), out_of(state));
     // SAFETY: `state` is a live state of the running program.
     let out1 = unsafe { (*state).out1 };
@@ -469,7 +478,7 @@ fn follow(
         }
 
         // The whole match's close, which a `\ze` may already have placed.
-        NFA_MCLOSE if has_zend_set(subs) => walk(l, out, subs, pim, off_arg, depth + 1),
+        NFA_MCLOSE if has_zend_set(rex, subs) => walk(l, out, subs, pim, off_arg, depth + 1),
 
         // A capture closes here.
         NFA_MCLOSE | NFA_MCLOSE1..=NFA_MCLOSE9 | NFA_ZCLOSE..=NFA_ZCLOSE9 | NFA_ZEND => {
@@ -482,12 +491,12 @@ fn follow(
 }
 
 /// Has a `\ze` already put group 0's end somewhere?
-fn has_zend_set(subs: &regsubs_T) -> bool {
+fn has_zend_set(rex: Rex, subs: &regsubs_T) -> bool {
     // SAFETY: `rex` describes a live match; which arm of the capture union is
     // live is `multi_line`.
     unsafe {
-        (*rex.ptr()).nfa_has_zend != 0
-            && if multi_line() {
+        rex.nfa_has_zend() != 0
+            && if multi_line(rex) {
                 subs.norm.list.multi[0].end_lnum >= 0
             } else {
                 !subs.norm.list.line[0].end.is_null()
@@ -538,9 +547,10 @@ fn open(
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
+    let rex = l.rex;
     let (c, out) = (op(state), out_of(state));
     let (subidx, synt) = slot_of(c, true);
-    let multi = multi_line();
+    let multi = multi_line(rex);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
     let saved = if subidx < sub.in_use as usize {
@@ -579,16 +589,15 @@ fn open(
             if off == -1 {
                 // The thread is about to cross a line break, so the group
                 // starts at the beginning of the next line.
-                slot.start_lnum = (*rex.ptr()).lnum + 1 as linenr_T;
+                slot.start_lnum = rex.lnum() + 1 as linenr_T;
                 slot.start_col = 0;
             } else {
-                slot.start_lnum = (*rex.ptr()).lnum;
-                slot.start_col =
-                    ((*rex.ptr()).input.offset_from((*rex.ptr()).line) + off as isize) as colnr_T;
+                slot.start_lnum = rex.lnum();
+                slot.start_col = (rex.input().offset_from(rex.line()) + off as isize) as colnr_T;
             }
             slot.end_lnum = -1;
         } else {
-            sub.list.line[subidx].start = (*rex.ptr()).input.offset(off as isize);
+            sub.list.line[subidx].start = rex.input().offset(off as isize);
         }
     }
 
@@ -619,9 +628,10 @@ fn close(
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
+    let rex = l.rex;
     let (c, out) = (op(state), out_of(state));
     let (subidx, synt) = slot_of(c, false);
-    let multi = multi_line();
+    let multi = multi_line(rex);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
     let was_in_use = sub.in_use;
@@ -635,17 +645,16 @@ fn close(
             let was = sub.list.multi[subidx];
             let slot = &mut sub.list.multi[subidx];
             if off == -1 {
-                slot.end_lnum = (*rex.ptr()).lnum + 1 as linenr_T;
+                slot.end_lnum = rex.lnum() + 1 as linenr_T;
                 slot.end_col = 0;
             } else {
-                slot.end_lnum = (*rex.ptr()).lnum;
-                slot.end_col =
-                    ((*rex.ptr()).input.offset_from((*rex.ptr()).line) + off as isize) as colnr_T;
+                slot.end_lnum = rex.lnum();
+                slot.end_col = (rex.input().offset_from(rex.line()) + off as isize) as colnr_T;
             }
             SavedPos::Multi(was)
         } else {
             let was = sub.list.line[subidx].end;
-            sub.list.line[subidx].end = (*rex.ptr()).input.offset(off as isize);
+            sub.list.line[subidx].end = rex.input().offset(off as isize);
             SavedPos::Line(was)
         }
     };

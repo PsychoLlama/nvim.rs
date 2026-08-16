@@ -12,7 +12,7 @@
 
 use core::ffi::{c_char, c_int};
 
-use super::{LineOrigin, NUL, can_f_submatch, reg_line, reg_line_len, rsm};
+use super::{LineOrigin, NUL, Rex, can_f_submatch, reg_line, reg_line_len, rsm};
 use crate::src::nvim::eval::typval::{
     tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
 };
@@ -25,13 +25,13 @@ use crate::src::nvim::types::{
 
 /// The text of the submatch line `lnum` lines into the match `submatch()`
 /// and a `\=` expression see.
-pub(crate) fn reg_getline_submatch(lnum: linenr_T) -> *mut c_char {
-    reg_line(lnum, LineOrigin::Submatch)
+pub(crate) fn reg_getline_submatch(rex: Rex, lnum: linenr_T) -> *mut c_char {
+    reg_line(rex, lnum, LineOrigin::Submatch)
 }
 
 /// Its length.
-pub(crate) fn reg_getline_submatch_len(lnum: linenr_T) -> colnr_T {
-    reg_line_len(lnum, LineOrigin::Submatch)
+pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: linenr_T) -> colnr_T {
+    reg_line_len(rex, lnum, LineOrigin::Submatch)
 }
 
 /// Fill `argv[argskip]` — a ten-item static list — with the submatches, and
@@ -106,6 +106,9 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
             return core::ptr::null_mut();
         }
         let no = no as usize;
+        // SAFETY: `can_f_submatch` says a match is live, so the context
+        // still names the buffer the submatch lines are read from.
+        let rex = Rex::acquire();
 
         // A string match has no lines to cross.
         if !(*rsm.ptr()).sm_match.is_null() {
@@ -124,7 +127,7 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
             if lnum < 0 || (*mmatch).endpos[no].lnum < 0 {
                 return core::ptr::null_mut();
             }
-            let line = reg_getline_submatch(lnum);
+            let line = reg_getline_submatch(rex, lnum);
             if line.is_null() {
                 // Anti-crash check; cannot happen.
                 break;
@@ -146,7 +149,7 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
             } else {
                 // The rest of the start line, then whole lines, then the
                 // head of the end line. Each break travels as a newline.
-                len = (reg_getline_submatch_len(lnum) - scol) as usize;
+                len = (reg_getline_submatch_len(rex, lnum) - scol) as usize;
                 if round == 2 {
                     strcpy(retval, s);
                     *retval.add(len) = b'\n' as c_char;
@@ -154,11 +157,11 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
                 len += 1;
                 lnum += 1;
                 while lnum < (*mmatch).endpos[no].lnum {
-                    let line = reg_getline_submatch(lnum);
+                    let line = reg_getline_submatch(rex, lnum);
                     if round == 2 {
                         strcpy(retval.add(len), line);
                     }
-                    len += reg_getline_submatch_len(lnum) as usize;
+                    len += reg_getline_submatch_len(rex, lnum) as usize;
                     if round == 2 {
                         *retval.add(len) = b'\n' as c_char;
                     }
@@ -166,7 +169,11 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
                     lnum += 1;
                 }
                 if round == 2 {
-                    strncpy(retval.add(len), reg_getline_submatch(lnum), ecol as usize);
+                    strncpy(
+                        retval.add(len),
+                        reg_getline_submatch(rex, lnum),
+                        ecol as usize,
+                    );
                 }
                 len += ecol as usize;
                 if round == 2 {
@@ -193,6 +200,9 @@ pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut list_T {
             return core::ptr::null_mut();
         }
         let no = no as usize;
+        // SAFETY: `can_f_submatch` says a match is live, so the context
+        // still names the buffer the submatch lines are read from.
+        let rex = Rex::acquire();
 
         // A string match is one item.
         if !(*rsm.ptr()).sm_match.is_null() {
@@ -217,16 +227,16 @@ pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut list_T {
         let ecol = (*mmatch).endpos[no].col;
 
         let list = tv_list_alloc((elnum - slnum + 1) as isize);
-        let s = reg_getline_submatch(slnum).offset(scol as isize);
+        let s = reg_getline_submatch(rex, slnum).offset(scol as isize);
         if slnum == elnum {
             tv_list_append_string(list, s, (ecol - scol) as isize);
         } else {
             // A negative length means "to the end of the line".
             tv_list_append_string(list, s, -1);
             for lnum in slnum + 1..elnum {
-                tv_list_append_string(list, reg_getline_submatch(lnum), -1);
+                tv_list_append_string(list, reg_getline_submatch(rex, lnum), -1);
             }
-            tv_list_append_string(list, reg_getline_submatch(elnum), ecol as isize);
+            tv_list_append_string(list, reg_getline_submatch(rex, elnum), ecol as isize);
         }
         tv_list_ref(list);
         list

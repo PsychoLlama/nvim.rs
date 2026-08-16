@@ -22,8 +22,8 @@ use crate::src::nvim::regexp::{
     ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, DIGIT, EXACTLY, FIRST_NL, FNAME, HEAD, HEX, IDENT, KWORD,
     LAST_NL, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOCTAL, NUL, NUPPER,
     NWHITE, NWORD, OCTAL, PRINT, RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL,
-    RI_UPPER, RI_WHITE, RI_WORD, SFNAME, SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, cstrchr,
-    reg_nextline, rex,
+    RI_UPPER, RI_WHITE, RI_WORD, Rex, SFNAME, SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, cstrchr,
+    reg_nextline,
 };
 use crate::src::nvim::types::{int64_t, uint8_t};
 
@@ -39,7 +39,7 @@ enum Line {
 
 /// How many times the item at `p` matches starting at `rex.input`, capped at
 /// `maxcount`. Leaves `rex.input` just past the last match.
-pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
+pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
     // SAFETY: `p` is a node in the compiled program, so its opcode byte and
     // the operand three bytes in are readable; `scan` walks the current line,
     // which is NUL-terminated, and every advance below is by the length of
@@ -47,31 +47,31 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
     unsafe {
         let op = *p as c_int;
         let opnd = p.add(3);
-        let mut scan = (*rex.ptr()).input;
+        let mut scan = rex.input();
         let mut count: int64_t = 0;
 
         // Only a `\_x` node counts a line break, and only in a multi-line
         // match where the line break is not already part of the text.
         let crosses_lines = (FIRST_NL..=LAST_NL).contains(&op);
         let next_line = || {
-            if !(*rex.ptr()).reg_match.is_null()
+            if !rex.multi()
                 || !crosses_lines
-                || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                || (*rex.ptr()).reg_line_lbr
+                || rex.lnum() > rex.reg_maxline()
+                || rex.reg_line_lbr()
             {
                 return Line::End;
             }
-            reg_nextline();
+            reg_nextline(rex);
             if got_int.get() {
-                Line::Interrupted((*rex.ptr()).input)
+                Line::Interrupted(rex.input())
             } else {
-                Line::Crossed((*rex.ptr()).input)
+                Line::Crossed(rex.input())
             }
         };
         // With 'reg_line_lbr' the text holds real newline bytes rather than
         // line breaks, so a `\_x` matches the byte itself.
         let literal_newline = |scan: *mut uint8_t| {
-            (*rex.ptr()).reg_line_lbr && *scan as c_int == '\n' as c_int && crosses_lines
+            rex.reg_line_lbr() && *scan as c_int == '\n' as c_int && crosses_lines
         };
 
         // Advance over one character of the class, cross a line break, or
@@ -147,7 +147,7 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
 
             // `\k`/`\K`: 'iskeyword' characters, which are buffer-local.
             _ if is(op, KWORD) || is(op, SKWORD) => count_class!(false, |scan: *mut uint8_t| {
-                vim_iswordp_buf(scan.cast(), (*rex.ptr()).reg_buf)
+                vim_iswordp_buf(scan.cast(), rex.reg_buf())
                     && (positive || !ascii_isdigit(*scan as c_int))
             }),
 
@@ -169,7 +169,7 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
             // construction (`use_multibytecode` sends the rest to
             // `MULTIBYTECODE`).
             EXACTLY => {
-                if (*rex.ptr()).reg_ic {
+                if rex.reg_ic() {
                     let upper = mb_toupper(*opnd as c_int);
                     let lower = mb_tolower(*opnd as c_int);
                     while count < maxcount && (*scan as c_int == upper || *scan as c_int == lower) {
@@ -190,16 +190,14 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
             MULTIBYTECODE => {
                 let len = utfc_ptr2len(opnd.cast());
                 if len > 1 {
-                    let folded = if (*rex.ptr()).reg_ic {
+                    let folded = if rex.reg_ic() {
                         utf_fold(utf_ptr2char(opnd.cast()))
                     } else {
                         0
                     };
                     while count < maxcount && utfc_ptr2len(scan.cast()) >= len {
                         let same = (0..len).all(|i| *opnd.add(i as usize) == *scan.add(i as usize));
-                        if !same
-                            && (!(*rex.ptr()).reg_ic
-                                || utf_fold(utf_ptr2char(scan.cast())) != folded)
+                        if !same && (!rex.reg_ic() || utf_fold(utf_ptr2char(scan.cast())) != folded)
                         {
                             break;
                         }
@@ -227,7 +225,7 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
                         } else {
                             *scan as c_int
                         };
-                        if c_int::from(cstrchr(opnd.cast(), c).is_null()) == wanted {
+                        if c_int::from(cstrchr(rex, opnd.cast(), c).is_null()) == wanted {
                             break 'coll;
                         }
                         scan = scan.add(if len > 1 { len as usize } else { 1 });
@@ -240,20 +238,18 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
             NEWL => {
                 while count < maxcount
                     && ((*scan as c_int == NUL
-                        && (*rex.ptr()).lnum <= (*rex.ptr()).reg_maxline
-                        && !(*rex.ptr()).reg_line_lbr
-                        && (*rex.ptr()).reg_match.is_null())
-                        || (*scan as c_int == '\n' as c_int && (*rex.ptr()).reg_line_lbr))
+                        && rex.lnum() <= rex.reg_maxline()
+                        && !rex.reg_line_lbr()
+                        && rex.multi())
+                        || (*scan as c_int == '\n' as c_int && rex.reg_line_lbr()))
                 {
                     count += 1;
-                    if (*rex.ptr()).reg_line_lbr {
-                        (*rex.ptr()).input = (*rex.ptr())
-                            .input
-                            .add(utfc_ptr2len((*rex.ptr()).input.cast()) as usize);
+                    if rex.reg_line_lbr() {
+                        rex.set_input(rex.input().add(utfc_ptr2len(rex.input().cast()) as usize));
                     } else {
-                        reg_nextline();
+                        reg_nextline(rex);
                     }
-                    scan = (*rex.ptr()).input;
+                    scan = rex.input();
                     if got_int.get() {
                         break;
                     }
@@ -264,7 +260,7 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
             _ => {
                 let Some((mask, positive)) = byte_class(op) else {
                     iemsg(gettext(&raw const e_re_corr as *const c_char));
-                    (*rex.ptr()).input = scan;
+                    rex.set_input(scan);
                     return count as c_int;
                 };
                 let testval = if positive { mask } else { 0 };
@@ -296,7 +292,7 @@ pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
             }
         }
 
-        (*rex.ptr()).input = scan;
+        rex.set_input(scan);
         count as c_int
     }
 }

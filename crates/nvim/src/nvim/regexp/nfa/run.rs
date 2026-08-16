@@ -22,10 +22,10 @@ use crate::src::nvim::regexp::{
     NFA_CLASS_BACKSPACE, NFA_CLASS_BLANK, NFA_CLASS_CNTRL, NFA_CLASS_DIGIT, NFA_CLASS_ESCAPE,
     NFA_CLASS_FNAME, NFA_CLASS_GRAPH, NFA_CLASS_IDENT, NFA_CLASS_KEYWORD, NFA_CLASS_LOWER,
     NFA_CLASS_PRINT, NFA_CLASS_PUNCT, NFA_CLASS_RETURN, NFA_CLASS_SPACE, NFA_CLASS_TAB,
-    NFA_CLASS_UPPER, NFA_CLASS_XDIGIT, NFA_TOO_EXPENSIVE, OK, RA_MATCH, cleanup_subexpr,
+    NFA_CLASS_UPPER, NFA_CLASS_XDIGIT, NFA_TOO_EXPENSIVE, OK, RA_MATCH, Rex, cleanup_subexpr,
     cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, nfa_ll_index, nfa_match,
     nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out, reg_getline, reg_getline_len,
-    reg_iswordc, regsub_T, regsubs_T, rex, save_se_T,
+    reg_iswordc, regsub_T, regsubs_T, save_se_T,
 };
 use crate::src::nvim::regexp::{
     NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BOF, NFA_BOL, NFA_BOW, NFA_COL, NFA_COL_GT,
@@ -43,7 +43,7 @@ use crate::src::nvim::types::{colnr_T, uint8_t};
 /// The ranges are upstream's and are not uniform: some classes only ever
 /// answer for ASCII, others run the whole Latin-1 range or defer to a
 /// multibyte predicate.
-pub(crate) fn check_char_class(cls: c_int, c: c_int) -> c_int {
+pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> c_int {
     // SAFETY: the ctype table is indexed only inside the guards below.
     let member = unsafe {
         let ctype = |mask: c_int| {
@@ -69,7 +69,7 @@ pub(crate) fn check_char_class(cls: c_int, c: c_int) -> c_int {
             NFA_CLASS_BACKSPACE => c == 0x08,
             NFA_CLASS_ESCAPE => c == ESC,
             NFA_CLASS_IDENT => vim_isIDc(c),
-            NFA_CLASS_KEYWORD => reg_iswordc(c),
+            NFA_CLASS_KEYWORD => reg_iswordc(rex, c),
             NFA_CLASS_FNAME => vim_isfilec(c),
             _ => {
                 // `siemsg`, not `semsg`: an internal-error report, dropped
@@ -87,7 +87,7 @@ pub(crate) fn check_char_class(cls: c_int, c: c_int) -> c_int {
 
 /// Match what capture group `subidx` captured. On success `*bytelen` is how
 /// far to advance — on the *last* line, for a capture that spans lines.
-pub(crate) fn match_backref(sub: &regsub_T, subidx: c_int, bytelen: &mut c_int) -> bool {
+pub(crate) fn match_backref(rex: Rex, sub: &regsub_T, subidx: c_int, bytelen: &mut c_int) -> bool {
     // An unset group matches the empty string rather than failing.
     if sub.in_use <= subidx {
         *bytelen = 0;
@@ -96,21 +96,22 @@ pub(crate) fn match_backref(sub: &regsub_T, subidx: c_int, bytelen: &mut c_int) 
     // SAFETY: the capture slots belong to this match, and `rex.input` points
     // into the line being matched.
     unsafe {
-        if (*rex.ptr()).reg_match.is_null() {
+        if rex.multi() {
             let m = sub.list.multi[subidx as usize];
             if m.start_lnum < 0 || m.end_lnum < 0 {
                 *bytelen = 0;
                 return true;
             }
-            if m.start_lnum == (*rex.ptr()).lnum && m.end_lnum == (*rex.ptr()).lnum {
+            if m.start_lnum == rex.lnum() && m.end_lnum == rex.lnum() {
                 // Wholly on this line: a plain comparison.
                 let mut len = m.end_col - m.start_col;
-                let captured = ((*rex.ptr()).line as *mut c_char).offset(m.start_col as isize);
-                if cstrncmp(captured, (*rex.ptr()).input as *mut c_char, &mut len) == 0 {
+                let captured = (rex.line() as *mut c_char).offset(m.start_col as isize);
+                if cstrncmp(rex, captured, rex.input() as *mut c_char, &mut len) == 0 {
                     *bytelen = len;
                     return true;
                 }
             } else if match_with_backref(
+                rex,
                 m.start_lnum,
                 m.start_col,
                 m.end_lnum,
@@ -128,8 +129,9 @@ pub(crate) fn match_backref(sub: &regsub_T, subidx: c_int, bytelen: &mut c_int) 
             }
             let mut len = l.end.offset_from(l.start) as c_int;
             if cstrncmp(
+                rex,
                 l.start as *mut c_char,
-                (*rex.ptr()).input as *mut c_char,
+                rex.input() as *mut c_char,
                 &mut len,
             ) == 0
             {
@@ -142,8 +144,8 @@ pub(crate) fn match_backref(sub: &regsub_T, subidx: c_int, bytelen: &mut c_int) 
 }
 
 /// Match what the enclosing syntax item's `\z(` group captured.
-pub(crate) fn match_zref(subidx: c_int, bytelen: &mut c_int) -> bool {
-    cleanup_zsubexpr();
+pub(crate) fn match_zref(rex: Rex, subidx: c_int, bytelen: &mut c_int) -> bool {
+    cleanup_zsubexpr(rex);
     // SAFETY: `re_extmatch_in` is the capture set the syntax item handed in,
     // whose members are NUL-terminated copies.
     unsafe {
@@ -154,7 +156,7 @@ pub(crate) fn match_zref(subidx: c_int, bytelen: &mut c_int) -> bool {
         }
         let captured = (*captures).matches[subidx as usize] as *mut c_char;
         let mut len = strlen(captured) as c_int;
-        if cstrncmp(captured, (*rex.ptr()).input as *mut c_char, &mut len) == 0 {
+        if cstrncmp(rex, captured, rex.input() as *mut c_char, &mut len) == 0 {
             *bytelen = len;
             return true;
         }
@@ -204,6 +206,7 @@ pub(crate) fn nfa_re_num_cmp(val: u64, op: c_int, pos: u64) -> bool {
 /// runs from where it was postponed rather than from the current position.
 /// `listids` is the caller's scratch buffer for the generation counters.
 pub(crate) fn recursive_regmatch(
+    rex: Rex,
     state: *mut nfa_state_T,
     pim: *mut nfa_pim_T,
     prog: *mut nfa_regprog_T,
@@ -214,18 +217,18 @@ pub(crate) fn recursive_regmatch(
     // SAFETY: everything below reads and restores the match context, which
     // is live for the duration of the match.
     unsafe {
-        let save_reginput_col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as c_int;
-        let save_reglnum = (*rex.ptr()).lnum;
+        let save_reginput_col = rex.input().offset_from(rex.line()) as c_int;
+        let save_reglnum = rex.lnum();
         let save_nfa_match = nfa_match.get();
-        let save_nfa_listid = (*rex.ptr()).nfa_listid;
+        let save_nfa_listid = rex.nfa_listid();
         let save_nfa_endp = nfa_endp.get();
 
         if !pim.is_null() {
-            (*rex.ptr()).input = if (*rex.ptr()).reg_match.is_null() {
-                (*rex.ptr()).line.offset((*pim).end.pos.col as isize)
+            rex.set_input(if rex.multi() {
+                rex.line().offset((*pim).end.pos.col as isize)
             } else {
                 (*pim).end.ptr
-            };
+            });
         }
 
         // A lookbehind has to start earlier in the line and stop where the
@@ -244,23 +247,23 @@ pub(crate) fn recursive_regmatch(
                 | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
         ) {
             endposp = &raw mut endpos;
-            if (*rex.ptr()).reg_match.is_null() {
+            if rex.multi() {
                 endpos.se_u.pos = if pim.is_null() {
                     crate::src::nvim::types::lpos_T {
-                        lnum: (*rex.ptr()).lnum,
-                        col: (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T,
+                        lnum: rex.lnum(),
+                        col: rex.input().offset_from(rex.line()) as colnr_T,
                     }
                 } else {
                     (*pim).end.pos
                 };
             } else {
                 endpos.se_u.ptr = if pim.is_null() {
-                    (*rex.ptr()).input
+                    rex.input()
                 } else {
                     (*pim).end.ptr
                 };
             }
-            start_lookbehind(state);
+            start_lookbehind(rex, state);
         }
 
         // Two generations of list ids are available. The first nested match
@@ -272,30 +275,30 @@ pub(crate) fn recursive_regmatch(
             nfa_save_listids(prog, listids);
         } else {
             nfa_ll_index.set(nfa_ll_index.get() + 1);
-            if (*rex.ptr()).nfa_listid <= (*rex.ptr()).nfa_alt_listid {
-                (*rex.ptr()).nfa_listid = (*rex.ptr()).nfa_alt_listid;
+            if rex.nfa_listid() <= rex.nfa_alt_listid() {
+                rex.set_nfa_listid(rex.nfa_alt_listid());
             }
         }
 
         nfa_endp.set(endposp);
-        let result = nfa_regmatch(prog, (*state).out, submatch, m);
+        let result = nfa_regmatch(rex, prog, (*state).out, submatch, m);
         if need_restore {
             nfa_restore_listids(prog, listids);
         } else {
             nfa_ll_index.set(nfa_ll_index.get() - 1);
-            (*rex.ptr()).nfa_alt_listid = (*rex.ptr()).nfa_listid;
+            rex.set_nfa_alt_listid(rex.nfa_listid());
         }
 
-        (*rex.ptr()).lnum = save_reglnum;
-        if (*rex.ptr()).reg_match.is_null() {
-            (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
+        rex.set_lnum(save_reglnum);
+        if rex.multi() {
+            rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
         }
-        (*rex.ptr()).input = (*rex.ptr()).line.offset(save_reginput_col as isize);
+        rex.set_input(rex.line().offset(save_reginput_col as isize));
         // A match that ran out of budget keeps its verdict; anything else
         // hands the outer match its own state back.
         if result != NFA_TOO_EXPENSIVE {
             nfa_match.set(save_nfa_match);
-            (*rex.ptr()).nfa_listid = save_nfa_listid;
+            rex.set_nfa_listid(save_nfa_listid);
         }
         nfa_endp.set(save_nfa_endp);
         result
@@ -310,50 +313,43 @@ pub(crate) fn recursive_regmatch(
 ///
 /// The match context must be live, and `state` one of the lookbehind
 /// opcodes.
-unsafe fn start_lookbehind(state: *mut nfa_state_T) {
+unsafe fn start_lookbehind(rex: Rex, state: *mut nfa_state_T) {
     unsafe {
         let val = (*state).val;
         if val <= 0 {
             // Unknown width: try from the start of the previous line.
-            if (*rex.ptr()).reg_match.is_null() {
-                (*rex.ptr()).lnum -= 1;
-                (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
-                if (*rex.ptr()).line.is_null() {
+            if rex.multi() {
+                rex.set_lnum(rex.lnum() - 1);
+                rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
+                if rex.line().is_null() {
                     // Already on the first line.
-                    (*rex.ptr()).lnum += 1;
-                    (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
+                    rex.set_lnum(rex.lnum() + 1);
+                    rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
                 }
             }
-            (*rex.ptr()).input = (*rex.ptr()).line;
+            rex.set_input(rex.line());
             return;
         }
         // The width reaches back past the start of this line.
-        if (*rex.ptr()).reg_match.is_null()
-            && ((*rex.ptr()).input.offset_from((*rex.ptr()).line) as c_int) < val
-        {
-            (*rex.ptr()).lnum -= 1;
-            (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
-            if (*rex.ptr()).line.is_null() {
-                (*rex.ptr()).lnum += 1;
-                (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
-                (*rex.ptr()).input = (*rex.ptr()).line;
+        if rex.multi() && (rex.input().offset_from(rex.line()) as c_int) < val {
+            rex.set_lnum(rex.lnum() - 1);
+            rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
+            if rex.line().is_null() {
+                rex.set_lnum(rex.lnum() + 1);
+                rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
+                rex.set_input(rex.line());
             } else {
-                (*rex.ptr()).input = (*rex.ptr())
-                    .line
-                    .offset(reg_getline_len((*rex.ptr()).lnum) as isize);
+                rex.set_input(rex.line().offset(reg_getline_len(rex, rex.lnum()) as isize));
             }
         }
-        if (*rex.ptr()).input.offset_from((*rex.ptr()).line) as c_int >= val {
-            (*rex.ptr()).input = (*rex.ptr()).input.offset(-(val as isize));
+        if rex.input().offset_from(rex.line()) as c_int >= val {
+            rex.set_input(rex.input().offset(-(val as isize)));
             // Land on a character boundary, not inside one.
-            (*rex.ptr()).input = (*rex.ptr()).input.offset(
-                -(utf_head_off(
-                    (*rex.ptr()).line as *mut c_char,
-                    (*rex.ptr()).input as *mut c_char,
-                ) as isize),
-            );
+            rex.set_input(rex.input().offset(
+                -(utf_head_off(rex.line() as *mut c_char, rex.input() as *mut c_char) as isize),
+            ));
         } else {
-            (*rex.ptr()).input = (*rex.ptr()).line;
+            rex.set_input(rex.line());
         }
     }
 }
@@ -409,16 +405,16 @@ pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
 /// Move `*colp` forward to the next occurrence of `c` in the line, or fail
 /// if there is none. The whole machine cannot match before the character
 /// every match must start with.
-pub(crate) fn skip_to_start(c: c_int, colp: &mut colnr_T) -> c_int {
+pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut colnr_T) -> c_int {
     // SAFETY: `rex.line` is the NUL-terminated line being matched and
     // `*colp` is a column inside it.
     unsafe {
-        let from = ((*rex.ptr()).line as *mut c_char).offset(*colp as isize);
-        let found = cstrchr(from, c);
+        let from = (rex.line() as *mut c_char).offset(*colp as isize);
+        let found = cstrchr(rex, from, c);
         if found.is_null() {
             return FAIL;
         }
-        *colp = found.offset_from((*rex.ptr()).line as *mut c_char) as colnr_T;
+        *colp = found.offset_from(rex.line() as *mut c_char) as colnr_T;
         OK
     }
 }
@@ -426,6 +422,7 @@ pub(crate) fn skip_to_start(c: c_int, colp: &mut colnr_T) -> c_int {
 /// A pattern that is one literal run needs no machine at all: look for the
 /// text directly. Returns 1 and fills in the capture slots on a match.
 pub(crate) fn find_match_text(
+    rex: Rex,
     startcol: &mut colnr_T,
     regstart: c_int,
     match_text: *mut uint8_t,
@@ -443,19 +440,18 @@ pub(crate) fn find_match_text(
             // so measure what is actually there.
             let mut regstart_len2 = regstart_len;
             if regstart_len2 > 1
-                && utf_ptr2len(((*rex.ptr()).line as *mut c_char).offset(col as isize))
-                    != regstart_len2
+                && utf_ptr2len((rex.line() as *mut c_char).offset(col as isize)) != regstart_len2
             {
                 regstart_len2 = utf_char2len(utf_fold(regstart));
             }
-            let mut s2 = (*rex.ptr())
-                .line
+            let mut s2 = rex
+                .line()
                 .offset(col as isize)
                 .offset(regstart_len2 as isize);
             while *s1 != 0 {
                 let c1 = utf_ptr2char(s1 as *mut c_char);
                 let c2 = utf_ptr2char(s2 as *mut c_char);
-                if c1 != c2 && (!(*rex.ptr()).reg_ic || utf_fold(c1) != utf_fold(c2)) {
+                if c1 != c2 && (!rex.reg_ic() || utf_fold(c1) != utf_fold(c2)) {
                     matched = false;
                     break;
                 }
@@ -465,23 +461,23 @@ pub(crate) fn find_match_text(
             // A combining character after the run makes it a different
             // grapheme, so it is not the text after all.
             if matched && !utf_iscomposing_legacy(utf_ptr2char(s2 as *mut c_char)) {
-                cleanup_subexpr();
-                if (*rex.ptr()).reg_match.is_null() {
-                    let start = (*rex.ptr()).reg_startpos;
-                    let end = (*rex.ptr()).reg_endpos;
-                    (*start).lnum = (*rex.ptr()).lnum;
+                cleanup_subexpr(rex);
+                if rex.multi() {
+                    let start = rex.reg_startpos();
+                    let end = rex.reg_endpos();
+                    (*start).lnum = rex.lnum();
                     (*start).col = col;
-                    (*end).lnum = (*rex.ptr()).lnum;
-                    (*end).col = s2.offset_from((*rex.ptr()).line) as colnr_T;
+                    (*end).lnum = rex.lnum();
+                    (*end).col = s2.offset_from(rex.line()) as colnr_T;
                 } else {
-                    *(*rex.ptr()).reg_startp = (*rex.ptr()).line.offset(col as isize);
-                    *(*rex.ptr()).reg_endp = s2;
+                    *rex.reg_startp() = rex.line().offset(col as isize);
+                    *rex.reg_endp() = s2;
                 }
                 *startcol = col;
                 return 1;
             }
             col += regstart_len;
-            if skip_to_start(regstart, &mut col) == FAIL {
+            if skip_to_start(rex, regstart, &mut col) == FAIL {
                 break;
             }
         }
