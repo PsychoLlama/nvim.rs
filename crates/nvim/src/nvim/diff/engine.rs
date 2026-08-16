@@ -201,7 +201,7 @@ pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> c_int {
         block_autocmds();
         call_shell(
             cmd,
-            kShellOptFilter | kShellOptSilent | kShellOptDoOut,
+            ShellOpts::FILTER | ShellOpts::SILENT | ShellOpts::DO_OUT,
             ::core::ptr::null_mut(),
         );
         unblock_autocmds();

@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::os::shell::ShellOpts;
 use crate::src::nvim::types::{
     CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make,
 };
@@ -142,7 +143,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
         os_remove(fname);
 
         let cmd = make_get_fullcmd((*eap).arg, fname);
-        do_shell(cmd, 0);
+        do_shell(cmd, ShellOpts::NONE);
 
         incr_quickfix_busy();
 

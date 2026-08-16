@@ -15,7 +15,7 @@
 
 use super::{
     BL_FIX, BL_WHITE, CPO_REMMARK, FAIL, NUL, OK, READ_FILTER, buf_autocmd, check_secure, false_0,
-    kExtmarkNOOP, kShellOptDoOut, kShellOptFilter, kShellOptRead, kShellOptWrite, true_0,
+    kExtmarkNOOP, true_0,
 };
 use crate::semsg_c;
 use crate::src::nvim::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
@@ -49,7 +49,7 @@ use crate::src::nvim::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::src::nvim::os::fs::os_remove;
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::gettext;
-use crate::src::nvim::os::shell::call_shell;
+use crate::src::nvim::os::shell::{ShellOpts, call_shell};
 use crate::src::nvim::path::invocation_path_tail;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
@@ -222,7 +222,7 @@ pub unsafe fn do_bang(
             }
             ui_cursor_goto(msg_row.get(), msg_col.get());
             // SAFETY: as above.
-            unsafe { do_shell(newcmd, 0) };
+            unsafe { do_shell(newcmd, ShellOpts::NONE) };
         } else {
             // SAFETY: `eap` is the caller's live argument and `newcmd` a live
             // string; the autocommand runs with the current buffer.
@@ -346,13 +346,17 @@ unsafe fn do_filter(
     //
     // When writing the input with a pipe or when catching the output with a
     // pipe only need to do 3.
-    let mut shell_flags = if do_out { kShellOptDoOut as c_int } else { 0 };
+    let mut shell_flags = if do_out {
+        ShellOpts::DO_OUT
+    } else {
+        ShellOpts::NONE
+    };
     let mut itmp = None;
     let mut otmp = None;
     let mut no_tempname = false;
     if stmp == 0 && (do_in || do_out) {
         if do_in {
-            shell_flags |= kShellOptWrite as c_int;
+            shell_flags |= ShellOpts::WRITE;
             // SAFETY: `curbuf` is live.
             unsafe {
                 (*curbuf.get()).b_op_start.lnum = line1;
@@ -360,7 +364,7 @@ unsafe fn do_filter(
             }
         }
         if do_out {
-            shell_flags |= kShellOptRead as c_int;
+            shell_flags |= ShellOpts::READ;
             // SAFETY: `curwin` is live.
             unsafe { (*curwin.get()).w_cursor.lnum = line2 };
         }
@@ -449,13 +453,9 @@ unsafe fn do_filter(
             let mut read_linecount = unsafe { (*curbuf.get()).b_ml.ml_line_count };
 
             // SAFETY: `cmd_buf` is a live command line and ours to free.
-            // Pass on the kShellOptDoOut flag when the output is redirected.
+            // Pass on the DO_OUT flag when the output is redirected.
             unsafe {
-                call_shell(
-                    cmd_buf,
-                    kShellOptFilter as c_int | shell_flags,
-                    ptr::null_mut(),
-                );
+                call_shell(cmd_buf, ShellOpts::FILTER | shell_flags, ptr::null_mut());
                 xfree(cmd_buf.cast());
             }
 
@@ -507,7 +507,7 @@ unsafe fn do_filter(
             // SAFETY: `curbuf` is live.
             read_linecount = unsafe { (*curbuf.get()).b_ml.ml_line_count } - read_linecount;
 
-            if shell_flags & kShellOptRead as c_int != 0 {
+            if shell_flags.has(ShellOpts::READ) {
                 // SAFETY: as above; the read appended after `line2`.
                 unsafe {
                     (*curbuf.get()).b_op_start.lnum = line2 + 1;
@@ -640,11 +640,11 @@ fn report_filtered(linecount: linenr_T) {
 
 /// Call a shell to execute `cmd`; a NULL `cmd` starts an interactive shell.
 ///
-/// `flags` may be `kShellOptDoOut` when the output is redirected.
+/// `flags` may be [`ShellOpts::DO_OUT`] when the output is redirected.
 ///
 /// # Safety
 /// `cmd` must be a live C string, or NULL.
-pub unsafe fn do_shell(cmd: *mut c_char, flags: c_int) {
+pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     // SAFETY: main thread, message state.
     if unsafe { check_secure() } {
         unsafe { msg_end() };

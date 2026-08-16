@@ -397,9 +397,9 @@ pub unsafe fn os_expand_wildcards(
         );
         let command = CString::new(command).expect("no interior NUL in a shell command");
 
-        let mut shellopts = kShellOptExpand | kShellOptSilent;
+        let mut shellopts = ShellOpts::EXPAND | ShellOpts::SILENT;
         if flags & EW_SILENT != 0 {
-            shellopts |= kShellOptHideMess;
+            shellopts |= ShellOpts::HIDE_MESS;
         }
         // With zsh -G a pattern that matches nothing is dropped from the
         // argument list; otherwise zsh errors out and expands nothing else.

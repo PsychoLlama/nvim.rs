@@ -95,6 +95,7 @@ pub mod src {
         pub mod extmark;
         pub mod file_search;
         pub mod fileio;
+        pub mod flags;
         pub mod fold;
         pub mod fuzzy;
         pub mod garray;

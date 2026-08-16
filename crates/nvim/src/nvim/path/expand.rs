@@ -14,6 +14,7 @@ use std::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::os::shell::ShellOpts;
 
 /// Whether a `gen_expand_wildcards` is already running. The pieces it calls
 /// can come back round to it — `expand_env` falls back on `ExpandOne` — and
@@ -402,9 +403,9 @@ pub(crate) unsafe fn expand_backtick(gap: *mut garray_T, pat: *mut c_char, flags
             eval_to_string(cmd.add(1), true, false)
         } else {
             let opts = if flags & EW_SILENT as c_int != 0 {
-                kShellOptSilent as c_int
+                ShellOpts::SILENT
             } else {
-                0
+                ShellOpts::NONE
             };
             get_cmd_output(cmd, core::ptr::null_mut(), opts, core::ptr::null_mut())
         };

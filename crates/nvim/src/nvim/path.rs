@@ -67,7 +67,6 @@ pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const WILD_ICASE: C2Rust_Unnamed_18 = 256;
 pub const WILD_ADD_SLASH: C2Rust_Unnamed_18 = 16;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kShellOptSilent: C2Rust_Unnamed_19 = 8;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const EW_NOBREAK: C2Rust_Unnamed_20 = 262144;
 pub const EW_CDPATH: C2Rust_Unnamed_20 = 131072;

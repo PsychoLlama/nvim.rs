@@ -344,7 +344,7 @@
     "crates/nvim/src/nvim/ex_cmds/append.rs": {"unsafe_lines": 136},
     "crates/nvim/src/nvim/ex_cmds/ecmd.rs": {"cell_ptr": 1, "unsafe_lines": 275},
     "crates/nvim/src/nvim/ex_cmds/ecmd/switch.rs": {"unsafe_lines": 154},
-    "crates/nvim/src/nvim/ex_cmds/filter.rs": {"cell_ptr": 1, "unsafe_lines": 260},
+    "crates/nvim/src/nvim/ex_cmds/filter.rs": {"cell_ptr": 1, "unsafe_lines": 256},
     "crates/nvim/src/nvim/ex_cmds/global.rs": {"unsafe_lines": 100},
     "crates/nvim/src/nvim/ex_cmds/lines.rs": {"cell_ptr": 1, "unsafe_lines": 122},
     "crates/nvim/src/nvim/ex_cmds/sort.rs": {"unsafe_lines": 249},

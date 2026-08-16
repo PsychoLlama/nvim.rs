@@ -25,7 +25,7 @@ use crate::src::nvim::memory::{xfree, xstrlcpy};
 use crate::src::nvim::option::{PROJECT_NAME, set_helplang_default};
 use crate::src::nvim::os::env::os_setenv;
 use crate::src::nvim::os::libc::{bindtextdomain, gettext, setlocale, textdomain};
-use crate::src::nvim::os::shell::{get_cmd_output, kShellOptSilent};
+use crate::src::nvim::os::shell::{ShellOpts, get_cmd_output};
 use crate::src::nvim::path::{path_tail, path_tail_with_sep};
 use crate::src::nvim::profile::time_msg;
 use crate::src::nvim::types::{
@@ -301,7 +301,7 @@ fn find_locales() -> Option<&'static [CString]> {
         let out = get_cmd_output(
             c"locale -a".as_ptr().cast_mut(),
             ptr::null_mut(),
-            kShellOptSilent as c_int,
+            ShellOpts::SILENT,
             ptr::null_mut(),
         );
         if out.is_null() {

@@ -60,16 +60,29 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-/// `ShellOpts`: how a shell command's input and output are wired up.
-///
-/// Retyped from the `c_uint` c2rust picked for the anonymous enum, because
-/// every consumer passes them as the `int opts` parameter.
-pub const kShellOptExpand: c_int = 2;
-pub const kShellOptDoOut: c_int = 4;
-pub const kShellOptSilent: c_int = 8;
-pub const kShellOptRead: c_int = 16;
-pub const kShellOptWrite: c_int = 32;
-pub const kShellOptHideMess: c_int = 64;
+crate::flag_set! {
+    /// How a shell command's input and output are wired up — upstream's
+    /// `ShellOpts` enum, whose values are always combined with `|`.
+    pub struct ShellOpts;
+
+    /// The command filters the buffer (`:{range}!cmd`). Only `ex_cmds/`
+    /// and `diff/` set it, and only [`call_shell`]'s `'shelltemp'` path
+    /// and the `:diff` writer read it back.
+    const FILTER = 1;
+    /// The command is a wildcard expansion, not something the user typed:
+    /// no mode change, no output forwarding.
+    const EXPAND = 2;
+    /// The caller has already redirected the output somewhere.
+    const DO_OUT = 4;
+    /// Do not report a non-zero exit code.
+    const SILENT = 8;
+    /// Capture the output and write it into the editor.
+    const READ = 16;
+    /// Feed the current buffer to the command's standard input.
+    const WRITE = 32;
+    /// Run without any message at all, not even the mode change.
+    const HIDE_MESS = 64;
+}
 
 const OK: c_int = 1;
 const FAIL: c_int = 0;
@@ -194,13 +207,13 @@ pub unsafe extern "C" fn shell_argv_to_str(argv: *mut *mut c_char) -> *mut c_cha
 }
 
 /// Run `cmd` through `'shell'`, or start an interactive shell when it is
-/// NULL. `opts` is a combination of the `kShellOpt*` flags.
+/// NULL. `opts` says how the command's streams are wired up.
 ///
 /// Answers the command's exit code.
 ///
 /// # Safety
 /// `cmd` and `extra_args` must be NUL-terminated strings or NULL.
-pub unsafe fn os_call_shell(cmd: *mut c_char, opts: c_int, extra_args: *mut c_char) -> c_int {
+pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut c_char) -> c_int {
     let mut input = STRINGBUILDER_INIT;
     let mut output: *mut c_char = ptr::null_mut();
     let mut output_ptr: *mut *mut c_char = ptr::null_mut();
@@ -213,17 +226,17 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: c_int, extra_args: *mut c_ch
     // SAFETY: the caller's contract; `input`, `output` and `nread` are locals
     // whose addresses outlive the call.
     let exitcode = unsafe {
-        if opts & (kShellOptHideMess | kShellOptExpand) != 0 {
+        if opts.has(ShellOpts::HIDE_MESS | ShellOpts::EXPAND) {
             forward_output = false;
         } else {
             State.set(MODE_EXTERNCMD);
-            if opts & kShellOptWrite != 0 {
+            if opts.has(ShellOpts::WRITE) {
                 read_input(&raw mut input);
             }
-            if opts & kShellOptRead != 0 {
+            if opts.has(ShellOpts::READ) {
                 output_ptr = &raw mut output;
                 forward_output = false;
-            } else if opts & kShellOptDoOut != 0 {
+            } else if opts.has(ShellOpts::DO_OUT) {
                 // The caller has already redirected the output.
                 forward_output = false;
             }
@@ -246,7 +259,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: c_int, extra_args: *mut c_ch
             xfree(output.cast());
         }
 
-        if emsg_silent.get() == 0 && exitcode != 0 && opts & kShellOptSilent == 0 {
+        if emsg_silent.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
             msg_ext_set_kind(c"shell_ret".as_ptr());
             if !ui_has(kUIMessages) {
                 msg_putchar(NL);
@@ -267,7 +280,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: c_int, extra_args: *mut c_ch
 ///
 /// # Safety
 /// As [`os_call_shell`].
-pub unsafe fn call_shell(cmd: *mut c_char, opts: c_int, extra_shell_arg: *mut c_char) -> c_int {
+pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mut c_char) -> c_int {
     let mut wait_time: proftime_T = 0;
     // SAFETY: the caller's contract. `smsg` is printf-shaped.
     unsafe {
@@ -315,7 +328,7 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: c_int, extra_shell_arg: *mut c_
 pub unsafe fn get_cmd_output(
     cmd: *mut c_char,
     infile: *mut c_char,
-    flags: c_int,
+    flags: ShellOpts,
     ret_len: *mut size_t,
 ) -> *mut c_char {
     // SAFETY: the caller's contract; `tempname` and `command` are owned here
@@ -336,7 +349,7 @@ pub unsafe fn get_cmd_output(
         no_check_timestamps.set(no_check_timestamps.get() + 1);
         call_shell(
             command,
-            kShellOptDoOut | kShellOptExpand | flags,
+            ShellOpts::DO_OUT | ShellOpts::EXPAND | flags,
             ptr::null_mut(),
         );
         no_check_timestamps.set(no_check_timestamps.get() - 1);

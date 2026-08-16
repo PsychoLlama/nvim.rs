@@ -90,7 +90,7 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::libc::{
     atol, fclose, fwrite, gettext, snprintf, strcat, strcpy, strlen, strncmp, tolower,
 };
-use crate::src::nvim::os::shell::{call_shell, kShellOptDoOut, kShellOptSilent};
+use crate::src::nvim::os::shell::{ShellOpts, call_shell};
 use crate::src::nvim::path::FullName_save;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
@@ -198,9 +198,6 @@ pub struct diffhunk_T {
     pub count_new: ::core::ffi::c_int,
 }
 pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
-/// `kShellOptFilter`, which `os/shell.rs` does not declare: it is read by
-/// `do_filter`, not by `call_shell`.
-pub const kShellOptFilter: ::core::ffi::c_int = 1;
 pub const OPT_LOCAL: ::core::ffi::c_int = 2;
 #[derive(Copy, Clone)]
 pub struct linemap_entry_T {

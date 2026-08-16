@@ -100,7 +100,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                     block_autocmds();
                     call_shell(
                         buf,
-                        kShellOptFilter,
+                        ShellOpts::FILTER,
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     );
                     unblock_autocmds();
