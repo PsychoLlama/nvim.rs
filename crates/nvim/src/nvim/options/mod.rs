@@ -142,7 +142,7 @@ const BLANK: vimoption_T = vimoption_T {
     type_0: kOptValTypeBoolean,
     scope_flags: 0,
     var: ptr::null_mut(),
-    flags_var: ptr::null_mut(),
+    flags_var: None,
     scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
     immutable: false,
     values: ptr::null_mut(),

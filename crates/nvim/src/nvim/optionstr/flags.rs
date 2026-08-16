@@ -23,7 +23,7 @@ use core::ptr;
 use crate::src::nvim::main::e_invarg;
 use crate::src::nvim::option::{get_option, kOptFlagComma, kOptFlagOneComma};
 use crate::src::nvim::options::{
-    kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions, opt_ff_values,
+    kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions,
 };
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{OptIndex, optset_T, size_t};
@@ -190,9 +190,10 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
     };
     let list = unsafe { (*opt).flags } & (kOptFlagComma | kOptFlagOneComma) != 0;
     let (values, _) = opt_values(idx);
-    // SAFETY: the option's variable holds a C string, and `flags_var` is the
-    // table's own `unsigned` (or null for an option with no mask).
-    unsafe { opt_strings_flags(*varp, values, (*opt).flags_var, list) }
+    // The table names the mask cell itself; an option with no mask has none.
+    let flagp = unsafe { (*opt).flags_var }.map_or(ptr::null_mut(), |cell| cell.ptr());
+    // SAFETY: the option's variable holds a C string.
+    unsafe { opt_strings_flags(*varp, values, flagp, list) }
 }
 
 /// Is `p` one of "unix", "dos" or "mac"? `OK` or `FAIL`, exported for the
@@ -202,14 +203,9 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
 /// `p` is a C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn check_ff_value(p: *mut c_char) -> c_int {
-    unsafe {
-        opt_strings_flags(
-            p,
-            opt_ff_values.ptr().cast::<*const c_char>(),
-            ptr::null_mut(),
-            false,
-        )
-    }
+    let (values, _) = opt_values(kOptFileformat);
+    // SAFETY: the caller's C string, against the table's own word list.
+    unsafe { opt_strings_flags(p, values, ptr::null_mut(), false) }
 }
 
 #[cfg(test)]

@@ -4,6 +4,8 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
+use crate::src::nvim::global_cell::GlobalCell;
+
 pub type OptScope = ::core::ffi::c_uint;
 pub type OptScopeFlags = uint8_t;
 #[derive(Copy, Clone)]
@@ -62,7 +64,7 @@ pub struct vimoption_T {
     pub type_0: OptValType,
     pub scope_flags: OptScopeFlags,
     pub var: *mut ::core::ffi::c_void,
-    pub flags_var: *mut ::core::ffi::c_uint,
+    pub flags_var: Option<&'static GlobalCell<::core::ffi::c_uint>>,
     pub scope_idx: [ssize_t; 3],
     pub immutable: bool,
     pub values: *mut *const ::core::ffi::c_char,

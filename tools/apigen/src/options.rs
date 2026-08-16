@@ -805,7 +805,7 @@ fn emit_row(out: &mut String, o: &Opt) {
         None => {}
     }
     if let Some(flags_var) = &o.flags_varname {
-        writeln!(out, "        flags_var: {flags_var}.as_raw(),").unwrap();
+        writeln!(out, "        flags_var: Some(&{flags_var}),").unwrap();
     }
     if o.immutable {
         writeln!(out, "        immutable: true,").unwrap();
@@ -885,7 +885,7 @@ const BLANK: vimoption_T = vimoption_T {
     type_0: kOptValTypeBoolean,
     scope_flags: 0,
     var: ptr::null_mut(),
-    flags_var: ptr::null_mut(),
+    flags_var: None,
     scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
     immutable: false,
     values: ptr::null_mut(),

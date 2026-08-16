@@ -437,7 +437,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptFoldopen, kWinOptInvalid, kBufOptInvalid),
         var: p_fdo.as_raw().cast(),
-        flags_var: fdo_flags.as_raw(),
+        flags_var: Some(&fdo_flags),
         values: opt_fdo_values.as_raw().cast(),
         values_len: 11,
         opt_did_set_cb: Some(did_set_str_generic),
