@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use core::ffi::{c_char, c_int, c_void};
 
 /// Is fuzzy completion supported in this cmdline completion context?
@@ -163,14 +164,14 @@ pub(crate) unsafe fn escape_matches(
     xp: *mut expand_T,
     str: *mut c_char,
     matches: &mut [*mut c_char],
-    options: c_int,
+    options: WildOpts,
 ) {
     unsafe {
         // May change home directory back to "~".
-        if options & WILD_HOME_REPLACE != 0 {
+        if options.has(WildOpts::HOME_REPLACE) {
             tilde_replace(str, matches.len() as c_int, matches.as_mut_ptr());
         }
-        if options & WILD_ESCAPE != 0 {
+        if options.has(WildOpts::ESCAPE) {
             wildescape(xp, str, matches);
         }
     }

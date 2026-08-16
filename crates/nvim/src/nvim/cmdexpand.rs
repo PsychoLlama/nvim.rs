@@ -233,34 +233,103 @@ pub const EXPAND_OK: C2Rust_Unnamed_14 = -1;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_14 = -2;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
-pub const WILD_PUM_WANT: C2Rust_Unnamed_18 = 13;
-pub const WILD_PAGEDOWN: C2Rust_Unnamed_18 = 12;
-pub const WILD_PAGEUP: C2Rust_Unnamed_18 = 11;
-pub const WILD_APPLY: C2Rust_Unnamed_18 = 10;
-pub const WILD_CANCEL: C2Rust_Unnamed_18 = 9;
-pub const WILD_ALL_KEEP: C2Rust_Unnamed_18 = 8;
-pub const WILD_LONGEST: C2Rust_Unnamed_18 = 7;
-pub const WILD_ALL: C2Rust_Unnamed_18 = 6;
-pub const WILD_PREV: C2Rust_Unnamed_18 = 5;
-pub const WILD_NEXT: C2Rust_Unnamed_18 = 4;
-pub const WILD_EXPAND_FREE: C2Rust_Unnamed_18 = 2;
-pub const WILD_FREE: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
-pub const WILD_FUNC_TRIGGER: C2Rust_Unnamed_19 = 65536;
-pub const WILD_MAY_EXPAND_PATTERN: C2Rust_Unnamed_19 = 32768;
-pub const WILD_NOSELECT: C2Rust_Unnamed_19 = 16384;
-pub const BUF_DIFF_FILTER: C2Rust_Unnamed_19 = 8192;
-pub const WILD_NOERROR: C2Rust_Unnamed_19 = 2048;
-pub const WILD_ALLLINKS: C2Rust_Unnamed_19 = 512;
-pub const WILD_ICASE: C2Rust_Unnamed_19 = 256;
-pub const WILD_ESCAPE: C2Rust_Unnamed_19 = 128;
-pub const WILD_SILENT: C2Rust_Unnamed_19 = 64;
-pub const WILD_KEEP_ALL: C2Rust_Unnamed_19 = 32;
-pub const WILD_ADD_SLASH: C2Rust_Unnamed_19 = 16;
-pub const WILD_NO_BEEP: C2Rust_Unnamed_19 = 8;
-pub const WILD_USE_NL: C2Rust_Unnamed_19 = 4;
-pub const WILD_HOME_REPLACE: C2Rust_Unnamed_19 = 2;
-pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_19 = 1;
+/// Not a `WILD_*` at all — `buffer.h`'s, and `ExpandBufnames` reads it out
+/// of the same `options` word, so it is spelled as one of them.
+pub const BUF_DIFF_FILTER: WildOpts = WildOpts::from_bits(8192);
+
+/// What [`ExpandOne`] should do — upstream's `WILD_*` *modes*, which are an
+/// enumeration and not a flag set: exactly one is passed, and the value space
+/// (1..=13) collides with [`WildOpts`]'s bits one for one.
+///
+/// c2rust gave both families the same `c_int`, so `ExpandOne(xp, s, o,
+/// WILD_ALL, WILD_SILENT)` — arguments swapped — compiled. As an enum the
+/// swap does not, and [`next_match`](expandone) can match exhaustively
+/// instead of leaning on a `_` arm.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WildMode {
+    /// Just release the previously expanded matches.
+    Free,
+    /// Expand, and do not keep the matches.
+    ExpandFree,
+    /// Expand, and keep the matches for a later `Next`/`Prev`.
+    ExpandKeep,
+    /// Step forward through the matches, wrapping around.
+    Next,
+    /// Step back through the matches, wrapping around.
+    Prev,
+    /// Answer every match, concatenated.
+    All,
+    /// Answer the longest part every match starts with.
+    Longest,
+    /// Answer every match and keep them.
+    AllKeep,
+    /// Close the popup menu and go back to the original text.
+    Cancel,
+    /// Apply the item selected in the popup menu.
+    Apply,
+    /// Move the selection a page towards the start.
+    PageUp,
+    /// Move the selection a page towards the end.
+    PageDown,
+    /// Select the item the UI named in `pum_want`.
+    PumWant,
+}
+
+impl WildMode {
+    /// Whether this mode only moves within a match list that already exists,
+    /// rather than expanding anything.
+    pub const fn navigates(self) -> bool {
+        matches!(
+            self,
+            Self::Next | Self::Prev | Self::PageUp | Self::PageDown | Self::PumWant
+        )
+    }
+}
+
+crate::flag_set! {
+    /// How an expansion should behave — upstream's `WILD_*` options, the
+    /// `options` argument to [`ExpandOne`] and [`nextwild`].
+    ///
+    /// Distinct from the `mode` argument beside it, which is an enumeration
+    /// ([`WildMode`]) whose values run 1..=13 and therefore collide with
+    /// these bit values one for one. Nothing but the parameter name kept
+    /// them apart while both were `int`.
+    pub struct WildOpts;
+
+    /// Answer a pattern that matched nothing as itself.
+    const LIST_NOTFOUND = 1;
+    /// Shorten a name under `$HOME` to `~/`.
+    const HOME_REPLACE = 2;
+    /// Separate the concatenated matches with newlines, not spaces.
+    const USE_NL = 4;
+    /// Do not beep when there is nothing to complete.
+    const NO_BEEP = 8;
+    /// Append a path separator to every directory answered.
+    const ADD_SLASH = 16;
+    /// Do not drop the matches `'wildignore'` and `'suffixes'` name.
+    const KEEP_ALL = 32;
+    /// Do not report a failure to the user.
+    const SILENT = 64;
+    /// Escape the answer for the command line it is going back into.
+    const ESCAPE = 128;
+    /// Match without regard to case.
+    const ICASE = 256;
+    /// Answer a dangling symbolic link as a match.
+    const ALLLINKS = 512;
+    /// Leave a trailing slash alone, whatever `'completeslash'` says.
+    const IGNORE_COMPLETESLASH = 1024;
+    /// Do not report a pattern that could not be expanded at all.
+    const NOERROR = 2048;
+    /// Order the buffer matches by when they were last used.
+    const BUFLASTUSED = 4096;
+    /// Leave the popup menu with nothing selected.
+    const NOSELECT = 16384;
+    /// `'wildmode'` says the pattern itself may be one of the answers.
+    const MAY_EXPAND_PATTERN = 32768;
+    /// The completion was asked for by `'wildmode'`'s function trigger.
+    const FUNC_TRIGGER = 65536;
+}
 pub const VSE_NONE: C2Rust_Unnamed_24 = 0;
 pub const VSE_BUFFER: C2Rust_Unnamed_24 = 2;
 pub const VSE_SHELL: C2Rust_Unnamed_24 = 1;

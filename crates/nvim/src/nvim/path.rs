@@ -64,8 +64,6 @@ mod expand;
 pub use self::expand::*;
 
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const WILD_ICASE: C2Rust_Unnamed_18 = 256;
-pub const WILD_ADD_SLASH: C2Rust_Unnamed_18 = 16;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 

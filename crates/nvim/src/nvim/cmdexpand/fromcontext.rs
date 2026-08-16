@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::src::nvim::cmdexpand::WildOpts;
 use crate::src::nvim::path::ExpandFlags;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -19,26 +20,22 @@ use core::ptr;
 pub(crate) type ItemGetter = unsafe extern "C" fn(*mut expand_T, c_int) -> *mut c_char;
 
 /// The `WILD_*` options that name an `EW_*` flag one-for-one.
-const WILDOPT_TO_EW: [(c_int, ExpandFlags); 6] = [
-    (WILD_LIST_NOTFOUND, ExpandFlags::NOTFOUND),
-    (WILD_ADD_SLASH, ExpandFlags::ADDSLASH),
-    (WILD_KEEP_ALL, ExpandFlags::KEEPALL),
-    (WILD_SILENT, ExpandFlags::SILENT),
-    (WILD_NOERROR, ExpandFlags::NOERROR),
-    (WILD_ALLLINKS, ExpandFlags::ALLLINKS),
+const WILDOPT_TO_EW: [(WildOpts, ExpandFlags); 6] = [
+    (WildOpts::LIST_NOTFOUND, ExpandFlags::NOTFOUND),
+    (WildOpts::ADD_SLASH, ExpandFlags::ADDSLASH),
+    (WildOpts::KEEP_ALL, ExpandFlags::KEEPALL),
+    (WildOpts::SILENT, ExpandFlags::SILENT),
+    (WildOpts::NOERROR, ExpandFlags::NOERROR),
+    (WildOpts::ALLLINKS, ExpandFlags::ALLLINKS),
 ];
 
 /// Translate the `WILD_*` options into the `EW_*` flags `expand_wildcards`
 /// takes.  `ExpandFlags::DIR` — include directories — is always on.
-pub(crate) fn map_wildopts_to_ewflags(options: c_int) -> ExpandFlags {
+pub(crate) fn map_wildopts_to_ewflags(options: WildOpts) -> ExpandFlags {
     WILDOPT_TO_EW
         .iter()
         .fold(ExpandFlags::DIR, |flags, &(wild, ew)| {
-            if options & wild != 0 {
-                flags | ew
-            } else {
-                flags
-            }
+            if options.has(wild) { flags | ew } else { flags }
         })
 }
 
@@ -53,7 +50,7 @@ pub(crate) unsafe fn ExpandFromContext(
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-    options: c_int,
+    options: WildOpts,
 ) -> c_int {
     unsafe {
         let mut pat = pat;

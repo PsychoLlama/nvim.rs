@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::path::tail_index;
 use crate::src::nvim::runtime::DIP_ALL;
@@ -319,8 +320,8 @@ pub(crate) unsafe fn expand_tag_fname(
                 &raw mut xpc,
                 fname,
                 ptr::null_mut(),
-                (WILD_LIST_NOTFOUND | WILD_SILENT) as c_int,
-                WILD_EXPAND_FREE as c_int,
+                WildOpts::LIST_NOTFOUND | WildOpts::SILENT,
+                WildMode::ExpandFree,
             );
         }
         let fname = if expanded.is_null() { fname } else { expanded };

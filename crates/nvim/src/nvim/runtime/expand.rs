@@ -14,8 +14,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -65,7 +66,7 @@ unsafe fn build_pattern(
 /// collecting the matches in `gap`.
 ///
 /// When `dir` is empty this runs twice: once for script files, once more with
-/// `WILD_ADD_SLASH` for directories, which is what makes `:runtime` complete a
+/// `WildOpts::ADD_SLASH` for directories, which is what makes `:runtime` complete a
 /// subdirectory name.
 ///
 /// # Safety
@@ -79,7 +80,7 @@ unsafe fn glob_rounds(
     flags: c_int,
     gap: *mut garray_T,
 ) {
-    let mut glob_flags = 0;
+    let mut glob_flags = WildOpts::NONE;
     let mut expand_dirs = false;
     // SAFETY: the caller's buffer and strings, and `globpath` only appends.
     unsafe {
@@ -106,7 +107,7 @@ unsafe fn glob_rounds(
                 return;
             }
             snprintf(buf, buf_len, c"%s*".as_ptr(), pat);
-            glob_flags = WILD_ADD_SLASH;
+            glob_flags = WildOpts::ADD_SLASH;
             expand_dirs = true;
         }
     }
@@ -340,7 +341,7 @@ pub unsafe extern "C" fn ExpandPackAddDir(
         let s = xmalloc(buflen).cast::<c_char>();
         for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
             snprintf(s, buflen, fmt.as_ptr(), pat);
-            globpath(p_pp.get(), s, &raw mut ga, 0, true);
+            globpath(p_pp.get(), s, &raw mut ga, WildOpts::NONE, true);
         }
         xfree(s.cast());
 

@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::cmdexpand::WildOpts;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -142,12 +143,12 @@ pub(crate) unsafe fn expand_in_path(
         let paths = ga_concat_strings(&raw mut path_ga, c",".as_ptr());
         ga_clear_strings(&raw mut path_ga);
 
-        let mut glob_flags = 0;
+        let mut glob_flags = WildOpts::NONE;
         if flags.has(ExpandFlags::ICASE) {
-            glob_flags |= WILD_ICASE as c_int;
+            glob_flags |= WildOpts::ICASE;
         }
         if flags.has(ExpandFlags::ADDSLASH) {
-            glob_flags |= WILD_ADD_SLASH as c_int;
+            glob_flags |= WildOpts::ADD_SLASH;
         }
         globpath(
             paths,

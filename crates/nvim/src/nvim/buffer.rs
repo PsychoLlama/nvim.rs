@@ -174,10 +174,8 @@ pub struct bufmatch_T {
     pub buf: *mut buf_T,
     pub match_0: *mut ::core::ffi::c_char,
 }
-pub const WILD_BUFLASTUSED: C2Rust_Unnamed_25 = 4096;
-pub const WILD_HOME_REPLACE: C2Rust_Unnamed_25 = 2;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_30 = -2147483648;
-pub const BUF_DIFF_FILTER: C2Rust_Unnamed_25 = 8192;
+
 pub const SHM_RO: C2Rust_Unnamed_24 = 114;
 pub const SHM_MOD: C2Rust_Unnamed_24 = 109;
 pub const READ_DUMMY: C2Rust_Unnamed_29 = 16;

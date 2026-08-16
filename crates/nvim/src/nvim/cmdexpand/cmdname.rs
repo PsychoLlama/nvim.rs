@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::types::{
     CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_abbreviate, CMD_aboveleft, CMD_amenu, CMD_and,
@@ -619,7 +620,7 @@ pub unsafe fn expand_cmdline(
     matches: *mut *mut *mut c_char,
 ) -> c_int {
     unsafe {
-        let mut options = WILD_ADD_SLASH | WILD_SILENT;
+        let mut options = WildOpts::ADD_SLASH | WildOpts::SILENT;
 
         if (*xp).xp_context == EXPAND_UNSUCCESSFUL {
             beep_flush();
@@ -641,7 +642,7 @@ pub unsafe fn expand_cmdline(
         };
 
         if p_wic.get() != 0 {
-            options += WILD_ICASE;
+            options |= WildOpts::ICASE;
         }
 
         // Find all files that match the description.

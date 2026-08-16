@@ -7,6 +7,7 @@
 //! old line.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -23,8 +24,7 @@ use crate::src::nvim::ex_docmd::scan::skip_grep_pat;
 use crate::src::nvim::ex_docmd::{
     ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EX_NOSPC, EXPAND_FILES, FAIL, FIND_EVAL,
     FIND_IDENT, FIND_STRING, FNAME_HYP, FNAME_MESS, MAXPATHL, NUL, OK, VALID_HEAD, VALID_PATH,
-    WILD_ADD_SLASH, WILD_EXPAND_FREE, WILD_ICASE, WILD_LIST_NOTFOUND, WILD_NOERROR, dollar_command,
-    e_no_autocommand_buffer_number_to_substitute_for_abuf,
+    dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
@@ -241,17 +241,16 @@ pub unsafe fn expand_filename(
         let mut xpc: expand_T = core::mem::zeroed();
         ExpandInit(&raw mut xpc);
         xpc.xp_context = EXPAND_FILES as c_int;
-        let mut options =
-            WILD_LIST_NOTFOUND as c_int | WILD_NOERROR as c_int | WILD_ADD_SLASH as c_int;
+        let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
         if p_wic.get() != 0 {
-            options += WILD_ICASE as c_int;
+            options |= WildOpts::ICASE;
         }
         let expanded = ExpandOne(
             &raw mut xpc,
             ea.arg,
             ptr::null_mut(),
             options,
-            WILD_EXPAND_FREE as c_int,
+            WildMode::ExpandFree,
         );
         if expanded.is_null() {
             return FAIL;

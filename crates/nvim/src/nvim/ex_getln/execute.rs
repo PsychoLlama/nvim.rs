@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
     Ctrl_Y, Ctrl_Z,
@@ -25,6 +26,16 @@ enum CtrlBsl {
     GotoNormalMode,
     /// Not a `CTRL-\` sequence at all; the key was pushed back.
     ProcessNextKey,
+}
+
+/// The wildmenu gesture a key is, if it is one: Ctrl-E cancels the popup menu
+/// and goes back to the original text, Ctrl-Y accepts the current selection.
+const fn wildmenu_gesture(c: ::core::ffi::c_int) -> Option<WildMode> {
+    match c {
+        Ctrl_E => Some(WildMode::Cancel),
+        Ctrl_Y => Some(WildMode::Apply),
+        _ => None,
+    }
 }
 
 /// Handle CTRL-\ pressed in Command-line mode:
@@ -127,8 +138,8 @@ pub(crate) unsafe fn command_line_end_wildmenu(
                 &raw mut (*s).xpc,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                0,
-                WILD_FREE,
+                WildOpts::NONE,
+                WildMode::Free,
             );
         }
         (*s).did_wild_list = false;
@@ -203,15 +214,15 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                 if cmdline_pum_active() {
                     nextwild(
                         &raw mut (*s).xpc,
-                        WILD_PUM_WANT,
-                        0,
+                        WildMode::PumWant,
+                        WildOpts::NONE,
                         (*s).firstc != '@' as ::core::ffi::c_int,
                     );
                     if (*pum_want.ptr()).finish {
                         nextwild(
                             &raw mut (*s).xpc,
-                            WILD_APPLY,
-                            WILD_NO_BEEP,
+                            WildMode::Apply,
+                            WildOpts::NO_BEEP,
                             (*s).firstc != '@' as ::core::ffi::c_int,
                         );
                         command_line_end_wildmenu(s, false, (*s).c);
@@ -286,26 +297,20 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             (*s).c = wildmenu_translate_key(cc, (*s).c, &raw mut (*s).xpc, (*s).did_wild_list);
         }
 
-        let mut wild_type = 0;
+        // Which wildmenu gesture, if any, the key was already used for.
+        let mut wild_type = None;
         let key_is_wc =
             ((*s).c as OptInt == p_wc.get() && KeyTyped.get()) || (*s).c as OptInt == p_wcm.get();
         if (cmdline_pum_active() || wild_menu_showing.get() != 0 || (*s).did_wild_list)
             && !key_is_wc
             && (*s).xpc.xp_numfiles > 0
         {
-            // Ctrl-Y: accept the current selection and close the popup menu.
-            // Ctrl-E: cancel the cmdline popup menu and return the original
-            // text.
-            if (*s).c == Ctrl_E || (*s).c == Ctrl_Y {
-                wild_type = if (*s).c == Ctrl_E {
-                    WILD_CANCEL
-                } else {
-                    WILD_APPLY
-                };
+            if let Some(mode) = wildmenu_gesture((*s).c) {
+                wild_type = Some(mode);
                 nextwild(
                     &raw mut (*s).xpc,
-                    wild_type,
-                    WILD_NO_BEEP,
+                    mode,
+                    WildOpts::NO_BEEP,
                     (*s).firstc != '@' as ::core::ffi::c_int,
                 );
             }
@@ -438,8 +443,8 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             && KeyTyped.get()
             && nextwild(
                 &raw mut (*s).xpc,
-                WILD_EXPAND_KEEP,
-                0,
+                WildMode::ExpandKeep,
+                WildOpts::NONE,
                 (*s).firstc != '@' as ::core::ffi::c_int,
             ) == OK
         {
@@ -457,14 +462,14 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             }
             nextwild(
                 &raw mut (*s).xpc,
-                WILD_PREV,
-                0,
+                WildMode::Prev,
+                WildOpts::NONE,
                 (*s).firstc != '@' as ::core::ffi::c_int,
             );
             nextwild(
                 &raw mut (*s).xpc,
-                WILD_PREV,
-                0,
+                WildMode::Prev,
+                WildOpts::NONE,
                 (*s).firstc != '@' as ::core::ffi::c_int,
             );
             return command_line_changed(s);
@@ -478,7 +483,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
 
         // If the key was already used to cancel or accept the wildmenu, don't
         // process it any further.
-        if wild_type == WILD_CANCEL || wild_type == WILD_APPLY {
+        if matches!(wild_type, Some(WildMode::Cancel | WildMode::Apply)) {
             // Apply search highlighting.
             if (*s).is_state.winid != (*curwin.get()).handle {
                 init_incsearch_state(&raw mut (*s).is_state);

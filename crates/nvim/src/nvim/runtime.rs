@@ -151,7 +151,6 @@ pub const kOptValTypeString: OptValType = 2;
 pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 pub const ADDR_LINES: cmd_addr_T = 0;
 /// `globpath` flags.
-pub const WILD_ADD_SLASH: ::core::ffi::c_int = 16;
 pub const kXDGDataDirs: XDGVarType = 6;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGRuntimeDir: XDGVarType = 4;

@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
@@ -119,7 +120,7 @@ pub unsafe extern "C" fn ExpandBufnames(
     pat: *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
-    options: c_int,
+    options: WildOpts,
 ) -> c_int {
     let mut matches: *mut bufmatch_T = ptr::null_mut();
     let mut to_free = false;
@@ -130,7 +131,7 @@ pub unsafe extern "C" fn ExpandBufnames(
     *num_file = 0;
     *file = ptr::null_mut();
 
-    if options & BUF_DIFF_FILTER as c_int != 0 && current_win().w_onebuf_opt.wo_diff == 0 {
+    if options.has(BUF_DIFF_FILTER) && current_win().w_onebuf_opt.wo_diff == 0 {
         return FAIL;
     }
 
@@ -169,7 +170,7 @@ pub unsafe extern "C" fn ExpandBufnames(
             if buf.b_p_bl == 0 {
                 continue;
             }
-            if options & BUF_DIFF_FILTER as c_int != 0 {
+            if options.has(BUF_DIFF_FILTER) {
                 // Skip buffers not suitable for :diffget or :diffput
                 // completion.
                 if buf.raw() == curbuf.get() || !diff_mode(buf) {
@@ -210,7 +211,7 @@ pub unsafe extern "C" fn ExpandBufnames(
                 continue;
             }
 
-            p = if options & WILD_HOME_REPLACE as c_int != 0 {
+            p = if options.has(WildOpts::HOME_REPLACE) {
                 home_replaced(buf.raw(), p)
             } else {
                 dup(p)
@@ -243,7 +244,7 @@ pub unsafe extern "C" fn ExpandBufnames(
                 fuzmatch = alloc_array::<fuzmatch_str_T>(count);
             } else {
                 *file = alloc_array::<*mut c_char>(count);
-                if options & WILD_BUFLASTUSED as c_int != 0 {
+                if options.has(WildOpts::BUFLASTUSED) {
                     matches = alloc_array::<bufmatch_T>(count);
                 }
             }

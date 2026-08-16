@@ -11,6 +11,7 @@
 use super::*;
 use crate::src::nvim::charset::{vim_isIDc, vim_isfilec};
 use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::eval::skip_expr;
 use crate::src::nvim::os::users::os_get_userdir;
 use crate::src::nvim::path::after_pathsep;
@@ -18,9 +19,6 @@ use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::types::{Direction, expand_T, xp_prefix_T};
 
 const EXPAND_FILES: c_int = 2;
-const WILD_ADD_SLASH: c_int = 16;
-const WILD_SILENT: c_int = 64;
-const WILD_EXPAND_FREE: c_int = 2;
 const kDirectionNotSet: Direction = 0;
 const XP_PREFIX_NONE: xp_prefix_T = 0;
 
@@ -164,8 +162,8 @@ unsafe fn resolve_user_dir(src: *const c_char, dst: *mut c_char, dstlen: c_int) 
                 &raw mut xpc,
                 dst,
                 ptr::null_mut(),
-                WILD_ADD_SLASH | WILD_SILENT,
-                WILD_EXPAND_FREE,
+                WildOpts::ADD_SLASH | WildOpts::SILENT,
+                WildMode::ExpandFree,
             );
         }
         Expansion {

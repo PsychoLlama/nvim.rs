@@ -4,13 +4,12 @@
 
 use super::args::frame;
 use super::{
-    ADDR_LINES, ENV_SEPCHAR, EX_NOSPC, EXPAND_FILES, FAIL, NUL, OK, WILD_ALL, WILD_ALL_KEEP,
-    WILD_ICASE, WILD_KEEP_ALL, WILD_LIST_NOTFOUND, WILD_SILENT, WILD_USE_NL, kXDGCacheHome,
-    kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir, kXDGStateHome,
-    tv_get_buf,
+    ADDR_LINES, ENV_SEPCHAR, EX_NOSPC, EXPAND_FILES, FAIL, NUL, OK, kXDGCacheHome, kXDGConfigDirs,
+    kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
 use crate::semsg_c;
 use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne};
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::eval::typval::{
     tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_get_number_chk,
     tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc,
@@ -108,7 +107,7 @@ pub unsafe extern "C" fn f_expand(
     _fptr: EvalFuncData,
 ) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut options = (WILD_SILENT | WILD_USE_NL | WILD_LIST_NOTFOUND) as c_int;
+    let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
     let mut error = false;
     rettv.v_type = VAR_STRING;
     // SAFETY: `s` points into the argument, which outlives every call here;
@@ -159,7 +158,7 @@ pub unsafe extern "C" fn f_expand(
             return;
         }
         if args.has(1) && tv_get_number_chk(args.ptr(1), &raw mut error) != 0 {
-            options |= WILD_KEEP_ALL as c_int;
+            options |= WildOpts::KEEP_ALL;
         }
         if error {
             rettv.vval.v_string = ptr::null_mut();
@@ -169,9 +168,7 @@ pub unsafe extern "C" fn f_expand(
         ExpandInit(&raw mut xpc);
         xpc.xp_context = EXPAND_FILES as c_int;
         if p_wic.get() != 0 {
-            // `+=`, as upstream has it; WILD_ICASE is not already set, so it
-            // is the same as `|=`.
-            options += WILD_ICASE as c_int;
+            options |= WildOpts::ICASE;
         }
         if rettv.v_type == VAR_STRING {
             rettv.vval.v_string = ExpandOne(
@@ -179,7 +176,7 @@ pub unsafe extern "C" fn f_expand(
                 s as *mut c_char,
                 ptr::null_mut(),
                 options,
-                WILD_ALL as c_int,
+                WildMode::All,
             );
         } else {
             ExpandOne(
@@ -187,7 +184,7 @@ pub unsafe extern "C" fn f_expand(
                 s as *mut c_char,
                 ptr::null_mut(),
                 options,
-                WILD_ALL_KEEP as c_int,
+                WildMode::AllKeep,
             );
             tv_list_alloc_ret(rettv, xpc.xp_numfiles as isize);
             for i in 0..xpc.xp_numfiles {

@@ -79,6 +79,13 @@ macro_rules! flag_set {
                 Self(self.0 | flags.0)
             }
 
+            /// `self` when `cond` holds and nothing otherwise — C's
+            /// `cond ? FOO : 0`, which is how half of these are built up.
+            #[inline]
+            pub const fn when(self, cond: bool) -> Self {
+                if cond { self } else { Self::NONE }
+            }
+
             /// Every flag of `self` that is not in `flags`: C's `& ~FOO`.
             #[inline]
             pub const fn without(self, flags: Self) -> Self {

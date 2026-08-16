@@ -11,11 +11,23 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::semsg_c;
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::types::{VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 /// `getcompletion()`: expand `{pattern}` as `{type}` and answer the matches.
+/// What `getcompletion()` asks of every expansion: newline-separated so the
+/// caller can split it, quiet, and with `~/` restored.
+const GETCOMPLETION: WildOpts = WildOpts::SILENT
+    .or(WildOpts::USE_NL)
+    .or(WildOpts::ADD_SLASH)
+    .or(WildOpts::NO_BEEP)
+    .or(WildOpts::HOME_REPLACE);
+
+/// `ExpandOne`'s `orig` argument, which this caller never has.
+const NO_ORIG: *mut c_char = ptr::null_mut();
+
 pub unsafe extern "C" fn f_getcompletion(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
@@ -24,8 +36,7 @@ pub unsafe extern "C" fn f_getcompletion(
     unsafe {
         let mut xpc: expand_T = core::mem::zeroed();
         let mut filtered = false;
-        let mut options =
-            WILD_SILENT | WILD_USE_NL | WILD_ADD_SLASH | WILD_NO_BEEP | WILD_HOME_REPLACE;
+        let mut options = GETCOMPLETION;
 
         if tv_check_for_string_arg(argvars, 1) == FAIL {
             return;
@@ -37,12 +48,12 @@ pub unsafe extern "C" fn f_getcompletion(
         }
 
         if p_wic.get() != 0 {
-            options |= WILD_ICASE;
+            options |= WildOpts::ICASE;
         }
 
         // For filtered results, 'wildignore' is used.
         if !filtered {
-            options |= WILD_KEEP_ALL;
+            options |= WildOpts::KEEP_ALL;
         }
 
         if (*argvars).v_type != VAR_STRING {
@@ -137,7 +148,7 @@ pub unsafe extern "C" fn f_getcompletion(
             addstar(xpc.xp_pattern, xpc.xp_pattern_len, xpc.xp_context)
         };
 
-        ExpandOne(&raw mut xpc, pat, ptr::null_mut(), options, WILD_ALL_KEEP);
+        ExpandOne(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep);
         tv_list_alloc_ret(rettv, xpc.xp_numfiles as ptrdiff_t);
 
         for i in 0..xpc.xp_numfiles {

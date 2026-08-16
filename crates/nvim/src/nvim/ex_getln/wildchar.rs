@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::keycodes::Ctrl_Z;
 use crate::src::nvim::options::OptWimFlags;
 
@@ -26,13 +27,13 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
     unsafe {
         let cc = ccline.ptr();
         let res;
-        let mut options = WILD_NO_BEEP;
+        let mut options = WildOpts::NO_BEEP;
         let escape = (*s).firstc != '@' as ::core::ffi::c_int;
         let redraw_if_menu_empty = (*s).c == K_WILD;
         let wim_noselect = p_wmnu.get() != 0 && wim_has(0, kOptWimFlagNoselect);
 
         if wim_has((*s).wim_index, kOptWimFlagLastused) {
-            options |= WILD_BUFLASTUSED;
+            options |= WildOpts::BUFLASTUSED;
         }
 
         if (*s).xpc.xp_numfiles > 0 {
@@ -47,9 +48,9 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                 (*s).did_wild_list = true;
             }
             if wim_has((*s).wim_index, kOptWimFlagLongest) {
-                res = nextwild(&raw mut (*s).xpc, WILD_LONGEST, options, escape);
+                res = nextwild(&raw mut (*s).xpc, WildMode::Longest, options, escape);
             } else if wim_has((*s).wim_index, kOptWimFlagFull) {
-                res = nextwild(&raw mut (*s).xpc, WILD_NEXT, options, escape);
+                res = nextwild(&raw mut (*s).xpc, WildMode::Next, options, escape);
             } else {
                 res = OK; // don't insert 'wildchar' now
             }
@@ -65,9 +66,9 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                 || (*s).c == K_WILD
                 || (*s).c == Ctrl_Z
             {
-                options |= WILD_MAY_EXPAND_PATTERN;
+                options |= WildOpts::MAY_EXPAND_PATTERN;
                 if (*s).c == K_WILD {
-                    options |= WILD_FUNC_TRIGGER;
+                    options |= WildOpts::FUNC_TRIGGER;
                 }
                 (*s).xpc.xp_pre_incsearch_pos = (*s).is_state.search_start;
             }
@@ -76,12 +77,12 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
             // If 'wildmode' starts with "longest", get the longest common
             // part.
             if wim_longest {
-                res = nextwild(&raw mut (*s).xpc, WILD_LONGEST, options, escape);
+                res = nextwild(&raw mut (*s).xpc, WildMode::Longest, options, escape);
             } else {
                 if wim_noselect || wim_list {
-                    options |= WILD_NOSELECT;
+                    options |= WildOpts::NOSELECT;
                 }
-                res = nextwild(&raw mut (*s).xpc, WILD_EXPAND_KEEP, options, escape);
+                res = nextwild(&raw mut (*s).xpc, WildMode::ExpandKeep, options, escape);
             }
 
             // Remove the popup menu if no completion items are available.
@@ -97,8 +98,8 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                     &raw mut (*s).xpc,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0,
-                    WILD_FREE,
+                    WildOpts::NONE,
+                    WildMode::Free,
                 );
                 (*s).xpc.xp_context = EXPAND_NOTHING;
                 return KeyOutcome::Changed;
@@ -120,7 +121,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                             || (p_wmnu.get() != 0 && (wim_full_next || wim_noselect_next))
                         {
                             if wim_full_next && !wim_noselect_next {
-                                nextwild(&raw mut (*s).xpc, WILD_NEXT, options, escape);
+                                nextwild(&raw mut (*s).xpc, WildMode::Next, options, escape);
                             } else {
                                 showmatches(
                                     &raw mut (*s).xpc,

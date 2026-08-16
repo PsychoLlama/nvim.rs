@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::src::nvim::cmdexpand::WildOpts;
 use crate::src::nvim::path::ExpandFlags;
 #[allow(unused_imports)]
 use crate::src::nvim::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
@@ -485,7 +486,7 @@ pub unsafe fn globpath(
     path: *mut c_char,
     file: *mut c_char,
     ga: *mut garray_T,
-    expand_options: c_int,
+    expand_options: WildOpts,
     dirs: bool,
 ) {
     unsafe {
@@ -542,14 +543,14 @@ pub unsafe fn globpath(
                     buf,
                     &raw mut p,
                     &raw mut num_p,
-                    WILD_SILENT | expand_options,
+                    WildOpts::SILENT | expand_options,
                 );
                 if num_p > 0 {
                     escape_matches(
                         &raw mut xpc,
                         buf,
                         core::slice::from_raw_parts_mut(p, num_p as usize),
-                        WILD_SILENT | expand_options,
+                        WildOpts::SILENT | expand_options,
                     );
 
                     // Concatenate new results to previous ones, taking over

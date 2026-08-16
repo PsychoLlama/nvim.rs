@@ -87,9 +87,6 @@ mod flag {
 
     /// `ExpandOne` context and flags.
     pub const EXPAND_DIRECTORIES: c_int = 3;
-    pub const WILD_LIST_NOTFOUND: c_uint = 1;
-    pub const WILD_SILENT: c_uint = 64;
-    pub const WILD_EXPAND_FREE: c_uint = 2;
 
     /// `set_option_direct` scope.
     pub const OPT_LOCAL: c_uint = 2;

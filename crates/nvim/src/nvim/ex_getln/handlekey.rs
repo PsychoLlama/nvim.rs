@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, is_special,
@@ -429,8 +430,8 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 }
                 if nextwild(
                     &raw mut (*s).xpc,
-                    WILD_ALL,
-                    0,
+                    WildMode::All,
+                    WildOpts::NONE,
                     (*s).firstc != '@' as ::core::ffi::c_int,
                 ) == FAIL
                 {
@@ -450,8 +451,8 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 // Completion: the longest common part.
                 if nextwild(
                     &raw mut (*s).xpc,
-                    WILD_LONGEST,
-                    0,
+                    WildMode::Longest,
+                    WildOpts::NONE,
                     (*s).firstc != '@' as ::core::ffi::c_int,
                 ) == FAIL
                 {
@@ -466,14 +467,14 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
             | K_PAGEDOWN | K_KPAGEDOWN => {
                 if ((*s).c == Ctrl_N || (*s).c == Ctrl_P) && (*s).xpc.xp_numfiles > 0 {
                     let wild_type = if (*s).c == Ctrl_P {
-                        WILD_PREV
+                        WildMode::Prev
                     } else {
-                        WILD_NEXT
+                        WildMode::Next
                     };
                     if nextwild(
                         &raw mut (*s).xpc,
                         wild_type,
-                        0,
+                        WildOpts::NONE,
                         (*s).firstc != '@' as ::core::ffi::c_int,
                     ) == FAIL
                     {
@@ -491,14 +492,14 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                     // If the popup menu is displayed, PageUp and PageDown
                     // scroll the menu.
                     let wild_type = if (*s).c == K_PAGEDOWN || (*s).c == K_KPAGEDOWN {
-                        WILD_PAGEDOWN
+                        WildMode::PageDown
                     } else {
-                        WILD_PAGEUP
+                        WildMode::PageUp
                     };
                     if nextwild(
                         &raw mut (*s).xpc,
                         wild_type,
-                        0,
+                        WildOpts::NONE,
                         (*s).firstc != '@' as ::core::ffi::c_int,
                     ) == FAIL
                     {

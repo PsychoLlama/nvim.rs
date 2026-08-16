@@ -27,11 +27,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    Args, EXPAND_FILES, FAIL, FINDFILE_DIR, FINDFILE_FILE, OK, RetList, WILD_ALL, WILD_ALL_KEEP,
-    WILD_ALLLINKS, WILD_ICASE, WILD_IGNORE_COMPLETESLASH, WILD_KEEP_ALL, WILD_SILENT, WILD_USE_NL,
-    XP_PREFIX_NONE, frame, kDirectionNotSet, nr_arg, numbuf, ret_string, str_arg, str_arg_buf,
+    Args, EXPAND_FILES, FAIL, FINDFILE_DIR, FINDFILE_FILE, OK, RetList, XP_PREFIX_NONE, frame,
+    kDirectionNotSet, nr_arg, numbuf, ret_string, str_arg, str_arg_buf,
 };
 use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, globpath};
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::eval::eval_expr_typval;
 use crate::src::nvim::eval::typval::{
     TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret,
@@ -96,16 +96,16 @@ impl Expand {
         Self(xpc)
     }
 
-    /// Expand `pat`.  `WILD_ALL` answers the matches joined into the string
-    /// this returns; `WILD_ALL_KEEP` leaves them in [`Expand::files`].
-    fn one(&mut self, pat: &CStr, options: c_int, mode: c_int) -> *mut c_char {
+    /// Expand `pat`.  `WildMode::All` answers the matches joined into the string
+    /// this returns; `WildMode::AllKeep` leaves them in [`Expand::files`].
+    fn one(&mut self, pat: &CStr, options: WildOpts, mode: WildMode) -> *mut c_char {
         let (p, orig) = (pat.as_ptr().cast_mut(), ptr::null_mut());
         // SAFETY: an initialised expander and a NUL-terminated pattern, which
         // `ExpandOne` only reads; a NULL `orig` asks for no old match.
         unsafe { ExpandOne(&raw mut self.0, p, orig, options, mode) }
     }
 
-    /// The names a `WILD_ALL_KEEP` expansion left behind, in the order
+    /// The names a `WildMode::AllKeep` expansion left behind, in the order
     /// `gen_expand_wildcards` sorted them into.
     fn files(&self) -> &[*mut c_char] {
         if self.0.xp_numfiles <= 0 {
@@ -344,20 +344,20 @@ pub unsafe extern "C" fn f_findfile(
 /// a cleared result.
 pub unsafe extern "C" fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut options = (WILD_SILENT | WILD_USE_NL) as c_int;
+    let mut options = WildOpts::SILENT | WildOpts::USE_NL;
     let mut error = false;
 
     rettv.v_type = VAR_STRING;
     if args.has(1) {
         if nr_arg(args, 1, &mut error) != 0 {
-            options |= WILD_KEEP_ALL as c_int;
+            options |= WildOpts::KEEP_ALL;
         }
         if args.has(2) {
             if nr_arg(args, 2, &mut error) != 0 {
                 ret_list(rettv);
             }
             if args.has(3) && nr_arg(args, 3, &mut error) != 0 {
-                options |= WILD_ALLLINKS as c_int;
+                options |= WildOpts::ALLLINKS;
             }
         }
     }
@@ -368,14 +368,14 @@ pub unsafe extern "C" fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _f
 
     let mut xpc = Expand::new();
     if p_wic.get() != 0 {
-        options += WILD_ICASE as c_int;
+        options |= WildOpts::ICASE;
     }
     let pat = str_arg(args, 0);
     if rettv.v_type == VAR_STRING {
-        rettv.vval.v_string = xpc.one(pat, options, WILD_ALL as c_int);
+        rettv.vval.v_string = xpc.one(pat, options, WildMode::All);
         return;
     }
-    xpc.one(pat, options, WILD_ALL_KEEP as c_int);
+    xpc.one(pat, options, WildMode::AllKeep);
     let list = RetList::alloc(rettv, xpc.count() as ptrdiff_t);
     for &name in xpc.files() {
         list.push(name);
@@ -395,20 +395,20 @@ pub unsafe extern "C" fn f_globpath(
     _fptr: EvalFuncData,
 ) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut flags = WILD_IGNORE_COMPLETESLASH as c_int;
+    let mut flags = WildOpts::IGNORE_COMPLETESLASH;
     let mut error = false;
 
     rettv.v_type = VAR_STRING;
     if args.has(2) {
         if nr_arg(args, 2, &mut error) != 0 {
-            flags |= WILD_KEEP_ALL as c_int;
+            flags |= WildOpts::KEEP_ALL;
         }
         if args.has(3) {
             if nr_arg(args, 3, &mut error) != 0 {
                 ret_list(rettv);
             }
             if args.has(4) && nr_arg(args, 4, &mut error) != 0 {
-                flags |= WILD_ALLLINKS as c_int;
+                flags |= WildOpts::ALLLINKS;
             }
         }
     }

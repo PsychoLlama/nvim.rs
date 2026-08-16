@@ -26,6 +26,7 @@ use crate::semsg_c;
 use crate::src::nvim::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
+use crate::src::nvim::cmdexpand::{WildMode, WildOpts};
 use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::main::{IObuff, NameBuff, e_fnametoolong, got_int, p_rtp};
 use crate::src::nvim::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
@@ -44,10 +45,7 @@ use crate::src::nvim::types::{FILE, exarg_T, expand_T, size_t, uint8_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::flag::{
-    EXPAND_DIRECTORIES, FAIL, IOSIZE, MAXPATHL, NUL, WILD_EXPAND_FREE, WILD_LIST_NOTFOUND,
-    WILD_SILENT, kEqualFiles,
-};
+use super::flag::{EXPAND_DIRECTORIES, FAIL, IOSIZE, MAXPATHL, NUL, kEqualFiles};
 
 /// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
 /// out at each site: written that way, the five calls below each wrap onto
@@ -92,8 +90,8 @@ pub unsafe fn ex_helptags(eap: *mut exarg_T) {
             &raw mut xpc,
             (*eap).arg,
             ptr::null_mut(),
-            (WILD_LIST_NOTFOUND | WILD_SILENT) as c_int,
-            WILD_EXPAND_FREE as c_int,
+            WildOpts::LIST_NOTFOUND | WildOpts::SILENT,
+            WildMode::ExpandFree,
         );
         if dirname.is_null() || !os_isdir(dirname) {
             semsg_c!(translated(c"E150: Not a directory: %s"), (*eap).arg);

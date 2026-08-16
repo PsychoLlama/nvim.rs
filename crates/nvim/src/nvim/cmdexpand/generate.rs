@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::src::nvim::cmdexpand::WildOpts;
 use crate::src::nvim::path::ExpandFlags;
 #[allow(unused_imports)]
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -32,7 +33,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     flags: ExpandFlags,
-    options: c_int,
+    options: WildOpts,
 ) -> c_int {
     unsafe {
         let mut pat = pat;
@@ -86,7 +87,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
                 EXPAND_DIRS_IN_CDPATH => dirs_only(flags) | ExpandFlags::CDPATH,
                 _ => dirs_only(flags),
             };
-            if options & WILD_ICASE != 0 {
+            if options.has(WildOpts::ICASE) {
                 flags |= ExpandFlags::ICASE;
             }
             // Expand wildcards, supporting %:h and the like.
