@@ -817,15 +817,9 @@ static cmdpreview_bufnr: GlobalCell<handle_T> = GlobalCell::new(0 as handle_T);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static e_active_window_or_buffer_changed_or_deleted: [::core::ffi::c_char; 49] =
     c_bytes(b"E199: Active window or buffer changed or deleted\0");
-pub const PATH_ESC_CHARS: [::core::ffi::c_char; 18] = unsafe {
-    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b" \t\n*?[{`$\\%#'\"|!<\0")
-};
-pub const SHELL_ESC_CHARS: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b" \t\n*?[{`$\\%#'\"|!<>();&\0")
-};
-pub const BUFFER_ESC_CHARS: [::core::ffi::c_char; 17] = unsafe {
-    ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b" \t\n*?[`$\\%#'\"|!<\0")
-};
+pub const PATH_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<";
+pub const SHELL_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<>();&";
+pub const BUFFER_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[`$\\%#'\"|!<";
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;

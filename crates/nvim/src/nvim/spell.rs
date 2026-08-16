@@ -177,8 +177,7 @@ pub const IOSIZE: c_int = 1025;
 /// The longest `SYLLABLE` item.
 pub const SY_MAXLEN: c_int = 30;
 /// `int_wordlist`'s compiled name, as a `vim_snprintf` template.
-pub const SPL_FNAME_TMPL: [c_char; 10] =
-    unsafe { ::core::mem::transmute::<[u8; 10], [c_char; 10]>(*b"%s.%s.spl\0") };
+pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
 /// A `wordcount_T`'s key starts this far into it, so a hash item's key
 /// pointer can be walked back to the struct. Derived from the type rather
 /// than spelled out: the word-count table stores the record and hashes on

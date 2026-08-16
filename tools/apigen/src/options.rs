@@ -833,9 +833,7 @@ fn emit_row(out: &mut String, o: &Opt) {
         Default::Macro(name, "number") => {
             writeln!(out, "        def_val: number({name} as OptInt),").unwrap()
         }
-        Default::Macro(name, _) => {
-            writeln!(out, "        def_val: macro_string(&{name}),").unwrap()
-        }
+        Default::Macro(name, _) => writeln!(out, "        def_val: string({name}),").unwrap(),
     }
     writeln!(out, "        ..BLANK").unwrap();
     writeln!(out, "    }},").unwrap();
@@ -936,20 +934,6 @@ const fn string(value: &'static CStr) -> OptVal {
             string: String_0 {
                 data: value.as_ptr().cast_mut(),
                 size: value.count_bytes(),
-            },
-        },
-    }
-}
-
-/// A default that a C constant supplies — `macros(...)` in options.lua. The
-/// constant is a NUL-terminated `char[]`, so its length counts the NUL.
-const fn macro_string(value: &'static [c_char]) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0 {
-                data: value.as_ptr().cast_mut(),
-                size: value.len() - 1,
             },
         },
     }

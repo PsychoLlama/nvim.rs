@@ -3,7 +3,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_add_list, tv_dict_add_str, tv_dict_alloc, tv_list_alloc, tv_list_append_dict,
     tv_list_append_number,
 };
-use crate::src::nvim::main::{curbuf, curwin, namedfm};
+use crate::src::nvim::main::{c_bytes, curbuf, curwin, namedfm};
 use crate::src::nvim::memory::xfree;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -67,7 +67,7 @@ pub(super) unsafe extern "C" fn add_mark(
 /// `buf` — Buffer to get the marks from
 /// `l` — List to store marks
 pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut list_T) {
-    let mut mname: [c_char; 3] = ::core::mem::transmute::<[u8; 3], [c_char; 3]>(*b"' \0");
+    let mut mname: [c_char; 3] = c_bytes(b"' \0");
     let mut i: c_int = 0;
     while i < NMARKS {
         mname[1] = ('a' as c_int + i) as c_char;
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut 
 ///
 /// `l` — List to store global marks
 pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
-    let mut mname: [c_char; 3] = ::core::mem::transmute::<[u8; 3], [c_char; 3]>(*b"' \0");
+    let mut mname: [c_char; 3] = c_bytes(b"' \0");
     let mut name: *mut c_char = ptr::null_mut();
     let mut i: c_int = 0;
     while i < NMARKS + EXTRA_MARKS {

@@ -286,15 +286,12 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const NL_STR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\n\0") };
+pub const NL_STR: &::core::ffi::CStr = c"\n";
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const ESC_STR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x1B\0") };
+pub const ESC_STR: &::core::ffi::CStr = c"\x1B";
 pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
-pub const CTRL_V_STR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x16\0") };
+pub const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
 pub const FO_RET_COMS: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const FO_INS_LONG: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
 pub const FO_INS_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;

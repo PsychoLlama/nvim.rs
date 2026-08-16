@@ -316,11 +316,7 @@ unsafe extern "C" fn map_get_String_int(
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-pub const SYS_OPTWIN_FILE: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-        *b"$VIMRUNTIME/scripts/optwin.lua\0",
-    )
-};
+pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_CONCAT: ::core::ffi::c_int = 'C' as ::core::ffi::c_int;
@@ -401,6 +397,5 @@ static runtime_expand_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0)
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const READBIN: [::core::ffi::c_char; 3] =
-    unsafe { ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"rb\0") };
+pub const READBIN: &::core::ffi::CStr = c"rb";
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;

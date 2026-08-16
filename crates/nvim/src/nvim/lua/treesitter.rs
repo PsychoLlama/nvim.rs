@@ -444,22 +444,12 @@ unsafe extern "C-unwind" fn map_get_cstr_t_ptr_t(
     }
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TS_META_PARSER: [::core::ffi::c_char; 18] = unsafe {
-    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"treesitter_parser\0")
-};
-pub const TS_META_TREE: [::core::ffi::c_char; 16] =
-    unsafe { ::core::mem::transmute::<[u8; 16], [::core::ffi::c_char; 16]>(*b"treesitter_tree\0") };
-pub const TS_META_NODE: [::core::ffi::c_char; 16] =
-    unsafe { ::core::mem::transmute::<[u8; 16], [::core::ffi::c_char; 16]>(*b"treesitter_node\0") };
-pub const TS_META_QUERY: [::core::ffi::c_char; 17] = unsafe {
-    ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"treesitter_query\0")
-};
-pub const TS_META_QUERYCURSOR: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"treesitter_querycursor\0")
-};
-pub const TS_META_QUERYMATCH: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"treesitter_querymatch\0")
-};
+pub const TS_META_PARSER: &::core::ffi::CStr = c"treesitter_parser";
+pub const TS_META_TREE: &::core::ffi::CStr = c"treesitter_tree";
+pub const TS_META_NODE: &::core::ffi::CStr = c"treesitter_node";
+pub const TS_META_QUERY: &::core::ffi::CStr = c"treesitter_query";
+pub const TS_META_QUERYCURSOR: &::core::ffi::CStr = c"treesitter_querycursor";
+pub const TS_META_QUERYMATCH: &::core::ffi::CStr = c"treesitter_querymatch";
 static langs: GlobalCell<Map_cstr_t_ptr_t> = GlobalCell::new(MAP_INIT);
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

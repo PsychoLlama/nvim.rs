@@ -618,8 +618,7 @@ pub const BAD_KEEP: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const BAD_DROP: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FORCE_NOBIN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const ENC_UCSBOM: [::core::ffi::c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"ucs-bom\0") };
+pub const ENC_UCSBOM: &::core::ffi::CStr = c"ucs-bom";
 pub const EOL_UNKNOWN: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

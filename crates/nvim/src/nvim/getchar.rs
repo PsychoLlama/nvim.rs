@@ -268,8 +268,7 @@ static no_reduce_keys: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::c
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const K_SELECT_STRING: [::core::ffi::c_char; 4] =
-    unsafe { ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"\x80\xF5X\0") };
+pub const K_SELECT_STRING: &::core::ffi::CStr = c"\x80\xF5X";
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_ALT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;

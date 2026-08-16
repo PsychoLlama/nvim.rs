@@ -440,7 +440,7 @@ pub(super) const PART: [vimoption_T; 78] = [
         scope_idx: scope_idx(kGlobalOptCedit, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_cedit),
         opt_did_set_cb: Some(did_set_cedit),
-        def_val: macro_string(&CTRL_F_STR),
+        def_val: string(CTRL_F_STR),
         ..BLANK
     },
     // 'channel'
@@ -775,7 +775,7 @@ pub(super) const PART: [vimoption_T; 78] = [
         var: OptVar::String(&p_cpo),
         opt_did_set_cb: Some(did_set_cpoptions),
         opt_expand_cb: Some(expand_set_cpoptions),
-        def_val: macro_string(&CPO_VIM),
+        def_val: string(CPO_VIM),
         ..BLANK
     },
     // 'cursorbind'

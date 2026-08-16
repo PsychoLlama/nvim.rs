@@ -215,7 +215,7 @@ pub(super) const PART: [vimoption_T; 81] = [
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptLispwords, kWinOptInvalid, kBufOptLispwords),
         var: OptVar::String(&p_lispwords),
-        def_val: macro_string(&LISPWORD_VALUE),
+        def_val: string(LISPWORD_VALUE),
         ..BLANK
     },
     // 'list'

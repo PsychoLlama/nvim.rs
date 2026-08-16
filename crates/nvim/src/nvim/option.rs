@@ -181,10 +181,8 @@ pub const OK: c_int = 1 as c_int;
 pub const FAIL: c_int = 0 as c_int;
 pub const NUL: c_int = '\0' as c_int;
 pub const TAB: c_int = '\t' as c_int;
-pub const CTRL_F_STR: [c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [c_char; 2]>(*b"\x06\0") };
-pub const PATHSEPSTR: [c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [c_char; 2]>(*b"/\0") };
+pub const CTRL_F_STR: &::core::ffi::CStr = c"\x06";
+pub const PATHSEPSTR: &::core::ffi::CStr = c"/";
 pub const FORCE_BIN: c_int = 1 as c_int;
 pub const HLATTRS_INIT: HlAttrs = HlAttrs {
     rgb_ae_attr: 0 as int32_t,
@@ -197,46 +195,17 @@ pub const HLATTRS_INIT: HlAttrs = HlAttrs {
     hl_blend: -1 as int32_t,
     url: -1 as int32_t,
 };
-pub const HIGHLIGHT_INIT: [c_char; 779] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 779],
-        [c_char; 779],
-    >(
-        *b"8:SpecialKey,~:EndOfBuffer,z:TermCursor,@:NonText,d:Directory,e:ErrorMsg,i:IncSearch,l:Search,y:CurSearch,m:MoreMsg,M:ModeMsg,n:LineNr,a:LineNrAbove,b:LineNrBelow,N:CursorLineNr,G:CursorLineSign,O:CursorLineFold,r:Question,s:StatusLine,S:StatusLineNC,c:VertSplit,t:Title,v:Visual,V:VisualNOS,w:WarningMsg,W:WildMenu,f:Folded,F:FoldColumn,A:DiffAdd,C:DiffChange,D:DiffDelete,T:DiffText,E:DiffTextAdd,>:SignColumn,-:Conceal,B:SpellBad,P:SpellCap,R:SpellRare,L:SpellLocal,+:Pmenu,=:PmenuSel,k:PmenuMatch,<:PmenuMatchSel,[:PmenuKind,]:PmenuKindSel,{:PmenuExtra,}:PmenuExtraSel,x:PmenuSbar,X:PmenuThumb,*:TabLine,#:TabLineSel,_:TabLineFill,!:CursorColumn,.:CursorLine,o:ColorColumn,q:QuickFixLine,z:StatusLineTerm,Z:StatusLineTermNC,g:MsgArea,h:ComplMatchIns,0:Whitespace,I:PreInsert\0",
-    )
-};
-pub const DFLT_EFM: [c_char; 667] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 667],
-        [c_char; 667],
-    >(
-        *b"%*[^\"]\"%f\"%*\\D%l: %m,\"%f\"%*\\D%l: %m,%-Gg%\\?make[%*\\d]: *** [%f:%l:%m,%-Gg%\\?make: *** [%f:%l:%m,%-G%f:%l: (Each undeclared identifier is reported only once,%-G%f:%l: for each function it appears in.),%-GIn file included from %f:%l:%c:,%-GIn file included from %f:%l:%c\\,,%-GIn file included from %f:%l:%c,%-GIn file included from %f:%l,%-G%*[ ]from %f:%l:%c,%-G%*[ ]from %f:%l:,%-G%*[ ]from %f:%l\\,,%-G%*[ ]from %f:%l,%f:%l:%c:%m,%f(%l):%m,%f:%l:%m,\"%f\"\\, line %l%*\\D%c%*[^ ] %m,%D%*\\a[%*\\d]: Entering directory %*[`']%f',%X%*\\a[%*\\d]: Leaving directory %*[`']%f',%D%*\\a: Entering directory %*[`']%f',%X%*\\a: Leaving directory %*[`']%f',%DMaking %*\\a in %f,%f|%l| %m\0",
-    )
-};
-pub const DFLT_GFN: [c_char; 55] = unsafe {
-    ::core::mem::transmute::<[u8; 55], [c_char; 55]>(
-        *b"Source Code Pro,DejaVu Sans Mono,Courier New,monospace\0",
-    )
-};
-pub const DFLT_GREPFORMAT: [c_char; 26] =
-    unsafe { ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"%f:%l:%m,%f:%l%m,%f  %l%m\0") };
-pub const ENC_DFLT: [c_char; 6] =
-    unsafe { ::core::mem::transmute::<[u8; 6], [c_char; 6]>(*b"utf-8\0") };
+pub const HIGHLIGHT_INIT: &::core::ffi::CStr = c"8:SpecialKey,~:EndOfBuffer,z:TermCursor,@:NonText,d:Directory,e:ErrorMsg,i:IncSearch,l:Search,y:CurSearch,m:MoreMsg,M:ModeMsg,n:LineNr,a:LineNrAbove,b:LineNrBelow,N:CursorLineNr,G:CursorLineSign,O:CursorLineFold,r:Question,s:StatusLine,S:StatusLineNC,c:VertSplit,t:Title,v:Visual,V:VisualNOS,w:WarningMsg,W:WildMenu,f:Folded,F:FoldColumn,A:DiffAdd,C:DiffChange,D:DiffDelete,T:DiffText,E:DiffTextAdd,>:SignColumn,-:Conceal,B:SpellBad,P:SpellCap,R:SpellRare,L:SpellLocal,+:Pmenu,=:PmenuSel,k:PmenuMatch,<:PmenuMatchSel,[:PmenuKind,]:PmenuKindSel,{:PmenuExtra,}:PmenuExtraSel,x:PmenuSbar,X:PmenuThumb,*:TabLine,#:TabLineSel,_:TabLineFill,!:CursorColumn,.:CursorLine,o:ColorColumn,q:QuickFixLine,z:StatusLineTerm,Z:StatusLineTermNC,g:MsgArea,h:ComplMatchIns,0:Whitespace,I:PreInsert";
+pub const DFLT_EFM: &::core::ffi::CStr = c"%*[^\"]\"%f\"%*\\D%l: %m,\"%f\"%*\\D%l: %m,%-Gg%\\?make[%*\\d]: *** [%f:%l:%m,%-Gg%\\?make: *** [%f:%l:%m,%-G%f:%l: (Each undeclared identifier is reported only once,%-G%f:%l: for each function it appears in.),%-GIn file included from %f:%l:%c:,%-GIn file included from %f:%l:%c\\,,%-GIn file included from %f:%l:%c,%-GIn file included from %f:%l,%-G%*[ ]from %f:%l:%c,%-G%*[ ]from %f:%l:,%-G%*[ ]from %f:%l\\,,%-G%*[ ]from %f:%l,%f:%l:%c:%m,%f(%l):%m,%f:%l:%m,\"%f\"\\, line %l%*\\D%c%*[^ ] %m,%D%*\\a[%*\\d]: Entering directory %*[`']%f',%X%*\\a[%*\\d]: Leaving directory %*[`']%f',%D%*\\a: Entering directory %*[`']%f',%X%*\\a: Leaving directory %*[`']%f',%DMaking %*\\a in %f,%f|%l| %m";
+pub const DFLT_GFN: &::core::ffi::CStr = c"Source Code Pro,DejaVu Sans Mono,Courier New,monospace";
+pub const DFLT_GREPFORMAT: &::core::ffi::CStr = c"%f:%l:%m,%f:%l%m,%f  %l%m";
+pub const ENC_DFLT: &::core::ffi::CStr = c"utf-8";
 pub const EOL_UNIX: c_int = 0 as c_int;
 pub const EOL_DOS: c_int = 1 as c_int;
 pub const EOL_MAC: c_int = 2 as c_int;
-pub const DFLT_FO_VIM: [c_char; 5] =
-    unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"tcqj\0") };
-pub const CPO_VIM: [c_char; 9] =
-    unsafe { ::core::mem::transmute::<[u8; 9], [c_char; 9]>(*b"aABceFs_\0") };
-pub const LISPWORD_VALUE: [c_char; 746] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 746],
-        [c_char; 746],
-    >(
-        *b"defun,define,defmacro,set!,lambda,if,case,let,flet,let*,letrec,do,do*,define-syntax,let-syntax,letrec-syntax,destructuring-bind,defpackage,defparameter,defstruct,deftype,defvar,do-all-symbols,do-external-symbols,do-symbols,dolist,dotimes,ecase,etypecase,eval-when,labels,macrolet,multiple-value-bind,multiple-value-call,multiple-value-prog1,multiple-value-setq,prog1,progv,typecase,unless,unwind-protect,when,with-input-from-string,with-open-file,with-open-stream,with-output-to-string,with-package-iterator,define-condition,handler-bind,handler-case,restart-bind,restart-case,with-simple-restart,store-value,use-value,muffle-warning,abort,continue,with-slots,with-slots*,with-accessors,with-accessors*,defclass,defmethod,print-unreadable-object\0",
-    )
-};
+pub const DFLT_FO_VIM: &::core::ffi::CStr = c"tcqj";
+pub const CPO_VIM: &::core::ffi::CStr = c"aABceFs_";
+pub const LISPWORD_VALUE: &::core::ffi::CStr = c"defun,define,defmacro,set!,lambda,if,case,let,flet,let*,letrec,do,do*,define-syntax,let-syntax,letrec-syntax,destructuring-bind,defpackage,defparameter,defstruct,deftype,defvar,do-all-symbols,do-external-symbols,do-symbols,dolist,dotimes,ecase,etypecase,eval-when,labels,macrolet,multiple-value-bind,multiple-value-call,multiple-value-prog1,multiple-value-setq,prog1,progv,typecase,unless,unwind-protect,when,with-input-from-string,with-open-file,with-open-stream,with-output-to-string,with-package-iterator,define-condition,handler-bind,handler-case,restart-bind,restart-case,with-simple-restart,store-value,use-value,muffle-warning,abort,continue,with-slots,with-slots*,with-accessors,with-accessors*,defclass,defmethod,print-unreadable-object";
 pub static p_vfile: GlobalCell<*mut c_char> =
     GlobalCell::new((empty_string_option.as_raw() as *const _) as *mut c_char);
 pub const NO_LOCAL_UNDOLEVEL: c_int = -123456 as c_int;
@@ -244,16 +213,13 @@ pub const SB_MAX: c_int = 1000000 as c_int;
 pub const MAX_NUMBERWIDTH: c_int = 20 as c_int;
 pub const TABSTOP_MAX: c_int = 9999 as c_int;
 pub const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
-pub const DFLT_ERRORFILE: [c_char; 11] =
-    unsafe { ::core::mem::transmute::<[u8; 11], [c_char; 11]>(*b"errors.err\0") };
-pub const DFLT_HELPFILE: [c_char; 25] =
-    unsafe { ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"$VIMRUNTIME/doc/help.txt\0") };
+pub const DFLT_ERRORFILE: &::core::ffi::CStr = c"errors.err";
+pub const DFLT_HELPFILE: &::core::ffi::CStr = c"$VIMRUNTIME/doc/help.txt";
 pub const NO_SCREEN: c_int = 2 as c_int;
 pub const DFLT_COLS: c_int = 80 as c_int;
 pub const DFLT_ROWS: c_int = 24 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
 pub const INT_MIN: c_int = -INT_MAX - 1 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
-pub const PROJECT_NAME: [c_char; 5] =
-    unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"nvim\0") };
+pub const PROJECT_NAME: &::core::ffi::CStr = c"nvim";
 pub const __INT_MAX__: c_int = 2147483647 as c_int;

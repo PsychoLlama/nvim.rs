@@ -234,19 +234,14 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const SPL_FNAME_TMPL: [::core::ffi::c_char; 10] =
-    unsafe { ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"%s.%s.spl\0") };
-pub const SPL_FNAME_ADD: [::core::ffi::c_char; 6] =
-    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b".add.\0") };
-pub const SPL_FNAME_ASCII: [::core::ffi::c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".ascii.\0") };
-pub const VIMSUGMAGIC: [::core::ffi::c_char; 7] =
-    unsafe { ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"VIMsug\0") };
+pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
+pub const SPL_FNAME_ADD: &::core::ffi::CStr = c".add.";
+pub const SPL_FNAME_ASCII: &::core::ffi::CStr = c".ascii.";
+pub const VIMSUGMAGIC: &::core::ffi::CStr = c"VIMsug";
 pub const VIMSUGMAGICL: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const VIMSUGVERSION: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ZERO_FLAG: ::core::ffi::c_int = 65009 as ::core::ffi::c_int;
-pub const VIMSPELLMAGIC: [::core::ffi::c_char; 9] =
-    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"VIMspell\0") };
+pub const VIMSPELLMAGIC: &::core::ffi::CStr = c"VIMspell";
 pub const VIMSPELLMAGICL: usize =
     ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1_usize);
 pub const VIMSPELLVERSION: ::core::ffi::c_int = 50 as ::core::ffi::c_int;

@@ -194,20 +194,6 @@ const fn string(value: &'static CStr) -> OptVal {
     }
 }
 
-/// A default that a C constant supplies — `macros(...)` in options.lua. The
-/// constant is a NUL-terminated `char[]`, so its length counts the NUL.
-const fn macro_string(value: &'static [c_char]) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0 {
-                data: value.as_ptr().cast_mut(),
-                size: value.len() - 1,
-            },
-        },
-    }
-}
-
 /// The words a string option accepts: the address of the generated array,
 /// which the walk in `crate::src::nvim::optionstr` runs to its terminating
 /// null pointer.

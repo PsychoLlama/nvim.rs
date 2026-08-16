@@ -42,7 +42,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptEncoding, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_enc),
         opt_did_set_cb: Some(did_set_encoding),
-        def_val: macro_string(&ENC_DFLT),
+        def_val: string(ENC_DFLT),
         ..BLANK
     },
     // 'endoffile'
@@ -109,7 +109,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptErrorfile, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_ef),
-        def_val: macro_string(&DFLT_ERRORFILE),
+        def_val: string(DFLT_ERRORFILE),
         ..BLANK
     },
     // 'errorformat'
@@ -121,7 +121,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptErrorformat, kWinOptInvalid, kBufOptErrorformat),
         var: OptVar::String(&p_efm),
-        def_val: macro_string(&DFLT_EFM),
+        def_val: string(DFLT_EFM),
         ..BLANK
     },
     // 'eventignore'
@@ -492,7 +492,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         var: OptVar::String(&p_fo),
         opt_did_set_cb: Some(did_set_formatoptions),
         opt_expand_cb: Some(expand_set_formatoptions),
-        def_val: macro_string(&DFLT_FO_VIM),
+        def_val: string(DFLT_FO_VIM),
         ..BLANK
     },
     // 'formatprg'
@@ -536,7 +536,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptGrepformat, kWinOptInvalid, kBufOptGrepformat),
         var: OptVar::String(&p_gefm),
-        def_val: macro_string(&DFLT_GREPFORMAT),
+        def_val: string(DFLT_GREPFORMAT),
         ..BLANK
     },
     // 'grepprg'
@@ -575,7 +575,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptGuifont, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_guifont),
-        def_val: macro_string(&DFLT_GFN),
+        def_val: string(DFLT_GFN),
         ..BLANK
     },
     // 'guifontwide'
@@ -639,7 +639,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptHelpfile, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_hf),
         opt_did_set_cb: Some(did_set_helpfile),
-        def_val: macro_string(&DFLT_HELPFILE),
+        def_val: string(DFLT_HELPFILE),
         ..BLANK
     },
     // 'helpheight'
@@ -687,7 +687,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptHighlight, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_hl),
         opt_did_set_cb: Some(did_set_highlight),
-        def_val: macro_string(&HIGHLIGHT_INIT),
+        def_val: string(HIGHLIGHT_INIT),
         ..BLANK
     },
     // 'history'
