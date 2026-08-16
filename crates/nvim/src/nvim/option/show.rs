@@ -46,11 +46,11 @@ use crate::src::nvim::undo::curbufIsChanged;
 
 use super::{
     FAIL, MAXPATHL, NUL, OK, OPT_GLOBAL, OPT_LOCAL, OPT_ONECOLUMN, OPT_SKIPRTP, copy_option_part,
-    get_opt_idx, get_option_unset_value, get_varp, get_varp_scope, kOptFlagComma, kOptFlagExpand,
-    kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption, kOptValTypeBoolean,
-    kOptValTypeNumber, kOptValTypeString, option_has_type, option_is_global_local,
-    option_is_global_only, option_is_window_local, optval_as_object, optval_equal,
-    optval_from_varp, optval_is_default,
+    get_opt_idx, get_option, get_option_unset_value, get_varp, get_varp_scope, kOptFlagComma,
+    kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_type,
+    option_is_global_local, option_is_global_only, option_is_window_local, option_var,
+    optval_as_object, optval_equal, optval_from_varp, optval_is_default,
 };
 
 /// The column width one option gets in the multi-column listing, and the
@@ -164,12 +164,12 @@ pub fn ui_refresh_options() {
     // option's own global variable.
     unsafe {
         for opt_idx in all_options() {
-            let opt = &(*options.ptr())[opt_idx as usize];
-            if opt.flags & kOptFlagUIOption as uint32_t == 0 {
+            let opt = get_option(opt_idx);
+            if (*opt).flags & kOptFlagUIOption as uint32_t == 0 {
                 continue;
             }
-            let name = cstr_as_string(opt.fullname);
-            let value = optval_as_object(optval_from_varp(opt_idx, opt.var));
+            let name = cstr_as_string((*opt).fullname);
+            let value = optval_as_object(optval_from_varp(opt_idx, option_var(opt)));
             ui_call_option_set(name, value);
         }
         // 'mouse' is not a UI option, but the UI has to be told about it
@@ -273,8 +273,8 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: c_int, local_only: c_int) -> c_i
                 // `:mksession` skips the runtime paths, which belong to the
                 // installation rather than the session.
                 if opt_flags & OPT_SKIPRTP != 0
-                    && ((*opt).var == p_rtp.ptr().cast::<c_void>()
-                        || (*opt).var == p_pp.ptr().cast::<c_void>())
+                    && (option_var(opt) == p_rtp.ptr().cast::<c_void>()
+                        || option_var(opt) == p_pp.ptr().cast::<c_void>())
                 {
                     continue;
                 }
@@ -384,7 +384,7 @@ pub(crate) unsafe fn put_set(
 
         // A global-local option with no local value has nothing to say.
         if option_is_global_local(opt_idx)
-            && varp != (*opt).var
+            && varp != option_var(opt)
             && optval_equal(value, get_option_unset_value(opt_idx))
         {
             return OK;

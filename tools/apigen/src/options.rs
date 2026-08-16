@@ -800,8 +800,8 @@ fn emit_row(out: &mut String, o: &Opt) {
         .collect();
     writeln!(out, "        scope_idx: scope_idx({}),", idx.join(", ")).unwrap();
     match &o.varname {
-        Some(var) => writeln!(out, "        var: {var}.as_raw().cast(),").unwrap(),
-        None if o.immutable => writeln!(out, "        var: own_default({}),", o.index).unwrap(),
+        Some(var) => writeln!(out, "        var: OptVar::{}(&{var}),", titlecase(&o.ty)).unwrap(),
+        None if o.immutable => writeln!(out, "        var: OptVar::OwnDefault,").unwrap(),
         None => {}
     }
     if let Some(flags_var) = &o.flags_varname {
@@ -813,7 +813,7 @@ fn emit_row(out: &mut String, o: &Opt) {
     if !o.values.is_empty() {
         writeln!(
             out,
-            "        values: {}_values.as_raw().cast(),",
+            "        values: accepted(&{}_values),",
             o.values_prefix()
         )
         .unwrap();
@@ -884,7 +884,7 @@ const BLANK: vimoption_T = vimoption_T {
     flags: 0,
     type_0: kOptValTypeBoolean,
     scope_flags: 0,
-    var: ptr::null_mut(),
+    var: OptVar::NoGlobal,
     flags_var: None,
     scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
     immutable: false,
@@ -955,20 +955,13 @@ const fn macro_string(value: &'static [c_char]) -> OptVal {
     }
 }
 
-/// An immutable option has nowhere to keep a value, so it reads its own
-/// default in place. Nothing writes through the pointer: `set_option`
-/// refuses the option before it gets that far.
-///
-/// This is the address of `options[index].def_val.data`, computed rather
-/// than projected: the table is still being built when the rows call this,
-/// and pointer arithmetic needs only the static's address, not its contents.
-const fn own_default(index: usize) -> *mut c_void {
-    options
-        .as_raw()
-        .cast::<vimoption_T>()
-        .wrapping_add(index)
-        .wrapping_byte_add(offset_of!(vimoption_T, def_val) + offset_of!(OptVal, data))
-        .cast()
+/// The words a string option accepts: the address of the generated array,
+/// which the walk in `crate::src::nvim::optionstr` runs to its terminating
+/// null pointer.
+const fn accepted<const N: usize>(
+    values: &'static GlobalCell<[*const c_char; N]>,
+) -> *mut *const c_char {
+    values.as_raw().cast()
 }
 
 /// Copy one generated part into the table under construction.
@@ -1014,13 +1007,12 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
             .insert(name);
     }
 
-    let mut ffi = vec!["CStr", "c_char", "c_int", "c_void"];
+    let mut ffi = vec!["CStr", "c_char", "c_int"];
     if opts.iter().any(|o| !o.flag_enum.is_empty()) {
         ffi.push("c_uint");
     }
     ffi.sort_by_key(|name| (name.starts_with("c_"), *name));
     writeln!(out, "use core::ffi::{{{}}};", ffi.join(", ")).unwrap();
-    out.push_str("use core::mem::offset_of;\n");
     out.push_str("use core::ptr;\n\n");
     out.push_str("use crate::src::nvim::global_cell::GlobalCell;\n");
     for (module, names) in &by_module {
@@ -1037,6 +1029,7 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         "OptScopeFlags",
         "OptVal",
         "OptValData",
+        "OptVar",
         "String_0",
         "sctx_T",
         "ssize_t",
@@ -1197,7 +1190,18 @@ pub fn generate(
         )
         .unwrap();
     }
-    out.push_str("    assert!(base == kOptCount as usize);\n    table\n}\n");
+    out.push_str(
+        "    assert!(base == kOptCount as usize);\n\
+         \x20   let mut i = 0;\n\
+         \x20   while i < table.len() {\n\
+         \x20       assert!(\n\
+         \x20           table[i].var.agrees_with(table[i].type_0),\n\
+         \x20           \"an option's variable is not the type its row declares\"\n\
+         \x20       );\n\
+         \x20       i += 1;\n\
+         \x20   }\n\
+         \x20   table\n}\n",
+    );
 
     files.insert(
         0,

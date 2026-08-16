@@ -43,12 +43,13 @@ use crate::src::nvim::types::{
 use super::{
     FAIL, FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, IOSIZE, NUL, OK, OP_ADDING, OP_NONE,
     OP_PREPENDING, OP_REMOVING, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, OPT_NOWIN, OPT_ONECOLUMN,
-    OPT_WINONLY, STR2NR_ALL, didset_options, didset_options2, get_option_default, get_option_value,
-    get_varp, get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf,
-    kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString,
-    option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
-    option_scope_idx, optval_copy, optval_from_varp, set_option, set_options_default, showoneopt,
-    showoptions, stropt_get_newval, unset_option_local_value,
+    OPT_WINONLY, STR2NR_ALL, didset_options, didset_options2, get_option, get_option_default,
+    get_option_value, get_varp, get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure,
+    kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
+    kOptValTypeString, option_has_scope, option_has_type, option_is_global_local,
+    option_is_window_local, option_scope_idx, option_var, optval_copy, optval_from_varp,
+    set_option, set_options_default, showoneopt, showoptions, stropt_get_newval,
+    unset_option_local_value,
 };
 
 /// The messages the parse reports. They go back to [`do_set`] rather than
@@ -569,6 +570,7 @@ unsafe fn do_one_set_option(
 ///
 /// `varp` must be the option's variable in the scope `opt_flags` names.
 unsafe fn show_one(opt_idx: OptIndex, opt_flags: c_int, varp: *mut c_void, did_show: &mut bool) {
+    let opt = get_option(opt_idx);
     // SAFETY: `curwin`/`curbuf` are live and the option table is a plain
     // array.
     unsafe {
@@ -579,15 +581,15 @@ unsafe fn show_one(opt_idx: OptIndex, opt_flags: c_int, varp: *mut c_void, did_s
             gotocmdline(true);
             *did_show = true;
         }
-        showoneopt(&raw mut (*options.ptr())[opt_idx as usize], opt_flags);
+        showoneopt(opt, opt_flags);
 
         // With 'verbose' set, say where the value came from — from the
         // script context of the scope the value is being read from.
         if p_verbose.get() <= 0 {
             return;
         }
-        if varp == (*options.ptr())[opt_idx as usize].var {
-            last_set_msg((*options.ptr())[opt_idx as usize].script_ctx);
+        if varp == option_var(opt) {
+            last_set_msg((*opt).script_ctx);
         } else if option_has_scope(opt_idx, kOptScopeWin) {
             let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
             last_set_msg((*curwin.get()).w_onebuf_opt.wo_script_ctx[at]);

@@ -19,6 +19,7 @@
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
+use core::ptr;
 
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::message::iemsg;
@@ -26,7 +27,8 @@ use crate::src::nvim::os::libc::gettext;
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
 use crate::src::nvim::options::*;
 use crate::src::nvim::types::{
-    OptIndex, OptInt, OptScope, OptValType, buf_T, ssize_t, vimoption_T, win_T, winopt_T,
+    OptIndex, OptInt, OptScope, OptVal, OptValType, OptVar, buf_T, ssize_t, vimoption_T, win_T,
+    winopt_T,
 };
 
 use super::{
@@ -41,23 +43,44 @@ use super::{
 const ALLBUF_OFFSET: usize = offset_of!(win_T, w_allbuf_opt) - offset_of!(win_T, w_onebuf_opt);
 const _: () = assert!(ALLBUF_OFFSET == size_of::<winopt_T>());
 
-/// Whether an option is hidden: immutable, and pointing its variable at its
-/// own default, so a write through it could not be observed anyway.
+/// Where an option keeps its global value: the variable its row names, or —
+/// for an immutable option, which has nowhere to keep one — that row's own
+/// `def_val.data`, read in place.
+///
+/// This is the only place [`OptVar`] becomes an address, and the reason it
+/// needs the row rather than the tag alone.
+///
+/// # Safety
+///
+/// `p` must point into the option table.
+pub(crate) unsafe fn option_var(p: *mut vimoption_T) -> *mut c_void {
+    // SAFETY: the caller's `p` is a table row.
+    match unsafe { (*p).var } {
+        OptVar::NoGlobal => ptr::null_mut(),
+        OptVar::Boolean(cell) => cell.ptr().cast(),
+        OptVar::Number(cell) => cell.ptr().cast(),
+        OptVar::String(cell) => cell.ptr().cast(),
+        OptVar::OwnDefault => p
+            .wrapping_byte_add(offset_of!(vimoption_T, def_val) + offset_of!(OptVal, data))
+            .cast(),
+    }
+}
+
+/// Whether an option is hidden: immutable, and reading its own default in
+/// place, so a write through its variable could not be observed anyway.
 pub fn is_option_hidden(opt_idx: OptIndex) -> bool {
     if opt_idx == kOptInvalid {
         return false;
     }
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe {
-        let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-        (*opt).immutable && (*opt).var == (&raw mut (*opt).def_val.data).cast::<c_void>()
-    }
+    let opt = get_option(opt_idx);
+    // SAFETY: `get_option` hands back a row of the option table.
+    unsafe { (*opt).immutable && matches!((*opt).var, OptVar::OwnDefault) }
 }
 
 /// Whether the table declares `type_0` as the option's type.
 pub fn option_has_type(opt_idx: OptIndex, type_0: OptValType) -> bool {
     // SAFETY: the option table is a plain array; nothing holds a borrow.
-    opt_idx != kOptInvalid && unsafe { (*options.ptr())[opt_idx as usize].type_0 } == type_0
+    opt_idx != kOptInvalid && unsafe { (*get_option(opt_idx)).type_0 } == type_0
 }
 
 /// Whether the option exists in `scope`.
@@ -73,7 +96,7 @@ fn scope_flags(opt_idx: OptIndex) -> u32 {
         return 0;
     }
     // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { (*options.ptr())[opt_idx as usize].scope_flags as u32 }
+    unsafe { (*get_option(opt_idx)).scope_flags as u32 }
 }
 
 /// Whether the option has both a global value and a local one.
@@ -94,7 +117,7 @@ pub(crate) fn option_is_window_local(opt_idx: OptIndex) -> bool {
 /// Where in a window's or buffer's array of values this option's sits.
 pub fn option_scope_idx(opt_idx: OptIndex, scope: OptScope) -> ssize_t {
     // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { (*options.ptr())[opt_idx as usize].scope_idx[scope as usize] }
+    unsafe { (*get_option(opt_idx)).scope_idx[scope as usize] }
 }
 
 /// A global-local string variable, or the global one when the local value is
@@ -165,7 +188,7 @@ pub unsafe fn get_varp_scope_from(
                     .add(ALLBUF_OFFSET)
                     .cast::<c_void>();
             }
-            return (*p).var;
+            return option_var(p);
         }
         if opt_flags & OPT_LOCAL != 0 && option_is_global_local(opt_idx) {
             // The local variable itself, sentinel and all.
@@ -233,14 +256,7 @@ pub unsafe fn get_option_varp_scope_from(
     win: *mut win_T,
 ) -> *mut c_void {
     // SAFETY: `opt_idx` indexes the table; the caller's pointers are live.
-    unsafe {
-        get_varp_scope_from(
-            (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
-            opt_flags,
-            buf,
-            win,
-        )
-    }
+    unsafe { get_varp_scope_from(get_option(opt_idx), opt_flags, buf, win) }
 }
 
 /// The variable the option reads from right now, for the given buffer and
@@ -254,7 +270,7 @@ pub unsafe fn get_varp_from(p: *mut vimoption_T, buf: *mut buf_T, win: *mut win_
     // SAFETY: the caller's pointers are live, and `p` is a table row.
     unsafe {
         let opt_idx = get_opt_idx(p);
-        let global = (*p).var;
+        let global = option_var(p);
         if is_option_hidden(opt_idx) || option_is_global_only(opt_idx) {
             return global;
         }

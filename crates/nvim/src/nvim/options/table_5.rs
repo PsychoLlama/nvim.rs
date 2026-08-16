@@ -16,7 +16,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         fullname: name(c"terse"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTerse, kWinOptInvalid, kBufOptInvalid),
-        var: own_default(317),
+        var: OptVar::OwnDefault,
         immutable: true,
         ..BLANK
     },
@@ -28,7 +28,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptTextwidth),
-        var: p_tw.as_raw().cast(),
+        var: OptVar::Number(&p_tw),
         opt_did_set_cb: Some(did_set_textwidth),
         def_val: number(0),
         ..BLANK
@@ -41,7 +41,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptThesaurus, kWinOptInvalid, kBufOptThesaurus),
-        var: p_tsr.as_raw().cast(),
+        var: OptVar::String(&p_tsr),
         def_val: string(c""),
         ..BLANK
     },
@@ -57,7 +57,7 @@ pub(super) const PART: [vimoption_T; 57] = [
             kWinOptInvalid,
             kBufOptThesaurusfunc,
         ),
-        var: p_tsrfu.as_raw().cast(),
+        var: OptVar::String(&p_tsrfu),
         opt_did_set_cb: Some(did_set_thesaurusfunc),
         def_val: string(c""),
         ..BLANK
@@ -68,7 +68,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"top"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTildeop, kWinOptInvalid, kBufOptInvalid),
-        var: p_to.as_raw().cast(),
+        var: OptVar::Boolean(&p_to),
         ..BLANK
     },
     // 'timeout'
@@ -77,7 +77,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"to"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTimeout, kWinOptInvalid, kBufOptInvalid),
-        var: p_timeout.as_raw().cast(),
+        var: OptVar::Boolean(&p_timeout),
         def_val: boolean(true),
         ..BLANK
     },
@@ -88,7 +88,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTimeoutlen, kWinOptInvalid, kBufOptInvalid),
-        var: p_tm.as_raw().cast(),
+        var: OptVar::Number(&p_tm),
         def_val: number(1000),
         ..BLANK
     },
@@ -97,7 +97,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         fullname: name(c"title"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTitle, kWinOptInvalid, kBufOptInvalid),
-        var: p_title.as_raw().cast(),
+        var: OptVar::Boolean(&p_title),
         opt_did_set_cb: Some(did_set_title_icon),
         ..BLANK
     },
@@ -107,7 +107,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTitlelen, kWinOptInvalid, kBufOptInvalid),
-        var: p_titlelen.as_raw().cast(),
+        var: OptVar::Number(&p_titlelen),
         opt_did_set_cb: Some(did_set_titlelen),
         def_val: number(85),
         ..BLANK
@@ -119,7 +119,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTitleold, kWinOptInvalid, kBufOptInvalid),
-        var: p_titleold.as_raw().cast(),
+        var: OptVar::String(&p_titleold),
         def_val: string(c""),
         ..BLANK
     },
@@ -130,7 +130,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTitlestring, kWinOptInvalid, kBufOptInvalid),
-        var: p_titlestring.as_raw().cast(),
+        var: OptVar::String(&p_titlestring),
         opt_did_set_cb: Some(did_set_titlestring),
         def_val: string(c""),
         ..BLANK
@@ -141,7 +141,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         flags: kOptFlagUIOption,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTtimeout, kWinOptInvalid, kBufOptInvalid),
-        var: p_ttimeout.as_raw().cast(),
+        var: OptVar::Boolean(&p_ttimeout),
         def_val: boolean(true),
         ..BLANK
     },
@@ -153,7 +153,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTtimeoutlen, kWinOptInvalid, kBufOptInvalid),
-        var: p_ttm.as_raw().cast(),
+        var: OptVar::Number(&p_ttm),
         def_val: number(50),
         ..BLANK
     },
@@ -164,7 +164,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         flags: kOptFlagNoMkrc,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptTtyfast, kWinOptInvalid, kBufOptInvalid),
-        var: p_tf.as_raw().cast(),
+        var: OptVar::Boolean(&p_tf),
         def_val: boolean(true),
         ..BLANK
     },
@@ -180,7 +180,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptUndodir, kWinOptInvalid, kBufOptInvalid),
-        var: p_udir.as_raw().cast(),
+        var: OptVar::String(&p_udir),
         def_val: string(c""),
         ..BLANK
     },
@@ -190,7 +190,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"udf"),
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptUndofile),
-        var: p_udf.as_raw().cast(),
+        var: OptVar::Boolean(&p_udf),
         opt_did_set_cb: Some(did_set_undofile),
         ..BLANK
     },
@@ -201,7 +201,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptUndolevels, kWinOptInvalid, kBufOptUndolevels),
-        var: p_ul.as_raw().cast(),
+        var: OptVar::Number(&p_ul),
         opt_did_set_cb: Some(did_set_undolevels),
         def_val: number(1000),
         ..BLANK
@@ -213,7 +213,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptUndoreload, kWinOptInvalid, kBufOptInvalid),
-        var: p_ur.as_raw().cast(),
+        var: OptVar::Number(&p_ur),
         def_val: number(10000),
         ..BLANK
     },
@@ -224,7 +224,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptUpdatecount, kWinOptInvalid, kBufOptInvalid),
-        var: p_uc.as_raw().cast(),
+        var: OptVar::Number(&p_uc),
         opt_did_set_cb: Some(did_set_updatecount),
         def_val: number(200),
         ..BLANK
@@ -236,7 +236,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptUpdatetime, kWinOptInvalid, kBufOptInvalid),
-        var: p_ut.as_raw().cast(),
+        var: OptVar::Number(&p_ut),
         def_val: number(4000),
         ..BLANK
     },
@@ -248,7 +248,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptVarsofttabstop),
-        var: p_vsts.as_raw().cast(),
+        var: OptVar::String(&p_vsts),
         opt_did_set_cb: Some(did_set_varsofttabstop),
         def_val: string(c""),
         ..BLANK
@@ -261,7 +261,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptVartabstop),
-        var: p_vts.as_raw().cast(),
+        var: OptVar::String(&p_vts),
         opt_did_set_cb: Some(did_set_vartabstop),
         def_val: string(c""),
         ..BLANK
@@ -274,7 +274,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptVerbose, kWinOptInvalid, kBufOptInvalid),
-        var: p_verbose.as_raw().cast(),
+        var: OptVar::Number(&p_verbose),
         def_val: number(0),
         ..BLANK
     },
@@ -286,7 +286,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptVerbosefile, kWinOptInvalid, kBufOptInvalid),
-        var: p_vfile.as_raw().cast(),
+        var: OptVar::String(&p_vfile),
         opt_did_set_cb: Some(did_set_verbosefile),
         def_val: string(c""),
         ..BLANK
@@ -299,7 +299,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptViewdir, kWinOptInvalid, kBufOptInvalid),
-        var: p_vdir.as_raw().cast(),
+        var: OptVar::String(&p_vdir),
         def_val: string(c""),
         ..BLANK
     },
@@ -311,7 +311,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptViewoptions, kWinOptInvalid, kBufOptInvalid),
-        var: p_vop.as_raw().cast(),
+        var: OptVar::String(&p_vop),
         flags_var: Some(&vop_flags),
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -326,9 +326,9 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | WIN,
         scope_idx: scope_idx(kGlobalOptVirtualedit, kWinOptVirtualedit, kBufOptInvalid),
-        var: p_ve.as_raw().cast(),
+        var: OptVar::String(&p_ve),
         flags_var: Some(&ve_flags),
-        values: opt_ve_values.as_raw().cast(),
+        values: accepted(&opt_ve_values),
         values_len: 6,
         opt_did_set_cb: Some(did_set_virtualedit),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -341,7 +341,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"vb"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptVisualbell, kWinOptInvalid, kBufOptInvalid),
-        var: p_vb.as_raw().cast(),
+        var: OptVar::Boolean(&p_vb),
         ..BLANK
     },
     // 'warn'
@@ -349,7 +349,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         fullname: name(c"warn"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWarn, kWinOptInvalid, kBufOptInvalid),
-        var: p_warn.as_raw().cast(),
+        var: OptVar::Boolean(&p_warn),
         def_val: boolean(true),
         ..BLANK
     },
@@ -361,7 +361,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWhichwrap, kWinOptInvalid, kBufOptInvalid),
-        var: p_ww.as_raw().cast(),
+        var: OptVar::String(&p_ww),
         opt_did_set_cb: Some(did_set_whichwrap),
         opt_expand_cb: Some(expand_set_whichwrap),
         def_val: string(c"b,s"),
@@ -374,7 +374,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildchar, kWinOptInvalid, kBufOptInvalid),
-        var: p_wc.as_raw().cast(),
+        var: OptVar::Number(&p_wc),
         opt_did_set_cb: Some(did_set_wildchar),
         def_val: number(TAB as OptInt),
         ..BLANK
@@ -386,7 +386,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildcharm, kWinOptInvalid, kBufOptInvalid),
-        var: p_wcm.as_raw().cast(),
+        var: OptVar::Number(&p_wcm),
         opt_did_set_cb: Some(did_set_wildchar),
         def_val: number(0),
         ..BLANK
@@ -399,7 +399,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildignore, kWinOptInvalid, kBufOptInvalid),
-        var: p_wig.as_raw().cast(),
+        var: OptVar::String(&p_wig),
         def_val: string(c""),
         ..BLANK
     },
@@ -409,7 +409,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"wic"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildignorecase, kWinOptInvalid, kBufOptInvalid),
-        var: p_wic.as_raw().cast(),
+        var: OptVar::Boolean(&p_wic),
         ..BLANK
     },
     // 'wildmenu'
@@ -418,7 +418,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"wmnu"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildmenu, kWinOptInvalid, kBufOptInvalid),
-        var: p_wmnu.as_raw().cast(),
+        var: OptVar::Boolean(&p_wmnu),
         def_val: boolean(true),
         ..BLANK
     },
@@ -430,8 +430,8 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildmode, kWinOptInvalid, kBufOptInvalid),
-        var: p_wim.as_raw().cast(),
-        values: opt_wim_values.as_raw().cast(),
+        var: OptVar::String(&p_wim),
+        values: accepted(&opt_wim_values),
         values_len: 5,
         opt_did_set_cb: Some(did_set_wildmode),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -446,9 +446,9 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildoptions, kWinOptInvalid, kBufOptInvalid),
-        var: p_wop.as_raw().cast(),
+        var: OptVar::String(&p_wop),
         flags_var: Some(&wop_flags),
-        values: opt_wop_values.as_raw().cast(),
+        values: accepted(&opt_wop_values),
         values_len: 4,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -462,8 +462,8 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinaltkeys, kWinOptInvalid, kBufOptInvalid),
-        var: p_wak.as_raw().cast(),
-        values: opt_wak_values.as_raw().cast(),
+        var: OptVar::String(&p_wak),
+        values: accepted(&opt_wak_values),
         values_len: 3,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -478,7 +478,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | WIN,
         scope_idx: scope_idx(kGlobalOptWinbar, kWinOptWinbar, kBufOptInvalid),
-        var: p_wbr.as_raw().cast(),
+        var: OptVar::String(&p_wbr),
         opt_did_set_cb: Some(did_set_winbar),
         def_val: string(c""),
         ..BLANK
@@ -502,8 +502,8 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinborder, kWinOptInvalid, kBufOptInvalid),
-        var: p_winborder.as_raw().cast(),
-        values: opt_winborder_values.as_raw().cast(),
+        var: OptVar::String(&p_winborder),
+        values: accepted(&opt_winborder_values),
         values_len: 8,
         opt_did_set_cb: Some(did_set_winborder),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -517,7 +517,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWindow, kWinOptInvalid, kBufOptInvalid),
-        var: p_window.as_raw().cast(),
+        var: OptVar::Number(&p_window),
         opt_did_set_cb: Some(did_set_window),
         def_val: number(0),
         ..BLANK
@@ -555,7 +555,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinheight, kWinOptInvalid, kBufOptInvalid),
-        var: p_wh.as_raw().cast(),
+        var: OptVar::Number(&p_wh),
         opt_did_set_cb: Some(did_set_winheight),
         def_val: number(1),
         ..BLANK
@@ -580,7 +580,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinminheight, kWinOptInvalid, kBufOptInvalid),
-        var: p_wmh.as_raw().cast(),
+        var: OptVar::Number(&p_wmh),
         opt_did_set_cb: Some(did_set_winminheight),
         def_val: number(1),
         ..BLANK
@@ -592,7 +592,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinminwidth, kWinOptInvalid, kBufOptInvalid),
-        var: p_wmw.as_raw().cast(),
+        var: OptVar::Number(&p_wmw),
         opt_did_set_cb: Some(did_set_winminwidth),
         def_val: number(1),
         ..BLANK
@@ -604,7 +604,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinwidth, kWinOptInvalid, kBufOptInvalid),
-        var: p_wiw.as_raw().cast(),
+        var: OptVar::Number(&p_wiw),
         opt_did_set_cb: Some(did_set_winwidth),
         def_val: number(20),
         ..BLANK
@@ -626,7 +626,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptWrapmargin),
-        var: p_wm.as_raw().cast(),
+        var: OptVar::Number(&p_wm),
         def_val: number(0),
         ..BLANK
     },
@@ -636,7 +636,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"ws"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWrapscan, kWinOptInvalid, kBufOptInvalid),
-        var: p_ws.as_raw().cast(),
+        var: OptVar::Boolean(&p_ws),
         def_val: boolean(true),
         ..BLANK
     },
@@ -645,7 +645,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         fullname: name(c"write"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWrite, kWinOptInvalid, kBufOptInvalid),
-        var: p_write.as_raw().cast(),
+        var: OptVar::Boolean(&p_write),
         def_val: boolean(true),
         ..BLANK
     },
@@ -655,7 +655,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"wa"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWriteany, kWinOptInvalid, kBufOptInvalid),
-        var: p_wa.as_raw().cast(),
+        var: OptVar::Boolean(&p_wa),
         ..BLANK
     },
     // 'writebackup'
@@ -664,7 +664,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         shortname: name(c"wb"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWritebackup, kWinOptInvalid, kBufOptInvalid),
-        var: p_wb.as_raw().cast(),
+        var: OptVar::Boolean(&p_wb),
         def_val: boolean(true),
         ..BLANK
     },
@@ -675,7 +675,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWritedelay, kWinOptInvalid, kBufOptInvalid),
-        var: p_wd.as_raw().cast(),
+        var: OptVar::Number(&p_wd),
         def_val: number(0),
         ..BLANK
     },

@@ -40,9 +40,9 @@ use super::{
     EXPAND_NOTHING, EXPAND_OLD_SETTING, EXPAND_OWNSYNTAX, EXPAND_SETTING_SUBTRACT, EXPAND_SETTINGS,
     EXPAND_STRING_SETTING, EXPAND_UNSUCCESSFUL, FAIL, FUZZY_SCORE_NONE, MAXPATHL, NUL, OK,
     XP_BS_COMMA, XP_BS_ONE, XP_BS_THREE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len,
-    get_option_varp_scope_from, get_varp_scope, is_option_hidden, kOptFlagColon, kOptFlagComma,
-    kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
-    option_value2string,
+    get_option, get_option_varp_scope_from, get_varp_scope, is_option_hidden, kOptFlagColon,
+    kOptFlagComma, kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber,
+    option_has_type, option_value2string, option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
@@ -67,12 +67,12 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
     // SAFETY: the option table is a plain array, `var` is the option's own
     // variable, and the caller's `val` is NUL-terminated.
     unsafe {
-        let opt = &(*options.ptr())[opt_idx as usize];
-        if opt.flags & kOptFlagExpand as uint32_t == 0 || is_option_hidden(opt_idx) {
+        let opt = get_option(opt_idx);
+        if (*opt).flags & kOptFlagExpand as uint32_t == 0 || is_option_hidden(opt_idx) {
             return ptr::null_mut();
         }
         let val = if val.is_null() {
-            *opt.var.cast::<*mut c_char>()
+            *option_var(opt).cast::<*mut c_char>()
         } else {
             val
         };
@@ -80,7 +80,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
         if val.is_null() || strlen(val) > MAXPATHL as size_t {
             return ptr::null_mut();
         }
-        let var = opt.var.cast::<*mut c_char>();
+        let var = option_var(opt).cast::<*mut c_char>();
         // 'path' and 'tags' hold escaped file names, so their separators
         // must survive the expansion.
         let esc = var == p_tags.ptr() || var == p_path.ptr();
@@ -192,7 +192,7 @@ pub unsafe fn set_context_in_set_cmd(xp: *mut expand_T, arg: *mut c_char, opt_fl
         START_COL.set(p.add(1).offset_from((*xp).xp_line) as c_int);
 
         // Three options reuse another command's completion wholesale.
-        let var = (*options.ptr())[opt_idx as usize].var;
+        let var = option_var(get_option(opt_idx));
         for (cell, context) in [
             (p_syn.ptr().cast::<c_void>(), EXPAND_OWNSYNTAX),
             (p_ft.ptr().cast::<c_void>(), EXPAND_FILETYPE),
@@ -357,7 +357,7 @@ unsafe fn take_option_name(
 unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t) {
     // SAFETY: the caller's expansion state, and the option table.
     unsafe {
-        let var = (*options.ptr())[opt_idx as usize].var.cast::<c_char>();
+        let var = option_var(get_option(opt_idx)).cast::<c_char>();
         let directories = [
             p_bdir.ptr().cast::<c_char>(),
             p_dir.ptr().cast::<c_char>(),

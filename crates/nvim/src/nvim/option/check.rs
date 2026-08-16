@@ -46,9 +46,9 @@ use crate::src::nvim::types::{
 
 use super::{
     HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, didset_options_sctx,
-    didset_window_options, get_varp, kFillchars, kListchars, kOptFlagHLOnly, kOptFlagInsecure,
-    kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin,
-    kOptValTypeString, option_has_type,
+    didset_window_options, get_option, get_varp, kFillchars, kListchars, kOptFlagHLOnly,
+    kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
+    kOptFlagRedrWin, kOptValTypeString, option_has_type,
 };
 
 /// What 'binary' overrode, so that switching it off again restores the
@@ -185,7 +185,7 @@ pub fn check_options() {
     unsafe {
         for opt_idx in kOptAleph..kOptCount {
             if option_has_type(opt_idx, kOptValTypeString)
-                && !(*options.ptr())[opt_idx as usize].var.is_null()
+                && (*get_option(opt_idx)).var.has_global()
             {
                 let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
                 check_string_option(get_varp(opt).cast::<*mut c_char>());

@@ -32,8 +32,7 @@ pub use self::index::*;
 pub use self::lookup::*;
 pub use self::values::*;
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::mem::offset_of;
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
 use crate::src::nvim::ex_docmd::did_set_findfunc;
@@ -123,7 +122,8 @@ use crate::src::nvim::tag::did_set_tagfunc;
 use crate::src::nvim::types::option::MAX_MCO;
 use crate::src::nvim::types::types::{kFalse, kTrue};
 use crate::src::nvim::types::{
-    OptIndex, OptInt, OptScopeFlags, OptVal, OptValData, String_0, sctx_T, ssize_t, vimoption_T,
+    OptIndex, OptInt, OptScopeFlags, OptVal, OptValData, OptVar, String_0, sctx_T, ssize_t,
+    vimoption_T,
 };
 use crate::src::nvim::window::{did_set_winminheight, did_set_winminwidth};
 
@@ -141,7 +141,7 @@ const BLANK: vimoption_T = vimoption_T {
     flags: 0,
     type_0: kOptValTypeBoolean,
     scope_flags: 0,
-    var: ptr::null_mut(),
+    var: OptVar::NoGlobal,
     flags_var: None,
     scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
     immutable: false,
@@ -208,20 +208,13 @@ const fn macro_string(value: &'static [c_char]) -> OptVal {
     }
 }
 
-/// An immutable option has nowhere to keep a value, so it reads its own
-/// default in place. Nothing writes through the pointer: `set_option`
-/// refuses the option before it gets that far.
-///
-/// This is the address of `options[index].def_val.data`, computed rather
-/// than projected: the table is still being built when the rows call this,
-/// and pointer arithmetic needs only the static's address, not its contents.
-const fn own_default(index: usize) -> *mut c_void {
-    options
-        .as_raw()
-        .cast::<vimoption_T>()
-        .wrapping_add(index)
-        .wrapping_byte_add(offset_of!(vimoption_T, def_val) + offset_of!(OptVal, data))
-        .cast()
+/// The words a string option accepts: the address of the generated array,
+/// which the walk in `crate::src::nvim::optionstr` runs to its terminating
+/// null pointer.
+const fn accepted<const N: usize>(
+    values: &'static GlobalCell<[*const c_char; N]>,
+) -> *mut *const c_char {
+    values.as_raw().cast()
 }
 
 /// Copy one generated part into the table under construction.
@@ -247,5 +240,13 @@ const fn table() -> [vimoption_T; kOptCount as usize] {
     base = fill(&mut table, base, &table_4::PART);
     base = fill(&mut table, base, &table_5::PART);
     assert!(base == kOptCount as usize);
+    let mut i = 0;
+    while i < table.len() {
+        assert!(
+            table[i].var.agrees_with(table[i].type_0),
+            "an option's variable is not the type its row declares"
+        );
+        i += 1;
+    }
     table
 }

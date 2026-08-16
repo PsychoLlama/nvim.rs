@@ -5,6 +5,7 @@
 use super::*;
 
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::option::{kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
 
 pub type OptScope = ::core::ffi::c_uint;
 pub type OptScopeFlags = uint8_t;
@@ -56,6 +57,57 @@ pub struct optset_T {
     pub os_win: *mut ::core::ffi::c_void,
     pub os_buf: *mut ::core::ffi::c_void,
 }
+/// Where an option keeps its global value.
+///
+/// An option's variable is a tagged pointer — the same bytes are an `int`,
+/// an `OptInt` or a `char *` depending on the row's `type_0` — and the
+/// table used to state the tag once and the address once, with nothing
+/// tying them together: `var` was a `*mut c_void` filled in from whichever
+/// global the metadata named. Here the arm carries the cell itself, so a
+/// row cannot point a string option at a number and still compile, and
+/// [`crate::src::nvim::option::scope::option_var`] is the one place that
+/// turns any of it back into an address.
+#[derive(Copy, Clone)]
+pub enum OptVar {
+    /// The option has no global variable: its value lives only in a window
+    /// or a buffer.
+    NoGlobal,
+    /// A boolean option's `int`.
+    Boolean(&'static GlobalCell<::core::ffi::c_int>),
+    /// A number option's `OptInt`.
+    Number(&'static GlobalCell<OptInt>),
+    /// A string option's `char *`.
+    String(&'static GlobalCell<*mut ::core::ffi::c_char>),
+    /// An immutable option has nowhere to keep a value, so it reads its own
+    /// default in place — the `def_val.data` of its own row, whose active
+    /// member is this option's type. Nothing writes through it: `set_option`
+    /// refuses the option long before it gets that far.
+    OwnDefault,
+}
+
+impl OptVar {
+    /// Whether the option has a global variable at all — the question the
+    /// null `var` used to answer. An immutable option counts: its own
+    /// default stands in for one.
+    pub fn has_global(self) -> bool {
+        !matches!(self, OptVar::NoGlobal)
+    }
+
+    /// Whether `type_0` describes the bytes this points at. The table
+    /// asserts it for every row at compile time, which is what lets the
+    /// `varp` plumbing read a variable as its option's type without
+    /// checking first.
+    pub const fn agrees_with(self, type_0: OptValType) -> bool {
+        match self {
+            // Neither carries a variable of its own to disagree with.
+            OptVar::NoGlobal | OptVar::OwnDefault => true,
+            OptVar::Boolean(_) => type_0 == kOptValTypeBoolean,
+            OptVar::Number(_) => type_0 == kOptValTypeNumber,
+            OptVar::String(_) => type_0 == kOptValTypeString,
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct vimoption_T {
     pub fullname: *mut ::core::ffi::c_char,
@@ -63,7 +115,7 @@ pub struct vimoption_T {
     pub flags: uint32_t,
     pub type_0: OptValType,
     pub scope_flags: OptScopeFlags,
-    pub var: *mut ::core::ffi::c_void,
+    pub var: OptVar,
     pub flags_var: Option<&'static GlobalCell<::core::ffi::c_uint>>,
     pub scope_idx: [ssize_t; 3],
     pub immutable: bool,

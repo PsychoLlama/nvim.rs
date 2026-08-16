@@ -60,7 +60,7 @@ use super::{
     kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptFlagWasSet,
     kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
     kOptValTypeString, option_has_scope, option_has_type, option_is_global_local,
-    option_is_global_only, option_scope_idx, optval_copy, optval_equal, optval_free,
+    option_is_global_only, option_scope_idx, option_var, optval_copy, optval_equal, optval_free,
     optval_from_varp, set_option_varp, validate_option_value,
 };
 use crate::src::nvim::pos::MAXCOL;
@@ -636,7 +636,7 @@ pub(crate) unsafe fn set_option(
         // `:set opt=val` on a global-local option resets the local value, so
         // it is the global variable that is being written.
         let varp = if scope_both && option_is_global_local(opt_idx) {
-            (*opt).var
+            option_var(opt)
         } else {
             get_varp_scope(opt, opt_flags)
         };

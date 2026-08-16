@@ -21,7 +21,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
 use crate::src::nvim::main::e_invarg;
-use crate::src::nvim::option::{get_option, kOptFlagComma, kOptFlagOneComma};
+use crate::src::nvim::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::src::nvim::options::{
     kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions,
 };
@@ -184,7 +184,7 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
     // SAFETY: `get_option` returns a row of the generated option table.
     let opt = get_option(idx);
     let varp = if varp.is_null() {
-        unsafe { (*opt).var.cast::<*mut c_char>() }
+        unsafe { option_var(opt).cast::<*mut c_char>() }
     } else {
         varp
     };

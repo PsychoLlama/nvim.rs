@@ -62,9 +62,9 @@ use super::{
     check_options, check_win_options, default_fileformat, didset_options, didset_options2,
     get_option_unset_value, insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagInsecure,
     kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean, kOptValTypeNumber,
-    kOptValTypeString, option_expand, option_has_type, option_is_global_local, option_was_set,
-    optval_copy, optval_free, set_fileformat, set_option_direct, set_option_value_give_err,
-    set_option_varp,
+    kOptValTypeString, option_expand, option_has_type, option_is_global_local, option_var,
+    option_was_set, optval_copy, optval_free, set_fileformat, set_option_direct,
+    set_option_value_give_err, set_option_varp,
 };
 
 /// Every option, in table order.
@@ -259,8 +259,8 @@ fn set_init_expand_env() {
             // A `kOptFlagGettext` default is a translatable message rather
             // than a path; there is nothing in it to expand.
             let expanded =
-                if (*opt).flags & kOptFlagGettext as uint32_t != 0 && !(*opt).var.is_null() {
-                    gettext(*(*opt).var.cast::<*mut c_char>())
+                if (*opt).flags & kOptFlagGettext as uint32_t != 0 && (*opt).var.has_global() {
+                    gettext(*option_var(opt).cast::<*mut c_char>())
                 } else {
                     option_expand(opt_idx, ptr::null())
                 };
@@ -273,7 +273,7 @@ fn set_init_expand_env() {
                     string: cstr_to_string(expanded),
                 },
             };
-            set_option_varp(opt_idx, (*opt).var, value, true);
+            set_option_varp(opt_idx, option_var(opt), value, true);
             change_option_default(
                 opt_idx,
                 OptVal {
