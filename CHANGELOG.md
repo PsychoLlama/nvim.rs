@@ -7,6 +7,17 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Took the C memory layout off 239 of the editor's own struct types, leaving
+  it only where something outside the editor really reads the bytes; threaded
+  the regular-expression engines' match state through both engines instead of
+  reaching for it as a global on every character; gave each option row a typed
+  handle on the variable it keeps its value in, so a row naming a variable of
+  the wrong type no longer compiles; and turned the shell, wildcard-expansion,
+  file-expansion and libuv-error constants into real types instead of loose
+  integers. Nothing observable changed.
+
 ## [2026.08.15-2b1aee84f3]
 
 ### Changed
