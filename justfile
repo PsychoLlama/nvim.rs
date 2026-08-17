@@ -124,6 +124,14 @@ miri *args:
 apigen *args:
   @scripts/gen-api-dispatch.sh {{ args }}
 
+# Regenerate crates/nvim/src/nvim/keycodes.lua from the Rust key-name table
+# (crates/nvim/src/nvim/keycodes/tables.rs). Nothing in the editor reads it —
+# the port answers key-name lookups from the Rust table directly — but
+# test/benchmark/keycodes_spec.lua does, and generating beats letting a
+# benchmark keep its own copy of a 187-row table. `--check` fails on drift.
+keycodes-lua *args:
+  @scripts/gen-keycodes-lua.py {{ args }}
+
 # Regenerate the ABI ledger (metrics/abi-ledger.jsonl): classifies every
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the
 # committed ledger instead of writing.
@@ -139,9 +147,10 @@ ratchet *args:
   @scripts/ratchet.py {{ args }}
 
 # Regenerate every committed baseline, in the one order that is self-consistent:
-# the generated wrappers, then format, then the ABI ledger, then the ratchet,
-# then re-check formatting. This is the entry point; running the pieces by hand
-# invites a baseline that describes a tree that no longer exists.
+# the generated wrappers and the keycode table, then format, then the ABI
+# ledger, then the ratchet, then re-check formatting. This is the entry point;
+# running the pieces by hand invites a baseline that describes a tree that no
+# longer exists.
 #
 # Code generation leads because it writes crate source every later step reads.
 # Formatting comes next because rustfmt rewrapping a line changes the line counts
@@ -156,7 +165,7 @@ ratchet *args:
 # fixed point that the pre-commit hook can't move.
 #
 # Args are forwarded to the ratchet and lint, e.g. `just refresh --allow-growth`.
-refresh *args: apigen fmt abi-ledger (ratchet args) (lint args)
+refresh *args: apigen keycodes-lua fmt abi-ledger (ratchet args) (lint args)
   @treefmt --no-cache --fail-on-change --quiet
 
 # This is the gate CI runs on every push. It deliberately skips the slow
@@ -169,4 +178,4 @@ refresh *args: apigen fmt abi-ledger (ratchet args) (lint args)
 # check because the ratchet snapshots the ledger's internal-export count and
 # cannot tell a stale ledger from a fresh one (both also run as pre-commit
 # hooks, see .gitconfig).
-minimal-ci: fmt-check (apigen "--check") (abi-ledger "--check") (ratchet "--check") build cargo-test
+minimal-ci: fmt-check (apigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (ratchet "--check") build cargo-test
