@@ -14,10 +14,9 @@ use core::{mem, ptr};
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc, tv_list_append_string,
-    tv_list_unref,
+    callback_free, kCallbackNone, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc,
+    tv_list_append_string, tv_list_ref, tv_list_unref,
 };
-use crate::eval::typval::{kCallbackNone, tv_list_ref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::garray::{ga_clear, ga_concat_len, ga_init};

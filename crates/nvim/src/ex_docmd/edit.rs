@@ -67,8 +67,7 @@ use crate::types::{
     ssize_t, uint8_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
-use crate::undo::u_clearline;
-use crate::undo::{u_redo, u_undo, u_undo_and_forget, undo_time};
+use crate::undo::{u_clearline, u_redo, u_undo, u_undo_and_forget, undo_time};
 
 /// `:print`, `:number` and `:list`.
 pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {

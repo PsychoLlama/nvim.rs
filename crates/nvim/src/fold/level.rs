@@ -13,8 +13,9 @@ use crate::syntax::syn_get_foldlevel;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
+use super::adjust::*;
+use super::marker::*;
 use super::*;
-use super::{adjust::*, marker::*};
 use crate::pos::MAXLNUM;
 use crate::types::{VV_LNUM, kNone};
 

@@ -29,8 +29,7 @@
 
 use crate::autocmd::apply_autocmds;
 use crate::charset::{skiptowhite, vim_isIDc};
-use crate::eval::typval::tv_list_len;
-use crate::eval::typval::{tv_get_string, tv_list_find_str};
+use crate::eval::typval::{tv_get_string, tv_list_find_str, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::do_exedit;
 use crate::input::prompt_for_input;
@@ -49,14 +48,12 @@ use crate::os::env::expand_env_save;
 use crate::os::input::os_breakcheck;
 use crate::os::libc::gettext;
 use crate::pos::MAXLNUM;
-use crate::regexp::RE_MAGIC;
-use crate::regexp::skip_regexp;
-use crate::types::event_T;
+use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
     CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMOD_BROWSE, CMOD_LOCKMARKS,
     ExtmarkOp, OptVal, OptValData, OptValType, String_0, UndoObjectType, VV_OLDFILES, bcount_t,
-    bfa_values, bln_values, buf_T, dobuf_action_values, exarg_T, getf_retvalues, linenr_T, list_T,
-    listitem_T, lpos_T, size_t, uint8_t, win_T,
+    bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T, getf_retvalues, linenr_T,
+    list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use core::ptr;

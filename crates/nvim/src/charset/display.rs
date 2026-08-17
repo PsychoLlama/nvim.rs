@@ -25,9 +25,9 @@ use crate::option::get_fileformat;
 use crate::os::libc::strlen;
 use crate::types::{StringBuilder, buf_T, garray_T, size_t, ssize_t, uint8_t};
 
-use super::transchar as render;
 use super::{
-    CT_CELL_MASK, EOL_MAC, NL, NUL, TAB, chartab, chartab_initialized, kOptDyFlagUhex, vim_isprintc,
+    CT_CELL_MASK, EOL_MAC, NL, NUL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,
+    transchar as render, vim_isprintc,
 };
 use crate::keycodes::K_SPECIAL;
 use crate::pos::MAXCOL;

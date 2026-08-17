@@ -19,8 +19,7 @@ use core::ptr;
 #[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_TABENTER, EVENT_WINENTER};
-use crate::buffer::{BufRef, bt_prompt, is_changed, reset_syntax};
-use crate::buffer::{buf_valid, close_buffer};
+use crate::buffer::{BufRef, bt_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::keycodes::Ctrl_C;

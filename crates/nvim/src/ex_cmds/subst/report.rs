@@ -21,8 +21,7 @@ use crate::main::{
     sub_nlines, sub_nsubs,
 };
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
-use crate::memory::xstrdup;
-use crate::memory::{xfree, xrealloc};
+use crate::memory::{xfree, xrealloc, xstrdup};
 use crate::message::{MSG_BUF_LEN, emsg, messaging, msg, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::set_option_direct;

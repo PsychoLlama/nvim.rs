@@ -30,8 +30,10 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::slice;
 
-use crate::eval::typval::{GARRAY_EMPTY, tv_list_first, tv_list_last, tv_list_len};
-use crate::eval::typval::{tv_dict_find, tv_list_append_allocated_string, tv_list_idx_of_item};
+use crate::eval::typval::{
+    GARRAY_EMPTY, tv_dict_find, tv_list_append_allocated_string, tv_list_first,
+    tv_list_idx_of_item, tv_list_last, tv_list_len,
+};
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::garray::{Gap, ga_clear, ga_concat, ga_init};

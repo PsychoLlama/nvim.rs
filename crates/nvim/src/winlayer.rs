@@ -30,9 +30,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_char;
-use core::iter;
 use core::ops::{Deref, DerefMut};
-use core::ptr;
+use core::{iter, ptr};
 
 use crate::drawscreen::redraw_later;
 use crate::fold::{hasAnyFolding, hasFolding};

@@ -13,9 +13,9 @@ use core::ptr;
 use super::{
     FUNCEXE_INIT, LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast,
 };
-use crate::api::private::helpers::try_enter;
-use crate::api::private::helpers::try_leave;
-use crate::api::private::helpers::{api_clear_error, api_set_error, api_set_sctx, arena_array};
+use crate::api::private::helpers::{
+    api_clear_error, api_set_error, api_set_sctx, arena_array, try_enter, try_leave,
+};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
 use crate::ex_getln::{ERROR_INIT, TRY_STATE_INIT};

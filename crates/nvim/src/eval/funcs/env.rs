@@ -7,8 +7,7 @@ use super::{
     ADDR_LINES, ENV_SEPCHAR, EX_NOSPC, EXPAND_FILES, FAIL, NUL, OK, kXDGCacheHome, kXDGConfigDirs,
     kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
-use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne};
-use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts};
 use crate::eval::typval::{
     tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_get_number_chk,
     tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc,

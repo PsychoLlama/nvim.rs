@@ -25,8 +25,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::option::find_option_end;
 use crate::os::libc::{gettext, strlen};
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{OptIndex, VAR_PARTIAL, VV_LUA};
-use crate::types::{partial_T, size_t, typval_T, uint8_t};
+use crate::types::{OptIndex, VAR_PARTIAL, VV_LUA, partial_T, size_t, typval_T, uint8_t};
 
 /// The length of the environment-variable name at the cursor, which is
 /// left after it. Zero when there is none.

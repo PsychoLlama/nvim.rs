@@ -42,8 +42,7 @@ use crate::autocmd::{
     EVENT_INSERTENTER, EVENT_INSERTLEAVE, EVENT_INSERTLEAVEPRE, EVENT_TEXTCHANGEDI,
     EVENT_TEXTCHANGEDP, apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event,
 };
-use crate::buffer::{bt_prompt, bt_quickfix, buf_is_empty};
-use crate::buffer::{buf_get_changedtick, buf_meta_total};
+use crate::buffer::{bt_prompt, bt_quickfix, buf_get_changedtick, buf_is_empty, buf_meta_total};
 use crate::change::{
     appended_lines_mark, change_warning, changed_bytes, del_bytes, del_char, get_leader_len,
     ins_bytes_len, ins_char, ins_char_bytes, ins_str, inserted_bytes, open_line,
@@ -157,14 +156,15 @@ use crate::options::{
 use crate::os::input::line_breakcheck;
 use crate::os::libc::{__ctype_b_loc, gettext, memcpy, memmove, strcmp, strlen};
 use crate::os::time::os_time;
-use crate::plines::linetabsize_str;
 use crate::plines::{
-    charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize,
+    charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, linetabsize_str, win_charsize,
+    win_chartabsize,
 };
 use crate::popupmenu::{pum_check_clear, pum_visible};
 use crate::pos::{MAXCOL, equalpos};
-use crate::register::is_literal_register;
-use crate::register::{do_put, get_expr_register, get_yank_register, insert_reg, valid_yank_reg};
+use crate::register::{
+    do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, valid_yank_reg,
+};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_REPLACE, MODE_VREPLACE,

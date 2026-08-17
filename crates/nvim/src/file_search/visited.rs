@@ -15,8 +15,7 @@ use crate::memory::xmalloc;
 #[allow(unused_imports)]
 use crate::path::ExpandFlags;
 use core::ffi::{c_char, c_int};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// The names one directory's wildcard expansion produced.
 ///

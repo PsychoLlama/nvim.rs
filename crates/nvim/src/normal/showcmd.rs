@@ -33,10 +33,9 @@ use crate::os::libc::{memmove, snprintf, strcat, strcpy, strlen};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
-use crate::types::object;
 use crate::types::{
     Array, Integer, Object, OptInt, colnr_T, int64_t, kObjectTypeArray, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, linenr_T, size_t,
+    kObjectTypeNil, kObjectTypeString, linenr_T, object, size_t,
 };
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{c_char, c_int, c_void};

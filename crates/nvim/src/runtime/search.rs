@@ -22,8 +22,7 @@ use super::*;
 use crate::path::ExpandFlags;
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// The `[where]` qualifiers `:runtime` accepts, and the `DIP_*` set each one
 /// selects.  Upstream sums the flags; they are disjoint bits, so this is the

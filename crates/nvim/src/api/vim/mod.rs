@@ -15,15 +15,14 @@ use crate::autocmd::{
     EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume,
     unblock_autocmds,
 };
-use crate::buffer::buf_get_changedtick;
 use crate::buffer::{
-    buf_close_terminal, buflist_new, buflist_nr2name, bufref_valid, do_buffer, read_buffer_into,
-    set_bufref,
+    buf_close_terminal, buf_get_changedtick, buflist_new, buflist_nr2name, bufref_valid, do_buffer,
+    read_buffer_into, set_bufref,
 };
-use crate::channel::channel_internal;
-use crate::channel::find_channel;
-use crate::channel::{channel_all_info, channel_info, channel_send};
-use crate::channel::{channel_alloc, channel_decref, channel_incref};
+use crate::channel::{
+    channel_all_info, channel_alloc, channel_decref, channel_incref, channel_info,
+    channel_internal, channel_send, find_channel,
+};
 use crate::context::{ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict, kCtxAll};
 use crate::cursor::get_cursor_rel_lnum;
 use crate::decoration::decor_redraw_signs;

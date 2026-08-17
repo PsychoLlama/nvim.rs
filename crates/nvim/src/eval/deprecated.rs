@@ -24,8 +24,9 @@ use core::slice;
 use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
-use crate::eval::typval::{kCallbackNone, tv_list_len};
-use crate::eval::typval::{tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_get_string};
+use crate::eval::typval::{
+    kCallbackNone, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_get_string, tv_list_len,
+};
 use crate::ex_cmds::check_secure;
 use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2, firstbuf};
 use crate::memory::{xmalloc, xstrdup};

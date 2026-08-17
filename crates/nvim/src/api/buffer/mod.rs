@@ -7,8 +7,7 @@ use crate::api::private::helpers::{
 };
 use crate::api::private::validate::{api_err_invalid, check_string_array};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
-use crate::buffer::{buf_ensure_loaded, do_buffer};
-use crate::buffer::{buf_get_changedtick, buf_meta_total};
+use crate::buffer::{buf_ensure_loaded, buf_get_changedtick, buf_meta_total, do_buffer};
 use crate::buffer_updates::{buf_updates_register, buf_updates_unregister};
 use crate::change::changed_lines;
 use crate::cursor::{check_cursor_col, check_cursor_lnum, check_visual_pos};

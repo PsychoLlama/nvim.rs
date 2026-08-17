@@ -19,8 +19,7 @@
 use super::*;
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// Offset of `uf_name` inside `ufunc_T`: the function table's hash keys point
 /// at that inline buffer, so backing up by this recovers the function.  This is

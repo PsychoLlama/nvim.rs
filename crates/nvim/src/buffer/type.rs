@@ -23,8 +23,7 @@ use core::ptr;
 #[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{EVENT_BUFADD, EVENT_BUFDELETE, apply_autocmds};
-use crate::eval::typval::tv_dict_is_watched;
-use crate::eval::typval::{tv_dict_find, tv_dict_watcher_notify};
+use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_notify};
 use crate::main::{cmdmod, cmdwin_buf, curbuf, msg_loclist, msg_qflist, p_hid};
 use crate::memline::ml_get_buf;
 use crate::message::emsg;

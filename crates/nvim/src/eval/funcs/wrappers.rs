@@ -37,8 +37,7 @@ use crate::types::{
 };
 use crate::{semsg_c, semsg_multiline_c};
 use core::ffi::{c_char, c_int};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// A cleared typval, which is what an unfilled argument slot holds.
 const EMPTY_TV: typval_T = typval_T {

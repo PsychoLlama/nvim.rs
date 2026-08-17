@@ -2,10 +2,9 @@
 //! generator.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::VARNUMBER_MAX;
 use super::args::{Args, frame};
-use super::uv_random;
 use super::wrappers::tv_get_float_chk;
+use super::{VARNUMBER_MAX, uv_random};
 use crate::charset::skipwhite;
 use crate::eval::string2float;
 use crate::eval::typval::{
@@ -17,9 +16,8 @@ use crate::main::e_invarg2;
 use crate::os::env::os_get_pid;
 use crate::os::libc::gettext;
 use crate::os::time::os_hrtime;
-use crate::semsg;
-use crate::semsg_c;
 use crate::types::{EvalFuncData, VAR_FLOAT, VAR_LIST, VAR_NUMBER, float_T, typval_T, varnumber_T};
+use crate::{semsg, semsg_c};
 use core::ffi::{c_char, c_double, c_int, c_void};
 use core::ptr;
 

@@ -12,8 +12,7 @@
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of_val};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 #[allow(unused_imports)]
 use super::*;

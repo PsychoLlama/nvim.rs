@@ -10,9 +10,8 @@
 
 use core::ffi::{c_char, c_int};
 
-use super::cursor;
 use super::equi_class::nfa_emit_equi_class;
-use super::postfix;
+use super::{cursor, postfix};
 use crate::main::rc_did_emsg;
 use crate::mbyte::utf_char2len;
 use crate::regexp::{

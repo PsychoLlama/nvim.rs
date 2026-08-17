@@ -10,8 +10,9 @@ use crate::buffer::{bt_quickfix, bt_terminal, buflist_findnr, buflist_new, bufli
 use crate::cmdhist::{HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view};
 use crate::eval::decode::{decode_string, unpack_typval};
 use crate::eval::encode::encode_vim_to_msgpack;
-use crate::eval::typval::tv_list_len;
-use crate::eval::typval::{tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string};
+use crate::eval::typval::{
+    tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string, tv_list_len,
+};
 use crate::eval::vars::{get_globvar_ht, get_vim_var_list, set_vim_var_list};
 use crate::eval::{get_copyID, set_ref_in_ht, set_ref_in_list_items, var_flavour, var_set_global};
 use crate::event::libuv::uv_strerror;
@@ -57,10 +58,7 @@ use crate::path::{
 };
 use crate::pos::MAXLNUM;
 use crate::regexp::regtilde;
-use crate::register::op_global_reg_iter;
-use crate::register::op_reg_get;
-use crate::register::op_reg_index;
-use crate::register::op_reg_set;
+use crate::register::{op_global_reg_iter, op_reg_get, op_reg_index, op_reg_set};
 use crate::search::{
     get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
     set_search_pattern, set_substitute_pattern,

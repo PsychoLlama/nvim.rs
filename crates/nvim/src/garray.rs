@@ -8,8 +8,7 @@
 //! joining logic live in safe code below them.
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 use crate::log::{LOGLVL_WRN, logmsg_c};
 use crate::memory::{xfree, xmallocz, xrealloc, xstrdup};

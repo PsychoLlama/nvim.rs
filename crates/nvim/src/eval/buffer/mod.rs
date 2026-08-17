@@ -51,10 +51,8 @@ use crate::eval::window::win_has_winnr;
 use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
-use core::ffi::CStr;
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::mem;
-use core::ptr;
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::{mem, ptr};
 
 use crate::main::{
     VIsual_active, cmdwin_buf, curbuf, curtab, curwin, did_emsg, emsg_off, firstbuf, firstwin,

@@ -1,22 +1,19 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::buffer::bt_quickfix;
-use crate::buffer::buf_meta_total;
-use crate::charset::vim_isbreak;
+use crate::buffer::{bt_quickfix, buf_meta_total};
 use crate::charset::{
     byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex,
-    transstr_buf, vim_isprintc,
+    transstr_buf, vim_isbreak, vim_isprintc,
 };
 use crate::cursor::get_cursor_rel_lnum;
 use crate::cursor_shape::cursor_is_block_during_visual;
 use crate::decoration::{
     clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_range_at,
-    decor_range_count, decor_recheck_draw_col, decor_redraw_eol, decor_redraw_line,
-    decor_redraw_signs, decor_virt_lines, decor_virt_pos, decor_virt_pos_kind,
-    next_virt_text_chunk,
+    decor_range_count, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
+    decor_redraw_line, decor_redraw_signs, decor_virt_lines, decor_virt_pos, decor_virt_pos_kind,
+    kHlModeUnknown, next_virt_text_chunk,
 };
-use crate::decoration::{decor_redraw_col, kHlModeUnknown};
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
 use crate::diff::{diff_change_parse, diff_check_with_linestatus, diff_find_change};
 use crate::drawscreen::{compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end};
@@ -28,9 +25,8 @@ use crate::grid::{
     schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint,
     schar_len,
 };
-use crate::highlight::win_hl_attr;
 use crate::highlight::{
-    hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr,
+    hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
 };
 use crate::highlight_group::{
     HLF_0, HLF_8, HLF_ADD, HLF_AT, HLF_CHD, HLF_CLF, HLF_CLN, HLF_CLS, HLF_CONCEAL, HLF_COUNT,

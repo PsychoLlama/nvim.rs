@@ -8,8 +8,7 @@
 use crate::siemsg_c;
 use core::ffi::{c_char, c_int};
 
-use super::cursor;
-use super::postfix;
+use super::{cursor, postfix};
 use crate::main::{e_nopresub, rc_did_emsg};
 use crate::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::message::emsg;

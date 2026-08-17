@@ -20,8 +20,7 @@
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{EVENT_FILECHANGEDRO, apply_autocmds};
-use crate::buffer::buf_meta_total;
-use crate::buffer::{bt_dontwrite, bt_prompt, buf_inc_changedtick};
+use crate::buffer::{bt_dontwrite, bt_prompt, buf_inc_changedtick, buf_meta_total};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::charset::{getdigits_int, getwhitecols_curline, ptr2cells, skipwhite, vim_strnsize};
 use crate::cursor::{

@@ -11,12 +11,11 @@ use crate::context::{
 use crate::eval::typval::tv_list_first;
 use crate::main::did_emsg;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
-use crate::semsg;
-use crate::semsg_c;
 use crate::types::{
     Context, Error, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
     kErrorTypeNone, kObjectTypeDict, object, object_data, typval_T, varnumber_T,
 };
+use crate::{semsg, semsg_c};
 use core::ffi::{CStr, c_int};
 use core::ptr;
 

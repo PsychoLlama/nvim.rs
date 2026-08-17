@@ -26,10 +26,9 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    curbuf, curtab, curwin, e_autocmd_close, e_floatonly, firstwin, lastwin, p_ea, p_ead, p_ru,
-    redraw_cmdline, redraw_tabline,
+    curbuf, curtab, curwin, e_autocmd_close, e_floatonly, first_tabpage, firstwin, getout, lastwin,
+    p_ea, p_ead, p_ru, redraw_cmdline, redraw_tabline,
 };
-use crate::main::{first_tabpage, getout};
 use crate::message::internal_error;
 use crate::normal::reset_VIsual_and_resel;
 use crate::strings::vim_snprintf;

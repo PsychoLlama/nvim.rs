@@ -32,7 +32,6 @@ use core::mem::{offset_of, size_of};
 use core::ptr::{null, null_mut};
 
 use crate::eval::gc::{gc_first_dict, gc_first_list};
-use crate::eval::timers;
 use crate::eval::typval::{
     tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
     tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy, tv_list_copyid,
@@ -48,7 +47,7 @@ use crate::eval::vars::{
 use crate::eval::{
     COPYID_INC, COPYID_MASK, DICT_MAXNEST, FAIL, NUL, OK,
     e_variable_nested_too_deep_for_making_copy, kMTCharWise, set_ref_in_callback,
-    set_ref_in_callback_reader,
+    set_ref_in_callback_reader, timers,
 };
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;

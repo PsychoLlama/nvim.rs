@@ -23,8 +23,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 use crate::api::buffer::buf_collect_lines;
 use crate::api::private::helpers::arena_array;

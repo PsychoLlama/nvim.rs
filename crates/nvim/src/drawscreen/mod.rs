@@ -3,8 +3,7 @@
 use core::ffi::{c_char, c_int};
 
 use crate::autocmd::{EVENT_VIMRESIZED, apply_autocmds};
-use crate::buffer::buf_meta_total;
-use crate::buffer::maketitle;
+use crate::buffer::{buf_meta_total, maketitle};
 use crate::charset::{vim_isprintc, vim_strsize};
 use crate::cmdexpand::cmdline_pum_display;
 use crate::decoration::{
@@ -29,8 +28,9 @@ use crate::grid::{
     grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
     schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
 };
-use crate::highlight::win_hl_attr;
-use crate::highlight::{hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl};
+use crate::highlight::{
+    hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
+};
 use crate::highlight_group::{
     HLF_AT, HLF_C, HLF_CM, HLF_COUNT, HLF_EOB, HLF_FC, HLF_MSG, HLF_N, HLF_SC, highlight_changed,
 };

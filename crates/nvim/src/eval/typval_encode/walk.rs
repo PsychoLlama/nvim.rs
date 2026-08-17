@@ -9,13 +9,12 @@ use core::ptr;
 
 use super::{ConvFrame, ConvPath, ConvStack, ConvType, Flow, Frame, PartialStage, TypvalSink};
 use crate::eval::encode::encode_vim_list_to_buf;
-use crate::eval::get_copyID;
-use crate::eval::partial_name;
 use crate::eval::typval::{
     tv_blob_len, tv_dict_find, tv_dict_hi2di, tv_dict_item_key, tv_list_copyid, tv_list_first,
     tv_list_last, tv_list_len, tv_list_set_copyid,
 };
 use crate::eval::vars::eval_msgpack_type_lists;
+use crate::eval::{get_copyID, partial_name};
 use crate::memory::xfree;
 use crate::message::internal_error;
 use crate::os::libc::strlen;

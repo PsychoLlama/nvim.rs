@@ -17,8 +17,7 @@ use crate::os::uv_error::UV_EPIPE;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
-use crate::api::private::dispatch_wrappers::handle_nvim_get_mode;
-use crate::api::private::dispatch_wrappers::handle_nvim_ui_try_resize;
+use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
 use crate::api::private::helpers::{
     api_clear_error, api_free_dict, api_free_object, api_set_error, arena_string, cstr_as_string,
 };

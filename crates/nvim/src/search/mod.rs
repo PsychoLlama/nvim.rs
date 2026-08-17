@@ -22,10 +22,9 @@ use crate::drawscreen::{
     UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later, redraw_later,
     setcursor, show_cursor_info_later, showmode, update_screen,
 };
-use crate::eval::typval::tv_list_len;
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_dict_find,
-    tv_get_number_chk, tv_get_string_chk, tv_list_find,
+    tv_get_number_chk, tv_get_string_chk, tv_list_find, tv_list_len,
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::{getfile, prepare_tagpreview};
@@ -75,8 +74,7 @@ use crate::path::path_full_compare;
 use crate::plines::getvcol;
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::regexp::vim_regexec_multi;
-use crate::regexp::{skip_regexp_ex, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{skip_regexp_ex, vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::state::MODE_SHOWMATCH;
 use crate::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;

@@ -31,10 +31,9 @@ use crate::hashtab::hash_init;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::{nlua_call_ref, nlua_set_sctx};
-use crate::main::aucmd_win_vec;
 use crate::main::{
     KeyTyped, RedrawingDisabled, VIsual, VIsual_active, au_pending_free_buf, au_pending_free_win,
-    autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
+    aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
     autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx, curtab, curwin, deferred_events,
     did_cursorhold, did_emsg, do_profiling, e_argreq, e_cannot_define_autocommands_for_all_events,
     e_duparg2, first_tabpage, firstbuf, firstwin, globaldir, got_int, last_cursormoved,

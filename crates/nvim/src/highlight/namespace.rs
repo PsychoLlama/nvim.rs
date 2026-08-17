@@ -29,10 +29,9 @@ use crate::api::private::dispatch::KeyDict_highlight_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
-use crate::highlight_group::hlf_names;
 use crate::highlight_group::{
-    HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, set_hl_group,
-    syn_check_group, syn_id2name, syn_ns_id2attr,
+    HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
+    set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
 };
 use crate::lua::executor::nlua_call_ref;
 use crate::main::{

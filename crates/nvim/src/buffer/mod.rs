@@ -43,8 +43,7 @@
 
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::iter;
-use core::ptr;
+use core::{iter, ptr};
 
 use crate::autocmd::{apply_autocmds, apply_autocmds_retval, block_autocmds, unblock_autocmds};
 use crate::change::unchanged;

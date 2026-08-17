@@ -48,14 +48,12 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::magic_isset;
 use crate::os::input::os_breakcheck;
 use crate::os::libc::{memmove, strlen};
-use crate::path::ExpandFlags;
 use crate::path::{
-    FullName_save, expand_wildcards, fix_fname, gen_expand_wildcards, path_fnamecmp,
+    ExpandFlags, FullName_save, expand_wildcards, fix_fname, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
 };
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::*;
-use crate::types::{CMD_argdo, CMD_argglobal, CMD_arglocal, CMD_args, CMD_snext};
+use crate::types::{CMD_argdo, CMD_argglobal, CMD_arglocal, CMD_args, CMD_snext, *};
 use crate::undo::bufIsChanged;
 use crate::version::list_in_columns;
 use crate::window::{

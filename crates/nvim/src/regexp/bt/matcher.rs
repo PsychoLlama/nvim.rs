@@ -26,14 +26,13 @@ use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::{iemsg, internal_error};
 use crate::os::libc::gettext;
 use crate::profile::profile_passed_limit;
-use crate::regexp::backpos_T;
 use crate::regexp::{
     ADD_NL, BACK, BEHIND, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, EXACTLY, FIRST_NL,
     LAST_NL, MATCH, MAX_LIMIT, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, NUL, PLUS,
     RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH, RS_BRCPLX_LONG,
     RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG,
-    RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, STAR, SUBPAT, ZCLOSE, ZOPEN, backpos, bl_maxval,
-    bl_minval, brace_count, brace_max, brace_min, cleanup_subexpr, cleanup_zsubexpr,
+    RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, STAR, SUBPAT, ZCLOSE, ZOPEN, backpos, backpos_T,
+    bl_maxval, bl_minval, brace_count, brace_max, brace_min, cleanup_subexpr, cleanup_zsubexpr,
     reg_breakcheck, reg_endzp, reg_endzpos, reg_nextline, reg_save, reg_save_equal, reg_startzp,
     reg_startzpos, regstar_T, regstate_T, save_se_multi, save_se_one, save_subexpr,
 };

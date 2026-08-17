@@ -44,8 +44,9 @@ use crate::state::MODE_TERMINAL;
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
-use crate::types::{OP_NOP, pos_T};
-use crate::types::{cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, size_t, uint8_t, win_T};
+use crate::types::{
+    OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t, win_T,
+};
 use crate::undo::curbufIsChanged;
 use crate::window::check_can_set_curbuf_disabled;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};

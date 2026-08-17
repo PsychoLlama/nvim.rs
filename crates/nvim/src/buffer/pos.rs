@@ -19,8 +19,7 @@
 
 use core::ffi::c_void;
 use core::ops::{Deref, DerefMut};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 #[allow(unused_imports)]
 use super::*;

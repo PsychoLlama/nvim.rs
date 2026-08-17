@@ -13,9 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::iter;
-use core::ptr;
-use core::slice;
+use core::{iter, ptr, slice};
 
 #[allow(unused_imports)]
 use super::*;
@@ -23,8 +21,7 @@ use crate::autocmd::{EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds};
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
 use crate::digraph::keymap_ga_clear;
-use crate::eval::typval::kCallbackNone;
-use crate::eval::typval::{callback_free, tv_dict_alloc};
+use crate::eval::typval::{callback_free, kCallbackNone, tv_dict_alloc};
 use crate::eval::vars::init_var_dict;
 use crate::ex_cmds::getfile;
 use crate::ex_docmd::tabpage_new;

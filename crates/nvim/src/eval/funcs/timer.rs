@@ -5,11 +5,8 @@ use super::FAIL;
 use super::args::frame;
 use crate::eval::typval::{
     kCallbackNone, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
-    tv_check_for_opt_number_arg,
-};
-use crate::eval::typval::{
-    tv_dict_find, tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_number,
-    tv_list_find_nr, tv_list_len,
+    tv_check_for_opt_number_arg, tv_dict_find, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
+    tv_list_append_number, tv_list_find_nr, tv_list_len,
 };
 use crate::eval::{
     add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, find_timer_by_nr,

@@ -14,8 +14,7 @@
 
 use core::ffi::{CStr, c_char, c_int};
 
-use super::*;
-use super::{brackets, figure, operators, values};
+use super::{brackets, figure, operators, values, *};
 use crate::types::ParserHighlight;
 use crate::viml::parser::parser::reader_line;
 

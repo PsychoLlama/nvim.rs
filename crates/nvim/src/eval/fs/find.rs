@@ -30,8 +30,7 @@ use super::{
     Args, EXPAND_FILES, FAIL, FINDFILE_DIR, FINDFILE_FILE, OK, RetList, XP_PREFIX_NONE, frame,
     kDirectionNotSet, nr_arg, numbuf, ret_string, str_arg, str_arg_buf,
 };
-use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, globpath};
-use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts, globpath};
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
@@ -45,8 +44,7 @@ use crate::types::{
     pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 // ---------------------------------------------------------------------
 // The two things that hold the names found

@@ -10,13 +10,12 @@
 use core::ffi::{c_char, c_int};
 
 use super::collection::{Collection, collection};
-use super::cursor;
 use super::escape::{percent_atom, z_atom};
 use super::literal::{
     back_reference, class_shorthand, is_class_shorthand, literal, previous_substitute,
 };
 use super::parse::nfa_reg;
-use super::postfix;
+use super::{cursor, postfix};
 use crate::main::rc_did_emsg;
 use crate::regexp::{
     FAIL, NFA_ADD_NL, NFA_BOL, NFA_BOW, NFA_EOL, NFA_EOW, NFA_NEWL, NL, NUL, OK, REG_PAREN,

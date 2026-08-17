@@ -19,8 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 #[allow(unused_imports)]
 use super::*;

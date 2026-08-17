@@ -25,8 +25,7 @@ use crate::grid::{
     grid_invalidate, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     schar_from_ascii, schar_from_str, screengrid_line_start,
 };
-use crate::highlight::win_hl_attr;
-use crate::highlight::{hl_combine_attr, hl_get_ui_attr};
+use crate::highlight::{hl_combine_attr, hl_get_ui_attr, win_hl_attr};
 use crate::highlight_group::{
     HLF_PBR, HLF_PMNI, HLF_PMSI, HLF_PNI, HLF_PNK, HLF_PNX, HLF_PSB, HLF_PSI, HLF_PSK, HLF_PST,
     HLF_PSX, syn_check_group,
@@ -57,8 +56,7 @@ use crate::options::{
     kOptCotFlagPreview, kOptDiff, kOptSwapfile, opt_winborder_values,
 };
 use crate::os::libc::{gettext, strchr, strlen};
-use crate::plines::plines_m_win;
-use crate::plines::win_linetabsize;
+use crate::plines::{plines_m_win, win_linetabsize};
 use crate::state::MODE_CMDLINE;
 use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};

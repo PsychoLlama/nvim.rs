@@ -24,8 +24,7 @@
 
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
-use crate::cmdexpand::{ExpandInit, ExpandOne};
-use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cmdexpand::{ExpandInit, ExpandOne, WildMode, WildOpts};
 use crate::fileio::vim_fgets;
 use crate::main::{IObuff, NameBuff, e_fnametoolong, got_int, p_rtp};
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
@@ -36,8 +35,7 @@ use crate::os::libc::{
     fclose, fprintf, fputs, gettext, memcpy, putc, snprintf, strcasecmp, strchr, strcmp, strlen,
     strncmp,
 };
-use crate::path::ExpandFlags;
-use crate::path::{FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
+use crate::path::{ExpandFlags, FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::semsg_c;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};

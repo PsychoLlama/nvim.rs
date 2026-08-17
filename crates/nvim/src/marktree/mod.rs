@@ -53,10 +53,15 @@ use core::ptr;
 
 use crate::global_cell::GlobalCell;
 use crate::map::{map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, mh_get_ptr_t};
+pub use crate::marktree::check::*;
+pub use crate::marktree::inspect::*;
+pub use crate::marktree::iter::*;
 use crate::marktree::key::*;
 use crate::marktree::meta::*;
 use crate::marktree::node::*;
-pub use crate::marktree::{check::*, inspect::*, iter::*, pair::*, rebalance::*, splice::*};
+pub use crate::marktree::pair::*;
+pub use crate::marktree::rebalance::*;
+pub use crate::marktree::splice::*;
 use crate::memory::xfree;
 use crate::types::{
     MTKey, MTPos, Map_ptr_t_ptr_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash,

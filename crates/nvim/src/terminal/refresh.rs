@@ -20,8 +20,7 @@
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::change::changed_lines;
 use crate::channel::main_loop_events;
-use crate::cursor_shape::SHAPE_VER;
-use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, update_shape_entry};
+use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, SHAPE_VER, update_shape_entry};
 use crate::event::multiqueue::{
     multiqueue_free, multiqueue_move_events, multiqueue_new_child, multiqueue_process_events,
 };

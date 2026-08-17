@@ -39,8 +39,9 @@ use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
 use crate::message::{emsg, msg_make};
 use crate::normal::find_ident_under_cursor;
 use crate::os::env::{expand_env_esc, expand_env_save};
-use crate::os::libc::{gettext, strcmp, strpbrk};
-use crate::os::libc::{memmove, snprintf, strcat, strcpy, strlen, strncmp, strrchr};
+use crate::os::libc::{
+    gettext, memmove, snprintf, strcat, strcmp, strcpy, strlen, strncmp, strpbrk, strrchr,
+};
 use crate::path::{FullName_save, path_has_wildcard, path_tail, path_try_shorten_fname};
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;

@@ -33,10 +33,9 @@ use crate::ex_docmd::{
 use crate::fold::{foldUpdateAll, foldmethodIsSyntax};
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::global_cell::GlobalCell;
-use crate::hashtab::hash_removed;
 use crate::hashtab::{
     hash_add_item, hash_clear, hash_find, hash_hash, hash_init, hash_lock, hash_lookup,
-    hash_remove, hash_unlock,
+    hash_remove, hash_removed, hash_unlock,
 };
 use crate::highlight_group::{
     HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,
@@ -65,10 +64,9 @@ use crate::pos::MAXLNUM;
 use crate::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
 };
-use crate::regexp::vim_regexec_multi;
 use crate::regexp::{
     ref_extmatch, skip_regexp, unref_extmatch, vim_regcomp, vim_regcomp_had_eol, vim_regexec,
-    vim_regfree,
+    vim_regexec_multi, vim_regfree,
 };
 use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, xstrnsave};

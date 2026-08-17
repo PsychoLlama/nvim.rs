@@ -42,10 +42,9 @@ use crate::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::indent::ex_retab;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
-use crate::main::c_bytes;
 use crate::main::{
-    e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, e_zerocount,
-    searchcmdlen,
+    c_bytes, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange,
+    e_zerocount, searchcmdlen,
 };
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};

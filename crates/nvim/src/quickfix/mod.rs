@@ -21,19 +21,20 @@ use crate::arglist::get_arglist_exp;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::{
     EVENT_BUFREADPOST, EVENT_BUFWINENTER, EVENT_FILETYPE, EVENT_QUICKFIXCMDPOST,
-    EVENT_QUICKFIXCMDPRE, apply_autocmds, aucmd_prepbuf, aucmd_restbuf,
+    EVENT_QUICKFIXCMDPRE, apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf,
+    aucmd_restbuf, block_autocmds, unblock_autocmds,
 };
-use crate::autocmd::{au_event_disable, au_event_restore, block_autocmds, unblock_autocmds};
 use crate::buffer::{
-    bt_help, bt_normal, bt_quickfix, buf_valid, buflist_findname_exp, buflist_findnr, buflist_new,
-    bufref_valid, close_buffer, set_bufref, setfname, wipe_buffer,
+    bt_help, bt_normal, bt_quickfix, buf_valid, buflist_findname_exp, buflist_findnr,
+    buflist_getfile, buflist_new, bufref_valid, close_buffer, do_modelines, no_write_message,
+    set_bufref, setfname, wipe_buffer,
 };
-use crate::buffer::{buflist_getfile, do_modelines, no_write_message};
 use crate::change::changed_lines;
 use crate::charset::{skipdigits, skipwhite, vim_isprintc};
 use crate::cursor::{check_cursor, coladvance};
-use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_buf_later};
-use crate::drawscreen::{redraw_curbuf_later, update_screen};
+use crate::drawscreen::{
+    UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_curbuf_later, update_screen,
+};
 use crate::edit::beginline;
 use crate::eval::typval::{
     callback_copy, callback_free, callback_put, kCallbackNone, tv_clear, tv_copy, tv_dict_add,
@@ -41,44 +42,41 @@ use crate::eval::typval::{
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
     tv_dict_get_string, tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_unref,
     tv_free, tv_get_number_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_dict,
+    tv_list_append_dict, tv_list_first, tv_list_len, tv_list_ref,
 };
-use crate::eval::typval::{tv_list_first, tv_list_len, tv_list_ref};
 use crate::eval::vars::set_internal_string_var;
 use crate::eval::window::{find_win_by_nr_or_id, win_id2wp};
 use crate::eval::{
     callback_call, callback_from_typval, eval_expr, set_ref_in_callback, set_ref_in_item,
 };
-use crate::ex_cmds::do_ecmd;
-use crate::ex_cmds::{append_redir, check_secure, do_shell, skip_vimgrep_pat};
-use crate::ex_cmds2::autowrite_all;
-use crate::ex_cmds2::can_abandon;
+use crate::ex_cmds::{append_redir, check_secure, do_ecmd, do_shell, skip_vimgrep_pat};
+use crate::ex_cmds2::{autowrite_all, can_abandon};
 use crate::ex_docmd::{do_cmdline_cmd, ex_cd, is_loclist_cmd};
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::get_list_range;
 use crate::extmark::extmark_splice;
-use crate::fileio::shorten_buf_fname;
-use crate::fileio::{readfile, shorten_fnames, vim_fgets, vim_tempname};
+use crate::fileio::{readfile, shorten_buf_fname, shorten_fnames, vim_fgets, vim_tempname};
 use crate::fold::{foldOpenCursor, foldUpdateAll};
 use crate::fuzzy::fuzzy_match;
 use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
 use crate::main::{
-    Columns, IObuff, KeyTyped, NameBuff, cmdline_row, cmdmod, e_au_recursive,
-    e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invarg2, e_invrange, e_listreq,
-    e_loclist, e_no_errors, e_nomatch, e_nomatch2, e_noprevre, e_notmp, e_openerrf, e_readerrf,
-    e_string_required, e_trailing_arg, e_winfixbuf_cannot_go_to_buffer, empty_string_option,
-    fdo_flags, got_int, msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled, must_redraw,
-    p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc, p_mls, p_qftf,
-    p_rtp, p_shq, p_sp, p_swb, restart_edit, swb_flags, textlock,
+    Columns, IObuff, KeyTyped, NameBuff, cmdline_row, cmdmod, curbuf, curtab, curwin,
+    e_au_recursive, e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invarg2, e_invrange,
+    e_listreq, e_loclist, e_no_errors, e_nomatch, e_nomatch2, e_noprevre, e_notmp, e_openerrf,
+    e_readerrf, e_string_required, e_trailing_arg, e_winfixbuf_cannot_go_to_buffer,
+    empty_string_option, fdo_flags, first_tabpage, firstwin, got_int, lastwin, msg_col, msg_didout,
+    msg_nowait, msg_scroll, msg_scrolled, must_redraw, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc,
+    p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc, p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, prevwin,
+    restart_edit, swb_flags, textlock,
 };
-use crate::main::{curbuf, curtab, curwin, first_tabpage, firstwin, lastwin, prevwin};
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
 use crate::memfile::mf_fname;
-use crate::memline::{check_need_swap, ml_delete};
-use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_open};
+use crate::memline::{
+    check_need_swap, ml_append_buf, ml_delete, ml_get_buf, ml_get_buf_len, ml_open,
+};
 use crate::memory::{
     strequal, xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
@@ -90,10 +88,9 @@ use crate::message::{
 use crate::r#move::update_topline;
 use crate::normal::reset_VIsual_and_resel;
 use crate::ops::get_region_bytecount;
-use crate::option::buf_copy_options;
 use crate::option::{
-    copy_option_part, option_set_callback_func, set_option_direct, set_option_value_give_err,
-    shortmess, skip_to_option_part,
+    buf_copy_options, copy_option_part, option_set_callback_func, set_option_direct,
+    set_option_value_give_err, shortmess, skip_to_option_part,
 };
 use crate::options::{
     kOptBufhidden, kOptBuftype, kOptCpoptions, kOptErrorfile, kOptFdoFlagQuickfix, kOptFiletype,
@@ -128,8 +125,10 @@ use crate::types::{
 };
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;
-use crate::window::{check_can_set_curbuf_forceit, check_lnums, win_setheight, win_split};
-use crate::window::{goto_tabpage_win, win_close, win_enter, win_goto, win_valid};
+use crate::window::{
+    check_can_set_curbuf_forceit, check_lnums, goto_tabpage_win, win_close, win_enter, win_goto,
+    win_setheight, win_split, win_valid,
+};
 use core::ffi::{CStr, c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.

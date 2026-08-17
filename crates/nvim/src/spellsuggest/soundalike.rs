@@ -32,8 +32,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::hashtab::hash_removed;
-use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup};
+use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup, hash_removed};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc};

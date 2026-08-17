@@ -17,8 +17,7 @@ use crate::global_cell::{GlobalCell, SharedCell};
 use crate::semsg_c;
 use crate::types::{Arena, ArenaMem, consumed_blk};
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 use crate::main::{arena_alloc_count, did_outofmem_msg, e_outofmem, emsg_silent, preserve_exit};
 use crate::memfile::mf_release_all;

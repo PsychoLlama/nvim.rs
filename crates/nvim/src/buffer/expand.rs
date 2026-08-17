@@ -13,8 +13,7 @@
 
 use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 #[allow(unused_imports)]
 use super::*;

@@ -7,12 +7,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::memory::{xfree, xmalloc, xrealloc};
-use crate::tui::termkey::driver_csi;
-use crate::tui::termkey::driver_ti;
 use crate::tui::termkey::format::{self, KeyBody};
-use crate::tui::termkey::keynames;
-use crate::tui::termkey::report;
 use crate::tui::termkey::utf8::{self, Decoded, UNICODE_INVALID};
+use crate::tui::termkey::{driver_csi, driver_ti, keynames, report};
 use crate::types::{
     TermKey, TermKey_Terminfo_Getstr_Hook, TermKeyEvent, TermKeyFormat, TermKeyKey,
     TermKeyKey_code, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry,

@@ -17,8 +17,7 @@
 //! small helpers inlined.
 
 use crate::buffer::buf_meta_total;
-use crate::charset::vim_isbreak;
-use crate::charset::{ptr2cells, vim_isprintc, vim_strsize};
+use crate::charset::{ptr2cells, vim_isbreak, vim_isprintc, vim_strsize};
 use crate::decoration::{decor_conceal_line, decor_virt_lines, mark_virt_chain, ns_in_win};
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::{hasFolding, hasFoldingWin, lineFolded};

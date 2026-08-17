@@ -18,8 +18,10 @@ use crate::edit::{
     beginline, edit, get_literal, ins_copychar, prompt_curpos_editable, set_last_insert,
 };
 use crate::fold::{foldUpdateAfterInsert, hasFolding};
-use crate::getchar::{AppendCharToRedobuff, AppendToRedobuff};
-use crate::getchar::{stuff_empty, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff};
+use crate::getchar::{
+    AppendCharToRedobuff, AppendToRedobuff, stuff_empty, stuffReadbuff, stuffcharReadbuff,
+    stuffnumReadbuff,
+};
 use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, K_DEL, K_INS, K_KDEL, K_KINS};
 use crate::main::{
     State, VIsual_active, VIsual_mode, cb_flags, curbuf, curwin, e_modifiable, got_int, msg_silent,

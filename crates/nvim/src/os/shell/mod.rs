@@ -41,11 +41,11 @@ use crate::main::{
 };
 use crate::memline::ml_append;
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
-use crate::message::{emsg, msg_outnum, msg_puts, verbose_enter, verbose_leave};
-use crate::message::{msg_ext_set_kind, msg_putchar};
+use crate::message::{
+    emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_puts, verbose_enter, verbose_leave,
+};
 use crate::os::fs::{os_fopen, os_remove};
-use crate::os::libc::strlen;
-use crate::os::libc::{fclose, fopen, fread, fseek, ftell, gettext, strcmp, strcpy};
+use crate::os::libc::{fclose, fopen, fread, fseek, ftell, gettext, strcmp, strcpy, strlen};
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::state::MODE_EXTERNCMD;

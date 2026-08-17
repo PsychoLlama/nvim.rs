@@ -9,8 +9,7 @@
 
 use crate::siemsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 use crate::memory::{xcalloc, xfree};
 use crate::os::libc::gettext;

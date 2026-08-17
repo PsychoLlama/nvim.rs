@@ -25,8 +25,7 @@ use crate::os::fs::{
 use crate::os::uv_error::{UV_EINVAL, UV_EIO, UV_ENOTSUP, UV_EROFS};
 use crate::types::{FileDescriptor, iovec, ptrdiff_t, size_t};
 use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// Size of the arena block a `FileDescriptor` buffers through.
 const ARENA_BLOCK_SIZE: usize = 4096;

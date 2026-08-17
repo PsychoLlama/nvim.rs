@@ -44,8 +44,7 @@ use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
 use crate::os::libc::{gettext, strlen, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::regexp::vim_regexec_multi;
-use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regfree};
+use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
     EvalFuncData, VAR_LIST, VAR_NUMBER, colnr_T, dict_T, dictitem_T, exarg_T, int64_t, linenr_T,

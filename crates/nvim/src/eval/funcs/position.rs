@@ -11,8 +11,7 @@ use crate::eval::typval::{
     tv_get_bool, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_chk,
     tv_list_alloc_ret, tv_list_append_number,
 };
-use crate::eval::window::find_win_by_nr_or_id;
-use crate::eval::window::win_id2wp_tp;
+use crate::eval::window::{find_win_by_nr_or_id, win_id2wp_tp};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
 use crate::main::{curbuf, curwin, e_invarg, e_invarg2, p_spk, skip_update_topline};
 use crate::mark::setmark_pos;

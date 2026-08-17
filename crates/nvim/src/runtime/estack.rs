@@ -20,8 +20,7 @@
 use super::*;
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// Slack [`estack_sfile`] reserves per entry on top of the name and its type
 /// prefix: enough for the `[%d]` line number and the `..` separator.

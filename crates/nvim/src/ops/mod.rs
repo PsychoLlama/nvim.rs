@@ -14,8 +14,7 @@
 use crate::ascii::{
     ascii_isalpha, ascii_isbdigit, ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_isxdigit,
 };
-use crate::buffer::buf_get_changedtick;
-use crate::buffer::col_print;
+use crate::buffer::{buf_get_changedtick, col_print};
 use crate::change::{
     appended_lines_mark, changed_bytes, changed_lines, del_bytes, del_char, del_lines,
     get_last_leader_offset, get_leader_len, ins_char, ins_str, truncate_line,
@@ -75,8 +74,9 @@ use crate::option::{get_equalprg, get_fileformat, get_ve_flags, option_set_callb
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::os::libc::{__ctype_b_loc, abort, gettext, memmove, memset, ngettext, strcpy, strlen};
-use crate::plines::linetabsize_str;
-use crate::plines::{getvcol, getvcols, getvvcol, init_charsize_arg, win_charsize};
+use crate::plines::{
+    getvcol, getvcols, getvvcol, init_charsize_arg, linetabsize_str, win_charsize,
+};
 use crate::pos::{MAXCOL, equalpos, lt, ltoreq};
 use crate::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,

@@ -22,8 +22,7 @@ use crate::decoration::{
     SIGN_WIDTH, kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove,
     kVTRepeatLinebreak,
 };
-use crate::grid::MAX_SCHAR_SIZE;
-use crate::grid::schar_get;
+use crate::grid::{MAX_SCHAR_SIZE, schar_get};
 use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
 use crate::sign::describe_sign_text;

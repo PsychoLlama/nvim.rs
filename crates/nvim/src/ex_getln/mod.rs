@@ -11,10 +11,9 @@ use crate::autocmd::{
     EVENT_CMDWINENTER, EVENT_CMDWINLEAVE, EVENT_CURSORMOVEDC, apply_autocmds, aucmd_prepbuf,
     aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
-use crate::buffer::buf_get_changedtick;
 use crate::buffer::{
-    buf_clear, buf_open_scratch, buf_set_changedtick, buf_valid, buflist_findnr, bufref_valid,
-    close_buffer, do_buffer, set_bufref,
+    buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid,
+    buflist_findnr, bufref_valid, close_buffer, do_buffer, set_bufref,
 };
 use crate::charset::{ptr2cells, skipwhite, vim_isIDc, vim_isprintc, vim_iswordc, vim_str2nr};
 use crate::cmdexpand::{
@@ -39,9 +38,9 @@ use crate::eval::typval::{
     callback_free, kCallbackNone, tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear,
     tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_add_str, tv_dict_find, tv_dict_get_callback,
     tv_dict_get_number, tv_dict_get_string_buf_chk, tv_dict_set_keys_readonly, tv_get_number,
-    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_free,
+    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_first,
+    tv_list_free, tv_list_last, tv_list_len,
 };
-use crate::eval::typval::{tv_list_first, tv_list_last, tv_list_len};
 use crate::eval::vars::{get_globvar_dict, heredoc_get, set_vim_var_char};
 use crate::eval::{callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event};
 use crate::ex_cmds::rename_buffer;
@@ -126,9 +125,9 @@ use crate::popupmenu::{pum_check_clear, pum_undisplay};
 use crate::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::profile::profile_setlimit;
 use crate::regexp::{RE_SEARCH, skip_regexp_ex};
-use crate::register::is_literal_register;
 use crate::register::{
-    cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, valid_yank_reg,
+    cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, is_literal_register,
+    valid_yank_reg,
 };
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_KEEP, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,

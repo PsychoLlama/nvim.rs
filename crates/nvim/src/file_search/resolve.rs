@@ -14,8 +14,7 @@ use crate::path::buffer_path;
 #[allow(unused_imports)]
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// Find the file `ptr[len]` in `'path'`. Also finds directory names.
 ///

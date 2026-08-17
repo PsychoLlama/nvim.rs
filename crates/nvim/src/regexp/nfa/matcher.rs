@@ -24,10 +24,9 @@ use crate::mbyte::{utf_fold, utf_ptr2char};
 use crate::regexp::{
     AUTOMATIC_ENGINE, FAIL, NFA_MAX_STATES, NFA_MOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH,
     NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_TOO_EXPENSIVE, NUL, Rex, nfa_endp, nfa_match, nfa_pim_T,
-    nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, reg_breakcheck, reg_nextline,
-    regsubs_T,
+    nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, recursive_regmatch, reg_breakcheck,
+    reg_nextline, regsubs_T, skip_to_start,
 };
-use crate::regexp::{recursive_regmatch, skip_to_start};
 
 /// How many characters may pass between two checks of the caller's time
 /// limit.

@@ -11,8 +11,9 @@ use crate::autocmd::{
     EVENT_FILEWRITEPRE, EVENT_FILTERWRITEPOST, EVENT_FILTERWRITEPRE, apply_autocmds_exarg,
     aucmd_prepbuf, aucmd_restbuf,
 };
-use crate::buffer::buf_get_changedtick;
-use crate::buffer::{bt_nofilename, buf_set_file_id, bufref_valid, set_bufref};
+use crate::buffer::{
+    bt_nofilename, buf_get_changedtick, buf_set_file_id, bufref_valid, set_bufref,
+};
 use crate::change::unchanged;
 use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;

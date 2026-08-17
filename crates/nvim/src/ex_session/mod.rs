@@ -74,8 +74,7 @@ use crate::types::{
     exarg_T, garray_T, size_t, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::fmt;
-use core::ptr;
+use core::{fmt, ptr};
 
 use session::makeopens;
 use view::put_view;

@@ -16,26 +16,23 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skipdigits, skipwhite};
 use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::address::{get_address, skip_range};
-use crate::ex_docmd::ex_func_T;
 use crate::ex_docmd::lookup::checkforcmd;
 use crate::ex_docmd::onecmd::ex_func_is;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    ADDR_TABS, BF_DUMMY, FAIL, NUL, OK, SID_NONE, cmdnames, e_invrange, ex_pressedreturn,
-    exmode_plus, getexline,
+    ADDR_TABS, BF_DUMMY, FAIL, NUL, OK, SID_NONE, cmdnames, e_invrange, ex_func_T,
+    ex_pressedreturn, exmode_plus, getexline,
 };
 use crate::main::{
-    curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_silent, p_ei,
-    p_verbose, sandbox,
+    curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col,
+    msg_scroll, msg_silent, p_ei, p_verbose, sandbox,
 };
-use crate::main::{msg_col, msg_scroll};
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::memory::{xfree, xmemcpyz, xstrdup};
 use crate::message::redirecting;
-use crate::option::kOptValTypeString;
-use crate::option::set_option_direct;
+use crate::option::{kOptValTypeString, set_option_direct};
 use crate::options::kOptEventignore;
 use crate::optionstr::free_string_option;
 use crate::os::libc::{atoi, gettext, memmove, memset, strlen, strncmp};
@@ -46,11 +43,8 @@ use crate::types::{
     CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CMOD_BROWSE,
     CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
     CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
-    CMOD_UNSILENT, String_0,
+    CMOD_UNSILENT, OptInt, OptVal, OptValData, String_0, cmdidx_T, cmdmod_T, exarg_T, size_t,
 };
-use crate::types::{OptInt, size_t};
-use crate::types::{OptVal, OptValData};
-use crate::types::{cmdidx_T, cmdmod_T, exarg_T};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 
 /// One recognised modifier name, for the two callers that only need to know

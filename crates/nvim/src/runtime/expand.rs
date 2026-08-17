@@ -19,8 +19,7 @@ use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 /// What a completion round looks for: script files, or — on the second round,
 /// where a directory name is being completed — anything.

@@ -60,8 +60,9 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, internal_error};
-use crate::regexp::vim_regfree;
-use crate::regexp::{RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl};
+use crate::regexp::{
+    RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
+};
 use crate::runtime::do_finish;
 use crate::semsg_c;
 use crate::types::{cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};

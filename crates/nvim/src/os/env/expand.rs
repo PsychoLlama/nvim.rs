@@ -10,8 +10,7 @@
 
 use super::*;
 use crate::charset::{vim_isIDc, vim_isfilec};
-use crate::cmdexpand::{ExpandInit, ExpandOne};
-use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cmdexpand::{ExpandInit, ExpandOne, WildMode, WildOpts};
 use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;

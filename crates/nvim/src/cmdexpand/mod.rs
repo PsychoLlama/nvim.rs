@@ -35,8 +35,7 @@ use crate::garray::{ga_append, ga_clear_strings, ga_concat_len, ga_grow, ga_init
 use crate::getchar::{beep_flush, char_avail, vpeekc};
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};
-use crate::hashtab::hash_removed;
-use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup};
+use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup, hash_removed};
 use crate::help::{cleanup_help_tags, find_help_tags};
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
@@ -47,13 +46,13 @@ use crate::keycodes::{K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP};
 use crate::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
-use crate::main::pum_want;
 use crate::main::{
     Columns, KeyTyped, NameBuff, RedrawingDisabled, Rows, cmd_silent, cmdline_row, cmdline_win,
     curbuf, current_sctx, curwin, default_gridview, e_invarg, e_invarg2, e_nomatch2, e_toomany,
     emsg_off, got_int, hl_attr_active, lastwin, msg_col, msg_didany, msg_grid_adj, msg_row,
-    msg_scrolled, msg_silent, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, save_p_ls,
-    save_p_wmh, search_first_line, search_last_line, topframe, wild_menu_showing, wop_flags,
+    msg_scrolled, msg_silent, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, pum_want,
+    save_p_ls, save_p_wmh, search_first_line, search_last_line, topframe, wild_menu_showing,
+    wop_flags,
 };
 use crate::mapping::{ExpandMappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};

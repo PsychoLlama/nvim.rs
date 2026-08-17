@@ -27,9 +27,9 @@ use crate::ex_docmd::{
     ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
     ADDR_QUICKFIX, ADDR_QUICKFIX_VALID, ADDR_TABS, ADDR_TABS_RELATIVE, ADDR_UNSIGNED, ADDR_WINDOWS,
     EX_RANGE, EX_ZEROR, EXPAND_NOTHING, FAIL, INT32_MAX, NUL, OK, cmdnames, e_backslash,
-    e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, searchcmdlen,
+    e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, kMarkAll, kMarkBufLocal,
+    searchcmdlen,
 };
-use crate::ex_docmd::{kMarkAll, kMarkBufLocal};
 use crate::fold::hasFolding;
 use crate::main::{curbuf, curtab, curwin, firstbuf, lastbuf};
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};

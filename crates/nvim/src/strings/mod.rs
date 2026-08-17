@@ -9,8 +9,7 @@ use crate::os::libc::{gettext, qsort, strcasecmp, strchr, strcmp, strlen, strncm
 use crate::semsg_c;
 use crate::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
+use core::{ptr, slice};
 
 // The carve of the transpiled module; see each child's docs.
 mod case;
