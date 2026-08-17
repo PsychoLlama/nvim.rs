@@ -39,10 +39,6 @@ use crate::src::nvim::undo::anyBufIsChanged;
 use crate::src::nvim::window::do_window;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
-/// The key a `<Cmd>` mapping arrives as.
-/// The key a Lua callback mapping arrives as.
-/// The answer that leaves the command-line window open.
-
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
 pub(crate) unsafe fn nv_ignore(cap: *mut cmdarg_T) {

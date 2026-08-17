@@ -56,9 +56,6 @@ use crate::src::nvim::types::{
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
-/// The keypad's own `<Del>` and `<Insert>`, which mean the same as the main
-/// keyboard's.
-
 /// Refuse a change in a prompt buffer that is not on its own editable line.
 unsafe fn prompt_refuses(cap: *mut cmdarg_T) -> bool {
     // SAFETY: `cap` is the caller's live command argument.

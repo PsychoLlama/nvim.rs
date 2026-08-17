@@ -244,9 +244,6 @@ pub unsafe extern "C" fn xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c
     dst.add(bytes.len() - 1)
 }
 
-/// `stpncpy`: copy at most `maxlen` bytes, zero-filling any remainder, and
-/// return where the terminator went (or `dst + maxlen` if none fit).
-
 /// BSD `strlcpy`: bounded copy that always terminates (when `dsize > 0`)
 /// and returns the untruncated source length.
 pub unsafe extern "C" fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
@@ -292,8 +289,6 @@ pub unsafe extern "C" fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: u
 pub unsafe extern "C" fn xstrdup(str: *const c_char) -> *mut c_char {
     xmemdupz(str as *const c_void, CStr::from_ptr(str).to_bytes().len()) as *mut c_char
 }
-
-/// `xstrdup` that maps NULL to an allocated empty string.
 
 /// `memrchr`: last occurrence of `c` in the first `len` bytes, or NULL.
 pub unsafe extern "C" fn xmemrchr(src: *const c_void, c: u8, len: usize) -> *mut c_void {

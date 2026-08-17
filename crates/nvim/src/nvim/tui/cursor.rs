@@ -31,10 +31,6 @@ pub static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false);
 /// The blend value `'guicursor'` uses to mean "no cursor at all".
 const BLEND_INVISIBLE: int32_t = 100;
 
-/// `HL_INVERSE`, the attribute that says "swap foreground and background" --
-/// a cursor carrying it wants the terminal's own inverse rendering rather
-/// than an explicit colour.
-
 /// The DECSCUSR parameter for a shape, in its steady form.
 ///
 /// DECSCUSR numbers the shapes 1/3/5 for block/underline/bar and uses the

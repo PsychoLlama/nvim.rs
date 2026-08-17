@@ -46,9 +46,6 @@ use crate::src::nvim::r#move::{
 };
 use crate::src::nvim::pos::MAXCOL;
 
-/// The mouse keys `g` accepts, which it re-sends as their CTRL-modified form.
-/// The key that means "nothing happened"; `g` swallows it.
-
 // The non-printing bytes the tree dispatches on, spelled as the bytes a
 // pattern can name.
 const CTRL_A: u8 = 1;

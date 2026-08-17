@@ -29,9 +29,6 @@ use crate::src::nvim::types::{
     kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 
-/// A Lua reference. Not in the parent's preamble because nothing there
-/// named it; the other three `kCallback*` tags are.
-
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,

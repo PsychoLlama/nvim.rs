@@ -51,8 +51,6 @@ const WRAPPED: c_int = 1;
 const MAX_REPEATED_BACK: c_int = 4;
 const MAX_REPEATED_FORWARD: c_int = 2;
 
-/// The log level for the event-queue flood warning.
-
 // ------------------------------------------------------------------ cursor
 
 /// Follow the terminal's own wrap after a cell was printed in the last
