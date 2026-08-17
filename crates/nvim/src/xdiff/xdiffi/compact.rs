@@ -17,9 +17,9 @@
 
 #![forbid(unsafe_code)]
 
-use crate::src::xdiff::ffi::is_space;
-use crate::src::xdiff::xtypes::{XDF_INDENT_HEURISTIC, XdFile};
-use crate::src::xdiff::xutils::recmatch;
+use crate::xdiff::ffi::is_space;
+use crate::xdiff::xtypes::{XDF_INDENT_HEURISTIC, XdFile};
+use crate::xdiff::xutils::recmatch;
 
 /// If a line is indented more than this, [`line_indent`] just answers this.
 /// Keeps the work bounded on data that is not human-readable text.

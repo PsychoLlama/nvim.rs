@@ -15,9 +15,9 @@
 
 #![forbid(unsafe_code)]
 
-use crate::src::xdiff::ffi::{Emit, is_space};
-use crate::src::xdiff::xdiffi::do_diff;
-use crate::src::xdiff::xtypes::{
+use crate::xdiff::ffi::{Emit, is_space};
+use crate::xdiff::xdiffi::do_diff;
+use crate::xdiff::xtypes::{
     Block, Env, Params, XDF_IGNORE_CR_AT_EOL, XDF_IGNORE_WHITESPACE, XDF_IGNORE_WHITESPACE_AT_EOL,
     XDF_IGNORE_WHITESPACE_CHANGE, XDF_WHITESPACE_FLAGS, XdResult,
 };

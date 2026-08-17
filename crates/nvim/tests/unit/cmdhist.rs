@@ -1,7 +1,7 @@
 //! Ring/dedup logic of the command-line history, exercised on a plain
 //! [`Ring`] with no editor state involved.
 
-use c2rust_neovim::src::nvim::cmdhist::Ring;
+use c2rust_neovim::cmdhist::Ring;
 
 /// Entry texts oldest-first, walking raw slots back from the newest.
 fn texts_newest_first(ring: &Ring) -> Vec<Vec<u8>> {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate src/nvim/utf8proc/tables.rs from a utf8proc source tree.
+"""Generate src/utf8proc/tables.rs from a utf8proc source tree.
 
 Usage: gen.py <utf8proc-src-dir> <output.rs>
 

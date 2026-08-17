@@ -3,7 +3,7 @@
 //! checksum computed from the transpiled table it replaced (which itself
 //! matched `v0.12.4` `digraph.c` entry for entry).
 
-use c2rust_neovim::src::nvim::digraph::{default_digraphs, lookup_default};
+use c2rust_neovim::digraph::{default_digraphs, lookup_default};
 use std::collections::HashSet;
 
 #[test]

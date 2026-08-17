@@ -14,7 +14,7 @@ describe('treesitter perf', function()
     -- its tree had a bundled parser for. The port has no C sources, so this
     -- takes ours: eval.lua is 13.7k lines of hand-maintained function
     -- metadata, and `lua` ships as a parser and a query set like `c` did.
-    n.command 'edit ./src/nvim/eval.lua'
+    n.command 'edit ./src/eval.lua'
     exec_lua [[
       local parser = vim.treesitter.get_parser(0, "lua", {})
       vim.treesitter.highlighter.new(parser)

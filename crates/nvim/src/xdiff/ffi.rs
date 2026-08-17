@@ -25,12 +25,12 @@
 use core::ffi::{CStr, c_char, c_int, c_long};
 
 #[cfg(not(miri))]
-use crate::src::nvim::os::libc::__ctype_b_loc;
-use crate::src::nvim::types::{
+use crate::os::libc::__ctype_b_loc;
+use crate::types::{
     mmbuffer_t, mmfile_t, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
 };
-use crate::src::xdiff::xdiffi::diff;
-use crate::src::xdiff::xtypes::{Aborted, EmitConf, Params, XdResult};
+use crate::xdiff::xdiffi::diff;
+use crate::xdiff::xtypes::{Aborted, EmitConf, Params, XdResult};
 
 /// glibc's `_ISspace` bit in the `__ctype_b_loc` table.
 #[cfg(not(miri))]

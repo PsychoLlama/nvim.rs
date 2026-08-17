@@ -17,7 +17,7 @@
 use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::src::nvim::keycodes::{
+use c2rust_neovim::keycodes::{
     FSK_IN_STRING, MOD_MASK_ALT, MOD_MASK_CMD, MOD_MASK_CTRL, MOD_MASK_META, MOD_MASK_SHIFT,
     REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL, find_special_key, get_special_key_code,
     get_special_key_name, replace_termcodes,

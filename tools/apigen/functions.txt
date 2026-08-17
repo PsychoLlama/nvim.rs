@@ -2,7 +2,7 @@
 # tools/apigen generates the RPC wrapper, the handler table, the `vim.api` Lua
 # binding, the `nvim_*()` half of the Vimscript builtin table and the api-info
 # metadata from these entries; everything else about a wrapper is read off the
-# Rust signature in crates/nvim/src/nvim/api/.
+# Rust signature in crates/nvim/src/api/.
 #
 #   <name> [flag ...] [key=value ...]
 #
@@ -300,9 +300,9 @@ nvim_win_set_hl_ns since=10
 nvim_win_text_height since=12
 
 # The remote UI's own method, whose handler is hand-written in
-# crate::src::nvim::ui_client rather than generated here: an attached UI
+# crate::ui_client rather than generated here: an attached UI
 # receives `redraw`, it never serves one, so the entry exists to refuse it.
-redraw fast handler=crate::src::nvim::ui_client::handle_ui_client_redraw
+redraw fast handler=crate::ui_client::handle_ui_client_redraw
 
 # Deprecated spellings. Each shares the wrapper of the method it names,
 # and inherits its fast/ret_alloc, so it needs no wrapper of its own.

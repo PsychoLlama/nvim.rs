@@ -26,7 +26,7 @@ use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 
 use super::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, empty_token, mpack_read, mpack_write};
-use crate::src::nvim::types::{
+use crate::types::{
     mpack_node_t, mpack_parser_t, mpack_token_t, mpack_token_type_t, mpack_uint32_t, mpack_walk_cb,
     size_t,
 };

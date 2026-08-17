@@ -1,6 +1,6 @@
 //! Port of `test/unit/memory_spec.lua`.
 
-use c2rust_neovim::src::nvim::memory::xstrlcat;
+use c2rust_neovim::memory::xstrlcat;
 
 use crate::support::cstr;
 

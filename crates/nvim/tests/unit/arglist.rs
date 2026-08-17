@@ -3,7 +3,7 @@
 //! The oldtest suite covers it end to end (`Test_args_with_quote`,
 //! `Test_large_arg`); this pins the escaping rules directly.
 
-use c2rust_neovim::src::nvim::arglist::split_one_arg;
+use c2rust_neovim::arglist::split_one_arg;
 
 /// Runs the splitter over a NUL-terminated buffer the way `get_arglist` does,
 /// and answers the arguments it carved out.

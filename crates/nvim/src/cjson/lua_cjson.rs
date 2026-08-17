@@ -29,13 +29,13 @@ pub mod encode;
 
 use core::ffi::{CStr, c_int, c_void};
 
-use crate::src::nvim::lua::ffi::{
+use crate::lua::ffi::{
     LUA_REGISTRYINDEX, LUA_TNIL, lua_createtable, lua_getfield, lua_newtable, lua_newuserdata,
     lua_pop, lua_pushcclosure, lua_pushcfunction, lua_pushlightuserdata, lua_pushlstring,
     lua_pushvalue, lua_rawget, lua_rawset, lua_setfield, lua_setmetatable, lua_touserdata,
     lua_type, lua_upvalueindex, luaL_checkstack,
 };
-use crate::src::nvim::types::{lua_CFunction, lua_State};
+use crate::types::{lua_CFunction, lua_State};
 
 /// Reported as `vim.json._NAME` / `._VERSION`.
 const MODULE_NAME: &CStr = c"cjson";

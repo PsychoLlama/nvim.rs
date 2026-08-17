@@ -1,4 +1,4 @@
-//! The cursor's viewport arithmetic (`src/nvim/cursor/arith.rs`).
+//! The cursor's viewport arithmetic (`src/cursor/arith.rs`).
 //!
 //! `coladvance2` is the editor's answer to "put the cursor at screen column
 //! N": it walks the line measuring characters, overshoots by one, steps back,
@@ -15,11 +15,11 @@
 use std::cell::Cell;
 use std::ffi::c_int;
 
-use c2rust_neovim::src::nvim::cursor::arith::{
+use c2rust_neovim::cursor::arith::{
     ColAdd, carried_coladd, checked_col, folded_line_span, gap_coladd, step_back, wrap_target_col,
 };
-use c2rust_neovim::src::nvim::pos::MAXCOL;
-use c2rust_neovim::src::nvim::types::{colnr_T, linenr_T};
+use c2rust_neovim::pos::MAXCOL;
+use c2rust_neovim::types::{colnr_T, linenr_T};
 
 // --------------------------------------------------------------- wrap_target_col
 //

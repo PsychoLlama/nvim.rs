@@ -17,7 +17,7 @@ use core::ffi::{c_char, c_double, c_int, c_uint};
 
 use super::mpack_core::{from_tok, to_tok};
 use super::token::{self, Kind, Tok};
-use crate::src::nvim::types::{
+use crate::types::{
     mpack_sintmax_t, mpack_token_s_data, mpack_token_t, mpack_uint32_t, mpack_uintmax_t,
 };
 

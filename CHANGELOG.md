@@ -9,6 +9,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Moved the sources into a normal Rust crate layout, so every module path in
+  the editor lost its `src::nvim::` prefix. Nothing observable changed.
 - Took the C memory layout off 239 of the editor's own struct types, leaving
   it only where something outside the editor really reads the bytes; threaded
   the regular-expression engines' match state through both engines instead of

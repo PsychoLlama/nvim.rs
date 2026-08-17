@@ -80,4 +80,4 @@ run() {
 # The vimscript syntax keyword tables: options/commands/events/vvars from the
 # vendored metadata, builtin functions from the binary itself.
 run gen_vimvim.lua "$runtime/syntax/vim/generated.vim" \
-  "$root/crates/nvim/src/nvim"/{options,auevents,ex_cmds,vvars}.lua
+  "$root/crates/nvim/src"/{options,auevents,ex_cmds,vvars}.lua

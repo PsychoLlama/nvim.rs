@@ -19,20 +19,20 @@ use super::{
     LUA_NOREF, LUA_REFNIL, Session, Unpacker, check_session, check_unpacker, geti, grow_session,
     is_unpacker, reference, start_offset, unpack_into_registry, unreference,
 };
-use crate::src::mpack::mpack_core::{MPACK_EOF, MPACK_OK};
-use crate::src::mpack::object::MPACK_NOMEM;
-use crate::src::mpack::rpc::{
-    MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, mpack_rpc_notify,
-    mpack_rpc_receive, mpack_rpc_reply, mpack_rpc_request, mpack_rpc_session_init,
-};
-use crate::src::nvim::lua::ffi::{
+use crate::lua::ffi::{
     LUA_REGISTRYINDEX, lua_getfield, lua_gettop, lua_isnoneornil, lua_istable, lua_newtable,
     lua_newuserdata, lua_pop, lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber,
     lua_pushstring, lua_setmetatable, lua_tonumber, luaL_argcheck, luaL_checklstring, luaL_error,
     luaL_ref, luaL_unref,
 };
-use crate::src::nvim::os::libc::{free, malloc};
-use crate::src::nvim::types::{
+use crate::mpack::mpack_core::{MPACK_EOF, MPACK_OK};
+use crate::mpack::object::MPACK_NOMEM;
+use crate::mpack::rpc::{
+    MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, mpack_rpc_notify,
+    mpack_rpc_receive, mpack_rpc_reply, mpack_rpc_request, mpack_rpc_session_init,
+};
+use crate::os::libc::{free, malloc};
+use crate::types::{
     lua_Integer, lua_Number, lua_State, mpack_data_t, mpack_rpc_session_t, mpack_uint32_t, size_t,
 };
 

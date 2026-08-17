@@ -1,4 +1,4 @@
-//! The viewport arithmetic (`src/nvim/move/arith.rs`).
+//! The viewport arithmetic (`src/move/arith.rs`).
 //!
 //! `update_topline()` and `curs_columns()` are the two ends of "which part of
 //! the buffer does this window show, and where in it is the cursor?". Between
@@ -15,14 +15,14 @@
 
 use std::ffi::c_int;
 
-use c2rust_neovim::src::nvim::r#move::arith::{
+use c2rust_neovim::r#move::arith::{
     cursor_screen_col, fit_scrolloff_cols, fit_skipcol_to_window, marker_overlap,
     recentre_threshold, scrolljump_lines, scrolloff_cols, sidescroll_leftcol,
     skipcol_for_tall_line, skipcol_from_plines, skipcol_line_back, skipcol_showing_last,
     skipped_plines, sms_cursor_row, sms_fixup_count_back, sms_fixup_count_forw, top_skipped_plines,
     visible_sms_col, wrap_cursor_cell, wrap_rowoff,
 };
-use c2rust_neovim::src::nvim::types::colnr_T;
+use c2rust_neovim::types::colnr_T;
 
 // ------------------------------------------------------------ skipped_plines
 //

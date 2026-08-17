@@ -3,7 +3,7 @@
 //! undo, so the constants and the encoder are asserted from outside the
 //! crate as well as from inside it.
 
-use c2rust_neovim::src::nvim::undo::format::*;
+use c2rust_neovim::undo::format::*;
 
 /// The nine bytes at offset 0 of every undo file since the format's
 /// inception. `Vim`, 0x9f, `UnDo`, 0xe5.
@@ -89,13 +89,11 @@ mod write {
     use std::path::PathBuf;
     use std::sync::{Mutex, MutexGuard};
 
-    use c2rust_neovim::src::nvim::main::{curbuf, p_udir};
-    use c2rust_neovim::src::nvim::memory::xfree;
-    use c2rust_neovim::src::nvim::types::buf_T;
-    use c2rust_neovim::src::nvim::undo::format::UF_START_MAGIC;
-    use c2rust_neovim::src::nvim::undo::{
-        UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo,
-    };
+    use c2rust_neovim::main::{curbuf, p_udir};
+    use c2rust_neovim::memory::xfree;
+    use c2rust_neovim::types::buf_T;
+    use c2rust_neovim::undo::format::UF_START_MAGIC;
+    use c2rust_neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
 
     /// `p_udir` and `curbuf` are process-wide, so the cases run one at a
     /// time and put them back. Poisoning is ignored: a panicking case has

@@ -1,0 +1,642 @@
+#![forbid(unsafe_code)]
+
+//! The keysets: the option-dict layouts the API takes by name.
+//!
+//! Canonical type definitions, hoisted out of the per-module copies c2rust
+//! emitted. One definition per logical type; every module re-exports here.
+//!
+//! These structs are also the source of truth `tools/apigen` generates the
+//! keyset tables from (`crate::api::private::dispatch`), so the
+//! shape here is load-bearing:
+//!
+//! - Declaration order fixes the table order, which fixes each key's
+//!   `opt_index` — the bit it occupies in the leading `is_set__*_` mask.
+//!   Reordering fields renumbers those bits.
+//! - The leading `is_set__<name>_: OptionalKeys` field, when present, says
+//!   the keyset tracks which keys the caller actually set. A keyset without
+//!   one gives every key an `opt_index` of -1.
+//! - The field type picks the `ObjectType` a value must arrive as; `Object`
+//!   accepts any, and `HLGroupID` marks a highlight-group name the converter
+//!   resolves to an id.
+//! - A field whose name on the wire differs from its name here says so in a
+//!   doc comment of the form ``Wire key: `name`.``
+
+use super::*;
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_buflist_item {
+    pub is_set___shada_buflist_item_: OptionalKeys,
+    pub l: Integer,
+    pub c: Integer,
+    pub f: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_mark {
+    pub is_set___shada_mark_: OptionalKeys,
+    pub n: Integer,
+    pub l: Integer,
+    pub c: Integer,
+    pub f: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_register {
+    pub is_set___shada_register_: OptionalKeys,
+    pub rc: StringArray,
+    pub ru: Boolean,
+    pub rt: Integer,
+    pub n: Integer,
+    pub rw: Integer,
+}
+/// ShaDa entries spell their keys as two-letter codes, so every field here
+/// names the one it travels under.
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_search_pat {
+    pub is_set___shada_search_pat_: OptionalKeys,
+    /// Wire key: `sm`.
+    pub magic: Boolean,
+    /// Wire key: `sc`.
+    pub smartcase: Boolean,
+    /// Wire key: `sl`.
+    pub has_line_offset: Boolean,
+    /// Wire key: `se`.
+    pub place_cursor_at_end: Boolean,
+    /// Wire key: `su`.
+    pub is_last_used: Boolean,
+    /// Wire key: `ss`.
+    pub is_substitute_pattern: Boolean,
+    /// Wire key: `sh`.
+    pub highlighted: Boolean,
+    /// Wire key: `sb`.
+    pub search_backward: Boolean,
+    /// Wire key: `so`.
+    pub offset: Integer,
+    /// Wire key: `sp`.
+    pub pat: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_buf_attach {
+    pub is_set__buf_attach_: OptionalKeys,
+    pub on_lines: LuaRef,
+    pub on_bytes: LuaRef,
+    pub on_changedtick: LuaRef,
+    pub on_detach: LuaRef,
+    pub on_reload: LuaRef,
+    pub utf_sizes: Boolean,
+    pub preview: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_buf_delete {
+    pub is_set__buf_delete_: OptionalKeys,
+    pub force: Boolean,
+    pub unload: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_clear_autocmds {
+    pub is_set__clear_autocmds_: OptionalKeys,
+    pub buffer: Buffer,
+    pub buf: Buffer,
+    pub event: Object,
+    pub group: Object,
+    pub pattern: Object,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd {
+    pub is_set__cmd_: OptionalKeys,
+    pub cmd: String_0,
+    pub range: Array,
+    pub count: Integer,
+    pub reg: String_0,
+    pub bang: Boolean,
+    pub args: Array,
+    pub magic: Dict,
+    pub mods: Dict,
+    pub nargs: Object,
+    pub addr: String_0,
+    pub nextcmd: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd_magic {
+    pub is_set__cmd_magic_: OptionalKeys,
+    pub file: Boolean,
+    pub bar: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd_mods {
+    pub is_set__cmd_mods_: OptionalKeys,
+    pub silent: Boolean,
+    pub emsg_silent: Boolean,
+    pub unsilent: Boolean,
+    pub filter: Dict,
+    pub sandbox: Boolean,
+    pub noautocmd: Boolean,
+    pub browse: Boolean,
+    pub confirm: Boolean,
+    pub hide: Boolean,
+    pub horizontal: Boolean,
+    pub keepalt: Boolean,
+    pub keepjumps: Boolean,
+    pub keepmarks: Boolean,
+    pub keeppatterns: Boolean,
+    pub lockmarks: Boolean,
+    pub noswapfile: Boolean,
+    pub tab: Integer,
+    pub verbose: Integer,
+    pub vertical: Boolean,
+    pub split: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd_mods_filter {
+    pub is_set__cmd_mods_filter_: OptionalKeys,
+    pub pattern: String_0,
+    pub force: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd_opts {
+    pub output: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_complete_set {
+    pub is_set__complete_set_: OptionalKeys,
+    pub info: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_context {
+    pub is_set__context_: OptionalKeys,
+    pub types: Array,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_create_augroup {
+    pub is_set__create_augroup_: OptionalKeys,
+    pub clear: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_create_autocmd {
+    pub is_set__create_autocmd_: OptionalKeys,
+    pub buffer: Buffer,
+    pub buf: Buffer,
+    pub callback: Object,
+    pub command: String_0,
+    pub desc: String_0,
+    pub group: Object,
+    pub nested: Boolean,
+    pub once: Boolean,
+    pub pattern: Object,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_echo_opts {
+    pub is_set__echo_opts_: OptionalKeys,
+    pub err: Boolean,
+    pub verbose: Boolean,
+    pub _truncate: Boolean,
+    pub kind: String_0,
+    pub id: Object,
+    pub title: String_0,
+    pub status: String_0,
+    pub percent: Integer,
+    pub source: String_0,
+    pub data: Dict,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_empty {
+    pub is_set__empty_: OptionalKeys,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_eval_statusline {
+    pub is_set__eval_statusline_: OptionalKeys,
+    pub winid: Window,
+    pub maxwidth: Integer,
+    pub fillchar: String_0,
+    pub highlights: Boolean,
+    pub use_winbar: Boolean,
+    pub use_tabline: Boolean,
+    pub use_statuscol_lnum: Integer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_exec_autocmds {
+    pub is_set__exec_autocmds_: OptionalKeys,
+    pub buffer: Buffer,
+    pub buf: Buffer,
+    pub group: Object,
+    pub modeline: Boolean,
+    pub pattern: Object,
+    pub data: Object,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_exec_opts {
+    pub output: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_get_autocmds {
+    pub is_set__get_autocmds_: OptionalKeys,
+    pub event: Object,
+    pub group: Object,
+    pub pattern: Object,
+    pub buffer: Object,
+    pub buf: Object,
+    pub id: Integer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_get_commands {
+    pub builtin: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_get_extmark {
+    pub is_set__get_extmark_: OptionalKeys,
+    pub details: Boolean,
+    pub hl_name: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_get_extmarks {
+    pub is_set__get_extmarks_: OptionalKeys,
+    pub limit: Integer,
+    pub details: Boolean,
+    pub hl_name: Boolean,
+    pub overlap: Boolean,
+    /// Wire key: `type`.
+    pub type_0: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_get_highlight {
+    pub is_set__get_highlight_: OptionalKeys,
+    pub id: Integer,
+    pub name: String_0,
+    pub link: Boolean,
+    pub create: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_get_ns {
+    pub is_set__get_ns_: OptionalKeys,
+    pub winid: Window,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_highlight {
+    pub is_set__highlight_: OptionalKeys,
+    pub altfont: Boolean,
+    pub blink: Boolean,
+    pub bold: Boolean,
+    pub conceal: Boolean,
+    pub dim: Boolean,
+    pub italic: Boolean,
+    pub nocombine: Boolean,
+    pub overline: Boolean,
+    pub reverse: Boolean,
+    pub standout: Boolean,
+    pub strikethrough: Boolean,
+    pub undercurl: Boolean,
+    pub underdashed: Boolean,
+    pub underdotted: Boolean,
+    pub underdouble: Boolean,
+    pub underline: Boolean,
+    /// Wire key: `default`.
+    pub default_: Boolean,
+    pub cterm: Dict,
+    pub foreground: Object,
+    pub fg: Object,
+    pub background: Object,
+    pub bg: Object,
+    pub ctermfg: Object,
+    pub ctermbg: Object,
+    pub special: Object,
+    pub sp: Object,
+    pub link: HLGroupID,
+    pub link_global: HLGroupID,
+    pub fallback: Boolean,
+    pub blend: Integer,
+    pub fg_indexed: Boolean,
+    pub bg_indexed: Boolean,
+    pub force: Boolean,
+    pub update: Boolean,
+    pub url: String_0,
+}
+/// The `cterm` sub-dict of a highlight definition. It has no `is_set__` mask:
+/// an unset attribute is simply false.
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_highlight_cterm {
+    pub bold: Boolean,
+    pub standout: Boolean,
+    pub strikethrough: Boolean,
+    pub underline: Boolean,
+    pub undercurl: Boolean,
+    pub underdouble: Boolean,
+    pub underdotted: Boolean,
+    pub underdashed: Boolean,
+    pub italic: Boolean,
+    pub reverse: Boolean,
+    pub altfont: Boolean,
+    pub dim: Boolean,
+    pub blink: Boolean,
+    pub conceal: Boolean,
+    pub overline: Boolean,
+    pub nocombine: Boolean,
+}
+
+impl KeyDict_highlight {
+    /// Every key absent. `api_dict_to_keydict` fills in what the caller
+    /// named and records it in `is_set__highlight_`, so this is the state a
+    /// keydict must start in for that mask to mean anything.
+    pub const fn new() -> Self {
+        const NO_DICT: Dict = Dict {
+            size: 0,
+            capacity: 0,
+            items: core::ptr::null_mut(),
+        };
+        Self {
+            is_set__highlight_: 0,
+            altfont: false,
+            blink: false,
+            bold: false,
+            conceal: false,
+            dim: false,
+            italic: false,
+            nocombine: false,
+            overline: false,
+            reverse: false,
+            standout: false,
+            strikethrough: false,
+            undercurl: false,
+            underdashed: false,
+            underdotted: false,
+            underdouble: false,
+            underline: false,
+            default_: false,
+            cterm: NO_DICT,
+            foreground: Object::NIL,
+            fg: Object::NIL,
+            background: Object::NIL,
+            bg: Object::NIL,
+            ctermfg: Object::NIL,
+            ctermbg: Object::NIL,
+            special: Object::NIL,
+            sp: Object::NIL,
+            link: 0,
+            link_global: 0,
+            fallback: false,
+            blend: 0,
+            fg_indexed: false,
+            bg_indexed: false,
+            force: false,
+            update: false,
+            url: String_0 {
+                data: core::ptr::null_mut(),
+                size: 0,
+            },
+        }
+    }
+}
+
+impl Default for KeyDict_highlight {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KeyDict_highlight_cterm {
+    /// Every attribute off. See [`KeyDict_highlight::new`].
+    pub const fn new() -> Self {
+        Self {
+            bold: false,
+            standout: false,
+            strikethrough: false,
+            underline: false,
+            undercurl: false,
+            underdouble: false,
+            underdotted: false,
+            underdashed: false,
+            italic: false,
+            reverse: false,
+            altfont: false,
+            dim: false,
+            blink: false,
+            conceal: false,
+            overline: false,
+            nocombine: false,
+        }
+    }
+}
+
+impl Default for KeyDict_highlight_cterm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_keymap {
+    pub is_set__keymap_: OptionalKeys,
+    pub noremap: Boolean,
+    pub nowait: Boolean,
+    pub silent: Boolean,
+    pub script: Boolean,
+    pub expr: Boolean,
+    pub unique: Boolean,
+    pub callback: LuaRef,
+    pub desc: String_0,
+    pub replace_keycodes: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_ns_opts {
+    pub is_set__ns_opts_: OptionalKeys,
+    pub wins: Array,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_open_term {
+    pub is_set__open_term_: OptionalKeys,
+    pub on_input: LuaRef,
+    pub force_crlf: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_option {
+    pub is_set__option_: OptionalKeys,
+    pub scope: String_0,
+    pub win: Window,
+    pub buf: Buffer,
+    pub filetype: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_redraw {
+    pub is_set__redraw_: OptionalKeys,
+    pub flush: Boolean,
+    pub cursor: Boolean,
+    pub valid: Boolean,
+    pub statuscolumn: Boolean,
+    pub statusline: Boolean,
+    pub tabline: Boolean,
+    pub winbar: Boolean,
+    pub range: Array,
+    pub win: Window,
+    pub buf: Buffer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_runtime {
+    pub is_lua: Boolean,
+    pub do_source: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_set_decoration_provider {
+    pub is_set__set_decoration_provider_: OptionalKeys,
+    pub on_start: LuaRef,
+    pub on_buf: LuaRef,
+    pub on_win: LuaRef,
+    pub on_line: LuaRef,
+    pub on_range: LuaRef,
+    pub on_end: LuaRef,
+    pub _on_hl_def: LuaRef,
+    pub _on_spell_nav: LuaRef,
+    pub _on_conceal_line: LuaRef,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_set_extmark {
+    pub is_set__set_extmark_: OptionalKeys,
+    pub id: Integer,
+    pub end_line: Integer,
+    pub end_row: Integer,
+    pub end_col: Integer,
+    pub hl_group: Object,
+    pub virt_text: Array,
+    pub virt_text_pos: String_0,
+    pub virt_text_win_col: Integer,
+    pub virt_text_hide: Boolean,
+    pub virt_text_repeat_linebreak: Boolean,
+    pub hl_eol: Boolean,
+    pub hl_mode: String_0,
+    pub invalidate: Boolean,
+    pub ephemeral: Boolean,
+    pub priority: Integer,
+    pub right_gravity: Boolean,
+    pub end_right_gravity: Boolean,
+    pub virt_lines: Array,
+    pub virt_lines_above: Boolean,
+    pub virt_lines_leftcol: Boolean,
+    pub virt_lines_overflow: String_0,
+    pub strict: Boolean,
+    pub sign_text: String_0,
+    pub sign_hl_group: HLGroupID,
+    pub number_hl_group: HLGroupID,
+    pub line_hl_group: HLGroupID,
+    pub cursorline_hl_group: HLGroupID,
+    pub conceal: String_0,
+    pub conceal_lines: String_0,
+    pub spell: Boolean,
+    pub ui_watched: Boolean,
+    pub undo_restore: Boolean,
+    pub url: String_0,
+    pub scoped: Boolean,
+    pub _subpriority: Integer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_tabpage_config {
+    pub is_set__tabpage_config_: OptionalKeys,
+    pub after: Integer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_user_command {
+    pub is_set__user_command_: OptionalKeys,
+    pub addr: Object,
+    pub bang: Boolean,
+    pub bar: Boolean,
+    pub complete: Object,
+    pub count: Object,
+    pub desc: Object,
+    pub force: Boolean,
+    pub keepscript: Boolean,
+    pub nargs: Object,
+    pub preview: Object,
+    pub range: Object,
+    /// Wire key: `register`.
+    pub register_: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_win_config {
+    pub is_set__win_config_: OptionalKeys,
+    pub external: Boolean,
+    pub fixed: Boolean,
+    pub focusable: Boolean,
+    pub footer: Object,
+    pub footer_pos: String_0,
+    pub hide: Boolean,
+    pub height: Integer,
+    pub mouse: Boolean,
+    pub relative: String_0,
+    pub row: Float,
+    pub style: String_0,
+    pub noautocmd: Boolean,
+    pub vertical: Boolean,
+    pub win: Window,
+    pub width: Integer,
+    pub zindex: Integer,
+    pub anchor: String_0,
+    pub border: Object,
+    pub bufpos: Array,
+    pub col: Float,
+    pub split: String_0,
+    pub title: Object,
+    pub title_pos: String_0,
+    pub _cmdline_offset: Integer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_win_text_height {
+    pub is_set__win_text_height_: OptionalKeys,
+    pub start_row: Integer,
+    pub end_row: Integer,
+    pub start_vcol: Integer,
+    pub end_vcol: Integer,
+    pub max_height: Integer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_xdl_diff {
+    pub is_set__xdl_diff_: OptionalKeys,
+    pub on_hunk: LuaRef,
+    pub result_type: String_0,
+    pub algorithm: String_0,
+    pub ctxlen: Integer,
+    pub interhunkctxlen: Integer,
+    pub linematch: Object,
+    pub ignore_whitespace: Boolean,
+    pub ignore_whitespace_change: Boolean,
+    pub ignore_whitespace_change_at_eol: Boolean,
+    pub ignore_cr_at_eol: Boolean,
+    pub ignore_blank_lines: Boolean,
+    pub indent_heuristic: Boolean,
+}

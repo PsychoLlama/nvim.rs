@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, CString, c_char};
 
-use c2rust_neovim::src::nvim::memory::xfree;
+use c2rust_neovim::memory::xfree;
 
 /// A NUL-terminated copy of `s`, kept alive by the caller's binding.
 pub fn cstr(s: impl Into<Vec<u8>>) -> CString {

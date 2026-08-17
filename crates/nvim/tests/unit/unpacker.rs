@@ -7,10 +7,10 @@
 
 use std::ffi::{CStr, c_char, c_void};
 
-use c2rust_neovim::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
-use c2rust_neovim::src::nvim::msgpack_rpc::unpacker::unpack;
-use c2rust_neovim::src::nvim::types::api::kErrorTypeNone;
-use c2rust_neovim::src::nvim::types::{
+use c2rust_neovim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use c2rust_neovim::msgpack_rpc::unpacker::unpack;
+use c2rust_neovim::types::api::kErrorTypeNone;
+use c2rust_neovim::types::{
     Arena, Error, Object, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow,
@@ -37,7 +37,7 @@ impl Drop for Decoded {
         unsafe {
             arena_mem_free(arena_finish(&raw mut self.arena));
             if !self.error.msg.is_null() {
-                c2rust_neovim::src::nvim::memory::xfree(self.error.msg.cast::<c_void>());
+                c2rust_neovim::memory::xfree(self.error.msg.cast::<c_void>());
             }
         }
     }

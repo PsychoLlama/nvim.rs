@@ -2,7 +2,7 @@
 //! arithmetic. The stateful pieces (wait-time accounting, the `:profile`
 //! report, `--startuptime`) are covered by the functional and old suites.
 
-use c2rust_neovim::src::nvim::profile::{
+use c2rust_neovim::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg_str, profile_passed_limit,
     profile_self, profile_setlimit, profile_signed, profile_start, profile_sub, profile_zero,
 };

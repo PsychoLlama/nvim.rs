@@ -1,7 +1,7 @@
 //! FIPS 180-2 test vectors, previously asserted at runtime by the C
 //! `sha256_self_test()`.
 
-use c2rust_neovim::src::nvim::sha256::{SHA256_SUM_SIZE, Sha256, hex_digest};
+use c2rust_neovim::sha256::{SHA256_SUM_SIZE, Sha256, hex_digest};
 
 #[test]
 fn fips_180_2_vector_1() {

@@ -8,12 +8,12 @@
 use std::ffi::{CStr, CString, c_char, c_uint, c_void};
 use std::{ptr, slice};
 
-use c2rust_neovim::src::nvim::hashtab::{
+use c2rust_neovim::hashtab::{
     HT_INIT_SIZE, hash_add, hash_clear_all, hash_find, hash_init, hash_lock, hash_remove,
     hash_unlock,
 };
-use c2rust_neovim::src::nvim::memory::{xcalloc, xfree};
-use c2rust_neovim::src::nvim::types::{hashitem_T, hashtab_T};
+use c2rust_neovim::memory::{xcalloc, xfree};
+use c2rust_neovim::types::{hashitem_T, hashtab_T};
 
 /// `hash_add` answers OK/FAIL, spelled as the C's `OK`.
 const OK: std::ffi::c_int = 1;

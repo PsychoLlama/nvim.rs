@@ -1,4 +1,4 @@
-//! The window-layout arithmetic (`src/nvim/window/arith.rs`).
+//! The window-layout arithmetic (`src/window/arith.rs`).
 //!
 //! Between the frame-tree writes that `win_split_ins()`, `win_equal()` and
 //! `frame_setheight()` make sit a handful of decisions that are pure integer
@@ -16,13 +16,13 @@
 use std::ffi::c_int;
 use std::ptr;
 
-use c2rust_neovim::src::nvim::types::{frame_T, win_T};
-use c2rust_neovim::src::nvim::window::arith::{
+use c2rust_neovim::types::{frame_T, win_T};
+use c2rust_neovim::window::arith::{
     MinSize, NextCurwin, cursor_fraction, fraction_row, frame_check_height, frame_check_width,
     frame_minheight, frame_minwidth, height_with_chrome, parent_target, sort_columns,
     width_with_chrome,
 };
-use c2rust_neovim::src::nvim::winlayer::Frame;
+use c2rust_neovim::winlayer::Frame;
 
 // The layouts below mirror the C's: `FR_LEAF` 0, `FR_ROW` 1, `FR_COL` 2.
 const FR_LEAF: i8 = 0;

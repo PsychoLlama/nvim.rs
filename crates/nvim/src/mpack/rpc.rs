@@ -31,7 +31,7 @@ use super::mpack_core::{
 };
 use super::object::MPACK_NOMEM;
 use super::token::{Kind, Tok};
-use crate::src::nvim::types::{
+use crate::types::{
     mpack_data_t, mpack_rpc_header_t, mpack_rpc_message_t, mpack_rpc_session_t, mpack_rpc_slot_s,
     mpack_token_t, mpack_uint32_t, size_t,
 };

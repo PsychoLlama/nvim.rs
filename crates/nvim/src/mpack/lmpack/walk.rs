@@ -1,6 +1,6 @@
 //! The four walk callbacks: msgpack tokens to Lua values and back.
 //!
-//! [`crate::src::mpack::object`] drives a stack of nodes and calls in twice
+//! [`crate::mpack::object`] drives a stack of nodes and calls in twice
 //! per node — once descending, once ascending. These callbacks are what make
 //! it mean something: [`parse_enter`]/[`parse_exit`] build Lua values from
 //! tokens, [`unparse_enter`]/[`unparse_exit`] read tokens out of Lua values.
@@ -21,26 +21,26 @@ use super::{
     LUA_NOREF, LUA_REFNIL, Packer, Unpacker, geti, is_nil_sentinel, objlen, push_nil_sentinel,
     reference, unreference,
 };
-use crate::src::mpack::conv::{
-    mpack_pack_array, mpack_pack_bin, mpack_pack_boolean, mpack_pack_chunk, mpack_pack_ext,
-    mpack_pack_map, mpack_pack_nil, mpack_pack_number, mpack_pack_str, mpack_unpack_boolean,
-    mpack_unpack_number,
-};
-use crate::src::mpack::mpack_core::{
-    MPACK_TOKEN_ARRAY, MPACK_TOKEN_BIN, MPACK_TOKEN_BOOLEAN, MPACK_TOKEN_CHUNK, MPACK_TOKEN_EXT,
-    MPACK_TOKEN_FLOAT, MPACK_TOKEN_MAP, MPACK_TOKEN_NIL, MPACK_TOKEN_SINT, MPACK_TOKEN_STR,
-    MPACK_TOKEN_UINT, to_tok,
-};
-use crate::src::mpack::object::parent_of;
-use crate::src::nvim::lua::ffi::{
+use crate::lua::ffi::{
     LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TUSERDATA, lua_call,
     lua_getmetatable, lua_gettable, lua_isnumber, lua_isstring, lua_newtable, lua_next, lua_pop,
     lua_pushboolean, lua_pushinteger, lua_pushlstring, lua_pushnumber, lua_pushvalue, lua_rawequal,
     lua_rawgeti, lua_remove, lua_replace, lua_setmetatable, lua_settable, lua_toboolean,
     lua_tolstring, lua_tonumber, lua_type, luaL_error,
 };
-use crate::src::nvim::os::libc::{free, malloc, memcpy};
-use crate::src::nvim::types::{lua_Number, lua_State, mpack_node_t, mpack_parser_t, size_t};
+use crate::mpack::conv::{
+    mpack_pack_array, mpack_pack_bin, mpack_pack_boolean, mpack_pack_chunk, mpack_pack_ext,
+    mpack_pack_map, mpack_pack_nil, mpack_pack_number, mpack_pack_str, mpack_unpack_boolean,
+    mpack_unpack_number,
+};
+use crate::mpack::mpack_core::{
+    MPACK_TOKEN_ARRAY, MPACK_TOKEN_BIN, MPACK_TOKEN_BOOLEAN, MPACK_TOKEN_CHUNK, MPACK_TOKEN_EXT,
+    MPACK_TOKEN_FLOAT, MPACK_TOKEN_MAP, MPACK_TOKEN_NIL, MPACK_TOKEN_SINT, MPACK_TOKEN_STR,
+    MPACK_TOKEN_UINT, to_tok,
+};
+use crate::mpack::object::parent_of;
+use crate::os::libc::{free, malloc, memcpy};
+use crate::types::{lua_Number, lua_State, mpack_node_t, mpack_parser_t, size_t};
 
 /// A decoded token becomes a Lua value.
 ///

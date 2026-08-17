@@ -195,13 +195,13 @@ The externally maintained libraries used by Neovim are:
   - gettext
   - libiconv
   - libmpack: MIT license
-  - libtermkey (ported to Rust as crates/nvim/src/nvim/tui/termkey/, with its
-    types in crates/nvim/src/nvim/types/termkey*.rs): MIT license, Copyright
+  - libtermkey (ported to Rust as crates/nvim/src/tui/termkey/, with its
+    types in crates/nvim/src/types/termkey*.rs): MIT license, Copyright
     (c) 2007-2011 Paul Evans <leonerd@leonerd.org.uk>; the notice is
     reproduced in licenses/libtermkey-LICENSE.txt
   - libuv. Copyright Joyent, Inc. and other Node contributors. Node.js license.
-  - libvterm (ported to Rust as crates/nvim/src/nvim/vterm/, with its types
-    in crates/nvim/src/nvim/types/vterm*.rs): MIT license, Copyright (c)
+  - libvterm (ported to Rust as crates/nvim/src/vterm/, with its types
+    in crates/nvim/src/types/vterm*.rs): MIT license, Copyright (c)
     2008 Paul Evans <leonerd@leonerd.org.uk>; the notice is reproduced in
     licenses/libvterm-LICENSE.txt
   - lua-bitop: MIT license
@@ -213,9 +213,9 @@ The externally maintained libraries used by Neovim are:
   - xdiff (ported to Rust as crates/nvim/src/xdiff/): LGPL v2.1 or later,
     except xhistogram.rs: Eclipse Distribution License v1.0 (3-clause BSD),
     with the full notice retained in that file
-  - unibilium (ported to Rust as crates/nvim/src/nvim/tui/unibi.rs): LGPL v3
+  - unibilium (ported to Rust as crates/nvim/src/tui/unibi.rs): LGPL v3
     or later
-  - utf8proc (ported to Rust as crates/nvim/src/nvim/utf8proc/): MIT
+  - utf8proc (ported to Rust as crates/nvim/src/utf8proc/): MIT
     license, with Unicode-derived data tables under the Unicode, Inc.
     license; both notices are reproduced in licenses/utf8proc-LICENSE.md
 

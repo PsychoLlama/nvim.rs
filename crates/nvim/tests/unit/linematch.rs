@@ -3,7 +3,7 @@
 
 use std::ffi::c_int;
 
-use c2rust_neovim::src::nvim::linematch::linematch_nbuffers;
+use c2rust_neovim::linematch::linematch_nbuffers;
 
 /// Both buffers advance together, one line at a time.
 const BOTH: c_int = 0b11;

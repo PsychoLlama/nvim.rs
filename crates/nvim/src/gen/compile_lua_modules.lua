@@ -3,7 +3,7 @@
 -- Rust's build.rs runs this (with the deps-prefix luajit) in place of the
 -- upstream CMake + src/gen/gen_char_blob.lua pipeline that produced the
 -- bytecode c2rust originally transpiled as array literals in
--- src/nvim/lua/executor.rs. The compile step is byte-for-byte the same as
+-- src/lua/executor.rs. The compile step is byte-for-byte the same as
 -- gen_char_blob.lua's `-c` mode: an unstripped string.dump() of the source
 -- loaded under a chunkname of `@<mod/path>` (the `@` omitted for the
 -- ignorelist below, as upstream does), plus the trailing 0 sentinel the C

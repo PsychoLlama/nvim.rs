@@ -118,14 +118,14 @@ miri *args:
   MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
 
 # Regenerate the committed msgpack-RPC dispatch wrappers
-# (crates/nvim/src/nvim/api/private/dispatch_wrappers/) from the `nvim_*`
+# (crates/nvim/src/api/private/dispatch_wrappers/) from the `nvim_*`
 # signatures themselves plus tools/apigen/functions.txt, the attributes the
 # signatures can't carry. `--check` fails on drift instead of writing.
 apigen *args:
   @scripts/gen-api-dispatch.sh {{ args }}
 
-# Regenerate crates/nvim/src/nvim/keycodes.lua from the Rust key-name table
-# (crates/nvim/src/nvim/keycodes/tables.rs). Nothing in the editor reads it —
+# Regenerate crates/nvim/src/keycodes.lua from the Rust key-name table
+# (crates/nvim/src/keycodes/tables.rs). Nothing in the editor reads it —
 # the port answers key-name lookups from the Rust table directly — but
 # test/benchmark/keycodes_spec.lua does, and generating beats letting a
 # benchmark keep its own copy of a 187-row table. `--check` fails on drift.

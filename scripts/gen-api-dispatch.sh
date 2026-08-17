@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerate the API dispatch layer from the Rust API signatures.
 #
-# tools/apigen parses crates/nvim/src/nvim/api/*.rs plus the attribute spec
+# tools/apigen parses crates/nvim/src/api/*.rs plus the attribute spec
 # (tools/apigen/functions.txt) and writes five module directories — the
 # msgpack-RPC wrappers, the dispatch tables, the `vim.api` Lua binding, the
 # option table and the Vimscript builtin table — plus the packed api-info
@@ -12,7 +12,7 @@
 # everything else.
 #
 # Three of them read metadata rather than Rust: the vendored
-# crates/nvim/src/nvim/{options,eval,ex_cmds}.lua, the same files upstream fed
+# crates/nvim/src/{options,eval,ex_cmds}.lua, the same files upstream fed
 # to src/gen/gen_options.lua, src/gen/gen_eval.lua and src/gen/gen_ex_cmds.lua.
 # ex_cmds.lua yields two single modules rather than a directory --- the Ex
 # command table with its two lookup indices, and the CMD_* names that index it
@@ -34,16 +34,16 @@ cargo build --release --quiet --manifest-path "$root/tools/apigen/Cargo.toml"
   --root "$root/crates/nvim" \
   --spec "$root/tools/apigen/functions.txt" \
   --metadata-spec "$root/tools/apigen/metadata.txt" \
-  --out-dir "$root/crates/nvim/src/nvim/api/private/dispatch_wrappers" \
-  --tables-dir "$root/crates/nvim/src/nvim/api/private/dispatch" \
-  --lua-dir "$root/crates/nvim/src/nvim/lua/api_wrappers" \
-  --options-lua "$root/crates/nvim/src/nvim/options.lua" \
-  --options-dir "$root/crates/nvim/src/nvim/options" \
-  --eval-lua "$root/crates/nvim/src/nvim/eval.lua" \
-  --eval-dir "$root/crates/nvim/src/nvim/eval/funcs/table" \
-  --metadata-file "$root/crates/nvim/src/nvim/api/private/metadata.rs" \
-  --ex-cmds-lua "$root/crates/nvim/src/nvim/ex_cmds.lua" \
-  --cmdtable-file "$root/crates/nvim/src/nvim/ex_docmd/cmdtable.rs" \
-  --cmdidx-file "$root/crates/nvim/src/nvim/types/cmdidx.rs" \
+  --out-dir "$root/crates/nvim/src/api/private/dispatch_wrappers" \
+  --tables-dir "$root/crates/nvim/src/api/private/dispatch" \
+  --lua-dir "$root/crates/nvim/src/lua/api_wrappers" \
+  --options-lua "$root/crates/nvim/src/options.lua" \
+  --options-dir "$root/crates/nvim/src/options" \
+  --eval-lua "$root/crates/nvim/src/eval.lua" \
+  --eval-dir "$root/crates/nvim/src/eval/funcs/table" \
+  --metadata-file "$root/crates/nvim/src/api/private/metadata.rs" \
+  --ex-cmds-lua "$root/crates/nvim/src/ex_cmds.lua" \
+  --cmdtable-file "$root/crates/nvim/src/ex_docmd/cmdtable.rs" \
+  --cmdidx-file "$root/crates/nvim/src/types/cmdidx.rs" \
   --rustfmt-config "$root/rustfmt.toml" \
   "$@"

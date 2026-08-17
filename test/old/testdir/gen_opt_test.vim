@@ -1,4 +1,4 @@
-" Script to generate test/old/testdir/opt_test.vim from crates/nvim/src/nvim/options.lua
+" Script to generate test/old/testdir/opt_test.vim from crates/nvim/src/options.lua
 " and runtime/doc/options.txt
 
 set cpo&vim
@@ -56,7 +56,7 @@ let script = [
       \ 'scriptencoding utf-8',
       \ ]
 
-let options = luaeval('loadfile("../../../crates/nvim/src/nvim/options.lua")().options')
+let options = luaeval('loadfile("../../../crates/nvim/src/options.lua")().options')
 
 " font name that works everywhere (hopefully)
 let fontname = has('win32') ? 'fixedsys' : 'fixed'

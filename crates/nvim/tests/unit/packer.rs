@@ -8,12 +8,10 @@
 
 use std::ffi::c_char;
 
-use c2rust_neovim::src::nvim::memory::xfree;
-use c2rust_neovim::src::nvim::msgpack_rpc::packer::format;
-use c2rust_neovim::src::nvim::msgpack_rpc::packer::{
-    mpack_object, packer_string_buffer, packer_take_string,
-};
-use c2rust_neovim::src::nvim::types::{
+use c2rust_neovim::memory::xfree;
+use c2rust_neovim::msgpack_rpc::packer::format;
+use c2rust_neovim::msgpack_rpc::packer::{mpack_object, packer_string_buffer, packer_take_string};
+use c2rust_neovim::types::{
     Array, Dict, KeyValuePair, Object, PackerBuffer, String_0, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, kObjectTypeWindow, object_data,

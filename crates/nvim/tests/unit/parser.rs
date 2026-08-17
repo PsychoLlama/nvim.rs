@@ -9,11 +9,9 @@
 use std::ffi::c_void;
 use std::ptr;
 
-use c2rust_neovim::src::nvim::types::{
-    ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
-};
-use c2rust_neovim::src::nvim::viml::parser::expressions::{viml_pexpr_free_ast, viml_pexpr_parse};
-use c2rust_neovim::src::nvim::viml::parser::parser::{
+use c2rust_neovim::types::{ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition};
+use c2rust_neovim::viml::parser::expressions::{viml_pexpr_free_ast, viml_pexpr_parse};
+use c2rust_neovim::viml::parser::parser::{
     PARSER_STATE_INIT, highlight_vec, parser_simple_get_line, viml_parser_destroy,
     viml_parser_get_remaining_line, viml_parser_highlight, viml_parser_init,
 };
@@ -24,8 +22,8 @@ const EMPTY_LINE: ParserLine = ParserLine {
     allocated: false,
 };
 
-fn advance(pstate: &mut c2rust_neovim::src::nvim::types::ParserState, len: usize) {
-    c2rust_neovim::src::nvim::viml::parser::parser::viml_parser_advance(
+fn advance(pstate: &mut c2rust_neovim::types::ParserState, len: usize) {
+    c2rust_neovim::viml::parser::parser::viml_parser_advance(
         &mut pstate.pos,
         &mut pstate.reader,
         len,

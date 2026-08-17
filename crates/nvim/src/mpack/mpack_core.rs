@@ -25,7 +25,7 @@
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::token::{self, Kind, MAX_TOKEN_LEN, Read, Tok};
-use crate::src::nvim::types::{
+use crate::types::{
     mpack_tokbuf_t, mpack_token_s_data, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
     mpack_value_t, size_t,
 };

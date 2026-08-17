@@ -15,7 +15,7 @@
 
 use core::ffi::{c_char, c_double, c_int};
 
-use c2rust_neovim::src::cjson::fpconv::{append_g_fmt, strtod};
+use c2rust_neovim::cjson::fpconv::{append_g_fmt, strtod};
 
 unsafe extern "C" {
     fn snprintf(s: *mut c_char, n: usize, format: *const c_char, ...) -> c_int;

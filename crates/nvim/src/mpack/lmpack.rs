@@ -26,17 +26,8 @@ pub mod walk;
 
 use core::ffi::{c_char, c_int, c_uint};
 
-use crate::luaL_reg_table;
-use crate::src::mpack::mpack_core::MPACK_EOF;
-use crate::src::mpack::object::{
-    MPACK_MAX_OBJECT_DEPTH, MPACK_NOMEM, mpack_parse, mpack_parser_copy, mpack_parser_init,
-    mpack_unparse,
-};
-use crate::src::mpack::rpc::{
-    MPACK_RPC_MAX_REQUESTS, mpack_rpc_session_copy, mpack_rpc_session_init,
-};
-use crate::src::nvim::global_cell::SharedCell;
-use crate::src::nvim::lua::ffi::{
+use crate::global_cell::SharedCell;
+use crate::lua::ffi::{
     LUA_NOREF, LUA_REFNIL, LUA_REGISTRYINDEX, LUA_TFUNCTION, LUA_TNUMBER, LUA_TTABLE, lua_getfield,
     lua_gettop, lua_insert, lua_isnil, lua_istable, lua_newtable, lua_newuserdata, lua_next,
     lua_objlen, lua_pop, lua_pushcfunction, lua_pushfstring, lua_pushinteger, lua_pushnil,
@@ -46,8 +37,15 @@ use crate::src::nvim::lua::ffi::{
     luaL_error, luaL_newmetatable, luaL_prepbuffer, luaL_pushresult, luaL_ref, luaL_register,
     luaL_unref,
 };
-use crate::src::nvim::os::libc::{free, malloc};
-use crate::src::nvim::types::{
+use crate::luaL_reg_table;
+use crate::mpack::mpack_core::MPACK_EOF;
+use crate::mpack::object::{
+    MPACK_MAX_OBJECT_DEPTH, MPACK_NOMEM, mpack_parse, mpack_parser_copy, mpack_parser_init,
+    mpack_unparse,
+};
+use crate::mpack::rpc::{MPACK_RPC_MAX_REQUESTS, mpack_rpc_session_copy, mpack_rpc_session_init};
+use crate::os::libc::{free, malloc};
+use crate::types::{
     lua_Number, lua_State, luaL_Buffer, luaL_Reg, mpack_data_t, mpack_node_t, mpack_one_parser_t,
     mpack_parser_t, mpack_rpc_message_t, mpack_rpc_one_session_t, mpack_rpc_session_t,
     mpack_rpc_slot_s, mpack_uint32_t, size_t,
@@ -253,7 +251,7 @@ pub unsafe fn check_session(state: *mut lua_State, index: c_int) -> *mut Session
 /// `state` must be live.
 pub unsafe fn is_nil_sentinel(state: *mut lua_State, index: c_int) -> bool {
     unsafe {
-        if lua_type(state, index) != crate::src::nvim::lua::ffi::LUA_TUSERDATA {
+        if lua_type(state, index) != crate::lua::ffi::LUA_TUSERDATA {
             return false;
         }
         lua_getfield(state, LUA_REGISTRYINDEX, NIL_NAME);
@@ -277,7 +275,7 @@ pub unsafe fn push_nil_sentinel(state: *mut lua_State) {
 /// `state` must be live.
 pub unsafe fn is_unpacker(state: *mut lua_State, index: c_int) -> bool {
     unsafe {
-        if lua_type(state, index) != crate::src::nvim::lua::ffi::LUA_TUSERDATA
+        if lua_type(state, index) != crate::lua::ffi::LUA_TUSERDATA
             || lua_getmetatable(state, index) == 0
         {
             return false;
@@ -289,7 +287,7 @@ pub unsafe fn is_unpacker(state: *mut lua_State, index: c_int) -> bool {
     }
 }
 
-use crate::src::nvim::lua::ffi::lua_getmetatable;
+use crate::lua::ffi::lua_getmetatable;
 
 // ---------------------------------------------------------------------------
 // Shared argument handling
@@ -478,7 +476,7 @@ pub unsafe fn unpack_into_registry(
                 return luaL_error(state, c"failed to grow Unpacker capacity".as_ptr());
             }
         }
-        if status == crate::src::mpack::mpack_core::MPACK_ERROR as c_int {
+        if status == crate::mpack::mpack_core::MPACK_ERROR as c_int {
             return luaL_error(state, c"invalid msgpack string".as_ptr());
         }
         status
@@ -516,7 +514,7 @@ unsafe extern "C-unwind" fn unpacker_unpack(state: *mut lua_State) -> c_int {
     }
 }
 
-use crate::src::nvim::types::lua_Integer;
+use crate::types::lua_Integer;
 
 // ---------------------------------------------------------------------------
 // Packer
@@ -565,7 +563,7 @@ unsafe extern "C-unwind" fn packer_new(state: *mut lua_State) -> c_int {
                 lua_pop(state, 1);
             } else {
                 let kind = lua_type(state, -1);
-                if kind != crate::src::nvim::lua::ffi::LUA_TBOOLEAN && kind != LUA_TFUNCTION {
+                if kind != crate::lua::ffi::LUA_TBOOLEAN && kind != LUA_TFUNCTION {
                     return luaL_error(
                         state,
                         c"\"is_bin\" option must be a boolean or function".as_ptr(),
@@ -748,9 +746,7 @@ unsafe extern "C-unwind" fn decode(state: *mut lua_State) -> c_int {
         let message = match status {
             MPACK_NOMEM => c"object was too deep to unpack",
             s if s == MPACK_EOF as c_int => c"incomplete msgpack string",
-            s if s == crate::src::mpack::mpack_core::MPACK_ERROR as c_int => {
-                c"invalid msgpack string"
-            }
+            s if s == crate::mpack::mpack_core::MPACK_ERROR as c_int => c"invalid msgpack string",
             _ if len != 0 => c"trailing data in msgpack string",
             _ => return 1,
         };

@@ -18,8 +18,8 @@
 
 #![forbid(unsafe_code)]
 
-use crate::src::xdiff::xtypes::{Algorithm, Changed, Env, Params, Rec, XdFile};
-use crate::src::xdiff::xutils::{bogosqrt, guess_lines, hash_record, hashbits, recmatch};
+use crate::xdiff::xtypes::{Algorithm, Changed, Env, Params, Rec, XdFile};
+use crate::xdiff::xutils::{bogosqrt, guess_lines, hash_record, hashbits, recmatch};
 
 /// A run of similar lines shorter than this fraction is not worth keeping;
 /// see the ratio at the end of [`clean_mmatch`].

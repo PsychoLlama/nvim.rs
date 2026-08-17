@@ -56,9 +56,9 @@
 
 #![forbid(unsafe_code)]
 
-use crate::src::xdiff::xprepare::prepare_env;
-use crate::src::xdiff::xtypes::{Aborted, Block, Env, Params, XdFile, XdResult};
-use crate::src::xdiff::xutils::{fall_back_diff, hashbits, recmatch};
+use crate::xdiff::xprepare::prepare_env;
+use crate::xdiff::xtypes::{Aborted, Block, Env, Params, XdFile, XdResult};
+use crate::xdiff::xutils::{fall_back_diff, hashbits, recmatch};
 
 /// Largest line number the index can hold; upstream's `MAX_PTR`.
 const MAX_PTR: i64 = i32::MAX as i64;

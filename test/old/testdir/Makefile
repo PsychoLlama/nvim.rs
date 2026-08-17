@@ -155,7 +155,7 @@ newtests: newtestssilent
 
 newtestssilent: $(NEW_TESTS_RES)
 
-GEN_OPT_DEPS = gen_opt_test.vim ../../../crates/nvim/src/nvim/options.lua ../../../runtime/doc/options.txt
+GEN_OPT_DEPS = gen_opt_test.vim ../../../crates/nvim/src/options.lua ../../../runtime/doc/options.txt
 
 opt_test.vim: $(GEN_OPT_DEPS)
 	$(NVIM_PRG) -e -s -u NONE $(NO_INITS) -S $(GEN_OPT_DEPS)

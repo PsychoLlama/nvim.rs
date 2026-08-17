@@ -16,9 +16,9 @@
 
 #![forbid(unsafe_code)]
 
-use crate::src::xdiff::ffi::Emit;
-use crate::src::xdiff::xtypes::{Change, EmitConf, Env, XDL_EMIT_NO_HUNK_HDR, XdFile, XdResult};
-use crate::src::xdiff::xutils::{emit_diffrec, emit_hunk_hdr};
+use crate::xdiff::ffi::Emit;
+use crate::xdiff::xtypes::{Change, EmitConf, Env, XDL_EMIT_NO_HUNK_HDR, XdFile, XdResult};
+use crate::xdiff::xutils::{emit_diffrec, emit_hunk_hdr};
 
 /// Starting at `*start`, find the last change that belongs in the same hunk.
 ///

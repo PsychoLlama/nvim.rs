@@ -6,11 +6,11 @@
 //! `v0.12.4`'s `terminfo_builtin.h`, so it locks the port to the C source
 //! capability for capability rather than merely to itself.
 
-use c2rust_neovim::src::nvim::tui::terminfo::builtin::{DESCRIPTIONS, Description, from_term};
-use c2rust_neovim::src::nvim::tui::terminfo::caps::{
+use c2rust_neovim::tui::terminfo::builtin::{DESCRIPTIONS, Description, from_term};
+use c2rust_neovim::tui::terminfo::caps::{
     EXT_CAPS, KEYS, MAX_FUNCTION_KEY, STRING_CAPS, kTermCount, key_slot,
 };
-use c2rust_neovim::src::nvim::tui::terminfo::param::{Out, Param, expand};
+use c2rust_neovim::tui::terminfo::param::{Out, Param, expand};
 use std::ffi::CStr;
 
 /// Expand a description's sparse capability lists into the dense slot arrays

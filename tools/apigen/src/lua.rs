@@ -1,6 +1,6 @@
 //! A reader for the subset of Lua that the vendored metadata is written in.
 //!
-//! `crates/nvim/src/nvim/options.lua` and `crates/nvim/src/nvim/eval.lua` are
+//! `crates/nvim/src/options.lua` and `crates/nvim/src/eval.lua` are
 //! data, not programs: one nested table constructor of literals, plus a
 //! handful of helper calls (`N_` for the short descriptions, `macros` for
 //! defaults that a C macro supplies). Upstream fed them to a real Lua

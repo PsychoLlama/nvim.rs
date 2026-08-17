@@ -12,15 +12,15 @@ use std::ffi::{CStr, c_int, c_void};
 use std::fmt::Write as _;
 use std::ptr;
 
-use c2rust_neovim::src::nvim::memory::xfree;
-use c2rust_neovim::src::nvim::types::{
+use c2rust_neovim::memory::xfree;
+use c2rust_neovim::types::{
     ExprAST, ExprASTNode, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
     ParserState,
 };
-use c2rust_neovim::src::nvim::viml::parser::expressions::{
+use c2rust_neovim::viml::parser::expressions::{
     east_node_type_tab, viml_pexpr_free_ast, viml_pexpr_parse,
 };
-use c2rust_neovim::src::nvim::viml::parser::parser::{
+use c2rust_neovim::viml::parser::parser::{
     PARSER_STATE_INIT, highlight_vec, parser_simple_get_line, reader_line, viml_parser_destroy,
     viml_parser_init,
 };
@@ -773,11 +773,11 @@ mod lexer {
     use std::ffi::{CStr, c_char, c_int, c_void};
     use std::{fmt, ptr, slice};
 
-    use c2rust_neovim::src::nvim::types::{
+    use c2rust_neovim::types::{
         ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ParserLine,
         ParserPosition, ParserState,
     };
-    use c2rust_neovim::src::nvim::viml::parser::expressions::{
+    use c2rust_neovim::viml::parser::expressions::{
         LexExprToken, LexExprTokenType, ccs_tab, eltkn_cmp_type_tab, expr_asgn_type_tab,
         kELFlagAllowFloat, kELFlagForbidEOC, kELFlagForbidScope, kELFlagIsNotCmp, kELFlagPeek,
         kExprLexAnd, kExprLexArrow, kExprLexAssignment, kExprLexBracket, kExprLexColon,
@@ -789,7 +789,7 @@ mod lexer {
         kExprLexSpacing, kExprOptScopeGlobal, kExprOptScopeLocal, kExprOptScopeUnspecified,
         viml_pexpr_next_token,
     };
-    use c2rust_neovim::src::nvim::viml::parser::parser::{
+    use c2rust_neovim::viml::parser::parser::{
         PARSER_STATE_INIT, parser_simple_get_line, reader_line, viml_parser_destroy,
         viml_parser_init,
     };

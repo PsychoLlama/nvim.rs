@@ -19,15 +19,15 @@
 
 use core::ops::{Index, IndexMut};
 
-use crate::src::xdiff::ffi::Emit;
-use crate::src::xdiff::xemit::{emit_diff, get_hunk};
-use crate::src::xdiff::xprepare::prepare_env;
-use crate::src::xdiff::xtypes::{
+use crate::xdiff::ffi::Emit;
+use crate::xdiff::xemit::{emit_diff, get_hunk};
+use crate::xdiff::xprepare::prepare_env;
+use crate::xdiff::xtypes::{
     Algorithm, Change, DiffData, EmitConf, Env, Params, XDF_IGNORE_BLANK_LINES, XDF_NEED_MINIMAL,
     XdResult,
 };
-use crate::src::xdiff::xutils::{blankline, bogosqrt};
-use crate::src::xdiff::{xhistogram, xpatience};
+use crate::xdiff::xutils::{blankline, bogosqrt};
+use crate::xdiff::{xhistogram, xpatience};
 
 mod compact;
 

@@ -3,7 +3,7 @@
 //
 // Reads the transpiled crate (src/**/*.rs), collects
 //   - #[repr(C)] structs/unions and type aliases (canonical copies preferred
-//     from src/nvim/types/),
+//     from src/types/),
 //   - #[no_mangle] fns and statics (the linkable ABI surface),
 //   - integer `pub const`s (c2rust's rendering of C enums and #defines),
 // and emits one C-syntax declaration chunk (`unit-cdefs.h`) that ffi.cdef can
@@ -37,7 +37,7 @@ struct Def {
     file: String, // repo-relative
     kind: Kind,
     align: Option<u64>,
-    is_types: bool, // lives under src/nvim/types/
+    is_types: bool, // lives under src/types/
 }
 
 #[derive(Clone, Debug)]
@@ -232,7 +232,7 @@ fn repr_of(attrs: &[syn::Attribute]) -> (bool, Option<u64>) {
 
 /// One parsed `crate::bitfield_accessors!` invocation: the crate stores C
 /// bitfields as `[u8; N]` arrays and generates `name()`/`set_name()` methods
-/// over them with this macro (src/nvim/bitfield.rs). The invocation is the
+/// over them with this macro (src/bitfield.rs). The invocation is the
 /// single source of truth for the C-side member layout, so parse it and emit
 /// the storage field as real C bitfield members.
 ///
@@ -368,7 +368,7 @@ fn is_opaque_struct(fields: &syn::FieldsNamed) -> bool {
 }
 
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
-    let is_types = rel.starts_with("src/nvim/types/");
+    let is_types = rel.starts_with("src/types/");
     let bitfields = bitfield_invocations(&ast);
     let add = |world: &mut World, name: String, kind: Kind, align: Option<u64>| {
         let def = Def {

@@ -28,8 +28,9 @@ cargo build --release --quiet --manifest-path "$root/tools/ffigen/Cargo.toml"
 
 echo "generating unit-test cdefs from the crate" >&2
 # --root is the crate dir, not the repo root: ffigen walks <root>/src and
-# derives its keys ("src/nvim/...") relative to it, which keeps the cimport
-# paths in the unit specs stable across the crates/nvim move.
+# derives its keys ("src/...") relative to it. Those keys are internal — the
+# cimport paths the unit specs pass are labels testutil rewrites away — so
+# they stayed stable across the crates/nvim move and the src/nvim flatten.
 "$root/tools/ffigen/target/release/ffigen" \
   --root "$root/crates/nvim" \
   --deny "$root/tools/ffigen/deny.txt" \

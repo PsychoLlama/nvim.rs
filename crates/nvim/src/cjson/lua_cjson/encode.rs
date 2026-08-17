@@ -19,9 +19,9 @@ use super::{
     Config, ENCODE_MAX_DEPTH, NUMBER_PRECISION, SPARSE_RATIO, SPARSE_SAFE, array_key,
     empty_array_key, fetch_config, push_registry, unreachable_after_raise,
 };
-use crate::src::cjson::fpconv::append_g_fmt;
-use crate::src::nvim::lua::executor::{nlua_get_empty_dict_ref, nlua_get_nil_ref, nlua_pushref};
-use crate::src::nvim::lua::ffi::{
+use crate::cjson::fpconv::append_g_fmt;
+use crate::lua::executor::{nlua_get_empty_dict_ref, nlua_get_nil_ref, nlua_pushref};
+use crate::lua::ffi::{
     LUA_TBOOLEAN, LUA_TLIGHTUSERDATA, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE,
     LUA_TUSERDATA, lua_call, lua_checkstack, lua_getfield, lua_getmetatable, lua_gettable,
     lua_gettop, lua_next, lua_objlen, lua_pop, lua_pushinteger, lua_pushlstring, lua_pushnil,
@@ -29,7 +29,7 @@ use crate::src::nvim::lua::ffi::{
     lua_tointeger, lua_tolstring, lua_tonumber, lua_touserdata, lua_type, lua_typename,
     luaL_checklstring, luaL_checktype, luaL_error, luaL_getmetafield,
 };
-use crate::src::nvim::types::{lua_State, size_t};
+use crate::types::{lua_State, size_t};
 
 /// The JSON escape for `byte`, or `None` to emit it unchanged.
 ///

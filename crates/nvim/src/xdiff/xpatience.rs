@@ -18,9 +18,9 @@
 
 #![forbid(unsafe_code)]
 
-use crate::src::xdiff::xprepare::prepare_env;
-use crate::src::xdiff::xtypes::{Block, Env, Params, XdResult};
-use crate::src::xdiff::xutils::fall_back_diff;
+use crate::xdiff::xprepare::prepare_env;
+use crate::xdiff::xtypes::{Block, Env, Params, XdResult};
+use crate::xdiff::xutils::fall_back_diff;
 
 /// `line2` for a line that is not unique in one of the two files.
 const NON_UNIQUE: u64 = u64::MAX;
