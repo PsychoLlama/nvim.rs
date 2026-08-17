@@ -776,6 +776,7 @@ pub(crate) fn prep_redo(
 /// As [`prep_redo`], with a second count between the second and third
 /// command characters -- which is what `z<n><CR>` and the `[count]` forms of
 /// the `Z` commands need.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn prep_redo_num2(
     regname: c_int,
     num1: c_int,

@@ -113,6 +113,7 @@ pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *co
 ///
 /// # Safety
 /// `lp` must be valid with `ll_tv` a Dict; the rest as `get_lval`'s.
+#[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn get_lval_dict_item(
     lp: *mut lval_T,
     name: *mut c_char,

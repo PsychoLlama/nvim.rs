@@ -869,7 +869,7 @@
     "crates/nvim/src/nvim/spellsuggest/walk/rep.rs": {"unsafe_lines": 86},
     "crates/nvim/src/nvim/spellsuggest/walk/split.rs": {"unsafe_lines": 178},
     "crates/nvim/src/nvim/spellsuggest/walk/transpose.rs": {"unsafe_lines": 161},
-    "crates/nvim/src/nvim/state.rs": {"cell_ptr": 12, "unsafe_lines": 357},
+    "crates/nvim/src/nvim/state.rs": {"cell_ptr": 12, "unsafe_lines": 355},
     "crates/nvim/src/nvim/statusline.rs": {"unsafe_lines": 45},
     "crates/nvim/src/nvim/statusline/custom.rs": {"cell_ptr": 3, "unsafe_lines": 48},
     "crates/nvim/src/nvim/statusline/status.rs": {"cell_ptr": 1, "unsafe_lines": 14},

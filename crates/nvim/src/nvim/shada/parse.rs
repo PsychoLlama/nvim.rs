@@ -34,7 +34,7 @@ pub(crate) unsafe fn parse_known(
 
         // How many elements of an array entry are left for `extra` once the
         // ones this Nvim understands have been taken.
-        let trailing = (|| match header.type_u64 as ShadaEntryType {
+        let trailing = match header.type_u64 as ShadaEntryType {
             kSDItemHeader => {
                 // The header is written for the benefit of anyone reading
                 // the file by hand; Nvim has never read it back.
@@ -52,7 +52,7 @@ pub(crate) unsafe fn parse_known(
             kSDItemSubString => parse_sub_string(entry, pos, cursor),
             kSDItemBufferList => parse_buffer_list(entry, pos, cursor, &mut error),
             _ => unreachable!("shada: entry type {} is not read here", header.type_u64),
-        })();
+        };
 
         let finish = trailing.and_then(|trailing| {
             for _ in 0..trailing {

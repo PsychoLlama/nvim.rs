@@ -1,35 +1,3 @@
 {
-  "files": {
-    "crates/nvim/src/nvim/base64.rs": 2,
-    "crates/nvim/src/nvim/drawscreen/mode.rs": 1,
-    "crates/nvim/src/nvim/drawscreen/winupdate.rs": 1,
-    "crates/nvim/src/nvim/eval/callback.rs": 1,
-    "crates/nvim/src/nvim/eval/expr/index.rs": 1,
-    "crates/nvim/src/nvim/eval/lval.rs": 1,
-    "crates/nvim/src/nvim/ex_docmd/cmdline.rs": 1,
-    "crates/nvim/src/nvim/main/remote.rs": 1,
-    "crates/nvim/src/nvim/memfile.rs": 1,
-    "crates/nvim/src/nvim/memline/block0.rs": 1,
-    "crates/nvim/src/nvim/memory.rs": 2,
-    "crates/nvim/src/nvim/normal/dispatch.rs": 1,
-    "crates/nvim/src/nvim/normal/edit.rs": 1,
-    "crates/nvim/src/nvim/normal/gcmd.rs": 1,
-    "crates/nvim/src/nvim/normal/ident.rs": 1,
-    "crates/nvim/src/nvim/normal/misc.rs": 1,
-    "crates/nvim/src/nvim/normal/motion.rs": 1,
-    "crates/nvim/src/nvim/optionstr/check.rs": 1,
-    "crates/nvim/src/nvim/path.rs": 1,
-    "crates/nvim/src/nvim/quickfix/parse.rs": 1,
-    "crates/nvim/src/nvim/quickfix/read.rs": 1,
-    "crates/nvim/src/nvim/regexp/nfa/list.rs": 1,
-    "crates/nvim/src/nvim/shada/parse.rs": 1,
-    "crates/nvim/src/nvim/shada/read.rs": 1,
-    "crates/nvim/src/nvim/sign.rs": 1,
-    "crates/nvim/src/nvim/spellsuggest/collect.rs": 2,
-    "crates/nvim/src/nvim/state.rs": 1,
-    "crates/nvim/src/nvim/tui/cursor.rs": 1,
-    "crates/nvim/src/nvim/tui/paint.rs": 1,
-    "crates/nvim/src/nvim/ui/sinks.rs": 2,
-    "crates/nvim/tests/unit/memory.rs": 2
-  }
+  "files": {}
 }

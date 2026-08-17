@@ -133,10 +133,8 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
 pub unsafe extern "C" fn state_handle_k_event() {
     loop {
         let mut event: Event = multiqueue_get((*main_loop.ptr()).events);
-        if event.handler.is_some() {
-            event.handler.expect("non-null function pointer")(
-                &raw mut event.argv as *mut *mut ::core::ffi::c_void,
-            );
+        if let Some(handler) = event.handler {
+            handler(&raw mut event.argv as *mut *mut ::core::ffi::c_void);
         }
         if multiqueue_empty((*main_loop.ptr()).events) {
             return;

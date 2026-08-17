@@ -96,6 +96,8 @@ def render(warnings):
         for file, count in sorted(warnings.items())
         if count > 0
     ]
+    if not entries:
+        return '{\n  "files": {}\n}\n'
     body = ",\n".join(entries)
     return f'{{\n  "files": {{\n{body}\n  }}\n}}\n'
 

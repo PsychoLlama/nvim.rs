@@ -416,7 +416,7 @@ pub unsafe fn score_comp_sal(su: *mut suginfo_T) {
         // Use the sound folding of the first language that has any.
         let Some(lp) = window_langs()
             .iter()
-            .find(|lp| (*(*lp).lp_slang).sl_sal.ga_len > 0)
+            .find(|lp| (*lp.lp_slang).sl_sal.ga_len > 0)
         else {
             return;
         };
@@ -468,7 +468,7 @@ pub unsafe fn score_combine(su: *mut suginfo_T) {
         // Give the edit-distance list a sound-a-like score.
         if let Some(lp) = window_langs()
             .iter()
-            .find(|lp| (*(*lp).lp_slang).sl_sal.ga_len > 0)
+            .find(|lp| (*lp.lp_slang).sl_sal.ga_len > 0)
         {
             slang = lp.lp_slang;
             spell_soundfold(

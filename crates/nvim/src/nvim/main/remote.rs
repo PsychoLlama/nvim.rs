@@ -101,7 +101,7 @@ unsafe fn bad_reply_type(key: &CStr) -> ! {
 }
 
 /// Read one key of the reply dict, checking its type first.
-unsafe fn field<'a>(dict: &'a Dict, index: size_t) -> (&'a CStr, &'a Object) {
+unsafe fn field(dict: &Dict, index: size_t) -> (&CStr, &Object) {
     // SAFETY: `index` is below `dict.size`, so the pair is in the items array
     // and its key is a NUL-terminated string.
     unsafe {

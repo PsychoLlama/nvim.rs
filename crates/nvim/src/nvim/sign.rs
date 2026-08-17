@@ -170,6 +170,7 @@ impl DerefMut for Sign {
 /// `msg_puts`. Deleting swap-removes, which is what the `Map(cstr_t, ptr_t)`
 /// upstream uses does to its dense key array — and that order is observable
 /// in `:sign list`, `sign_getdefined()` and `:sign` completion.
+#[allow(clippy::vec_box)] // the box keeps the address stable; see above
 static SIGNS: GlobalCell<Vec<Box<SignEntry>>> = GlobalCell::new(Vec::new());
 
 /// The namespaces `:sign place group=` has created, in creation order — the

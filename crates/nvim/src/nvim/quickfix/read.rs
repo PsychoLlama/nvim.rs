@@ -471,6 +471,7 @@ static EFM_CACHE: GlobalCell<Option<(Vec<u8>, Efm)>> = GlobalCell::new(None);
 ///
 /// `qi` must be a live stack; the other pointers must be null or live, and
 /// the strings NUL-terminated.
+#[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn qf_init_ext(
     qi: *mut qf_info_T,
     mut qf_idx: c_int,

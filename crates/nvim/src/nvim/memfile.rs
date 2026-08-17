@@ -200,6 +200,10 @@ impl Hasher for BlockNrHasher {
 /// are observable, so this is an index map rather than a plain [`HashMap`].
 #[derive(Default)]
 struct BlockTable {
+    // Boxed because a block's address escapes: every caller works through the
+    // `*mut bhdr_T` this hands out, and those must survive the vector growing
+    // or swapping entries around.
+    #[allow(clippy::vec_box)]
     blocks: Vec<Box<bhdr_T>>,
     index: HashMap<blocknr_T, u32, BuildHasherDefault<BlockNrHasher>>,
 }

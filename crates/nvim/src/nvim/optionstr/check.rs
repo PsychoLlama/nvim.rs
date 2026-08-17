@@ -358,10 +358,7 @@ pub unsafe extern "C" fn check_stl_option(s: *mut c_char) -> *const c_char {
     let mut rest = unsafe { CStr::from_ptr(s) }.to_bytes();
     let mut groupdepth: c_int = 0;
 
-    loop {
-        let Some(at) = rest.iter().position(|&b| b == b'%') else {
-            break;
-        };
+    while let Some(at) = rest.iter().position(|&b| b == b'%') {
         // Past the `%`. The value may end here, in which case the item is
         // the terminator and the membership test below rejects it.
         rest = &rest[at + 1..];

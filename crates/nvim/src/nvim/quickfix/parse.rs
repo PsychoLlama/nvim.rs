@@ -201,6 +201,7 @@ impl Fields {
     ///
     /// `regmatch`'s submatch pointers must point into `linebuf`, which must
     /// be writable, NUL-terminated and `linelen` bytes long.
+    #[allow(clippy::too_many_arguments)]
     unsafe fn take_match(
         &mut self,
         linebuf: *mut c_char,

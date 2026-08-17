@@ -226,6 +226,7 @@ pub unsafe extern "C" fn f_slice(
 /// # Safety
 /// `rettv` must be valid; `var1`/`var2` null or valid; `key` null or
 /// `keylen` readable bytes (or NUL-terminated when `keylen` is negative).
+#[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn eval_index_inner(
     rettv: *mut typval_T,
     is_range: bool,

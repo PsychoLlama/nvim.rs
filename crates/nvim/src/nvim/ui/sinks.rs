@@ -117,6 +117,7 @@ macro_rules! broadcast {
             $(, via $comp:expr)?;
     )*) => {$(
         $(#[$attr])*
+        #[allow(clippy::too_many_arguments)]
         pub fn $sink($($arg: $ty),*) {
             $( $comp; )?
             broadcast_to(Reach::$reach, $name, |ui| unsafe {
@@ -211,6 +212,7 @@ macro_rules! event {
         fn $sink:ident($($arg:ident: $ty:ident),* $(,)?) => $name:literal;
     )*) => {$(
         $(#[$attr])*
+        #[allow(clippy::too_many_arguments)]
         pub fn $sink($($arg: $ty),*) {
             static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
             if ENTERED.get() {
