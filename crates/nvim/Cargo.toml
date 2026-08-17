@@ -13,7 +13,11 @@ include = ["**/*.rs", "Cargo.toml", "build.rs"]
 [lib]
 name = "c2rust_neovim"
 path = "src/lib.rs"
-crate-type = ["staticlib", "rlib"]
+# rlib only. The `nvim` binary links this as a Rust library, and the unit
+# tests reach the editor's `#[unsafe(no_mangle)]` symbols through the binary
+# itself (`dlsym(RTLD_DEFAULT)`, courtesy of the `--export-dynamic` build.rs
+# adds). Nothing has ever linked a `libc2rust_neovim.a`.
+crate-type = ["rlib"]
 
 # Runnable `nvim` executable. `autobins = false` above disables bin
 # auto-discovery, so the entry point is declared explicitly here; it just
