@@ -69,7 +69,7 @@ describe('vim.iter perf', function()
 
   describe('list like table', function()
     describe('simple map', function()
-      reset()
+      before_each(reset)
 
       it('vim.iter', function()
         local function f(t)
@@ -96,7 +96,7 @@ describe('vim.iter perf', function()
     end)
 
     describe('filter, map, skip, reverse', function()
-      reset()
+      before_each(reset)
 
       it('vim.iter', function()
         local function f(t)
@@ -143,7 +143,7 @@ describe('vim.iter perf', function()
 
   describe('iterator', function()
     describe('simple map', function()
-      reset()
+      before_each(reset)
       it('vim.iter', function()
         local function f(t)
           return vim
@@ -169,7 +169,7 @@ describe('vim.iter perf', function()
     end)
 
     describe('multiple stages', function()
-      reset()
+      before_each(reset)
       it('vim.iter', function()
         local function f(t)
           return vim
