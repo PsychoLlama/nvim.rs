@@ -19,7 +19,6 @@
 use core::ptr;
 use std::ffi::CString;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::Ctrl_C;
 use crate::menu::{Menu, is_separator};

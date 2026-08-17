@@ -10,7 +10,6 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
-#[allow(unused_imports)]
 use crate::semsg_multiline_c;
 use crate::types::{MB_MAXBYTES, kErrorTypeNone};
 use core::ffi::{c_char, c_int};

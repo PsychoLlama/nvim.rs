@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::api::private::helpers::{array_add, dict_put};
 
 pub unsafe extern "C" fn virt_text_to_array(

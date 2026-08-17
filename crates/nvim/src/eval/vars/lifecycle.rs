@@ -9,7 +9,6 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at

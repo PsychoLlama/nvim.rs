@@ -17,7 +17,6 @@ use core::ffi::{c_char, c_int};
 
 use crate::types::{CMOD_LOCKMARKS, event_T};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// How a write was asked for. Chooses which autocommand events fire, and is

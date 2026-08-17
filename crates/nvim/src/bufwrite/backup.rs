@@ -18,7 +18,6 @@ use crate::os::uv_error::UV_ENOTSUP;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::highlight_group::HLF_E;
 

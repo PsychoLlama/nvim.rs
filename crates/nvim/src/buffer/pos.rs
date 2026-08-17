@@ -21,7 +21,6 @@ use core::ffi::c_void;
 use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::fold::{clearFolding, cloneFoldGrowArray, deleteFoldRecurse};
 use crate::global_cell::GlobalCell;

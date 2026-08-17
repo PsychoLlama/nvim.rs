@@ -21,7 +21,6 @@ use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
     CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE,
 };
-#[allow(unused_imports)]
 use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;

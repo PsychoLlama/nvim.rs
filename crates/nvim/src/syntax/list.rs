@@ -10,7 +10,6 @@
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Everything is listed in the "directory" highlight, as `:highlight` does.

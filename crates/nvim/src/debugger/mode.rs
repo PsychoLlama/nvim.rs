@@ -12,7 +12,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and

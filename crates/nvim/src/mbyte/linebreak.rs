@@ -8,8 +8,6 @@
 
 #![forbid(unsafe_code)]
 
-#[allow(unused_imports)]
-use super::*;
 use core::ffi::c_int;
 
 /// Punctuation that may not start a line, so no break is allowed *before* it.

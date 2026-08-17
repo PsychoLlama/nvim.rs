@@ -7,7 +7,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::types::builders::{ArrayBuf, DictBuf, static_cstring};
 use crate::types::kErrorTypeNone;

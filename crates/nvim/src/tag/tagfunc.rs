@@ -7,7 +7,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::hashtab::hash_removed;
 use crate::types::{

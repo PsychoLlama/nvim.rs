@@ -9,7 +9,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::path::ExpandFlags;
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list

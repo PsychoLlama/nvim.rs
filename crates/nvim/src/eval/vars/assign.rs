@@ -12,7 +12,6 @@ use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The compound assignment operators, as they appear before the `=`.

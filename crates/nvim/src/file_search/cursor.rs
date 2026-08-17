@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 use crate::types::VV_FNAME;
 use core::ffi::{c_char, c_int, c_long};

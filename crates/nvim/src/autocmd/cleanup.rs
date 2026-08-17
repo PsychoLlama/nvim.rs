@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::smsg_c;
 
 /// Mark one autocommand deleted: free everything it owns and null its

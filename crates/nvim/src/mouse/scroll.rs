@@ -12,7 +12,6 @@
 
 use core::ffi::CStr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::buffer::bt_prompt;
 use crate::drawscreen::redraw_statuslines;

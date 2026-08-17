@@ -10,7 +10,6 @@
 use super::*;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
-#[allow(unused_imports)]
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;

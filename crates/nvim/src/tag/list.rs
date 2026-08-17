@@ -7,7 +7,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};

@@ -10,7 +10,6 @@
 use super::*;
 use crate::path::ExpandFlags;
 use crate::regexp::{RE_MAGIC, RE_STRING};
-#[allow(unused_imports)]
 use crate::semsg_c;
 use crate::types::{CMD_helpgrep, CMD_lhelpgrep};
 use core::ffi::{c_char, c_int};

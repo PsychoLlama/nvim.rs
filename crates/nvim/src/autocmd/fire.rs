@@ -19,7 +19,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// A zeroed `sctx_T`; `getnextac` fills `patcmd.script_ctx` in from the

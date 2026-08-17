@@ -13,7 +13,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Give `fp` the funccall that is running as its scope, so that the locals it

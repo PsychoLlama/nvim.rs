@@ -9,7 +9,6 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
-#[allow(unused_imports)]
 use crate::semsg_c;
 use crate::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 

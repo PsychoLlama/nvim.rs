@@ -15,7 +15,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Build the function table, once, at startup.

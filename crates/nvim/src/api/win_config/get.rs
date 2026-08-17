@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::api::private::helpers::{array_add, set_key};
 
 unsafe extern "C" fn config_put_bordertext(

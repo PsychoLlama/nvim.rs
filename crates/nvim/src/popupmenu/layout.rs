@@ -13,7 +13,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// How many items the menu shows before `'pumheight'` has a say.

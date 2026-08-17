@@ -14,7 +14,6 @@
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Why a swap file yielded no block zero.

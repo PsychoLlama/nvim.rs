@@ -13,7 +13,6 @@
 
 use core::ffi::{CStr, c_char, c_int};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, win_scroll_lines};
 use crate::eval::typval::{

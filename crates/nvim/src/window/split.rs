@@ -18,7 +18,6 @@ use core::mem::size_of;
 use core::ptr;
 
 use super::arith::NextCurwin;
-#[allow(unused_imports)]
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
 use crate::fold::copyFoldingState;

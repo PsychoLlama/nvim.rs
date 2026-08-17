@@ -12,7 +12,6 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Read one argument name at `arg` and append a copy of it to `newargs`.

@@ -19,7 +19,6 @@ use core::ffi::{c_char, c_int};
 use crate::bufwrite::translate;
 use crate::memfile::mf_fname;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The file, open and ready to read.

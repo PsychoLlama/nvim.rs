@@ -10,7 +10,6 @@
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Where a `keyentry_T`'s trailing `keyword` array starts.

@@ -22,7 +22,6 @@
 
 use core::ffi::{c_char, c_int};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::api::private::helpers::{api_free_array, cstr_as_string};
 use crate::ascii::ascii_isdigit;

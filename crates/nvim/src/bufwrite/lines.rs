@@ -13,7 +13,6 @@
 
 use core::ffi::{CStr, c_char, c_int};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// What a pass over the lines produced.

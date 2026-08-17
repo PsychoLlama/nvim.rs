@@ -18,7 +18,6 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::arith::NextCurwin;
-#[allow(unused_imports)]
 use super::*;
 use crate::buffer::bt_help;
 use crate::decoration::decor_conceal_line;

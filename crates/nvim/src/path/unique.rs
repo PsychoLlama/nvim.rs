@@ -13,7 +13,6 @@
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::regexp::{RE_MAGIC, RE_STRING};
 

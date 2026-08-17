@@ -15,7 +15,6 @@
 
 use core::ffi::c_int;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::buffer::buf_spname;
 use crate::charset::trans_characters;

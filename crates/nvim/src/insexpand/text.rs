@@ -7,7 +7,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The completed text with the case of the originally typed text inferred.

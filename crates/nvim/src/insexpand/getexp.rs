@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::path::ExpandFlags;
 
 /// In large buffers a timeout can miss nearby matches, so the search starts

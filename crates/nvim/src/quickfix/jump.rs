@@ -13,7 +13,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::search::SEARCH_KEEP;
 use core::ffi::{c_char, c_int, c_uint};

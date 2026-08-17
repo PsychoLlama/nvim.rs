@@ -8,7 +8,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::drawscreen::windows_in_curtab;
 use crate::types::{kBoolVarFalse, kBoolVarTrue, kErrorTypeNone};

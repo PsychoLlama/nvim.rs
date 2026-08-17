@@ -14,7 +14,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::types::{
     CMD_caddbuffer, CMD_caddexpr, CMD_caddfile, CMD_cbuffer, CMD_cexpr, CMD_cfile, CMD_cgetbuffer,

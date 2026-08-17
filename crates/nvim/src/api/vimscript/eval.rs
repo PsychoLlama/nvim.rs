@@ -12,7 +12,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{c_char, c_int};

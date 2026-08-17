@@ -14,7 +14,6 @@
 
 use core::ffi::c_char;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor, update_screen};
 use crate::eval::call_vim_function;

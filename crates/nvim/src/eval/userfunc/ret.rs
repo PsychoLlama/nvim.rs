@@ -13,7 +13,6 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// One call recorded by `:defer`, to be made when the function returns.

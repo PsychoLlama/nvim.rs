@@ -7,7 +7,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};

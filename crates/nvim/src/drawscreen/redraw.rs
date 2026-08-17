@@ -13,7 +13,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Mark the title and icon for redraw if either of them uses statusline format.

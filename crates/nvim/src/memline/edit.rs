@@ -10,7 +10,6 @@
 
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// How a data block split came out, in the terms the pointer block above it

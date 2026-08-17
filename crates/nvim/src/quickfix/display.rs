@@ -13,7 +13,6 @@
 
 use super::*;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
-#[allow(unused_imports)]
 use crate::semsg_c;
 use crate::types::{CMD_colder, CMD_lolder};
 use core::ffi::{CStr, c_char, c_int};

@@ -16,7 +16,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::arglist::alist_unlink;
 use crate::autocmd::{block_autocmds, unblock_autocmds};

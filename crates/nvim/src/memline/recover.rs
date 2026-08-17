@@ -15,7 +15,6 @@
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::highlight_group::HLF_E;
 

@@ -15,7 +15,6 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{iter, ptr, slice};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds};
 use crate::cursor::{check_cursor_col, check_cursor_lnum};

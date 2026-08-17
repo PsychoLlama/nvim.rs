@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::keycodes::Ctrl_Z;
 use crate::options::OptWimFlags;

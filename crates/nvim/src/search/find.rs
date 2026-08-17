@@ -15,7 +15,6 @@ use crate::search::{
     SEARCH_COL, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, SEARCH_NOOF, SEARCH_PEEK,
     SEARCH_START,
 };
-#[allow(unused_imports)]
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;

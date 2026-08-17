@@ -12,7 +12,6 @@
 use core::ffi::c_int;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::is_aucmd_win;
 use crate::ex_cmds2::autowrite;

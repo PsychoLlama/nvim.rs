@@ -12,7 +12,6 @@
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::regexp::{RE_MAGIC, RE_NOBREAK};
 

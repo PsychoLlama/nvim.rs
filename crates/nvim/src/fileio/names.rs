@@ -16,7 +16,6 @@ use std::ffi::CStr;
 
 use crate::path::tail_index;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::regexp::RE_MAGIC;
 

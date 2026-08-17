@@ -14,7 +14,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,

@@ -21,7 +21,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::pos::MAXCOL;
 use crate::types::{kFalse, kTrue};

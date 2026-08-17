@@ -15,7 +15,6 @@
 use core::ffi::c_int;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::cursor::check_cursor;
 use crate::diff::diff_get_corresponding_line;

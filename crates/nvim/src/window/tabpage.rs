@@ -15,7 +15,6 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{
     EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_TABENTER, EVENT_TABLEAVE, EVENT_TABNEW,

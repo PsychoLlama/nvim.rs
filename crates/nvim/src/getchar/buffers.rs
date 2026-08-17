@@ -14,7 +14,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::{Ctrl_O, Ctrl_V, key_escape};
 use crate::types::MB_MAXBYTES;

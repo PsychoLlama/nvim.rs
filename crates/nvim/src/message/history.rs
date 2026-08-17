@@ -11,7 +11,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

@@ -12,7 +12,6 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The buffer [`cat_prefix_varname`] hands its answer back in, and its size.

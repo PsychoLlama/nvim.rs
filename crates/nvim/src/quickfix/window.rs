@@ -13,7 +13,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::buffer::find_buf;
 use crate::cursor::check_cursor;

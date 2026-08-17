@@ -9,8 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
-use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cmdexpand::WildOpts;
 use crate::keycodes::Ctrl_V;
 use crate::types::{
     CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_abbreviate, CMD_aboveleft, CMD_amenu, CMD_and,

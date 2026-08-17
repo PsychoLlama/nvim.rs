@@ -16,7 +16,6 @@ use crate::path::ExpandFlags;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::types::{CMOD_NOSWAPFILE, VV_SWAPCHOICE, VV_SWAPNAME};
 

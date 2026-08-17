@@ -9,7 +9,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_LUA};
 use core::ffi::{c_char, c_int};

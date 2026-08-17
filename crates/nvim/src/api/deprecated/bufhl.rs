@@ -8,7 +8,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 pub unsafe extern "C" fn nvim_buf_get_number(mut buffer: Buffer, mut err: *mut Error) -> Integer {

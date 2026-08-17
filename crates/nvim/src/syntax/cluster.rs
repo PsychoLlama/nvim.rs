@@ -10,7 +10,6 @@
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The ids of a cluster list, which is a NUL-terminated `int16_t` array.

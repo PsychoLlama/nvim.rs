@@ -17,7 +17,6 @@
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::api::private::helpers::{
     api_clear_error, api_set_error, cstr_as_string, find_window_by_handle, try_enter, try_leave,

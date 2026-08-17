@@ -9,7 +9,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 
 /// Allocate an empty blob.  The caller owns the reference count.

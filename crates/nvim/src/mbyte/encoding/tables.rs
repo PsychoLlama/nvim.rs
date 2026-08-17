@@ -17,10 +17,7 @@
 
 #![forbid(unsafe_code)]
 
-#[allow(unused_imports)]
 use super::*;
-#[allow(unused_imports)]
-use crate::mbyte::*;
 use core::ffi::{CStr, c_int};
 
 /// The DBCS codepages, as `enc_dbcs` numbered them. The `U` suffix is the

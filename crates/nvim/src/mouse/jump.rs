@@ -21,7 +21,6 @@
 use core::ffi::c_int;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;

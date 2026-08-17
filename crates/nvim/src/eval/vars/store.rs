@@ -17,7 +17,6 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Store `tv` in the variable `name`.

@@ -7,7 +7,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::api::private::helpers::has_key;
 
 pub unsafe extern "C" fn nvim_exec_autocmds(

@@ -14,7 +14,6 @@ use crate::undo::UNDO_HASH_SIZE;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::highlight_group::{HLF_E, HLF_W};
 use crate::types::{VV_FCS_CHOICE, VV_FCS_REASON, VV_WARNINGMSG};

@@ -12,7 +12,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::arith::{MinSize, NextCurwin};
-#[allow(unused_imports)]
 use super::*;
 use crate::main::{Rows, curwin, p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::option::set_option_value;

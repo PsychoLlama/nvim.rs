@@ -10,7 +10,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::types::{VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{CStr, c_char, c_int};

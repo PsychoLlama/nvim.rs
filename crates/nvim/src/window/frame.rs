@@ -15,7 +15,6 @@
 use core::ffi::c_int;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::main::{cmdline_win, first_tabpage, lastused_tabpage, p_sb, p_spr, tcl_flags};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};

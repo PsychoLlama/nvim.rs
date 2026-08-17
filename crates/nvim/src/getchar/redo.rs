@@ -8,7 +8,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
 use crate::types::MB_MAXBYTES;

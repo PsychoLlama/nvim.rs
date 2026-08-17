@@ -13,7 +13,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::swmsg_c;
 use core::ffi::{c_char, c_int};
 

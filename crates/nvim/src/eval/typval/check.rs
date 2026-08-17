@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 
 /// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`

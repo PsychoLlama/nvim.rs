@@ -11,7 +11,6 @@ use core::ffi::{c_char, c_int};
 
 use crate::bufwrite::translate;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Everything the closing message needs to know about how the read went.

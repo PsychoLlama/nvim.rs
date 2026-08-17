@@ -15,7 +15,6 @@
 
 use core::ffi::{c_char, c_int, c_uint};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The iconv descriptor value that means "no iconv".

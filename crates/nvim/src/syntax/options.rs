@@ -12,7 +12,6 @@
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::regexp::RE_MAGIC;
 

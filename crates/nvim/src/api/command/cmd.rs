@@ -34,7 +34,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::api::private::helpers::{array_add, has_key};
 use crate::types::FieldHashfn;

@@ -21,7 +21,6 @@
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;

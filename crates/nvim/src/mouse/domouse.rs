@@ -20,7 +20,6 @@
 
 use core::ops::{Deref, DerefMut};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::buffer::bt_quickfix;

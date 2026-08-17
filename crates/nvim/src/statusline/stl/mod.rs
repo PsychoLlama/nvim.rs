@@ -50,7 +50,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::buffer::{append_arg_number, bt_quickfix, buf_spname, calc_percentage, get_rel_pos};
 use crate::charset::{ptr2cells, trans_characters, vim_strsize};

@@ -24,7 +24,6 @@ use std::ffi::CStr;
 
 use crate::bufwrite::translate;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The iconv descriptor value that means "no iconv".

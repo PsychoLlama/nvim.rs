@@ -9,7 +9,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::KE_WILD;
 use crate::types::{VAR_STRING, VAR_UNKNOWN};

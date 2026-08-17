@@ -18,7 +18,6 @@
 
 use super::*;
 use crate::log::logmsg_c;
-#[allow(unused_imports)]
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::ptr;
 

@@ -17,7 +17,6 @@ use core::mem::size_of;
 use core::ptr;
 
 use super::arith::NextCurwin;
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{
     EVENT_WINRESIZED, EVENT_WINSCROLLED, apply_autocmds, event_ignored, has_event,

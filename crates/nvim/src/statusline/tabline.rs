@@ -20,7 +20,6 @@
 use core::ffi::{CStr, c_int};
 use core::iter;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::api::private::helpers::{arena_array, arena_dict, arena_string, cstr_as_string};
 use crate::charset::{ptr2cells, vim_strsize};

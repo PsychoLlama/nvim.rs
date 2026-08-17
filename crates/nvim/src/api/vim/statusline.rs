@@ -18,7 +18,6 @@
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::api::private::helpers::has_key;
 use crate::statusline::{

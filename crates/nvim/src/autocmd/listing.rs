@@ -9,7 +9,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// `:autocmd` with no event: list every event's autocommands.

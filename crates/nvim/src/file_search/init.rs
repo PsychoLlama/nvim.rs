@@ -12,7 +12,6 @@
 
 use super::*;
 use crate::os::libc::strtol;
-#[allow(unused_imports)]
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};

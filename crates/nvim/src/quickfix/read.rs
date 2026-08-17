@@ -15,7 +15,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 use crate::types::{CONV_NONE, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int};

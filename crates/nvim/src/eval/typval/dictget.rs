@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.

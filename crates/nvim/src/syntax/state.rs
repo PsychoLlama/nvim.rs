@@ -11,7 +11,6 @@
 
 use core::ffi::c_int;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Start syntax recognition for a line.

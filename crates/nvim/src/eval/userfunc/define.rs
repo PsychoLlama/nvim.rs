@@ -13,7 +13,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Whether the function table changed under a listing, which means the

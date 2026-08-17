@@ -21,7 +21,6 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::arglist::check_arg_idx;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_BUFWINENTER};

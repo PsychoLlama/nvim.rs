@@ -9,7 +9,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::file_search::Name;
 use crate::path::tail_index;

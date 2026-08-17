@@ -14,7 +14,6 @@
 
 use core::ffi::{c_char, c_int};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::pos::MAXCOL;
 

@@ -12,7 +12,6 @@
 
 use super::*;
 use crate::memory::xmalloc;
-#[allow(unused_imports)]
 use crate::path::ExpandFlags;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};

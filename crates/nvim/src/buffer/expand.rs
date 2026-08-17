@@ -15,7 +15,6 @@ use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::diff::diff_mode_buf;

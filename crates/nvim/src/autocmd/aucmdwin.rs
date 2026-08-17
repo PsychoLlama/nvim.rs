@@ -15,7 +15,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Whether `win` is one of the autocommand windows currently in use.

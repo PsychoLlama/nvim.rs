@@ -12,7 +12,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::file_search::Name;
 use crate::types::{CMD_cdo, CMD_cfdo, CMD_ldo, CMD_lfdo};

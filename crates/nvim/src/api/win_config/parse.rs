@@ -9,8 +9,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
-use crate::api::private::helpers::array_add;
 use crate::kvec::Kvec;
 
 unsafe extern "C" fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) -> bool {

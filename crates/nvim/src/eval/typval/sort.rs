@@ -17,7 +17,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 
 /// Compare two list items by the ordering `sortinfo` selected: numeric, float,

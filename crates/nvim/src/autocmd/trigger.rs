@@ -11,7 +11,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::smsg_c;
 
 /// A `multiqueue` event's argument vector with nothing in it.

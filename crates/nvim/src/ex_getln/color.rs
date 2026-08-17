@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::smsg_c;
 use crate::types::{VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
 

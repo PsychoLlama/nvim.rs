@@ -10,7 +10,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::types::{
     CMD_cNext, CMD_cNfile, CMD_cabove, CMD_cafter, CMD_cbefore, CMD_cbelow, CMD_cc, CMD_cdo,

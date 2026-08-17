@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,

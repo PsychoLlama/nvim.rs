@@ -11,7 +11,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::{semsg_c, smsg_c};
 
 /// A `vim_snprintf` into a fresh [`MSG_BUF_LEN`] buffer, kept as bytes so the

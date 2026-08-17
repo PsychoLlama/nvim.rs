@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 
 /// Resolve the first index of `l[n1:n2]`, clamping a negative one that fell

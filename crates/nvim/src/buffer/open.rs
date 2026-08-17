@@ -21,7 +21,6 @@
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{
     EVENT_BUFENTER, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, EVENT_BUFWINENTER, EVENT_STDINREADPOST,

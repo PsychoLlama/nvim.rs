@@ -20,7 +20,6 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{
     EVENT_BUFDELETE, EVENT_BUFHIDDEN, EVENT_BUFUNLOAD, EVENT_BUFWINLEAVE, EVENT_BUFWIPEOUT,

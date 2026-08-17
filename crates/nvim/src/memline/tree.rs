@@ -11,7 +11,6 @@
 use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// `ML_SIMPLE(action)` upstream. The actions that may be answered straight

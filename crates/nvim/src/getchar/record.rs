@@ -13,7 +13,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
 use crate::types::MB_MAXBYTES;

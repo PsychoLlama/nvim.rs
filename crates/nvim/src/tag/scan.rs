@@ -16,7 +16,6 @@ use crate::options::{
 use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
 use crate::types::CONV_NONE;
-#[allow(unused_imports)]
 use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

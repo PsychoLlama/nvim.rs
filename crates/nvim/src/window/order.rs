@@ -15,7 +15,6 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::UPD_NOT_VALID;

@@ -5,7 +5,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 pub unsafe extern "C" fn nvim_get_hl_by_id(

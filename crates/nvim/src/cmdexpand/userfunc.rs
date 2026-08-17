@@ -10,7 +10,6 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
-#[allow(unused_imports)]
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;

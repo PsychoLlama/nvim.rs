@@ -7,7 +7,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::{K_C_END, K_C_HOME, K_COMMAND, K_IGNORE, K_LUA, K_MOUSEMOVE, key_unescape};
 use crate::types::MB_MAXBYTES;

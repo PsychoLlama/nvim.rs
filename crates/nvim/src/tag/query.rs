@@ -9,7 +9,6 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-#[allow(unused_imports)]
 use crate::smsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;

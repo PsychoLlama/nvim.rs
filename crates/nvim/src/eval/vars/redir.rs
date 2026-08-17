@@ -11,7 +11,6 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Append the message in `gap` to `v:errors`, which the `assert_*` builtins

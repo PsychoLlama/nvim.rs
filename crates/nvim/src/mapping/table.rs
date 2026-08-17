@@ -16,7 +16,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;

@@ -9,7 +9,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The largest screen this port will allocate, so that `Rows * Columns` cannot

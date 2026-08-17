@@ -12,7 +12,6 @@
 
 use core::ffi::{c_char, c_int};
 
-#[allow(unused_imports)]
 use super::*;
 
 /// What [`find_endpos`] found.

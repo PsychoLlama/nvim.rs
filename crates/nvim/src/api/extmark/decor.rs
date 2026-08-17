@@ -10,8 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
-use crate::api::private::helpers::array_add;
 use crate::kvec::Kvec;
 
 pub unsafe extern "C" fn nvim_buf_del_extmark(

@@ -7,7 +7,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use core::ffi::{c_char, c_int};

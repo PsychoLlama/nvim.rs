@@ -11,7 +11,6 @@
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// An argument array for one call: `MAX_FUNC_ARGS` values plus the slot a

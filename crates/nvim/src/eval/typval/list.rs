@@ -9,7 +9,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 pub(crate) unsafe extern "C" fn tv_list_item_alloc() -> *mut listitem_T {

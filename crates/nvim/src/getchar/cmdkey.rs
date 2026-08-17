@@ -8,7 +8,6 @@
 
 use super::*;
 use crate::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
-#[allow(unused_imports)]
 use crate::semsg_multiline_c;
 use crate::types::kErrorTypeNone;
 use core::ffi::{c_char, c_int, c_void};

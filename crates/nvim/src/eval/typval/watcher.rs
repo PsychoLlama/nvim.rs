@@ -14,7 +14,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Free `watcher` and the callback and pattern it owns.

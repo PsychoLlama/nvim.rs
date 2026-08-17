@@ -18,7 +18,6 @@
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Where the last component of `name` starts — what [`path_tail`] answers,

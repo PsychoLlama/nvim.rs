@@ -16,7 +16,6 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::mem::size_of;
 use core::{ptr, slice};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;

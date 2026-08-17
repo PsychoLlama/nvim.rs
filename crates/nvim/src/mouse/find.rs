@@ -19,7 +19,6 @@
 use core::ffi::c_int;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::grid::get_win_by_grid_handle;
 use crate::main::{firstwin, msg_grid, msg_grid_pos, pum_grid, topframe};

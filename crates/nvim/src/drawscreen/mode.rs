@@ -13,7 +13,6 @@
 
 use core::ffi::CStr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::Ctrl_V;
 use crate::types::VV_ECHOSPACE;

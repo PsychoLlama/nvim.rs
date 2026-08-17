@@ -11,7 +11,6 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
-#[allow(unused_imports)]
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 

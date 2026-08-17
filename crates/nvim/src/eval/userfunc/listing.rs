@@ -13,7 +13,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Print the head of every function, or of the ones `regmatch` matches.

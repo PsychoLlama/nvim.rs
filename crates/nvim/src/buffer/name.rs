@@ -14,7 +14,6 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::arglist::check_arg_idx;
 use crate::drawscreen::status_redraw_all;

@@ -17,7 +17,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::smsg_c;
 
 /// Advance `apc` to the next autocommand whose pattern matches, updating

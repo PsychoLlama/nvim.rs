@@ -9,7 +9,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-#[allow(unused_imports)]
 use crate::semsg_c;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no

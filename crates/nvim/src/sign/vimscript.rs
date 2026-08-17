@@ -8,7 +8,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 

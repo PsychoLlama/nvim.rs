@@ -10,7 +10,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP};

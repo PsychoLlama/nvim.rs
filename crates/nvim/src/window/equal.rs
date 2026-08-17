@@ -14,7 +14,6 @@
 use core::ffi::c_int;
 
 use super::arith::NextCurwin;
-#[allow(unused_imports)]
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::main::{Columns, cmdline_row, p_ead, p_ls, p_wh, p_wiw, p_wmh, p_wmw};

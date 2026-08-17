@@ -18,7 +18,6 @@
 use core::ffi::{c_char, c_int};
 use core::slice;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::ascii::ascii_isspace;
 use crate::charset::try_getdigits;

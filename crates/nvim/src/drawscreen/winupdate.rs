@@ -13,7 +13,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::decoration::kVPosWinCol;
 use crate::keycodes::Ctrl_V;

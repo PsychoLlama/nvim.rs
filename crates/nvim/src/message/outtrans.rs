@@ -6,7 +6,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::{termcap_key, termcap_name};
 use crate::types::MB_MAXCHAR;

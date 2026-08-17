@@ -17,7 +17,6 @@
 use core::ffi::{c_char, c_int};
 
 use super::arith::NextCurwin;
-#[allow(unused_imports)]
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::main::{

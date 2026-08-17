@@ -10,7 +10,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 
 /// What [`get_sign_name`] should enumerate.

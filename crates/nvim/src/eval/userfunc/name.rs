@@ -14,7 +14,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of_val};
 use core::{ptr, slice};
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::KE_SNR;
 

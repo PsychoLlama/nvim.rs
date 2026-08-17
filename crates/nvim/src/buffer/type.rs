@@ -20,7 +20,6 @@
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::autocmd::{EVENT_BUFADD, EVENT_BUFDELETE, apply_autocmds};
 use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_notify};

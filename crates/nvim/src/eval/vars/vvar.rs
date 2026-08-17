@@ -15,7 +15,6 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the

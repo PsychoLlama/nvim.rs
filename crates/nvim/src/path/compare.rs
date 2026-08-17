@@ -14,7 +14,6 @@
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// Compare two file names, by identity where the file system can say and by

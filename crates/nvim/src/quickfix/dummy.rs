@@ -14,7 +14,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::types::{CMD_cd, CMD_lcd};
 use core::ffi::{c_char, c_int};

@@ -20,7 +20,6 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-#[allow(unused_imports)]
 use super::*;
 use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{trans_characters, vim_strsize};

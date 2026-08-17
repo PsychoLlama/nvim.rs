@@ -13,7 +13,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::types::{VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};

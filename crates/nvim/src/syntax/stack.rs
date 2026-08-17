@@ -20,7 +20,6 @@
 
 use core::ffi::c_int;
 
-#[allow(unused_imports)]
 use super::*;
 
 /// The state stack of one cached entry, whether it is short enough to live

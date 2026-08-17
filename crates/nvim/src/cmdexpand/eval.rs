@@ -10,7 +10,6 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
-#[allow(unused_imports)]
 use crate::semsg_c;
 use crate::types::{VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
