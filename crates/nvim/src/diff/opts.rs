@@ -12,8 +12,8 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::semsg_c;
-use ::core::ffi::{c_char, c_int};
-use ::std::ffi::CStr;
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
 
 /// The `'diffopt'` items that are nothing but a flag bit.
 ///

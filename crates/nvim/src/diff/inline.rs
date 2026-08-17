@@ -12,8 +12,8 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::c_int;
-use ::std::ffi::CStr;
+use core::ffi::c_int;
+use std::ffi::CStr;
 
 /// Throw away the cached inline changes of the block holding `lnum`.
 ///

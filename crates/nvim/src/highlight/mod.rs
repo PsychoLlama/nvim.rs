@@ -53,9 +53,9 @@ use crate::types::{
     Arena, Array, Dict, HlAttrs, HlEntry, HlKind, Integer, KeyValuePair, Object, RemoteUI, uint32_t,
 };
 use crate::ui::ui_call_hl_attr_define;
-use ::core::ffi::{CStr, c_char, c_int};
-use ::core::hash::BuildHasherDefault;
 use cache::AttrCache;
+use core::ffi::{CStr, c_char, c_int};
+use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::hash::DefaultHasher;

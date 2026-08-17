@@ -48,8 +48,8 @@ use crate::types::{
     virt_line,
 };
 use crate::winlayer::Win;
-use ::core::ffi::c_int;
-use ::core::{mem, ptr};
+use core::ffi::c_int;
+use core::{mem, ptr};
 
 mod dict;
 mod handles;

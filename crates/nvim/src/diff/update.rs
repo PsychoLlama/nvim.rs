@@ -14,8 +14,8 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::{c_char, c_int};
-use ::std::ffi::CStr;
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
 
 /// Release one side of a diff: the temp file if there is one, else the
 /// memory image.

@@ -10,8 +10,6 @@
 #![allow(unused_assignments)]
 #![allow(unused_mut)]
 
-extern crate libc;
-
 pub mod allocator;
 pub mod api;
 pub mod arabic;

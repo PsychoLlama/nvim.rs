@@ -17,7 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_char, c_int, c_ulong, c_void};
+use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
 

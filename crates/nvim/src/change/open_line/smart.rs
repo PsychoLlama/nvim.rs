@@ -14,9 +14,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 
-use super::super::*;
+use crate::change::*;
 
 /// Where the C comment that ends on this line began, as an indent.
 ///

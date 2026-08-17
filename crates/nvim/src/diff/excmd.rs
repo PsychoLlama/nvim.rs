@@ -16,7 +16,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 /// `:diffpatch {file}`: apply a patch to a copy of the current buffer and
 /// open the result beside it.

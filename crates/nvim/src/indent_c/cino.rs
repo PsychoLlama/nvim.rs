@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// Set every `b_ind_*` on `buf` from its 'cinoptions'.
 ///

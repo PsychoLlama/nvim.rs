@@ -23,8 +23,8 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::{c_char, c_int};
-use ::std::ffi::CStr;
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
 
 /// One entry per token written into the fake file, per buffer.
 type LineMap = [Vec<linemap_entry_T>; DB_COUNT as usize];

@@ -29,8 +29,8 @@ use crate::sign::describe_sign_text;
 use crate::types::{
     Arena, Array, DecorInline, DecorSignHighlight, DecorVirtText, Dict, Object, uint16_t, uint32_t,
 };
-use ::core::ffi::{CStr, c_char, c_int};
-use ::core::ptr;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
 /// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the
 /// marktree stores beside it.

@@ -3,7 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::CStr;
+use core::ffi::CStr;
 
 use super::*;
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};

@@ -22,8 +22,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_EINVAL, UV_UNKNOWN};
-use ::core::ffi::{CStr, c_char, c_int, c_void};
-use ::core::{ptr, slice};
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::{ptr, slice};
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::event::libuv::{

@@ -32,7 +32,7 @@ use crate::types::{
     KeySetLink, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
 };
-use ::core::ffi::{CStr, c_int};
+use core::ffi::{CStr, c_int};
 
 /// Most entries [`hlattrs2dict`] can write, and so the capacity every caller
 /// must hand it. Fourteen attribute bits, three RGB colours or two cterm
@@ -42,7 +42,7 @@ pub const HLATTRS_DICT_SIZE: size_t = 24;
 /// Bit positions in `KeyDict_highlight::is_set__highlight_`, which apigen
 /// numbers from the field order in `types::keysets`.
 mod key {
-    use ::core::ffi::c_int;
+    use core::ffi::c_int;
 
     pub const BG: c_int = 1;
     pub const FG: c_int = 2;

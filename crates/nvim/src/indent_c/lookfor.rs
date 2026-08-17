@@ -22,7 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::c_char;
+use core::ffi::c_char;
 
 impl BlockScan<'_> {
     /// A continuation line's amount: the remembered base, or one more level.

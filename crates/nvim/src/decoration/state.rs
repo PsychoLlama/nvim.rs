@@ -66,8 +66,8 @@ use crate::types::{
     MTPair, MTPos, VirtTextPos, buf_T, kFalse, kNone, kTrue, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win};
-use ::core::ffi::c_int;
-use ::core::slice;
+use core::ffi::c_int;
+use core::slice;
 
 /// `draw_col` sentinels, in the order the drawing code goes through them.
 /// A new virtual-position range starts at [`DRAW_COL_NEW`]; the column loop

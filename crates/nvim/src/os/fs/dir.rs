@@ -9,8 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::os::uv_error::UV_EOF;
-use ::core::ffi::{CStr, c_char, c_int};
-use ::core::ptr;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
 use super::{
     LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_STAT_T_INIT, fs_ok, fs_request,

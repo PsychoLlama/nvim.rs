@@ -14,10 +14,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 
-use super::super::*;
 use super::Put;
+use crate::register::*;
 
 impl Put {
     /// Splice `count` copies of the register's single line into the buffer at

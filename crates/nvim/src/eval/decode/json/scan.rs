@@ -10,11 +10,11 @@
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
-use super::super::decode_string;
 use super::stack::Decoder;
 use super::{BS, CAR, FF, NL, NUL, TAB};
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::vim_str2nr;
+use crate::eval::decode::decode_string;
 use crate::eval::string2float;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmalloc;

@@ -11,14 +11,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::super::{CPO_UNDO, ESC, EXPAND_NOTHING, IOSIZE, NUL, false_0};
 use super::exec::Sub;
 use super::subflags;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
 use crate::eval::typval::kCallbackNone;
-use crate::ex_cmds::print_line_no_prefix;
+use crate::ex_cmds::{CPO_UNDO, ESC, EXPAND_NOTHING, IOSIZE, NUL, false_0, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;

@@ -11,7 +11,7 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::semsg_c;
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 /// `do` and `dp`: get or put the diff block under the cursor.
 ///

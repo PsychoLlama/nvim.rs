@@ -19,9 +19,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::c_int;
-use ::core::iter;
-use ::core::ops::{Deref, DerefMut};
+use core::ffi::c_int;
+use core::iter;
+use core::ops::{Deref, DerefMut};
 
 use crate::buffer::buf_meta_total;
 use crate::decoration::{

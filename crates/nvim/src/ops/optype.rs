@@ -18,7 +18,7 @@ use crate::keycodes::{Ctrl_A, Ctrl_X};
 use crate::message::internal_error;
 use crate::types::{OP_NR_ADD, OP_NR_SUB, OP_REPLACE, OP_TILDE, OP_YANK, OpType};
 
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// The operator always works on whole lines, whatever the motion said.
 const OPF_LINES: u8 = 1;

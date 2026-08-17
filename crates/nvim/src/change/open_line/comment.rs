@@ -13,9 +13,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 
-use super::super::*;
+use crate::change::*;
 
 /// What the new line's leader should be built from.
 pub(crate) enum Repl {

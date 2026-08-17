@@ -20,7 +20,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 /// The line being indented, and where it sits.
 ///

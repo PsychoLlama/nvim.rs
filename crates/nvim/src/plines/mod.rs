@@ -38,7 +38,7 @@ use crate::types::{
 };
 use crate::winlayer::{Buf, Win};
 
-use ::core::ffi::{c_char, c_int, c_long};
+use core::ffi::{c_char, c_int, c_long};
 
 /// Cells a byte that is not part of a valid UTF-8 sequence occupies: it is
 /// shown as `<xx>`.

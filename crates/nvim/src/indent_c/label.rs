@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 /// The first non-white non-comment character after a `:` label in `l`, or
 /// null.

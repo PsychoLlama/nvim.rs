@@ -10,8 +10,8 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::{c_char, c_int};
-use ::std::ffi::CStr;
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
 
 /// Diff two one-line files and see whether the answer is recognisable.
 ///

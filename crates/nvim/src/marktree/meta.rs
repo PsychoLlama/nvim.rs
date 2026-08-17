@@ -107,12 +107,12 @@ pub fn filtered_key_flags(filter: &MetaCount) -> uint32_t {
 
 #[cfg(test)]
 mod tests {
-    use super::super::key::{
-        DECOR_HIGHLIGHT_INLINE_INIT, MT_FLAG_END, MT_FLAG_INVALID, kMTFilterSelect,
-    };
     use super::*;
     use crate::decoration::{
         kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
+    };
+    use crate::marktree::key::{
+        DECOR_HIGHLIGHT_INLINE_INIT, MT_FLAG_END, MT_FLAG_INVALID, kMTFilterSelect,
     };
     use crate::types::{DecorInlineData, MTPos, uint16_t};
 

@@ -9,7 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// Whether `dp` is short enough for the line-matching pass.
 ///

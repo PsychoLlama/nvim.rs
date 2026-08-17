@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 /// Which format an external diff answered in.
 ///

@@ -48,8 +48,8 @@ use crate::ui::{
     ui_line,
 };
 
-use ::core::ffi::{c_char, c_int, c_void};
-use ::core::mem::size_of;
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::size_of;
 
 // Split out for size; the rest of the tree calls all of it as `grid::*`.
 pub mod border;

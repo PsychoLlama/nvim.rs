@@ -16,7 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 /// The column `trypos.col` sits at once comments and strings before it are
 /// stepped over -- so a `{` inside a comment answers a column past its own,

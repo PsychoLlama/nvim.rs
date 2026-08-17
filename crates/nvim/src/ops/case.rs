@@ -16,7 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::smsg_c;
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 use super::*;
 

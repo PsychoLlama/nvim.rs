@@ -3,8 +3,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::CStr;
-use ::core::ptr;
+use core::ffi::CStr;
+use core::ptr;
 
 use super::*;
 use crate::api::private::helpers::cstr_as_string;

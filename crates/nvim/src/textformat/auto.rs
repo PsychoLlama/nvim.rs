@@ -8,7 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::change::{del_char, get_leader_len};

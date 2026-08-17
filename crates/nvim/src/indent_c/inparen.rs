@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// The indent for a line inside the unclosed paren at `our_paren_pos`.
 ///

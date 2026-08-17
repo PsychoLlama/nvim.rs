@@ -40,8 +40,8 @@ use crate::types::{
     win_T,
 };
 
-use ::core::ffi::{c_char, c_int};
-use ::core::ptr;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
 // The provider's own lifecycle state. `Disabled` is sticky (only a fresh
 // `nvim_set_decoration_provider` clears it); the other two are per-redraw.

@@ -17,7 +17,7 @@
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
-use super::super::FAIL;
+use crate::eval::decode::FAIL;
 use crate::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,

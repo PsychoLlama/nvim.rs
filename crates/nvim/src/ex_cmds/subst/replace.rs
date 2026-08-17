@@ -15,12 +15,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::super::{
-    CAR, LineData, NUL, OK, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
-};
 use super::exec::{Sub, SubArgs, save_undo_once};
 use super::{sub_grow_buf, subflags};
 use crate::change::{appended_lines, changed_bytes, deleted_lines};
+use crate::ex_cmds::{
+    CAR, LineData, NUL, OK, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
+};
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
 use crate::main::{curbuf, curwin, sandbox, sub_nsubs, textlock};

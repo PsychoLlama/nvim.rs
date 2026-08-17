@@ -12,15 +12,15 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::super::{
-    BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_SET_HELP, buf_autocmd,
-};
 use super::{Ecmd, EcmdArgs};
 use crate::autocmd::EVENT_BUFLEAVE;
 use crate::buffer::{
     buf_valid, buflist_altfpos, buflist_findfmark, buflist_findnr, buflist_new, bufref_valid,
     close_buffer, get_winopts, set_bufref,
+};
+use crate::ex_cmds::{
+    BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, ECMD_ADDBUF, ECMD_ALTBUF,
+    ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_SET_HELP, buf_autocmd,
 };
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};

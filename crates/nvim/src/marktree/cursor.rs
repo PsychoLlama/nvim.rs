@@ -30,8 +30,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::c_int;
-use ::core::marker::PhantomData;
+use core::ffi::c_int;
+use core::marker::PhantomData;
 
 use crate::marktree::iter::{
     marktree_itr_current, marktree_itr_get, marktree_itr_get_filter, marktree_itr_get_overlap,

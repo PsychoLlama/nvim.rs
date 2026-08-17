@@ -14,7 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 /// What the backwards scan should do after looking at one line.
 #[derive(PartialEq, Eq)]

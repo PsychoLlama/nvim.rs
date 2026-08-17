@@ -16,8 +16,8 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::semsg_c;
-use ::core::ffi::c_int;
-use ::std::ffi::CStr;
+use core::ffi::c_int;
+use std::ffi::CStr;
 
 /// Free one block, its cached inline changes included.
 pub(crate) unsafe fn clear_diffblock(dp: *mut diff_T) {

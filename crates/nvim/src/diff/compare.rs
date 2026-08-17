@@ -18,8 +18,8 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::{c_char, c_int};
-use ::std::ffi::CStr;
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
 
 /// Skip a run of spaces and tabs: `charset.rs`'s `skipwhite` over a slice.
 ///

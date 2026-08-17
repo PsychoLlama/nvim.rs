@@ -29,8 +29,8 @@ use crate::types::{
     virt_line, win_T,
 };
 use crate::winlayer::{Buf, Win};
-use ::core::ffi::{c_char, c_int};
-use ::core::{mem, ptr, slice};
+use core::ffi::{c_char, c_int};
+use core::{mem, ptr, slice};
 
 /// Marktree filters, indexed by `MetaIndex`: `kMTMetaLines` is 1 and
 /// `kMTMetaConcealLines` 4.

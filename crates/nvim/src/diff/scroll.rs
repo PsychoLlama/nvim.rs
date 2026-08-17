@@ -15,7 +15,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// The first block of the adjacent run containing `topline`, and the first
 /// block *after* that run.

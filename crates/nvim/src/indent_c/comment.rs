@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 /// Where the comment enclosing the cursor starts, bounded by 'cinoptions'
 /// `*N`.

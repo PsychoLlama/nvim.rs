@@ -8,7 +8,7 @@
 //! terminal codes above 0x80. The C had them as `static inline`s in a header,
 //! so the transpiler left a copy in every module that called one.
 
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// The string terminator, as the `int` the predicates take.
 const NUL: c_int = 0;

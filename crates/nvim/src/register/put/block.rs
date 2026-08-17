@@ -10,10 +10,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 
-use super::super::*;
 use super::Put;
+use crate::register::*;
 
 /// Where in one buffer line the block goes, measured by [`Put::blockwise`].
 struct Landing {

@@ -29,7 +29,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::highlight_changed;
 use crate::main::{curwin, normal_bg, normal_fg, normal_sp, p_bg};
 use crate::types::{HlAttrs, HlEntry, RgbValue, int16_t};
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// Blends of a blank cell over another, by `(back, front)`.
 static BLEND_THROUGH: GlobalCell<AttrCache> = GlobalCell::new(AttrCache::new());

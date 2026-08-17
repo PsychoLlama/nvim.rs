@@ -12,13 +12,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::super::{FAIL, INT_MAX, NUL, kSubIgnoreCase, kSubMatchCase, true_0};
 use super::{
     check_regexp_delim, old_sub, skip_substitute, sub_joining_lines, sub_parse_flags,
     sub_set_replacement, subflags,
 };
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{getdigits_int, skipwhite};
+use crate::ex_cmds::{FAIL, INT_MAX, NUL, kSubIgnoreCase, kSubMatchCase, true_0};
 use crate::ex_docmd::check_nextcmd;
 use crate::main::{
     curbuf, curwin, e_backslash, e_invcmd, e_modifiable, e_nopresub, e_trailing_arg,

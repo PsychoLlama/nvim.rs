@@ -18,9 +18,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::super::{
-    BL_FIX, BL_WHITE, LineData, NUL, PreviewLines, SID_NONE, SubResult, re_multiline,
-};
 use super::args::{SubSetup, parse_sub};
 use super::confirm::{Confirm, ask_confirm};
 use super::replace::{build_replacement, commit_line};
@@ -29,7 +26,9 @@ use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
 use crate::cursor::coladvance;
 use crate::edit::beginline;
-use crate::ex_cmds::print_line;
+use crate::ex_cmds::{
+    BL_FIX, BL_WHITE, LineData, NUL, PreviewLines, SID_NONE, SubResult, print_line, re_multiline,
+};
 use crate::ex_eval::aborting;
 use crate::fold::hasAnyFolding;
 use crate::global_cell::GlobalCell;

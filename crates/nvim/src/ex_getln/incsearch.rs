@@ -11,7 +11,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-use ::core::ffi::CStr;
+use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`
 /// are the command-line type character.

@@ -46,7 +46,7 @@ use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, HlAttrs, HlEntry, KeyDict_highlight, KeySetLink,
     LuaRetMode, NS, Object, kErrorTypeNone, kObjectTypeDict, size_t, win_T,
 };
-use ::core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;

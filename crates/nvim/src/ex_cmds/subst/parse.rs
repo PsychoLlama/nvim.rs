@@ -13,12 +13,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::super::{
+use super::do_sub_msg;
+use crate::cmdhist::add_to_history;
+use crate::ex_cmds::{
     _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, HIST_SEARCH, NUL, OK, kSubHonorOptions,
     kSubIgnoreCase, kSubMatchCase, subflags_T,
 };
-use super::do_sub_msg;
-use crate::cmdhist::add_to_history;
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curwin, p_gd, sub_nlines, sub_nsubs};

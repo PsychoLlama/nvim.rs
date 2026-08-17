@@ -30,8 +30,8 @@ use crate::types::{
     kFalse, kNone, kTrue, linenr_T, win_T,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
-use ::core::ffi::c_int;
-use ::core::{ptr, slice};
+use core::ffi::c_int;
+use core::{ptr, slice};
 
 /// Marktree filters: which meta counts a walk is allowed to descend into.
 /// The index is a `MetaIndex`; `kMTMetaSignText` is 3 and `kMTMetaSignHL` 2.

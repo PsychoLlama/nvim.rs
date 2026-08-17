@@ -16,7 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
 use crate::cursor::get_cursor_pos_ptr;

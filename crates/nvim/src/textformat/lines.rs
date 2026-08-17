@@ -7,7 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ::core::ffi::{c_char, c_int, c_long};
+use core::ffi::{c_char, c_int, c_long};
 
 use super::*;
 use crate::ascii::ascii_isspace;

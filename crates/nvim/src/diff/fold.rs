@@ -11,7 +11,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use ::core::ffi::c_int;
+use core::ffi::c_int;
 
 /// `linestatus`: the line is *changed* -- present in every buffer of the
 /// block, but not with the same text.

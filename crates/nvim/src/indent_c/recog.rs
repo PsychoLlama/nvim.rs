@@ -16,7 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use ::core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 /// Whether `line` starts with a word from 'cinwords' -- `if`, `else`,
 /// `while`, `do`, `for`, `switch` by default.

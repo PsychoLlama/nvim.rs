@@ -25,7 +25,6 @@ use core::ffi::{
 };
 use core::ptr;
 
-use super::super::vim_strchr;
 use super::spec::{
     MAX_ALLOWED_STRING_WIDTH, format_overflow_error, get_unsigned_int, parse_fmt_types, skip_to_arg,
 };
@@ -35,6 +34,7 @@ use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{xfree, xmemscan, xstrchrnul, xstrlcpy};
 use crate::message::emsg;
 use crate::os::libc::{gettext, log10, memmove, snprintf, strlen};
+use crate::strings::vim_strchr;
 use crate::types::{
     VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t,
 };
