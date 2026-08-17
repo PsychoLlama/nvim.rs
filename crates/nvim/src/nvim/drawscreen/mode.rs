@@ -168,7 +168,7 @@ pub unsafe fn showmode() -> c_int {
                                 c" (%s)".as_ptr(),
                                 keymap_name.as_ptr(),
                             );
-                            if plen > 0 && plen <= MAXPATHL - 1 {
+                            if plen > 0 && plen < MAXPATHL {
                                 msg_puts_hl(buf, hl_id, false);
                             }
                         }

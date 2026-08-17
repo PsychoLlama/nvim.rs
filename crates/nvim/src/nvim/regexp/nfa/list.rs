@@ -321,7 +321,7 @@ pub(crate) fn addstate_here(
         // even though the result is one shorter than the list is now, and
         // 'maxmempattern' is charged against that. Rotating in place needs no
         // room at all, but the limit has to fire where it used to.
-        if l.n + count - 1 >= l.slots && !l.grow() {
+        if l.n + count > l.slots && !l.grow() {
             return false;
         }
         // What was appended moves to `listidx`, pushing the threads between

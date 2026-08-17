@@ -228,7 +228,7 @@ pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, buf: *mut buf_T) {
         let fenc = (*buf).b_p_fenc;
         let n = strlen(fenc) as usize;
         let name = &mut (*b0p).b0_fname;
-        let fits = strlen(name.as_ptr()) as usize + n + 1 <= size;
+        let fits = strlen(name.as_ptr()) as usize + n < size;
         if fits {
             let at = size - n;
             core::ptr::copy_nonoverlapping(fenc, name[at..].as_mut_ptr(), n);

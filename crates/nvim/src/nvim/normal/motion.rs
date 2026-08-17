@@ -211,7 +211,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
         if (*cap).cmdchar == 'L' as c_int {
             validate_botline_win(win);
             (*win).w_cursor.lnum = (*win).w_botline - 1;
-            if (*cap).count1 as linenr_T - 1 >= (*win).w_cursor.lnum {
+            if (*cap).count1 as linenr_T > (*win).w_cursor.lnum {
                 (*win).w_cursor.lnum = 1;
             } else if win_lines_concealed(win) {
                 // A concealed line takes no screen row, so the count has to be

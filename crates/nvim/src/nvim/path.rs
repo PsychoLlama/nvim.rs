@@ -638,7 +638,7 @@ pub unsafe extern "C" fn path_guess_exepath(
                 if dir.is_null() || dir_len == 0 {
                     break;
                 }
-                if dir_len as usize + 1 <= size {
+                if (dir_len as usize) < size {
                     xmemcpyz(name.cast(), dir.cast(), dir_len);
                     xstrlcat(name, PATHSEPSTR.as_ptr(), size);
                     xstrlcat(name, argv0, size);

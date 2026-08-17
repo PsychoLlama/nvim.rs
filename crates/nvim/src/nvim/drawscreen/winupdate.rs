@@ -733,7 +733,7 @@ unsafe fn plan_visual_area(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) {
         rg.mid_end = (*wp).w_view_height;
         while idx < (*wp).w_lines_valid {
             let wl = (*wp).w_lines.add(idx as usize);
-            if (*wl).wl_valid && (*wl).wl_lnum >= to + 1 {
+            if (*wl).wl_valid && (*wl).wl_lnum > to {
                 // Only update to the first row of this line.
                 rg.mid_end = srow;
                 break;

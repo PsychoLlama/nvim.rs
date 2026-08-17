@@ -8,7 +8,7 @@ use crate::support::cstr;
 /// concatenate `src`, and return the resulting string. Asserts the returned
 /// length is the total length xstrlcat tried to create.
 fn concat(dst: &str, src: &str, dsize: usize) -> String {
-    assert!(dsize >= 1 + dst.len());
+    assert!(dsize > dst.len());
     let mut buf = vec![0u8; dsize];
     buf[..dst.len()].copy_from_slice(dst.as_bytes());
     let src = cstr(src);
@@ -20,7 +20,7 @@ fn concat(dst: &str, src: &str, dsize: usize) -> String {
 
 /// Mirror of `test_xstrlcat_overlap`: `src` points into `dst` at `src_idx`.
 fn concat_overlap(dst: &str, src_idx: usize, dsize: usize) -> String {
-    assert!(dsize >= 1 + dst.len());
+    assert!(dsize > dst.len());
     let mut buf = vec![0u8; dsize];
     buf[..dst.len()].copy_from_slice(dst.as_bytes());
     let ptr = buf.as_mut_ptr();

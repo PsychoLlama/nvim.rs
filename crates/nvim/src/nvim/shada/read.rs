@@ -517,7 +517,7 @@ unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
             (*win).w_jumplistlen += 1;
         }
         // Keep the cursor into the list pointing at the same jump.
-        if (*win).w_jumplistidx >= i && (*win).w_jumplistidx + 1 <= (*win).w_jumplistlen {
+        if (*win).w_jumplistidx >= i && (*win).w_jumplistidx < (*win).w_jumplistlen {
             (*win).w_jumplistidx += 1;
         }
     }

@@ -689,7 +689,7 @@ pub unsafe fn do_cmdline(
             // debugger.
             if (getline_equal(fgetline, cookie, Some(getsourceline))
                 || getline_equal(fgetline, cookie, Some(get_func_line)))
-                && ex_nesting_level.get() + 1 <= debug_break_level.get()
+                && ex_nesting_level.get() < debug_break_level.get()
             {
                 do_debug(gettext(
                     if getline_equal(fgetline, cookie, Some(getsourceline)) {
