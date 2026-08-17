@@ -63,7 +63,7 @@ const NL: c_char = b'\n' as c_char;
 const IOSIZE: usize = 1024 + 1;
 /// Offset of `uf_name` inside `ufunc_T`: hash keys point at the name, this
 /// recovers the function (the transpiled `HI2UF`, same constant as
-/// eval/userfunc.rs uses).
+/// eval/userfunc/ uses).
 const UF_NAME_OFFSET: isize = 240;
 
 /// Accumulated time the user kept the editor waiting (input, `:profile

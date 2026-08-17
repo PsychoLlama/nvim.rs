@@ -57,7 +57,7 @@
 # declared the functions in, which is the order the metadata lists them; the
 # emitters sort by name themselves, so nothing else depends on it.
 
-# api/autocmd.rs
+# api/autocmd/
 nvim_get_autocmds ret=ArrayOf(Dict) since=9
 nvim_create_autocmd since=9
 nvim_del_autocmd since=9
@@ -67,7 +67,7 @@ nvim_del_augroup_by_id since=9
 nvim_del_augroup_by_name since=9
 nvim_exec_autocmds since=9
 
-# api/buffer.rs
+# api/buffer/
 nvim_buf_line_count since=1
 nvim_buf_attach since=4
 nvim_buf_detach remote_only since=4
@@ -94,7 +94,7 @@ nvim_buf_get_mark ret=ArrayOf(Integer,_2) since=1
 nvim_buf_call lua_only since=7
 nvim__buf_stats since=-1
 
-# api/command.rs
+# api/command/
 nvim_parse_cmd fast since=10
 nvim_cmd since=10
 nvim_create_user_command since=9
@@ -104,7 +104,7 @@ nvim_buf_del_user_command since=9
 nvim_get_commands since=4
 nvim_buf_get_commands since=4
 
-# api/deprecated.rs
+# api/deprecated/
 nvim_exec ret_alloc since=7 deprecated_since=11
 nvim_command_output ret_alloc since=1 deprecated_since=7
 nvim_execute_lua remote_only since=3 deprecated_since=7
@@ -147,7 +147,7 @@ nvim_notify since=7 deprecated_since=13
 nvim_error_event remote_only since=-1
 nvim_ui_term_event remote_only since=12
 
-# api/extmark.rs
+# api/extmark/
 nvim_create_namespace since=5
 nvim_get_namespaces since=5
 nvim_buf_get_extmark_by_id since=7
@@ -177,7 +177,7 @@ nvim_tabpage_get_number since=1
 nvim_tabpage_is_valid since=1
 nvim_open_tabpage textlock_allow_cmdwin since=14
 
-# api/ui.rs
+# api/ui/
 nvim_ui_attach remote_only since=1
 ui_attach remote_only
 nvim_ui_set_focus remote_only since=11
@@ -189,7 +189,7 @@ nvim_ui_pum_set_height remote_only since=6
 nvim_ui_pum_set_bounds remote_only since=7
 nvim_ui_send since=14
 
-# api/vim.rs
+# api/vim/
 nvim_get_hl_id_by_name since=7
 nvim_get_hl since=11
 nvim_set_hl since=7
@@ -264,7 +264,7 @@ nvim_eval_statusline fast since=8
 nvim__complete_set since=-1
 nvim__redraw since=-1
 
-# api/vimscript.rs
+# api/vimscript/
 nvim_exec2 ret_alloc since=11
 nvim_command since=1
 nvim_eval since=1
@@ -272,7 +272,7 @@ nvim_call_function since=1
 nvim_call_dict_function since=4
 nvim_parse_expression fast since=4
 
-# api/win_config.rs
+# api/win_config/
 nvim_open_win textlock_allow_cmdwin since=6
 nvim_win_set_config since=6
 nvim_win_get_config since=6

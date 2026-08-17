@@ -6,7 +6,7 @@ use super::*;
 
 pub type MessagePackType = ::core::ffi::c_uint;
 pub type VimVarIndex = ::core::ffi::c_uint;
-/// Index of each `v:` variable in the `vimvars` table (eval/vars.rs).
+/// Index of each `v:` variable in the `vimvars` table (eval/vars/).
 pub const VV_COUNT: VimVarIndex = 0;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_PREVCOUNT: VimVarIndex = 2;

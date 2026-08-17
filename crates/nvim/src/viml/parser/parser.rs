@@ -2,7 +2,7 @@
 //! the cursor over those lines, and the highlight log they append to.
 //!
 //! `ParserState` and everything it embeds is `repr(C)` and frozen —
-//! `expressions.rs`, `api/vimscript.rs` and `ex_getln.rs` all read the fields
+//! `expressions.rs`, `api/vimscript/` and `ex_getln.rs` all read the fields
 //! directly, and the three collections inside it are `kvec_withinit_t`s
 //! (see `kvec::InitVec`).
 //!

@@ -2,7 +2,7 @@
 //! and the cmdline highlighter.
 //!
 //! This file holds only the shared vocabulary — the token and AST node types,
-//! and the integer enums the unit specs and `api/vimscript.rs` name. The work
+//! and the integer enums the unit specs and `api/vimscript/` name. The work
 //! is split across four submodules:
 //!
 //! - `lexer` scans one token at a time out of the parser's input.

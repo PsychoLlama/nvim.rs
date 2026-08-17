@@ -15,7 +15,7 @@
 //! stream's close callback and the child's exit callback both land in
 //! [`decref`] — and the last drop unlinks the child from `loop->children`
 //! and queues the caller's exit callback. Nothing here frees a `Proc`; the
-//! owner (a `Channel`, or a stack frame in `os/shell.rs`) does that.
+//! owner (a `Channel`, or a stack frame in `os/shell/`) does that.
 //!
 //! # Aliasing
 //!
@@ -359,7 +359,7 @@ unsafe fn remove_child(uv_loop: *mut Loop, proc: *mut Proc) {
 /// Queue `handler` on `queue`, or run it immediately if there is no queue.
 ///
 /// Upstream's `CREATE_EVENT`. A `Loop` without an event queue is one that is
-/// driven synchronously (`os/shell.rs` builds one), so the handler simply
+/// driven synchronously (`os/shell/` builds one), so the handler simply
 /// runs on the spot.
 unsafe fn create_event(
     queue: *mut MultiQueue,

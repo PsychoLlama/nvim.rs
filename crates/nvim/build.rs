@@ -195,7 +195,7 @@ fn compile_lua_modules(manifest: &Path, repo_root: &Path, deps_prefix: &Path) {
         assert!(
             EMBEDDED_LUA_MODULES.contains(&modname.as_str()),
             "{} is not in build.rs's EMBEDDED_LUA_MODULES; add it there and \
-             to builtin_modules in src/lua/executor.rs",
+             to builtin_modules in src/lua/executor/",
             path.display(),
         );
     }

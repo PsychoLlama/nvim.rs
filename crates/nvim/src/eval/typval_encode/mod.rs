@@ -2,8 +2,8 @@
 //! `eval/typval_encode.c.h`.
 //!
 //! Upstream spells one algorithm as a 132-line header that is `#include`d
-//! **seven** times — msgpack and JSON in `eval/encode.rs`, `string()` and
-//! `echo` beside them, Lua in `lua/converter.rs`, api `Object`s in
+//! **seven** times — msgpack and JSON in `eval/encode/`, `string()` and
+//! `echo` beside them, Lua in `lua/converter/`, api `Object`s in
 //! `api/private/converter.rs`, and the `nothing` sink `tv_clear` deep-frees
 //! with in `eval/typval/`.  Each includer defines a set of
 //! `TYPVAL_ENCODE_CONV_*` macros and the header emits the same walk around

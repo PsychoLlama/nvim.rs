@@ -1,7 +1,7 @@
 //! Mouse reporting: turning pointer motion and button events into the
 //! escape sequences the host asked for.
 //!
-//! Which events are reported at all is `vterm/state.rs`'s business (the
+//! Which events are reported at all is `vterm/state/`'s business (the
 //! `mouse_flags` it sets from DECSM 1000/1002/1003); this module only decides
 //! how a reportable event is spelled, in whichever of the four protocols the
 //! host selected.

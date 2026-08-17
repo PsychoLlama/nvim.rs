@@ -3,7 +3,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-// `src/main.rs` is the transpiled `main.c`, not a binary entry point (the real
+// `src/main/` is the transpiled `main.c`, not a binary entry point (the real
 // one is `src/bin/nvim.rs`). Rust flags any `mod main;` as a likely mistake;
 // the lint only listens at the crate root, not on the `mod` item itself.
 #![allow(special_module_name)]
@@ -13,29 +13,7 @@
 extern crate libc;
 
 pub mod allocator;
-pub mod api {
-    pub mod autocmd;
-    pub mod buffer;
-    pub mod command;
-    pub mod deprecated;
-    pub mod events;
-    pub mod extmark;
-    pub mod options;
-    pub mod private {
-        pub mod converter;
-        pub mod dispatch;
-        pub mod dispatch_wrappers;
-        pub mod helpers;
-        pub mod metadata;
-        pub mod validate;
-    } // mod private
-    pub mod tabpage;
-    pub mod ui;
-    pub mod vim;
-    pub mod vimscript;
-    pub mod win_config;
-    pub mod window;
-} // mod api
+pub mod api;
 pub mod arabic;
 pub mod arglist;
 pub mod ascii;
@@ -48,10 +26,7 @@ pub mod bufwrite;
 pub mod change;
 pub mod channel;
 pub mod charset;
-pub mod cjson {
-    pub mod fpconv;
-    pub mod lua_cjson;
-} // mod cjson
+pub mod cjson;
 pub mod clipboard;
 pub mod cmdexpand;
 pub mod cmdhist;
@@ -67,19 +42,7 @@ pub mod drawline;
 pub mod drawscreen;
 pub mod edit;
 pub mod eval;
-pub mod event {
-    pub mod libuv;
-    pub mod libuv_proc;
-    pub mod r#loop;
-    pub mod multiqueue;
-    pub mod proc;
-    pub mod rstream;
-    pub mod signal;
-    pub mod socket;
-    pub mod stream;
-    pub mod time;
-    pub mod wstream;
-} // mod event
+pub mod event;
 pub mod ex_cmds;
 pub mod ex_cmds2;
 pub mod ex_docmd;
@@ -108,18 +71,7 @@ pub mod keycodes;
 pub mod kvec;
 pub mod linematch;
 pub mod log;
-pub mod lua {
-    pub mod api_wrappers;
-    pub mod base64;
-    pub mod converter;
-    pub mod executor;
-    pub mod ffi;
-    pub mod secure;
-    pub mod spell;
-    pub mod stdlib;
-    pub mod treesitter;
-    pub mod xdiff;
-} // mod lua
+pub mod lua;
 pub mod main;
 pub mod map;
 pub mod map_glyph_cache;
@@ -137,42 +89,14 @@ pub mod message;
 pub mod message_fmt;
 pub mod mouse;
 pub mod r#move;
-pub mod mpack {
-    pub mod conv;
-    pub mod lmpack;
-    pub mod mpack_core;
-    pub mod object;
-    pub mod rpc;
-    pub mod token;
-} // mod mpack
-pub mod msgpack_rpc {
-    pub mod channel;
-    pub mod packer;
-    pub mod server;
-    pub mod unpacker;
-} // mod msgpack_rpc
+pub mod mpack;
+pub mod msgpack_rpc;
 pub mod normal;
 pub mod ops;
 pub mod option;
 pub mod options;
 pub mod optionstr;
-pub mod os {
-    pub mod dl;
-    pub mod env;
-    pub mod fileio;
-    pub mod fs;
-    pub mod input;
-    pub mod lang;
-    pub mod libc;
-    pub mod proc;
-    pub mod pty_proc_unix;
-    pub mod shell;
-    pub mod signal;
-    pub mod stdpaths;
-    pub mod time;
-    pub mod users;
-    pub mod uv_error;
-} // mod os
+pub mod os;
 pub mod path;
 pub mod plines;
 pub mod popupmenu;
@@ -198,33 +122,7 @@ pub mod terminal;
 pub mod testing;
 pub mod textformat;
 pub mod textobject;
-pub mod tui {
-    pub mod attrs;
-    pub mod cursor;
-    pub mod events;
-    pub mod input;
-    pub mod keys;
-    pub mod negotiate;
-    pub mod output;
-    pub mod paint;
-    pub mod quirks;
-    pub mod terminfo;
-    pub mod termkey {
-        pub mod csi;
-        pub mod driver_csi;
-        pub mod driver_ti;
-        pub mod format;
-        pub mod keynames;
-        pub mod keytables;
-        pub mod report;
-        pub mod termkey;
-        pub mod trie;
-        pub mod utf8;
-    } // mod termkey
-    pub mod tui;
-    pub mod ugrid;
-    pub mod unibi;
-} // mod tui
+pub mod tui;
 pub mod types;
 pub mod ui;
 pub mod ui_client;
@@ -233,42 +131,9 @@ pub mod undo;
 pub mod usercmd;
 pub mod utf8proc;
 pub mod version;
-pub mod viml {
-    pub mod parser {
-        pub mod expressions;
-        pub mod parser;
-    } // mod parser
-} // mod viml
-pub mod vterm {
-    pub mod cell;
-    pub mod color;
-    pub mod csi;
-    pub mod damage;
-    pub mod dcs;
-    pub mod encoding;
-    pub mod geometry;
-    pub mod keyboard;
-    pub mod mode;
-    pub mod mouse;
-    pub mod output;
-    pub mod parser;
-    pub mod pen;
-    pub mod screen;
-    pub mod selection;
-    pub mod state;
-    pub mod text;
-    pub mod vterm;
-} // mod vterm
+pub mod viml;
+pub mod vterm;
 pub mod window;
 pub mod winfloat;
 pub mod winlayer;
-pub mod xdiff {
-    pub mod ffi;
-    pub mod xdiffi;
-    pub mod xemit;
-    pub mod xhistogram;
-    pub mod xpatience;
-    pub mod xprepare;
-    pub mod xtypes;
-    pub mod xutils;
-} // mod xdiff
+pub mod xdiff;

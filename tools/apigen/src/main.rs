@@ -43,7 +43,7 @@
 // inputs cross-check: a spec entry naming a function that no longer exists,
 // or whose declared parameter count disagrees with the Rust signature, is a
 // hard error, and so is a handler-table layout that has drifted out from
-// under the row numbers eval/funcs.rs has baked in.
+// under the row numbers eval/funcs/ has baked in.
 //
 // Output is committed, rustfmt'd Rust: module directories whose roots hold
 // the shared support code and whose children hold the bulk, split when a file
@@ -445,7 +445,7 @@ fn api_sources(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
 /// Collect every `pub unsafe extern "C" fn` in `<root>/src/api/`.
 ///
 /// An API source file over the tree's 1,000-line cap is carved into
-/// `api/<stem>.rs` plus `api/<stem>/*.rs`, with the parent re-exporting its
+/// `api/<stem>/mod.rs` plus `api/<stem>/*.rs`, with the parent re-exporting its
 /// children, so an API function may sit in a child and still be reached as
 /// `api::<stem>::nvim_foo`. The module recorded here is therefore always the
 /// *top-level* stem, however deep the function itself lives: it is what the
@@ -629,7 +629,7 @@ fn collect_keysets(root: &Path) -> Result<Vec<Keyset>, String> {
 /// generated module's header), but the layout has to survive: a key's position
 /// is its `opt_index`, the bit it owns in the keyset's `is_set__*_` mask, and
 /// call sites all over the crate test those bits by number. The same is true
-/// of the handler table, whose indices `eval/funcs.rs` has baked in.
+/// of the handler table, whose indices `eval/funcs/` has baked in.
 ///
 /// Returns the permutation: `result[i]` is the index in `names` of the key
 /// that belongs at position `i`.
@@ -1535,7 +1535,7 @@ const TABLES_HEADER: &str = r#"//! The msgpack-RPC dispatch tables.
 //! What did survive from `hashy` is the *table order*, because it is not an
 //! implementation detail: a key's row index is its `opt_index`, the bit it
 //! owns in its keyset's `is_set__*_` mask, and a method's row index is what
-//! `eval/funcs.rs` stores to bind the builtin `nvim_*()` Vimscript functions.
+//! `eval/funcs/` stores to bind the builtin `nvim_*()` Vimscript functions.
 //! `tools/apigen`'s `table_order` reproduces the layout upstream's hash
 //! implied.
 
@@ -3029,7 +3029,7 @@ fn byte_strings(expr: &syn::Expr, out: &mut Vec<String>) {
 /// that open with an underscore are the tree's own debugging switches and stay
 /// unadvertised.
 fn read_ui_options(root: &Path) -> Result<Vec<String>, String> {
-    let path = root.join("src/main.rs");
+    let path = root.join("src/main/mod.rs");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut names = vec!["rgb".to_string()];
@@ -3058,7 +3058,7 @@ fn read_ui_options(root: &Path) -> Result<Vec<String>, String> {
 /// The three `NVIM_VERSION_*` constants, which are the tree's own statement of
 /// what version it is.
 fn read_version(root: &Path) -> Result<[i64; 3], String> {
-    let path = root.join("src/version.rs");
+    let path = root.join("src/version/mod.rs");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let wanted = [

@@ -3,7 +3,7 @@
 # `nvim --api-info` and `nvim_get_api_info()` return one msgpack dict with six
 # sections. tools/apigen builds the `functions` section from
 # tools/apigen/functions.txt plus the API signatures, and `ui_options` from
-# `ui_ext_names` in crates/nvim/src/main.rs. The rest have no source of
+# `ui_ext_names` in crates/nvim/src/main/mod.rs. The rest have no source of
 # truth in the tree, so they are spelled out here — the point is that one
 # audited encoder produces the blob and the committed bytes are checked, not
 # that every value gains a second home.
@@ -11,7 +11,7 @@
 # Lines are `<section> <name> [key=value ...]`.
 
 # The `version` dict, minus major/minor/patch, which are read from
-# NVIM_VERSION_MAJOR/MINOR/PATCH in crates/nvim/src/version.rs.
+# NVIM_VERSION_MAJOR/MINOR/PATCH in crates/nvim/src/version/mod.rs.
 #
 #   api_level       the API level this build implements
 #   api_compatible  the oldest API level it stays compatible with

@@ -20,7 +20,7 @@
 //! What did survive from `hashy` is the *table order*, because it is not an
 //! implementation detail: a key's row index is its `opt_index`, the bit it
 //! owns in its keyset's `is_set__*_` mask, and a method's row index is what
-//! `eval/funcs.rs` stores to bind the builtin `nvim_*()` Vimscript functions.
+//! `eval/funcs/` stores to bind the builtin `nvim_*()` Vimscript functions.
 //! `tools/apigen`'s `table_order` reproduces the layout upstream's hash
 //! implied.
 
