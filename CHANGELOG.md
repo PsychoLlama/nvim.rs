@@ -9,6 +9,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rebuilt the generator behind the API surface: the machine-written RPC and
+  Lua wrappers around every `nvim_*` function are emitted as ordinary Rust
+  with scoped cleanup instead of goto-shaped jumps, and the generator now
+  accepts API functions that return `Result`. Nothing observable changed.
 - Took the editor's own hand-written declarations of the C library out and
   put the `libc` crate in their place, leaving a small module for the
   handful of things that crate does not carry. Nothing observable changed.
