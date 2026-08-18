@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Regenerate the API dispatch layer from the Rust API signatures.
 #
-# tools/apigen parses crates/nvim/src/api/*.rs plus the attribute spec
-# (tools/apigen/functions.txt) and writes five module directories — the
+# tools/apigen syn-parses the `nvim_*` signatures under crates/nvim/src/api/
+# (bar private/) and the `KeyDict_*` structs in crates/nvim/src/types/
+# keysets.rs — no C headers are involved — plus the attribute spec
+# (tools/apigen/functions.txt), and writes five module directories — the
 # msgpack-RPC wrappers, the dispatch tables, the `vim.api` Lua binding, the
 # option table and the Vimscript builtin table — plus the packed api-info
-# metadata. Each directory is a root
-# holding the shared support code and one child per API source file. Unlike
+# metadata. Each directory is a root holding the shared support code and one
+# child per API source file. Unlike
 # the unit-test cdefs, the output is committed: it is ordinary crate source
 # that has to compile, be formatted and be measured by the ratchet like
 # everything else.

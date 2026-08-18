@@ -4,8 +4,11 @@
 // Upstream generated `dispatch_wrappers.generated.h` and
 // `keysets_defs.generated.h` by parsing the C headers under src/api/
 // (src/gen/gen_api_dispatch.lua at tag v0.12.4). The transpile froze that
-// output into one 27k-line Rust module. This tool takes the job back, from
-// the two real sources of truth in the crate:
+// output into one 27k-line Rust module. This tool takes the job back. It
+// reads no C: the sources of truth are the crate's own Rust signatures
+// (syn-parsed) and the vendored `*.lua` metadata upstream fed to its own
+// generators, plus two spec files for what neither of those can say. What it
+// writes:
 //
 //   --out-dir     one wrapper per API function under <root>/src/api/ (bar
 //                 `private/`): it validates an `Array` of msgpack arguments,
