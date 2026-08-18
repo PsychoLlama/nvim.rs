@@ -7,10 +7,13 @@
 // output into one 27k-line Rust module. This tool takes the job back, from
 // the two real sources of truth in the crate:
 //
-//   --out-dir     one wrapper per `pub unsafe extern "C" fn nvim_*` under
-//                 <root>/src/api/ (bar `private/`): it validates an `Array` of
-//                 msgpack arguments, converts them, calls the API function
-//                 and boxes the result back into an `Object`.
+//   --out-dir     one wrapper per API function under <root>/src/api/ (bar
+//                 `private/`): it validates an `Array` of msgpack arguments,
+//                 converts them, calls the API function and boxes the result
+//                 back into an `Object`. An API function is either transpiled
+//                 (`pub unsafe extern "C" fn`, reporting failure through an
+//                 `*mut Error` out-parameter) or converted (`pub [unsafe] fn`
+//                 answering `Result<T, Error>`); see `ApiFn`.
 //   --tables-dir  the keyset tables and their key lookups, read off the
 //                 `KeyDict_*` structs in <root>/src/types/keysets.rs,
 //                 plus the handler table and its method lookup.
@@ -163,13 +166,35 @@ impl RetType {
     }
 }
 
-/// One `pub unsafe extern "C" fn nvim_*` as parsed out of the crate.
+/// One API function as parsed out of the crate.
+///
+/// Two signature shapes say the same thing, and the crate holds both while
+/// the hand-written layer is converted one function at a time:
+///
+/// ```ignore
+/// pub unsafe extern "C" fn nvim_x(args.., arena: *mut Arena, err: *mut Error) -> T
+/// pub [unsafe] fn nvim_x(args.., arena: *mut Arena) -> Result<T, Error>
+/// ```
+///
+/// The first reports failure through an out-parameter the caller has to
+/// inspect afterwards; the second through its result. Everything downstream
+/// — the RPC wrapper, the Lua binding, the metadata — sees the same `params`
+/// and the same `ret` either way; only [`ApiFn::fallible`] differs, and only
+/// the shape of the call the wrappers emit follows from it.
 struct ApiFn {
     name: String,
     /// Module path segment under `crate::api::` (the file stem).
     module: String,
     params: Vec<Param>,
+    /// What a successful call answers with. `Result<T, Error>` records `T`,
+    /// so a conversion to the `Result` shape leaves the metadata untouched.
     ret: RetType,
+    /// The function reports failure by returning `Err`, rather than through
+    /// an `*mut Error` out-parameter. Mutually exclusive with [`Param::Error`].
+    fallible: bool,
+    /// The function is `unsafe` to call, so the wrappers wrap the call. A
+    /// converted function whose arguments are all values need not be.
+    is_unsafe: bool,
 }
 
 /// One line of the spec file: everything the signature cannot tell us.
@@ -353,11 +378,49 @@ fn value_type(ty: &syn::Type) -> Option<ApiType> {
     })
 }
 
-fn ret_type(ret: &syn::ReturnType) -> Option<RetType> {
+/// For `Result<T, Error>`, the `T`. The error half has to be the API's own
+/// `Error`, however it is spelled: a `Result` over anything else is not an
+/// API signature, and is left for the caller to reject.
+fn result_ok_type(ty: &syn::Type) -> Option<&syn::Type> {
+    let syn::Type::Path(path) = ty else {
+        return None;
+    };
+    let last = path.path.segments.last()?;
+    if last.ident != "Result" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    let mut types = args.args.iter().filter_map(|arg| match arg {
+        syn::GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    });
+    let (ok, err) = (types.next()?, types.next()?);
+    (type_name(err)? == "Error").then_some(ok)
+}
+
+/// What a call answers with, and whether it says so through a `Result` — the
+/// two shapes [`ApiFn`] documents. `Result<T, Error>` classifies as `T`, and
+/// `Result<(), Error>` as void, so the two shapes agree on everything but
+/// how failure travels.
+fn ret_type(ret: &syn::ReturnType) -> Option<(RetType, bool)> {
     let ty = match ret {
-        syn::ReturnType::Default => return Some(RetType::Void),
+        syn::ReturnType::Default => return Some((RetType::Void, false)),
         syn::ReturnType::Type(_, ty) => ty,
     };
+    match result_ok_type(ty) {
+        Some(ok) => Some((value_ret(ok)?, true)),
+        None => Some((value_ret(ty)?, false)),
+    }
+}
+
+/// The value half of a return type: what the wrappers box into an `Object`.
+fn value_ret(ty: &syn::Type) -> Option<RetType> {
+    // `Result<(), Error>` is the converted spelling of a `void` function.
+    if matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty()) {
+        return Some(RetType::Void);
+    }
     let name = type_name(ty)?;
     if let Some(keyset) = name.strip_prefix("KeyDict_") {
         return Some(RetType::KeyDict(keyset.to_string()));
@@ -442,7 +505,10 @@ fn api_sources(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
-/// Collect every `pub unsafe extern "C" fn` in `<root>/src/api/`.
+/// Collect the API functions in `<root>/src/api/`: every
+/// `pub unsafe extern "C" fn`, plus every `pub [unsafe] fn` that answers with
+/// a `Result<_, Error>` — the two shapes [`ApiFn`] documents. Anything else a
+/// source file holds is support code, and is passed over.
 ///
 /// An API source file over the tree's 1,000-line cap is carved into
 /// `api/<stem>/mod.rs` plus `api/<stem>/*.rs`, with the parent re-exporting its
@@ -469,20 +535,33 @@ fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
         let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
         for item in &file.items {
             let syn::Item::Fn(f) = item else { continue };
-            if !matches!(f.vis, syn::Visibility::Public(_)) || f.sig.unsafety.is_none() {
+            if !matches!(f.vis, syn::Visibility::Public(_)) {
                 continue;
             }
-            if !matches!(&f.sig.abi, Some(abi) if abi.name.as_ref().is_none_or(|n| n.value() == "C"))
-            {
+            let Some((ret, fallible)) = ret_type(&f.sig.output) else {
+                continue;
+            };
+            // The transpiled shape is recognised by its calling convention;
+            // the converted one by its `Result`, which no support function in
+            // an API source file returns.
+            let transpiled = f.sig.unsafety.is_some()
+                && matches!(&f.sig.abi, Some(abi) if abi.name.as_ref().is_none_or(|n| n.value() == "C"));
+            if !transpiled && !fallible {
                 continue;
             }
             let name = f.sig.ident.to_string();
             let Ok(params) = classify(&f.sig) else {
                 continue;
             };
-            let Some(ret) = ret_type(&f.sig.output) else {
-                continue;
-            };
+            // A `Result` is the whole story: a function that also took the
+            // out-parameter would have two places to say the same thing, and
+            // the wrappers would have to check both.
+            if fallible && params.contains(&Param::Error) {
+                return Err(format!(
+                    "{name} answers with a Result and takes an `*mut Error` out-parameter; \
+                     one or the other"
+                ));
+            }
             // Two files may hold a same-named private helper, but a name the
             // spec can reach must resolve to exactly one function.
             if let Some(prev) = out.insert(
@@ -492,6 +571,8 @@ fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
                     module: module.clone(),
                     params,
                     ret,
+                    fallible,
+                    is_unsafe: f.sig.unsafety.is_some(),
                 },
             ) {
                 return Err(format!(
@@ -828,7 +909,7 @@ fn emit_fn(
         .collect();
     let arity = values.len();
     let takes_arena = f.params.contains(&Param::Arena);
-    let can_fail = f.params.contains(&Param::Error);
+    let can_fail = f.fallible || f.params.contains(&Param::Error);
 
     for n in spec.declared.keys() {
         if *n > arity {
@@ -955,15 +1036,21 @@ fn emit_fn(
             Param::Value { index, .. } => format!("arg_{}", index + 1),
         })
         .collect();
-    let call = format!("unsafe {{ {name}({}) }}", call_args.join(", "));
-    // The API layer is still `unsafe extern "C"`, so the call is the one edge
-    // every wrapper has. Everything it is handed was checked above.
-    writeln!(
-        out,
-        "    // SAFETY: each argument was checked against the type the signature declares;\n\
-         \x20   // `arena` and `error` are the dispatcher's own."
-    )
-    .unwrap();
+    let args = call_args.join(", ");
+    let call = match f.is_unsafe {
+        // An API function still on the transpiled shape is the one edge every
+        // wrapper has. Everything it is handed was checked above.
+        true => format!("unsafe {{ {name}({args}) }}"),
+        false => format!("{name}({args})"),
+    };
+    if f.is_unsafe {
+        writeln!(
+            out,
+            "    // SAFETY: each argument was checked against the type the signature declares;\n\
+             \x20   // `arena` and `error` are the dispatcher's own."
+        )
+        .unwrap();
+    }
     // An `Object` result needs no boxing, so when nothing follows the call it
     // is the wrapper's tail expression rather than a binding.
     if f.ret == RetType::Object && !can_fail {
@@ -971,17 +1058,38 @@ fn emit_fn(
         writeln!(out, "}}").unwrap();
         return Ok(());
     }
+    // Converting a keyset result to a Dict takes it by pointer.
     let bind = match &f.ret {
-        RetType::Void => "",
-        // Converting a keyset result to a Dict takes it by pointer.
-        RetType::KeyDict(_) => "let mut rv = ",
-        _ => "let rv = ",
+        RetType::KeyDict(_) => "mut rv",
+        _ => "rv",
     };
-    writeln!(out, "    {bind}{call};").unwrap();
-    if can_fail {
-        writeln!(out, "    if error.type_0 != kErrorTypeNone {{").unwrap();
-        writeln!(out, "        return NIL;").unwrap();
-        writeln!(out, "    }}").unwrap();
+    if f.fallible {
+        // The failure travels back in the result, so it is over as soon as it
+        // is matched: `failure` moves it into the dispatcher's slot.
+        match &f.ret {
+            RetType::Void => {
+                writeln!(out, "    if let Err(e) = {call} {{").unwrap();
+                writeln!(out, "        return failure(error, e);").unwrap();
+                writeln!(out, "    }}").unwrap();
+            }
+            _ => {
+                writeln!(out, "    let {bind} = match {call} {{").unwrap();
+                writeln!(out, "        Ok(rv) => rv,").unwrap();
+                writeln!(out, "        Err(e) => return failure(error, e),").unwrap();
+                writeln!(out, "    }};").unwrap();
+            }
+        }
+    } else {
+        let bind = match &f.ret {
+            RetType::Void => String::new(),
+            _ => format!("let {bind} = "),
+        };
+        writeln!(out, "    {bind}{call};").unwrap();
+        if can_fail {
+            writeln!(out, "    if error.type_0 != kErrorTypeNone {{").unwrap();
+            writeln!(out, "        return NIL;").unwrap();
+            writeln!(out, "    }}").unwrap();
+        }
     }
 
     let boxed = match &f.ret {
@@ -1313,6 +1421,18 @@ fn expr_map_locked_error(error: &mut Error) {
     // SAFETY: `error` is live and `e_textlock` is a static NUL-terminated
     // message, which is what `%s` takes.
     unsafe { api_set_error(error, kErrorTypeException, fmt, &raw const e_textlock) };
+}
+"#,
+    ),
+    (
+        "failure",
+        r#"
+/// Hands the error an API function answered with to the dispatcher, which
+/// reads it out of the slot it lent the wrapper. The wrapper's own result is
+/// nil, as it is for every other way of refusing.
+fn failure(error: &mut Error, e: Error) -> Object {
+    *error = e;
+    NIL
 }
 "#,
     ),
@@ -2545,6 +2665,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // Whether the API function has a Lua implementation of its own, which it
     // needs the state for.
     let has_lua_imp = f.params.contains(&Param::LuaState);
+    let can_fail = f.fallible || f.params.contains(&Param::Error);
 
     for (index, ty, _) in &values {
         if matches!(ty, ApiType::Dict)
@@ -2582,7 +2703,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // three; with no arguments to convert only the call itself is left.
     let locked = spec.textlock || spec.textlock_allow_cmdwin;
     let uses_arena = argc > 0 || f.params.contains(&Param::Arena);
-    let uses_err = argc > 0 || locked || f.params.contains(&Param::Error);
+    let uses_err = argc > 0 || locked || can_fail;
     let fields: Vec<&str> = [
         ("arena", uses_arena),
         ("err", uses_err),
@@ -2726,25 +2847,56 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
             Param::Value { index, ty, .. } => value(*index, ty),
         })
         .collect();
-    let call = format!("{name}({})", call_args.join(", "));
+    let args = call_args.join(", ");
+    let call = match f.is_unsafe {
+        true => format!("unsafe {{ {name}({args}) }}"),
+        false => format!("{name}({args})"),
+    };
     // The API function may reach back into Lua; while it runs, this is the
     // state it reaches into.
     writeln!(out, "        let saved_lstate = active_lstate.get();").unwrap();
     writeln!(out, "        active_lstate.set(lstate);").unwrap();
     let by_pointer = matches!(f.ret, RetType::Object | RetType::KeyDict(_));
-    writeln!(
-        out,
-        "        // SAFETY: as above; the arguments are this binding's own."
-    )
-    .unwrap();
-    match f.ret {
-        RetType::Void => writeln!(out, "        unsafe {{ {call} }};").unwrap(),
-        _ => writeln!(
+    if f.is_unsafe {
+        writeln!(
             out,
-            "        let {}ret = unsafe {{ {call} }};",
-            if by_pointer { "mut " } else { "" }
+            "        // SAFETY: as above; the arguments are this binding's own."
         )
-        .unwrap(),
+        .unwrap();
+    }
+    let bind = if by_pointer { "mut ret" } else { "ret" };
+    if f.fallible {
+        // A failed call has no result to hand back and nothing left to
+        // release, so it restores the state it borrowed and leaves the error
+        // for `run` to raise.
+        match f.ret {
+            RetType::Void => writeln!(out, "        if let Err(e) = {call} {{").unwrap(),
+            _ => {
+                writeln!(out, "        let {bind} = match {call} {{").unwrap();
+                writeln!(out, "            Ok(ret) => ret,").unwrap();
+                writeln!(out, "            Err(e) => {{").unwrap();
+            }
+        }
+        let indent = if f.ret == RetType::Void {
+            "    "
+        } else {
+            "        "
+        };
+        writeln!(out, "        {indent}active_lstate.set(saved_lstate);").unwrap();
+        writeln!(out, "        {indent}*err = e;").unwrap();
+        writeln!(out, "        {indent}return;").unwrap();
+        match f.ret {
+            RetType::Void => writeln!(out, "        }}").unwrap(),
+            _ => {
+                writeln!(out, "            }}").unwrap();
+                writeln!(out, "        }};").unwrap();
+            }
+        }
+    } else {
+        match f.ret {
+            RetType::Void => writeln!(out, "        {call};").unwrap(),
+            _ => writeln!(out, "        let {bind} = {call};").unwrap(),
+        }
     }
     // A function with a Lua implementation converts its own result, so this
     // is only the fallback path, and upstream left it on the old conversion
