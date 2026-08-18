@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 enum Kind {
     Struct(Vec<Field>),
     Union(Vec<Field>),
-    Alias(syn::Type),
+    Alias(Box<syn::Type>),
     Opaque,
 }
 
@@ -93,11 +93,7 @@ fn type_names(ty: &syn::Type, out: &mut BTreeSet<String>) {
     match ty {
         syn::Type::Path(tp) => {
             if tp.path.segments.len() > 1
-                && tp
-                    .path
-                    .segments
-                    .first()
-                    .map_or(false, |s| s.ident == "libc")
+                && tp.path.segments.first().is_some_and(|s| s.ident == "libc")
             {
                 return;
             }
@@ -362,7 +358,7 @@ fn is_opaque_struct(fields: &syn::FieldsNamed) -> bool {
                 .path
                 .segments
                 .last()
-                .map_or(false, |s| s.ident == "PhantomData"),
+                .is_some_and(|s| s.ident == "PhantomData"),
             _ => false,
         })
 }
@@ -410,12 +406,7 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
                 }
             }
             syn::Item::Type(t) if t.generics.params.is_empty() => {
-                add(
-                    world,
-                    t.ident.to_string(),
-                    Kind::Alias((*t.ty).clone()),
-                    None,
-                );
+                add(world, t.ident.to_string(), Kind::Alias(t.ty.clone()), None);
             }
             syn::Item::Const(c) => {
                 world
@@ -461,7 +452,7 @@ fn discover(root: &Path) -> Vec<PathBuf> {
             let path = entry.expect("dirent").path();
             if path.is_dir() {
                 stack.push(path);
-            } else if path.extension().map_or(false, |e| e == "rs") {
+            } else if path.extension().is_some_and(|e| e == "rs") {
                 files.push(path);
             }
         }
@@ -727,11 +718,7 @@ impl<'w> Emitter<'w> {
                 let name = seg.ident.to_string();
                 // `::libc::X` re-exports: the system preamble owns these names.
                 if tp.path.segments.len() > 1
-                    && tp
-                        .path
-                        .segments
-                        .first()
-                        .map_or(false, |s| s.ident == "libc")
+                    && tp.path.segments.first().is_some_and(|s| s.ident == "libc")
                 {
                     return Some(CTy::Named { name, konst: false });
                 }
@@ -760,7 +747,7 @@ impl<'w> Emitter<'w> {
                     let deffile = def.file.clone();
                     match def.kind {
                         Kind::Alias(ref t) => {
-                            let t = t.clone();
+                            let t = (**t).clone();
                             return self.cty(&deffile, &t);
                         }
                         Kind::Struct(ref fields) | Kind::Union(ref fields) => {
@@ -936,7 +923,7 @@ impl<'w> Emitter<'w> {
                         self.opaque.insert(name);
                     }
                     Kind::Alias(ref t) => {
-                        let t = t.clone();
+                        let t = (**t).clone();
                         let deffile = def.file.clone();
                         self.emitted.insert(name, def);
                         let _ = self.cty(&deffile, &t);
@@ -968,11 +955,7 @@ fn value_deps(world: &World, def: &Def, out: &mut BTreeSet<String>) {
         match ty {
             syn::Type::Path(tp) => {
                 if tp.path.segments.len() > 1
-                    && tp
-                        .path
-                        .segments
-                        .first()
-                        .map_or(false, |s| s.ident == "libc")
+                    && tp.path.segments.first().is_some_and(|s| s.ident == "libc")
                 {
                     return; // external libc name, not a by-value dep of ours
                 }
@@ -998,7 +981,7 @@ fn value_deps(world: &World, def: &Def, out: &mut BTreeSet<String>) {
                                         }
                                     }
                                     Kind::Alias(t) => {
-                                        let t = t.clone();
+                                        let t = (**t).clone();
                                         walk(world, &file, &t, out);
                                     }
                                     Kind::Opaque => {}
@@ -1180,9 +1163,11 @@ fn main() {
         // GlobalCell/SharedCell wrap mutable editor state; a plain Rust
         // static is immutable, i.e. `const` on the C side.
         let cell = match &s.ty {
-            syn::Type::Path(tp) => tp.path.segments.last().map_or(false, |seg| {
-                seg.ident == "GlobalCell" || seg.ident == "SharedCell"
-            }),
+            syn::Type::Path(tp) => tp
+                .path
+                .segments
+                .last()
+                .is_some_and(|seg| seg.ident == "GlobalCell" || seg.ident == "SharedCell"),
             _ => false,
         };
         match emitter.cty(&s.file, &s.ty) {
@@ -1217,7 +1202,7 @@ fn main() {
             1 => {
                 let v = *vals.iter().next().unwrap();
                 // LuaJIT `static const` handles up to 32-bit values.
-                if v >= -(1i128 << 31) && v < (1i128 << 32) {
+                if (-(1i128 << 31)..(1i128 << 32)).contains(&v) {
                     const_vals.insert(name.clone(), v);
                 }
             }
@@ -1312,11 +1297,7 @@ fn main() {
         match ty {
             syn::Type::Path(tp) => {
                 if tp.path.segments.len() > 1
-                    && tp
-                        .path
-                        .segments
-                        .first()
-                        .map_or(false, |s| s.ident == "libc")
+                    && tp.path.segments.first().is_some_and(|s| s.ident == "libc")
                 {
                     return;
                 }
@@ -1373,16 +1354,16 @@ fn main() {
         state: &mut HashMap<String, u8>,
         aorder: &mut Vec<String>,
     ) {
-        match state.get(name) {
-            Some(_) => return, // done, or benign cycle through a pointer
-            None => {}
+        // Already visited: done, or a benign cycle through a pointer.
+        if state.contains_key(name) {
+            return;
         }
         let def = match emitted.get(name) {
             Some(d) => d,
             None => return,
         };
         let t = match &def.kind {
-            Kind::Alias(t) => t.clone(),
+            Kind::Alias(t) => (**t).clone(),
             _ => return,
         };
         state.insert(name.to_string(), 1);
