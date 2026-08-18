@@ -11,8 +11,9 @@ pub struct AdditionalData {
     pub nbytes: uint32_t,
     pub data: [::core::ffi::c_char; 0],
 }
-/// A libm operation on one Float, as `float_op_wrapper` calls it.
-pub type FloatFunc = Option<unsafe extern "C" fn(float_T) -> float_T>;
+/// A one-argument float operation, as `float_op_wrapper` calls it. The
+/// implementations are `eval::funcs::math`'s, wrapping `f64`'s methods.
+pub type FloatFunc = Option<fn(float_T) -> float_T>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union EvalFuncData {

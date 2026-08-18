@@ -45,25 +45,26 @@ use crate::eval::fs::{
     f_simplify, f_tempname, f_writefile,
 };
 use crate::eval::funcs::{
-    api_wrapper, f_abs, f_and, f_api_info, f_atan2, f_byte2line, f_call, f_chanclose, f_changenr,
-    f_chansend, f_char2nr, f_charcol, f_col, f_confirm, f_copy, f_ctxget, f_ctxpop, f_ctxpush,
-    f_ctxset, f_ctxsize, f_cursor, f_debugbreak, f_deepcopy, f_dictwatcheradd, f_dictwatcherdel,
-    f_did_filetype, f_empty, f_environ, f_escape, f_eval, f_eventhandler, f_execute, f_exists,
-    f_expand, f_expandcmd, f_feedkeys, f_flatten, f_flattennew, f_float2nr, f_fmod, f_fnameescape,
-    f_foreground, f_funcref, f_function, f_garbagecollect, f_get, f_getchangelist, f_getcharpos,
-    f_getcharsearch, f_getcurpos, f_getcursorcharpos, f_getenv, f_getfontname, f_getjumplist,
-    f_getmarklist, f_getpid, f_getpos, f_getreg, f_getreginfo, f_getregion, f_getregionpos,
-    f_getregtype, f_gettagstack, f_gettext, f_has, f_hlID, f_hlexists, f_hostname, f_id, f_index,
-    f_indexof, f_input, f_inputdialog, f_inputlist, f_inputrestore, f_inputsave, f_inputsecret,
-    f_interrupt, f_invert, f_isinf, f_islocked, f_isnan, f_jobpid, f_jobresize, f_jobstart,
-    f_jobstop, f_jobwait, f_json_decode, f_json_encode, f_keytrans, f_len, f_libcall, f_libcallnr,
-    f_line, f_line2byte, f_localtime, f_luaeval, f_match, f_matchbufline, f_matchend, f_matchlist,
-    f_matchstr, f_matchstrlist, f_matchstrpos, f_max, f_menu_get, f_min, f_mode, f_msgpackdump,
-    f_msgpackparse, f_nextnonblank, f_nr2char, f_or, f_perleval, f_pow, f_prevnonblank, f_printf,
-    f_prompt_getinput, f_prompt_getprompt, f_pum_getpos, f_pumvisible, f_py3eval, f_rand, f_range,
-    f_reduce, f_reg_executing, f_reg_recorded, f_reg_recording, f_reltime, f_reltimefloat,
-    f_reltimestr, f_repeat, f_rpcnotify, f_rpcrequest, f_rubyeval, f_screenattr, f_screenchar,
-    f_screenchars, f_screencol, f_screenrow, f_screenstring, f_search, f_searchdecl, f_searchpair,
+    acos, api_wrapper, asin, atan, ceil, cos, cosh, exp, f_abs, f_and, f_api_info, f_atan2,
+    f_byte2line, f_call, f_chanclose, f_changenr, f_chansend, f_char2nr, f_charcol, f_col,
+    f_confirm, f_copy, f_ctxget, f_ctxpop, f_ctxpush, f_ctxset, f_ctxsize, f_cursor, f_debugbreak,
+    f_deepcopy, f_dictwatcheradd, f_dictwatcherdel, f_did_filetype, f_empty, f_environ, f_escape,
+    f_eval, f_eventhandler, f_execute, f_exists, f_expand, f_expandcmd, f_feedkeys, f_flatten,
+    f_flattennew, f_float2nr, f_fmod, f_fnameescape, f_foreground, f_funcref, f_function,
+    f_garbagecollect, f_get, f_getchangelist, f_getcharpos, f_getcharsearch, f_getcurpos,
+    f_getcursorcharpos, f_getenv, f_getfontname, f_getjumplist, f_getmarklist, f_getpid, f_getpos,
+    f_getreg, f_getreginfo, f_getregion, f_getregionpos, f_getregtype, f_gettagstack, f_gettext,
+    f_has, f_hlID, f_hlexists, f_hostname, f_id, f_index, f_indexof, f_input, f_inputdialog,
+    f_inputlist, f_inputrestore, f_inputsave, f_inputsecret, f_interrupt, f_invert, f_isinf,
+    f_islocked, f_isnan, f_jobpid, f_jobresize, f_jobstart, f_jobstop, f_jobwait, f_json_decode,
+    f_json_encode, f_keytrans, f_len, f_libcall, f_libcallnr, f_line, f_line2byte, f_localtime,
+    f_luaeval, f_match, f_matchbufline, f_matchend, f_matchlist, f_matchstr, f_matchstrlist,
+    f_matchstrpos, f_max, f_menu_get, f_min, f_mode, f_msgpackdump, f_msgpackparse, f_nextnonblank,
+    f_nr2char, f_or, f_perleval, f_pow, f_prevnonblank, f_printf, f_prompt_getinput,
+    f_prompt_getprompt, f_pum_getpos, f_pumvisible, f_py3eval, f_rand, f_range, f_reduce,
+    f_reg_executing, f_reg_recorded, f_reg_recording, f_reltime, f_reltimefloat, f_reltimestr,
+    f_repeat, f_rpcnotify, f_rpcrequest, f_rubyeval, f_screenattr, f_screenchar, f_screenchars,
+    f_screencol, f_screenrow, f_screenstring, f_search, f_searchdecl, f_searchpair,
     f_searchpairpos, f_searchpos, f_serverlist, f_serverstart, f_serverstop, f_setcharpos,
     f_setcharsearch, f_setcursorcharpos, f_setenv, f_setfperm, f_setpos, f_setreg, f_settagstack,
     f_sha256, f_shellescape, f_shiftwidth, f_sockconnect, f_soundfold, f_spellbadword,
@@ -72,6 +73,7 @@ use crate::eval::funcs::{
     f_synIDattr, f_synIDtrans, f_synconcealed, f_synstack, f_tabpagebuflist, f_tagfiles, f_taglist,
     f_timer_info, f_timer_pause, f_timer_start, f_timer_stop, f_timer_stopall, f_type, f_virtcol,
     f_visualmode, f_wait, f_wildmenumode, f_windowsversion, f_wordcount, f_xor, float_op_wrapper,
+    floor, log, log10, round, sin, sinh, sqrt, tan, tanh, trunc,
 };
 use crate::eval::list::{
     f_add, f_count, f_extend, f_extendnew, f_filter, f_foreach, f_insert, f_map, f_mapnew,
@@ -116,10 +118,6 @@ use crate::mbyte::{f_charclass, f_getcellwidths, f_iconv, f_setcellwidths};
 use crate::menu::f_menu_info;
 use crate::mouse::f_getmousepos;
 use crate::r#move::{f_screenpos, f_virtcol2col};
-use crate::os::libc::{
-    acos, asin, atan, ceil, cos, cosh, exp, floor, log, log10, round, sin, sinh, sqrt, tan, tanh,
-    trunc,
-};
 use crate::quickfix::{f_getloclist, f_getqflist, f_setloclist, f_setqflist};
 use crate::runtime::{f_getscriptinfo, f_getstacktrace};
 use crate::search::f_searchcount;

@@ -18,10 +18,6 @@ unsafe extern "C" {
     pub fn _exit(__status: ::core::ffi::c_int) -> !;
     pub fn abort() -> !;
     pub fn abs(__x: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    pub fn acos(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn asin(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn atan(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn atan2(__y: ::core::ffi::c_double, __x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn atoi(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     pub fn atol(__nptr: *const ::core::ffi::c_char) -> ::core::ffi::c_long;
     pub fn backtrace(
@@ -44,12 +40,9 @@ unsafe extern "C" {
         __compar: __compar_fn_t,
     ) -> *mut ::core::ffi::c_void;
     pub fn calloc(nmemb: usize, size: usize) -> *mut ::core::ffi::c_void;
-    pub fn ceil(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn cfsetispeed(__termios_p: *mut termios, __speed: speed_t) -> ::core::ffi::c_int;
     pub fn cfsetospeed(__termios_p: *mut termios, __speed: speed_t) -> ::core::ffi::c_int;
     pub fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    pub fn cos(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn cosh(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn dup(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn dup2(__fd: ::core::ffi::c_int, __fd2: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn endpwent();
@@ -59,8 +52,6 @@ unsafe extern "C" {
         __argv: *const *mut ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
     pub fn exit(__status: ::core::ffi::c_int) -> !;
-    pub fn exp(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn fabs(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
     pub fn fcntl(__fd: ::core::ffi::c_int, __cmd: ::core::ffi::c_int, ...) -> ::core::ffi::c_int;
     pub fn fdopen(__fd: ::core::ffi::c_int, __modes: *const ::core::ffi::c_char) -> *mut FILE;
@@ -75,8 +66,6 @@ unsafe extern "C" {
     ) -> *mut ::core::ffi::c_char;
     pub fn fileno(__stream: *mut FILE) -> ::core::ffi::c_int;
     pub fn flock(__fd: ::core::ffi::c_int, __operation: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    pub fn floor(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn fmod(__x: ::core::ffi::c_double, __y: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn fopen(
         __filename: *const ::core::ffi::c_char,
         __modes: *const ::core::ffi::c_char,
@@ -168,8 +157,6 @@ unsafe extern "C" {
     ) -> ssize_t;
     pub fn llabs(__x: ::core::ffi::c_longlong) -> ::core::ffi::c_longlong;
     pub fn localtime_r(__timer: *const time_t, __tp: *mut tm) -> *mut tm;
-    pub fn log(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn log10(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn lseek(__fd: ::core::ffi::c_int, __offset: off_t, __whence: ::core::ffi::c_int) -> off_t;
     pub fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
     pub fn memchr(
@@ -210,7 +197,6 @@ unsafe extern "C" {
         __command: *const ::core::ffi::c_char,
         __modes: *const ::core::ffi::c_char,
     ) -> *mut FILE;
-    pub fn pow(__x: ::core::ffi::c_double, __y: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn printf(__format: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     pub fn pthread_exit(__retval: *mut ::core::ffi::c_void) -> !;
     pub fn ptsname(__fd: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
@@ -237,7 +223,6 @@ unsafe extern "C" {
         __count: ::core::ffi::c_int,
     ) -> ssize_t;
     pub fn realloc(__ptr: *mut ::core::ffi::c_void, __size: size_t) -> *mut ::core::ffi::c_void;
-    pub fn round(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn setbuf(__stream: *mut FILE, __buf: *mut ::core::ffi::c_char);
     pub fn setlocale(
         __category: ::core::ffi::c_int,
@@ -258,8 +243,6 @@ unsafe extern "C" {
         __size: size_t,
         __flags: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    pub fn sin(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn sinh(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     #[cfg(not(miri))]
     pub fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -272,7 +255,6 @@ unsafe extern "C" {
         __format: *const ::core::ffi::c_char,
         ...
     ) -> ::core::ffi::c_int;
-    pub fn sqrt(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn sscanf(
         __s: *const ::core::ffi::c_char,
         __format: *const ::core::ffi::c_char,
@@ -382,8 +364,6 @@ unsafe extern "C" {
         __from: *const ::core::ffi::c_char,
         __to: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    pub fn tan(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn tanh(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn tcdrain(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn tcgetattr(__fd: ::core::ffi::c_int, __termios_p: *mut termios) -> ::core::ffi::c_int;
     pub fn tcsetattr(
@@ -395,7 +375,6 @@ unsafe extern "C" {
     pub fn time(__timer: *mut time_t) -> time_t;
     pub fn tolower(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn toupper(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    pub fn trunc(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn tzset();
     pub fn umask(__mask: mode_t) -> mode_t;
     pub fn ungetc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;

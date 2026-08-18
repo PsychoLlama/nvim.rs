@@ -109,6 +109,70 @@ fn float2(args: Args<'_>, rettv: &mut typval_T, op: impl FnOnce(c_double, c_doub
     };
 }
 
+// -- The one-argument float builtins ---------------------------------------
+//
+// The generated table stores one of these in the row's payload and reaches
+// it through `float_op_wrapper`, so each needs a name of its own rather than
+// a closure. Every body is `f64`'s inherent method, which lowers to the same
+// libm call the C made; the two-argument builtins above already read that
+// way. The methods make no promise about `errno` or the rounding mode, which
+// costs nothing here: vim reads the value and nothing else, and reports a
+// domain error as the NaN the value already is.
+
+pub fn acos(x: float_T) -> float_T {
+    x.acos()
+}
+pub fn asin(x: float_T) -> float_T {
+    x.asin()
+}
+pub fn atan(x: float_T) -> float_T {
+    x.atan()
+}
+pub fn ceil(x: float_T) -> float_T {
+    x.ceil()
+}
+pub fn cos(x: float_T) -> float_T {
+    x.cos()
+}
+pub fn cosh(x: float_T) -> float_T {
+    x.cosh()
+}
+pub fn exp(x: float_T) -> float_T {
+    x.exp()
+}
+pub fn floor(x: float_T) -> float_T {
+    x.floor()
+}
+/// C's `log` is the natural logarithm, which Rust spells `ln`.
+pub fn log(x: float_T) -> float_T {
+    x.ln()
+}
+pub fn log10(x: float_T) -> float_T {
+    x.log10()
+}
+/// Half away from zero, matching C's `round` rather than Rust's `round_ties_even`.
+pub fn round(x: float_T) -> float_T {
+    x.round()
+}
+pub fn sin(x: float_T) -> float_T {
+    x.sin()
+}
+pub fn sinh(x: float_T) -> float_T {
+    x.sinh()
+}
+pub fn sqrt(x: float_T) -> float_T {
+    x.sqrt()
+}
+pub fn tan(x: float_T) -> float_T {
+    x.tan()
+}
+pub fn tanh(x: float_T) -> float_T {
+    x.tanh()
+}
+pub fn trunc(x: float_T) -> float_T {
+    x.trunc()
+}
+
 /// Argument `i` coerced to Float, reporting E808 if it is neither a Float
 /// nor a Number.
 fn float_arg(args: Args<'_>, i: usize) -> Option<float_T> {

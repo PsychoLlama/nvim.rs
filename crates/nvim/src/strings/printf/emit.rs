@@ -33,7 +33,7 @@ use crate::ascii::ascii_isdigit;
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{xfree, xmemscan, xstrchrnul, xstrlcpy};
 use crate::message::emsg;
-use crate::os::libc::{gettext, log10, memmove, snprintf, strlen};
+use crate::os::libc::{gettext, memmove, snprintf, strlen};
 use crate::strings::vim_strchr;
 use crate::types::{
     VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t,
@@ -715,7 +715,7 @@ unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; T
             // conversion also spends digits on the integer part.
             let mut max_prec = (TMP_LEN - 10) as size_t;
             if matches!(c.fmt_spec, b'f' | b'F') && abs_f > 1.0 {
-                max_prec -= log10(abs_f) as size_t;
+                max_prec -= abs_f.log10() as size_t;
             }
             c.precision = c.precision.min(max_prec);
             l += snprintf(
