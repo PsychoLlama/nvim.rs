@@ -187,7 +187,7 @@ pub unsafe extern "C" fn snprintf(
 /// hands it a raw pointer inside its own `unsafe` block, and a *safe* shim
 /// makes each of those an `unused_unsafe` error under `-D warnings`.
 #[cfg(miri)]
-pub fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+pub unsafe fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     __msgid as *mut ::core::ffi::c_char
 }
 

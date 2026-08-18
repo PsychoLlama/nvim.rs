@@ -565,7 +565,7 @@ pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
 /// The `do_cmdline` line getter a function body is executed through.  It
 /// also drives the debugger's breakpoints and the line profiler.
 ///
-/// Stays `extern "C"`: `getline_equal` compares this function's *address*
+/// Keeps the raw signature: `getline_equal` compares this function's *address*
 /// against the cookie's getter to decide whether a function is running.
 ///
 /// # Safety

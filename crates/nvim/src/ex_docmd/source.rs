@@ -292,7 +292,7 @@ pub unsafe fn handle_did_throw() {
 /// what lets a `:function` be defined inside a loop: its body is read once
 /// and replayed with everything else.
 ///
-/// Keeps `extern "C"`: `LineGetter` is a C fn-pointer type.
+/// Keeps the raw signature: it is stored as a `LineGetter`.
 pub(crate) unsafe fn get_loop_line(
     c: c_int,
     cookie: *mut c_void,

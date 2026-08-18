@@ -206,7 +206,7 @@ pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
 /// Completion over the user functions: answers the `idx`th name, resuming
 /// from where the last call stopped.
 ///
-/// Stays `extern "C"` because a completion table holds a pointer to it.
+/// Keeps the raw signature because a completion table holds a pointer to it.
 ///
 /// # Safety
 /// Called with `idx` 0 first, then increasing, with no change to the

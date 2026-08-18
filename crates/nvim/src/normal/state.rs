@@ -490,7 +490,7 @@ fn normal_redraw() {
 /// Answers 1 to go on and read a command, 0 to leave normal mode, and -1 to
 /// leave it because Ex mode ran instead.
 ///
-/// Kept `extern "C"`: it is installed as a `state_check_callback` and
+/// Keeps the raw signature: it is installed as a `state_check_callback` and
 /// `state_enter` calls it through that pointer.
 pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
     // SAFETY: `state` is the `VimState` at the head of our own `NormalState`,

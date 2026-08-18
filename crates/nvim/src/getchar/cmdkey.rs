@@ -26,8 +26,8 @@ fn byte_garray() -> garray_T {
 
 /// Read the command a `<Cmd>` key introduced out of the typeahead.
 ///
-/// This is a `LineGetter`, handed to `do_cmdline`, which is why it keeps the
-/// `extern "C"` ABI and the two parameters it does not use. The command runs
+/// This is a `LineGetter`, handed to `do_cmdline`, which is why it keeps that
+/// signature and the two parameters it does not use. The command runs
 /// to the `<CR>` that must terminate it; a null answer means it was aborted.
 ///
 /// # Safety

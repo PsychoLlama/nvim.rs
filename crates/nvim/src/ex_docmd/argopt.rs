@@ -85,7 +85,7 @@ pub unsafe fn get_bad_opt(p: *const c_char, eap: *mut exarg_T) -> c_int {
 
 /// The completion candidates for `++bad=`.
 ///
-/// Keeps `extern "C"`: installed as a `CompleteListItemGetter`.
+/// Keeps the raw signature: installed as a `CompleteListItemGetter`.
 pub(crate) fn get_bad_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     const VALUES: [&CStr; 3] = [c"?", c"keep", c"drop"];
     match VALUES.get(idx as usize) {
@@ -185,7 +185,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
 
 /// The completion candidates for `++`.
 ///
-/// Keeps `extern "C"`: installed as a `CompleteListItemGetter`.
+/// Keeps the raw signature: installed as a `CompleteListItemGetter`.
 pub(crate) fn get_argopt_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     const VALUES: [&CStr; 7] = [
         c"fileformat=",

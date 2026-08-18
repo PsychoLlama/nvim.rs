@@ -782,7 +782,7 @@ pub(crate) unsafe fn append_command(cmd: *const c_char) {
 
 /// The handler every command this build does not implement runs.
 ///
-/// Keeps `extern "C"`: it is a `cmd_func` in the command table, and
+/// Keeps the raw signature: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
 pub unsafe fn ex_ni(eap: *mut exarg_T) {
     unsafe {
