@@ -17,12 +17,12 @@ use crate::mbyte::utfc_ptr2len;
 use crate::option::set_option_value_give_err;
 use crate::options::kOptCpoptions;
 use crate::optionstr::free_string_option;
-use crate::os::libc::strcpy;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
 use crate::types::{
     OptVal, OptValData, colnr_T, garray_T, regmatch_T, regprog_T, size_t, typval_T,
 };
+use ::libc::strcpy;
 
 /// A `regmatch_T` with nothing in it.
 const EMPTY_REGMATCH: regmatch_T = regmatch_T {

@@ -29,8 +29,8 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::main::{current_sctx, e_invarg2, p_fs};
 use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_flush, file_open, file_write};
-use crate::os::libc::{gettext, strlen};
 use crate::path::FullName_save;
 use crate::runtime::script_is_lua;
 use crate::semsg_c;
@@ -38,6 +38,7 @@ use crate::types::{
     EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNLOCKED, blob_T, list_T,
     listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
 };
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

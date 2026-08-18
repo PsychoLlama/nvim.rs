@@ -12,7 +12,6 @@
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::memset;
 use crate::types::{
     VTerm, VTermAttr, VTermDamageSize, VTermKey, VTermModifier, VTermOutputCallback,
     VTermParserState, VTermProp, VTermRect, VTermSelectionMask, VTermState_mouse_protocol,
@@ -20,6 +19,7 @@ use crate::types::{
 };
 use crate::vterm::screen::vterm_screen_free;
 use crate::vterm::state::entry::vterm_state_free;
+use ::libc::memset;
 
 /// How much of the screen a single damaged cell is reported as.
 pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;

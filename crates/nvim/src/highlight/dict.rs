@@ -25,13 +25,13 @@ use crate::api::private::dispatch::KeyDict_highlight_cterm_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, api_set_error, arena_dict};
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
-use crate::os::libc::strcasecmp;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, Boolean, Dict, Error, HlAttrs, Integer, KeyDict_highlight, KeyDict_highlight_cterm,
     KeySetLink, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
 };
+use ::libc::strcasecmp;
 use core::ffi::{CStr, c_int};
 
 /// Most entries [`hlattrs2dict`] can write, and so the capacity every caller

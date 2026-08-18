@@ -31,7 +31,7 @@ use crate::ex_cmds::check_secure;
 use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2, firstbuf};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{

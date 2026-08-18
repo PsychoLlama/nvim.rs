@@ -29,13 +29,13 @@
 use crate::charset::{skiptowhite, skipwhite};
 use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
-use crate::os::libc::strcat;
 use crate::spell::{byte_in_str, can_compound, match_compoundrule, nofold_len, spell_iswordp_nmw};
 use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::walk::{FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk};
 use crate::spellsuggest::{
     MAXWLEN, NUL, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, WF_NEEDCOMP, badword_captype,
 };
+use ::libc::strcat;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

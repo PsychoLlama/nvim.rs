@@ -36,15 +36,16 @@ use crate::main::{
 };
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
+use crate::os::cshim::{gettext, strncmp};
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
-use crate::os::libc::{gettext, strcmp, strncmp};
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
     EvalFuncData, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarType,
     funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
 };
+use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;

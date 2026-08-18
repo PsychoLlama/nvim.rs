@@ -47,8 +47,8 @@ use crate::memline::makeswapname;
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::option::{copy_option_part, shortmess};
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
-use crate::os::libc::{gettext, strcpy};
 use crate::path::fix_fname;
 use crate::semsg_c;
 use crate::strings::vim_strchr;
@@ -58,6 +58,7 @@ use crate::types::{
 };
 use crate::undo::{bufIsChanged, curbufIsChanged};
 use crate::window::check_can_set_curbuf_forceit;
+use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

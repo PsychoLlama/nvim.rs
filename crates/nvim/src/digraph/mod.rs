@@ -34,8 +34,8 @@ use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
 use crate::memory::{xfree, xmemdupz};
 use crate::message::{msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar};
 use crate::normal::add_to_showcmd;
+use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
-use crate::os::libc::gettext;
 use crate::runtime::{getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{

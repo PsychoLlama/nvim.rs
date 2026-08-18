@@ -17,7 +17,7 @@ use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_isIDc, vim_isfilec, vim_isprintc};
 use crate::main::rc_did_emsg;
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
-use crate::os::libc::__ctype_b_loc;
+use crate::os::cshim::__ctype_b_loc;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ADD_NL, ANYBUT, ANYOF, CLASS_ALNUM,
     CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE, CLASS_FNAME,

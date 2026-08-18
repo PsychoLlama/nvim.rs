@@ -18,12 +18,13 @@ use crate::eval::{FAIL, INT_MAX, VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::garray::ga_grow;
 use crate::memory::xrealloc;
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::strings::concat_str;
 use crate::types::{
     VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, float_T, typval_T,
     typval_vval_union, varnumber_T,
 };
+use ::libc::strlen;
 
 /// The length of the scratch buffer `tv_get_string_buf` may render a Number
 /// or a Float into. `NUMBUFLEN` in the C.

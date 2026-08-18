@@ -40,15 +40,12 @@ use crate::message::{
 };
 use crate::option::copy_option_part;
 use crate::options::kOptFdoFlagUndo;
+use crate::os::cshim::{getc, gettext, memmove, ngettext};
 use crate::os::fs::{
     os_fchown, os_fileinfo, os_fopen, os_free_acl, os_fsync, os_get_acl, os_getperm, os_isdir,
     os_mkdir_recurse, os_open, os_path_exists, os_remove, os_set_acl, os_setperm,
 };
 use crate::os::input::fast_breakcheck;
-use crate::os::libc::{
-    abort, close, fclose, fdopen, fflush, fread, fwrite, getc, gettext, getuid, memcmp, memmove,
-    memset, ngettext, strcmp, strftime, strlen, time,
-};
 use crate::os::time::{os_localtime_r, os_time, tm_zeroed};
 use crate::path::{FullName_save, concat_fnames, path_tail, vim_ispathsep};
 use crate::pos::clearpos;
@@ -57,6 +54,10 @@ use crate::spell::spell_check_window;
 use crate::state::virtual_active;
 use crate::strings::{sort_strings, vim_snprintf, vim_snprintf_add, vim_strchr};
 use crate::types::*;
+use ::libc::{
+    abort, close, fclose, fdopen, fflush, fread, fwrite, getuid, memcmp, memset, strcmp, strftime,
+    strlen, time,
+};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 

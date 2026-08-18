@@ -45,13 +45,14 @@ use crate::main::{IObuff, e_notopen, got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::{msg_clr_eos, msg_outtrans_long, msg_start};
+use crate::os::cshim::{gettext, memmove};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{fclose, gettext, memmove, strlen};
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
 use crate::types::{CONV_NONE, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t};
 use crate::ui::ui_flush;
+use ::libc::{fclose, strlen};
 
 use super::flags::{flag_in_afflist, get_affitem};
 use super::wordtree::store_word;

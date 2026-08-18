@@ -22,7 +22,7 @@ use crate::main::{e_null, rc_did_emsg};
 use crate::mbyte::utf_ptr2char;
 use crate::memory::{xfree, xmalloc};
 use crate::message::iemsg;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::regexp::{
     BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, END, EOW,
     EXACTLY, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
@@ -36,6 +36,7 @@ use crate::regexp::{
 };
 use crate::semsg;
 use crate::types::{int64_t, regprog_T, size_t, uint8_t, uint32_t};
+use ::libc::strlen;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');

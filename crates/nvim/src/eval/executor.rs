@@ -15,12 +15,13 @@ use crate::eval::typval::{
 };
 use crate::eval::{grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
-use crate::os::libc::{abort, memmove};
+use crate::os::cshim::memmove;
 use crate::strings::concat_str;
 use crate::types::{
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
     VAR_STRING, VAR_UNKNOWN, blob_T, float_T, listitem_T, typval_T, uint8_t, varnumber_T,
 };
+use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int};
 
 /// The size of the buffer `tv_get_string_buf` formats a number into.

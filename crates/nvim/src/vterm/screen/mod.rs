@@ -28,7 +28,7 @@ use core::ops::{Deref, DerefMut};
 
 use self::resize::{realloc_sb_buffer, resize};
 use crate::global_cell::GlobalCell;
-use crate::os::libc::memmove;
+use crate::os::cshim::memmove;
 use crate::types::{
     ScreenCell, ScreenPen, VTerm, VTermAttr, VTermColor, VTermDamageSize, VTermGlyphInfo,
     VTermLineInfo, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,

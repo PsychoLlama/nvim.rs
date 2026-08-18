@@ -51,7 +51,6 @@ use crate::normal::{
     nv_max_linear, set_vcount_ca, start_selection,
 };
 use crate::ops::{do_pending_operator, get_op_type};
-use crate::os::libc::qsort;
 use crate::register::get_default_register_name;
 use crate::state::{
     MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE, MODE_SELECT,
@@ -62,6 +61,7 @@ use crate::types::{
     GraphemeState, OP_COLON, OP_NOP, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
+use ::libc::qsort;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::getchar::{

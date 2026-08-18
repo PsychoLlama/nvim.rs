@@ -19,7 +19,7 @@ use core::ffi::c_int;
 use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing_legacy};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::regexp::{
     BACK, BRACE_COMPLEX, BRANCH, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, NUL, RE_MAGIC,
     RE_STRICT, RE_STRING, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,

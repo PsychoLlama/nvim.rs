@@ -12,13 +12,14 @@ use crate::eval::{callback_from_typval, clear_lval, get_lval};
 use crate::ex_cmds::check_secure;
 use crate::main::{e_dictkey, e_invarg2, e_trailing_arg};
 use crate::memory::xmalloc;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
     Callback, Callback_data, EvalFuncData, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, typval_T,
     varnumber_T,
 };
 use crate::{semsg, semsg_c};
+use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

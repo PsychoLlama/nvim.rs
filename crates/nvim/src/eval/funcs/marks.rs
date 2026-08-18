@@ -12,7 +12,7 @@ use crate::eval::typval::{
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::main::{curbuf, curwin, emsg_off, vim_ignored};
 use crate::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{

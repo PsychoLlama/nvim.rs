@@ -38,9 +38,9 @@ use crate::message::{
 use crate::r#move::validate_virtcol;
 use crate::option::shortmess;
 use crate::options::{kOptIconstring, kOptTitlestring};
+use crate::os::cshim::{gettext, ngettext};
 use crate::os::env::home_replace;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{gettext, ngettext, qsort, strcmp, strcpy, strlen};
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
 use crate::statusline::build_stl_str_hl;
@@ -51,6 +51,7 @@ use crate::types::{OptIndex, OptInt, buf_T, exarg_T, int64_t, linenr_T, size_t, 
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{bufIsChanged, curbufIsChanged, undo_fmt_time};
 use crate::winlayer::{Buf, Win, buffers};
+use ::libc::{qsort, strcmp, strcpy, strlen};
 
 use super::list::buf_time_compare;
 

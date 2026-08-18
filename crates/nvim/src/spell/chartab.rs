@@ -29,9 +29,9 @@ use crate::mbyte::{
     utf_char2bytes, utf_class, utf_fold, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memory::xstrlcpy;
-use crate::os::libc::strcpy;
 use crate::strings::vim_strchr;
 use crate::types::{MB_MAXBYTES, spelltab_T, uint8_t, win_T};
+use ::libc::strcpy;
 
 use super::{FAIL, MAXWLEN, NUL, OK, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
 

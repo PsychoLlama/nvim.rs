@@ -29,11 +29,12 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_replace};
 use crate::memory::xfree;
 use crate::option::magic_isset;
-use crate::os::libc::{memmove, strcat, strlen};
+use crate::os::cshim::memmove;
 use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
 use crate::types::{bcount_t, colnr_T, linenr_T, lpos_T, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
+use ::libc::{strcat, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

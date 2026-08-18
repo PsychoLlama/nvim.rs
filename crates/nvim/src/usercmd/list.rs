@@ -33,8 +33,8 @@ use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
     msg_puts, msg_puts_hl, msg_puts_title,
 };
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::gettext;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
 use crate::types::{

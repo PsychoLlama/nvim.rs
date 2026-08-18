@@ -39,10 +39,11 @@ use crate::hashtab::hash_removed;
 use crate::main::{e_notopen, e_write};
 use crate::mbyte::utf_char2bytes;
 use crate::message::emsg;
+use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
-use crate::os::libc::{fclose, fputc, fwrite, gettext, putc, qsort, strcmp, strlen, time};
 use crate::spell::spelltab;
 use crate::types::{FILE, fromto_T, garray_T, size_t, time_t, uintmax_t};
+use ::libc::{fclose, fputc, fwrite, qsort, strcmp, strlen, time};
 
 use super::wordtree::wordnode_T;
 use super::{

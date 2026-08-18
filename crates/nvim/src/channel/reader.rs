@@ -21,12 +21,12 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::garray::{ga_clear, ga_concat_len, ga_init};
 use crate::main::e_streamkey;
-use crate::os::libc::strlen;
 use crate::terminal::terminal_receive;
 use crate::types::{
     CallbackReader, Channel, RStream, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
     kListLenMayKnow, list_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
+use ::libc::strlen;
 
 use super::{channel_decref, channel_incref, translated};
 

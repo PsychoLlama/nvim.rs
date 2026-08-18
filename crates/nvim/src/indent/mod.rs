@@ -31,10 +31,11 @@ use crate::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::options::kOptDyFlagUhex;
-use crate::os::libc::{abort, gettext};
+use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::textformat::has_format_option;
 use crate::types::*;
+use ::libc::abort;
 
 // `regexp.rs` keeps its own copy of `regprog_T`, so these stay declarations
 // rather than imports. `breakindent.rs` reaches them through `use super::*`.

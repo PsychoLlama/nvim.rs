@@ -22,7 +22,7 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::stream::{stream_close_handle, stream_init, stream_may_close};
 use crate::log::{LOGLVL_DBG, logmsg_c};
 use crate::memory::{alloc_block, free_block};
-use crate::os::libc::memmove;
+use crate::os::cshim::memmove;
 use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
 use crate::types::{
     Event, Loop, RStream, Stream, size_t, ssize_t, stream_read_cb, uv_buf_t, uv_fs_t, uv_handle_t,

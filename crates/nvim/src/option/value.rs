@@ -17,7 +17,7 @@ use crate::api::private::helpers::{api_free_string, copy_string, cstr_as_string}
 use crate::main::{curbuf, empty_string_option};
 use crate::memory::{strnequal, xmalloc, xstrdup};
 use crate::options::options;
-use crate::os::libc::snprintf;
+use crate::os::cshim::snprintf;
 use crate::types::{
     Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, TriState, kFalse, kNone,
     kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kTrue, object,

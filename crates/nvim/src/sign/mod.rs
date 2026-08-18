@@ -64,7 +64,7 @@ use crate::marktree::{marktree_itr_current, marktree_itr_get, marktree_itr_next}
 use crate::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title};
-use crate::os::libc::{atoi, gettext, snprintf, strcmp, strlen, strncmp};
+use crate::os::cshim::{gettext, snprintf, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText,
@@ -74,6 +74,7 @@ use crate::types::{
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, windows};
+use ::libc::{atoi, strcmp, strlen};
 
 mod command;
 pub use self::command::*;

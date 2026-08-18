@@ -26,13 +26,14 @@ use crate::main::{
 use crate::memory::{xfree, xstrdup};
 use crate::message::{msg, msg_ext_set_kind};
 use crate::r#move::{update_topline, validate_cursor};
+use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save;
-use crate::os::libc::{fclose, gettext, strcasecmp};
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
 use crate::types::{FILE, VV_HLSEARCH, exarg_T, ssize_t, uint8_t, varnumber_T};
 use crate::ui::ui_flush;
+use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {

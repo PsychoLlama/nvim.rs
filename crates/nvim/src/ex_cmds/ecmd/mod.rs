@@ -60,7 +60,6 @@ use crate::message::{msg_check_for_delay, msg_start};
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_VIsual;
 use crate::option::shortmess;
-use crate::os::libc::time;
 use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
@@ -73,6 +72,7 @@ use crate::types::{
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
 use crate::winlayer::tab_windows;
+use ::libc::time;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

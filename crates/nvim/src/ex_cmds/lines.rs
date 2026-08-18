@@ -22,7 +22,7 @@ use crate::mark::mark_adjust_nofold;
 use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len};
 use crate::memory::xfree;
 use crate::message::{emsg, msgmore};
-use crate::os::libc::{gettext, ngettext};
+use crate::os::cshim::{gettext, ngettext};
 use crate::smsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{OptInt, bcount_t, int64_t, linenr_T, size_t};

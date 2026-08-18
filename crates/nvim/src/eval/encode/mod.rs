@@ -41,13 +41,14 @@ use crate::global_cell::GlobalCell;
 use crate::main::IObuff;
 use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
-use crate::os::libc::{abort, gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
     ListReaderState, MessagePackType, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING, VAR_UNLOCKED,
     garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
+use ::libc::{abort, strlen};
 
 // The sinks carved out of this module's `typval_encode.c.h` instantiations.
 mod json;

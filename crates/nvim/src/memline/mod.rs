@@ -48,16 +48,13 @@ use crate::message::{
 };
 use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
+use crate::os::cshim::{gettext, memmove, strncasecmp, strncmp};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_hostname, os_get_pid};
 use crate::os::fs::{
     os_fileinfo, os_fileinfo_inode, os_fileinfo_link, os_fileinfo_size, os_isdir, os_mkdir_recurse,
     os_open, os_path_exists, os_remove, os_set_cloexec,
 };
 use crate::os::input::{line_breakcheck, os_char_avail};
-use crate::os::libc::{
-    __errno_location, close, gettext, lseek, memmove, readlink, strcasecmp, strcmp, strcpy, strlen,
-    strncasecmp, strncmp,
-};
 use crate::os::proc::os_proc_running;
 use crate::os::time::{os_ctime_r, os_time};
 use crate::os::users::{os_get_uname, os_get_username};
@@ -81,6 +78,7 @@ use crate::types::{
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::bufIsChanged;
 use crate::version::min_vim_version_name;
+use ::libc::{__errno_location, close, lseek, readlink, strcasecmp, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod block0;

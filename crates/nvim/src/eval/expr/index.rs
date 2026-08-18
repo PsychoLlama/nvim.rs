@@ -29,12 +29,13 @@ use crate::main::{e_dictkey, e_dictkey_len, e_using_float_as_string};
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::types::{
     EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T,
     ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
 };
+use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

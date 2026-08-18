@@ -29,13 +29,14 @@ use crate::main::{
 };
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen, strncmp};
+use crate::os::cshim::{gettext, strncmp};
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, Object, VAR_BOOL,
     VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, expand_T, float_T,
     kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, typval_T, typval_vval_union, win_T,
 };
 use crate::{semsg_c, semsg_multiline_c};
+use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 

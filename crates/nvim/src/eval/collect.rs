@@ -62,7 +62,7 @@ use crate::mbyte::string_convert;
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{emsg, internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::quickfix::set_ref_in_quickfix;
 use crate::register::op_global_reg_iter;
 use crate::runtime::exestack;

@@ -18,7 +18,6 @@ use crate::event::r#loop::{loop_purge, loop_size};
 use crate::grid::{schar_cache_clear_if_full, schar_get, schar_get_ascii};
 use crate::log::{LOGLVL_WRN, logmsg_c};
 use crate::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
-use crate::os::libc::{fclose, fopen, fprintf};
 use crate::tui::attrs::{attrs_differ, update_attrs};
 use crate::tui::events::tui_busy_stop;
 use crate::tui::negotiate::{LEFT_AND_RIGHT_MARGINS, tui_set_term_mode};
@@ -34,6 +33,7 @@ use crate::tui::terminfo::caps::{
     kTerm_set_lr_margin,
 };
 use crate::types::{FILE, Integer, LineFlags, Rect, String_0, TUIData, UCell, sattr_T, schar_T};
+use ::libc::{fclose, fopen, fprintf};
 use core::ffi::{c_char, c_int};
 
 /// The `schar_T` value of a cell nothing has been drawn into, and of the

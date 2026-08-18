@@ -17,25 +17,14 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg_c};
 use crate::main::{IObuff, curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
-use crate::os::libc::snprintf;
+use crate::os::cshim::snprintf;
 use crate::types::{
     SignalWatcher, VV_DYING, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
     uv_signal_t,
 };
+use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-
-unsafe extern "C" {
-    fn sigemptyset(set: *mut sigset_t) -> c_int;
-    fn pthread_sigmask(how: c_int, newmask: *const sigset_t, oldmask: *mut sigset_t) -> c_int;
-}
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct __sigset_t {
-    pub __val: [::core::ffi::c_ulong; 16],
-}
-pub type sigset_t = __sigset_t;
 
 // Signal numbers, for this module and for anything else that names one. Only
 // the values Linux and the BSDs agree on are listed without qualification;
@@ -111,7 +100,9 @@ fn watcher(i: usize) -> *mut SignalWatcher {
 /// Register a watcher per signal in [`WATCHED`] with the main loop and start
 /// them.
 pub fn signal_init() {
-    let mut mask = sigset_t { __val: [0; 16] };
+    // `sigemptyset` fills it in; libc's `sigset_t` has no public fields, and
+    // the C spelled this the same way (an uninitialised local).
+    let mut mask: sigset_t = unsafe { core::mem::zeroed() };
     // SAFETY: `mask` is a live out-parameter; the log call takes no format
     // arguments; the main loop is initialised before this runs and every
     // watcher address comes from the static array.

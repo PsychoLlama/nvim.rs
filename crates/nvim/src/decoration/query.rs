@@ -23,12 +23,12 @@ use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::xrealloc;
-use crate::os::libc::memcpy;
 use crate::types::{
     DecorVirtText, MarkTreeIter, OptInt, VirtLines, VirtText, buf_T, linenr_T, size_t, uint64_t,
     virt_line, win_T,
 };
 use crate::winlayer::{Buf, Win};
+use ::libc::memcpy;
 use core::ffi::{c_char, c_int};
 use core::{mem, ptr, slice};
 

@@ -24,7 +24,7 @@ use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_ty
 use crate::garray::Gap;
 use crate::memory::xfree;
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{blob_T, dict_T, float_T, garray_T, int64_t, size_t, typval_T};
 

@@ -23,14 +23,15 @@ use crate::main::{IObuff, curbuf, curwin, e_argreq, got_int};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace};
 use crate::memory::{strequal, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_open_stdin};
-use crate::os::libc::{gettext, memcpy, strlen};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
     CMD_equal, FileDescriptor, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t, typval_T,
 };
 use crate::undo::u_save;
+use ::libc::{memcpy, strlen};
 
 /// The wrapper `:luado`'s body is compiled inside, so each line is one call.
 const DOSTART: &CStr = c"return function(line, linenr) ";

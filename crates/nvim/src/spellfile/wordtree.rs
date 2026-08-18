@@ -45,12 +45,13 @@ use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_looku
 use crate::main::{IObuff, curwin, got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{utf_valid_string, utfc_ptr2len};
 use crate::message::{msg_clr_eos, msg_puts, msg_start};
+use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
-use crate::os::libc::{gettext, strlen};
 use crate::spell::{captype, spell_casefold};
 use crate::strings::vim_snprintf;
 use crate::types::{hashtab_T, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
+use ::libc::strlen;
 
 use super::{FAIL, IOSIZE, MAXWLEN, NUL, OK, WF_KEEPCAP, spell_message, spellinfo_T};
 

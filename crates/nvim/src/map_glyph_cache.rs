@@ -1,8 +1,8 @@
 use crate::api::private::helpers::cstr_as_string;
 use crate::map::{MapKey, mh_realloc};
 use crate::memory::xrealloc;
-use crate::os::libc::{abort, memcpy, strlen};
 use crate::types::{MHPutStatus, MapHash, Set_glyph, String_0, size_t, uint32_t};
+use ::libc::{abort, memcpy, strlen};
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;

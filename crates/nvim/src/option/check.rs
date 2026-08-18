@@ -34,7 +34,7 @@ use crate::options::*;
 use crate::optionstr::{
     check_string_option, did_set_breakat, didset_string_options, set_chars_option,
 };
-use crate::os::libc::strchr;
+use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;

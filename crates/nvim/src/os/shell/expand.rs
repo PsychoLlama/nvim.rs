@@ -16,8 +16,8 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, msg, msg_putchar, msg_start};
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_can_exe, os_isdir, os_path_exists, os_remove};
-use crate::os::libc::gettext;
 use crate::os::time::os_delay;
 use crate::path::{ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
 use crate::semsg_c;

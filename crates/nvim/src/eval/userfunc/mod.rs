@@ -60,11 +60,8 @@ use crate::message::{
     msg_prt_line, msg_putchar, msg_puts, msg_start, trunc_string, verbose_enter_scroll,
     verbose_leave_scroll,
 };
+use crate::os::cshim::{gettext, memmove, snprintf, strncmp, strstr};
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{
-    abort, gettext, memcmp, memcpy, memmove, memset, snprintf, strcmp, strcpy, strlen, strncmp,
-    strstr,
-};
 use crate::path::path_fnamecmp;
 use crate::profile::{
     func_do_profile, func_line_end, func_line_start, prof_def_func, profile_add, profile_end,
@@ -88,6 +85,7 @@ use crate::types::{
     regmatch_T, save_redo_T, size_t, typval_T, ufunc_T, varnumber_T,
 };
 use crate::ui::ui_has;
+use ::libc::{abort, memcmp, memcpy, memset, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod args;

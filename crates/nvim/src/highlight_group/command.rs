@@ -25,7 +25,7 @@ use crate::main::{
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::runtime::exestack;
 use crate::types::ui::kUILinegrid;
 use crate::types::{OptVal, OptValData, estack_T, kFalse, kTrue};

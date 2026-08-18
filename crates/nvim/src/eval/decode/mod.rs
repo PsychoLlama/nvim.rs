@@ -23,11 +23,11 @@ use crate::eval::typval::{
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::garray::ga_concat_len;
 use crate::memory::xmemdupz;
-use crate::os::libc::memchr;
 use crate::types::{
     MessagePackType, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNLOCKED, dictitem_T, list_T, ptrdiff_t,
     size_t, typval_T, typval_vval_union,
 };
+use ::libc::memchr;
 
 mod json;
 mod msgpack;

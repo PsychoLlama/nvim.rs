@@ -25,34 +25,18 @@ use crate::event::r#loop::loop_children;
 use crate::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::os::cshim::environ;
 use crate::os::fs::os_set_cloexec;
-use crate::os::libc::{
-    __errno_location, _exit, cfsetispeed, cfsetospeed, close, dup, environ, execvp, fcntl, forkpty,
-    ioctl, kill, killpg, ptsname, setsid, strerror, waitpid,
-};
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
 use crate::types::{Loop, Proc, PtyProc, speed_t, uv_file, uv_pipe_t, uv_signal_t};
+use ::libc::{
+    __errno_location, _exit, cfsetispeed, cfsetospeed, close, dup, execvp, fcntl, forkpty, ioctl,
+    kill, killpg, ptsname, setsid, strerror, waitpid,
+};
+use ::libc::{SIG_DFL, poll, pollfd, signal};
 use core::ffi::{c_char, c_int, c_short, c_ulong, c_void};
 use core::ptr;
 use wait_status::ChildState;
-
-unsafe extern "C" {
-    fn signal(sig: c_int, handler: SigHandler) -> SigHandler;
-    fn poll(fds: *mut pollfd, nfds: c_ulong, timeout: c_int) -> c_int;
-}
-
-type SigHandler = Option<unsafe extern "C" fn(c_int)>;
-
-/// Restore a signal to its default disposition.
-const SIG_DFL: SigHandler = None;
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct pollfd {
-    pub fd: c_int,
-    pub events: c_short,
-    pub revents: c_short,
-}
 
 const POLLIN: c_short = 0x1;
 const EINTR: c_int = 4;
@@ -323,7 +307,7 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
     let prog = proc_get_exepath(proc);
     debug_assert!(!(*proc).env.is_null());
     environ = tv_dict_to_env((*proc).env);
-    execvp(prog, (*proc).argv as *const *mut c_char);
+    execvp(prog, (*proc).argv as *const *const c_char);
     logmsg_c!(
         LOGLVL_ERR,
         ptr::null(),

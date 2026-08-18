@@ -46,13 +46,13 @@ use crate::options::{
     kOptSsopFlagTerminal, kOptSsopFlagWinsize,
 };
 use crate::os::env::home_replace_save;
-use crate::os::libc::fprintf;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
     VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, buf_T, dictitem_T, frame_T,
     hashitem_T, int64_t, typval_T, win_T,
 };
 use crate::window::tabpage_index;
+use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

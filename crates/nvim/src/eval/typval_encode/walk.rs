@@ -17,12 +17,12 @@ use crate::eval::vars::eval_msgpack_type_lists;
 use crate::eval::{get_copyID, partial_name};
 use crate::memory::xfree;
 use crate::message::internal_error;
-use crate::os::libc::strlen;
 use crate::types::{
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, dictitem_T, int64_t, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
+use ::libc::strlen;
 
 /// Apply a hook's verdict inside `convert_one_value`, where "stop" is
 /// upstream's `goto typval_encode_stop_converting_one_item` into that

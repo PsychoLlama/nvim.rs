@@ -64,7 +64,6 @@ use crate::memline::ml_delete_buf;
 use crate::r#move::win_col_off;
 use crate::option::set_option_value;
 use crate::options::kOptBuftype;
-use crate::os::libc::{abort, strlen};
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
@@ -92,6 +91,7 @@ use crate::vterm::vterm::{
     vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
 };
 use crate::winlayer::{Buf, Win, tab_windows, windows};
+use ::libc::{abort, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ops::{Deref, DerefMut};
 

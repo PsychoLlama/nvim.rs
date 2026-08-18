@@ -8,12 +8,13 @@ use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, current_sctx, curwin, did_emsg, emsg_off};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
-use crate::os::libc::{memmove, memset, ngettext, strlen, strncmp, strstr};
+use crate::os::cshim::{memmove, ngettext, strncmp, strstr};
 use crate::strings::vim_snprintf;
 use crate::types::{
     VV_FOLDDASHES, VV_FOLDEND, VV_FOLDLEVEL, VV_FOLDSTART, kErrorTypeNone, kObjectTypeArray,
     kObjectTypeNil, kObjectTypeString,
 };
+use ::libc::{memset, strlen};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 

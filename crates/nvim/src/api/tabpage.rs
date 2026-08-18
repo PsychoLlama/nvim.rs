@@ -8,7 +8,6 @@ use crate::api::vim::nvim_get_current_win;
 use crate::main::{
     autocmd_no_enter, autocmd_no_leave, cmdwin_buf, cmdwin_type, curtab, curwin, e_cmdwin, firstwin,
 };
-use crate::os::libc::abort;
 use crate::types::{
     Arena, Array, Boolean, Buffer, Error, Integer, KeyDict_tabpage_config, Object, String_0,
     Tabpage, TryState, Window, buf_T, except_T, kErrorTypeException, kErrorTypeNone,
@@ -18,6 +17,7 @@ use crate::types::{
 use crate::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
 };
+use ::libc::abort;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,

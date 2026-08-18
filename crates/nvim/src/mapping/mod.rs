@@ -58,10 +58,7 @@ use crate::message::{
     msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl, msg_start, str2special_arena,
     str2special_save,
 };
-use crate::os::libc::{
-    abort, fprintf, fputc, fputs, gettext, putc, snprintf, strcasecmp, strchr, strcmp, strlen,
-    strncmp, strpbrk, strstr,
-};
+use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp, strstr};
 use crate::regexp::vim_regexec;
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
@@ -75,6 +72,7 @@ use crate::types::{
     mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t,
     typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
+use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strcmp, strlen, strpbrk};
 
 // The carve of the transpiled module; see each child's docs.
 mod table;

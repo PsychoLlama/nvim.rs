@@ -20,7 +20,6 @@ use crate::main::cb_flags;
 use crate::memory::{xcalloc, xfree};
 use crate::message::{emsg, msg, redirecting};
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
-use crate::os::libc::strlen;
 use crate::register::{
     PLUS_REGISTER, STAR_REGISTER, free_register, get_y_previous, get_y_register, kMTBlockWise,
     kMTCharWise, kMTLineWise, kMTUnknown, update_yankreg_width,
@@ -29,6 +28,7 @@ use crate::types::{
     AdditionalData, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, ptrdiff_t, size_t, ssize_t,
     yankreg_T,
 };
+use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 
 pub const NUL: c_int = 0;

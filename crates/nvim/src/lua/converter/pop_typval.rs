@@ -30,13 +30,14 @@ use crate::lua::ffi::{
 use crate::main::nlua_global_refs;
 use crate::memory::xstrdup;
 use crate::message::emsg;
-use crate::os::libc::{abort, gettext};
+use crate::os::cshim::gettext;
 use crate::types::{
     LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
     VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t, typval_T,
     typval_vval_union, varnumber_T,
 };
+use ::libc::abort;
 
 /// Refused when the Lua stack will not grow far enough for the next value.
 const E1502_GROW_STACK: &CStr = c"E1502: Lua failed to grow stack to %i";

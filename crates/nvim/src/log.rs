@@ -42,10 +42,8 @@ use crate::types::{
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
-use crate::os::libc::{
-    __errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, snprintf, stderr, stdout,
-    strerror, strftime,
-};
+use crate::os::cshim::{snprintf, stderr, stdout};
+use ::libc::{__errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, strerror, strftime};
 
 /// The levels [`logmsg_c!`] takes, and 'verbose' compares against.
 pub const LOGLVL_DBG: c_int = 1;
@@ -397,7 +395,7 @@ macro_rules! logmsg_c {
             false
         } else {
             let payload_ok =
-                $crate::os::libc::fprintf(log_file, fmt $(, $arg)*) >= 0;
+                ::libc::fprintf(log_file, fmt $(, $arg)*) >= 0;
             $crate::log::logmsg_finish(log_file, eol, payload_ok)
         }
     }};

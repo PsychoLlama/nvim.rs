@@ -59,6 +59,7 @@ use crate::option::{
     set_option_direct, set_options_bin, shortmess,
 };
 use crate::options::kOptFileencoding;
+use crate::os::cshim::{getc, gettext, ngettext, putc, snprintf};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_env_exists};
 use crate::os::fs::{
     os_closedir, os_copy, os_dirname, os_fchown, os_file_is_writable, os_file_owned, os_fileinfo,
@@ -67,11 +68,6 @@ use crate::os::fs::{
     os_rmdir, os_scandir, os_scandir_next, os_set_acl, os_set_cloexec, os_setperm,
 };
 use crate::os::input::os_breakcheck;
-use crate::os::libc::{
-    __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, getc, gettext, iconv,
-    iconv_close, lseek, memchr, memcpy, ngettext, putc, read, readlink, snprintf, strcmp, strlen,
-    symlink, umask, write,
-};
 use crate::os::users::os_get_username;
 use crate::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
@@ -95,6 +91,10 @@ use crate::undo::{
     bufIsChanged, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
+use ::libc::{
+    __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, iconv, iconv_close, lseek,
+    memchr, memcpy, read, readlink, strcmp, strlen, symlink, umask, write,
+};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -115,18 +115,6 @@ mod names;
 pub use self::names::*;
 mod tempfile;
 pub use self::tempfile::*;
-// Opaque C type: layout unknown here, only ever used behind a pointer.
-#[repr(C)]
-pub struct __dirstream {
-    _data: [u8; 0],
-    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
-}
-unsafe extern "C" {
-    fn closedir(__dirp: *mut DIR) -> ::core::ffi::c_int;
-    fn opendir(__name: *const ::core::ffi::c_char) -> *mut DIR;
-    fn dirfd(__dirp: *mut DIR) -> ::core::ffi::c_int;
-}
-pub type DIR = __dirstream;
 pub type C2Rust_Unnamed_5 = ::core::ffi::c_int;
 pub const kOptValTypeString: OptValType = 2;
 pub const BLN_DUMMY: bln_values = 4;

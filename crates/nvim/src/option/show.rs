@@ -34,15 +34,16 @@ use crate::options::{
     kOptFoldlevel, kOptFoldmarker, kOptFoldmethod, kOptFoldminlines, kOptFoldnestmax, kOptSyntax,
     options,
 };
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::{fprintf, fputs, gettext, snprintf, strlen};
 use crate::strings::vim_strchr;
 use crate::types::{
     FILE, OptIndex, OptInt, OptVal, buf_T, kNone, kTrue, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbufIsChanged;
+use ::libc::{fprintf, fputs, strlen};
 
 use super::{
     FAIL, MAXPATHL, NUL, OK, OPT_GLOBAL, OPT_LOCAL, OPT_ONECOLUMN, OPT_SKIPRTP, copy_option_part,

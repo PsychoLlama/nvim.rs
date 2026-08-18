@@ -38,7 +38,6 @@ use crate::memory::xrealloc;
 use crate::option::set_option_value_give_err;
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
-use crate::os::libc::strcmp;
 use crate::pos::MAXLNUM;
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -46,6 +45,7 @@ use crate::types::{
     int64_t, kFalse, linenr_T, size_t, varnumber_T, win_T,
 };
 use crate::winlayer::buffers;
+use ::libc::strcmp;
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped

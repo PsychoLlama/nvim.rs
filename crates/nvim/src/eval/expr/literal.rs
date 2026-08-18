@@ -30,12 +30,13 @@ use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, iemsg};
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
 use crate::options::{kOptAleph, kOptInvalid};
+use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
-use crate::os::libc::{gettext, strlen, strncasecmp, strtod, toupper};
 use crate::types::{
     OptIndex, OptVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T,
     float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
+use ::libc::{strlen, strtod, toupper};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

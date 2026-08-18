@@ -61,7 +61,7 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
 use crate::option::{kOptValTypeNumber, set_option_value, ui_refresh_options};
 use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::os::time::{os_hrtime, os_sleep};
 use crate::state::MODE_CMDLINE;
 use crate::strings::vim_strchr;

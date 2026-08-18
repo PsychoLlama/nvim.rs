@@ -22,8 +22,9 @@ use crate::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,
 };
-use crate::os::libc::{abort, gettext};
+use crate::os::cshim::gettext;
 use crate::types::{VAR_LIST, VAR_STRING, list_T, typval_T};
+use ::libc::abort;
 
 const E474_COMMA_BEFORE_LIST_ITEM: &CStr = c"E474: Expected comma before list item: %s";
 const E474_COLON_BEFORE_DICT_VALUE: &CStr = c"E474: Expected colon before dictionary value: %s";

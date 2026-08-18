@@ -41,7 +41,6 @@ use crate::main::{
 };
 use crate::r#move::scroll_cursor_halfway;
 use crate::option::buf_copy_options;
-use crate::os::libc::time;
 use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
@@ -51,6 +50,7 @@ use crate::types::{
 };
 use crate::undo::u_sync;
 use crate::window::{get_last_winid, win_valid};
+use ::libc::time;
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped

@@ -24,7 +24,7 @@ use crate::mbyte::{
 };
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::{emsg, str2special_save};
-use crate::os::libc::{gettext, memmove, mktime, strftime, strlen, time};
+use crate::os::cshim::{gettext, memmove};
 use crate::os::time::{os_localtime_r, os_strptime, tm_zeroed};
 use crate::regexp::{
     RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_list, vim_regcomp, vim_regexec_nl, vim_regfree,
@@ -39,6 +39,7 @@ use crate::types::{
     CONV_NONE, EvalFuncData, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T, hlf_T,
     kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T, vimconv_T,
 };
+use ::libc::{mktime, strftime, strlen, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
 use core::ptr;
 

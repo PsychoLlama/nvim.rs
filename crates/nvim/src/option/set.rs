@@ -43,7 +43,7 @@ use crate::options::{
     kOptSidescrolloff, kOptUndolevels, options,
 };
 use crate::optionstr::check_illegal_path_names;
-use crate::os::libc::{gettext, snprintf, strlen};
+use crate::os::cshim::{gettext, snprintf};
 use crate::runtime::exestack;
 use crate::types::{
     OptIndex, OptVal, OptValData, String_0, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD,
@@ -52,6 +52,7 @@ use crate::types::{
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
+use ::libc::strlen;
 
 use super::{
     IOSIZE, NO_LOCAL_UNDOLEVEL, NUL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, SID_NONE,

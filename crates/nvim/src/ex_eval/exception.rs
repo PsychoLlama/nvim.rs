@@ -53,7 +53,7 @@ use crate::main::{
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
 use crate::message::{emsg, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::option::p_vfile;
-use crate::os::libc::{snprintf, strcat, strcpy, strlen, strncmp};
+use crate::os::cshim::{snprintf, strncmp};
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::smsg_c;
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
@@ -61,6 +61,7 @@ use crate::types::{
     VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T, except_type_T,
     exception_state_T, int64_t, list_T, msglist_T, ptrdiff_t,
 };
+use ::libc::{strcat, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -357,7 +358,7 @@ pub unsafe fn get_exception_string(
                 *p.sub(2) = NUL;
                 snprintf(
                     val.add(strlen(p)),
-                    strlen(c" (%s)".as_ptr()),
+                    c" (%s)".count_bytes(),
                     c" (%s)".as_ptr(),
                     mesg.add(1),
                 );

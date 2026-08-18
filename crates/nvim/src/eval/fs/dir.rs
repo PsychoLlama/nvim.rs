@@ -37,8 +37,8 @@ use crate::fileio::{delete_recursive, vim_copyfile, vim_rename, vim_tempname};
 use crate::main::{curtab, curwin, e_invarg, e_invargNval, e_invexpr2, e_mkdir, globaldir};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, os_rmdir};
-use crate::os::libc::{abort, gettext};
 use crate::path::{FullName_save, path_tail, path_tail_with_sep};
 use crate::semsg_c;
 use crate::types::{
@@ -47,6 +47,7 @@ use crate::types::{
     varnumber_T, win_T,
 };
 use crate::window::find_tabpage;
+use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

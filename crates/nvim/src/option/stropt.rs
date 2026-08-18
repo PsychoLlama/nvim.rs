@@ -34,9 +34,10 @@ use crate::ascii::ascii_iswhite;
 use crate::main::p_kp;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::os::libc::{memmove, strcpy, strlen, strncmp};
+use crate::os::cshim::{memmove, strncmp};
 use crate::strings::vim_strchr;
 use crate::types::{OptIndex, size_t, uint32_t};
+use ::libc::{strcpy, strlen};
 
 use super::{
     NUL, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, find_dup_item, kOptFlagColon,

@@ -34,7 +34,7 @@ use crate::main::{
 use crate::memfile::mf_fname;
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::message::wait_return;
-use crate::os::libc::{exit, fprintf, stderr, strlen, tcdrain};
+use crate::os::cshim::stderr;
 use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
@@ -42,6 +42,7 @@ use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{VAR_NUMBER, VV_EXITING, VV_EXITREASON, bufref_T, tabpage_T, varnumber_T};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
+use ::libc::{exit, fprintf, strlen, tcdrain};
 
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.

@@ -52,11 +52,9 @@ use crate::message::{
 };
 use crate::option::set_option_direct;
 use crate::options::kOptEventignore;
+use crate::os::cshim::{gettext, snprintf, strchr, strncasecmp, strncmp};
 use crate::os::env::expand_env_save;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{
-    abort, atoi, gettext, snprintf, strcasecmp, strchr, strcpy, strlen, strncasecmp, strncmp,
-};
 use crate::os::time::os_now;
 use crate::path::{FullName_save, path_fnamecmp, path_tail};
 use crate::profile::{prof_child_enter, prof_child_exit};
@@ -85,6 +83,7 @@ use crate::window::{
     win_init_empty, win_remove,
 };
 use crate::winfloat::win_config_float;
+use ::libc::{abort, atoi, strcasecmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod aucmdwin;

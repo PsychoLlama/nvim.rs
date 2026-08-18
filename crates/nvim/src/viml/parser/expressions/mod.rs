@@ -42,7 +42,7 @@ use crate::global_cell::GlobalCell;
 use crate::keycodes::trans_special;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utfc_ptr2len_len};
 use crate::memory::{xfree, xmalloc, xmallocz};
-use crate::os::libc::{abort, gettext};
+use crate::os::cshim::gettext;
 use crate::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, ExprVarScope,
@@ -55,6 +55,7 @@ use crate::types::{
 use crate::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
 };
+use ::libc::abort;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const STR2NR_ALL: C2Rust_Unnamed = 15;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;

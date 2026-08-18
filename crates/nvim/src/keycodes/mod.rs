@@ -32,9 +32,10 @@ use crate::mbyte::{
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
-use crate::os::libc::{gettext, snprintf, strlen, strncasecmp, strncmp};
+use crate::os::cshim::{gettext, snprintf, strncasecmp, strncmp};
 use crate::strings::vim_strchr;
 use crate::types::{MB_MAXBYTES, key_extra, scid_T, size_t, uvarnumber_T, varnumber_T};
+use ::libc::strlen;
 
 mod codes;
 pub use self::codes::*;

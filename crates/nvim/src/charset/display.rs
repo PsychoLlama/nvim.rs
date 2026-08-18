@@ -22,8 +22,8 @@ use crate::mbyte::{
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
-use crate::os::libc::strlen;
 use crate::types::{StringBuilder, buf_T, garray_T, size_t, ssize_t, uint8_t};
+use ::libc::strlen;
 
 use super::{
     CT_CELL_MASK, EOL_MAC, NL, NUL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,

@@ -26,7 +26,7 @@ use crate::lua::ffi::{
 use crate::main::{IObuff, main_loop, time_fd};
 use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::message::{msg_multihl, msg_putchar};
-use crate::os::libc::{gettext, snprintf, strcmp, strlen};
+use crate::os::cshim::{gettext, snprintf};
 use crate::profile::{time_msg, time_pop, time_push};
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;
@@ -35,6 +35,7 @@ use crate::types::{
     intptr_t, lua_State, proftime_T, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use crate::ui::ui_has;
+use ::libc::{strcmp, strlen};
 
 /// The message kind `print()`'s output is reported under.
 const LUA_PRINT_KIND: &CStr = c"lua_print";

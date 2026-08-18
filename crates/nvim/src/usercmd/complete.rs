@@ -33,8 +33,9 @@ use crate::mapping::set_context_in_map_cmd;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
-use crate::os::libc::{snprintf, strlen};
+use crate::os::cshim::snprintf;
 use crate::types::{CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, expand_T, uint32_t};
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

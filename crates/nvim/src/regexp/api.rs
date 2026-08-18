@@ -20,7 +20,7 @@ use super::{
 use crate::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
-use crate::os::libc::{gettext, strncmp};
+use crate::os::cshim::{gettext, strncmp};
 use crate::regexp::RE_AUTO;
 use crate::types::{
     OptInt, buf_T, colnr_T, linenr_T, proftime_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,

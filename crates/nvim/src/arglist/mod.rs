@@ -46,8 +46,8 @@ use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup};
 use crate::normal::reset_VIsual_and_resel;
 use crate::option::magic_isset;
+use crate::os::cshim::memmove;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::{memmove, strlen};
 use crate::path::{
     ExpandFlags, FullName_save, expand_wildcards, fix_fname, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
@@ -60,6 +60,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 

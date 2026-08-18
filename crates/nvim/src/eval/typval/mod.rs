@@ -29,11 +29,8 @@ use crate::main::{
 use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup};
 use crate::message::emsg;
+use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::os::input::{fast_breakcheck, line_breakcheck};
-use crate::os::libc::{
-    abort, gettext, memcmp, memcpy, memmove, qsort, snprintf, strcasecmp, strcmp, strcoll, strcpy,
-    strlen, strncmp, strtod,
-};
 use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Arena, BoolVarValue, Callback, CallbackType, DictWatcher, EvalFuncData, LuaRef,
@@ -45,6 +42,7 @@ use crate::types::{
     ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t,
     varnumber_T, vimconv_T,
 };
+use ::libc::{abort, memcmp, memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strlen, strtod};
 
 // The carve of the transpiled module; see each child's docs.
 mod access;

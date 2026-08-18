@@ -26,8 +26,8 @@ use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
+use crate::os::cshim::{gettext, ngettext, strncmp};
 use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
-use crate::os::libc::{gettext, ngettext, strcasecmp, strcmp, strncmp};
 use crate::strings::vim_snprintf;
 use crate::types::regexp::regmatch_T;
 use crate::types::{
@@ -35,6 +35,7 @@ use crate::types::{
     int32_t, intmax_t, size_t, uint8_t,
 };
 use crate::window::{only_one_window, tabpage_index, valid_tabpage};
+use ::libc::{strcasecmp, strcmp};
 
 /// Take a `+cmd` argument, and answer the command it names.
 ///

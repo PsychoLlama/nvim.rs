@@ -70,12 +70,10 @@ use crate::option::{
 use crate::options::{
     kOptBoFlagWildmode, kOptWopFlagExacttext, kOptWopFlagFuzzy, kOptWopFlagPum, kOptWopFlagTagfile,
 };
+use crate::os::cshim::{gettext, memmove, snprintf, strchr, strncmp};
 use crate::os::env::{expand_env_save_opt, get_env_name, home_replace, vim_getenv};
 use crate::os::fs::os_isdir;
 use crate::os::lang::{get_lang_arg, get_locales};
-use crate::os::libc::{
-    gettext, memmove, qsort, snprintf, strchr, strcmp, strcpy, strlen, strncmp, strncpy,
-};
 use crate::os::users::{UserMatch, get_users, match_user};
 use crate::path::{
     FreeWild, after_pathsep, expand_wildcards, expand_wildcards_eval, match_suffix,
@@ -119,6 +117,7 @@ use crate::usercmd::{
     set_context_in_user_cmd, set_context_in_user_cmdarg,
 };
 use crate::window::{global_stl_height, last_status};
+use ::libc::{qsort, strcmp, strcpy, strlen, strncpy};
 use core::ffi::CStr;
 
 // The carve of the transpiled module; see each child's docs.

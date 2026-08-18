@@ -58,9 +58,9 @@ use crate::r#move::{
 };
 use crate::normal::end_visual_mode;
 use crate::os::fs::{os_chdir, os_dirname};
-use crate::os::libc::{memset, strcmp, strtol};
 use crate::strings::vim_snprintf_safelen;
 use crate::types::*;
+use ::libc::{memset, strcmp, strtol};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{mem, ptr};
 pub const NUL: c_int = '\0' as c_int;

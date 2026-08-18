@@ -55,10 +55,8 @@ use crate::message::{
     msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
 };
 use crate::optionstr::clear_string_option;
+use crate::os::cshim::{gettext, memmove, strncasecmp, strncmp};
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{
-    gettext, memmove, qsort, strcasecmp, strcmp, strcpy, strlen, strncasecmp, strncmp, strpbrk,
-};
 use crate::path::path_is_absolute;
 use crate::pos::MAXLNUM;
 use crate::profile::{
@@ -75,6 +73,7 @@ use crate::types::{
     lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
     synblock_T, synstate_T, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
+use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen, strpbrk};
 
 mod flags;
 pub use self::flags::*;

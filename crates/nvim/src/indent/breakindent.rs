@@ -14,9 +14,9 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xstrdup};
 use crate::r#move::{win_col_off, win_col_off2};
 use crate::option::{get_flp_value, get_showbreak_value};
-use crate::os::libc::strcmp;
 use crate::plines::win_chartabsize;
 use crate::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
+use ::libc::strcmp;
 
 /// 'breakindentopt', parsed: the five values [`briopt_check`] writes onto a
 /// window as `w_briopt_*`.

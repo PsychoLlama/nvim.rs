@@ -12,12 +12,12 @@ use crate::api::private::validate::api_err_invalid;
 use crate::kvec::InitVec;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
-use crate::os::libc::{strlen, strnlen};
 use crate::pos::MAXLNUM;
 use crate::types::{
     Arena, Array, ArrayBuilder, Error, String_0, buf_T, garray_T, int64_t, kErrorTypeValidation,
     kObjectTypeString, linenr_T, object, object_data, size_t,
 };
+use ::libc::{strlen, strnlen};
 use core::ffi::c_char;
 use core::{mem, ptr};
 

@@ -21,7 +21,7 @@ use crate::memory::{arena_mem_free, strequal, xcalloc, xfree, xmemdupz, xstrdup}
 use crate::message::emsg;
 use crate::msgpack_rpc::channel::rpc_send_call;
 use crate::msgpack_rpc::server::{server_start, server_stop};
-use crate::os::libc::strstr;
+use crate::os::cshim::strstr;
 use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{

@@ -32,7 +32,7 @@ use crate::memory::{
 };
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
-use crate::os::libc::{memcpy, strchr, strlen};
+use crate::os::cshim::strchr;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
@@ -47,6 +47,7 @@ use crate::types::{
     win_T,
 };
 use crate::undo::u_save_buf;
+use ::libc::{memcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod attach;

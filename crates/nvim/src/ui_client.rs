@@ -43,7 +43,6 @@ use crate::main::{
 use crate::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{os_env_exists, os_get_pid};
-use crate::os::libc::{close, dup};
 use crate::profile::{time_finish, time_msg};
 use crate::tui::attrs::{tui_add_url, tui_default_colors_set, tui_hl_attr_define};
 use crate::tui::events::{
@@ -66,6 +65,7 @@ use crate::types::{
     kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
 };
+use ::libc::{close, dup};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 /// The descriptor the client hands the server as `stdin_fd` when the user

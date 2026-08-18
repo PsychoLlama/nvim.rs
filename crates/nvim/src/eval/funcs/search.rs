@@ -23,7 +23,7 @@ use crate::normal::find_decl;
 use crate::option::{kOptValTypeString, set_option_value_give_err};
 use crate::options::kOptCpoptions;
 use crate::optionstr::free_string_option;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::profile::profile_setlimit;
 use crate::regexp::RE_SEARCH;
@@ -35,6 +35,7 @@ use crate::types::{
     Direction, EvalFuncData, OptVal, OptValData, VAR_UNKNOWN, int64_t, linenr_T, pos_T,
     searchit_arg_T, typval_T, varnumber_T,
 };
+use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

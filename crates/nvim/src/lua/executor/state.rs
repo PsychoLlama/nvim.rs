@@ -27,9 +27,10 @@ use crate::lua::ffi::{
 use crate::lua::stdlib::nlua_state_add_stdlib;
 use crate::lua::treesitter::nlua_treesitter_init;
 use crate::main::{os_exit, time_fd};
-use crate::os::libc::{exit, fprintf, gettext, stderr};
+use crate::os::cshim::{gettext, stderr};
 use crate::runtime::runtime_search_path_validate;
 use crate::types::{lua_Integer, lua_State, nlua_ref_state_t, uv_thread_t};
+use ::libc::{exit, fprintf};
 
 /// Populate the global `arg` table from the command line, with `arg[0]` the
 /// script's own name.

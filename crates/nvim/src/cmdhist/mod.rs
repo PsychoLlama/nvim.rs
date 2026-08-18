@@ -31,7 +31,7 @@ use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
     trunc_string,
 };
-use crate::os::libc::{gettext, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;

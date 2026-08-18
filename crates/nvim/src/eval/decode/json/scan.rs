@@ -18,11 +18,12 @@ use crate::eval::decode::decode_string;
 use crate::eval::string2float;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmalloc;
-use crate::os::libc::{abort, gettext};
+use crate::os::cshim::gettext;
 use crate::types::{
     VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, typval_T, typval_vval_union, uvarnumber_T,
     varnumber_T,
 };
+use ::libc::abort;
 
 const E474_UNFINISHED_ESCAPE: &CStr = c"E474: Unfinished escape sequence: %.*s";
 const E474_UNFINISHED_UNICODE: &CStr = c"E474: Unfinished unicode escape sequence: %.*s";

@@ -11,7 +11,7 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{
     emsg, message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
 };
-use crate::os::libc::{gettext, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg_c;

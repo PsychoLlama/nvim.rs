@@ -20,12 +20,12 @@
 
 use crate::event::libuv::{uv_run, uv_strerror, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg_c};
-use crate::os::libc::fwrite;
 use crate::tui::terminfo::caps::{
     TerminfoDef, kTerm_cursor_invisible, kTerm_cursor_normal, kTermCount,
 };
 use crate::tui::terminfo::terminfo_fmt;
 use crate::types::{BUF_SIZE, TPVAR, TUIData, size_t, uv_buf_t, uv_stream_t, uv_write_t};
+use ::libc::fwrite;
 use core::ffi::{CStr, c_char, c_int};
 
 /// How much room a parameterised capability is assumed to need. If less than

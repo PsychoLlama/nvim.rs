@@ -47,7 +47,7 @@ use crate::highlight_group::{
 use crate::main::{highlight_attr, highlight_attr_last};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, Array, Dict, HlAttrs, HlEntry, HlKind, Integer, KeyValuePair, Object, RemoteUI, uint32_t,

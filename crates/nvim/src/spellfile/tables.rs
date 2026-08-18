@@ -18,10 +18,11 @@ use core::ffi::{CStr, c_char, c_int};
 use crate::garray::{ga_append, ga_append_via_ptr, ga_concat, ga_grow};
 use crate::main::curwin;
 use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
-use crate::os::libc::{gettext, strcat, strcmp, strcpy, strlen};
+use crate::os::cshim::gettext;
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{fromto_T, garray_T};
+use ::libc::{strcat, strcmp, strcpy, strlen};
 
 use super::aff::{AffState, is_digit_byte};
 use super::{MAXWLEN, NUL, e_afftrailing, spellinfo_T};

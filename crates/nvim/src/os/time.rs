@@ -14,10 +14,11 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg_c};
 use crate::main::{got_int, main_loop};
 use crate::memory::{xstrlcat, xstrlcpy};
+use crate::os::cshim::{gettext, strncmp, tzset};
 use crate::os::env::os_getenv_noalloc;
 use crate::os::input::os_input_ready;
-use crate::os::libc::{gettext, localtime_r, strftime, strncmp, strptime, time, tzset};
 use crate::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
+use ::libc::{localtime_r, strftime, strptime, time};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

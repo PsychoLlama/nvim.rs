@@ -56,7 +56,7 @@ use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,
 };
-use crate::os::libc::{abs, memcpy, memset, snprintf, strlen};
+use crate::os::cshim::snprintf;
 use crate::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::pos::{MAXCOL, ltoreq};
 use crate::quickfix::qf_current_entry;
@@ -76,6 +76,7 @@ use crate::types::{
     uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::ui::ui_rgb_attached;
+use ::libc::{abs, memcpy, memset, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod state;

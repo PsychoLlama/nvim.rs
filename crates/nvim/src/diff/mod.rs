@@ -81,11 +81,9 @@ use crate::normal::check_scrollbind;
 use crate::option::{set_option_direct_for, set_option_value_give_err};
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::optionstr::free_string_option;
+use crate::os::cshim::{gettext, snprintf, strncmp};
 use crate::os::env::{os_env_exists, os_unsetenv};
 use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove};
-use crate::os::libc::{
-    atol, fclose, fwrite, gettext, snprintf, strcat, strcpy, strlen, strncmp, tolower,
-};
 use crate::os::shell::{ShellOpts, call_shell};
 use crate::path::FullName_save;
 use crate::pos::{MAXCOL, MAXLNUM};
@@ -109,6 +107,7 @@ use crate::xdiff::xtypes::{
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
     XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
 };
+use ::libc::{atol, fclose, fwrite, strcat, strcpy, strlen, tolower};
 
 // The carve of the transpiled module; see each child's docs.
 mod block;

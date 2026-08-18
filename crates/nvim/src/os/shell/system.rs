@@ -27,7 +27,7 @@ use crate::main::{got_int, lines_left, msg_no_more, no_wait_return};
 use crate::memory::{xfree, xrealloc, xstrlcpy};
 use crate::message::{msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_start};
 use crate::msg_schedule_semsg_c;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{LibuvProc, MultiQueue, Proc, RStream, Stream, WBuffer};
 use crate::ui::{ui_busy_start, ui_busy_stop};
 

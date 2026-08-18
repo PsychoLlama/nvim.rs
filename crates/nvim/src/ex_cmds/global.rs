@@ -27,14 +27,15 @@ use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
 use crate::message::{emsg, msg, msgmore};
 use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
+use crate::os::cshim::gettext;
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::os::libc::{gettext, strlen};
 use crate::regexp::{
     RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, skip_regexp_ex, vim_regexec_multi, vim_regfree,
 };
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg_c;
 use crate::types::{colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

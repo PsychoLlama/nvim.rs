@@ -28,8 +28,8 @@ use crate::main::{
 };
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
+use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
-use crate::os::libc::gettext;
 use crate::strings::vim_strchr;
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};

@@ -75,16 +75,13 @@ use crate::message::{
 };
 use crate::option::{copy_option_part, set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
+use crate::os::cshim::{gettext, memmove, snprintf, strncasecmp, strncmp, strstr};
 use crate::os::env::{
     default_lib_dir, expand_env, expand_env_save, home_replace, home_replace_save, os_setenv,
     vim_get_prefix_from_exepath, vim_getenv,
 };
 use crate::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{
-    __errno_location, fclose, fdopen, fgets, gettext, memmove, snprintf, strcasecmp, strcat,
-    strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
-};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::{
     FreeWild, add_pathsep, append_path, concat_fnames, fix_fname, gen_expand_wildcards,
@@ -111,6 +108,7 @@ use crate::types::{
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::{semsg_c, smsg_c};
+use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod cache;

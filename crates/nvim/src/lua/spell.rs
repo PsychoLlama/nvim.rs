@@ -14,7 +14,7 @@ use crate::lua::ffi::{
 };
 use crate::main::{curwin, e_no_spell};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
 use crate::types::{hlf_T, lua_Integer, lua_State, luaL_Reg, size_t};
 use core::ffi::{CStr, c_char, c_int};

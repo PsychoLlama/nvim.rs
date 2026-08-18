@@ -23,9 +23,10 @@ use crate::main::e_invexpr2;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::option::find_option_end;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{OptIndex, VAR_PARTIAL, VV_LUA, partial_T, size_t, typval_T, uint8_t};
+use ::libc::strlen;
 
 /// The length of the environment-variable name at the cursor, which is
 /// left after it. Zero when there is none.

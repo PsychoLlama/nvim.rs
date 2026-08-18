@@ -17,8 +17,8 @@ use core::ffi::c_void;
 use core::{mem, ptr, slice};
 
 use crate::memory::{xfree, xmalloc, xrealloc};
-use crate::os::libc::memcpy;
 use crate::types::size_t;
+use ::libc::memcpy;
 
 pub struct InitVec<'a, T> {
     size: &'a mut usize,

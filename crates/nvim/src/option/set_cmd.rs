@@ -32,13 +32,14 @@ use crate::main::{
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
 use crate::options::{kOptAleph, kOptFoldmethod, kOptInvalid, kOptWrap, options};
-use crate::os::libc::{gettext, memmove, strlen, strncmp};
+use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, OptIndex, OptInt, OptVal, OptValData, TriState,
     exarg_T, kFalse, kNone, kTrue, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, vimoption_T,
     win_T,
 };
+use ::libc::strlen;
 
 use super::{
     FAIL, FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, IOSIZE, NUL, OK, OP_ADDING, OP_NONE,

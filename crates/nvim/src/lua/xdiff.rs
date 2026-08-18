@@ -10,7 +10,6 @@ use crate::lua::ffi::{
     luaL_pushresult, luaL_where,
 };
 use crate::memory::strequal;
-use crate::os::libc::{memcpy, memset};
 use crate::types::{
     Arena, Error, KeyDict_xdl_diff, KeySetLink, Object, OptionalKeys, String_0, int64_t,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean,
@@ -19,6 +18,7 @@ use crate::types::{
     xdl_emit_hunk_consume_func_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
+use ::libc::{memcpy, memset};
 pub const kNluaXdiffModeLocations: NluaXdiffMode = 2;
 pub type NluaXdiffMode = ::core::ffi::c_uint;
 pub const kNluaXdiffModeOnHunkCB: NluaXdiffMode = 1;

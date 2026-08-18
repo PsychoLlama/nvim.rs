@@ -18,7 +18,7 @@ use crate::eval::vars::get_vim_var_str;
 use crate::keycodes::Ctrl_V;
 use crate::main::{e_invargval, e_toomanyarg, reg_executing, reg_recorded, reg_recording};
 use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::register::{
     format_reg_type, get_reg_contents, get_reg_type, get_register_name, get_unname_register,
     get_yank_register, op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
@@ -29,6 +29,7 @@ use crate::types::{
     BoolVarValue, EvalFuncData, MotionType, VAR_DICT, VAR_LIST, VAR_STRING, VV_REG, colnr_T,
     dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
 };
+use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

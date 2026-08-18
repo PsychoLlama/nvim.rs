@@ -15,11 +15,11 @@ use crate::mark::mark_get;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
-use crate::os::libc::strcmp;
 use crate::types::{
     VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T, pos_T, typval_T,
     uint8_t, win_T,
 };
+use ::libc::strcmp;
 
 /// The character index of byte index `byteidx` in a buffer line.
 ///

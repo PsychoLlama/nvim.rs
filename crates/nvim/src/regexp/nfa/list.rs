@@ -28,7 +28,7 @@ use core::ffi::c_int;
 use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, multi_line, pim_equal, sub_equal};
 use crate::main::p_mmp;
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::regexp::{
     ADDSTATE_HERE_OFFSET, CaptureSlots, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, NFA_BOF,
     NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN9,

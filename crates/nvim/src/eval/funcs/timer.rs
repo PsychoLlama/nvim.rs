@@ -20,7 +20,6 @@ use crate::ex_cmds::check_secure;
 use crate::getchar::vgetc;
 use crate::main::{called_emsg, got_int, main_loop};
 use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::os::libc::time;
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
@@ -29,6 +28,7 @@ use crate::types::{
     proftime_T, time_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::ui::ui_flush;
+use ::libc::time;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

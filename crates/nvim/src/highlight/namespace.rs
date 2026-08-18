@@ -39,13 +39,13 @@ use crate::main::{
     ns_hl_fast, ns_hl_global, ns_hl_win, p_pb,
 };
 use crate::option::check_blending;
-use crate::os::libc::strlen;
 use crate::popupmenu::pum_drawn;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, HlAttrs, HlEntry, KeyDict_highlight, KeySetLink,
     LuaRetMode, NS, Object, kErrorTypeNone, kObjectTypeDict, size_t, win_T,
 };
+use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;

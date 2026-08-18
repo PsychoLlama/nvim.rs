@@ -39,7 +39,7 @@ use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, opt_bh_values, opt_bkc_values,
     opt_bt_values,
 };
-use crate::os::libc::{strcmp, strstr};
+use crate::os::cshim::strstr;
 use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
@@ -48,6 +48,7 @@ use crate::types::{
     linenr_T, optset_T, pos_T, win_T,
 };
 use crate::window::global_stl_height;
+use ::libc::strcmp;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{

@@ -26,13 +26,14 @@ use crate::message::{MSG_BUF_LEN, emsg, messaging, msg, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::set_option_direct;
 use crate::options::kOptShortmess;
-use crate::os::libc::{gettext, ngettext, snprintf, strcpy};
+use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
 use crate::types::{
     OptInt, OptVal, OptValData, String_0, buf_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
     lpos_T, pos_T, size_t,
 };
+use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
 use core::ptr;
 

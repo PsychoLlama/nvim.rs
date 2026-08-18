@@ -41,14 +41,15 @@ use crate::main::{curbuf, curwin, e_invarg, firstbuf, firstwin, p_enc, starting}
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::option::{copy_option_part, valid_name};
+use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::os::fs::os_remove;
-use crate::os::libc::{gettext, memmove, snprintf, strcasecmp, strcmp, strcpy, strlen, strncmp};
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{bufref_T, garray_T, langp_T, regprog_T, size_t, slang_T, synblock_T, win_T};
 use crate::window::win_valid_any_tab;
+use ::libc::{strcasecmp, strcmp, strcpy, strlen};
 
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;

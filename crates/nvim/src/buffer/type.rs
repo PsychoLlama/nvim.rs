@@ -26,7 +26,7 @@ use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_noti
 use crate::main::{cmdmod, cmdwin_buf, curbuf, msg_loclist, msg_qflist, p_hid};
 use crate::memline::ml_get_buf;
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
     CMOD_HIDE, VAR_FIXED, VAR_NUMBER, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T, varnumber_T,

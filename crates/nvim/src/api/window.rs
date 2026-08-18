@@ -16,7 +16,7 @@ use crate::main::{
 };
 use crate::message::emsg;
 use crate::r#move::{update_topline, validate_cursor};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{

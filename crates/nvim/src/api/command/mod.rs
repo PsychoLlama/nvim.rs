@@ -24,7 +24,7 @@ use crate::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::main::{capture_ga, curbuf, current_sctx, msg_col, msg_silent, redir_off};
 use crate::mbyte::mb_islower;
 use crate::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xrealloc};
-use crate::os::libc::{memcpy, memmove, snprintf, strcmp, strlen, strncmp, strtol};
+use crate::os::cshim::{memmove, snprintf, strncmp};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::strings::kv_do_printf;
@@ -46,6 +46,7 @@ use crate::usercmd::{
     uc_add_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name, ucmds,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
+use ::libc::{memcpy, strcmp, strlen, strtol};
 
 // The carve of the transpiled module; see each child's docs.
 mod cmd;

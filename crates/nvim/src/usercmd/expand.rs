@@ -35,7 +35,7 @@ use crate::lua::executor::nlua_do_ucmd;
 use crate::main::{cmdmod, current_sctx, curtab};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::{memmove, strcat, strlen};
+use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_USER, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
@@ -43,6 +43,7 @@ use crate::types::{
     CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
+use ::libc::{strcat, strlen};
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
 use core::{ptr, slice};

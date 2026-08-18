@@ -34,9 +34,9 @@ use crate::options::{
     kOptSsopFlagCurdir, kOptSsopFlagCursor, kOptSsopFlagFolds, kOptSsopFlagLocaloptions,
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
-use crate::os::libc::fprintf;
 use crate::pos::MAXCOL;
 use crate::types::{int64_t, tabpage_T, win_T};
+use ::libc::fprintf;
 use core::ffi::{c_int, c_void};
 
 /// Write the commands that restore `wp`'s view.

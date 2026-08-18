@@ -40,9 +40,9 @@ use crate::main::{IObuff, e_notopen, e_write, got_int};
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::emsg;
+use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{fclose, fwrite, gettext, putc, strlen};
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::strings::vim_snprintf;
@@ -50,6 +50,7 @@ use crate::types::{
     FILE, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T, uint8_t, uint16_t,
     uintmax_t,
 };
+use ::libc::{fclose, fwrite, strlen};
 
 use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compress};
 use super::write::{clear_node, put_node};

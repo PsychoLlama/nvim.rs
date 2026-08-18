@@ -32,7 +32,7 @@ use crate::main::{
 use crate::map::mh_get_int;
 use crate::mark::setmark_pos;
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::vsnprintf;
+use crate::os::cshim::vsnprintf;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{

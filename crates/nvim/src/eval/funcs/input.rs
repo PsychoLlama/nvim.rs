@@ -31,7 +31,7 @@ use crate::memory::xstrdup;
 use crate::message::{
     do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, verb_msg,
 };
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::ui::kUIMessages;
 use crate::types::{

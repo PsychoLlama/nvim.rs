@@ -181,7 +181,7 @@ pub unsafe extern "C" fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::
             let key = tv_dict_item_key(var);
             let str = tv_get_string(&raw mut (*var).di_tv);
             debug_assert!(!str.is_null());
-            let len = strlen(key) + strlen(str) + strlen(c"=".as_ptr()) + 1;
+            let len = strlen(key) + strlen(str) + c"=".count_bytes() + 1;
             *env.add(i) = xmalloc(len) as *mut ::core::ffi::c_char;
             snprintf(*env.add(i), len, c"%s=%s".as_ptr(), key, str);
         }

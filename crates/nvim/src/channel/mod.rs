@@ -45,8 +45,8 @@ use crate::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint
 use crate::memory::{xfree, xmemdup};
 use crate::msgpack_rpc::channel::call_stack::CallStack;
 use crate::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_init};
+use crate::os::cshim::{gettext, stderr};
 use crate::os::fs::os_write;
-use crate::os::libc::{freopen, gettext, stderr};
 use crate::os::pty_proc_unix::pty_proc_close_master;
 use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::libc::STDERR_FILENO;
@@ -54,6 +54,7 @@ use crate::types::{
     Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef, Map_uint64_t_ptr_t,
     MultiQueue, Proc, PtyProc, RStream, RpcState, Stream, ptr_t, size_t, uint64_t,
 };
+use ::libc::freopen;
 
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.

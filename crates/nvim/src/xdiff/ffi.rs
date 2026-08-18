@@ -25,7 +25,7 @@
 use core::ffi::{CStr, c_char, c_int, c_long};
 
 #[cfg(not(miri))]
-use crate::os::libc::__ctype_b_loc;
+use crate::os::cshim::__ctype_b_loc;
 use crate::types::{
     mmbuffer_t, mmfile_t, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
 };

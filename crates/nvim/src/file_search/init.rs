@@ -11,8 +11,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::os::libc::strtol;
 use crate::semsg_c;
+use ::libc::strtol;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 

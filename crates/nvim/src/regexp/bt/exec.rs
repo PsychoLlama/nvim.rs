@@ -17,7 +17,7 @@ use crate::main::{e_null, got_int, re_extmatch_out};
 use crate::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
 use crate::message::iemsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
     BACKPOS_INITIAL, NSUBEXP, NUL, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, backpos,

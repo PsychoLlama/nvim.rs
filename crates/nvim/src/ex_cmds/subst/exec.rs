@@ -45,8 +45,8 @@ use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting;
 use crate::option::set_option_direct;
 use crate::options::kOptInccommand;
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{gettext, strlen};
 use crate::pos::MAXCOL;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{vim_regexec_multi, vim_regfree};
@@ -60,6 +60,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
+use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

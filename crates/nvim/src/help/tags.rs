@@ -29,17 +29,15 @@ use crate::fileio::vim_fgets;
 use crate::main::{IObuff, NameBuff, e_fnametoolong, got_int, p_rtp};
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::emsg;
+use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{
-    fclose, fprintf, fputs, gettext, memcpy, putc, snprintf, strcasecmp, strchr, strcmp, strlen,
-    strncmp,
-};
 use crate::path::{ExpandFlags, FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::semsg_c;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{FILE, exarg_T, expand_T, size_t, uint8_t};
+use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

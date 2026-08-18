@@ -36,7 +36,7 @@ use crate::normal::{
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
 use crate::options::kOptFdoFlagSearch;
-use crate::os::libc::{gettext, snprintf, strcmp, strcpy, strlen};
+use crate::os::cshim::{gettext, snprintf};
 use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
@@ -49,6 +49,7 @@ use crate::types::{
 };
 use crate::undo::curbufIsChanged;
 use crate::window::check_can_set_curbuf_disabled;
+use ::libc::{strcmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// The character classes `mb_get_class` answers with that this file cares

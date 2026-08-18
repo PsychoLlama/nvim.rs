@@ -38,8 +38,8 @@ use crate::hashtab::hash_removed;
 use crate::main::{current_sctx, do_profiling};
 use crate::memory::xcalloc;
 use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save_opt;
-use crate::os::libc::gettext;
 use crate::os::time::os_hrtime;
 use crate::runtime::{exestack, script_items};
 use crate::types::{

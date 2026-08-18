@@ -22,13 +22,14 @@ use crate::main::{
     ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, WIN_TABS, kRetObject, mparm_T, ui_client_channel_id,
 };
 use crate::memory::{strequal, xfree, xrealloc};
+use crate::os::cshim::stderr;
 use crate::os::env::os_getenv_noalloc;
-use crate::os::libc::{fprintf, printf, stderr};
 use crate::types::{
     Arena, Array, Callback, Callback_data, CallbackReader, Dict, Error, Integer, Object, String_0,
     TriState, dict_T, kErrorTypeNone, kFalse, kNone, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, kTrue, object_data, size_t, uint64_t,
 };
+use ::libc::{fprintf, printf};
 
 /// How long to wait for the server to answer the connection, in ms.
 const CONNECT_TIMEOUT_MS: c_int = 500;

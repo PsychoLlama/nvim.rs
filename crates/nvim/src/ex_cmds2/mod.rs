@@ -71,7 +71,7 @@ use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
     vim_dialog_yesnocancel, wait_return,
 };
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::path::vim_FullName;
 use crate::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::semsg_c;
@@ -82,6 +82,7 @@ use crate::types::{
 use crate::undo::bufIsChanged;
 use crate::window::goto_tabpage_win;
 use crate::winlayer::{Buf, Win, buffers as all_buffers, tabs, windows, windows_in_tab};
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

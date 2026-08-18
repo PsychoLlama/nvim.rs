@@ -36,7 +36,6 @@ use crate::main::{g_stats, p_verbose, stdin_fd};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::os::env::os_getenv;
-use crate::os::libc::{__errno_location, abort, dup, fcntl, fdopen, read, readv, strerror, write};
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg_c;
 use crate::types::libc::STDIN_FILENO;
@@ -45,6 +44,7 @@ use crate::types::{
     uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
 };
 use crate::ui::ui_call_chdir;
+use ::libc::{__errno_location, abort, dup, fcntl, fdopen, read, readv, strerror, write};
 
 pub mod dir;
 pub mod meta;

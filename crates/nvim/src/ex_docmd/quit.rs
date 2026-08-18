@@ -34,7 +34,7 @@ use crate::main::{
     first_tabpage, firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,
 };
 use crate::message::{emsg, msg};
-use crate::os::libc::{gettext, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::types::{
     CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
     CMD_wq, CMOD_CONFIRM, Integer, VV_EXITREASON, buf_T, bufref_T, exarg_T, linenr_T, ptrdiff_t,

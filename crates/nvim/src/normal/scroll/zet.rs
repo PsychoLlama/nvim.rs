@@ -24,7 +24,7 @@ use crate::normal::{
     nv_put, read_command_char, true_0,
 };
 use crate::option::get_sidescrolloff_value;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;

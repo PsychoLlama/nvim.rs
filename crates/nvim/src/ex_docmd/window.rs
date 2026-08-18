@@ -40,9 +40,9 @@ use crate::memory::{xfree, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
 use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
+use crate::os::cshim::gettext;
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::{atol, gettext, strlen};
 use crate::popupmenu::pum_make_popup;
 use crate::strings::vim_snprintf;
 use crate::types::{
@@ -56,6 +56,7 @@ use crate::window::{
     tabpage_move, valid_tab, valid_win,
 };
 use crate::winlayer::{Buf, TabPage, Win, tabs, windows, windows_in_tab};
+use ::libc::{atol, strlen};
 
 // ---------------------------------------------------------------------------
 // The command's own arguments.

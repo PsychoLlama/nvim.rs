@@ -8,7 +8,7 @@ use core::ffi::{c_char, c_int};
 
 use super::Rex;
 use crate::mbyte::{mb_ptr2char_adv, utf_fold, utf_ptr2char, utf_strnicmp, utfc_ptr2len};
-use crate::os::libc::strncmp;
+use crate::os::cshim::strncmp;
 use crate::strings::vim_strchr;
 
 /// The base characters of U+FB20..U+FB4F, the Hebrew presentation forms, so

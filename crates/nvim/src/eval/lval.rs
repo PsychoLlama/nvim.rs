@@ -59,13 +59,14 @@ use crate::main::{
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
-use crate::os::libc::{gettext, memset, strlen};
+use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
     VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, dict_T,
     dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union, uint8_t, varnumber_T,
 };
+use ::libc::{memset, strlen};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

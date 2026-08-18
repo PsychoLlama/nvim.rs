@@ -12,7 +12,7 @@ use super::{cursor, postfix};
 use crate::main::{e_nopresub, rc_did_emsg};
 use crate::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::regexp::{
     FAIL, NFA_ADD_NL, NFA_ALPHA, NFA_ANY, NFA_BACKREF1, NFA_COMPOSING, NFA_CONCAT, NFA_DIGIT,
     NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER, NFA_NALPHA, NFA_NDIGIT,

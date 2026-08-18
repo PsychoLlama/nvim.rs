@@ -37,7 +37,6 @@ use crate::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_stat
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
 use crate::os::env::{os_getenv, os_getenv_noalloc};
 use crate::os::input::os_isatty;
-use crate::os::libc::{abort, kill, sscanf};
 use crate::os::uv_error::UV_EINTR;
 use crate::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
 use crate::tui::input::{tinput_destroy, tinput_init, tinput_start, tinput_stop};
@@ -64,6 +63,7 @@ use crate::types::{
     uv_timer_t, uv_tty_mode_t,
 };
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
+use ::libc::{abort, kill, sscanf};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 // --------------------------------------------------------------- the state

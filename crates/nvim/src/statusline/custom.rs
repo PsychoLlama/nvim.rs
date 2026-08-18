@@ -42,7 +42,7 @@ use crate::memline::ml_get_buf;
 use crate::memory::xmemdupz;
 use crate::message::msg_clr_eos;
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
-use crate::os::libc::{atoi, gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
@@ -52,6 +52,7 @@ use crate::types::{
 };
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
+use ::libc::{atoi, strlen};
 
 static DID_SHOW_EXT_RULER: GlobalCell<bool> = GlobalCell::new(false);
 

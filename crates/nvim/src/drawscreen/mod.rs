@@ -67,7 +67,7 @@ use crate::r#move::{
 use crate::normal::{clear_showcmd, do_check_scrollbind};
 use crate::option::{get_ve_flags, shortmess};
 use crate::options::{kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::plines::{getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill};
 use crate::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
 use crate::pos::MAXLNUM;

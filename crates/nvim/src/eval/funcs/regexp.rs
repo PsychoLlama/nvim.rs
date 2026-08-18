@@ -23,13 +23,14 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmemdupz};
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg_c;
 use crate::types::{
     EvalFuncData, VAR_BOOL, VAR_LIST, VAR_STRING, buf_T, colnr_T, dict_T, kListLenMayKnow,
     kListLenUnknown, linenr_T, list_T, listitem_T, regmatch_T, regprog_T, typval_T, varnumber_T,
 };
+use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

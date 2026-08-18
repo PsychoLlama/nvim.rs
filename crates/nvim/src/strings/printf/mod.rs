@@ -22,11 +22,12 @@ use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{tv_get_number_chk, tv_get_string_chk};
 use crate::memory::{arena_alloc, arena_alloc_block, xrealloc};
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen, vsnprintf};
+use crate::os::cshim::{gettext, vsnprintf};
 use crate::types::{
     Arena, String_0, StringBuilder, VAR_FLOAT, VAR_NUMBER, VAR_STRING, float_T, size_t, typval_T,
     varnumber_T,
 };
+use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
 mod emit;

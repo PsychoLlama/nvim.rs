@@ -25,9 +25,10 @@ use crate::charset::{getdigits_int, hex2nr};
 use crate::global_cell::GlobalCell;
 use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::os::libc::{gettext, memmove, strlen};
+use crate::os::cshim::{gettext, memmove};
 use crate::strings::xstrnsave;
 use crate::{semsg, semsg_c};
+use ::libc::strlen;
 
 /// Whether `c` is a repeat operator, and whether it can match more than one
 /// of the preceding atom.

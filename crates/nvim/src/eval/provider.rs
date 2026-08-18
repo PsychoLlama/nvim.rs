@@ -31,7 +31,7 @@ use crate::main::{
 use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
 use crate::message::emsg;
-use crate::os::libc::{gettext, snprintf, strlen};
+use crate::os::cshim::{gettext, snprintf};
 use crate::runtime::{exestack, script_autoload};
 use crate::strings::concat_str;
 use crate::types::{
@@ -40,6 +40,7 @@ use crate::types::{
     size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::undo::u_clearallandblockfree;
+use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

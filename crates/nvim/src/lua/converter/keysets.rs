@@ -22,7 +22,6 @@ use crate::lua::ffi::{
     lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_rawset, lua_settop,
     lua_tolstring, lua_type,
 };
-use crate::os::libc::abort;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
     OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeNone, kErrorTypeValidation,
@@ -30,6 +29,7 @@ use crate::types::{
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow, lua_Integer, lua_Number, lua_State, size_t,
 };
+use ::libc::abort;
 
 /// The three api types that need a name of their own on the Lua side, both
 /// ways round: `vim.types.float` is the tag and `vim.types[tag]` the name.

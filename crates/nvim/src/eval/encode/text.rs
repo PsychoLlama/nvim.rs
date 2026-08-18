@@ -28,9 +28,10 @@ use crate::eval::typval::tv_blob_get;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::garray::Gap;
 use crate::message::{emsg, internal_error};
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{blob_T, dict_T, float_T, garray_T, int64_t, ptrdiff_t, size_t, typval_T};
+use ::libc::strlen;
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.

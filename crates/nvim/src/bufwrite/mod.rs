@@ -40,6 +40,7 @@ use crate::option::{copy_option_part, get_bkc_flags, get_fileformat_force, short
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::fs::{
     os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
     os_fileinfo, os_fileinfo_hardlinks, os_fileinfo_id_equal, os_fileinfo_link, os_free_acl,
@@ -47,9 +48,6 @@ use crate::os::fs::{
     os_path_exists, os_remove, os_set_acl, os_setperm,
 };
 use crate::os::input::os_breakcheck;
-use crate::os::libc::{
-    __errno_location, close, getgid, gettext, getuid, iconv, iconv_close, snprintf, strlen,
-};
 use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
@@ -59,6 +57,7 @@ use crate::types::{
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
+use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod convert;

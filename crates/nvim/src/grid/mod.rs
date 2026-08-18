@@ -36,7 +36,7 @@ use crate::mbyte::{
 use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
-use crate::os::libc::{abort, memcpy, memmove, memset, strlen, strnlen};
+use crate::os::cshim::memmove;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BorderTextType, GridView, Integer, MHPutStatus, MapHash, ScreenGrid, Set_glyph,
@@ -47,6 +47,7 @@ use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
     ui_line,
 };
+use ::libc::{abort, memcpy, memset, strlen, strnlen};
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;

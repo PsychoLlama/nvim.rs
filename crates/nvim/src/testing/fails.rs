@@ -26,7 +26,7 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_reset_scroll};
-use crate::os::libc::{gettext, strstr};
+use crate::os::cshim::{gettext, strstr};
 use crate::types::{
     EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, VV_ERRMSG, list_T, typval_T,
     typval_vval_union, varnumber_T,

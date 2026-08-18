@@ -27,7 +27,7 @@ use crate::main::{
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
 use crate::option::magic_isset;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::pos::MAXCOL;
 use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde, skip_regexp_ex};
@@ -37,6 +37,7 @@ use crate::strings::vim_strchr;
 use crate::types::{
     AdditionalData, CMD_tilde, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
 };
+use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;

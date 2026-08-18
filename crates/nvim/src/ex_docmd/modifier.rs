@@ -35,7 +35,7 @@ use crate::message::redirecting;
 use crate::option::{kOptValTypeString, set_option_direct};
 use crate::options::kOptEventignore;
 use crate::optionstr::free_string_option;
-use crate::os::libc::{atoi, gettext, memmove, memset, strlen, strncmp};
+use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::strings::vim_strchr;
@@ -46,6 +46,7 @@ use crate::types::{
     CMOD_UNSILENT, OptInt, OptVal, OptValData, String_0, cmdidx_T, cmdmod_T, exarg_T, size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
+use ::libc::{atoi, memset, strlen};
 
 /// One recognised modifier name, for the two callers that only need to know
 /// *whether* a word is one: `modifier_len` and `cmd_exists`.

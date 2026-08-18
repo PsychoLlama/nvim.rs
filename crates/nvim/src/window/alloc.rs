@@ -35,7 +35,6 @@ use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
 use crate::memory::xcalloc;
 use crate::option::clear_winopt;
-use crate::os::libc::{abort, memset};
 use crate::quickfix::qf_free_all;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
@@ -46,6 +45,7 @@ use crate::types::{
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::{Buf, Frame, TabPage, Win, buffers, tabs};
+use ::libc::{abort, memset};
 
 // ---------------------------------------------------------------------------
 // The neighbours only this file reaches

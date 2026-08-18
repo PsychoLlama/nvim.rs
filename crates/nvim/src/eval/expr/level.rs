@@ -40,7 +40,7 @@ use crate::global_cell::GlobalCell;
 use crate::main::{called_emsg, curwin, did_emsg, e_invexpr2, e_trailing_arg, p_ic};
 use crate::memory::{strnequal, xfree, xmemdupz};
 use crate::message::emsg;
-use crate::os::libc::{__ctype_b_loc, gettext, strncmp, strstr};
+use crate::os::cshim::{__ctype_b_loc, gettext, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,

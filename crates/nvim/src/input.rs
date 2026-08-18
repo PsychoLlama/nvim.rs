@@ -21,11 +21,12 @@ use crate::mbyte::{utf_ptr2char, utf8len_tab};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::input_get;
-use crate::os::libc::{atoi, gettext, snprintf};
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, Callback_data, MultiQueue};
 use crate::ui::{ui_flush, ui_has};
+use ::libc::atoi;
 use core::ffi::{c_char, c_int, c_void};
 
 const EXPAND_NOTHING: c_int = 0;

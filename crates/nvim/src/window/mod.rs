@@ -55,7 +55,7 @@ use crate::map::map_put_ref_int_ptr_t;
 use crate::memory::xfree;
 use crate::message::{emsg, msg};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, CMD_tabnew, CdCause, Direction, Error, Map_int_ptr_t, MapHash, MotionType,

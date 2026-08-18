@@ -77,8 +77,8 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::{buf_copy_options, set_option_direct_for};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
 use crate::optionstr::check_stl_option;
+use crate::os::cshim::snprintf;
 use crate::os::input::{input_blocking, input_enqueue, input_enqueue_mouse, input_enqueue_raw};
-use crate::os::libc::{labs, memcpy, snprintf, strlen};
 use crate::os::proc::os_proc_children;
 use crate::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
@@ -111,6 +111,7 @@ use crate::types::{
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
+use ::libc::{labs, memcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod client;

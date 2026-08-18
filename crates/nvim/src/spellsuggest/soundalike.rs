@@ -211,7 +211,7 @@ pub unsafe fn add_sound_suggest(
         // The same soundfold turns up many times with different scores and
         // what follows is slow, so only the best score for each is done.
         let hash = hash_hash(goodword);
-        let goodword_len = crate::os::libc::strlen(goodword) as usize;
+        let goodword_len = libc::strlen(goodword) as usize;
         let hi = hash_lookup(&raw mut (*slang).sl_sounddone, goodword, goodword_len, hash);
         let key = (*hi).hi_key;
         if key.is_null() || key == &raw const hash_removed as *mut c_char {

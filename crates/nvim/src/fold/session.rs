@@ -1,5 +1,5 @@
 use crate::ex_session::{put_eol, put_line};
-use crate::os::libc::fprintf;
+use ::libc::fprintf;
 use core::ffi::{c_char, c_int};
 
 use super::*;

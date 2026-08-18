@@ -14,7 +14,6 @@ use core::ffi::c_int;
 use super::postfix;
 use crate::mbyte::{utf_char2bytes, utf_char2len};
 use crate::memory::xmalloc;
-use crate::os::libc::strlen;
 use crate::regexp::{
     CLASS_AF, CLASS_AZ, CLASS_af, CLASS_az, CLASS_not, CLASS_o7, CLASS_o9, CLASS_underscore, FAIL,
     NFA_ADD_NL, NFA_ALPHA, NFA_BOF, NFA_BOL, NFA_BOW, NFA_CURSOR, NFA_DIGIT, NFA_EOW, NFA_HEAD,
@@ -24,6 +23,7 @@ use crate::regexp::{
     NUL, Rex, istate, nfa_state_T, nstate, regcomp_start, wants_nfa,
 };
 use crate::types::uint8_t;
+use ::libc::strlen;
 
 /// Reset the compile-time state and reserve the postfix program.
 ///

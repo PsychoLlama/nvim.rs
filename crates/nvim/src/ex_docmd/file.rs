@@ -40,7 +40,7 @@ use crate::memory::xfree;
 use crate::message::{emsg, msg};
 use crate::normal::normal_enter;
 use crate::option::get_findfunc;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::path::path_fnamecmp;
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
@@ -56,6 +56,7 @@ use crate::ui::ui_has;
 use crate::undo::{curbufIsChanged, u_compute_hash, u_read_undo, u_save, u_savedel, u_write_undo};
 use crate::window::{check_can_set_curbuf_forceit, win_close, win_valid};
 use crate::winfloat::win_float_remove;
+use ::libc::strlen;
 
 /// Would editing `fnum`/`ffname` mean leaving the current buffer?
 ///

@@ -20,11 +20,11 @@ use crate::event::multiqueue::{
     multiqueue_size,
 };
 use crate::log::{LOGLVL_ERR, log_uv_handles, logmsg_c};
-use crate::os::libc::abort;
 use crate::os::time::os_hrtime;
 use crate::types::{
     Event, Loop, MultiQueue, Proc, argv_callback, uv_async_t, uv_handle_t, uv_run_mode, uv_timer_t,
 };
+use ::libc::abort;
 
 const UV_RUN_DEFAULT: uv_run_mode = 0;
 const UV_RUN_ONCE: uv_run_mode = 1;

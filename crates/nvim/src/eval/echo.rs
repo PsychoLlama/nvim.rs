@@ -30,7 +30,7 @@ use crate::message::{
     msg_outnum, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, verbose_enter,
     verbose_leave,
 };
-use crate::os::libc::{gettext, memcpy, strlen};
+use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
@@ -40,6 +40,7 @@ use crate::types::{
     typval_vval_union, var_flavour_T,
 };
 use crate::ui::ui_has;
+use ::libc::{memcpy, strlen};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

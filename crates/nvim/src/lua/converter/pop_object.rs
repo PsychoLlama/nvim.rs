@@ -22,12 +22,12 @@ use crate::lua::ffi::{
     lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
 };
 use crate::main::nlua_global_refs;
-use crate::os::libc::abort;
 use crate::types::{
     Arena, Array, Dict, Error, Integer, Object, String_0, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
     lua_Number, lua_State, size_t,
 };
+use ::libc::abort;
 
 /// One suspended container in the walk.
 ///

@@ -26,14 +26,15 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{kOptAleph, kOptCount, kOptInvalid, options};
+use crate::os::cshim::strncmp;
 use crate::os::env::expand_env_esc;
-use crate::os::libc::{strcmp, strlen, strncmp};
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
     OptIndex, colnr_T, expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t,
     uint8_t, uint32_t, vimoption_T, xp_prefix_T,
 };
+use ::libc::{strcmp, strlen};
 
 use super::{
     EXPAND_BOOL_SETTINGS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_FILETYPE, EXPAND_KEYMAP,

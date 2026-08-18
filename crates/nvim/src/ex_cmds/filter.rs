@@ -45,9 +45,9 @@ use crate::message::{
     wait_return,
 };
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
+use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::gettext;
 use crate::os::shell::{ShellOpts, call_shell};
 use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;

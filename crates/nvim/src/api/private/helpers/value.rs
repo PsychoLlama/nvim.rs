@@ -20,7 +20,6 @@ use crate::memory::{
 };
 use crate::message::hl_msg_free;
 use crate::msgpack_rpc::unpacker::unpack;
-use crate::os::libc::{abort, memcpy};
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
@@ -29,6 +28,7 @@ use crate::types::{
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow, key_value_pair, object, object_data, size_t,
 };
+use ::libc::{abort, memcpy};
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 

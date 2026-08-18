@@ -40,12 +40,10 @@ use crate::main::{
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::{reset_modifiable, set_option_value_give_err, set_options_bin};
+use crate::os::cshim::{gettext, snprintf, stderr, strncasecmp};
 use crate::os::env::os_getenv;
 use crate::os::fs::{os_exepath, os_isdir, os_write};
 use crate::os::input::os_isatty;
-use crate::os::libc::{
-    atoi, fprintf, gettext, memset, snprintf, stderr, strcasecmp, strlen, strncasecmp,
-};
 use crate::path::{concat_fnames, path_guess_exepath, path_tail};
 use crate::profile::{time_init, time_start};
 use crate::runtime::{estack_pop, estack_push};
@@ -55,6 +53,7 @@ use crate::types::{
     OptInt, OptVal, OptValData, VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T, kFalse, kTrue,
     linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
 };
+use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
 
 /// A bare `-V` is "a little bit verbose".
 const DEFAULT_VERBOSE: c_int = 10;

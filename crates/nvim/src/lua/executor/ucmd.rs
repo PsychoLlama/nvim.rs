@@ -21,7 +21,7 @@ use crate::lua::ffi::{
 };
 use crate::main::{cmdmod, p_verbose};
 use crate::memory::{xcalloc, xfree, xmalloc};
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
@@ -32,6 +32,7 @@ use crate::types::{
 };
 use crate::usercmd::{EX_EXTRA, EX_NEEDARG, EX_NOSPC, uc_mods, uc_split_args_iter};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
+use ::libc::strlen;
 
 /// How much room `uc_mods` is given to render the modifier prefix.
 const MODS_BUFSIZE: usize = 200;

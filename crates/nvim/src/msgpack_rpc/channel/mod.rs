@@ -441,7 +441,7 @@ unsafe fn channel_write(channel: *mut Channel, buffer: *mut WBuffer) -> bool {
 
     if err != 0 {
         let mut buf = [0 as c_char; 256];
-        crate::os::libc::snprintf(
+        crate::os::cshim::snprintf(
             buf.as_mut_ptr(),
             buf.len(),
             c"ch %lu: stream write failed: %s. RPC canceled; closing channel".as_ptr(),
@@ -521,7 +521,7 @@ unsafe extern "C" fn receive_msgpack(
     }
     if eof {
         let mut buf = [0 as c_char; 256];
-        crate::os::libc::snprintf(
+        crate::os::cshim::snprintf(
             buf.as_mut_ptr(),
             buf.len(),
             c"ch %lu was closed by the peer".as_ptr(),
@@ -589,7 +589,7 @@ unsafe fn complete_call(channel: *mut Channel, p: *mut Unpacker) -> bool {
     };
     let Some(frame) = frame else {
         let mut buf = [0 as c_char; 256];
-        crate::os::libc::snprintf(
+        crate::os::cshim::snprintf(
             buf.as_mut_ptr(),
             buf.len(),
             c"ch %lu (type=%u) returned a response with an unknown request id %u. Ensure the client is properly synchronized"

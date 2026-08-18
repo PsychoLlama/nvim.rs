@@ -34,8 +34,8 @@ use crate::mark::mark_adjust;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, msgmore};
+use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
-use crate::os::libc::{gettext, memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strtod};
 use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
 use crate::semsg_c;
@@ -43,6 +43,7 @@ use crate::types::{
     ExtmarkOp, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
 };
 use crate::undo::u_save;
+use ::libc::{memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;

@@ -8,8 +8,8 @@ use crate::main::{IObuff, c_bytes, e_exists, e_invarg, e_isadir2, got_int, p_msm
 use crate::mbyte::convert_setup;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
+use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::fs::{os_isdir, os_path_exists};
-use crate::os::libc::{gettext, memset, strcmp, strlen, strncmp, strstr};
 use crate::path::{FreeWild, path_tail};
 use crate::semsg_c;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
@@ -20,6 +20,7 @@ use crate::types::{
     hashtab_T, regprog_T, size_t, spelltab_T, time_t, uint8_t, vimconv_T,
 };
 use crate::ui::ui_flush;
+use ::libc::{memset, strcmp, strlen};
 mod add;
 mod aff;
 mod affix;

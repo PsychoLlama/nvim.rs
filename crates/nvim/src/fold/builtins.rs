@@ -6,9 +6,10 @@ use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curwin};
 use crate::memline::ml_get;
 use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::os::libc::{ngettext, snprintf, strcat, strlen};
+use crate::os::cshim::{ngettext, snprintf};
 use crate::search::linewhite;
 use crate::strings::concat_str;
+use ::libc::{strcat, strlen};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 use core::ptr;
 

@@ -72,8 +72,8 @@ use crate::normal::{
 };
 use crate::option::{get_equalprg, get_fileformat, get_ve_flags, option_set_callback_func};
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
+use crate::os::cshim::{__ctype_b_loc, gettext, memmove, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::os::libc::{__ctype_b_loc, abort, gettext, memmove, memset, ngettext, strcpy, strlen};
 use crate::plines::{
     getvcol, getvcols, getvvcol, init_charsize_arg, linetabsize_str, win_charsize,
 };
@@ -97,6 +97,7 @@ use crate::types::{
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
+use ::libc::{abort, memset, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod addsub;

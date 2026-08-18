@@ -10,10 +10,11 @@ use crate::lua::executor::nlua_init;
 use crate::main::exit::os_exit;
 use crate::main::{argv0, info_message, msg_didout};
 use crate::message::msg_putchar;
-use crate::os::libc::{fprintf, gettext, printf, stderr};
+use crate::os::cshim::{gettext, stderr};
 use crate::os::signal::signal_stop;
 use crate::path::path_tail;
 use crate::version::list_version;
+use ::libc::{fprintf, printf};
 
 /// The `--help` text, one line per entry.
 ///

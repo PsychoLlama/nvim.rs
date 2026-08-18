@@ -40,7 +40,6 @@ use crate::r#move::textpos2screenpos;
 use crate::option::{parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
 use crate::optionstr::{clear_string_option, free_string_option};
-use crate::os::libc::{qsort, strlen};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
@@ -56,6 +55,7 @@ use crate::window::{
     win_remove_status_line, win_set_buf, win_set_inner_size, win_valid, winframe_remove,
 };
 use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
+use ::libc::{qsort, strlen};
 
 /// Above this `zindex` a float is not capped by 'cmdheight'.
 const kZIndexMessages: c_int = 200;

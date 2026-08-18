@@ -32,7 +32,7 @@
 use crate::global_cell::GlobalCell;
 use crate::main::p_mmp;
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::regexp::{
     E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, FrameSave, InputPos, NSUBEXP, REGSTACK_INITIAL,
     Rex, SavedPos, reg_getline, regbehind_T, regitem_T, regsave_T, regstar_T, regstate_T,

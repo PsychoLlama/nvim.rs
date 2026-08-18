@@ -25,12 +25,13 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::memory::arena_memdupz;
-use crate::os::libc::{gettext, memchr};
+use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Float, Integer, LuaRef, ObjectType, String_0, handle_T,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, key_value_pair, lua_Number, lua_State, size_t,
 };
+use ::libc::memchr;
 
 /// Refused when the Lua stack will not grow far enough to walk the table.
 const E1502_GROW_STACK: &CStr = c"E1502: Lua failed to grow stack to %i";

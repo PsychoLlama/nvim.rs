@@ -76,13 +76,10 @@ use crate::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,
     kOptMoptFlagProgress, kOptMoptFlagWait, kOptRdbFlagNothrottle,
 };
+use crate::os::cshim::{gettext, ngettext, putc, snprintf, stderr};
 use crate::os::env::home_replace_save;
 use crate::os::fs::os_fopen;
 use crate::os::input::{input_available, os_breakcheck};
-use crate::os::libc::{
-    abort, abs, fclose, fprintf, fputs, gettext, memchr, ngettext, printf, putc, snprintf, stderr,
-    strcmp, strlen, strnlen,
-};
 use crate::os::time::os_delay;
 use crate::regexp::vim_regexec;
 use crate::register::write_reg_contents;
@@ -103,6 +100,7 @@ use crate::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
+use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strcmp, strlen, strnlen};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 

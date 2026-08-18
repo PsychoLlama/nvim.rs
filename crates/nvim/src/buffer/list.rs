@@ -40,8 +40,8 @@ use crate::message::{emsg, msg_delay};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::optionstr::clear_string_option;
+use crate::os::cshim::gettext;
 use crate::os::fs::os_fileid;
-use crate::os::libc::{gettext, strlen};
 use crate::path::FullName_save;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
@@ -54,6 +54,7 @@ use crate::types::{
 use crate::undo::curbufIsChanged;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
 use crate::winlayer::{Buf, Win, windows};
+use ::libc::strlen;
 
 use super::expand::{NO_REGMATCH, buflist_match, find_buf};
 use super::pos::{Entry, WinInfos};

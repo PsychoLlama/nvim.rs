@@ -34,11 +34,12 @@ use crate::mbyte::{
 use crate::memory::{xmalloc, xstrchrnul};
 use crate::option::skip_to_option_part;
 use crate::options::kOptDyFlagUhex;
-use crate::os::libc::{__errno_location, abort, strlen, strtoimax};
+use crate::os::cshim::strtoimax;
 use crate::path::path_has_wildcard;
 use crate::types::{
     buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T, varnumber_T,
 };
+use ::libc::{__errno_location, abort, strlen};
 
 pub mod display;
 pub mod str2nr;

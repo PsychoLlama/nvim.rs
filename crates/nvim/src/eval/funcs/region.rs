@@ -24,7 +24,7 @@ use crate::memory::xmalloc;
 use crate::message::emsg;
 use crate::normal::unadjust_for_sel_inner;
 use crate::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
-use crate::os::libc::{gettext, memmove, memset};
+use crate::os::cshim::{gettext, memmove};
 use crate::plines::getvvcol;
 use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg_c;
@@ -33,6 +33,7 @@ use crate::types::{
     EvalFuncData, MotionType, OP_NOP, String_0, TriState, VAR_DICT, block_def, buf_T, colnr_T,
     kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
+use ::libc::memset;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

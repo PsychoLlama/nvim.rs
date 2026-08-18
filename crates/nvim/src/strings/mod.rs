@@ -5,9 +5,10 @@ use crate::keycodes::Ctrl_V;
 use crate::main::e_using_number_as_bool_nr;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xmalloc, xmallocz};
-use crate::os::libc::{gettext, qsort, strcasecmp, strchr, strcmp, strlen, strncmp, strstr};
+use crate::os::cshim::{gettext, strchr, strncmp, strstr};
 use crate::semsg_c;
 use crate::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
+use ::libc::{qsort, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 

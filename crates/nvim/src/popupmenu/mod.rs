@@ -55,7 +55,7 @@ use crate::options::{
     kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
     kOptCotFlagPreview, kOptDiff, kOptSwapfile, opt_winborder_values,
 };
-use crate::os::libc::{gettext, strchr, strlen};
+use crate::os::cshim::{gettext, strchr};
 use crate::plines::{plines_m_win, win_linetabsize};
 use crate::state::MODE_CMDLINE;
 use crate::strings::reverse_text;
@@ -77,6 +77,7 @@ use crate::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
+use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
 mod layout;

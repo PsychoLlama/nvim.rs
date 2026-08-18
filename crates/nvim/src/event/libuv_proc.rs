@@ -12,12 +12,12 @@ use crate::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
 use crate::log::{LOGLVL_INF, logmsg_c};
 use crate::main::ui_client_forward_stdin;
 use crate::os::env::os_free_fullenv;
-use crate::os::libc::close;
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
     LibuvProc, Loop, Proc, uv_file, uv_handle_t, uv_pipe_t, uv_process_t, uv_stdio_container_t,
     uv_stdio_flags,
 };
+use ::libc::close;
 use core::ffi::{c_int, c_void};
 use core::ptr;
 

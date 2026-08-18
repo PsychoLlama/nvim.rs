@@ -97,15 +97,12 @@ use crate::options::{
     kOptFoldmethod, kOptSwapfile, kOptSwbFlagUselast, kOptSwbFlagUsetab,
 };
 use crate::optionstr::free_string_option;
+use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::os::env::{expand_env, os_get_pid};
 use crate::os::fs::{
     os_dirname, os_fileinfo_link, os_fopen, os_isdir, os_open_stdin_fd, os_path_exists, os_remove,
 };
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::os::libc::{
-    __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, gettext, snprintf,
-    strcmp, strlen, strncasecmp, time,
-};
 use crate::path::{
     FreeWild, PATHSEP, after_pathsep, concat_fnames, fix_fname, gen_expand_wildcards,
     path_fnamecmp, path_is_absolute, path_tail, path_try_shorten_fname, vim_isAbsName,
@@ -128,6 +125,9 @@ use crate::undo::u_clearallandblockfree;
 use crate::window::{
     check_can_set_curbuf_forceit, check_lnums, goto_tabpage_win, win_close, win_enter, win_goto,
     win_setheight, win_split, win_valid,
+};
+use ::libc::{
+    __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, strcmp, strlen, time,
 };
 use core::ffi::{CStr, c_int, c_uint};
 

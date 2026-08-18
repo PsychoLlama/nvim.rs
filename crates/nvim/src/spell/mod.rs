@@ -41,13 +41,14 @@ use crate::main::{curwin, got_int, p_ws, sub_nlines, sub_nsubs};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
-use crate::os::libc::{gettext, memmove, snprintf, strcat, strcpy, strlen, strncmp};
+use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
     colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
     slang_T, smt_T, spelltab_T, uint8_t, win_T,
 };
 use crate::undo::u_save_cursor;
+use ::libc::{strcat, strcpy, strlen};
 
 mod chartab;
 mod check;

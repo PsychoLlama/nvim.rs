@@ -39,7 +39,7 @@ use crate::main::{
 };
 use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
 use crate::types::{
     CharsOption, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T, schar_T, size_t, tabpage_T,

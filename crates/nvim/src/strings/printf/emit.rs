@@ -33,11 +33,12 @@ use crate::ascii::ascii_isdigit;
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{xfree, xmemscan, xstrchrnul, xstrlcpy};
 use crate::message::emsg;
-use crate::os::libc::{gettext, memmove, snprintf, strlen};
+use crate::os::cshim::{gettext, memmove, snprintf};
 use crate::strings::vim_strchr;
 use crate::types::{
     VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t,
 };
+use ::libc::strlen;
 
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
 

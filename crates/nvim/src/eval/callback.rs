@@ -20,12 +20,13 @@ use crate::lua::executor::{
 use crate::main::{curwin, e_command_too_recursive, p_mfd};
 use crate::memory::xstrdup;
 use crate::message::emsg;
-use crate::os::libc::{gettext, memcmp, strlen};
+use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Callback, CallbackReader, Error, Object, OptInt, VAR_DICT, VAR_FUNC, VAR_NUMBER,
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, funcexe_T, ht_stack_T,
     kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };
+use ::libc::{memcmp, strlen};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

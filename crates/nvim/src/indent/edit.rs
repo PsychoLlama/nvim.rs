@@ -28,8 +28,8 @@ use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;
 use crate::option::set_option_direct;
+use crate::os::cshim::{gettext, memmove, ngettext, snprintf, strncmp};
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{gettext, memmove, memset, ngettext, snprintf, strncmp};
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
 use crate::pos::MAXCOL;
 use crate::search::findmatch;
@@ -37,6 +37,7 @@ use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::strings::xstrnsave;
 use crate::types::CMOD_LOCKMARKS;
 use crate::undo::{u_clearline, u_save, u_savecommon};
+use ::libc::memset;
 
 /// Whether the cursor is before (or, with `extra` zero, on) the first
 /// non-blank of the line.

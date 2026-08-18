@@ -23,14 +23,15 @@ use crate::main::{
     silent_mode, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
+use crate::os::cshim::{gettext, stderr};
 use crate::os::env::vim_env_iter;
 use crate::os::fs::os_path_exists;
-use crate::os::libc::{fprintf, gettext, memcpy, stderr, strlen};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_subpath};
 use crate::path::path_full_compare;
 use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
 use crate::types::{lua_State, qf_info_T, scid_T, size_t};
+use ::libc::{fprintf, memcpy, strlen};
 
 /// Run the `--cmd` commands, which come before any config.
 pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {

@@ -19,7 +19,7 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{verbose_open, verbose_stop};
 use crate::option::{did_set_title, get_option_default, p_vfile};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{linenr_T, optset_T};

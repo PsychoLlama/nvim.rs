@@ -21,8 +21,8 @@ use crate::mbyte::{
     string_convert, utf_cp_bounds_len, utf_ptr2len_len,
 };
 use crate::memory::xfree;
-use crate::os::libc::{memchr, strcasecmp};
 use crate::types::{CONV_NONE, intptr_t, lua_Integer, lua_Number, lua_State, size_t, vimconv_T};
+use ::libc::{memchr, strcasecmp};
 
 /// `vim.str_utfindex()`: the UTF-32 and UTF-16 lengths of the string at slot 1
 /// up to the byte index at slot 2, or of the whole string when it is absent.

@@ -20,6 +20,7 @@ use std::ffi::{CStr, CString};
 
 use super::*;
 use crate::os::fs::TEMP_FILE_PATH_MAXLEN;
+use ::libc::{DIR, closedir, dirfd, opendir};
 
 /// Candidate homes for our private directory, tried in order.
 const TEMP_DIR_NAMES: [&CStr; 4] = [c"$TMPDIR", c"/tmp", c".", c"~"];

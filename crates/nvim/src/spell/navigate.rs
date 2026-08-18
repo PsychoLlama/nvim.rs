@@ -42,8 +42,8 @@ use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::give_warning;
 use crate::option::shortmess;
 use crate::options::kOptSpoFlagNoplainbuffer;
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{gettext, memset, strcpy, strlen};
 use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
@@ -52,6 +52,7 @@ use crate::types::{
     DecorState, TriState, colnr_T, hlf_T, kFalse, kTrue, linenr_T, pos_T, size_t, smt_T, uint8_t,
     win_T,
 };
+use ::libc::{memset, strcpy, strlen};
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
 use super::{MAXWLEN, NUL, SHM_SEARCH, SMT_BAD, SMT_RARE};

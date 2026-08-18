@@ -18,8 +18,8 @@ use crate::lua::ffi::{
     lua_pushstring, lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_ref, luaL_unref,
 };
 use crate::main::nlua_global_refs;
-use crate::os::libc::memset;
 use crate::types::{LuaRef, lua_State, nlua_ref_state_t};
+use ::libc::memset;
 
 /// The registry key the per-state reference table is parked under.
 const REF_STATE_KEY: &core::ffi::CStr = c"nlua.ref_state";

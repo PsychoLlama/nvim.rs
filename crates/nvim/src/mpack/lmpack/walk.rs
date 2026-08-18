@@ -42,8 +42,8 @@ use crate::mpack::mpack_core::{
     MPACK_TOKEN_UINT, to_tok,
 };
 use crate::mpack::object::parent_of;
-use crate::os::libc::{free, malloc, memcpy};
 use crate::types::{lua_Number, lua_State, mpack_node_t, mpack_parser_t, size_t};
+use ::libc::{free, malloc, memcpy};
 
 /// A decoded token becomes a Lua value.
 ///

@@ -49,12 +49,9 @@ use crate::options::{
     kOptSwbFlagVsplit,
 };
 use crate::optionstr::free_string_option;
+use crate::os::cshim::{gettext, snprintf, strncmp, strstr};
 use crate::os::fs::{os_fopen, os_path_exists};
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
-use crate::os::libc::{
-    abort, atoi, fclose, fseeko, ftello, gettext, snprintf, strcasecmp, strcmp, strlen, strncmp,
-    strstr,
-};
 use crate::path::{
     FreeWild, FullName_save, path_full_compare, path_has_wildcard, simplify_filename, vim_isAbsName,
 };
@@ -78,6 +75,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, tabpage_index, win_close, win_enter,
     win_split, win_valid,
 };
+use ::libc::{abort, atoi, fclose, fseeko, ftello, strcasecmp, strcmp, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod scan;

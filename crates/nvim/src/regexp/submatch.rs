@@ -17,9 +17,9 @@ use crate::eval::typval::{
     tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz};
-use crate::os::libc::{strcpy, strncpy};
 use crate::strings::xstrnsave;
 use crate::types::{VAR_STRING, colnr_T, linenr_T, list_T, staticList10_T, typval_T, ufunc_T};
+use ::libc::{strcpy, strncpy};
 
 /// The text of the submatch line `lnum` lines into the match `submatch()`
 /// and a `\=` expression see.

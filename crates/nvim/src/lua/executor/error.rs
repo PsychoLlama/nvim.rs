@@ -18,8 +18,9 @@ use crate::lua::ffi::{
     lua_pop, lua_remove, lua_replace, lua_tolstring, lua_type, luaL_callmeta, luaL_getmetafield,
 };
 use crate::memory::xfree;
-use crate::os::libc::{fprintf, stderr};
+use crate::os::cshim::stderr;
 use crate::types::{intptr_t, lua_State, size_t};
+use ::libc::fprintf;
 
 /// The message kind every Lua error is reported under.
 const LUA_ERROR_KIND: &CStr = c"lua_error";

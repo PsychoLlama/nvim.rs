@@ -57,14 +57,15 @@ use crate::main::{did_swapwrite_msg, e_swapclose, firstbuf, got_int, main_loop};
 use crate::memline::{ml_get_buf, ml_open_file};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, iemsg};
+use crate::os::cshim::gettext;
 use crate::os::fs::{
     os_fileinfo_blocksize, os_fileinfo_fd, os_fileinfo_link, os_fsync, os_open, os_remove,
     os_set_cloexec,
 };
 use crate::os::input::{os_breakcheck, os_char_avail};
-use crate::os::libc::{__errno_location, close, gettext, lseek, strerror};
 use crate::path::FullName_save;
 use crate::types::{FileInfo, blocknr_T, buf_T, off_T};
+use ::libc::{__errno_location, close, lseek, strerror};
 
 /// Whether a memfile has blocks that are not on disk, and whether they may
 /// be written yet.

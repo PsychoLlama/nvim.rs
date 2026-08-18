@@ -1,10 +1,11 @@
 use crate::api::private::helpers::{api_set_error, api_typename};
 
 use crate::main::IObuff;
-use crate::os::libc::{memchr, snprintf, strchr};
+use crate::os::cshim::{snprintf, strchr};
 use crate::types::{
     Array, Error, ErrorType, String_0, int64_t, kErrorTypeValidation, kObjectTypeString, size_t,
 };
+use ::libc::memchr;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub unsafe extern "C" fn api_err_invalid(
     mut err: *mut Error,

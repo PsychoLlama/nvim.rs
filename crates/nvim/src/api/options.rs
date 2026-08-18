@@ -17,7 +17,6 @@ use crate::option::{
     find_option, get_all_vimoptions, get_option_value_for, get_vimoption, object_as_optval,
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
-use crate::os::libc::strcmp;
 use crate::types::{
     Arena, Dict, Error, KeyDict_option, KeyValuePair, Object, OptIndex, OptScope, OptVal,
     OptValData, OptValType, String_0, TryState, aco_save_T, bln_values, buf_T, bufref_T, except_T,
@@ -25,6 +24,7 @@ use crate::types::{
     msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
 };
 use crate::window::close_windows;
+use ::libc::strcmp;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeNil: OptValType = -1;

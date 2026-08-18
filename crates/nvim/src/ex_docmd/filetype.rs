@@ -19,14 +19,15 @@ use crate::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
 use crate::message::emsg;
 use crate::option::set_option_value_give_err;
 use crate::options::kOptFiletype;
+use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::env::os_getenv_noalloc;
-use crate::os::libc::{gettext, strcmp, strncmp, strstr};
 use crate::runtime::{DIP_ALL, source_runtime};
 use crate::types::{
     Array, CMD_autocmd, Error, Object, OptVal, OptValData, String_0, exarg_T, kErrorTypeNone,
     kFalse, kNone, kObjectTypeString, kTrue, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
+use ::libc::strcmp;
 
 /// `:autocmd` and `:augroup`.
 ///

@@ -37,12 +37,12 @@ use crate::mpack::mpack_core::{
     MPACK_TOKEN_UINT,
 };
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
-use crate::os::libc::{abort, memcpy, strlen};
 use crate::types::{
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
     VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T,
     mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
 };
+use ::libc::{abort, memcpy, strlen};
 
 const MPACK_OK: c_int = 0;
 

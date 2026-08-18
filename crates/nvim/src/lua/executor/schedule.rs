@@ -30,7 +30,7 @@ use crate::main::{
     e_fast_api_disabled, expr_map_lock, got_int, main_loop, textlock, ui_event_ns_id,
 };
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{
     EvalFuncDef, Event, LuaRef, MultiQueue, TimeWatcher, int64_t, intptr_t, lua_Integer, lua_State,
     ptrdiff_t, uint32_t, uint64_t,

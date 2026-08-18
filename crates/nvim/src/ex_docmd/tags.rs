@@ -23,11 +23,11 @@ use crate::main::{
     postponed_split_tab,
 };
 use crate::option::magic_isset;
-use crate::os::libc::strlen;
 use crate::regexp::skip_regexp;
 use crate::search::find_pattern_in_path;
 use crate::tag::do_tag;
 use crate::types::exarg_T;
+use ::libc::strlen;
 
 /// `:isearch`, `:ilist`, `:ijump`, `:isplit` and their `:d…` twins.
 ///

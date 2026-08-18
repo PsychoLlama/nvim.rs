@@ -73,7 +73,7 @@ use crate::r#move::{
 };
 use crate::option::{copy_option_part, get_ve_flags};
 use crate::options::kOptVeFlagOnemore;
-use crate::os::libc::{gettext, memmove, strcat, strcmp, strlen, strncmp};
+use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::os::time::os_time;
 use crate::plines::{getvcol, linetabsize_eol, win_chartabsize};
 use crate::pos::{MAXCOL, MAXLNUM};
@@ -89,6 +89,7 @@ use crate::types::{
 };
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};
+use ::libc::{strcat, strcmp, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod flag;

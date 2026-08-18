@@ -40,14 +40,15 @@ use crate::memory::xstrlcpy;
 use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_puts, msg_start};
 use crate::option::{get_option_value, optval_free, set_option_value_give_err};
 use crate::options::{kOptSpell, kOptSpelllang};
+use crate::os::cshim::{snprintf, strncmp};
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{snprintf, strcat, strcmp, strcpy, strlen, strncmp};
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
     Direction, OptVal, OptValData, exarg_T, hashitem_T, idx_T, langp_T, linenr_T, size_t, slang_T,
     wordcount_T,
 };
+use ::libc::{strcat, strcmp, strcpy, strlen};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;

@@ -66,9 +66,9 @@ use crate::r#move::validate_cursor;
 use crate::normal::may_start_select;
 use crate::option::{magic_isset, shortmess};
 use crate::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};
+use crate::os::cshim::{gettext, snprintf, strncmp, strstr};
 use crate::os::fs::os_fopen;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
-use crate::os::libc::{atol, fclose, gettext, snprintf, strlen, strncmp, strpbrk, strstr};
 use crate::os::time::{os_delay, os_time};
 use crate::path::path_full_compare;
 use crate::plines::getvcol;
@@ -86,6 +86,7 @@ use crate::types::{
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};
+use ::libc::{atol, fclose, strlen, strpbrk};
 /// `searchit`/`do_search` flags plus the search-stat sizing constants.
 pub const SEARCH_HL_PRIORITY: ::core::ffi::c_int = 0;
 pub const SEARCH_NFMSG: ::core::ffi::c_int = 8;

@@ -15,7 +15,7 @@ use crate::main::{IObuff, buffer_handles, tslua_query_parse_count};
 use crate::map::{map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, mh_get_cstr_t, mh_get_int};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
-use crate::os::libc::{__ctype_b_loc, abort, memcmp, memcpy, snprintf, strchr, strlen};
+use crate::os::cshim::{__ctype_b_loc, snprintf, strchr};
 use crate::os::time::os_hrtime;
 use crate::strings::vim_snprintf;
 use crate::types::{
@@ -23,6 +23,7 @@ use crate::types::{
     linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t,
     uint32_t, uint64_t, uv_lib_t,
 };
+use ::libc::{abort, memcmp, memcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod cursor;

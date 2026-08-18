@@ -10,7 +10,7 @@ use super::compile::{regc, regmbc, regnode, use_multibytecode};
 use crate::main::{e_nopresub, rc_did_emsg};
 use crate::mbyte::{utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::regexp::{
     ALPHA, ANY, DIGIT, EXACTLY, FNAME, GRAPHEME_STATE_INIT, HASWIDTH, HEAD, HEX, IDENT, KWORD,
     LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NHEAD, NHEX, NLOWER, NOCTAL, NOT_MULTI, NUL, NUPPER,

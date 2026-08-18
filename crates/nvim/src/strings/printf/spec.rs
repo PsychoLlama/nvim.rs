@@ -21,7 +21,7 @@ use core::ptr;
 use crate::ascii::ascii_isdigit;
 use crate::main::e_val_too_large_len;
 use crate::memory::{xcalloc, xfree, xrealloc, xstrchrnul};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{VAR_UNKNOWN, size_t, typval_T};
 
 const E_CANNOT_MIX: &CStr = c"E1500: Cannot mix positional and non-positional arguments: %s";

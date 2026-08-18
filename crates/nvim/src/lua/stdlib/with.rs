@@ -24,13 +24,13 @@ use crate::lua::ffi::{
     luaL_checkinteger,
 };
 use crate::main::{cmdmod, g_min_log_level};
-use crate::os::libc::memset;
 use crate::types::{
     CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS,
     CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, aco_save_T, buf_T,
     cmdmod_T, lua_State, pos_T, switchwin_T, win_T, win_execute_T,
 };
 use crate::window::win_find_tabpage;
+use ::libc::memset;
 
 /// The context keys that are plain `:command` modifiers: a truthy value ors
 /// the flag in, anything else is ignored.

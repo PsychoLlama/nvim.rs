@@ -47,12 +47,12 @@ use crate::mpack::object::{
     mpack_unparse,
 };
 use crate::mpack::rpc::{MPACK_RPC_MAX_REQUESTS, mpack_rpc_session_copy, mpack_rpc_session_init};
-use crate::os::libc::{free, malloc};
 use crate::types::{
     lua_Number, lua_State, luaL_Buffer, luaL_Reg, mpack_data_t, mpack_node_t, mpack_one_parser_t,
     mpack_parser_t, mpack_rpc_message_t, mpack_rpc_one_session_t, mpack_rpc_session_t,
     mpack_rpc_slot_s, mpack_uint32_t, size_t,
 };
+use ::libc::{free, malloc};
 
 /// The metatable names, which double as the registry keys they are stored
 /// under.

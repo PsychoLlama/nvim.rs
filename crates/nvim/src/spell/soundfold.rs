@@ -27,9 +27,10 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
 use crate::memory::xstrdup;
-use crate::os::libc::{strlen, strstr};
+use crate::os::cshim::strstr;
 use crate::strings::vim_strchr;
 use crate::types::{MB_MAXBYTES, langp_T, salitem_T, slang_T};
+use ::libc::strlen;
 
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 use super::{MAXWLEN, NUL};

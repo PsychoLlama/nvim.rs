@@ -29,7 +29,7 @@ use crate::lua::ffi::{
     lua_pushnumber, lua_pushvalue, lua_rawset, lua_setmetatable, lua_tonumber,
 };
 use crate::main::nlua_global_refs;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{
     LuaRef, blob_T, dict_T, float_T, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
     typval_T,

@@ -60,7 +60,7 @@ use crate::memory::xfree;
 use crate::message::emsg;
 use crate::normal::end_visual_mode;
 use crate::option::shortmess;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, CdCause, ExtmarkOp, Map_int_ptr_t, MarkAdjustMode, MarkTree, MetaIndex,

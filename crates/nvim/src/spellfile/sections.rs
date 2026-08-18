@@ -32,13 +32,14 @@ use crate::mbyte::{
 };
 use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::message::emsg;
-use crate::os::libc::{getc, gettext, memset, strlen, ungetc};
+use crate::os::cshim::{getc, gettext};
 use crate::spell::{byte_in_str, clear_spell_chartab, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
     FILE, fromto_T, garray_T, hash_T, hashitem_T, int16_t, regprog_T, salfirst_T, salitem_T,
     size_t, slang_T, spelltab_T, uint8_t,
 };
+use ::libc::{memset, strlen, ungetc};
 
 use super::read::read_nonnul_bytes;
 use super::{

@@ -47,8 +47,8 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{msg, msg_starthere};
+use crate::os::cshim::{gettext, memmove, strncmp, strstr};
 use crate::os::env::{expand_env_save, home_replace};
-use crate::os::libc::{atoi, gettext, memmove, strcmp, strcpy, strlen, strncmp, strstr};
 use crate::path::fix_fname;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
 use crate::runtime::{estack_sfile, sourcing_lnum};
@@ -59,6 +59,7 @@ use crate::types::{
     varnumber_T,
 };
 use crate::{semsg, semsg_c, smsg, smsg_c};
+use ::libc::{atoi, strcmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

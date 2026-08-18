@@ -42,7 +42,7 @@ use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen, strncasecmp};
+use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::strings::vim_strchr;
@@ -51,6 +51,7 @@ use crate::types::{
     list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T, uint8_t,
     varnumber_T, win_T,
 };
+use ::libc::strlen;
 
 mod searchhl;
 pub use self::searchhl::*;

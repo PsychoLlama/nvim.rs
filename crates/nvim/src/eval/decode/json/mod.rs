@@ -22,7 +22,7 @@ use crate::eval::typval::{
     TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_list_alloc, tv_list_len, tv_list_ref,
 };
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{
     VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VAR_UNLOCKED, kBoolVarFalse,
     kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T, ptrdiff_t, size_t, typval_T,

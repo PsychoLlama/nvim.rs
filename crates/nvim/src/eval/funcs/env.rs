@@ -21,12 +21,12 @@ use crate::memfile::mf_fname;
 use crate::memline::{recover_names, swapfile_dict};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::emsg;
+use crate::os::cshim::{gettext, strchr};
 use crate::os::env::{
     os_copy_fullenv, os_free_fullenv, os_get_fullenv_size, vim_env_iter, vim_getenv,
     vim_setenv_ext, vim_unsetenv_ext,
 };
 use crate::os::fs::os_setperm;
-use crate::os::libc::{gettext, strchr, strlen};
 use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
 use crate::semsg_c;
@@ -35,6 +35,7 @@ use crate::types::{
     exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown, kSpecialVarNull, list_T,
     typval_T, varnumber_T,
 };
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

@@ -17,7 +17,7 @@ use crate::main::{
     msg_silent, redir_off, suppress_errthrow,
 };
 use crate::memory::xfree;
-use crate::os::libc::{abort, memmove, strlen};
+use crate::os::cshim::memmove;
 use crate::runtime::do_source_str;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
@@ -33,6 +33,7 @@ use crate::viml::parser::expressions::{
     viml_pexpr_parse,
 };
 use crate::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy, viml_parser_init};
+use ::libc::{abort, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod eval;

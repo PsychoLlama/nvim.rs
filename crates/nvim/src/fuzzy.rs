@@ -45,7 +45,7 @@ use crate::main::{curbuf, e_invarg2, e_invargNval, e_invargval, e_listarg, p_ws}
 use crate::mbyte::{mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{

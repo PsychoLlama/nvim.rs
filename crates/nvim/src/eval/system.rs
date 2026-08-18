@@ -27,14 +27,15 @@ use crate::main::{do_profiling, e_invarg, e_invarg2, e_invargNval, e_nobufnr, p_
 use crate::memline::ml_get_buf;
 use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{emsg, msg_puts, verbose_enter_scroll, verbose_leave_scroll};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::fs::os_can_exe;
-use crate::os::libc::{gettext, snprintf, strlen};
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
     EvalFuncData, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VV_SHELL_ERROR, buf_T,
     kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
+use ::libc::strlen;
 
 /// The scratch a "not executable" complaint is rendered into. `MAXPATHL`
 /// in the C.

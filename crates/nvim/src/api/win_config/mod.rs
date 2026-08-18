@@ -28,7 +28,7 @@ use crate::memory::{strequal, xrealloc, xstrdup};
 use crate::r#move::changed_window_setting;
 use crate::option::{copy_option_part, didset_window_options};
 use crate::options::opt_winborder_values;
-use crate::os::libc::{memcpy, memset, strchr};
+use crate::os::cshim::strchr;
 use crate::strings::striequal;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
@@ -54,6 +54,7 @@ use crate::window::{
 use crate::winfloat::{
     win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,
 };
+use ::libc::{memcpy, memset};
 
 // The carve of the transpiled module; see each child's docs.
 mod apply;

@@ -14,8 +14,9 @@ use crate::event::libuv::uv_err_name;
 use crate::global_cell::GlobalCell;
 use crate::main::{e_notopen, time_fd};
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::{fclose, fopen, fprintf, gettext, setvbuf, stderr};
+use crate::os::cshim::{gettext, stderr};
 use crate::types::proftime_T;
+use ::libc::{fclose, fopen, fprintf, setvbuf};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 

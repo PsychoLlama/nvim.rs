@@ -14,8 +14,8 @@ use crate::eval::typval::{
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
 use crate::main::e_invarg2;
+use crate::os::cshim::gettext;
 use crate::os::env::os_get_pid;
-use crate::os::libc::gettext;
 use crate::os::time::os_hrtime;
 use crate::types::{EvalFuncData, VAR_FLOAT, VAR_LIST, VAR_NUMBER, float_T, typval_T, varnumber_T};
 use crate::{semsg, semsg_c};

@@ -15,8 +15,8 @@ use core::slice;
 use super::strnlen;
 use crate::mbyte::{mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2CharInfo};
 use crate::memory::{xmalloc, xrealloc};
-use crate::os::libc::strlen;
 use crate::types::size_t;
+use ::libc::strlen;
 
 /// ASCII-uppercase `s` in place (bytes ≥ 0x80 untouched).
 pub(crate) fn ascii_upcase(s: &mut [u8]) {

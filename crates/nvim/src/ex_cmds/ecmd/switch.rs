@@ -31,12 +31,13 @@ use crate::main::{
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
 use crate::option::buf_copy_options;
-use crate::os::libc::{atol, gettext};
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::terminal::terminal_running;
 use crate::types::{CMOD_KEEPALT, buf_T, bufref_T, linenr_T, win_T};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
+use ::libc::atol;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

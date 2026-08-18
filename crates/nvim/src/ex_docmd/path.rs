@@ -32,9 +32,9 @@ use crate::message::{emsg, msg};
 use crate::option::{get_option_sctx, option_set_callback_func};
 use crate::options::kOptFindfunc;
 use crate::optionstr::free_string_option;
+use crate::os::cshim::gettext;
 use crate::os::env::expand_env;
 use crate::os::fs::os_dirname;
-use crate::os::libc::{gettext, strcmp};
 use crate::path::pathcmp;
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -43,6 +43,7 @@ use crate::types::{
     kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t,
     typval_T,
 };
+use ::libc::strcmp;
 
 /// The buffer-local 'findfunc' if it is set, and the global one otherwise.
 pub(crate) unsafe fn get_findfunc_callback() -> *mut Callback {

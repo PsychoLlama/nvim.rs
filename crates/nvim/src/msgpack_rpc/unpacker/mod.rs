@@ -23,7 +23,6 @@ use crate::mpack::conv::{
 };
 use crate::mpack::mpack_core::{mpack_read, mpack_rtoken, mpack_tokbuf_init};
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
-use crate::os::libc::abort;
 use crate::strings::arena_printf;
 use crate::types::{
     AdditionalData, AdditionalDataBuilder, Arena, Array, Boolean, Dict, Error, FieldHashfn,
@@ -36,6 +35,7 @@ use crate::types::{
 use crate::ui_client::{
     handle_ui_client_redraw, ui_client_event_grid_line, ui_client_get_redraw_handler,
 };
+use ::libc::abort;
 
 pub mod protocol;
 

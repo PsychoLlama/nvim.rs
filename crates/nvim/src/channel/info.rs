@@ -22,7 +22,6 @@ use crate::event::proc::proc_is_stopped;
 use crate::log::{LOGLVL_INF, logmsg_c};
 use crate::main::{IObuff, curbuf};
 use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
-use crate::os::libc::qsort;
 use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::terminal::terminal_buf;
 use crate::types::{
@@ -31,6 +30,7 @@ use crate::types::{
     kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair, object_data,
     save_v_event_T, size_t, typval_T, typval_vval_union, uint64_t,
 };
+use ::libc::qsort;
 
 use super::known::*;
 use super::{

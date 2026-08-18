@@ -44,9 +44,9 @@ use crate::message::{
 };
 use crate::option::set_option_direct;
 use crate::options::kOptFoldcolumn;
+use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::gettext;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{

@@ -19,8 +19,8 @@ use crate::ex_docmd::find_cmdline_var;
 use crate::mbyte::{mb_copy_char, utfc_ptr2len};
 use crate::memory::{xmalloc, xmallocz};
 use crate::option::{csh_like_shell, fish_like_shell};
-use crate::os::libc::strlen;
 use crate::types::size_t;
+use ::libc::strlen;
 
 /// Walk `src` as `vim_strnsave_unquoted` reads it, feeding kept bytes to
 /// `emit`: unescaped double quotes toggle quote mode and vanish; inside

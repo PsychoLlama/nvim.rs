@@ -15,7 +15,6 @@ use crate::mbyte::{
     mb_get_class_tab, utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len,
     utfc_ptr2len,
 };
-use crate::os::libc::strlen;
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{
@@ -29,6 +28,7 @@ use crate::regexp::{
     reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class, reg_save_equal,
 };
 use crate::types::{GraphemeState, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
+use ::libc::strlen;
 
 const BACKREF_1: c_int = BACKREF + 1;
 const BACKREF_9: c_int = BACKREF + 9;

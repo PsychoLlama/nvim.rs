@@ -39,12 +39,9 @@ use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::emsg;
 use crate::option::{copy_option_part, set_option_value_give_err};
 use crate::options::kOptSpellfile;
+use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::env::home_replace;
 use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
-use crate::os::libc::{
-    __errno_location, fclose, fprintf, fputc, fseek, ftell, gettext, strerror, strlen, strncmp,
-    strstr,
-};
 use crate::os::stdpaths::get_xdg_home;
 use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::spell::{int_wordlist, spell_enc};
@@ -53,6 +50,7 @@ use crate::types::{
     FILE, OptVal, OptValData, SpellAddType, buf_T, int32_t, langp_T, size_t, uint8_t,
 };
 use crate::undo::bufIsChanged;
+use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror, strlen};
 
 use super::wordtree::valid_spell_word;
 use super::{

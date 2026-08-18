@@ -33,8 +33,8 @@ use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
-use crate::os::libc::{gettext, strcpy, strlen};
 use crate::plines::{getvvcol, win_linetabsize};
 use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
@@ -42,6 +42,7 @@ use crate::semsg;
 use crate::types::{
     buf_T, colnr_T, linenr_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t, win_T,
 };
+use ::libc::{strcpy, strlen};
 
 /// Let the user interrupt a long match, unless the caller asked for an
 /// uninterruptible one (`RE_NOBREAK`, for matches run where input cannot

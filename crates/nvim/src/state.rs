@@ -19,13 +19,13 @@ use crate::main::{
 use crate::option::get_ve_flags;
 use crate::options::{kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
-use crate::os::libc::{strcmp, strcpy};
 use crate::strings::vim_snprintf;
 use crate::types::{
     Direction, Event, ProcType, VimState, dict_T, hashitem_T, hashtab_T, kNone, save_v_event_T,
     size_t, uint8_t, win_T,
 };
 use crate::ui::ui_flush;
+use ::libc::{strcmp, strcpy};
 pub const kProcTypePty: ProcType = 1;
 pub const kDirectionNotSet: Direction = 0;
 /// The editor-mode bitmask `State` carries, and the masks that read it.

@@ -23,7 +23,7 @@ use crate::main::{
 };
 use crate::memory::xfree;
 use crate::options::*;
-use crate::os::libc::{gettext, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::strings::vim_snprintf;
 use crate::types::{MAX_MCO, OptIndex, OptInt, OptVal, size_t, vimoption_T};
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};

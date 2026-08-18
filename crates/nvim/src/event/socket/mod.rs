@@ -27,14 +27,15 @@ use crate::event::stream::{stream_init, stream_may_close};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg_c};
 use crate::main::main_loop;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_path_exists, os_remove};
-use crate::os::libc::{gettext, ntohs};
 use crate::path::path_tail;
 use crate::types::{
     Loop, RStream, SocketWatcher, Stream, addrinfo, intmax_t, sa_family_t, socket_cb,
     socket_close_cb, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_pipe_t,
     uv_stream_t, uv_tcp_t,
 };
+use ::libc::ntohs;
 
 const UV_TCP: uv_handle_type = 12;
 

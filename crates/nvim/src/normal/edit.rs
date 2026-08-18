@@ -40,7 +40,7 @@ use crate::normal::{
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::register::{copy_register, do_put, free_register};
 use crate::search::{BACKWARD, FORWARD};
@@ -52,6 +52,7 @@ use crate::types::{
     PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, cmdarg_T, colnr_T, linenr_T, size_t, yankreg_T,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.

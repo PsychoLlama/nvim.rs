@@ -42,7 +42,7 @@ use crate::main::{
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext};
-use crate::os::libc::{atol, gettext, memcmp, memset, strlen};
+use crate::os::cshim::gettext;
 use crate::runtime::sourcing_a_script;
 use crate::types::{
     Arena, Object, String_0, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -51,6 +51,7 @@ use crate::types::{
     ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t,
     varnumber_T, win_T,
 };
+use ::libc::{atol, memcmp, memset, strlen};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

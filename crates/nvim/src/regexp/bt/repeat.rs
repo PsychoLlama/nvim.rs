@@ -17,7 +17,7 @@ use crate::charset::{vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordp_buf};
 use crate::main::{e_re_corr, got_int};
 use crate::mbyte::{mb_tolower, mb_toupper, utf_fold, utf_ptr2char, utfc_ptr2len};
 use crate::message::iemsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::regexp::{
     ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, DIGIT, EXACTLY, FIRST_NL, FNAME, HEAD, HEX, IDENT, KWORD,
     LAST_NL, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOCTAL, NUL, NUPPER,

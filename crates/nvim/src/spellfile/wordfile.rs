@@ -15,11 +15,12 @@ use crate::fileio::vim_fgets;
 use crate::main::{IObuff, e_notopen, got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::xfree;
+use crate::os::cshim::{gettext, strncmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{fclose, gettext, strcpy, strlen, strncmp};
 use crate::strings::{has_non_ascii, vim_snprintf, vim_strchr};
 use crate::types::{CONV_NONE, linenr_T, size_t, uint8_t};
+use ::libc::{fclose, strcpy, strlen};
 
 use super::wordtree::store_word;
 use super::{

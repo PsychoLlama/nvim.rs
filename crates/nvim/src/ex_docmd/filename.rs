@@ -38,10 +38,8 @@ use crate::main::{
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
 use crate::message::{emsg, msg_make};
 use crate::normal::find_ident_under_cursor;
+use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::os::env::{expand_env_esc, expand_env_save};
-use crate::os::libc::{
-    gettext, memmove, snprintf, strcat, strcmp, strcpy, strlen, strncmp, strpbrk, strrchr,
-};
 use crate::path::{FullName_save, path_has_wildcard, path_tail, path_try_shorten_fname};
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
@@ -50,6 +48,7 @@ use crate::types::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
     VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t, uint8_t, uint32_t,
 };
+use ::libc::{strcat, strcmp, strcpy, strlen, strpbrk, strrchr};
 
 /// `:make` and `:grep` are 'makeprg'/'grepprg' with `$*` replaced by the
 /// argument — spliced in here, before `%` and `#` are expanded, so that

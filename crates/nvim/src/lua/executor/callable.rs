@@ -26,14 +26,15 @@ use crate::lua::ffi::{
 };
 use crate::main::{got_int, mod_mask};
 use crate::memory::{xfree, xmalloc};
+use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
-use crate::os::libc::{gettext, strlen};
 use crate::strings::{arena_printf, vim_snprintf};
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, Array, LuaRef, Object, String_0, VAR_DICT, VAR_LIST, buf_T, kObjectTypeBoolean, size_t,
     typval_T,
 };
+use ::libc::strlen;
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
 const LUA_DEBUG_INIT: lua_Debug = lua_Debug {

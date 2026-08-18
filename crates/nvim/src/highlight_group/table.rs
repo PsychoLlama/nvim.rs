@@ -31,7 +31,7 @@ use crate::main::{
     normal_fg,
 };
 use crate::message::{emsg, msg_source};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{HlAttrs, NS, RgbValue, int16_t, int32_t, sctx_T, size_t};
 use crate::ui::ui_mode_info_set;
 

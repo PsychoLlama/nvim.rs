@@ -67,10 +67,8 @@ use crate::option::{
 use crate::options::{
     kOptAleph, kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest,
 };
+use crate::os::cshim::{__ctype_b_loc, gettext, snprintf, strncmp};
 use crate::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
-use crate::os::libc::{
-    __ctype_b_loc, abort, gettext, memchr, memcpy, snprintf, strcmp, strcpy, strlen, strncmp,
-};
 use crate::pos::MAXCOL;
 use crate::register::{get_reg_contents, write_reg_contents};
 use crate::runtime::{new_script_item, script_autoload, script_items};
@@ -98,6 +96,7 @@ use crate::types::{
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
+use ::libc::{abort, memchr, memcpy, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod assign;

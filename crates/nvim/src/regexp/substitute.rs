@@ -39,13 +39,14 @@ use crate::mbyte::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, iemsg};
-use crate::os::libc::{gettext, memmove, strcpy, strlen, strncmp};
+use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
     VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, funcexe_T, linenr_T,
     partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
 };
+use ::libc::{strcpy, strlen};
 
 /// How deep a `\=` expression may nest substitutions before it is more
 /// likely to be a mistake than an intention.

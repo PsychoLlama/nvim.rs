@@ -28,7 +28,7 @@ use super::{
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int;
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{cmd_addr_T, size_t, uint32_t};

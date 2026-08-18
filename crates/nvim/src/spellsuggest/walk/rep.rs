@@ -18,10 +18,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::os::libc::{strlen, strncmp};
+use crate::os::cshim::strncmp;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::types::{fromto_T, garray_T};
+use ::libc::strlen;
 use core::ffi::c_int;
 use core::ptr;
 

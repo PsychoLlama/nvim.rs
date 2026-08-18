@@ -28,11 +28,12 @@ use crate::lua::ffi::{
 };
 use crate::main::{e_outofmem, main_loop, preserve_exit};
 use crate::memory::xstrdup;
-use crate::os::libc::{fprintf, pthread_exit, stderr};
+use crate::os::cshim::stderr;
 use crate::runtime::runtime_get_named_thread;
 use crate::types::{
     Arena, Array, Event, intptr_t, kErrorTypeNone, lua_CFunction, lua_State, size_t,
 };
+use ::libc::{fprintf, pthread_exit};
 
 /// `lua_pcall`'s "out of memory" status, the one failure that is not a
 /// recoverable Lua error.

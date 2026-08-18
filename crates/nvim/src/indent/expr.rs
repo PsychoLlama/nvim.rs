@@ -20,13 +20,14 @@ use crate::main::{
 use crate::mbyte::{utf_ptr2CharInfo, utf_ptr2StrCharInfo, utfc_next};
 use crate::memory::{xfree, xstrdup};
 use crate::option::{copy_option_part, was_set_insecurely};
-use crate::os::libc::{strcmp, strncmp};
+use crate::os::cshim::strncmp;
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::pos::lt;
 use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
 use crate::strings::vim_strchr;
 use crate::types::VV_LNUM;
+use ::libc::strcmp;
 
 /// The indent 'indentexpr' answers for the cursor line, or the line's
 /// current indent when the expression failed.

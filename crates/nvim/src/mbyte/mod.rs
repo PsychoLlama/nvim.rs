@@ -29,7 +29,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::{char2cells, ptr2cells, vim_isprintc, vim_iswordc_tab};
@@ -53,11 +53,8 @@ use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting_all;
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::optionstr::check_chars_options;
+use crate::os::cshim::{__ctype_b_loc, gettext, memmove, snprintf, strchr, strncasecmp};
 use crate::os::env::os_getenv_noalloc;
-use crate::os::libc::{
-    __ctype_b_loc, __errno_location, gettext, iconv, iconv_close, iconv_open, memcmp, memmove,
-    setlocale, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, tolower, toupper,
-};
 use crate::pos::MAXCOL;
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -73,6 +70,10 @@ use crate::utf8proc::{
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,
     utf8proc_get_property, utf8proc_grapheme_break, utf8proc_grapheme_break_stateful,
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
+};
+use ::libc::{
+    __errno_location, iconv, iconv_close, iconv_open, memcmp, setlocale, strcmp, strcpy, strlen,
+    tolower, toupper,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -93,36 +94,6 @@ pub use self::encoding::*;
 pub use self::linebreak::*;
 pub use self::utf8::*;
 pub use self::walk::*;
-
-unsafe extern "C" {
-    #[cfg(not(miri))]
-    fn towlower(__wc: wint_t) -> wint_t;
-    #[cfg(not(miri))]
-    fn towupper(__wc: wint_t) -> wint_t;
-    fn nl_langinfo(__item: nl_item) -> *mut ::core::ffi::c_char;
-}
-
-// Miri cannot call libc. The tests never call setlocale, so glibc would run
-// these in the C locale, where they fold ASCII only — which is exactly what
-// these definitions do. Declared unsafe, exactly as the real ones are, so a
-// caller's block does not become `unused_unsafe` under `cargo miri`.
-///
-/// # Safety
-///
-/// None; the declaration only mirrors the foreign one it stands in for.
-#[cfg(miri)]
-unsafe fn towlower(__wc: wint_t) -> wint_t {
-    u8::try_from(__wc).map_or(__wc, |b| b.to_ascii_lowercase() as wint_t)
-}
-/// # Safety
-///
-/// None; the declaration only mirrors the foreign one it stands in for.
-#[cfg(miri)]
-unsafe fn towupper(__wc: wint_t) -> wint_t {
-    u8::try_from(__wc).map_or(__wc, |b| b.to_ascii_uppercase() as wint_t)
-}
-/// `wchar_t` widened for `towupper`/`towlower`.
-pub type wint_t = c_uint;
 
 /// The C-level vocabulary every transpiled module carries a copy of;
 /// consolidating them tree-wide is a family of its own, not this slice's.

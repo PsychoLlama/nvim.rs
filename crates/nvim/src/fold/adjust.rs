@@ -3,7 +3,7 @@ use crate::main::{State, VIsual, VIsual_active, curwin, p_sel};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::memline::ml_get_len;
-use crate::os::libc::memmove;
+use crate::os::cshim::memmove;
 use crate::pos::{MAXLNUM, ltoreq};
 use core::ffi::{c_int, c_void};
 use core::ptr;

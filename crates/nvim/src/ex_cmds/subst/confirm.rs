@@ -33,12 +33,13 @@ use crate::mouse::setmouse;
 use crate::r#move::{
     do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,
 };
-use crate::os::libc::{gettext, memset, snprintf, strlen};
+use crate::os::cshim::{gettext, snprintf};
 use crate::plines::getvcol;
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, Callback_data, colnr_T, linenr_T, size_t};
 use crate::ui::ui_has;
+use ::libc::{memset, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

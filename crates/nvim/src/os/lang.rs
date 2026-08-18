@@ -23,13 +23,15 @@ use crate::global_cell::GlobalCell;
 use crate::main::time_fd;
 use crate::memory::{xfree, xstrlcpy};
 use crate::option::{PROJECT_NAME, set_helplang_default};
+use crate::os::cshim::_nl_msg_cat_cntr;
+use crate::os::cshim::{bindtextdomain, gettext, textdomain};
 use crate::os::env::os_setenv;
-use crate::os::libc::{bindtextdomain, gettext, setlocale, textdomain};
 use crate::os::shell::{ShellOpts, get_cmd_output};
 use crate::path::{path_tail, path_tail_with_sep};
 use crate::profile::time_msg;
 use crate::types::{VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T};
 use crate::{semsg_c, smsg_c};
+use ::libc::setlocale;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -234,9 +236,6 @@ pub unsafe fn ex_language(eap: *mut exarg_T) {
     // environment variable name below is a static literal, and `name` is
     // NUL-terminated.
     unsafe {
-        unsafe extern "C" {
-            static mut _nl_msg_cat_cntr: c_int;
-        }
         _nl_msg_cat_cntr += 1;
 
         // $LC_ALL would overrule everything set below.

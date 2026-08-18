@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use ::libc::nl_langinfo;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 // The carve of the transpiled module; see each child's docs.

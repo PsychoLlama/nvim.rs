@@ -21,12 +21,13 @@
 
 use core::ffi::{c_int, c_void};
 
-use crate::os::libc::{abort, fprintf, memmove, stderr};
+use crate::os::cshim::{memmove, stderr};
 use crate::types::{
     ScreenCell, VTermLineInfo, VTermPos, VTermScreenCell, VTermStateFields, size_t,
 };
 use crate::vterm::cell::{blank_cells, import_row};
 use crate::vterm::vterm::{vterm_alloc, vterm_dealloc};
+use ::libc::{abort, fprintf};
 
 use super::{BUFIDX_ALTSCREEN, BUFIDX_PRIMARY, Screen, line_popcount, row_cells};
 

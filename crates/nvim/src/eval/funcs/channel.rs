@@ -34,7 +34,7 @@ use crate::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event
 use crate::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
 };
-use crate::os::libc::{gettext, strcmp};
+use crate::os::cshim::gettext;
 use crate::runtime::exestack;
 use crate::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
@@ -43,6 +43,7 @@ use crate::types::{
     kObjectTypeString, object, sctx_T, typval_T, uint64_t, varnumber_T,
 };
 use crate::{semsg_c, semsg_multiline_c};
+use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

@@ -12,7 +12,7 @@ use crate::lua::ffi::{
     lua_createtable, lua_getfield, lua_gettop, lua_pushnumber, lua_pushstring, lua_settable,
     lua_settop, lua_toboolean, lua_tolstring,
 };
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::exarg_T;
 use core::ffi::{CStr, c_char};
 use core::{ptr, slice};

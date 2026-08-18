@@ -47,10 +47,11 @@ use core::ffi::{c_char, c_int, c_uint};
 use crate::mbyte::{mb_charlen_len, utf_char2bytes, utf_head_off, utfc_ptr2len};
 use crate::memory::xmemcpyz;
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen, strncmp};
+use crate::os::cshim::{gettext, strncmp};
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
 use crate::types::{garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t, uint32_t};
+use ::libc::strlen;
 
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,

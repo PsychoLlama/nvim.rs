@@ -36,13 +36,14 @@ use crate::memline::ml_get_buf;
 use crate::memory::xfree;
 use crate::message::emsg;
 use crate::options::kOptSpoFlagCamel;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
 use crate::types::{
     colnr_T, garray_T, hlf_T, langp_T, linenr_T, regmatch_T, size_t, uint8_t, win_T,
 };
+use ::libc::strlen;
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};

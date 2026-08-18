@@ -23,7 +23,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::{decl, inc, incl, ml_get_pos};
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::snprintf;
+use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
 use crate::strings::vim_strchr;

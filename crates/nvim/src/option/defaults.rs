@@ -39,11 +39,9 @@ use crate::options::{
     kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow, options,
 };
 use crate::optionstr::{check_buf_options, free_string_option};
+use crate::os::cshim::{bind_textdomain_codeset, gettext, memmove, snprintf, strncasecmp, strncmp};
 use crate::os::env::{os_env_exists, os_getenv, vim_getenv};
 use crate::os::lang::{get_mess_lang, lang_init};
-use crate::os::libc::{
-    bind_textdomain_codeset, gettext, getuid, memmove, snprintf, strlen, strncasecmp, strncmp,
-};
 use crate::os::stdpaths::stdpaths_user_state_subpath;
 use crate::path::{after_pathsep, invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
 use crate::runtime::runtimepath_default;
@@ -54,6 +52,7 @@ use crate::types::{
     uint32_t, vimoption_T,
 };
 use crate::window::{last_status, win_comp_scroll};
+use ::libc::{getuid, strlen};
 
 use super::{
     NO_LOCAL_UNDOLEVEL, NUL, OPT_GLOBAL, OPT_LOCAL, PATHSEPSTR, PROJECT_NAME, ROOT_UID, SID_NONE,

@@ -65,7 +65,7 @@ use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
 use crate::main::{curbuf, current_sctx, p_cpo};
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
-use crate::os::libc::{gettext, memmove, strlen};
+use crate::os::cshim::{gettext, memmove};
 use crate::runtime::sourcing_lnum;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
@@ -74,6 +74,7 @@ use crate::types::{
     ucmd_T, uint32_t,
 };
 use crate::window::prevwin_curwin;
+use ::libc::strlen;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr, slice};

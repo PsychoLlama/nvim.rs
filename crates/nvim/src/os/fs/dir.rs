@@ -23,7 +23,7 @@ use crate::event::libuv::{
 use crate::main::{e_mkdir, e_noname};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::path::{
     FullName_save, dir_of_file_exists, get_past_head, path_tail_with_sep, vim_ispathsep,
 };

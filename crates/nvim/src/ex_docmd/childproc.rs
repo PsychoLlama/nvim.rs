@@ -12,7 +12,7 @@ use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, e_shellempty, p_sh};
 use crate::memory::{xfree, xstrlcat};
 use crate::message::{emsg, emsg_multiline};
-use crate::os::libc::{gettext, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::shell::{shell_build_argv, shell_free_argv};
 use crate::strings::vim_strsave_escaped;
 use crate::types::{

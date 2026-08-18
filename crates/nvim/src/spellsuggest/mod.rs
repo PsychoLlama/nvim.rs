@@ -57,9 +57,9 @@ use crate::main::{curbuf, curwin, e_notopen, got_int, p_sps};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::option::copy_option_part;
+use crate::os::cshim::{gettext, strncmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::os::libc::{atoi, fclose, gettext, strcasecmp, strcpy, strlen, strncmp};
 use crate::spell::{captype, make_case_word, spell_casefold, spell_check, spell_soundfold};
 use crate::spellfile::suggest_load_files;
 use crate::spellsuggest::collect::{
@@ -73,6 +73,7 @@ use crate::spellsuggest::soundalike::{
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::strings::vim_strchr;
 use crate::types::{FILE, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
+use ::libc::{atoi, fclose, strcasecmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 

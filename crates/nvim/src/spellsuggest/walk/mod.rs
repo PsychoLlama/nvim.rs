@@ -84,10 +84,10 @@ mod transpose;
 use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::strlen;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::spellsuggest::{MAXWLEN, spell_suggest_timeout, suginfo_T};
 use crate::types::{idx_T, int64_t, langp_T, proftime_T, slang_T};
+use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 
 /// One level per byte of the bad word is all the walk can ever need.

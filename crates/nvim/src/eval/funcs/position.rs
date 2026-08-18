@@ -19,7 +19,7 @@ use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
 use crate::message::emsg;
 use crate::r#move::update_curswant;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::plines::{getvvcol, win_chartabsize};
 use crate::pos::MAXCOL;
 use crate::search::{

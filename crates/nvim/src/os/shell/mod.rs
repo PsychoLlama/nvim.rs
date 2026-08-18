@@ -44,8 +44,8 @@ use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
 use crate::message::{
     emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_puts, verbose_enter, verbose_leave,
 };
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_fopen, os_remove};
-use crate::os::libc::{fclose, fopen, fread, fseek, ftell, gettext, strcmp, strcpy, strlen};
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::state::MODE_EXTERNCMD;
@@ -56,6 +56,7 @@ use crate::types::{
     StringBuilder, VV_SHELL_ERROR, linenr_T, proftime_T, size_t, stream_read_cb, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
+use ::libc::{fclose, fopen, fread, fseek, ftell, strcmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;

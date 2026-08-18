@@ -52,7 +52,6 @@ use crate::normal::{
 };
 use crate::option::shortmess;
 use crate::options::kOptFdoFlagAll;
-use crate::os::libc::time;
 use crate::pos::equalpos;
 use crate::profile::{time_finish, time_msg};
 use crate::state::{
@@ -63,6 +62,7 @@ use crate::terminal::terminal_check_refresh;
 use crate::types::{OP_NOP, VimState, cmdarg_T, int64_t, oparg_T};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
+use ::libc::time;
 use core::ffi::{c_int, c_uint, c_void};
 
 use crate::r#move::{update_curswant, update_topline, validate_cursor};

@@ -24,7 +24,7 @@ use crate::garray::ga_append_via_ptr;
 use crate::main::{e_re_corr, got_int};
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::{iemsg, internal_error};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
     ADD_NL, BACK, BEHIND, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, EXACTLY, FIRST_NL,

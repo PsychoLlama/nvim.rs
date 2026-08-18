@@ -29,7 +29,7 @@ use crate::normal::{
     ARRAY_DICT_INIT, NUL, SHOWCMD_BUFLEN, SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear,
     showcmd_visual,
 };
-use crate::os::libc::{memmove, snprintf, strcat, strcpy, strlen};
+use crate::os::cshim::{memmove, snprintf};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
@@ -38,6 +38,7 @@ use crate::types::{
     kObjectTypeNil, kObjectTypeString, linenr_T, object, size_t,
 };
 use crate::ui::{ui_call_msg_showcmd, ui_has};
+use ::libc::{strcat, strcpy, strlen};
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::highlight_group::HLF_MSG;

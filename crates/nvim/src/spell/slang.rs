@@ -29,13 +29,14 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
-use crate::os::libc::{memcpy, strlen, strncmp};
+use crate::os::cshim::strncmp;
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
     buf_T, fromto_T, garray_T, hash_T, hashitem_T, regprog_T, salitem_T, size_t, slang_T, uint8_t,
     uint16_t, wordcount_T,
 };
+use ::libc::{memcpy, strlen};
 
 use super::{
     FAIL, MAXWLEN, MAXWORDCOUNT, NUL, OK, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T,

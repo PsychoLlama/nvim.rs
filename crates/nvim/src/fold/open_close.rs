@@ -7,7 +7,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::main::{curtab, curwin, firstwin, p_fcl};
 use crate::message::emsg;
 use crate::r#move::changed_window_setting;
-use crate::os::libc::{gettext, memmove};
+use crate::os::cshim::{gettext, memmove};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

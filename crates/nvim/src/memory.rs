@@ -22,7 +22,8 @@ use core::{ptr, slice};
 use crate::main::{arena_alloc_count, did_outofmem_msg, e_outofmem, emsg_silent, preserve_exit};
 use crate::memfile::mf_release_all;
 use crate::message::clear_sb_text;
-use crate::os::libc::{calloc, free, gettext, malloc, realloc};
+use crate::os::cshim::gettext;
+use ::libc::{calloc, free, malloc, realloc};
 
 pub type MemMalloc = Option<unsafe extern "C" fn(usize) -> *mut c_void>;
 pub type MemFree = Option<unsafe extern "C" fn(*mut c_void)>;

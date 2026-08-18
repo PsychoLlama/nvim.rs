@@ -29,7 +29,7 @@ use crate::fold::getDeepestNesting;
 use crate::grid::{grid_adjust, win_grid_alloc};
 use crate::main::{Columns, RedrawingDisabled, Rows, default_grid, float_anchor_str, p_acd, p_ch};
 use crate::r#move::textpos2screenpos;
-use crate::os::libc::strncmp;
+use crate::os::cshim::strncmp;
 use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;

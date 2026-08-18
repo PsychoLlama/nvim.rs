@@ -58,7 +58,7 @@ use crate::main::{c_bytes, e_listdictblobarg};
 use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::reverse_text;
 use crate::types::{
@@ -67,6 +67,7 @@ use crate::types::{
     list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
     vimconv_T,
 };
+use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
 mod count;

@@ -32,10 +32,10 @@ use crate::message::emsg;
 use crate::normal::get_visual_text;
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::options::kOptIncludeexpr;
+use crate::os::cshim::{gettext, strncmp};
 use crate::os::env::expand_env_esc;
 use crate::os::fs::{os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir, os_path_exists};
 use crate::os::input::os_breakcheck;
-use crate::os::libc::{abort, gettext, strcpy, strlen, strncmp};
 use crate::path::{
     ExpandFlags, FreeWild, FullName_save, after_pathsep, expand_wildcards, path_fnamecmp,
     path_fnamencmp, path_has_drive_letter, path_is_url, path_shorten_fname, path_tail,
@@ -46,6 +46,7 @@ use crate::types::{
     BoolVarValue, CdCause, CdScope, FileID, cmdarg_T, event_T, linenr_T, ptrdiff_t, save_v_event_T,
     size_t,
 };
+use ::libc::{abort, strcpy, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CStr;

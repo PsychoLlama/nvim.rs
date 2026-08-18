@@ -32,32 +32,16 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::main::{IObuff, NameBuff, didset_vim, didset_vimruntime, nvim_testing, os_buf};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::internal_error;
+use crate::os::cshim::{environ, strchr, strncmp};
 use crate::os::fs::{os_dirname, os_realpath};
-use crate::os::libc::{
-    environ, getpid, strcasecmp, strchr, strcmp, strcpy, strlen, strncmp, strpbrk,
-};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::strings::striequal;
 use crate::types::{expand_T, int64_t, size_t};
+use ::libc::{getpid, strcasecmp, strcmp, strcpy, strlen, strpbrk};
+use ::libc::{uname, utsname};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-
-unsafe extern "C" {
-    fn uname(__name: *mut utsname) -> c_int;
-}
-
-/// `<sys/utsname.h>`'s answer, of which only `nodename` is read.
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct utsname {
-    pub sysname: [c_char; 65],
-    pub nodename: [c_char; 65],
-    pub release: [c_char; 65],
-    pub version: [c_char; 65],
-    pub machine: [c_char; 65],
-    pub domainname: [c_char; 65],
-}
 
 // The libuv error codes this file distinguishes, retyped from the `c_int`
 // anonymous enum c2rust emitted.

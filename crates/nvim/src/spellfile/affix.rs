@@ -27,10 +27,11 @@ use crate::garray::ga_append_via_ptr;
 use crate::hashtab::{hash_add, hash_find, hash_removed};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
-use crate::os::libc::{atoi, gettext, snprintf, strcmp, strcpy, strlen};
+use crate::os::cshim::{gettext, snprintf};
 use crate::spell::{onecap_copy, spelltab};
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{hashitem_T, hashtab_T, size_t};
+use ::libc::{atoi, strcmp, strcpy, strlen};
 
 use super::aff::{AffState, str_equal};
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};

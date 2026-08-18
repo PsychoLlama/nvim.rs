@@ -35,7 +35,7 @@ use crate::main::{curbuf, curtab, curwin, firstbuf, lastbuf};
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::message::iemsg;
 use crate::option::magic_isset;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size};
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
@@ -45,6 +45,7 @@ use crate::types::{
     CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, Direction, MarkGet, MarkMove,
     buf_T, cmd_addr_T, colnr_T, exarg_T, linenr_T, pos_T, size_t, uint32_t,
 };
+use ::libc::strlen;
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.
 ///

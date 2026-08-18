@@ -72,8 +72,8 @@ use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
 };
 use crate::options::kOptInvalid;
+use crate::os::cshim::gettext;
 use crate::os::env::home_replace;
-use crate::os::libc::{atoi, gettext, toupper};
 use crate::path::path_tail;
 use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
@@ -85,6 +85,7 @@ use crate::types::{
 };
 use crate::undo::bufIsChanged;
 use crate::winlayer::{Buf, Win};
+use ::libc::{atoi, toupper};
 
 // The stages of one expansion; see the module docs.
 mod arena;

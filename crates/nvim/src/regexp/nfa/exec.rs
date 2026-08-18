@@ -21,7 +21,7 @@ use super::sub::clear_sub;
 use crate::main::{e_null, re_extmatch_out};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::iemsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::regexp::{
     FAIL, NFA_TOO_EXPENSIVE, NSUBEXP, NUL, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex,
     cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi, make_extmatch,

@@ -21,12 +21,12 @@ use crate::eval::vars::assert_error;
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
-use crate::os::libc::strlen;
 use crate::runtime::{estack_sfile, exestack};
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
     VAR_DICT, VAR_STRING, VAR_UNKNOWN, estack_T, garray_T, int64_t, linenr_T, size_t, typval_T,
 };
+use ::libc::strlen;
 
 use super::{AssertType, ESTACK_NONE, NUMBUFLEN};
 

@@ -49,8 +49,8 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_start, wait_return};
+use crate::os::cshim::{gettext, memmove};
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{gettext, memmove, memset, strlen};
 use crate::profile::{func_line_end, func_line_start, script_line_end, script_line_start};
 use crate::runtime::{
     exestack, getsourceline, source_breakpoint, source_dbg_tick, source_finished, source_level,
@@ -60,6 +60,7 @@ use crate::types::{
     LineGetter, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T, size_t,
 };
 use crate::ui::ui_has;
+use ::libc::{memset, strlen};
 
 /// The top of the execution stack: the script or function whose line is
 /// running. `SOURCING_LNUM`/`SOURCING_NAME` in the C, where they are macros

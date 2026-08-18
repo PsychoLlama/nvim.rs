@@ -30,12 +30,13 @@ use crate::mbyte::{
     utfc_ptr2len,
 };
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen, strncmp, strstr};
+use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
     EvalFuncData, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T, uint8_t,
     varnumber_T,
 };
+use ::libc::strlen;
 
 /// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
 /// `NUMBUFLEN` in the C.

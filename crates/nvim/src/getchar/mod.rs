@@ -60,10 +60,10 @@ use crate::r#move::{validate_cursor, win_col_off};
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::ops::clear_oparg;
 use crate::options::kOptBoFlagError;
+use crate::os::cshim::{gettext, putc, stderr, strncmp};
 use crate::os::env::expand_env;
 use crate::os::fileio::{file_close, file_open, file_open_stdin, file_read};
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
-use crate::os::libc::{atoi, fprintf, gettext, putc, stderr, strcmp, strlen, strncmp};
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
@@ -80,6 +80,7 @@ use crate::types::{
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
+use ::libc::{atoi, fprintf, strcmp, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod buffers;

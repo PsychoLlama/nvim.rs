@@ -26,11 +26,12 @@ use crate::mbyte::{
 };
 use crate::message::{msg, msg_clr_eos, msg_end, msg_multiline, msg_sb_eol, msg_start};
 use crate::option::get_fileformat;
-use crate::os::libc::{atoi, gettext};
+use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
 use crate::strings::vim_snprintf;
 use crate::types::{cmdidx_T, exarg_T};
 use crate::undo::u_save;
+use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
 
 /// How wide `IObuff` is; every writer here bounds itself by it.

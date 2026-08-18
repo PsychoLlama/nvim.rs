@@ -33,7 +33,7 @@ use crate::message::{
     emsg, emsg_multiline, msg, msg_clr_eos, msg_puts, msg_scroll_flush, verbose_enter_scroll,
     verbose_leave_scroll,
 };
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::runtime::{estack_pop, estack_push};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 use crate::strings::vim_snprintf;

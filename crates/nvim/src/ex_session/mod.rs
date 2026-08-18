@@ -63,9 +63,9 @@ use crate::options::{
     OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
     kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,
 };
+use crate::os::cshim::{gettext, putc};
 use crate::os::env::home_replace_save;
 use crate::os::fs::{os_chdir, os_dirname, os_isdir};
-use crate::os::libc::{fclose, fprintf, fputs, gettext, putc, strcpy, strlen};
 use crate::path::{add_pathsep, vim_FullName, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg_c;
@@ -73,6 +73,7 @@ use crate::types::{
     CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FILE, VV_THIS_SESSION, aentry_T, buf_T,
     exarg_T, garray_T, size_t, win_T,
 };
+use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{fmt, ptr};
 

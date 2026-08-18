@@ -38,7 +38,7 @@ use crate::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_pos};
 use crate::memory::{xfree, xstrdup};
 use crate::option::{copy_option_part, skip_to_option_part};
-use crate::os::libc::{atoi, strlen, strncmp, tolower};
+use crate::os::cshim::strncmp;
 use crate::plines::getvcol;
 use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
@@ -48,6 +48,7 @@ use crate::types::{
     EvalFuncData, buf_T, colnr_T, int64_t, linenr_T, lpos_T, oparg_T, pos_T, size_t, typval_T,
     varnumber_T,
 };
+use ::libc::{atoi, strlen, tolower};
 
 // The carve of the transpiled module; see each child's docs.
 mod cino;

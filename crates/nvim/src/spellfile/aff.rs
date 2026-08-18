@@ -40,12 +40,13 @@ use crate::main::{IObuff, e_notopen, got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg;
+use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::os::libc::{__ctype_b_loc, atoi, fclose, gettext, strcat, strcmp, strcpy, strlen};
 use crate::spell::init_spell_chartab;
 use crate::strings::vim_snprintf;
 use crate::types::{CONV_NONE, size_t, uint8_t};
+use ::libc::{atoi, fclose, strcat, strcmp, strcpy, strlen};
 
 use super::affix::{handle_affix_entry, handle_affix_header};
 use super::flags::{affitem2flag, process_compflags};

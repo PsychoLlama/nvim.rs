@@ -22,7 +22,6 @@ use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::main::{curbuf, current_sctx};
 use crate::memory::{strequal, xfree};
-use crate::os::libc::{abort, strlen};
 use crate::strings::arena_printf;
 use crate::types::{
     Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback,
@@ -33,6 +32,7 @@ use crate::types::{
     kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, msglist_T,
     object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t,
 };
+use ::libc::{abort, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod create;

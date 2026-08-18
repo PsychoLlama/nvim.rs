@@ -23,11 +23,12 @@ use crate::event::libuv::{
     uv_fs_utime,
 };
 use crate::message::emsg;
-use crate::os::libc::{__errno_location, gettext, getuid, getxattr, listxattr, setxattr};
+use crate::os::cshim::gettext;
 use crate::types::{
     FileID, FileInfo, int32_t, size_t, ssize_t, uint64_t, uv_file, uv_gid_t, uv_stat_t, uv_uid_t,
     vim_acl_T,
 };
+use ::libc::{__errno_location, getuid, getxattr, listxattr, setxattr};
 
 /// The `errno` values [`os_copy_xattr`] treats as "this filesystem simply
 /// does not do that", plus the three it reports.

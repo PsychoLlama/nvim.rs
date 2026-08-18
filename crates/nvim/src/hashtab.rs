@@ -12,7 +12,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{ptr, slice};
 
 use crate::memory::{xcalloc, xfree};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 
 use crate::types::{hash_T, hashitem_T, hashtab_T};
 

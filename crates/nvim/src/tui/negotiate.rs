@@ -16,10 +16,10 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg_c};
 use crate::main::nvim_testing;
 use crate::memory::strequal;
-use crate::os::libc::tcgetattr;
 use crate::tui::output::{flush, out, out_fmt};
 use crate::tui::terminfo::caps::kTerm_set_underline_style;
 use crate::types::{KeyEncoding, TUIData, TermInput, TermMode, TermModeState, termios};
+use ::libc::tcgetattr;
 use core::ffi::{CStr, c_char, c_void};
 
 /// DEC private modes the TUI asks about or sets. The numbers are the

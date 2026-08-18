@@ -12,9 +12,9 @@ use crate::eval::{
 };
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
-use crate::os::libc::{strlen, strpbrk};
 use crate::strings::vim_strchr;
 use crate::types::{CMD_call, CMD_const, CMD_let, cmdidx_T, expand_T};
+use ::libc::{strlen, strpbrk};
 
 /// The characters that end the plain-name part of an expression: whatever
 /// one of them introduces is what completion should look at instead.

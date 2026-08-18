@@ -15,7 +15,6 @@ use super::{
 };
 use crate::api::private::validate::api_err_exp;
 use crate::lua::executor::api_free_luaref;
-use crate::os::libc::abort;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
     ObjectType, OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeNone, kErrorTypeValidation,
@@ -23,6 +22,7 @@ use crate::types::{
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow, key_value_pair, object, object_data, size_t,
 };
+use ::libc::abort;
 use core::ffi::{c_char, c_int, c_void};
 
 /// Whether the caller supplied the optional key at `idx`.

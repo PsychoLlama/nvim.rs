@@ -20,11 +20,12 @@ use crate::eval::{
 };
 use crate::mbyte::mb_strcmp_ic;
 use crate::message::emsg;
-use crate::os::libc::{gettext, strcmp};
+use crate::os::cshim::gettext;
 use crate::types::{
     VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, dict_T, exprtype_T,
     float_T, typval_T, varnumber_T,
 };
+use ::libc::strcmp;
 
 /// The scratch a Number or Float is rendered into for a String comparison.
 const NUMBUFLEN: usize = 65;

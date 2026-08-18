@@ -29,14 +29,15 @@ use crate::eval::typval::{
 use crate::garray::ga_grow;
 use crate::main::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::memory::{xfree, xmemdupz, xrealloc};
+use crate::os::cshim::{gettext, memmove};
 use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
-use crate::os::libc::{fclose, fileno, fread, fseeko, gettext, memcpy, memmove};
 use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::types::{
     EvalFuncData, FILE, FileInfo, VAR_STRING, VAR_UNLOCKED, blob_T, int64_t, kListLenUnknown,
     list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
 };
+use ::libc::{fclose, fileno, fread, fseeko, memcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

@@ -21,6 +21,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::{towlower, towupper, wint_t};
 use core::ffi::{c_char, c_int, c_uint};
 
 /// The case-folded form of `a`, for matching.

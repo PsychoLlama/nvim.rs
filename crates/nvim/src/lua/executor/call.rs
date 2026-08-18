@@ -30,12 +30,12 @@ use crate::main::{
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
-use crate::os::libc::strlen;
 use crate::strings::vim_snprintf;
 use crate::types::{
     Arena, ArenaMem, Array, Object, consumed_blk, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, lua_State, size_t, uint64_t,
 };
+use ::libc::strlen;
 
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.

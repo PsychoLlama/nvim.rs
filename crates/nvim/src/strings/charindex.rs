@@ -26,8 +26,8 @@ use crate::eval::typval::{
 };
 use crate::mbyte::{mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::memory::xmemdupz;
-use crate::os::libc::strlen;
 use crate::types::{EvalFuncData, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
+use ::libc::strlen;
 
 /// The character-length function a `countcc`/`comp` flag selects: with
 /// composing characters counted separately, or folded into their base.

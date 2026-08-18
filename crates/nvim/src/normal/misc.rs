@@ -28,7 +28,7 @@ use crate::normal::{
     nv_operator, nv_pcmark, true_0, v_visop,
 };
 use crate::options::kOptBoFlagEsc;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::syn_stack_free_all;
 use crate::types::{OP_NOP, cmdarg_T, linenr_T};

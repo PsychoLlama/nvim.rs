@@ -26,10 +26,11 @@ use crate::lua::ffi::{
 };
 use crate::main::{main_loop, nlua_disable_preload, ui_ext_names, ui_refresh_cmdheight};
 use crate::memory::strequal;
-use crate::os::libc::{fprintf, stderr};
+use crate::os::cshim::stderr;
 use crate::types::ui::kUILinegrid;
 use crate::types::{LuaRef, lua_Integer, lua_State, size_t, uint32_t};
 use crate::ui::{ui_add_cb, ui_remove_cb};
+use ::libc::fprintf;
 
 /// The registry key this state's reference bookkeeping is parked under.
 const REF_STATE_KEY: &CStr = c"nlua.ref_state";

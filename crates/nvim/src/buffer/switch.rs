@@ -40,8 +40,8 @@ use crate::memline::ml_recover;
 use crate::memory::xstrlcpy;
 use crate::message::msg_puts;
 use crate::options::kOptJopFlagClean;
+use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::ngettext;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{

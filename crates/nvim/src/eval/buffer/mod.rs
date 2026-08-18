@@ -63,11 +63,11 @@ use crate::memline::{
 };
 use crate::memory::{strnequal, xfree, xstrdup};
 use crate::r#move::update_topline;
-use crate::os::libc::{strcmp, strlen};
 use crate::path::path_with_url;
 use crate::sign::{buf_has_signs, get_buffer_signs};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
+use ::libc::{strcmp, strlen};
 pub const NUL: c_int = '\0' as c_int;
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;

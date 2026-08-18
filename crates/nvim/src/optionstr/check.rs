@@ -33,7 +33,7 @@ use crate::options::{
     kOptTabclose, kOptTagcase, kOptTermpastefilter, kOptViewoptions, kOptVirtualedit,
     kOptWildoptions, opt_scl_values,
 };
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{buf_T, size_t, uint32_t, win_T};
 

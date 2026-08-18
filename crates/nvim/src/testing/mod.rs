@@ -33,14 +33,15 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::emsg;
+use crate::os::cshim::{gettext, strstr};
 use crate::os::fs::os_fopen;
-use crate::os::libc::{fclose, fgetc, gettext, strcmp, strstr};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
     BoolVarValue, EvalFuncData, FILE, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_UNKNOWN, VV_EXCEPTION,
     VV_TESTING, VarType, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse, kBoolVarTrue,
     ptrdiff_t, size_t, typval_T, varnumber_T,
 };
+use ::libc::{fclose, fgetc, strcmp};
 
 /// Which `assert_*()` is reporting. Decides the wording of the message.
 #[derive(Clone, Copy, PartialEq, Eq)]

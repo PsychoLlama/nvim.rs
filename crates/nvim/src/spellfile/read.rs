@@ -35,11 +35,9 @@ use crate::main::{curwin, e_notopen, got_int, p_verbose};
 use crate::memline::ml_append_buf;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
+use crate::os::cshim::{getc, gettext, strncmp, strstr};
 use crate::os::fs::os_fopen;
 use crate::os::input::fast_breakcheck;
-use crate::os::libc::{
-    fclose, feof, ferror, fread, getc, gettext, memcmp, strcpy, strerror, strncmp, strrchr, strstr,
-};
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::runtime::{estack_pop, estack_push};
 use crate::spell::{
@@ -50,6 +48,7 @@ use crate::types::{
     FILE, OptInt, colnr_T, garray_T, idx_T, int16_t, langp_T, linenr_T, size_t, slang_T, time_t,
     uint8_t,
 };
+use ::libc::{fclose, feof, ferror, fread, memcmp, strcpy, strerror, strrchr};
 
 use super::sections::{
     read_charflags_section, read_compound, read_prefcond_section, read_region_section,

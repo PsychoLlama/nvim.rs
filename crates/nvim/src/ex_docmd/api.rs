@@ -47,7 +47,7 @@ use crate::main::{
 };
 use crate::memory::xstrlcpy;
 use crate::message::emsg;
-use crate::os::libc::{gettext, memset, strlen};
+use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout, CMD_checktime, CMD_edit, CMD_file,
@@ -55,6 +55,7 @@ use crate::types::{
     pos_T, size_t, uint32_t,
 };
 use crate::usercmd::do_ucmd;
+use ::libc::{memset, strlen};
 
 /// Parse one command line into an `exarg_T` and a `CmdParseInfo`, running
 /// nothing.

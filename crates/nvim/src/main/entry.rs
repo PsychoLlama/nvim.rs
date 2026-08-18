@@ -67,11 +67,11 @@ use crate::r#move::update_topline;
 use crate::msgpack_rpc::server::{server_init, server_teardown};
 use crate::normal::{check_scrollbind, init_normal_cmds, normal_enter};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
+use crate::os::cshim::{gettext, stderr, stdout};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};
 use crate::os::fs::os_fopen;
 use crate::os::input::{input_start, input_stop};
 use crate::os::lang::{init_locale, set_lang_var};
-use crate::os::libc::{abort, exit, fprintf, gettext, setbuf, stderr, stdout, strcasecmp};
 use crate::os::signal::{signal_init, signal_teardown};
 use crate::os::stdpaths::appname_is_valid;
 use crate::os::time::os_realtime;
@@ -90,6 +90,7 @@ use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
+use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
 
 /// Bring up the event loop and everything that hangs off it.
 ///

@@ -20,7 +20,7 @@ use crate::eval::{eval_expr_typval, get_copyID, partial_name, var_item_copy};
 use crate::main::{called_emsg, did_emsg, e_invarg2, e_listarg, e_listblobreq, e_listdictblobarg};
 use crate::memory::xstrdup;
 use crate::message::{emsg, internal_error};
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::{
     BoolVarValue, EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
@@ -29,6 +29,7 @@ use crate::types::{
     VAR_TYPE_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_KEY, VV_VAL, blob_T, kBoolVarTrue,
     kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
 };
+use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

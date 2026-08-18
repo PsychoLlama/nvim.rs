@@ -51,8 +51,8 @@ use crate::r#move::{
 use crate::normal::{end_visual_mode, get_vtopline, normal_cmd, set_cursor_for_append_to_line};
 use crate::ops::{clear_oparg, do_join, op_delete, op_shift};
 use crate::option::get_scrolloff_value;
+use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
-use crate::os::libc::{gettext, strlen};
 use crate::plines::plines_m_win_fill;
 use crate::pos::MAXLNUM;
 use crate::register::{do_execreg, do_put, op_yank};
@@ -68,6 +68,7 @@ use crate::types::{
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::undo::{u_clearline, u_redo, u_undo, u_undo_and_forget, undo_time};
+use ::libc::strlen;
 
 /// `:print`, `:number` and `:list`.
 pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {

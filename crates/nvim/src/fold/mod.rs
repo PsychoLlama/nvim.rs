@@ -20,7 +20,7 @@ use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{State, curwin, disable_fold_update, got_int, need_diff_redraw};
 use crate::memory::xfree;
-use crate::os::libc::memmove;
+use crate::os::cshim::memmove;
 use crate::plines::plines_win_nofold;
 use crate::types::*;
 use core::ffi::{c_char, c_int, c_uint, c_void};

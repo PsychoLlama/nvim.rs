@@ -21,7 +21,7 @@ use crate::normal::{
     may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt, true_0,
 };
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
-use crate::os::libc::__ctype_b_loc;
+use crate::os::cshim::__ctype_b_loc;
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};

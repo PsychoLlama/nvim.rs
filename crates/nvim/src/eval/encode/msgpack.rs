@@ -17,7 +17,7 @@ use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer,
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
 };
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{
     Integer, PackerBuffer, String_0, blob_T, dict_T, float_T, int64_t, size_t, typval_T,
 };

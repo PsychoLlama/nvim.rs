@@ -56,7 +56,7 @@ use crate::main::{
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrlcat, xstrlcpy};
 use crate::message::emsg;
-use crate::os::libc::{gettext, memmove, strcpy, strlen};
+use crate::os::cshim::{gettext, memmove};
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
 use crate::types::{
@@ -75,6 +75,7 @@ use crate::types::{
     CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, LineGetter, cmdidx_T, cmdmod_T, cstack_T,
     exarg_T, size_t, uint8_t, uint32_t,
 };
+use ::libc::{strcpy, strlen};
 
 /// A zeroed `exarg_T` with the empty range the parsers start from.
 ///

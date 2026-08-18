@@ -26,7 +26,7 @@ use crate::main::{
 use crate::memory::{xfree, xstrdup};
 use crate::msgpack_rpc::channel::rpc_start;
 use crate::msgpack_rpc::server::server_owns_pipe_address;
-use crate::os::libc::{dup2, fcntl, gettext};
+use crate::os::cshim::gettext;
 use crate::os::pty_proc_unix::pty_proc_init;
 use crate::os::shell::shell_free_argv;
 use crate::terminal::{terminal_close, terminal_set_state};
@@ -37,6 +37,7 @@ use crate::types::{
     uint16_t, uint64_t, varnumber_T,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
+use ::libc::{dup2, fcntl};
 
 use super::known::*;
 use super::reader::{

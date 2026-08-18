@@ -27,10 +27,11 @@ use crate::memory::{xcalloc, xfree, xrealloc};
 use crate::message::emsg;
 use crate::ops::do_join;
 use crate::option::magic_isset;
-use crate::os::libc::{__ctype_b_loc, gettext, memset, strlen};
+use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
 use crate::types::{SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
+use ::libc::{memset, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 

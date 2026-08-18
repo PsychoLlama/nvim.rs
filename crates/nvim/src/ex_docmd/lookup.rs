@@ -21,7 +21,7 @@ use crate::ex_docmd::{
 use crate::main::getout;
 use crate::memory::xstrdup;
 use crate::message::iemsg;
-use crate::os::libc::{gettext, strncmp};
+use crate::os::cshim::{gettext, strncmp};
 use crate::types::{
     CMD_Next, CMD_SIZE, CMD_append, CMD_bang, CMD_k, CMD_match, CMD_substitute, EvalFuncData,
     VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T, uint32_t,

@@ -48,7 +48,7 @@ use crate::message::{
 };
 use crate::normal::end_visual_mode;
 use crate::options::kOptBoFlagSpell;
-use crate::os::libc::{gettext, memmove, strcat, strcpy, strlen, strncmp};
+use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::search::FORWARD;
 use crate::smsg_c;
 use crate::spell::{
@@ -64,6 +64,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{colnr_T, int64_t, pos_T};
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
+use ::libc::{strcat, strcpy, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 

@@ -42,11 +42,11 @@ use crate::eval::typval::{
 use crate::main::c_bytes;
 use crate::memory::{xfree, xmallocz, xmemdupz, xstrdup};
 use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::os::fs::{
     os_can_exe, os_file_is_readable, os_file_is_writable, os_fileinfo, os_fileinfo_link,
     os_fileinfo_size, os_getperm, os_isdir,
 };
-use crate::os::libc::gettext;
 use crate::path::vim_ispathsep;
 use crate::strings::concat_str;
 use crate::types::{

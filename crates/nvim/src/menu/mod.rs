@@ -47,7 +47,7 @@ use crate::main::{
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::{emsg, str2special_save};
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::popupmenu::pum_show_popupmenu;
 use crate::semsg_c;
 use crate::state::{

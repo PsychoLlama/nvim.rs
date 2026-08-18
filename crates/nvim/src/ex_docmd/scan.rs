@@ -24,7 +24,7 @@ use crate::keycodes::Ctrl_V;
 use crate::main::{curbuf, p_cpo};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
-use crate::os::libc::{gettext, memmove, strlen};
+use crate::os::cshim::{gettext, memmove};
 use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::{del_trailing_spaces, vim_strchr};
@@ -35,6 +35,7 @@ use crate::types::{
     CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, size_t,
     uint32_t,
 };
+use ::libc::strlen;
 
 /// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
 /// `::::print` both reach the command name.

@@ -28,7 +28,7 @@ use crate::main::emsg_skip;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::types::{
     VAR_BLOB, VAR_FIXED, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, evalarg_T,
     exarg_T, listitem_T, size_t, typval_T, typval_vval_union, varnumber_T,

@@ -25,12 +25,13 @@ use crate::eval::{
 use crate::main::{curwin, e_invexpr2, e_missingparen, e_not_callable_type_str, e_trailing_arg};
 use crate::memory::{strnequal, xfree, xstrdup};
 use crate::message::emsg;
-use crate::os::libc::{gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
     VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, dict_T, evalarg_T, funcexe_T,
     partial_T, size_t, typval_T, typval_vval_union,
 };
+use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

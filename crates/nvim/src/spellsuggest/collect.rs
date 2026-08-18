@@ -30,11 +30,12 @@ use crate::highlight_group::HLF_COUNT;
 use crate::main::curwin;
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memory::{xfree, xmemdupz, xstrdup, xstrlcpy};
-use crate::os::libc::{qsort, strcasecmp, strcmp, strlen, strncmp};
+use crate::os::cshim::strncmp;
 use crate::spell::{spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, suggest_T, suginfo_T, window_langs};
 use crate::types::{__compar_fn_t, garray_T, hlf_T, size_t, slang_T};
+use ::libc::{qsort, strcasecmp, strcmp, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr, slice};
 

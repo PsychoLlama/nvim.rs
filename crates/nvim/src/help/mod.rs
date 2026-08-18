@@ -44,8 +44,8 @@ use crate::message::{emsg, emsg_multiline};
 use crate::option::set_option_direct;
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 use crate::optionstr::check_buf_options;
+use crate::os::cshim::{gettext, strncmp};
 use crate::os::fs::os_fopen;
-use crate::os::libc::{fclose, gettext, qsort, strcasecmp, strcmp, strlen, strncmp};
 use crate::path::FreeWild;
 use crate::pos::MAXCOL;
 use crate::tag::{do_tag, find_tags};
@@ -56,6 +56,7 @@ use crate::types::{
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::{semsg_c, smsg_c};
+use ::libc::{fclose, qsort, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

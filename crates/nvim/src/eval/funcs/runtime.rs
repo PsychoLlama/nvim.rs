@@ -31,8 +31,8 @@ use crate::memory::xstrdup;
 use crate::menu::{get_menu_cmd_modes, menu_get};
 use crate::normal::op_pending;
 use crate::ops::cursor_pos_info;
+use crate::os::cshim::strncasecmp;
 use crate::os::env::{os_get_hostname, os_get_pid};
-use crate::os::libc::{atoi, strcasecmp, strlen, strncasecmp, strtoul};
 use crate::popupmenu::{pum_set_event_info, pum_visible};
 use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
@@ -45,6 +45,7 @@ use crate::types::{
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
 use crate::window::find_tabpage;
+use ::libc::{atoi, strcasecmp, strlen, strtoul};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

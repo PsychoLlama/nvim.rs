@@ -16,7 +16,6 @@ use super::repeat::regrepeat;
 use super::state::RegStack;
 use crate::main::got_int;
 use crate::mbyte::utf_head_off;
-use crate::os::libc::strlen;
 use crate::regexp::{
     BEHIND, BRANCH, FAIL, NOBEHIND, NOMATCH, NUL, OK, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH,
     RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT,
@@ -26,6 +25,7 @@ use crate::regexp::{
     reg_startzpos, restore_subexpr,
 };
 use crate::types::{colnr_T, uint8_t};
+use ::libc::strlen;
 
 /// Pop frames until one of them has something new to try, or the stack runs
 /// out. Updates `scan` and `status` in place.

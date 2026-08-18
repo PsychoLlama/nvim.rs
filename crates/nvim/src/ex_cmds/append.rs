@@ -27,12 +27,13 @@ use crate::main::{
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::{emsg, msg_putchar};
-use crate::os::libc::{atol, gettext, strlen};
+use crate::os::cshim::gettext;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::strings::vim_strchr;
 use crate::types::{OptInt, exarg_T, int64_t, linenr_T, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
+use ::libc::{atol, strlen};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

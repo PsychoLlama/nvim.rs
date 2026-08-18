@@ -28,12 +28,13 @@ use crate::lua::ffi::{
 };
 use crate::main::IObuff;
 use crate::memory::{xfree, xmalloc};
-use crate::os::libc::{gettext, memcpy, strlen};
+use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Array, Error, ErrorType, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER, VAR_UNKNOWN,
     expand_T, garray_T, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, lua_Integer,
     lua_State, size_t, typval_T, varnumber_T,
 };
+use ::libc::{memcpy, strlen};
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
 /// `)` closed after it, so the expression is evaluated with `_A` bound to

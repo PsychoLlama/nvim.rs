@@ -41,7 +41,6 @@ use crate::hashtab::{hash_find, hash_removed};
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char};
 use crate::memory::xmemcpyz;
-use crate::os::libc::{strcpy, strlen};
 use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab};
 use crate::spellsuggest::{
     MAXWLEN, NUL, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
@@ -49,6 +48,7 @@ use crate::spellsuggest::{
     suginfo_T,
 };
 use crate::types::{MB_MAXCHAR, hashitem_T, size_t, slang_T, wordcount_T};
+use ::libc::{strcpy, strlen};
 use core::ffi::{c_char, c_int};
 
 /// A sound-folded word and the room around it, as the callers keep it.

@@ -34,10 +34,10 @@ use crate::mpack::rpc::{
     MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, mpack_rpc_notify,
     mpack_rpc_receive, mpack_rpc_reply, mpack_rpc_request, mpack_rpc_session_init,
 };
-use crate::os::libc::{free, malloc};
 use crate::types::{
     lua_Integer, lua_Number, lua_State, mpack_data_t, mpack_rpc_session_t, mpack_uint32_t, size_t,
 };
+use ::libc::{free, malloc};
 
 /// The scratch a whole envelope fits in: an array header, a one-byte type
 /// and a five-byte id at most.

@@ -16,7 +16,7 @@ use crate::mbyte::{
     mb_islower, mb_isupper, utf_char2len, utf_fold, utf_head_off, utf_iscomposing_legacy,
     utf_ptr2char, utf_ptr2len,
 };
-use crate::os::libc::{__ctype_b_loc, strlen};
+use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, FAIL, NFA_ANY, NFA_ANY_COMPOSING,
@@ -35,6 +35,7 @@ use crate::regexp::{
     reg_getline, reg_getline_len, reg_iswordc, regsub_T, regsubs_T, save_se_T,
 };
 use crate::types::{colnr_T, uint8_t};
+use ::libc::strlen;
 
 /// Is `c` a member of the `[:name:]` class `cls` stands for?
 ///

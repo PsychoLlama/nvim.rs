@@ -33,7 +33,7 @@ use crate::hashtab::{hash_find, hash_removed};
 use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memory::xmemcpyz;
-use crate::os::libc::{strcpy, strncmp};
+use crate::os::cshim::strncmp;
 use crate::spell::{
     can_compound, captype, make_case_word, match_checkcompoundpattern, nofold_len, spell_iswordp,
     spell_iswordp_nmw, spell_valid_case, valid_word_prefix,
@@ -50,6 +50,7 @@ use crate::spellsuggest::{
     badword_captype, suginfo_T,
 };
 use crate::types::{idx_T, size_t};
+use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

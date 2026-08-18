@@ -22,7 +22,7 @@ use crate::eval::window::find_win_by_nr_or_id;
 use crate::main::{dollar_vcol, e_invalid_line_number_nr, p_ss};
 use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::{
     EvalFuncData, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T, win_T,

@@ -8,9 +8,10 @@ use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace_buf};
 use crate::memory::{xmalloc, xmemcpyz};
 use crate::message::emsg;
 use crate::ops::skip_comment;
-use crate::os::libc::{atoi, gettext, memcpy, strcpy, strlen, strncmp, strstr};
+use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::strings::vim_strchr;
 use crate::undo::u_save;
+use ::libc::{atoi, memcpy, strcpy, strlen};
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;

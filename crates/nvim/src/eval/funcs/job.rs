@@ -35,9 +35,9 @@ use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
 use crate::r#move::win_col_off;
+use crate::os::cshim::{gettext, snprintf, strncmp};
 use crate::os::env::{home_replace, os_getenv};
 use crate::os::fs::os_isdir;
-use crate::os::libc::{gettext, snprintf, strlen, strncmp};
 use crate::os::pty_proc_unix::pty_proc_resize;
 use crate::os::shell::shell_free_argv;
 use crate::os::time::os_hrtime;
@@ -389,7 +389,7 @@ unsafe fn create_environment(
 
         if pty {
             for name in REQUIRED_ENV {
-                let len = strlen(name.as_ptr());
+                let len = name.count_bytes();
                 if tv_dict_find(env, name.as_ptr(), len as isize).is_null() {
                     let value = os_getenv(name.as_ptr());
                     if !value.is_null() {

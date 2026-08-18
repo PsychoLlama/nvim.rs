@@ -17,7 +17,7 @@ use crate::main::{called_emsg, e_listdictarg, e_reduce_of_an_empty_str_with_no_i
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xmemdupz;
 use crate::message::emsg;
-use crate::os::libc::gettext;
+use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::{
     EvalFuncData, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,

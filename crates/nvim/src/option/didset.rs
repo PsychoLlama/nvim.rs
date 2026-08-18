@@ -47,7 +47,7 @@ use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};
 use crate::options::{kOptKeymap, kOptWindow};
 use crate::optionstr::check_signcolumn;
-use crate::os::libc::{gettext, strcmp, strncmp};
+use crate::os::cshim::{gettext, strncmp};
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::{ll_resize_stack, qf_resize_stack};
 use crate::runtime::{DIP_ALL, source_runtime_vim_lua};
@@ -64,6 +64,7 @@ use crate::window::{
     tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
+use ::libc::strcmp;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, NO_SCREEN, NUL, OPT_GLOBAL, OPT_LOCAL,
