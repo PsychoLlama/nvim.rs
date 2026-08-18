@@ -27,8 +27,11 @@ const MINIMAL_SIZE: usize = 20;
 /// [`add_buff`] sizes a block as `offset_of!(buffblock_T, b_str) + len + 1`,
 /// which only describes the allocation while `b_str` is the last field — a
 /// layout that put it anywhere else would make every append overwrite
-/// `b_next`/`b_strlen`. `#[repr(C)]` on [`buffblock_T`] is what holds that; if
-/// it is ever dropped again this stops the build instead of the suite.
+/// `b_next`/`b_strlen`. `#[repr(C)]` on [`buffblock_T`] is what holds that.
+/// Drop the attribute and rustc is free to reorder, but only *some* layouts it
+/// then picks are wrong — so this fails the build on exactly the ones that
+/// are, which is what `-Zrandomize-layout` shakes out (verified: without the
+/// attribute, that flag trips this assertion rather than the suite).
 const _: () = {
     let tail = offset_of!(buffblock_T, b_str);
     assert!(tail > offset_of!(buffblock_T, b_next));
