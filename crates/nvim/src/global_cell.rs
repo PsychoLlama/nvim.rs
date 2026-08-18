@@ -41,7 +41,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::cell::UnsafeCell;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+#[cfg(debug_assertions)]
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A global editor-state cell. See the module docs for the contract.
 #[repr(transparent)]
@@ -215,6 +217,7 @@ fn check_main_thread() {}
 // All state is main-thread-only (guarded by check_main_thread), so plain
 // relaxed atomics act as ordinary variables here; keyed by cell address,
 // positive = shared count, -1 = exclusive.
+#[cfg(debug_assertions)]
 static ACTIVE_BORROWS: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(debug_assertions)]
