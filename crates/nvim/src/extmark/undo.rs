@@ -35,7 +35,7 @@ use crate::types::{
 /// change cannot simply be reversed for into the undo header.
 ///
 /// Copying does nothing on redo; it enforces the right position on undo.
-pub unsafe extern "C" fn extmark_splice_delete(
+pub unsafe fn extmark_splice_delete(
     buf: *mut buf_T,
     l_row: c_int,
     l_col: colnr_T,
@@ -146,7 +146,7 @@ pub(crate) fn splice_delete(
 }
 
 /// Undo or redo one recorded extmark operation.
-pub unsafe extern "C" fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
+pub unsafe fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
     let buf = current_buf();
     if undo_info.type_0 == kExtmarkSplice {
         // A splice: any text operation that changes position except `:move`.

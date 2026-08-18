@@ -35,7 +35,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_add_language_from_object(
     }
 }
 
-unsafe extern "C-unwind" fn load_language_from_object(
+unsafe fn load_language_from_object(
     mut L: *mut lua_State,
     mut path: *const ::core::ffi::c_char,
     mut lang_name: *const ::core::ffi::c_char,
@@ -99,7 +99,7 @@ unsafe extern "C-unwind" fn load_language_from_object(
     }
 }
 
-unsafe extern "C-unwind" fn load_language_from_wasm(
+unsafe fn load_language_from_wasm(
     mut L: *mut lua_State,
     mut _path: *const ::core::ffi::c_char,
     mut _lang_name: *const ::core::ffi::c_char,
@@ -110,10 +110,7 @@ unsafe extern "C-unwind" fn load_language_from_wasm(
     }
 }
 
-unsafe extern "C-unwind" fn add_language(
-    mut L: *mut lua_State,
-    mut is_wasm: bool,
-) -> ::core::ffi::c_int {
+unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi::c_int {
     unsafe {
         let mut path: *const ::core::ffi::c_char = luaL_checklstring(
             L,
@@ -188,7 +185,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn lang_check(
+pub(crate) unsafe fn lang_check(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut TSLanguage {

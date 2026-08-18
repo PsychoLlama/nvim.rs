@@ -50,7 +50,7 @@ pub(crate) static node_meta: SharedCell<[luaL_Reg; 36]> = luaL_reg_table![
     c"equal" => node_equal,
 ];
 
-pub(crate) unsafe extern "C-unwind" fn push_node(
+pub(crate) unsafe fn push_node(
     mut L: *mut lua_State,
     mut node: TSNode,
     mut uindex: ::core::ffi::c_int,
@@ -74,7 +74,7 @@ pub(crate) unsafe extern "C-unwind" fn push_node(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn node_check_opt(
+pub(crate) unsafe fn node_check_opt(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
     mut res: *mut TSNode,
@@ -89,10 +89,7 @@ pub(crate) unsafe extern "C-unwind" fn node_check_opt(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn node_check(
-    mut L: *mut lua_State,
-    mut index: ::core::ffi::c_int,
-) -> TSNode {
+pub(crate) unsafe fn node_check(mut L: *mut lua_State, mut index: ::core::ffi::c_int) -> TSNode {
     unsafe {
         let mut ud: *mut TSNode = luaL_checkudata(L, index, TS_META_NODE.as_ptr()) as *mut TSNode;
         return *ud;

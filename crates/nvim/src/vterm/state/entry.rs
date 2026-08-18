@@ -140,7 +140,7 @@ unsafe fn vterm_state_new(vt: *mut VTerm) -> *mut VTermState {
 ///
 /// `state` must have come from [`vterm_state_new`] and must not be used
 /// again.
-pub unsafe extern "C" fn vterm_state_free(state: *mut VTermState) {
+pub unsafe fn vterm_state_free(state: *mut VTermState) {
     // SAFETY: the caller's promise.
     let (tabstops, lineinfos) = unsafe { ((*state).tabstops, (*state).lineinfos) };
     // SAFETY: each was allocated in `vterm_state_new` and is reachable from
@@ -472,7 +472,7 @@ pub unsafe extern "C" fn vterm_state_set_unrecognised_fallbacks(
 /// Applies a terminal property, offering it to the consumer first, which may
 /// refuse it. Refusal matters most for the alternate screen: the state must
 /// not believe it switched if the screen did not.
-pub unsafe extern "C" fn vterm_state_set_termprop(
+pub unsafe fn vterm_state_set_termprop(
     state: *mut VTermState,
     prop: VTermProp,
     val: *mut VTermValue,

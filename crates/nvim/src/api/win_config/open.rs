@@ -306,7 +306,7 @@ pub unsafe extern "C" fn nvim_open_win(
     }
 }
 
-pub(crate) unsafe extern "C" fn win_split_dir(mut win: *mut win_T) -> WinSplit {
+pub(crate) unsafe fn win_split_dir(mut win: *mut win_T) -> WinSplit {
     unsafe {
         if (*win).w_frame.is_null() || (*(*win).w_frame).fr_parent.is_null() {
             return kWinSplitLeft;
@@ -328,7 +328,7 @@ pub(crate) unsafe extern "C" fn win_split_dir(mut win: *mut win_T) -> WinSplit {
     }
 }
 
-pub(crate) unsafe extern "C" fn win_split_flags(
+pub(crate) unsafe fn win_split_flags(
     mut split: WinSplit,
     mut toplevel: bool,
 ) -> ::core::ffi::c_int {
@@ -360,7 +360,7 @@ pub(crate) unsafe extern "C" fn win_split_flags(
     return flags;
 }
 
-pub(crate) unsafe extern "C" fn win_can_move_tp(
+pub(crate) unsafe fn win_can_move_tp(
     mut wp: *mut win_T,
     mut tp: *mut tabpage_T,
     mut err: *mut Error,
@@ -422,10 +422,7 @@ pub(crate) unsafe extern "C" fn win_can_move_tp(
     }
 }
 
-pub(crate) unsafe extern "C" fn win_find_altwin(
-    mut win: *mut win_T,
-    mut tp: *mut tabpage_T,
-) -> *mut win_T {
+pub(crate) unsafe fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T) -> *mut win_T {
     unsafe {
         if (*win).w_floating {
             return win_float_find_altwin(

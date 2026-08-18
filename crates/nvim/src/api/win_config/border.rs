@@ -11,7 +11,7 @@
 use super::*;
 use crate::api::private::helpers::array_add;
 
-pub unsafe extern "C" fn parse_border_style(
+pub unsafe fn parse_border_style(
     mut style: Object,
     mut fconfig: *mut WinConfig,
     mut err: *mut Error,
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn parse_border_style(
     }
 }
 
-pub(crate) unsafe extern "C" fn generate_api_error(
+pub(crate) unsafe fn generate_api_error(
     mut wp: *mut win_T,
     mut attribute: *const ::core::ffi::c_char,
     mut err: *mut Error,
@@ -456,7 +456,7 @@ pub(crate) unsafe extern "C" fn generate_api_error(
     }
 }
 
-pub unsafe extern "C" fn parse_winborder(
+pub unsafe fn parse_winborder(
     mut fconfig: *mut WinConfig,
     mut border_opt: *mut ::core::ffi::c_char,
     mut err: *mut Error,

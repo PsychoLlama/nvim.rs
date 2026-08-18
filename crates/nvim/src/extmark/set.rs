@@ -31,7 +31,7 @@ use crate::types::{
 /// Create or update an extmark.
 ///
 /// Must not be used during iteration.
-pub unsafe extern "C" fn extmark_set(
+pub unsafe fn extmark_set(
     buf: *mut buf_T,
     ns_id: uint32_t,
     idp: *mut uint32_t,

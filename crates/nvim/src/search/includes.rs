@@ -823,7 +823,7 @@ unsafe fn goto_match(
 /// `ptr` must point at `len` readable bytes, or be null when `kind` is
 /// `CHECK_PATH`.
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn find_pattern_in_path(
+pub unsafe fn find_pattern_in_path(
     ptr: *mut c_char,
     dir: Direction,
     len: size_t,

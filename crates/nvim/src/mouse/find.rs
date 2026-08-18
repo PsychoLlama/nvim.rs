@@ -252,7 +252,7 @@ pub fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, colnr_T
 /// # Safety
 /// `wp` must be a live window and `lnum` a line of the buffer it shows;
 /// `coladdp` must be writable or null.
-pub unsafe extern "C" fn vcol2col(
+pub unsafe fn vcol2col(
     wp: *mut win_T,
     lnum: linenr_T,
     vcol: colnr_T,

@@ -103,10 +103,7 @@ pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
         ga_clear_strings(&raw mut ga);
     };
 }
-pub(crate) unsafe extern "C" fn u_eval_tree(
-    buf: *mut buf_T,
-    first_uhp: *const u_header_T,
-) -> *mut list_T {
+pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) -> *mut list_T {
     let list: *mut list_T = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
     let mut uhp: *const u_header_T = first_uhp;
     while !uhp.is_null() {
@@ -236,7 +233,7 @@ pub unsafe fn f_undotree(
         u_eval_tree(buf, (*buf).b_u_oldhead),
     );
 }
-pub unsafe extern "C" fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_header_T {
+pub unsafe fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_header_T {
     let mut uhp: *mut u_header_T = ptr::null_mut();
     if !(*buf).b_u_curhead.is_null() {
         uhp = (*buf).b_u_curhead;

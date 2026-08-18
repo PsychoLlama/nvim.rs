@@ -174,7 +174,7 @@ unsafe fn bytes_of<'a>(s: *const c_char) -> &'a [u8] {
 /// The configured path when it exists, else `lib/nvim` beside the binary's
 /// install prefix -- which is what makes a relocated or AppImage build find
 /// its own files.
-pub unsafe extern "C" fn get_lib_dir() -> *mut c_char {
+pub unsafe fn get_lib_dir() -> *mut c_char {
     // SAFETY: `default_lib_dir` is a NUL-terminated build-time constant, and
     // `exe_name` is `MAXPATHL` bytes for the two calls that fill it.
     unsafe {
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn get_lib_dir() -> *mut c_char {
 /// # Safety
 /// Reads the environment; must run on the main thread, like every other
 /// caller of `stdpaths_get_xdg_var`.
-pub unsafe extern "C" fn runtimepath_default(clean_arg: bool) -> *mut c_char {
+pub unsafe fn runtimepath_default(clean_arg: bool) -> *mut c_char {
     // SAFETY: every pointer below is either null or an owned NUL-terminated
     // string, freed once at the end and not borrowed past that point.
     unsafe {

@@ -16,7 +16,7 @@ use crate::semsg_c;
 /// off the front and raising `E684` when there is no such item.
 ///
 /// `*n1` is updated to the index actually used.
-pub unsafe extern "C" fn tv_list_check_range_index_one(
+pub unsafe fn tv_list_check_range_index_one(
     l: *mut list_T,
     n1: *mut ::core::ffi::c_int,
     quiet: bool,
@@ -35,7 +35,7 @@ pub unsafe extern "C" fn tv_list_check_range_index_one(
 
 /// Resolve the second index of `l[n1:n2]` against the item `li1` the first one
 /// landed on, normalising both to non-negative indexes.
-pub unsafe extern "C" fn tv_list_check_range_index_two(
+pub unsafe fn tv_list_check_range_index_two(
     l: *mut list_T,
     n1: *mut ::core::ffi::c_int,
     li1: *const listitem_T,
@@ -77,7 +77,7 @@ pub unsafe extern "C" fn tv_list_check_range_index_two(
 /// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given.
 ///
 /// `empty_idx2` means the range had no upper bound (`dest[idx1:]`).
-pub unsafe extern "C" fn tv_list_assign_range(
+pub unsafe fn tv_list_assign_range(
     dest: *mut list_T,
     src: *mut list_T,
     idx1_arg: ::core::ffi::c_int,
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn tv_list_assign_range(
 
 /// `flatten()`: splice the items of any nested list into `list` in place,
 /// starting at `first` and going `maxdepth` levels down.
-pub unsafe extern "C" fn tv_list_flatten(
+pub unsafe fn tv_list_flatten(
     list: *mut list_T,
     first: *mut listitem_T,
     maxitems: int64_t,
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn tv_list_flatten(
 }
 
 /// A fresh list holding copies of `ol[n1..=n2]`.
-pub(crate) unsafe extern "C" fn tv_list_slice(
+pub(crate) unsafe fn tv_list_slice(
     ol: *mut list_T,
     mut n1: varnumber_T,
     n2: varnumber_T,
@@ -231,7 +231,7 @@ pub(crate) unsafe extern "C" fn tv_list_slice(
 ///
 /// `rettv` holds the list being subscripted on the way in.  An index out of
 /// range is an error; a *range* out of range is merely empty.
-pub unsafe extern "C" fn tv_list_slice_or_index(
+pub unsafe fn tv_list_slice_or_index(
     _list: *mut list_T,
     range: bool,
     n1_arg: varnumber_T,
@@ -297,7 +297,7 @@ pub unsafe extern "C" fn tv_list_slice_or_index(
 /// concatenate them into `gap` with `sep` between.
 ///
 /// Splitting it in two is what lets `gap` be grown to its final size once.
-pub(crate) unsafe extern "C" fn list_join_inner(
+pub(crate) unsafe fn list_join_inner(
     gap: *mut garray_T,
     l: *mut list_T,
     sep: *const ::core::ffi::c_char,

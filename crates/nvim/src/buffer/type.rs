@@ -86,7 +86,7 @@ const fn ch(byte: u8) -> c_char {
 // ---------------------------------------------------------------------------
 // The 'buftype' predicates
 
-pub unsafe extern "C" fn bt_prompt(buf: *mut buf_T) -> bool {
+pub unsafe fn bt_prompt(buf: *mut buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     buftype(unsafe { opt_buf(buf) }) == ch(b'p')
 }
@@ -96,19 +96,19 @@ fn is_prompt(buf: Buf) -> bool {
     buftype(Some(buf)) == ch(b'p')
 }
 
-pub unsafe extern "C" fn bt_help(buf: *const buf_T) -> bool {
+pub unsafe fn bt_help(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     unsafe { opt_buf(buf) }.is_some_and(|b| b.b_help)
 }
 
 /// A normal buffer: `'buftype'` is empty.
-pub unsafe extern "C" fn bt_normal(buf: *const buf_T) -> bool {
+pub unsafe fn bt_normal(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     let buf = unsafe { opt_buf(buf) };
     buf.is_some() && buftype(buf) == 0
 }
 
-pub unsafe extern "C" fn bt_quickfix(buf: *const buf_T) -> bool {
+pub unsafe fn bt_quickfix(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     buftype(unsafe { opt_buf(buf) }) == ch(b'q')
 }
@@ -119,14 +119,14 @@ fn is_quickfix(buf: Buf) -> bool {
     buftype(Some(buf)) == ch(b'q')
 }
 
-pub unsafe extern "C" fn bt_terminal(buf: *const buf_T) -> bool {
+pub unsafe fn bt_terminal(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     buftype(unsafe { opt_buf(buf) }) == ch(b't')
 }
 
 /// A "nofile", "acwrite", terminal or "prompt" buffer: its name may not be a
 /// file name, at least not one to write to.
-pub unsafe extern "C" fn bt_nofilename(buf: *const buf_T) -> bool {
+pub unsafe fn bt_nofilename(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     unsafe { opt_buf(buf) }.is_some_and(is_nofilename)
 }
@@ -142,7 +142,7 @@ fn is_nofilename(buf: Buf) -> bool {
 
 /// A "nofile", "quickfix", terminal or "prompt" buffer: not to be read from
 /// a file.
-pub(crate) unsafe extern "C" fn bt_nofileread(buf: *const buf_T) -> bool {
+pub(crate) unsafe fn bt_nofileread(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     let Some(buf) = (unsafe { opt_buf(buf) }) else {
         return false;
@@ -154,7 +154,7 @@ pub(crate) unsafe extern "C" fn bt_nofileread(buf: *const buf_T) -> bool {
         || bt == ch(b'p')
 }
 
-pub unsafe extern "C" fn bt_nofile(buf: *const buf_T) -> bool {
+pub unsafe fn bt_nofile(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     let Some(buf) = (unsafe { opt_buf(buf) }) else {
         return false;
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn bt_nofile(buf: *const buf_T) -> bool {
 }
 
 /// A "nowrite", "nofile", terminal or "prompt" buffer.
-pub unsafe extern "C" fn bt_dontwrite(buf: *const buf_T) -> bool {
+pub unsafe fn bt_dontwrite(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     unsafe { opt_buf(buf) }.is_some_and(is_dontwrite)
 }
@@ -174,7 +174,7 @@ fn is_dontwrite(buf: Buf) -> bool {
     bt == ch(b'n') || has_terminal(buf) || bt == ch(b'p')
 }
 
-pub unsafe extern "C" fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
+pub unsafe fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     if unsafe { opt_buf(buf) }.is_some_and(is_dontwrite) {
         // SAFETY: a translated message literal.
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
 
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
-pub unsafe extern "C" fn buf_hide(buf: *const buf_T) -> bool {
+pub unsafe fn buf_hide(buf: *const buf_T) -> bool {
     // SAFETY: the caller's promise -- a live buffer. Upstream dereferences
     // this one without a null test.
     let bufhidden = unsafe { *(*buf).b_p_bh };
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn buf_hide(buf: *const buf_T) -> bool {
 // The name a buffer without a file is shown under
 
 /// The name to display for a special buffer, or null for an ordinary one.
-pub unsafe extern "C" fn buf_spname(buf: *mut buf_T) -> *mut c_char {
+pub unsafe fn buf_spname(buf: *mut buf_T) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
     let b = unsafe { Buf::new(buf) };
     if is_quickfix(b) {
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn buf_spname(buf: *mut buf_T) -> *mut c_char {
     ptr::null_mut()
 }
 
-pub unsafe extern "C" fn buf_get_fname(buf: *const buf_T) -> *mut c_char {
+pub unsafe fn buf_get_fname(buf: *const buf_T) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
     let name = unsafe { (*buf).b_fname };
     if name.is_null() {
@@ -243,7 +243,7 @@ pub unsafe extern "C" fn buf_get_fname(buf: *const buf_T) -> *mut c_char {
 
 /// Set `'buflisted'` for the current buffer, firing `BufAdd`/`BufDelete` if
 /// it changed.
-pub unsafe extern "C" fn set_buflisted(on: c_int) {
+pub unsafe fn set_buflisted(on: c_int) {
     // SAFETY: `curbuf` is set from startup to exit.
     let mut buf = unsafe { Buf::current() };
     if on == buf.b_p_bl {
@@ -260,7 +260,7 @@ pub unsafe extern "C" fn set_buflisted(on: c_int) {
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) };
 }
 
-pub unsafe extern "C" fn buf_is_empty(buf: *mut buf_T) -> bool {
+pub unsafe fn buf_is_empty(buf: *mut buf_T) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
     let b = unsafe { Buf::new(buf) };
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
@@ -268,13 +268,13 @@ pub unsafe extern "C" fn buf_is_empty(buf: *mut buf_T) -> bool {
     b.b_ml.ml_line_count == 1 as linenr_T && unsafe { *ml_get_buf(buf, 1 as linenr_T) } == 0
 }
 
-pub unsafe extern "C" fn buf_inc_changedtick(buf: *mut buf_T) {
+pub unsafe fn buf_inc_changedtick(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     unsafe { buf_set_changedtick(buf, buf_get_changedtick(buf) + 1 as varnumber_T) };
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
-pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T) {
+pub unsafe fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut b = unsafe { Buf::new(buf) };
     let mut old_val: typval_T = b.changedtick_di.di_tv;

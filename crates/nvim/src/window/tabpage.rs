@@ -49,7 +49,7 @@ use crate::types::{
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::tabs;
 
-pub unsafe extern "C" fn unuse_tabpage(tp: *mut tabpage_T) {
+pub unsafe fn unuse_tabpage(tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live tab page.
     stash_tabpage(unsafe { TabPage::new(tp) });
 }
@@ -64,7 +64,7 @@ pub(crate) fn stash_tabpage(tp: TabPage) {
     tp.tp_curwin = curwin.get();
 }
 
-pub unsafe extern "C" fn use_tabpage(tp: *mut tabpage_T) {
+pub unsafe fn use_tabpage(tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live tab page.
     adopt_tabpage(unsafe { TabPage::new(tp) });
 }
@@ -100,7 +100,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     tp
 }
 
-pub unsafe extern "C" fn free_tabpage(tp: *mut tabpage_T) {
+pub unsafe fn free_tabpage(tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live tab page.
     free_tab(unsafe { TabPage::new(tp) });
 }
@@ -133,7 +133,7 @@ pub(crate) fn free_tab(tp: TabPage) {
     free(tp.raw());
 }
 
-pub unsafe extern "C" fn win_new_tabpage(
+pub unsafe fn win_new_tabpage(
     after: c_int,
     filename: *mut c_char,
     enter: bool,
@@ -316,7 +316,7 @@ pub(crate) fn may_open_tabpage() -> c_int {
     status
 }
 
-pub unsafe extern "C" fn make_tabpages(maxcount: c_int) -> c_int {
+pub unsafe fn make_tabpages(maxcount: c_int) -> c_int {
     let count = maxcount.min(p_tpm.get() as c_int);
 
     // Don't execute autocommands while creating the tab pages: `curwin` and
@@ -335,7 +335,7 @@ pub unsafe extern "C" fn make_tabpages(maxcount: c_int) -> c_int {
     count - todo
 }
 
-pub unsafe extern "C" fn valid_tabpage(tpc: *mut tabpage_T) -> bool {
+pub unsafe fn valid_tabpage(tpc: *mut tabpage_T) -> bool {
     valid_tab(tpc).is_some()
 }
 
@@ -348,14 +348,14 @@ pub(crate) fn valid_tab(tpc: *mut tabpage_T) -> Option<TabPage> {
     tabs().find(|tp| tp.raw() == tpc)
 }
 
-pub unsafe extern "C" fn valid_tabpage_win(tpc: *mut tabpage_T) -> c_int {
+pub unsafe fn valid_tabpage_win(tpc: *mut tabpage_T) -> c_int {
     let Some(tp) = valid_tab(tpc) else {
         return false_0; // shouldn't happen
     };
     windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.raw())) as c_int
 }
 
-pub unsafe extern "C" fn close_tabpage(tab: *mut tabpage_T) {
+pub unsafe fn close_tabpage(tab: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live tab page.
     close_tab(unsafe { TabPage::new(tab) });
 }
@@ -377,7 +377,7 @@ fn close_tab(tab: TabPage) {
     free_tab(tab);
 }
 
-pub unsafe extern "C" fn find_tabpage(n: c_int) -> *mut tabpage_T {
+pub unsafe fn find_tabpage(n: c_int) -> *mut tabpage_T {
     raw_tab(nth_tab(n))
 }
 
@@ -393,7 +393,7 @@ fn nth_tab(n: c_int) -> Option<TabPage> {
     tabs().nth(n as usize - 1)
 }
 
-pub unsafe extern "C" fn tabpage_index(ftp: *mut tabpage_T) -> c_int {
+pub unsafe fn tabpage_index(ftp: *mut tabpage_T) -> c_int {
     index_of_tab(ftp)
 }
 
@@ -581,7 +581,7 @@ fn config_float(mut wp: Win) {
     unsafe { win_config_float(raw, config) };
 }
 
-pub unsafe extern "C" fn goto_tabpage(n: c_int) {
+pub unsafe fn goto_tabpage(n: c_int) {
     goto_tab_number(n);
 }
 
@@ -633,7 +633,7 @@ pub(crate) fn goto_tab_number(n: c_int) {
     goto_tab(tp, true, true);
 }
 
-pub unsafe extern "C" fn goto_tabpage_tp(
+pub unsafe fn goto_tabpage_tp(
     tp: *mut tabpage_T,
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
@@ -668,7 +668,7 @@ pub(crate) fn goto_tab(tp: TabPage, trigger_enter_autocmds: bool, trigger_leave_
     skip_win_fix_scroll.set(false);
 }
 
-pub unsafe extern "C" fn goto_tabpage_lastused() -> bool {
+pub unsafe fn goto_tabpage_lastused() -> bool {
     goto_last_used_tab()
 }
 
@@ -681,7 +681,7 @@ pub(crate) fn goto_last_used_tab() -> bool {
     true
 }
 
-pub unsafe extern "C" fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T) {
+pub unsafe fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live tab page and a live window.
     let (tp, wp) = unsafe { (TabPage::new(tp), Win::new(wp)) };
     goto_tab_win(tp, wp);
@@ -697,7 +697,7 @@ pub(crate) fn goto_tab_win(tp: TabPage, wp: Win) {
     }
 }
 
-pub unsafe extern "C" fn tabpage_move(nr: c_int) {
+pub unsafe fn tabpage_move(nr: c_int) {
     debug_assert!(!curtab.get().is_null(), "curtab != NULL");
     if first_tab().next().is_none() || tabpage_move_disallowed.get() != 0 {
         return;

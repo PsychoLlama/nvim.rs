@@ -23,7 +23,7 @@ pub unsafe extern "C" fn closeFold(mut pos: pos_T, mut count: c_int) {
 }
 
 /// Close fold for current window at position `pos` recursively.
-pub unsafe extern "C" fn closeFoldRecurse(mut pos: pos_T) {
+pub unsafe fn closeFoldRecurse(mut pos: pos_T) {
     setManualFold(pos, false, true, ptr::null_mut());
 }
 
@@ -34,7 +34,7 @@ pub unsafe extern "C" fn closeFoldRecurse(mut pos: pos_T) {
 /// `opening` — true to open, false to close
 /// `recurse` — true to do it recursively
 /// `had_visual` — true when Visual selection used
-pub unsafe extern "C" fn opFoldRange(
+pub unsafe fn opFoldRange(
     mut firstpos: pos_T,
     mut lastpos: pos_T,
     mut opening: c_int,
@@ -77,12 +77,12 @@ pub unsafe extern "C" fn openFold(mut pos: pos_T, mut count: c_int) {
 }
 
 /// Open fold for current window at position `pos` recursively.
-pub unsafe extern "C" fn openFoldRecurse(mut pos: pos_T) {
+pub unsafe fn openFoldRecurse(mut pos: pos_T) {
     setManualFold(pos, true, true, ptr::null_mut());
 }
 
 /// Open folds until the cursor line is not in a closed fold.
-pub unsafe extern "C" fn foldOpenCursor() {
+pub unsafe fn foldOpenCursor() {
     checkupdate(curwin.get());
     if hasAnyFolding(curwin.get()) != 0 {
         loop {
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn foldOpenCursor() {
 }
 
 /// Set new foldlevel for current window.
-pub unsafe extern "C" fn newFoldLevel() {
+pub unsafe fn newFoldLevel() {
     newFoldLevelWin(curwin.get());
     if foldmethodIsDiff(curwin.get()) && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
         let mut wp: *mut win_T = if curtab.get() == curtab.get() {
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn newFoldLevel() {
     }
 }
 
-pub(super) unsafe extern "C" fn newFoldLevelWin(mut wp: *mut win_T) {
+pub(super) unsafe fn newFoldLevelWin(mut wp: *mut win_T) {
     checkupdate(wp);
     if (*wp).w_fold_manual {
         let mut fp: *mut fold_T = folds(&(*wp).w_folds);
@@ -129,7 +129,7 @@ pub(super) unsafe extern "C" fn newFoldLevelWin(mut wp: *mut win_T) {
 }
 
 /// Apply 'foldlevel' to all folds that don't contain the cursor.
-pub unsafe extern "C" fn foldCheckClose() {
+pub unsafe fn foldCheckClose() {
     if *p_fcl.get() as c_int == NUL {
         return;
     }
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn foldCheckClose() {
     }
 }
 
-pub(super) unsafe extern "C" fn checkCloseRec(
+pub(super) unsafe fn checkCloseRec(
     mut gap: *mut garray_T,
     mut lnum: linenr_T,
     mut level: c_int,
@@ -176,7 +176,7 @@ pub(super) unsafe extern "C" fn checkCloseRec(
 
 /// Returns true if it's allowed to manually create or delete a fold or,
 ///          give an error message and return false if not.
-pub unsafe extern "C" fn foldManualAllowed(mut create: bool) -> c_int {
+pub unsafe fn foldManualAllowed(mut create: bool) -> c_int {
     if foldmethodIsManual(curwin.get()) || foldmethodIsMarker(curwin.get()) {
         return true_0;
     }
@@ -194,7 +194,7 @@ pub unsafe extern "C" fn foldManualAllowed(mut create: bool) -> c_int {
 
 /// Create a fold from line "start" to line "end" (inclusive) in the current
 /// window.
-pub unsafe extern "C" fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
+pub unsafe fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
     let mut use_level: bool = false;
     let mut closed: bool = false;
     let mut level: c_int = 0;
@@ -314,7 +314,7 @@ pub unsafe extern "C" fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut en
 /// `end` — delete all folds from start to end when not 0
 /// `recursive` — delete recursively if true
 /// `had_visual` — true when Visual selection used
-pub unsafe extern "C" fn deleteFold(
+pub unsafe fn deleteFold(
     wp: *mut win_T,
     start: linenr_T,
     end: linenr_T,
@@ -396,11 +396,7 @@ pub unsafe extern "C" fn deleteFold(
 
 /// Open or close fold for current window at position `pos`.
 /// Repeat "count" times.
-pub(super) unsafe extern "C" fn setFoldRepeat(
-    mut pos: pos_T,
-    mut count: c_int,
-    mut do_open: c_int,
-) {
+pub(super) unsafe fn setFoldRepeat(mut pos: pos_T, mut count: c_int, mut do_open: c_int) {
     let mut n: c_int = 0;
     while n < count {
         let mut done: c_int = DONE_NOTHING;
@@ -421,7 +417,7 @@ pub(super) unsafe extern "C" fn setFoldRepeat(
 ///
 /// `opening` — true when opening, false when closing
 /// `recurse` — true when closing/opening recursive
-pub(super) unsafe extern "C" fn setManualFold(
+pub(super) unsafe fn setManualFold(
     mut pos: pos_T,
     mut opening: bool,
     mut recurse: bool,
@@ -458,7 +454,7 @@ pub(super) unsafe extern "C" fn setManualFold(
 ///
 /// Returns the line number of the next line that could be closed.
 ///                 It's only valid when "opening" is true!
-pub(super) unsafe extern "C" fn setManualFoldWin(
+pub(super) unsafe fn setManualFoldWin(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
     mut opening: bool,
@@ -543,7 +539,7 @@ pub(super) unsafe extern "C" fn setManualFoldWin(
 }
 
 /// Open all nested folds in fold "fpr" recursively.
-pub(super) unsafe extern "C" fn foldOpenNested(mut fpr: *mut fold_T) {
+pub(super) unsafe fn foldOpenNested(mut fpr: *mut fold_T) {
     let mut fp: *mut fold_T = folds(&(*fpr).fd_nested);
     let mut i: c_int = 0;
     while i < (*fpr).fd_nested.ga_len {
@@ -561,7 +557,7 @@ pub(super) unsafe extern "C" fn foldOpenNested(mut fpr: *mut fold_T) {
 /// `maybe_smallp` — true: outer this had fd_small == kNone
 /// `lnum_off` — line number offset for fp->fd_top
 /// Returns true if fold is closed
-pub(super) unsafe extern "C" fn check_closed(
+pub(super) unsafe fn check_closed(
     wp: *mut win_T,
     fp: *mut fold_T,
     use_levelp: *mut bool,

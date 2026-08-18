@@ -16,7 +16,7 @@ pub unsafe extern "C" fn nvim_subscribe(mut _channel_id: uint64_t, mut _event: S
 
 pub unsafe extern "C" fn nvim_unsubscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
 
-unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
+unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
     unsafe {
         static out_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
             size: 0 as size_t,

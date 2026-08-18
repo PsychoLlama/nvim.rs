@@ -7,7 +7,7 @@ use crate::types::{
 };
 use ::libc::memchr;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub unsafe extern "C" fn api_err_invalid(
+pub unsafe fn api_err_invalid(
     mut err: *mut Error,
     mut name: *const ::core::ffi::c_char,
     mut val_s: *const ::core::ffi::c_char,
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn api_err_invalid(
         );
     };
 }
-pub unsafe extern "C" fn api_err_exp(
+pub unsafe fn api_err_exp(
     mut err: *mut Error,
     mut name: *const ::core::ffi::c_char,
     mut expected: *const ::core::ffi::c_char,
@@ -106,10 +106,7 @@ pub unsafe extern "C" fn api_err_exp(
         actual,
     );
 }
-pub unsafe extern "C" fn api_err_required(
-    mut err: *mut Error,
-    mut name: *const ::core::ffi::c_char,
-) {
+pub unsafe fn api_err_required(mut err: *mut Error, mut name: *const ::core::ffi::c_char) {
     let mut errtype: ErrorType = kErrorTypeValidation;
     let mut has_space: *const ::core::ffi::c_char = strchr(name, ' ' as ::core::ffi::c_int);
     api_set_error(
@@ -123,7 +120,7 @@ pub unsafe extern "C" fn api_err_required(
         name,
     );
 }
-pub unsafe extern "C" fn api_err_conflict(
+pub unsafe fn api_err_conflict(
     mut err: *mut Error,
     mut name: *const ::core::ffi::c_char,
     mut name2: *const ::core::ffi::c_char,
@@ -142,7 +139,7 @@ pub unsafe extern "C" fn api_err_conflict(
         name2,
     );
 }
-pub unsafe extern "C" fn check_string_array(
+pub unsafe fn check_string_array(
     mut arr: Array,
     mut name: *mut ::core::ffi::c_char,
     mut disallow_nl: bool,

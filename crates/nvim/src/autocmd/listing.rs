@@ -12,7 +12,7 @@
 use super::*;
 
 /// `:autocmd` with no event: list every event's autocommands.
-pub(crate) unsafe extern "C" fn au_show_for_all_events(
+pub(crate) unsafe fn au_show_for_all_events(
     group: ::core::ffi::c_int,
     pat: *const ::core::ffi::c_char,
 ) {
@@ -28,7 +28,7 @@ pub(crate) unsafe extern "C" fn au_show_for_all_events(
 ///
 /// `got_int` is checked between every write: a listing is interruptible,
 /// and each check is at the point where upstream put it.
-pub(crate) unsafe extern "C" fn au_show_for_event(
+pub(crate) unsafe fn au_show_for_event(
     group: ::core::ffi::c_int,
     event: event_T,
     mut pat: *const ::core::ffi::c_char,
@@ -178,7 +178,7 @@ pub(crate) unsafe extern "C" fn au_show_for_event(
 
 /// Whether any autocommand for `event` would match the file `sfname`
 /// opened in `buf`.
-pub unsafe extern "C" fn has_autocmd(
+pub unsafe fn has_autocmd(
     event: event_T,
     sfname: *mut ::core::ffi::c_char,
     buf: *mut buf_T,
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn has_autocmd(
 ///
 /// Answers a pointer at the next command to expand instead, or null when
 /// it has set `xp` itself.
-pub unsafe extern "C" fn set_context_in_autocmd(
+pub unsafe fn set_context_in_autocmd(
     xp: *mut expand_T,
     mut arg: *mut ::core::ffi::c_char,
     doautocmd: bool,
@@ -288,7 +288,7 @@ pub unsafe extern "C" fn set_context_in_autocmd(
 
 /// `exists('#…')`, in all four shapes: `#Group`, `#Event`, `#Event#pat`
 /// and `#Group#Event#pat`.
-pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
+pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
     unsafe {
         // A copy, so the `#` separators can be overwritten with NULs.
         let arg_save = xstrdup(arg);

@@ -265,7 +265,7 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
 ///
 /// # Safety
 /// `path_name` must name a NUL-terminated string and `list` a live List.
-pub unsafe extern "C" fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut list_T) -> bool {
+pub unsafe fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut list_T) -> bool {
     // SAFETY: the caller's obligation.
     let path = unsafe { CStr::from_ptr(path_name) };
 

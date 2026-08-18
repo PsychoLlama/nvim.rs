@@ -78,7 +78,7 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 ///
 /// # Safety
 /// There must be a current buffer.
-pub unsafe extern "C" fn has_format_option(x: c_int) -> bool {
+pub unsafe fn has_format_option(x: c_int) -> bool {
     unsafe { p_paste.get() == 0 && !vim_strchr((*curbuf.get()).b_p_fo, x).is_null() }
 }
 
@@ -105,7 +105,7 @@ pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
 ///
 /// # Safety
 /// There must be a current window and buffer.
-pub unsafe extern "C" fn comp_textwidth(ff: bool) -> c_int {
+pub unsafe fn comp_textwidth(ff: bool) -> c_int {
     unsafe {
         let win = curwin.get();
         let mut textwidth = (*curbuf.get()).b_p_tw as c_int;

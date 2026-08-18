@@ -85,7 +85,7 @@ unsafe fn tab_firstwin(tp: *mut tabpage_T) -> *mut win_T {
         (*tp).tp_firstwin
     }
 }
-pub unsafe extern "C" fn win_has_winnr(wp: *mut win_T, mut tp: *mut tabpage_T) -> bool {
+pub unsafe fn win_has_winnr(wp: *mut win_T, mut tp: *mut tabpage_T) -> bool {
     wp == (if tp == curtab.get() {
         curwin.get()
     } else {

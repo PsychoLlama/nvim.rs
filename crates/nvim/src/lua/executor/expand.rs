@@ -46,7 +46,7 @@ static EXPAND_RESULTS: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALU
 /// # Safety
 /// `xp` must be a live expansion context whose `xp_pattern` points into
 /// `xp_line`.
-pub unsafe extern "C-unwind" fn nlua_expand_pat(xp: *mut expand_T) {
+pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
     unsafe {
         let lstate = get_global_lstate();
         let mut status = FAIL;
@@ -110,7 +110,7 @@ pub unsafe extern "C-unwind" fn nlua_expand_pat(xp: *mut expand_T) {
 ///
 /// # Safety
 /// Both out-parameters must be writable.
-pub unsafe extern "C-unwind" fn nlua_expand_get_matches(
+pub unsafe fn nlua_expand_get_matches(
     num_results: *mut c_int,
     results: *mut *mut *mut c_char,
 ) -> c_int {

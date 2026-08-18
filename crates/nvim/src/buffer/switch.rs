@@ -212,7 +212,7 @@ fn confirming() -> bool {
 ///
 /// # Safety
 /// `eap` must be a live `exarg_T`.
-pub unsafe extern "C" fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_int) {
+pub unsafe fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_int) {
     let save_sea = swap_exists_action.get();
     // SAFETY: the caller's promise -- a live command, whose `cmd` is a
     // NUL-terminated pointer into the command line.
@@ -263,7 +263,7 @@ pub unsafe extern "C" fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int
 ///
 /// # Safety
 /// `old_curbuf` may be null or invalid; it is only ever re-validated.
-pub unsafe extern "C" fn handle_swap_exists(old_curbuf: *mut bufref_T) {
+pub unsafe fn handle_swap_exists(old_curbuf: *mut bufref_T) {
     let old = match old_curbuf.is_null() {
         true => None,
         // SAFETY: the caller's promise -- a filled-in reference.
@@ -337,7 +337,7 @@ fn handle_swap_exists_opt(old_curbuf: Option<BufRef>) {
 ///
 /// # Safety
 /// `arg` must be NUL-terminated.
-pub unsafe extern "C" fn do_bufdel(
+pub unsafe fn do_bufdel(
     command: c_int,
     arg: *mut c_char,
     addr_count: c_int,
@@ -988,7 +988,7 @@ fn err_fname(fmt: &CStr, mut buf: Buf) {
 ///
 /// # Safety
 /// `curbuf` and `curwin` must be set.
-pub unsafe extern "C" fn do_buffer(
+pub unsafe fn do_buffer(
     action: c_int,
     start: c_int,
     dir: c_int,

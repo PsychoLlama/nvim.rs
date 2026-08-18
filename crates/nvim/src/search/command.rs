@@ -464,7 +464,7 @@ unsafe fn add_offset(pos: &mut pos_T, off: SearchOffset) -> c_int {
 /// # Safety
 /// `pat` must be null or NUL-terminated and writable up to its
 /// terminator; `oap` and `sia` must be null or valid.
-pub unsafe extern "C" fn do_search(
+pub unsafe fn do_search(
     oap: *mut oparg_T,
     dirc: c_int,
     search_delim: c_int,
@@ -770,7 +770,7 @@ unsafe fn mps_shows_match(c: c_int) -> bool {
 ///
 /// # Safety
 /// Must be called with a valid current window and buffer.
-pub unsafe extern "C" fn showmatch(c: c_int) {
+pub unsafe fn showmatch(c: c_int) {
     unsafe {
         // Only show a match for characters in 'matchpairs'.
         if !mps_shows_match(c) {

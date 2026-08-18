@@ -7,7 +7,7 @@ pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub unsafe extern "C" fn mh_find_bucket_glyph(
+pub unsafe fn mh_find_bucket_glyph(
     mut set: *mut Set_glyph,
     mut key: String_0,
     mut put: bool,
@@ -48,7 +48,7 @@ pub unsafe extern "C" fn mh_find_bucket_glyph(
     }
     return site;
 }
-pub unsafe extern "C" fn mh_rehash_glyph(mut set: *mut Set_glyph) {
+pub unsafe fn mh_rehash_glyph(mut set: *mut Set_glyph) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
         let mut idx: uint32_t = mh_find_bucket_glyph(
@@ -67,7 +67,7 @@ pub unsafe extern "C" fn mh_rehash_glyph(mut set: *mut Set_glyph) {
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
 }
-pub unsafe extern "C" fn mh_put_glyph(
+pub unsafe fn mh_put_glyph(
     mut set: *mut Set_glyph,
     mut key: String_0,
     mut new: *mut MHPutStatus,

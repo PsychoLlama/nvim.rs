@@ -24,7 +24,7 @@ use crate::smsg_c;
 ///
 /// When there is no next one, `lastpat` is left null and `auidx` at
 /// `SIZE_MAX`, which is how [`getnextac`] and its caller see the end.
-pub(crate) unsafe extern "C" fn aucmd_next(apc: *mut AutoPatCmd) {
+pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
     unsafe {
         let entry = ((*exestack.ptr()).ga_data.cast::<estack_T>())
             .offset(((*exestack.ptr()).ga_len - 1) as isize);

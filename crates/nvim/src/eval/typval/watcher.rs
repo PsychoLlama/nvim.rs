@@ -17,7 +17,7 @@
 use super::*;
 
 /// Free `watcher` and the callback and pattern it owns.
-pub(crate) unsafe extern "C" fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
+pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
     unsafe {
         callback_free(&raw mut (*watcher).callback);
         xfree((*watcher).key_pattern.cast());
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn tv_dict_watcher_add(
 }
 
 /// Whether `cb1` and `cb2` name the same function.
-pub unsafe extern "C" fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> bool {
+pub unsafe fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> bool {
     unsafe {
         if (*cb1).type_0 != (*cb2).type_0 {
             return false;
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn callback_free(callback: *mut Callback) {
 /// Store `cb` in `tv` as a Vimscript value, taking a reference to it.
 ///
 /// A Lua callback has no Vimscript form and comes out as `v:null`.
-pub unsafe extern "C" fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
+pub unsafe fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
     unsafe {
         match (*cb).type_0 {
             kCallbackPartial => {
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
 }
 
 /// Copy `src` into `dest`, taking a reference to whatever it holds.
-pub unsafe extern "C" fn callback_copy(dest: *mut Callback, src: *mut Callback) {
+pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
     unsafe {
         (*dest).type_0 = (*src).type_0;
         match (*src).type_0 {
@@ -133,10 +133,7 @@ pub unsafe extern "C" fn callback_copy(dest: *mut Callback, src: *mut Callback) 
 }
 
 /// A freshly allocated description of `cb`, as `string()` prints it.
-pub unsafe extern "C" fn callback_to_string(
-    cb: *mut Callback,
-    arena: *mut Arena,
-) -> *mut ::core::ffi::c_char {
+pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char {
     unsafe {
         if (*cb).type_0 == kCallbackLua {
             return nlua_funcref_str((*cb).data.luaref, arena);
@@ -225,7 +222,7 @@ pub unsafe extern "C" fn tv_dict_watcher_remove(
 
 /// Whether `watcher`'s pattern matches `key`.  A trailing `*` makes it a
 /// prefix match.
-pub(crate) unsafe extern "C" fn tv_dict_watcher_matches(
+pub(crate) unsafe fn tv_dict_watcher_matches(
     watcher: *mut DictWatcher,
     key: *const ::core::ffi::c_char,
 ) -> bool {
@@ -244,7 +241,7 @@ pub(crate) unsafe extern "C" fn tv_dict_watcher_matches(
 /// A callback may add or remove watchers, and may re-enter this function; the
 /// `busy` flag is what stops a watcher firing inside its own callback, and the
 /// second walk is the deferred deletion the first one could not do.
-pub unsafe extern "C" fn tv_dict_watcher_notify(
+pub unsafe fn tv_dict_watcher_notify(
     dict: *mut dict_T,
     key: *const ::core::ffi::c_char,
     newtv: *mut typval_T,

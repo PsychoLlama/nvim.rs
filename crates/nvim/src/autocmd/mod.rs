@@ -311,7 +311,7 @@ pub const MAPHASH_INIT: MapHash = MapHash {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn map_put_int_ptr_t(
+unsafe fn map_put_int_ptr_t(
     mut map: *mut Map_int_ptr_t,
     mut key: ::core::ffi::c_int,
     mut value: ptr_t,
@@ -327,7 +327,7 @@ unsafe extern "C" fn map_put_int_ptr_t(
     }
 }
 #[inline]
-unsafe extern "C" fn map_put_String_int(
+unsafe fn map_put_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
     mut value: ::core::ffi::c_int,
@@ -343,7 +343,7 @@ unsafe extern "C" fn map_put_String_int(
     }
 }
 #[inline]
-unsafe extern "C" fn map_get_String_int(
+unsafe fn map_get_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {
@@ -357,7 +357,7 @@ unsafe extern "C" fn map_get_String_int(
     }
 }
 #[inline]
-unsafe extern "C" fn map_put_int_String(
+unsafe fn map_put_int_String(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
     mut value: String_0,
@@ -373,7 +373,7 @@ unsafe extern "C" fn map_put_int_String(
     }
 }
 #[inline]
-unsafe extern "C" fn map_get_int_String(
+unsafe fn map_get_int_String(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
 ) -> String_0 {
@@ -417,7 +417,7 @@ static map_augroup_id_to_name: GlobalCell<Map_int_String> = GlobalCell::new(Map_
     },
     values: ::core::ptr::null_mut::<String_0>(),
 });
-pub unsafe extern "C" fn autocmd_init() {
+pub unsafe fn autocmd_init() {
     unsafe {
         deferred_events.set(multiqueue_new_child((*main_loop.ptr()).events));
     }

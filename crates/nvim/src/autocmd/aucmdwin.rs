@@ -18,7 +18,7 @@
 use super::*;
 
 /// Whether `win` is one of the autocommand windows currently in use.
-pub unsafe extern "C" fn is_aucmd_win(win: *mut win_T) -> bool {
+pub unsafe fn is_aucmd_win(win: *mut win_T) -> bool {
     unsafe {
         let vec = aucmd_win_vec.ptr();
         (0..(*vec).size).any(|i| {
@@ -30,7 +30,7 @@ pub unsafe extern "C" fn is_aucmd_win(win: *mut win_T) -> bool {
 
 /// Make `buf` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
-pub unsafe extern "C" fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
+pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
     unsafe {
         let entry = |idx: usize| (*aucmd_win_vec.ptr()).items.add(idx);
 
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
 
 /// Undo [`aucmd_prepbuf`], restoring the window layout as far as what the
 /// autocommand did to it allows.
-pub unsafe extern "C" fn aucmd_restbuf(aco: *mut aco_save_T) {
+pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
     unsafe {
         if (*aco).use_aucmd_win_idx >= 0 {
             let idx = (*aco).use_aucmd_win_idx as usize;

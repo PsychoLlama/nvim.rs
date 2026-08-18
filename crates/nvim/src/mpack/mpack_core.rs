@@ -257,7 +257,7 @@ fn drain_pending(tb: &mut mpack_tokbuf_t, out: &mut [u8]) -> (c_uint, usize) {
 ///
 /// # Safety
 /// `tokbuf` must point at a writable `mpack_tokbuf_t`.
-pub unsafe extern "C-unwind" fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
+pub unsafe fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
     // The C leaves `pending`/`pending_tok` alone, on the grounds that
     // `ppos`/`plen` say nothing in them is meaningful yet. That makes the
     // struct un-copyable without reading uninitialised bytes — which
@@ -283,7 +283,7 @@ pub unsafe extern "C-unwind" fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
 /// # Safety
 /// `buf`/`buflen` must describe a readable slice, and `tokbuf`/`tok` must
 /// point at writable objects.
-pub unsafe extern "C-unwind" fn mpack_read(
+pub unsafe fn mpack_read(
     tokbuf: *mut mpack_tokbuf_t,
     buf: *mut *const c_char,
     buflen: *mut size_t,
@@ -328,7 +328,7 @@ pub unsafe extern "C-unwind" fn mpack_read(
 /// `buf`/`buflen` must describe a writable slice, `tokbuf` a writable
 /// tokbuf, and `t` a readable token whose chunk pointer (if it is a chunk)
 /// spans `t->length` bytes.
-pub unsafe extern "C-unwind" fn mpack_write(
+pub unsafe fn mpack_write(
     tokbuf: *mut mpack_tokbuf_t,
     buf: *mut *mut c_char,
     buflen: *mut size_t,
@@ -400,7 +400,7 @@ unsafe fn write_chunk(
 ///
 /// # Safety
 /// `buf`/`buflen` must describe a readable slice and `tok` a writable token.
-pub unsafe extern "C-unwind" fn mpack_rtoken(
+pub unsafe fn mpack_rtoken(
     buf: *mut *const c_char,
     buflen: *mut size_t,
     tok: *mut mpack_token_t,

@@ -167,7 +167,7 @@ unsafe fn recompile_backtracking(prog: *mut regprog_T, extmatch: bool) -> *mut r
 
 /// Run `rmp`'s program over the single line `line`, starting at `col`.
 /// `nl` allows a `$` to match at the end of the string.
-unsafe extern "C" fn vim_regexec_string(
+unsafe fn vim_regexec_string(
     rmp: *mut regmatch_T,
     line: *const c_char,
     col: colnr_T,

@@ -37,7 +37,7 @@ use ::libc::{exit, fprintf};
 ///
 /// # Safety
 /// `argv` must hold `argc` NUL-terminated strings.
-unsafe extern "C-unwind" fn nlua_init_argv(
+unsafe fn nlua_init_argv(
     lstate: *mut lua_State,
     argv: *mut *mut c_char,
     argc: c_int,
@@ -66,7 +66,7 @@ unsafe extern "C-unwind" fn nlua_init_argv(
 ///
 /// # Safety
 /// `lstate` must be a freshly opened Lua state.
-unsafe extern "C-unwind" fn nlua_state_init(lstate: *mut lua_State) -> bool {
+unsafe fn nlua_state_init(lstate: *mut lua_State) -> bool {
     unsafe {
         lua_pushcfunction(lstate, nlua_print);
         lua_setglobal(lstate, c"print".as_ptr());
@@ -118,7 +118,7 @@ unsafe extern "C-unwind" fn nlua_state_init(lstate: *mut lua_State) -> bool {
 ///
 /// # Safety
 /// Called once, from `main()`.
-pub unsafe extern "C-unwind" fn nlua_init(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) {
+pub unsafe fn nlua_init(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) {
     unsafe {
         let lstate = luaL_newstate();
         if lstate.is_null() {
@@ -149,11 +149,7 @@ pub unsafe extern "C-unwind" fn nlua_init(argv: *mut *mut c_char, argc: c_int, l
 ///
 /// # Safety
 /// Called once, from `main()`, instead of [`nlua_init`].
-pub unsafe extern "C-unwind" fn nlua_run_script(
-    argv: *mut *mut c_char,
-    argc: c_int,
-    lua_arg0: c_int,
-) -> ! {
+pub unsafe fn nlua_run_script(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) -> ! {
     unsafe {
         in_script.set(true);
         global_lstate.set(nlua_init_state(false));
@@ -171,7 +167,7 @@ pub unsafe extern "C-unwind" fn nlua_run_script(
 ///
 /// # Safety
 /// Called on the thread the state will belong to.
-pub(crate) unsafe extern "C-unwind" fn nlua_init_state(thread: bool) -> *mut lua_State {
+pub(crate) unsafe fn nlua_init_state(thread: bool) -> *mut lua_State {
     unsafe {
         // The runtime path is shared, so only the main thread may rebuild it.
         let self_0: uv_thread_t = uv_thread_self();
@@ -230,7 +226,7 @@ unsafe extern "C-unwind" fn nlua_common_free_all_mem(lstate: *mut lua_State) {
 ///
 /// # Safety
 /// The main state must exist.
-pub unsafe extern "C-unwind" fn nlua_init_defaults() {
+pub unsafe fn nlua_init_defaults() {
     unsafe {
         let lstate = global_lstate.get();
         debug_assert!(!lstate.is_null());

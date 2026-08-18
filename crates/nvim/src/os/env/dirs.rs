@@ -79,7 +79,7 @@ unsafe fn remove_tail(path: *mut c_char, pend: *mut c_char, dirname: *const c_ch
 /// # Safety
 /// `val` must be NUL-terminated, `iter` NULL or an answer of this function
 /// over the same `val`, and `dir`/`len` writable.
-pub unsafe extern "C" fn vim_env_iter(
+pub unsafe fn vim_env_iter(
     delim: c_char,
     val: *const c_char,
     iter: *const c_void,
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn vim_env_iter(
 ///
 /// # Safety
 /// As [`vim_env_iter`].
-pub unsafe extern "C" fn vim_env_iter_rev(
+pub unsafe fn vim_env_iter_rev(
     delim: c_char,
     val: *const c_char,
     iter: *const c_void,

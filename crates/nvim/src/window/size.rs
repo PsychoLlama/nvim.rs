@@ -26,7 +26,7 @@ use crate::types::{OptInt, frame_T, kFloatRelativeWindow, optset_T, win_T};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{Frame, Win, frames, frames_back};
 
-pub unsafe extern "C" fn win_comp_pos() -> c_int {
+pub unsafe fn win_comp_pos() -> c_int {
     comp_positions()
 }
 
@@ -80,11 +80,11 @@ pub(crate) fn comp_pos(topfrp: Frame, row: &mut c_int, col: &mut c_int) {
     }
 }
 
-pub unsafe extern "C" fn win_setheight(height: c_int) {
+pub unsafe fn win_setheight(height: c_int) {
     setheight_win(height, cur_win());
 }
 
-pub unsafe extern "C" fn win_setheight_win(height: c_int, win: *mut win_T) {
+pub unsafe fn win_setheight_win(height: c_int, win: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     setheight_win(height, unsafe { Win::new(win) });
 }
@@ -252,11 +252,11 @@ fn set_frame_height(curfrp: Frame, height: c_int) {
     }
 }
 
-pub unsafe extern "C" fn win_setwidth(width: c_int) {
+pub unsafe fn win_setwidth(width: c_int) {
     setwidth_win(width, cur_win());
 }
 
-pub unsafe extern "C" fn win_setwidth_win(width: c_int, wp: *mut win_T) {
+pub unsafe fn win_setwidth_win(width: c_int, wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     setwidth_win(width, unsafe { Win::new(wp) });
 }
@@ -415,7 +415,7 @@ pub unsafe fn did_set_winminwidth(_args: *mut optset_T) -> *const c_char {
     ::core::ptr::null()
 }
 
-pub unsafe extern "C" fn win_drag_status_line(dragwin: *mut win_T, offset: c_int) {
+pub unsafe fn win_drag_status_line(dragwin: *mut win_T, offset: c_int) {
     // SAFETY: the caller's promise -- a live window.
     drag_status_line(unsafe { Win::new(dragwin) }, offset);
 }
@@ -519,7 +519,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
     unsafe { showmode() };
 }
 
-pub unsafe extern "C" fn win_drag_vsep_line(dragwin: *mut win_T, offset: c_int) {
+pub unsafe fn win_drag_vsep_line(dragwin: *mut win_T, offset: c_int) {
     // SAFETY: the caller's promise -- a live window.
     drag_vsep_line(unsafe { Win::new(dragwin) }, offset);
 }
@@ -611,7 +611,7 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub(crate) unsafe extern "C" fn frame_setwidth(curfrp: *mut frame_T, width: c_int) {
+pub(crate) unsafe fn frame_setwidth(curfrp: *mut frame_T, width: c_int) {
     // SAFETY: the caller's promise -- a live frame.
     set_frame_width(unsafe { Frame::new(curfrp) }, width);
 }

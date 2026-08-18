@@ -29,7 +29,7 @@ const REF_STATE_KEY: &core::ffi::CStr = c"nlua.ref_state";
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with room for one more value.
-pub(crate) unsafe extern "C-unwind" fn nlua_new_ref_state(
+pub(crate) unsafe fn nlua_new_ref_state(
     lstate: *mut lua_State,
     is_thread: bool,
 ) -> *mut nlua_ref_state_t {
@@ -50,9 +50,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_new_ref_state(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state whose [`nlua_new_ref_state`] has run.
-pub(crate) unsafe extern "C-unwind" fn nlua_get_ref_state(
-    lstate: *mut lua_State,
-) -> *mut nlua_ref_state_t {
+pub(crate) unsafe fn nlua_get_ref_state(lstate: *mut lua_State) -> *mut nlua_ref_state_t {
     unsafe {
         lua_getfield(lstate, LUA_REGISTRYINDEX, REF_STATE_KEY.as_ptr());
         let ref_state = lua_touserdata(lstate, -1).cast::<nlua_ref_state_t>();
@@ -63,13 +61,13 @@ pub(crate) unsafe extern "C-unwind" fn nlua_get_ref_state(
 
 /// # Safety
 /// As [`nlua_get_ref_state`].
-pub unsafe extern "C-unwind" fn nlua_get_nil_ref(lstate: *mut lua_State) -> LuaRef {
+pub unsafe fn nlua_get_nil_ref(lstate: *mut lua_State) -> LuaRef {
     unsafe { (*nlua_get_ref_state(lstate)).nil_ref }
 }
 
 /// # Safety
 /// As [`nlua_get_ref_state`].
-pub unsafe extern "C-unwind" fn nlua_get_empty_dict_ref(lstate: *mut lua_State) -> LuaRef {
+pub unsafe fn nlua_get_empty_dict_ref(lstate: *mut lua_State) -> LuaRef {
     unsafe { (*nlua_get_ref_state(lstate)).empty_dict_ref }
 }
 
@@ -78,7 +76,7 @@ pub unsafe extern "C-unwind" fn nlua_get_empty_dict_ref(lstate: *mut lua_State) 
 ///
 /// # Safety
 /// The main state must exist.
-pub unsafe extern "C-unwind" fn nlua_get_global_ref_count() -> c_int {
+pub unsafe fn nlua_get_global_ref_count() -> c_int {
     unsafe { (*nlua_global_refs.get()).ref_count }
 }
 
@@ -112,7 +110,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_empty_dict_tostring(lstate: *mut lua
 /// # Safety
 /// `lstate` must be a live Lua state, `index` a valid index, and `ref_state`
 /// that state's own bookkeeping.
-pub unsafe extern "C-unwind" fn nlua_ref(
+pub unsafe fn nlua_ref(
     lstate: *mut lua_State,
     ref_state: *mut nlua_ref_state_t,
     index: c_int,
@@ -131,7 +129,7 @@ pub unsafe extern "C-unwind" fn nlua_ref(
 ///
 /// # Safety
 /// As [`nlua_ref`].
-pub unsafe extern "C-unwind" fn nlua_ref_global(lstate: *mut lua_State, index: c_int) -> LuaRef {
+pub unsafe fn nlua_ref_global(lstate: *mut lua_State, index: c_int) -> LuaRef {
     unsafe { nlua_ref(lstate, nlua_global_refs.get(), index) }
 }
 
@@ -139,11 +137,7 @@ pub unsafe extern "C-unwind" fn nlua_ref_global(lstate: *mut lua_State, index: c
 ///
 /// # Safety
 /// `ref_0` must have come from [`nlua_ref`] against `ref_state`.
-pub unsafe extern "C-unwind" fn nlua_unref(
-    lstate: *mut lua_State,
-    ref_state: *mut nlua_ref_state_t,
-    ref_0: LuaRef,
-) {
+pub unsafe fn nlua_unref(lstate: *mut lua_State, ref_state: *mut nlua_ref_state_t, ref_0: LuaRef) {
     unsafe {
         if ref_0 > 0 {
             (*ref_state).ref_count -= 1;
@@ -156,7 +150,7 @@ pub unsafe extern "C-unwind" fn nlua_unref(
 ///
 /// # Safety
 /// As [`nlua_unref`].
-pub unsafe extern "C-unwind" fn nlua_unref_global(lstate: *mut lua_State, ref_0: LuaRef) {
+pub unsafe fn nlua_unref_global(lstate: *mut lua_State, ref_0: LuaRef) {
     unsafe { nlua_unref(lstate, nlua_global_refs.get(), ref_0) };
 }
 
@@ -165,7 +159,7 @@ pub unsafe extern "C-unwind" fn nlua_unref_global(lstate: *mut lua_State, ref_0:
 ///
 /// # Safety
 /// The main state must exist and `ref_0` be one of its references.
-pub unsafe extern "C-unwind" fn api_free_luaref(ref_0: LuaRef) {
+pub unsafe fn api_free_luaref(ref_0: LuaRef) {
     unsafe { nlua_unref_global(get_global_lstate(), ref_0) };
 }
 
@@ -173,7 +167,7 @@ pub unsafe extern "C-unwind" fn api_free_luaref(ref_0: LuaRef) {
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with room for one more value.
-pub unsafe extern "C-unwind" fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef) {
+pub unsafe fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef) {
     unsafe { lua_rawgeti(lstate, LUA_REGISTRYINDEX, ref_0) };
 }
 
@@ -181,7 +175,7 @@ pub unsafe extern "C-unwind" fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaR
 ///
 /// # Safety
 /// The main state must exist.
-pub unsafe extern "C-unwind" fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
+pub unsafe fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
     unsafe {
         if original_ref == LUA_NOREF {
             return LUA_NOREF;
@@ -199,7 +193,7 @@ pub unsafe extern "C-unwind" fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
 ///
 /// # Safety
 /// The main state must exist.
-pub unsafe extern "C-unwind" fn nlua_ref_is_function(ref_0: LuaRef) -> bool {
+pub unsafe fn nlua_ref_is_function(ref_0: LuaRef) -> bool {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, ref_0);

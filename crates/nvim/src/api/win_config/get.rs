@@ -10,7 +10,7 @@
 use super::*;
 use crate::api::private::helpers::{array_add, set_key};
 
-unsafe extern "C" fn config_put_bordertext(
+unsafe fn config_put_bordertext(
     mut config: *mut KeyDict_win_config,
     mut fconfig: *mut WinConfig,
     mut bordertext_type: BorderTextType,

@@ -114,7 +114,7 @@ fn strnicmp_asc(a: &[u8], b: &[u8], len: size_t) -> c_int {
 
 /// Copy at most `len` bytes of `string` into a fresh NUL-terminated
 /// buffer, zero-filling the remainder (strncpy semantics).
-pub unsafe extern "C" fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
+pub unsafe fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
     unsafe {
         let n = strnlen(string, len);
         let ret = xmallocz(len) as *mut c_char;
@@ -128,7 +128,7 @@ pub unsafe extern "C" fn xstrnsave(string: *const c_char, len: size_t) -> *mut c
 }
 
 /// Truncate unescaped trailing spaces and tabs in place.
-pub unsafe extern "C" fn del_trailing_spaces(ptr: *mut c_char) {
+pub unsafe fn del_trailing_spaces(ptr: *mut c_char) {
     unsafe {
         let len = CStr::from_ptr(ptr).to_bytes().len();
         let s = slice::from_raw_parts_mut(ptr as *mut u8, len);
@@ -139,17 +139,13 @@ pub unsafe extern "C" fn del_trailing_spaces(ptr: *mut c_char) {
 
 /// Case-insensitive `strcmp` equality where NULL only equals NULL.
 /// strcasecmp is locale-aware, so the libc call stays.
-pub unsafe extern "C" fn striequal(a: *const c_char, b: *const c_char) -> bool {
+pub unsafe fn striequal(a: *const c_char, b: *const c_char) -> bool {
     unsafe {
         (a.is_null() && b.is_null()) || (!a.is_null() && !b.is_null() && strcasecmp(a, b) == 0)
     }
 }
 
-pub unsafe extern "C" fn vim_strnicmp_asc(
-    s1: *const c_char,
-    s2: *const c_char,
-    len: size_t,
-) -> c_int {
+pub unsafe fn vim_strnicmp_asc(s1: *const c_char, s2: *const c_char, len: size_t) -> c_int {
     unsafe {
         strnicmp_asc(
             CStr::from_ptr(s1).to_bytes(),
@@ -160,7 +156,7 @@ pub unsafe extern "C" fn vim_strnicmp_asc(
 }
 
 /// Find character `c` (a codepoint, not a byte) in `string`.
-pub unsafe extern "C" fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
+pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
     unsafe {
         if c <= 0 {
             ptr::null_mut()
@@ -182,7 +178,7 @@ unsafe extern "C" fn sort_compare(
     unsafe { strcmp(*(s1 as *const *const c_char), *(s2 as *const *const c_char)) }
 }
 
-pub unsafe extern "C" fn sort_strings(files: *mut *mut c_char, count: c_int) {
+pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
     unsafe {
         qsort(
             files as *mut ::core::ffi::c_void,
@@ -199,12 +195,12 @@ pub unsafe extern "C" fn sort_strings(files: *mut *mut c_char, count: c_int) {
     }
 }
 
-pub unsafe extern "C" fn has_non_ascii(s: *const c_char) -> bool {
+pub unsafe fn has_non_ascii(s: *const c_char) -> bool {
     unsafe { !s.is_null() && any_non_ascii(CStr::from_ptr(s).to_bytes()) }
 }
 
 /// Freshly allocated `str1 ++ str2`, NUL-terminated.
-pub unsafe extern "C" fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char {
+pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char {
     unsafe {
         let a = CStr::from_ptr(str1).to_bytes();
         let b = CStr::from_ptr(str2).to_bytes_with_nul();
@@ -243,11 +239,7 @@ pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
 
 /// Every occurrence of `what` in `src` replaced by `rep`, freshly
 /// allocated, or NULL when `what` does not occur at all.
-pub unsafe extern "C" fn strrep(
-    src: *const c_char,
-    what: *const c_char,
-    rep: *const c_char,
-) -> *mut c_char {
+pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char) -> *mut c_char {
     unsafe {
         let what_len = strlen(what);
 
@@ -298,10 +290,7 @@ pub unsafe extern "C" fn strrep(
 /// The comparison length is the *longer* of the two, so a prefix sorts
 /// before the string it prefixes — `strncmp` stops at the shorter one's
 /// terminator either way.
-pub unsafe extern "C" fn cmp_keyvalue_value_n(
-    a: *const c_void,
-    b: *const c_void,
-) -> ::core::ffi::c_int {
+pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core::ffi::c_int {
     unsafe {
         let kv1 = &*(a as *const keyvalue_T);
         let kv2 = &*(b as *const keyvalue_T);

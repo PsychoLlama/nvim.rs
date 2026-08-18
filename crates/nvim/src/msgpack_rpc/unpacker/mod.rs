@@ -302,8 +302,7 @@ unsafe fn ext_object(p: *mut Unpacker, ext_type: c_int, length: mpack_uint32_t) 
     }
 }
 
-unsafe extern "C-unwind" fn api_parse_exit(_parser: *mut mpack_parser_t, _node: *mut mpack_node_t) {
-}
+unsafe fn api_parse_exit(_parser: *mut mpack_parser_t, _node: *mut mpack_node_t) {}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn unpacker_init(p: *mut Unpacker) {

@@ -26,15 +26,15 @@ static lastc_bytelen: GlobalCell<c_int> = GlobalCell::new(1);
 /// One `schar_T`'s bytes plus its NUL — what `lastc_bytes` holds.
 const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
 
-pub unsafe extern "C" fn last_csearch() -> *const c_char {
+pub unsafe fn last_csearch() -> *const c_char {
     lastc_bytes.ptr() as *const c_char
 }
 
-pub unsafe extern "C" fn last_csearch_forward() -> c_int {
+pub unsafe fn last_csearch_forward() -> c_int {
     c_int::from(lastcdir.get() as c_int == FORWARD as c_int)
 }
 
-pub unsafe extern "C" fn last_csearch_until() -> c_int {
+pub unsafe fn last_csearch_until() -> c_int {
     c_int::from(last_t_cmd.get())
 }
 
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn last_csearch_until() -> c_int {
 ///
 /// # Safety
 /// `s` must point at `len` readable bytes.
-pub unsafe extern "C" fn set_last_csearch(c: c_int, s: *mut c_char, len: c_int) {
+pub unsafe fn set_last_csearch(c: c_int, s: *mut c_char, len: c_int) {
     unsafe {
         lastc.set(c as u8);
         lastc_bytelen.set(len);
@@ -55,11 +55,11 @@ pub unsafe extern "C" fn set_last_csearch(c: c_int, s: *mut c_char, len: c_int) 
     }
 }
 
-pub unsafe extern "C" fn set_csearch_direction(cdir: Direction) {
+pub unsafe fn set_csearch_direction(cdir: Direction) {
     lastcdir.set(cdir);
 }
 
-pub unsafe extern "C" fn set_csearch_until(t_cmd: c_int) {
+pub unsafe fn set_csearch_until(t_cmd: c_int) {
     last_t_cmd.set(t_cmd != 0);
 }
 
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn set_csearch_until(t_cmd: c_int) {
 ///
 /// # Safety
 /// `cap` and `cap->oap` must be valid.
-pub unsafe extern "C" fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
+pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
     unsafe {
         let mut c = (*cap).nchar; // char to search for
         let mut dir = (*cap).arg; // true for searching forward

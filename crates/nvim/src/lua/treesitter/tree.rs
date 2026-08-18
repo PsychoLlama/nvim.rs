@@ -20,7 +20,7 @@ pub(crate) static tree_meta: SharedCell<[luaL_Reg; 7]> = luaL_reg_table![
     c"copy" => tree_copy,
 ];
 
-pub(crate) unsafe extern "C-unwind" fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
+pub(crate) unsafe fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
     unsafe {
         if tree.is_null() {
             lua_pushnil(L);

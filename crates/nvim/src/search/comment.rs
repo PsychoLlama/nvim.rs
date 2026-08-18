@@ -78,7 +78,7 @@ pub(crate) unsafe fn find_rawstring_end(
 ///
 /// # Safety
 /// `line` must be NUL-terminated.
-pub unsafe extern "C" fn check_linecomment(line: *const c_char) -> c_int {
+pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
     unsafe {
         let mut p = line; // scan from the start
         if (*curbuf.get()).b_p_lisp != 0 {
@@ -144,6 +144,6 @@ pub unsafe extern "C" fn check_linecomment(line: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a line of the current buffer.
-pub unsafe extern "C" fn linewhite(lnum: linenr_T) -> bool {
+pub unsafe fn linewhite(lnum: linenr_T) -> bool {
     unsafe { *skipwhite(ml_get(lnum)) as c_int == NUL }
 }

@@ -46,7 +46,7 @@ pub const KV_INITIAL_VALUE: Dict = Dict {
 pub const ARRAY_DICT_INIT: Dict = KV_INITIAL_VALUE;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-unsafe extern "C" fn validate_option_value_args(
+unsafe fn validate_option_value_args(
     mut opts: *mut KeyDict_option,
     mut name: *mut ::core::ffi::c_char,
     mut opt_idxp: *mut OptIndex,
@@ -177,7 +177,7 @@ unsafe extern "C" fn validate_option_value_args(
         OK
     };
 }
-unsafe extern "C" fn do_ft_buf(
+unsafe fn do_ft_buf(
     mut filetype: *const ::core::ffi::c_char,
     mut aco: *mut aco_save_T,
     mut aco_used: *mut bool,
@@ -286,7 +286,7 @@ unsafe extern "C" fn do_ft_buf(
     }
     return ftbuf;
 }
-unsafe extern "C" fn wipe_ft_buf(mut buf: *mut buf_T) {
+unsafe fn wipe_ft_buf(mut buf: *mut buf_T) {
     block_autocmds();
     let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, buf);

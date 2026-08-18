@@ -80,10 +80,7 @@ unsafe fn table<'a>(session: *mut mpack_rpc_session_t) -> &'a mut [mpack_rpc_slo
 ///
 /// # Safety
 /// `session` must point at storage with room for `capacity` slots.
-pub unsafe extern "C-unwind" fn mpack_rpc_session_init(
-    session: *mut mpack_rpc_session_t,
-    capacity: mpack_uint32_t,
-) {
+pub unsafe fn mpack_rpc_session_init(session: *mut mpack_rpc_session_t, capacity: mpack_uint32_t) {
     let capacity = if capacity != 0 {
         capacity
     } else {
@@ -112,7 +109,7 @@ pub unsafe extern "C-unwind" fn mpack_rpc_session_init(
 ///
 /// # Safety
 /// `session` must be initialised and `msg` writable.
-pub unsafe extern "C-unwind" fn mpack_rpc_receive_tok(
+pub unsafe fn mpack_rpc_receive_tok(
     session: *mut mpack_rpc_session_t,
     tok: mpack_token_t,
     msg: *mut mpack_rpc_message_t,
@@ -184,7 +181,7 @@ fn receive_type(hdr: &mut mpack_rpc_header_t, tok: mpack_token_t) -> Result<Opti
 ///
 /// # Safety
 /// `session` must be initialised and `tok` writable.
-pub unsafe extern "C-unwind" fn mpack_rpc_request_tok(
+pub unsafe fn mpack_rpc_request_tok(
     session: *mut mpack_rpc_session_t,
     tok: *mut mpack_token_t,
     data: mpack_data_t,
@@ -222,7 +219,7 @@ pub unsafe extern "C-unwind" fn mpack_rpc_request_tok(
 ///
 /// # Safety
 /// See [`mpack_rpc_request_tok`].
-pub unsafe extern "C-unwind" fn mpack_rpc_reply_tok(
+pub unsafe fn mpack_rpc_reply_tok(
     session: *mut mpack_rpc_session_t,
     tok: *mut mpack_token_t,
     id: mpack_uint32_t,
@@ -244,7 +241,7 @@ pub unsafe extern "C-unwind" fn mpack_rpc_reply_tok(
 ///
 /// # Safety
 /// See [`mpack_rpc_request_tok`].
-pub unsafe extern "C-unwind" fn mpack_rpc_notify_tok(
+pub unsafe fn mpack_rpc_notify_tok(
     session: *mut mpack_rpc_session_t,
     tok: *mut mpack_token_t,
 ) -> c_int {
@@ -281,7 +278,7 @@ fn send_rest(send: &mut mpack_rpc_header_t, tok: &mut mpack_token_t) -> c_int {
 /// # Safety
 /// `buf`/`buflen` must describe a readable slice; `session` and `msg` must be
 /// writable.
-pub unsafe extern "C-unwind" fn mpack_rpc_receive(
+pub unsafe fn mpack_rpc_receive(
     session: *mut mpack_rpc_session_t,
     buf: *mut *const c_char,
     buflen: *mut size_t,
@@ -337,7 +334,7 @@ unsafe fn send(
 
 /// # Safety
 /// See [`send`].
-pub unsafe extern "C-unwind" fn mpack_rpc_request(
+pub unsafe fn mpack_rpc_request(
     session: *mut mpack_rpc_session_t,
     buf: *mut *mut c_char,
     buflen: *mut size_t,
@@ -352,7 +349,7 @@ pub unsafe extern "C-unwind" fn mpack_rpc_request(
 
 /// # Safety
 /// See [`send`].
-pub unsafe extern "C-unwind" fn mpack_rpc_reply(
+pub unsafe fn mpack_rpc_reply(
     session: *mut mpack_rpc_session_t,
     buf: *mut *mut c_char,
     buflen: *mut size_t,
@@ -367,7 +364,7 @@ pub unsafe extern "C-unwind" fn mpack_rpc_reply(
 
 /// # Safety
 /// See [`send`].
-pub unsafe extern "C-unwind" fn mpack_rpc_notify(
+pub unsafe fn mpack_rpc_notify(
     session: *mut mpack_rpc_session_t,
     buf: *mut *mut c_char,
     buflen: *mut size_t,
@@ -386,10 +383,7 @@ pub unsafe extern "C-unwind" fn mpack_rpc_notify(
 ///
 /// # Safety
 /// Both sessions must be initialised and `dst` at least as large as `src`.
-pub unsafe extern "C-unwind" fn mpack_rpc_session_copy(
-    dst: *mut mpack_rpc_session_t,
-    src: *mut mpack_rpc_session_t,
-) {
+pub unsafe fn mpack_rpc_session_copy(dst: *mut mpack_rpc_session_t, src: *mut mpack_rpc_session_t) {
     unsafe {
         debug_assert!((*src).capacity <= (*dst).capacity);
         (*dst).reader = (*src).reader;

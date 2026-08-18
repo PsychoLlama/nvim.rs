@@ -50,9 +50,7 @@ const EMPTY_STRING: String_0 = String_0 {
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with a table on top.
-pub(crate) unsafe extern "C-unwind" fn nlua_traverse_table(
-    lstate: *mut lua_State,
-) -> LuaTableProps {
+pub(crate) unsafe fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProps {
     unsafe {
         let mut tsize: size_t = 0; // Total number of keys.
         let mut val_type: c_int = 0; // If has_val_key: Lua type of the value.
@@ -174,7 +172,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_traverse_table(
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top; `err` the caller's
 /// error slot.
-pub unsafe extern "C-unwind" fn nlua_pop_String(
+pub unsafe fn nlua_pop_String(
     lstate: *mut lua_State,
     arena: *mut Arena,
     err: *mut Error,
@@ -198,7 +196,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_String(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_Integer(
+pub unsafe fn nlua_pop_Integer(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     err: *mut Error,
@@ -226,7 +224,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_Integer(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_Boolean(
+pub unsafe fn nlua_pop_Boolean(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     _err: *mut Error,
@@ -243,10 +241,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_Boolean(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_Boolean_strict(
-    lstate: *mut lua_State,
-    err: *mut Error,
-) -> Boolean {
+pub unsafe fn nlua_pop_Boolean_strict(lstate: *mut lua_State, err: *mut Error) -> Boolean {
     unsafe {
         let ret = match lua_type(lstate, -1) {
             LUA_TBOOLEAN => lua_toboolean(lstate, -1) != 0,
@@ -268,7 +263,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_Boolean_strict(
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top; `err` may be null.
 #[inline]
-unsafe extern "C-unwind" fn nlua_check_type(
+unsafe fn nlua_check_type(
     lstate: *mut lua_State,
     err: *mut Error,
     type_0: ObjectType,
@@ -316,11 +311,7 @@ unsafe extern "C-unwind" fn nlua_check_type(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_Float(
-    lstate: *mut lua_State,
-    _arena: *mut Arena,
-    err: *mut Error,
-) -> Float {
+pub unsafe fn nlua_pop_Float(lstate: *mut lua_State, _arena: *mut Arena, err: *mut Error) -> Float {
     unsafe {
         if lua_type(lstate, -1) == LUA_TNUMBER {
             let ret = lua_tonumber(lstate, -1);
@@ -340,7 +331,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_Float(
 ///
 /// # Safety
 /// As [`nlua_pop_String`], with `table_props` this table's own.
-unsafe extern "C-unwind" fn nlua_pop_Array_unchecked(
+unsafe fn nlua_pop_Array_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
     arena: *mut Arena,
@@ -375,11 +366,7 @@ unsafe extern "C-unwind" fn nlua_pop_Array_unchecked(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_Array(
-    lstate: *mut lua_State,
-    arena: *mut Arena,
-    err: *mut Error,
-) -> Array {
+pub unsafe fn nlua_pop_Array(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Array {
     unsafe {
         let table_props = nlua_check_type(lstate, err, kObjectTypeArray);
         if table_props.type_0 != kObjectTypeArray {
@@ -393,7 +380,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_Array(
 ///
 /// # Safety
 /// As [`nlua_pop_Array_unchecked`].
-unsafe extern "C-unwind" fn nlua_pop_Dict_unchecked(
+unsafe fn nlua_pop_Dict_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
     ref_0: bool,
@@ -442,7 +429,7 @@ unsafe extern "C-unwind" fn nlua_pop_Dict_unchecked(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_Dict(
+pub unsafe fn nlua_pop_Dict(
     lstate: *mut lua_State,
     ref_0: bool,
     arena: *mut Arena,
@@ -462,7 +449,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_Dict(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_LuaRef(
+pub unsafe fn nlua_pop_LuaRef(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     _err: *mut Error,
@@ -478,7 +465,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_LuaRef(
 ///
 /// # Safety
 /// As [`nlua_pop_String`].
-pub unsafe extern "C-unwind" fn nlua_pop_handle(
+pub unsafe fn nlua_pop_handle(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     err: *mut Error,

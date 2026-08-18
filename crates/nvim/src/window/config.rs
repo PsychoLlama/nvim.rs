@@ -59,7 +59,7 @@ const TRY_STATE: TryState = TryState {
     did_emsg: 0,
 };
 
-pub unsafe extern "C" fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error) {
+pub unsafe fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error) {
     // SAFETY: the caller's promise -- a live window, a live buffer and a live
     // `Error` to report through.
     unsafe { set_buf(Win::new(win), Buf::new(buf), &mut *err) };
@@ -114,7 +114,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     RedrawingDisabled.set(RedrawingDisabled.get() - 1);
 }
 
-pub unsafe extern "C" fn win_fdccol_count(wp: *mut win_T) -> c_int {
+pub unsafe fn win_fdccol_count(wp: *mut win_T) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     fdccol_count(unsafe { Win::new(wp) })
 }
@@ -140,7 +140,7 @@ fn fdccol_count(wp: Win) -> c_int {
     fdccol.min(unsafe { getDeepestNesting(wp.raw()) })
 }
 
-pub unsafe extern "C" fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {
+pub unsafe fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {
     // SAFETY: the caller's promise -- a live config to overwrite.
     unsafe { merge(&mut *dst, src) };
 }
@@ -159,7 +159,7 @@ fn merge(dst: &mut WinConfig, src: WinConfig) {
     *dst = src;
 }
 
-pub unsafe extern "C" fn clear_float_config(fconfig: *mut WinConfig, free_fields: bool) {
+pub unsafe fn clear_float_config(fconfig: *mut WinConfig, free_fields: bool) {
     // SAFETY: the caller's promise -- a live config.
     unsafe { clear_float(&mut *fconfig, free_fields) };
 }
@@ -181,7 +181,7 @@ fn clear_float(fconfig: &mut WinConfig, free_fields: bool) {
 // ---------------------------------------------------------------------------
 // Telling the UI where a window sits
 
-pub unsafe extern "C" fn ui_ext_win_position(wp: *mut win_T, validate: bool) {
+pub unsafe fn ui_ext_win_position(wp: *mut win_T, validate: bool) {
     // SAFETY: the caller's promise -- a live window.
     ext_win_position(unsafe { Win::new(wp) }, validate);
 }
@@ -376,7 +376,7 @@ fn anchor_to_window(
     *col += (tcol - 1) as Float;
 }
 
-pub unsafe extern "C" fn ui_ext_win_viewport(wp: *mut win_T) {
+pub unsafe fn ui_ext_win_viewport(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     ext_win_viewport(unsafe { Win::new(wp) });
 }
@@ -483,7 +483,7 @@ fn text_height(
 // ---------------------------------------------------------------------------
 // May the layout change at all?
 
-pub unsafe extern "C" fn check_split_disallowed(wp: *const win_T) -> c_int {
+pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
     let mut err = Error {
         type_0: kErrorTypeNone,
         msg: ptr::null_mut::<c_char>(),
@@ -499,7 +499,7 @@ pub unsafe extern "C" fn check_split_disallowed(wp: *const win_T) -> c_int {
     if ok { OK } else { FAIL }
 }
 
-pub unsafe extern "C" fn check_split_disallowed_err(wp: *const win_T, err: *mut Error) -> bool {
+pub unsafe fn check_split_disallowed_err(wp: *const win_T, err: *mut Error) -> bool {
     if split_disallowed.get() > 0 {
         let msg = c"E242: Can't split a window while closing another".as_ptr();
         // SAFETY: a live `Error` and a static message.

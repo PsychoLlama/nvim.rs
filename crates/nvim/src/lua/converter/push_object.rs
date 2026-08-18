@@ -28,7 +28,7 @@ use crate::types::{
 /// # Safety
 /// `lstate` must be a live Lua state with room for one more value.
 #[inline]
-pub(crate) unsafe extern "C-unwind" fn nlua_push_type_idx(lstate: *mut lua_State) {
+pub(crate) unsafe fn nlua_push_type_idx(lstate: *mut lua_State) {
     unsafe { lua_pushboolean(lstate, TYPE_IDX_VALUE as c_int) };
 }
 
@@ -37,7 +37,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_push_type_idx(lstate: *mut lua_State
 /// # Safety
 /// As [`nlua_push_type_idx`].
 #[inline]
-pub(crate) unsafe extern "C-unwind" fn nlua_push_val_idx(lstate: *mut lua_State) {
+pub(crate) unsafe fn nlua_push_val_idx(lstate: *mut lua_State) {
     unsafe { lua_pushboolean(lstate, VAL_IDX_VALUE as c_int) };
 }
 
@@ -47,7 +47,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_push_val_idx(lstate: *mut lua_State)
 /// # Safety
 /// As [`nlua_push_type_idx`].
 #[inline]
-pub(crate) unsafe extern "C-unwind" fn nlua_create_typed_table(
+pub(crate) unsafe fn nlua_create_typed_table(
     lstate: *mut lua_State,
     narr: size_t,
     nrec: size_t,
@@ -65,11 +65,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_create_typed_table(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `s` a live api string.
-pub unsafe extern "C-unwind" fn nlua_push_String(
-    lstate: *mut lua_State,
-    s: String_0,
-    _flags: c_int,
-) {
+pub unsafe fn nlua_push_String(lstate: *mut lua_State, s: String_0, _flags: c_int) {
     unsafe {
         // A zero-length api string may carry a null pointer, which
         // lua_pushlstring will not take even for zero bytes.
@@ -84,11 +80,7 @@ pub unsafe extern "C-unwind" fn nlua_push_String(
 
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe extern "C-unwind" fn nlua_push_Integer(
-    lstate: *mut lua_State,
-    n: Integer,
-    _flags: c_int,
-) {
+pub unsafe fn nlua_push_Integer(lstate: *mut lua_State, n: Integer, _flags: c_int) {
     unsafe { lua_pushnumber(lstate, n as lua_Number) };
 }
 
@@ -98,7 +90,7 @@ pub unsafe extern "C-unwind" fn nlua_push_Integer(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe extern "C-unwind" fn nlua_push_Float(lstate: *mut lua_State, f: Float, flags: c_int) {
+pub unsafe fn nlua_push_Float(lstate: *mut lua_State, f: Float, flags: c_int) {
     unsafe {
         if flags & kNluaPushSpecial as c_int != 0 {
             nlua_create_typed_table(lstate, 0, 1, kObjectTypeFloat);
@@ -113,11 +105,7 @@ pub unsafe extern "C-unwind" fn nlua_push_Float(lstate: *mut lua_State, f: Float
 
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe extern "C-unwind" fn nlua_push_Boolean(
-    lstate: *mut lua_State,
-    b: Boolean,
-    _flags: c_int,
-) {
+pub unsafe fn nlua_push_Boolean(lstate: *mut lua_State, b: Boolean, _flags: c_int) {
     unsafe { lua_pushboolean(lstate, b as c_int) };
 }
 
@@ -127,7 +115,7 @@ pub unsafe extern "C-unwind" fn nlua_push_Boolean(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `dict` a live api dictionary.
-pub unsafe extern "C-unwind" fn nlua_push_Dict(lstate: *mut lua_State, dict: Dict, flags: c_int) {
+pub unsafe fn nlua_push_Dict(lstate: *mut lua_State, dict: Dict, flags: c_int) {
     unsafe {
         lua_createtable(lstate, 0, dict.size as c_int);
         if dict.size == 0 {
@@ -144,11 +132,7 @@ pub unsafe extern "C-unwind" fn nlua_push_Dict(lstate: *mut lua_State, dict: Dic
 
 /// # Safety
 /// `lstate` must be a live Lua state and `array` a live api array.
-pub unsafe extern "C-unwind" fn nlua_push_Array(
-    lstate: *mut lua_State,
-    array: Array,
-    flags: c_int,
-) {
+pub unsafe fn nlua_push_Array(lstate: *mut lua_State, array: Array, flags: c_int) {
     unsafe {
         lua_createtable(lstate, array.size as c_int, 0);
         for i in 0..array.size {
@@ -160,11 +144,7 @@ pub unsafe extern "C-unwind" fn nlua_push_Array(
 
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe extern "C-unwind" fn nlua_push_handle(
-    lstate: *mut lua_State,
-    item: handle_T,
-    _flags: c_int,
-) {
+pub unsafe fn nlua_push_handle(lstate: *mut lua_State, item: handle_T, _flags: c_int) {
     unsafe { lua_pushnumber(lstate, item as lua_Number) };
 }
 
@@ -176,11 +156,7 @@ pub unsafe extern "C-unwind" fn nlua_push_handle(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `obj` a live api object.
-pub unsafe extern "C-unwind" fn nlua_push_Object(
-    lstate: *mut lua_State,
-    obj: *mut Object,
-    flags: c_int,
-) {
+pub unsafe fn nlua_push_Object(lstate: *mut lua_State, obj: *mut Object, flags: c_int) {
     unsafe {
         match (*obj).type_0 {
             kObjectTypeNil => {

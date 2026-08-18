@@ -46,7 +46,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_parser(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn parser_check(
+pub(crate) unsafe fn parser_check(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut TSParser {

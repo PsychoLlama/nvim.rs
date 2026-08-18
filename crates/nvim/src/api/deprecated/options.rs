@@ -123,7 +123,7 @@ pub unsafe extern "C" fn nvim_win_set_option(
     }
 }
 
-unsafe extern "C" fn get_option_from(
+unsafe fn get_option_from(
     mut from: *mut ::core::ffi::c_void,
     mut scope: OptScope,
     mut name: String_0,
@@ -187,7 +187,7 @@ unsafe extern "C" fn get_option_from(
     }
 }
 
-unsafe extern "C" fn set_option_to(
+unsafe fn set_option_to(
     mut channel_id: uint64_t,
     mut to: *mut ::core::ffi::c_void,
     mut scope: OptScope,

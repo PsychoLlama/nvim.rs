@@ -475,7 +475,7 @@ fn announce_new_buffer(buf: Buf, flags: c_int) -> bool {
 
 /// Whether the current buffer is empty, unnamed, unmodified and shown in
 /// only one window -- which means it can be reused.
-pub unsafe extern "C" fn curbuf_reusable() -> bool {
+pub unsafe fn curbuf_reusable() -> bool {
     let Some(mut buf) = current_buf() else {
         return false;
     };
@@ -494,7 +494,7 @@ pub unsafe extern "C" fn curbuf_reusable() -> bool {
 
 /// Free the memory for a buffer's options. `free_p_ff` frees `'fileformat'`,
 /// `'buftype'` and `'fileencoding'` too.
-pub unsafe extern "C" fn free_buf_options(buf: *mut buf_T, free_p_ff: bool) {
+pub unsafe fn free_buf_options(buf: *mut buf_T, free_p_ff: bool) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     if free_p_ff {
@@ -580,7 +580,7 @@ pub unsafe extern "C" fn free_buf_options(buf: *mut buf_T, free_p_ff: bool) {
 // Switching to one
 
 /// Go to buffer `n`, putting the cursor where it was left.
-pub unsafe extern "C" fn buflist_getfile(
+pub unsafe fn buflist_getfile(
     n: c_int,
     mut lnum: linenr_T,
     options: c_int,
@@ -678,7 +678,7 @@ fn goto_existing_window(mut buf: Buf) -> bool {
 }
 
 /// Put the cursor where it was left in the current buffer.
-pub(crate) unsafe extern "C" fn buflist_getfpos() {
+pub(crate) unsafe fn buflist_getfpos() {
     // SAFETY: the current buffer; the answer is a live mark.
     let fm = unsafe { buflist_findfmark(curbuf.get()) };
     // SAFETY: a live mark.
@@ -705,7 +705,7 @@ pub(crate) unsafe extern "C" fn buflist_getfpos() {
 // Finding one by name
 
 /// The buffer for `fname`, resolved to a full path first.
-pub unsafe extern "C" fn buflist_findname_exp(fname: *mut c_char) -> *mut buf_T {
+pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> *mut buf_T {
     // SAFETY: a NUL-terminated name; the answer is an allocation or null.
     let ffname = unsafe { FullName_save(fname, true) };
     if ffname.is_null() {
@@ -718,7 +718,7 @@ pub unsafe extern "C" fn buflist_findname_exp(fname: *mut c_char) -> *mut buf_T 
 }
 
 /// The buffer whose full name is `ffname`, or whose file id matches it.
-pub unsafe extern "C" fn buflist_findname(ffname: *mut c_char) -> *mut buf_T {
+pub unsafe fn buflist_findname(ffname: *mut c_char) -> *mut buf_T {
     let mut file_id = NO_FILE_ID;
     // SAFETY: the caller's promise -- a NUL-terminated name -- and a local.
     let file_id_valid = unsafe { os_fileid(ffname, &raw mut file_id) };

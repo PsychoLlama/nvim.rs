@@ -126,18 +126,18 @@ pub unsafe extern "C" fn setmark(mut c: c_int) -> c_int {
     );
 }
 /// Free fmark_T item
-pub unsafe extern "C" fn free_fmark(mut fm: fmark_T) {
+pub unsafe fn free_fmark(mut fm: fmark_T) {
     xfree(fm.additional_data as *mut c_void);
 }
 /// Free xfmark_T item
-pub unsafe extern "C" fn free_xfmark(mut fm: xfmark_T) {
+pub unsafe fn free_xfmark(mut fm: xfmark_T) {
     xfree(fm.fname as *mut c_void);
     free_fmark(fm.fmark);
 }
 /// Free and clear fmark_T item.
 ///
 /// Does not trigger "MarkSet" event.
-pub unsafe extern "C" fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
+pub unsafe fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
     free_fmark(*fm);
     *fm = fmark_T {
         mark: pos_T {
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
 /// `c` — The name of the mark, e.g., 'a'.
 /// `pos` — Position of the mark in the buffer.
 /// `buf` — The buffer of the mark.
-unsafe extern "C" fn do_markset_autocmd(mut c: c_char, mut pos: *mut pos_T, mut buf: *mut buf_T) {
+unsafe fn do_markset_autocmd(mut c: c_char, mut pos: *mut pos_T, mut buf: *mut buf_T) {
     if !has_event(EVENT_MARKSET) {
         return;
     }
@@ -231,7 +231,7 @@ unsafe extern "C" fn do_markset_autocmd(mut c: c_char, mut pos: *mut pos_T, mut 
 /// Set named mark "c" to position "pos".
 /// When "c" is upper case use file "fnum".
 /// Returns OK on success, FAIL if bad name given.
-pub unsafe extern "C" fn setmark_pos(
+pub unsafe fn setmark_pos(
     mut c: c_int,
     mut pos: *mut pos_T,
     mut fnum: c_int,
@@ -343,7 +343,7 @@ pub unsafe extern "C" fn setmark_pos(
 }
 /// Delete every entry referring to file "fnum" from both the jumplist and the
 /// tag stack.
-pub unsafe extern "C" fn mark_forget_file(mut wp: *mut win_T, mut fnum: c_int) {
+pub unsafe fn mark_forget_file(mut wp: *mut win_T, mut fnum: c_int) {
     mark_jumplist_forget_file(wp, fnum);
     let mut i: c_int = (*wp).w_tagstacklen - 1;
     while i >= 0 {
@@ -372,7 +372,7 @@ pub unsafe extern "C" fn mark_forget_file(mut wp: *mut win_T, mut fnum: c_int) {
 /// `fmp` — pointer to save the mark.
 ///
 /// @return[static] Mark with the given information.
-pub unsafe extern "C" fn pos_to_mark(
+pub unsafe fn pos_to_mark(
     mut buf: *mut buf_T,
     mut fmp: *mut fmark_T,
     mut pos: pos_T,
@@ -401,7 +401,7 @@ pub unsafe extern "C" fn pos_to_mark(
 /// definition, this function restores the "view".
 /// @note  Assumes the mark has been checked, is valid.
 /// `fm` — the named mark.
-pub unsafe extern "C" fn mark_view_restore(mut fm: *mut fmark_T) {
+pub unsafe fn mark_view_restore(mut fm: *mut fmark_T) {
     if !fm.is_null() && (*fm).view.topline_offset >= 0 {
         let mut topline: linenr_T = (*fm).mark.lnum - (*fm).view.topline_offset;
         if topline >= 1 {
@@ -417,7 +417,7 @@ pub unsafe extern "C" fn mark_view_restore(mut fm: *mut fmark_T) {
         }
     }
 }
-pub unsafe extern "C" fn mark_view_make(mut wp: *const win_T, mut pos: pos_T) -> fmarkv_T {
+pub unsafe fn mark_view_make(mut wp: *const win_T, mut pos: pos_T) -> fmarkv_T {
     return fmarkv_T {
         topline_offset: pos.lnum - (*wp).w_topline,
         skipcol: (*wp).w_skipcol,
@@ -426,7 +426,7 @@ pub unsafe extern "C" fn mark_view_make(mut wp: *const win_T, mut pos: pos_T) ->
 /// For an xtended filemark: set the fnum from the fname.
 /// This is used for marks obtained from the .shada file.  It's postponed
 /// until the mark is used to avoid a long startup delay.
-unsafe extern "C" fn fname2fnum(mut fm: *mut xfmark_T) {
+unsafe fn fname2fnum(mut fm: *mut xfmark_T) {
     if (*fm).fname.is_null() {
         return;
     }
@@ -458,7 +458,7 @@ unsafe extern "C" fn fname2fnum(mut fm: *mut xfmark_T) {
 /// Check all file marks for a name that matches the file name in buf.
 /// May replace the name with an fnum.
 /// Used for marks that come from the .shada file.
-pub unsafe extern "C" fn fmarks_check_names(mut buf: *mut buf_T) {
+pub unsafe fn fmarks_check_names(mut buf: *mut buf_T) {
     let mut name: *mut c_char = (*buf).b_ffname;
     if (*buf).b_ffname.is_null() {
         return;
@@ -490,11 +490,7 @@ pub unsafe extern "C" fn fmarks_check_names(mut buf: *mut buf_T) {
         wp = (*wp).w_next;
     }
 }
-unsafe extern "C" fn fmarks_check_one(
-    mut fm: *mut xfmark_T,
-    mut name: *mut c_char,
-    mut buf: *mut buf_T,
-) {
+unsafe fn fmarks_check_one(mut fm: *mut xfmark_T, mut name: *mut c_char, mut buf: *mut buf_T) {
     if (*fm).fmark.fnum == 0 && !(*fm).fname.is_null() && path_fnamecmp(name, (*fm).fname) == 0 {
         (*fm).fmark.fnum = (*buf).handle as c_int;
         let mut ptr_: *mut *mut c_void = &raw mut (*fm).fname as *mut *mut c_void;
@@ -514,10 +510,7 @@ unsafe extern "C" fn fmarks_check_one(
 /// `errormsg[out]` — Error message, if any.
 ///
 /// Returns true if the mark passes all the above checks, else false.
-pub unsafe extern "C" fn mark_check(
-    mut fm: *mut fmark_T,
-    mut errormsg: *mut *const c_char,
-) -> bool {
+pub unsafe fn mark_check(mut fm: *mut fmark_T, mut errormsg: *mut *const c_char) -> bool {
     if fm.is_null() {
         *errormsg = gettext(&raw const e_umark as *const c_char);
         return false;
@@ -539,7 +532,7 @@ pub unsafe extern "C" fn mark_check(
 /// `fm` — Mark to check.
 /// `errormsg[out]` — Error message, if any.
 /// Returns true if below line count else false.
-pub unsafe extern "C" fn mark_check_line_bounds(
+pub unsafe fn mark_check_line_bounds(
     mut buf: *mut buf_T,
     mut fm: *mut fmark_T,
     mut errormsg: *mut *const c_char,
@@ -557,7 +550,7 @@ pub unsafe extern "C" fn mark_check_line_bounds(
 /// Does not trigger "MarkSet" event.
 ///
 /// `buf` — Buffer to clear marks in.
-pub unsafe extern "C" fn clrallmarks(buf: *mut buf_T, timestamp: Timestamp) {
+pub unsafe fn clrallmarks(buf: *mut buf_T, timestamp: Timestamp) {
     let mut i: size_t = 0;
     while i < NMARKS as size_t {
         clear_fmark((&raw mut (*buf).b_namedm as *mut fmark_T).add(i), timestamp);
@@ -579,7 +572,7 @@ pub unsafe extern "C" fn clrallmarks(buf: *mut buf_T, timestamp: Timestamp) {
     }
     (*buf).b_changelistlen = 0;
 }
-pub unsafe extern "C" fn set_last_cursor(mut win: *mut win_T) {
+pub unsafe fn set_last_cursor(mut win: *mut win_T) {
     if !(*win).w_buffer.is_null() {
         let fmarkp___: *mut fmark_T = &raw mut (*(*win).w_buffer).b_last_cursor;
         free_fmark(*fmarkp___);
@@ -600,7 +593,7 @@ pub unsafe extern "C" fn set_last_cursor(mut win: *mut win_T) {
 ///
 /// `buf` — Buffer to adjust position in.
 /// `lp` — Position to adjust.
-pub unsafe extern "C" fn mark_mb_adjustpos(mut buf: *mut buf_T, mut lp: *mut pos_T) {
+pub unsafe fn mark_mb_adjustpos(mut buf: *mut buf_T, mut lp: *mut pos_T) {
     if (*lp).col > 0 || (*lp).coladd > 1 {
         let p: *const c_char = ml_get_buf(buf, (*lp).lnum);
         if *p as c_int == NUL || ml_get_buf_len(buf, (*lp).lnum) < (*lp).col {

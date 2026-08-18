@@ -282,7 +282,7 @@ pub unsafe extern "C" fn os_dirname(buf: *mut c_char, mut len: size_t) -> c_int 
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-pub unsafe extern "C" fn os_isrealdir(name: *const c_char) -> bool {
+pub unsafe fn os_isrealdir(name: *const c_char) -> bool {
     // `lstat`, not `stat`: a symlink to a directory is not one, though
     // `os_isdir` says it is.
     fs_request(
@@ -332,7 +332,7 @@ pub unsafe extern "C" fn os_nodetype(name: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `buffer` must address `*size` writable bytes.
-pub unsafe extern "C" fn os_exepath(buffer: *mut c_char, size: *mut size_t) -> c_int {
+pub unsafe fn os_exepath(buffer: *mut c_char, size: *mut size_t) -> c_int {
     // SAFETY: the caller's buffer and its length, both non-null.
     unsafe { uv_exepath(buffer, size) }
 }
@@ -463,7 +463,7 @@ fn fopen_flags(mode: &[u8]) -> Option<c_int> {
 /// # Safety
 /// `path` must be null or NUL-terminated, and `flags` a NUL-terminated
 /// `fopen` mode string.
-pub unsafe extern "C" fn os_fopen(path: *const c_char, flags: *const c_char) -> *mut FILE {
+pub unsafe fn os_fopen(path: *const c_char, flags: *const c_char) -> *mut FILE {
     debug_assert!(!flags.is_null());
     // SAFETY: the caller's NUL-terminated mode string.
     let mode = unsafe { CStr::from_ptr(flags) }.to_bytes();
@@ -490,7 +490,7 @@ pub unsafe extern "C" fn os_fopen(path: *const c_char, flags: *const c_char) -> 
 ///
 /// # Safety
 /// `fd` must be a descriptor this process owns.
-pub unsafe extern "C" fn os_set_cloexec(fd: c_int) -> c_int {
+pub unsafe fn os_set_cloexec(fd: c_int) -> c_int {
     // SAFETY: `fcntl` on the caller's descriptor, and `errno` is this
     // thread's. The line numbers are the sites in `v0.12.4:os/fs.c`.
     unsafe {
@@ -561,7 +561,7 @@ pub unsafe extern "C" fn os_dup(fd: c_int) -> c_int {
 
 /// The descriptor to read stdin from: the one `--` handed us if there is
 /// one, and otherwise a duplicate of the real stdin.
-pub unsafe extern "C" fn os_open_stdin_fd() -> c_int {
+pub unsafe fn os_open_stdin_fd() -> c_int {
     if stdin_fd.get() > 0 {
         stdin_fd.get()
     } else {
@@ -737,11 +737,7 @@ pub unsafe extern "C" fn os_write(
 ///
 /// # Safety
 /// Both paths must be NUL-terminated strings.
-pub unsafe extern "C" fn os_copy(
-    path: *const c_char,
-    new_path: *const c_char,
-    flags: c_int,
-) -> c_int {
+pub unsafe fn os_copy(path: *const c_char, new_path: *const c_char, flags: c_int) -> c_int {
     // SAFETY: the caller's NUL-terminated paths.
     fs_result(|req| unsafe { uv_fs_copyfile(NO_LOOP, req, path, new_path, flags, None) })
 }
@@ -750,7 +746,7 @@ pub unsafe extern "C" fn os_copy(
 ///
 /// # Safety
 /// `fd` must be a descriptor this process owns.
-pub unsafe extern "C" fn os_fsync(fd: c_int) -> c_int {
+pub unsafe fn os_fsync(fd: c_int) -> c_int {
     // SAFETY: the caller's descriptor.
     let r = fs_result(|req| unsafe { uv_fs_fsync(NO_LOOP, req, fd as uv_file, None) });
     g_stats.with_mut(|stats| stats.fsync += 1);
@@ -763,11 +759,7 @@ pub unsafe extern "C" fn os_fsync(fd: c_int) -> c_int {
 /// # Safety
 /// `buf` must be null or address `len` writable bytes, and `name` must be a
 /// NUL-terminated string.
-pub unsafe extern "C" fn os_realpath(
-    name: *const c_char,
-    mut buf: *mut c_char,
-    len: size_t,
-) -> *mut c_char {
+pub unsafe fn os_realpath(name: *const c_char, mut buf: *mut c_char, len: size_t) -> *mut c_char {
     // `request.ptr` is the resolved path and `uv_fs_req_cleanup` frees
     // it, so the copy has to happen inside the read.
     fs_request(

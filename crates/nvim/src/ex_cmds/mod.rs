@@ -258,7 +258,7 @@ pub unsafe fn check_secure() -> bool {
     }
     false
 }
-pub unsafe extern "C" fn prepare_tagpreview(mut undo_sync: bool) -> bool {
+pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
     unsafe {
         if (*curwin.get()).w_onebuf_opt.wo_pvw != 0 {
             return false_0 != 0;
@@ -309,7 +309,7 @@ pub unsafe extern "C" fn prepare_tagpreview(mut undo_sync: bool) -> bool {
         return true_0 != 0;
     }
 }
-pub unsafe extern "C" fn skip_vimgrep_pat(
+pub unsafe fn skip_vimgrep_pat(
     mut p: *mut ::core::ffi::c_char,
     mut s: *mut *mut ::core::ffi::c_char,
     mut flags: *mut ::core::ffi::c_int,

@@ -78,7 +78,7 @@ impl SavedState {
 ///
 /// # Safety
 /// `cmd` must be the NUL-terminated command line about to be executed.
-pub unsafe extern "C" fn do_debug(cmd: *mut c_char) {
+pub unsafe fn do_debug(cmd: *mut c_char) {
     let saved = SavedState::enter();
     // SAFETY: caller contract.
     unsafe {

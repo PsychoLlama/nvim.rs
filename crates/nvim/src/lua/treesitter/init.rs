@@ -9,7 +9,7 @@
 
 use super::*;
 
-unsafe extern "C-unwind" fn build_meta(
+unsafe fn build_meta(
     mut L: *mut lua_State,
     mut tname: *const ::core::ffi::c_char,
     mut meta: *const luaL_Reg,
@@ -24,7 +24,7 @@ unsafe extern "C-unwind" fn build_meta(
     }
 }
 
-unsafe extern "C-unwind" fn tslua_init(mut L: *mut lua_State) {
+unsafe fn tslua_init(mut L: *mut lua_State) {
     unsafe {
         build_meta(
             L,
@@ -77,9 +77,9 @@ unsafe extern "C-unwind" fn tslua_get_minimum_language_version(
     }
 }
 
-pub unsafe extern "C-unwind" fn nlua_treesitter_free() {}
+pub unsafe fn nlua_treesitter_free() {}
 
-pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
+pub unsafe fn nlua_treesitter_init(lstate: *mut lua_State) {
     unsafe {
         tslua_init(lstate);
         lua_pushcclosure(

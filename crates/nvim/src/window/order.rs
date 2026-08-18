@@ -28,7 +28,7 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::types::{OptInt, frame_T, win_T};
 use crate::winlayer::{Frame, Win, frames};
 
-pub unsafe extern "C" fn make_windows(count: c_int, vertical: bool) -> c_int {
+pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
     let cur = cur_win();
     // Each window needs at least 'winminheight' lines and a status line, and
     // the current window wants 'winheight'.
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn make_windows(count: c_int, vertical: bool) -> c_int {
     count - todo
 }
 
-pub(crate) unsafe extern "C" fn win_exchange(prenum: c_int) {
+pub(crate) unsafe fn win_exchange(prenum: c_int) {
     exchange(prenum);
 }
 
@@ -176,7 +176,7 @@ pub(crate) fn exchange(prenum: c_int) {
     wp.redraw_later(UPD_NOT_VALID);
 }
 
-pub(crate) unsafe extern "C" fn win_rotate(upwards: bool, count: c_int) {
+pub(crate) unsafe fn win_rotate(upwards: bool, count: c_int) {
     rotate(upwards, count);
 }
 
@@ -255,7 +255,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub unsafe extern "C" fn win_splitmove(wp: *mut win_T, size: c_int, flags: c_int) -> c_int {
+pub unsafe fn win_splitmove(wp: *mut win_T, size: c_int, flags: c_int) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     splitmove(unsafe { Win::new(wp) }, size, flags)
 }
@@ -318,7 +318,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
     OK
 }
 
-pub unsafe extern "C" fn win_move_after(win1: *mut win_T, win2: *mut win_T) {
+pub unsafe fn win_move_after(win1: *mut win_T, win2: *mut win_T) {
     // SAFETY: the caller's promise -- two live windows.
     unsafe { move_after(Win::new(win1), Win::new(win2)) };
 }
@@ -373,7 +373,7 @@ fn move_after(win1: Win, win2: Win) {
     unsafe { win_enter(win1.raw(), false) };
 }
 
-pub(crate) unsafe extern "C" fn get_maximum_wincount(fr: *mut frame_T, height: c_int) -> c_int {
+pub(crate) unsafe fn get_maximum_wincount(fr: *mut frame_T, height: c_int) -> c_int {
     // SAFETY: the caller's promise -- a live frame.
     max_wincount(unsafe { Frame::new(fr) }, height)
 }

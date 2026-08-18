@@ -10,11 +10,7 @@
 use super::*;
 use crate::api::private::helpers::has_key;
 
-unsafe extern "C" fn redraw_status(
-    mut wp: *mut win_T,
-    mut opts: *mut KeyDict_redraw,
-    mut flush: *mut bool,
-) {
+unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut flush: *mut bool) {
     unsafe {
         if (*opts).statuscolumn as ::core::ffi::c_int != 0
             && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL

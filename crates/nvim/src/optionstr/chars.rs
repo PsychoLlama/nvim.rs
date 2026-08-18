@@ -336,7 +336,7 @@ fn chars_base(what: CharsOption) -> *mut u8 {
 /// # Safety
 /// `wp` is a live window, `value` a C string, and `errbuf` null or
 /// `errbuflen` writable bytes.
-pub unsafe extern "C" fn set_chars_option(
+pub unsafe fn set_chars_option(
     wp: *mut win_T,
     value: *const c_char,
     what: CharsOption,
@@ -743,7 +743,7 @@ fn field_name(tab: &'static [Field], idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Reads the editor's window list.
-pub unsafe extern "C" fn check_chars_options() -> *const c_char {
+pub unsafe fn check_chars_options() -> *const c_char {
     let check = |wp, value, what, apply| {
         // SAFETY: a live window and a C string; no message is wanted.
         if unsafe { set_chars_option(wp, value, what, apply, ptr::null_mut(), 0) }.is_null() {

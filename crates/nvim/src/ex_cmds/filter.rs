@@ -725,7 +725,7 @@ unsafe fn shell_kind() -> Shell {
 /// # Safety
 /// The three strings must be live, apart from the NULLs allowed above.  The
 /// result is the caller's to `xfree`.
-pub unsafe extern "C" fn make_filter_cmd(
+pub unsafe fn make_filter_cmd(
     cmd: *mut c_char,
     itmp: *mut c_char,
     otmp: *mut c_char,
@@ -849,7 +849,7 @@ fn wrap_group(shell: Shell, cmd: &[u8], buf: &mut Vec<u8>) {
 /// # Safety
 /// `buf` must be a NUL-terminated string in an allocation of `buflen` bytes,
 /// with room left for what is appended; `opt` and `fname` must be live.
-pub unsafe extern "C" fn append_redir(
+pub unsafe fn append_redir(
     buf: *mut c_char,
     buflen: usize,
     opt: *const c_char,

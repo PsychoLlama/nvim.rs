@@ -44,7 +44,7 @@ const FIRST_DEV_MODULE: &CStr = c"vim.inspect";
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with the `vim` table on top.
-pub(crate) unsafe extern "C-unwind" fn nlua_common_vim_init(
+pub(crate) unsafe fn nlua_common_vim_init(
     lstate: *mut lua_State,
     is_thread: bool,
     is_standalone: bool,
@@ -138,10 +138,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_module_preloader(lstate: *mut lua_St
 ///
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub(crate) unsafe extern "C-unwind" fn nlua_init_packages(
-    lstate: *mut lua_State,
-    is_standalone: bool,
-) -> bool {
+pub(crate) unsafe fn nlua_init_packages(lstate: *mut lua_State, is_standalone: bool) -> bool {
     unsafe {
         lua_getglobal(lstate, c"package".as_ptr());
         lua_getfield(lstate, -1, c"preload".as_ptr());

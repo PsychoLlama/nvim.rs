@@ -11,7 +11,7 @@
 
 use super::*;
 
-pub(crate) unsafe extern "C" fn tv_list_item_alloc() -> *mut listitem_T {
+pub(crate) unsafe fn tv_list_item_alloc() -> *mut listitem_T {
     unsafe { xmalloc(::core::mem::size_of::<listitem_T>()) as *mut listitem_T }
 }
 
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn tv_list_watch_remove(l: *mut list_T, lwrem: *mut listwa
 ///
 /// This is what keeps a `:for` loop walking a list whose current item is
 /// removed underneath it.
-pub(crate) unsafe extern "C" fn tv_list_watch_fix(l: *mut list_T, item: *const listitem_T) {
+pub(crate) unsafe fn tv_list_watch_fix(l: *mut list_T, item: *const listitem_T) {
     unsafe {
         let mut lw = (*l).lv_watch;
         while !lw.is_null() {
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut list_T {
 /// Initialise a stack-allocated ten-item list, all items zeroed and linked.
 ///
 /// The list is `VAR_FIXED` and carries `DO_NOT_FREE_CNT`, so nothing frees it.
-pub unsafe extern "C" fn tv_list_init_static10(sl: *mut staticList10_T) {
+pub unsafe fn tv_list_init_static10(sl: *mut staticList10_T) {
     unsafe {
         let l = &raw mut (*sl).sl_list;
         let items = (&raw mut (*sl).sl_items).cast::<listitem_T>();
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn tv_list_init_static10(sl: *mut staticList10_T) {
 }
 
 /// Initialise a stack-allocated empty list that nothing may free.
-pub unsafe extern "C" fn tv_list_init_static(l: *mut list_T) {
+pub unsafe fn tv_list_init_static(l: *mut list_T) {
     unsafe {
         l.write_bytes(0, 1);
         (*l).lv_refcount = DO_NOT_FREE_CNT as ::core::ffi::c_int;
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn tv_list_remove_items(
 }
 
 /// Move the items `item..=item2` (`cnt` of them) from `l` onto `tgt_l`'s tail.
-pub unsafe extern "C" fn tv_list_move_items(
+pub unsafe fn tv_list_move_items(
     l: *mut list_T,
     item: *mut listitem_T,
     item2: *mut listitem_T,

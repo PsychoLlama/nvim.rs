@@ -130,7 +130,7 @@ pub const VALID_CROW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 /// # Safety
 /// `wp` must be a live window, `lnum` one of its buffer's lines, and `spv` a
 /// live `spellvars_T`.
-pub unsafe extern "C" fn win_line(
+pub unsafe fn win_line(
     wp: *mut win_T,
     lnum: linenr_T,
     startrow: ::core::ffi::c_int,

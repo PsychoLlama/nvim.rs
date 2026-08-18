@@ -152,7 +152,7 @@ unsafe extern "C" fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_vo
 /// # Safety
 /// `lstate` must be a live Lua state with the condition at slot 2, and every
 /// out-parameter writable.
-unsafe extern "C-unwind" fn nlua_wait_condition(
+unsafe fn nlua_wait_condition(
     lstate: *mut lua_State,
     status: *mut c_int,
     callback_result: *mut bool,
@@ -310,7 +310,7 @@ pub unsafe extern "C-unwind" fn nlua_in_fast_event(lstate: *mut lua_State) -> c_
 ///
 /// # Safety
 /// `name` must be a NUL-terminated function name.
-pub(crate) unsafe extern "C-unwind" fn viml_func_is_fast(name: *const core::ffi::c_char) -> bool {
+pub(crate) unsafe fn viml_func_is_fast(name: *const core::ffi::c_char) -> bool {
     unsafe {
         let fdef: *const EvalFuncDef = find_internal_func(name);
         !fdef.is_null() && (*fdef).fast
@@ -318,6 +318,6 @@ pub(crate) unsafe extern "C-unwind" fn viml_func_is_fast(name: *const core::ffi:
 }
 
 /// Whether anything that is not `fast` may run right now.
-pub unsafe extern "C-unwind" fn nlua_is_deferred_safe() -> bool {
+pub unsafe fn nlua_is_deferred_safe() -> bool {
     in_fast_callback.get() == 0
 }

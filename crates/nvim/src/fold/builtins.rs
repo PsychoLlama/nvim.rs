@@ -18,7 +18,7 @@ use super::*;
 use crate::types::{VAR_STRING, VV_FOLDDASHES, VV_FOLDEND, VV_FOLDSTART};
 
 /// "foldclosed()" and "foldclosedend()" functions
-pub(super) unsafe extern "C" fn foldclosed_both(
+pub(super) unsafe fn foldclosed_both(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut end: bool,

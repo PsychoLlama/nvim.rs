@@ -75,12 +75,12 @@ pub unsafe extern "C" fn tv_get_number_chk(
 }
 
 /// `tv` as a boolean number: -1 when it has no numeric form.
-pub unsafe extern "C" fn tv_get_bool(tv: *const typval_T) -> varnumber_T {
+pub unsafe fn tv_get_bool(tv: *const typval_T) -> varnumber_T {
     unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) }
 }
 
 /// `tv` as a boolean number, setting `*ret_error` when it has no numeric form.
-pub unsafe extern "C" fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T {
+pub unsafe fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T {
     unsafe { tv_get_number_chk(tv, ret_error) }
 }
 
@@ -104,7 +104,7 @@ pub unsafe extern "C" fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
-pub unsafe extern "C" fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_T {
+pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_T {
     unsafe {
         if (*tv).v_type == VAR_STRING
             && !(*tv).vval.v_string.is_null()
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn tv_get_string_buf(
 }
 
 /// Truthiness of `tv`, as `if` and `while` ask for it.
-pub unsafe extern "C" fn tv2bool(tv: *const typval_T) -> bool {
+pub unsafe fn tv2bool(tv: *const typval_T) -> bool {
     unsafe {
         match (*tv).v_type {
             VAR_NUMBER => (*tv).vval.v_number != 0,

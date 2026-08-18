@@ -11,7 +11,7 @@
 use super::*;
 use crate::kvec::Kvec;
 
-unsafe extern "C" fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) -> bool {
+unsafe fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) -> bool {
     unsafe {
         if anchor.size == 0 as size_t {
             *out = 0 as ::core::ffi::c_int;
@@ -33,10 +33,7 @@ unsafe extern "C" fn parse_float_anchor(mut anchor: String_0, mut out: *mut Floa
     }
 }
 
-unsafe extern "C" fn parse_float_relative(
-    mut relative: String_0,
-    mut out: *mut FloatRelative,
-) -> bool {
+unsafe fn parse_float_relative(mut relative: String_0, mut out: *mut FloatRelative) -> bool {
     unsafe {
         let mut str: *mut ::core::ffi::c_char = relative.data;
         if striequal(str, c"editor".as_ptr()) {
@@ -58,7 +55,7 @@ unsafe extern "C" fn parse_float_relative(
     }
 }
 
-unsafe extern "C" fn parse_config_split(mut split: String_0, mut out: *mut WinSplit) -> bool {
+unsafe fn parse_config_split(mut split: String_0, mut out: *mut WinSplit) -> bool {
     unsafe {
         let mut str: *mut ::core::ffi::c_char = split.data;
         if striequal(str, c"left".as_ptr()) {
@@ -76,7 +73,7 @@ unsafe extern "C" fn parse_config_split(mut split: String_0, mut out: *mut WinSp
     }
 }
 
-unsafe extern "C" fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T) -> bool {
+unsafe fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T) -> bool {
     unsafe {
         if bufpos.size != 2 as size_t
             || (*bufpos.items.offset(0 as ::core::ffi::c_int as isize)).type_0
@@ -98,7 +95,7 @@ unsafe extern "C" fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T)
     }
 }
 
-unsafe extern "C" fn parse_bordertext(
+unsafe fn parse_bordertext(
     mut bordertext: Object,
     mut bordertext_type: BorderTextType,
     mut fconfig: *mut WinConfig,
@@ -176,7 +173,7 @@ unsafe extern "C" fn parse_bordertext(
     }
 }
 
-unsafe extern "C" fn parse_bordertext_pos(
+unsafe fn parse_bordertext_pos(
     mut wp: *mut win_T,
     mut bordertext_pos: String_0,
     mut bordertext_type: BorderTextType,
@@ -227,7 +224,7 @@ unsafe extern "C" fn parse_bordertext_pos(
     }
 }
 
-pub(crate) unsafe extern "C" fn parse_win_config(
+pub(crate) unsafe fn parse_win_config(
     mut wp: *mut win_T,
     mut config: *mut KeyDict_win_config,
     mut fconfig: *mut WinConfig,

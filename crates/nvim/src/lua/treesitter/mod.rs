@@ -391,16 +391,13 @@ pub const MAP_INIT: Map_cstr_t_ptr_t = Map_cstr_t_ptr_t {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C-unwind" fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
+unsafe fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
     unsafe {
         return mh_get_cstr_t(set, key) != MH_TOMBSTONE as uint32_t;
     }
 }
 #[inline]
-unsafe extern "C-unwind" fn map_get_int_ptr_t(
-    mut map: *mut Map_int_ptr_t,
-    mut key: ::core::ffi::c_int,
-) -> ptr_t {
+unsafe fn map_get_int_ptr_t(mut map: *mut Map_int_ptr_t, mut key: ::core::ffi::c_int) -> ptr_t {
     unsafe {
         let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
         return if k == MH_TOMBSTONE as uint32_t {
@@ -411,11 +408,7 @@ unsafe extern "C-unwind" fn map_get_int_ptr_t(
     }
 }
 #[inline]
-unsafe extern "C-unwind" fn map_put_cstr_t_ptr_t(
-    mut map: *mut Map_cstr_t_ptr_t,
-    mut key: cstr_t,
-    mut value: ptr_t,
-) {
+unsafe fn map_put_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t, mut value: ptr_t) {
     unsafe {
         let mut val: *mut ptr_t = map_put_ref_cstr_t_ptr_t(
             map,
@@ -427,10 +420,7 @@ unsafe extern "C-unwind" fn map_put_cstr_t_ptr_t(
     }
 }
 #[inline]
-unsafe extern "C-unwind" fn map_get_cstr_t_ptr_t(
-    mut map: *mut Map_cstr_t_ptr_t,
-    mut key: cstr_t,
-) -> ptr_t {
+unsafe fn map_get_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t) -> ptr_t {
     unsafe {
         let mut k: uint32_t = mh_get_cstr_t(&raw mut (*map).set, key);
         return if k == MH_TOMBSTONE as uint32_t {

@@ -19,7 +19,7 @@ use std::ffi::CStr;
 /// The file name at the cursor, or the Visual selection when there is one.
 ///
 /// Returns the name in allocated memory, NULL for failure.
-pub unsafe extern "C" fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *mut c_char {
+pub unsafe fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *mut c_char {
     unsafe {
         let options = (FNAME_MESS | FNAME_EXP | FNAME_REL | FNAME_UNESC) as c_int;
         if !VIsual_active.get() {
@@ -55,7 +55,7 @@ pub unsafe extern "C" fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) 
 /// - `FNAME_EXP`   expand to path
 /// - `FNAME_HYP`   check for hypertext link
 /// - `FNAME_INCL`  apply `'includeexpr'`
-pub unsafe extern "C" fn file_name_at_cursor(
+pub unsafe fn file_name_at_cursor(
     options: c_int,
     count: c_int,
     file_lnum: *mut linenr_T,
@@ -193,7 +193,7 @@ unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
 /// @param file_lnum  line number after the file name
 ///
 /// Otherwise like [`file_name_at_cursor`].
-pub unsafe extern "C" fn file_name_in_line(
+pub unsafe fn file_name_in_line(
     line: *mut c_char,
     col: c_int,
     options: c_int,
@@ -245,7 +245,7 @@ pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c
 /// Otherwise like [`file_name_at_cursor`].
 ///
 /// @param rel_fname  file we are searching relative to
-pub unsafe extern "C" fn find_file_name_in_path(
+pub unsafe fn find_file_name_in_path(
     ptr: *mut c_char,
     len: size_t,
     options: c_int,

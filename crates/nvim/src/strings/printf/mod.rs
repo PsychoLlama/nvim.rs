@@ -172,7 +172,7 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     }
 }
 
-pub unsafe extern "C" fn vim_vsnprintf(
+pub unsafe fn vim_vsnprintf(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,

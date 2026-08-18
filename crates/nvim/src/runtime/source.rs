@@ -86,7 +86,7 @@ pub unsafe fn ex_options(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `cookie` is a live [`source_cookie_T`].
-pub unsafe extern "C" fn source_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
+pub unsafe fn source_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
     // SAFETY: the caller's contract.
     unsafe { &raw mut (*cookie.cast::<source_cookie_T>()).breakpoint }
 }
@@ -95,7 +95,7 @@ pub unsafe extern "C" fn source_breakpoint(cookie: *mut c_void) -> *mut linenr_T
 ///
 /// # Safety
 /// `cookie` is a live [`source_cookie_T`].
-pub unsafe extern "C" fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
+pub unsafe fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
     // SAFETY: the caller's contract.
     unsafe { &raw mut (*cookie.cast::<source_cookie_T>()).dbg_tick }
 }
@@ -104,7 +104,7 @@ pub unsafe extern "C" fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
 ///
 /// # Safety
 /// `cookie` is a live [`source_cookie_T`].
-pub unsafe extern "C" fn source_level(cookie: *mut c_void) -> c_int {
+pub unsafe fn source_level(cookie: *mut c_void) -> c_int {
     // SAFETY: the caller's contract.
     unsafe { (*cookie.cast::<source_cookie_T>()).level }
 }
@@ -134,7 +134,7 @@ unsafe fn fopen_noinh_readbin(filename: *mut c_char) -> *mut FILE {
 /// # Safety
 /// `ga` is a garray the caller is collecting a script line in, and `p` names
 /// `len` readable bytes.
-pub(crate) unsafe extern "C" fn concat_continued_line(
+pub(crate) unsafe fn concat_continued_line(
     ga: *mut garray_T,
     init_growsize: c_int,
     p: *const c_char,
@@ -166,10 +166,7 @@ pub(crate) unsafe extern "C" fn concat_continued_line(
 ///
 /// # Safety
 /// `name` is owned memory or null; `sid_out` is null or writable.
-pub unsafe extern "C" fn new_script_item(
-    name: *mut c_char,
-    sid_out: *mut scid_T,
-) -> *mut scriptitem_T {
+pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut scid_T) -> *mut scriptitem_T {
     /// The highest script ID handed out so far.
     static last_current_SID: GlobalCell<scid_T> = GlobalCell::new(0);
 
@@ -296,7 +293,7 @@ unsafe fn do_source_str_init(sp: &mut source_cookie_T, mut str: *const c_char) {
 ///
 /// # Safety
 /// `eap` carries the range to run.
-pub unsafe extern "C" fn cmd_source_buffer(eap: *const exarg_T, ex_lua: bool) {
+pub unsafe fn cmd_source_buffer(eap: *const exarg_T, ex_lua: bool) {
     let req = SourceRequest::new(ptr::null_mut(), ptr::null(), eap, ex_lua);
     // SAFETY: the caller's contract.
     unsafe { do_source_ext(&req) };
@@ -309,10 +306,7 @@ pub unsafe extern "C" fn cmd_source_buffer(eap: *const exarg_T, ex_lua: bool) {
 ///
 /// # Safety
 /// `str` is NUL-terminated and `traceback_name` names the caller.
-pub unsafe extern "C" fn do_source_str(
-    str: *const c_char,
-    mut traceback_name: *mut c_char,
-) -> c_int {
+pub unsafe fn do_source_str(str: *const c_char, mut traceback_name: *mut c_char) -> c_int {
     let mut sname_buf = [0 as c_char; 256];
     let (name, lnum) = (estack::sourcing_name(), estack::sourcing_lnum());
     if !name.is_null() {

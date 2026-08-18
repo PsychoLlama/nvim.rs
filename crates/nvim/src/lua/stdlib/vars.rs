@@ -39,7 +39,7 @@ use crate::types::{
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with a scope string at 1 and a handle at 2.
-unsafe extern "C-unwind" fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
+unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
     unsafe {
         let scope = CStr::from_ptr(luaL_checklstring(lstate, 1, ptr::null_mut()));
         let handle = luaL_checkinteger(lstate, 2) as handle_T;

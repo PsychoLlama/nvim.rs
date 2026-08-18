@@ -174,7 +174,7 @@ unsafe fn name_buff_in(arena: *mut Arena) -> String_0 {
 ///
 /// # Safety
 /// The editor must be up. `'tabline'` is a user format, so this re-enters.
-pub unsafe extern "C" fn draw_tabline() {
+pub unsafe fn draw_tabline() {
     // SAFETY: `default_grid` is live for the process's lifetime; before the
     // first resize it has no cells yet.
     if unsafe { (*default_grid.ptr()).chars.is_null() } {

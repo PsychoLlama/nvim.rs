@@ -85,10 +85,7 @@ pub unsafe fn parent_of(node: *mut mpack_node_t) -> *mut mpack_node_t {
 /// `parser` must point at storage with room for `capacity + 1` frames —
 /// `mpack_parser_t` for the default 32, or `lmpack_grow_parser`'s larger
 /// allocation.
-pub unsafe extern "C-unwind" fn mpack_parser_init(
-    parser: *mut mpack_parser_t,
-    capacity: mpack_uint32_t,
-) {
+pub unsafe fn mpack_parser_init(parser: *mut mpack_parser_t, capacity: mpack_uint32_t) {
     let capacity = if capacity != 0 {
         capacity
     } else {
@@ -168,7 +165,7 @@ unsafe fn walk(
 ///
 /// # Safety
 /// See [`walk`].
-pub unsafe extern "C-unwind" fn mpack_parse_tok(
+pub unsafe fn mpack_parse_tok(
     parser: *mut mpack_parser_t,
     tok: mpack_token_t,
     enter_cb: mpack_walk_cb,
@@ -186,7 +183,7 @@ pub unsafe extern "C-unwind" fn mpack_parse_tok(
 ///
 /// # Safety
 /// See [`walk`]; `tok` must be writable.
-pub unsafe extern "C-unwind" fn mpack_unparse_tok(
+pub unsafe fn mpack_unparse_tok(
     parser: *mut mpack_parser_t,
     tok: *mut mpack_token_t,
     enter_cb: mpack_walk_cb,
@@ -208,7 +205,7 @@ pub unsafe extern "C-unwind" fn mpack_unparse_tok(
 ///
 /// # Safety
 /// `buf`/`buflen` must describe a readable slice; see [`walk`] for the rest.
-pub unsafe extern "C-unwind" fn mpack_parse(
+pub unsafe fn mpack_parse(
     parser: *mut mpack_parser_t,
     buf: *mut *const c_char,
     buflen: *mut size_t,
@@ -255,7 +252,7 @@ pub unsafe extern "C-unwind" fn mpack_parse(
 ///
 /// # Safety
 /// `buf`/`buflen` must describe a writable slice; see [`walk`] for the rest.
-pub unsafe extern "C-unwind" fn mpack_unparse(
+pub unsafe fn mpack_unparse(
     parser: *mut mpack_parser_t,
     buf: *mut *mut c_char,
     buflen: *mut size_t,
@@ -297,7 +294,7 @@ pub unsafe extern "C-unwind" fn mpack_unparse(
 ///
 /// # Safety
 /// Both parsers must be initialised and `d` must be at least as deep as `s`.
-pub unsafe extern "C-unwind" fn mpack_parser_copy(d: *mut mpack_parser_t, s: *mut mpack_parser_t) {
+pub unsafe fn mpack_parser_copy(d: *mut mpack_parser_t, s: *mut mpack_parser_t) {
     unsafe {
         debug_assert!((*s).capacity <= (*d).capacity);
         // Every field but `capacity`, which describes the destination's own

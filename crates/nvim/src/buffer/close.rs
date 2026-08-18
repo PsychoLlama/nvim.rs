@@ -358,7 +358,7 @@ pub(crate) fn can_unload_buffer(mut buf: Buf) -> bool {
     can_unload
 }
 
-pub unsafe extern "C" fn buf_close_terminal(buf: *mut buf_T) {
+pub unsafe fn buf_close_terminal(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     debug_assert!(!buf.terminal.is_null(), "buf->terminal");
@@ -644,7 +644,7 @@ fn unlink_and_free(mut buf: Buf, clear_w_buf: Option<Win>) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_clear_file(buf: *mut buf_T) {
+pub unsafe fn buf_clear_file(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     buf.b_ml.ml_line_count = 1 as linenr_T;
@@ -663,7 +663,7 @@ pub unsafe extern "C" fn buf_clear_file(buf: *mut buf_T) {
 ///
 /// # Safety
 /// `curbuf` must be set, which it is from startup to exit.
-pub unsafe extern "C" fn buf_clear() {
+pub unsafe fn buf_clear() {
     let buf = cur_buf();
     let line_count = buf.line_count();
     free_extmarks(buf); // delete any extmarks
@@ -688,7 +688,7 @@ pub unsafe extern "C" fn buf_clear() {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_freeall(buf: *mut buf_T, flags: c_int) {
+pub unsafe fn buf_freeall(buf: *mut buf_T, flags: c_int) {
     // SAFETY: the caller's promise -- a live buffer.
     let buf = unsafe { Buf::new(buf) };
     let is_curbuf = buf.raw() == curbuf.get();
@@ -893,7 +893,7 @@ pub(crate) fn free_buffer_stuff(mut buf: Buf, free_flags: c_int) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn wipe_buffer(buf: *mut buf_T, aucmd: bool) {
+pub unsafe fn wipe_buffer(buf: *mut buf_T, aucmd: bool) {
     if !aucmd {
         block_autocmds_now();
     }

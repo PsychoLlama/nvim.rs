@@ -593,7 +593,7 @@ fn shell_stage(mods: Mods, f: Fname) {
 /// `src` is NUL-terminated and `*usedlen` a cursor within it; `*fnamep` is a
 /// NUL-terminated name with at least `*fnamelen` bytes; `*bufp` is NULL or an
 /// owned string, and the caller frees whatever it holds afterwards.
-pub unsafe extern "C" fn modify_fname(
+pub unsafe fn modify_fname(
     src: *mut c_char,
     tilde_file: bool,
     usedlen: *mut size_t,

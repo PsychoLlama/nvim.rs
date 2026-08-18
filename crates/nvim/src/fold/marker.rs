@@ -18,11 +18,7 @@ use super::*;
 
 /// Create a fold from line "start" to line "end" (inclusive) in window `wp`
 /// by adding markers.
-pub(super) unsafe extern "C" fn foldCreateMarkers(
-    mut wp: *mut win_T,
-    mut start: pos_T,
-    mut end: pos_T,
-) {
+pub(super) unsafe fn foldCreateMarkers(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
     let mut buf: *mut buf_T = (*wp).w_buffer;
     if (*buf).b_p_ma == 0 {
         emsg(gettext(&raw const e_modifiable as *const c_char));
@@ -42,7 +38,7 @@ pub(super) unsafe extern "C" fn foldCreateMarkers(
 }
 
 /// Add "marker[markerlen]" in 'commentstring' to position `pos`.
-pub(super) unsafe extern "C" fn foldAddMarker(
+pub(super) unsafe fn foldAddMarker(
     mut buf: *mut buf_T,
     mut pos: pos_T,
     mut marker: *const c_char,
@@ -105,7 +101,7 @@ pub(super) unsafe extern "C" fn foldAddMarker(
 /// Delete the markers for a fold, causing it to be deleted.
 ///
 /// `lnum_off` — offset for fp->fd_top
-pub(super) unsafe extern "C" fn deleteFoldMarkers(
+pub(super) unsafe fn deleteFoldMarkers(
     mut wp: *mut win_T,
     mut fp: *mut fold_T,
     mut recursive: bool,
@@ -141,7 +137,7 @@ pub(super) unsafe extern "C" fn deleteFoldMarkers(
 /// Delete 'commentstring' if it matches.
 /// If the marker is not found, there is no error message.  Could be a missing
 /// close-marker.
-pub(super) unsafe extern "C" fn foldDelMarker(
+pub(super) unsafe fn foldDelMarker(
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
     mut marker: *mut c_char,
@@ -207,7 +203,7 @@ pub(super) unsafe extern "C" fn foldDelMarker(
 /// Parse 'foldmarker' and set "foldendmarker", "foldstartmarkerlen" and
 /// "foldendmarkerlen".
 /// Relies on the option value to have been checked for correctness already.
-pub(super) unsafe extern "C" fn parseMarker(mut wp: *mut win_T) {
+pub(super) unsafe fn parseMarker(mut wp: *mut win_T) {
     foldendmarker.set(vim_strchr((*wp).w_onebuf_opt.wo_fmr, ',' as c_int));
     let c2rust_fresh0 = foldendmarker.get();
     foldendmarker.set((*foldendmarker.ptr()).offset(1));

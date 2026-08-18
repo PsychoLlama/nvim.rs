@@ -20,7 +20,7 @@ use crate::main::{Columns, cmdline_row, p_ead, p_ls, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::{OptInt, win_T};
 use crate::winlayer::{Frame, Win};
 
-pub unsafe extern "C" fn win_equal(next_curwin: *mut win_T, current: bool, dir: c_int) {
+pub unsafe fn win_equal(next_curwin: *mut win_T, current: bool, dir: c_int) {
     // SAFETY: the caller's promise -- a live window, or null for "the current
     // one".
     equal(unsafe { Win::from_raw(next_curwin) }, current, dir);

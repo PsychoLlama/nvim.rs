@@ -419,7 +419,7 @@ pub unsafe extern "C" fn vim_to_object(
 ///
 /// # Safety
 /// `tv` must point at writable typval storage.
-pub unsafe extern "C" fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error) {
+pub unsafe fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error) {
     let mut obj = obj;
     unsafe { object_to_vim_take_luaref(&raw mut obj, tv, false, err) };
 }
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut
 /// # Safety
 /// As [`object_to_vim`]; `obj` must point at a live object tree.
 #[allow(clippy::only_used_in_recursion)]
-pub unsafe extern "C" fn object_to_vim_take_luaref(
+pub unsafe fn object_to_vim_take_luaref(
     obj: *mut Object,
     tv: *mut typval_T,
     take_luaref: bool,

@@ -18,7 +18,7 @@ use crate::smsg_c;
 /// The row itself stays in place.  A walk may be standing on it, and the
 /// pattern list it is walking is indexed, so the row may not move until
 /// `autocmd_busy` is clear.
-pub(crate) unsafe extern "C" fn aucmd_del(ac: *mut AutoCmd) {
+pub(crate) unsafe fn aucmd_del(ac: *mut AutoCmd) {
     unsafe {
         // `XFREE_CLEAR`, three times, over `*mut c_char` fields.
         let xfree_clear = |slot: *mut *mut ::core::ffi::c_char| {
@@ -51,7 +51,7 @@ pub(crate) unsafe extern "C" fn aucmd_del(ac: *mut AutoCmd) {
 }
 
 /// Delete every autocommand `group` defined for `event`.
-pub unsafe extern "C" fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::c_int) {
+pub unsafe fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::c_int) {
     unsafe {
         let acs = au_event_vec(event);
         let mut i: usize = 0;
@@ -72,7 +72,7 @@ pub unsafe extern "C" fn aucmd_del_for_event_and_group(event: event_T, group: ::
 /// no walk is live: `autocmd_busy` says one is, and then the rows have to
 /// stay where a walk's index can still reach them.  Every call site is
 /// therefore a point where the editor is between autocommands.
-pub(crate) unsafe extern "C" fn au_cleanup() {
+pub(crate) unsafe fn au_cleanup() {
     unsafe {
         if autocmd_busy.get() || !au_need_clean.get() {
             return;
@@ -109,12 +109,12 @@ pub(crate) unsafe extern "C" fn au_cleanup() {
 }
 
 /// The autocommand list for `event`, for the API's readers.
-pub unsafe extern "C" fn au_get_autocmds_for_event(event: event_T) -> *mut AutoCmdVec {
+pub unsafe fn au_get_autocmds_for_event(event: event_T) -> *mut AutoCmdVec {
     au_event_vec(event)
 }
 
 /// Drop every `<buffer=N>` autocommand naming `buf`, which is being freed.
-pub unsafe extern "C" fn aubuflocal_remove(buf: *mut buf_T) {
+pub unsafe fn aubuflocal_remove(buf: *mut buf_T) {
     unsafe {
         // A walk in progress may be about to match on this buffer number;
         // clear it rather than let it match a freed buffer.
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn aubuflocal_remove(buf: *mut buf_T) {
 
 /// Whether `pat` is one of the buffer-local pattern spellings:
 /// `<buffer>`, `<buffer=N>` or `<buffer=abuf>`.
-pub unsafe extern "C" fn aupat_is_buflocal(
+pub unsafe fn aupat_is_buflocal(
     pat: *const ::core::ffi::c_char,
     patlen: ::core::ffi::c_int,
 ) -> bool {
@@ -166,7 +166,7 @@ pub unsafe extern "C" fn aupat_is_buflocal(
 
 /// The buffer number a buffer-local pattern names, or 0 when it names one
 /// that cannot be resolved.
-pub unsafe extern "C" fn aupat_get_buflocal_nr(
+pub unsafe fn aupat_get_buflocal_nr(
     pat: *const ::core::ffi::c_char,
     patlen: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn aupat_get_buflocal_nr(
 
 /// Write the canonical `<buffer=N>` spelling of a buffer-local pattern
 /// into `dest`, which must hold `BUFLOCAL_PAT_LEN` bytes.
-pub unsafe extern "C" fn aupat_normalize_buflocal_pat(
+pub unsafe fn aupat_normalize_buflocal_pat(
     dest: *mut ::core::ffi::c_char,
     pat: *const ::core::ffi::c_char,
     patlen: ::core::ffi::c_int,

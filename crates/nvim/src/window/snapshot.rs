@@ -67,15 +67,15 @@ fn check_lnums_both(do_curwin: bool, nested: bool) {
     }
 }
 
-pub unsafe extern "C" fn check_lnums(do_curwin: bool) {
+pub unsafe fn check_lnums(do_curwin: bool) {
     check_lnums_both(do_curwin, false);
 }
 
-pub unsafe extern "C" fn check_lnums_nested(do_curwin: bool) {
+pub unsafe fn check_lnums_nested(do_curwin: bool) {
     check_lnums_both(do_curwin, true);
 }
 
-pub unsafe extern "C" fn reset_lnums() {
+pub unsafe fn reset_lnums() {
     for mut wp in tab_windows() {
         if wp.w_buffer != curbuf.get() {
             continue;
@@ -116,7 +116,7 @@ fn snapshot_of(tp: TabPage, idx: c_int) -> Option<Frame> {
     unsafe { Frame::from_raw(tp.tp_snapshot[idx as usize]) }
 }
 
-pub unsafe extern "C" fn make_snapshot(idx: c_int) {
+pub unsafe fn make_snapshot(idx: c_int) {
     take_snapshot(idx);
 }
 
@@ -151,7 +151,7 @@ fn make_snapshot_rec(fr: Frame, slot: *mut *mut frame_T) {
     }
 }
 
-pub(crate) unsafe extern "C" fn clear_snapshot(tp: *mut tabpage_T, idx: c_int) {
+pub(crate) unsafe fn clear_snapshot(tp: *mut tabpage_T, idx: c_int) {
     // SAFETY: the caller's promise -- a live tab page.
     drop_snapshot(unsafe { TabPage::new(tp) }, idx);
 }
@@ -200,7 +200,7 @@ pub(crate) fn snapshot_curwin(idx: c_int) -> Option<Win> {
     snapshot_of(cur_tab(), idx).and_then(snapshot_curwin_rec)
 }
 
-pub unsafe extern "C" fn restore_snapshot(idx: c_int, close_curwin: c_int) {
+pub unsafe fn restore_snapshot(idx: c_int, close_curwin: c_int) {
     restore_layout(idx, close_curwin != 0);
 }
 
@@ -270,7 +270,7 @@ fn restore_snapshot_rec(sn: Frame, fr: Frame) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // 'colorcolumn'
 
-pub unsafe extern "C" fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_char {
+pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_char {
     // SAFETY: the caller's promise -- a live window or null, and a
     // NUL-terminated string or null.
     let win = unsafe { Win::from_raw(wp) };
@@ -382,16 +382,16 @@ fn digits(s: &mut *mut c_char) -> c_int {
 // ---------------------------------------------------------------------------
 // Odds and ends
 
-pub unsafe extern "C" fn get_last_winid() -> c_int {
+pub unsafe fn get_last_winid() -> c_int {
     last_win_id.get()
 }
 
-pub unsafe extern "C" fn win_locked(wp: *mut win_T) -> c_int {
+pub unsafe fn win_locked(wp: *mut win_T) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     unsafe { Win::new(wp) }.w_locked as c_int
 }
 
-pub unsafe extern "C" fn win_get_tabwin(id: handle_T, tabnr: *mut c_int, winnr: *mut c_int) {
+pub unsafe fn win_get_tabwin(id: handle_T, tabnr: *mut c_int, winnr: *mut c_int) {
     let found = tab_and_win_number(id);
     // SAFETY: the caller's promise -- two writable `int`s.
     unsafe {
@@ -419,7 +419,7 @@ fn tab_and_win_number(id: handle_T) -> Option<(c_int, c_int)> {
     None
 }
 
-pub unsafe extern "C" fn win_ui_flush(validate: bool) {
+pub unsafe fn win_ui_flush(validate: bool) {
     for tp in tabs() {
         for mut wp in windows_in_tab(tp) {
             let moved = wp.w_pos_changed || wp.w_grid_alloc.pending_comp_index_update;
@@ -447,7 +447,7 @@ pub unsafe extern "C" fn win_ui_flush(validate: bool) {
     }
 }
 
-pub unsafe extern "C" fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T {
+pub unsafe fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T {
     // SAFETY: the caller's promise -- a live tab page or null.
     last_nonfloating(unsafe { TabPage::from_raw(tp) }).raw()
 }

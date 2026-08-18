@@ -207,7 +207,7 @@ fn in_buffer<R>(mut buf: Buf, f: impl FnOnce() -> R) -> R {
 // Small answers about the buffer list
 
 /// Calculate the percentage that `part` is of the `whole`.
-pub unsafe extern "C" fn calc_percentage(part: int64_t, whole: int64_t) -> c_int {
+pub unsafe fn calc_percentage(part: int64_t, whole: int64_t) -> c_int {
     // With 32 bit longs and more than 21,474,836 lines multiplying by 100
     // causes an overflow, thus for large numbers divide instead.
     if part > 1000000 {
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn calc_percentage(part: int64_t, whole: int64_t) -> c_int
 }
 
 /// The highest buffer number handed out so far.
-pub unsafe extern "C" fn get_highest_fnum() -> c_int {
+pub unsafe fn get_highest_fnum() -> c_int {
     top_file_num.get() - 1
 }
 
@@ -284,7 +284,7 @@ fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> c_int {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_ensure_loaded(buf: *mut buf_T) -> bool {
+pub unsafe fn buf_ensure_loaded(buf: *mut buf_T) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
     let buf = unsafe { Buf::new(buf) };
     if !buf.b_ml.ml_mfp.is_null() {
@@ -305,11 +305,7 @@ pub unsafe extern "C" fn buf_ensure_loaded(buf: *mut buf_T) -> bool {
 ///
 /// # Safety
 /// `curbuf` and `curwin` must be set, and `eap` be null or a live `exarg_T`.
-pub unsafe extern "C" fn open_buffer(
-    read_stdin: bool,
-    eap: *mut exarg_T,
-    flags_arg: c_int,
-) -> c_int {
+pub unsafe fn open_buffer(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c_int {
     open_buffer_inner(read_stdin, eap, flags_arg)
 }
 
@@ -525,7 +521,7 @@ fn set_dirty(mut buf: Buf, state: MfDirty) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_contents_changed(buf: *mut buf_T) -> bool {
+pub unsafe fn buf_contents_changed(buf: *mut buf_T) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
     let buf = unsafe { Buf::new(buf) };
     let mut differ = true;
@@ -569,7 +565,7 @@ pub unsafe extern "C" fn buf_contents_changed(buf: *mut buf_T) -> bool {
 ///
 /// # Safety
 /// `bufname` must be null or NUL-terminated, and `curwin` be set.
-pub unsafe extern "C" fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> c_int {
+pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> c_int {
     let none = ptr::null_mut::<c_char>();
     let one = ECMD_ONE as c_int as linenr_T;
     let hide = ECMD_HIDE as c_int;
@@ -597,7 +593,7 @@ pub unsafe extern "C" fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char)
 /// # Safety
 /// `buf` must be a live buffer, `sb` a live `StringBuilder`, and `start` and
 /// `end` lines of the buffer.
-pub unsafe extern "C" fn read_buffer_into(
+pub unsafe fn read_buffer_into(
     buf: *mut buf_T,
     start: linenr_T,
     end: linenr_T,

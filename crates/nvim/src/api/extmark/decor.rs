@@ -157,7 +157,7 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
     }
 }
 
-pub unsafe extern "C" fn parse_virt_text(
+pub unsafe fn parse_virt_text(
     mut chunks: Array,
     mut err: *mut Error,
     mut width: *mut ::core::ffi::c_int,

@@ -28,7 +28,7 @@ use crate::types::{
 /// Every mark between two positions, the ones at either end included.
 ///
 /// `amount` is the caller's limit, `INT64_MAX` for "all of them".
-pub unsafe extern "C" fn extmark_get(
+pub unsafe fn extmark_get(
     buf: *mut buf_T,
     ns_id: uint32_t,
     l_row: c_int,
@@ -109,7 +109,7 @@ fn push_mark(
 }
 
 /// The extmark `id` of namespace `ns_id`, paired with its end position.
-pub unsafe extern "C" fn extmark_from_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> MTPair {
+pub unsafe fn extmark_from_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> MTPair {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     let mark = tree_lookup_ns(buf.marktree(), ns_id, id, false, None);
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn extmark_from_id(buf: *mut buf_T, ns_id: uint32_t, id: u
 }
 
 /// Release every mark of a buffer, as it is freed.
-pub unsafe extern "C" fn extmark_free_all(buf: *mut buf_T) {
+pub unsafe fn extmark_free_all(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     let mut itr = MarkTreeIter::default();

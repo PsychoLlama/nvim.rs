@@ -501,10 +501,7 @@ impl ClickArena {
 ///
 /// # Safety
 /// `click_defs` must be null or an allocation of `click_defs_size` entries.
-pub unsafe extern "C" fn stl_clear_click_defs(
-    click_defs: *mut StlClickDefinition,
-    click_defs_size: size_t,
-) {
+pub unsafe fn stl_clear_click_defs(click_defs: *mut StlClickDefinition, click_defs_size: size_t) {
     // SAFETY: the caller's promise.
     unsafe { ClickArena::new(click_defs, click_defs_size) }.clear();
 }
@@ -513,7 +510,7 @@ pub unsafe extern "C" fn stl_clear_click_defs(
 ///
 /// # Safety
 /// As [`stl_clear_click_defs`]; `size` must be the owner's own record.
-pub unsafe extern "C" fn stl_alloc_click_defs(
+pub unsafe fn stl_alloc_click_defs(
     cdp: *mut StlClickDefinition,
     width: ::core::ffi::c_int,
     size: *mut size_t,
@@ -723,7 +720,7 @@ pub(crate) fn fillchar_status_of(win: Win) -> (hlf_T, schar_T) {
 ///
 /// # Safety
 /// `wp` must be a live window and `group` a writable `hlf_T`.
-pub unsafe extern "C" fn fillchar_status(group: *mut hlf_T, wp: *mut win_T) -> schar_T {
+pub unsafe fn fillchar_status(group: *mut hlf_T, wp: *mut win_T) -> schar_T {
     // SAFETY: the caller's promise.
     let (g, fillchar) = fillchar_status_of(unsafe { Win::new(wp) });
     // SAFETY: the caller's out-parameter.
@@ -736,7 +733,7 @@ pub unsafe extern "C" fn fillchar_status(group: *mut hlf_T, wp: *mut win_T) -> s
 /// # Safety
 /// `wp` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe extern "C" fn redraw_custom_statusline(wp: *mut win_T) {
+pub unsafe fn redraw_custom_statusline(wp: *mut win_T) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // A `'statusline'` expression that triggers a redraw gets here again.
     if ENTERED.get() {
@@ -758,7 +755,7 @@ pub unsafe extern "C" fn redraw_custom_statusline(wp: *mut win_T) {
 /// # Safety
 /// `wp` must be a live window, `lnum` one of its buffer's lines, `buf` a
 /// buffer of `MAXPATHL` bytes and `stcp` this line's status-column state.
-pub unsafe extern "C" fn build_statuscol_str(
+pub unsafe fn build_statuscol_str(
     wp: *mut win_T,
     lnum: linenr_T,
     relnum: linenr_T,

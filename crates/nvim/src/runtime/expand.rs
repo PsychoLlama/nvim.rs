@@ -254,7 +254,7 @@ unsafe fn take_matches(ga: garray_T, num_file: *mut c_int, file: *mut *mut *mut 
 ///
 /// # Safety
 /// As [`ExpandRTDir_int`]; both out-parameters must be writable.
-pub unsafe extern "C" fn ExpandRTDir(
+pub unsafe fn ExpandRTDir(
     pat: *mut c_char,
     flags: c_int,
     num_file: *mut c_int,
@@ -282,7 +282,7 @@ const WHERE_VALUES: [&CStr; 4] = [c"START", c"OPT", c"PACK", c"ALL"];
 ///
 /// # Safety
 /// `pat` must be NUL-terminated and both out-parameters writable.
-pub unsafe extern "C" fn expand_runtime_cmd(
+pub unsafe fn expand_runtime_cmd(
     pat: *mut c_char,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn expand_runtime_cmd(
 ///
 /// # Safety
 /// `pat` must be NUL-terminated and both out-parameters writable.
-pub unsafe extern "C" fn ExpandPackAddDir(
+pub unsafe fn ExpandPackAddDir(
     pat: *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,

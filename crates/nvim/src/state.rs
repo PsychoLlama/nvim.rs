@@ -52,7 +52,7 @@ pub const MODE_VISUAL: ModeFlags = 2;
 pub const MODE_NORMAL: ModeFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
+pub unsafe fn state_enter(mut s: *mut VimState) {
     's_132: loop {
         let mut check_result: ::core::ffi::c_int = if (*s).check.is_some() {
             (*s).check.expect("non-null function pointer")(s)
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
         }
     }
 }
-pub unsafe extern "C" fn state_handle_k_event() {
+pub unsafe fn state_handle_k_event() {
     loop {
         let mut event: Event = multiqueue_get((*main_loop.ptr()).events);
         if let Some(handler) = event.handler {
@@ -145,7 +145,7 @@ pub unsafe extern "C" fn state_handle_k_event() {
         }
     }
 }
-pub unsafe extern "C" fn virtual_active(mut wp: *mut win_T) -> bool {
+pub unsafe fn virtual_active(mut wp: *mut win_T) -> bool {
     if virtual_op.get() as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
         return virtual_op.get() as u64 != 0;
     }
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn virtual_active(mut wp: *mut win_T) -> bool {
         || cur_ve_flags & kOptVeFlagInsert as ::core::ffi::c_int as ::core::ffi::c_uint != 0
             && State.get() & MODE_INSERT != 0;
 }
-pub unsafe extern "C" fn get_real_state() -> ::core::ffi::c_int {
+pub unsafe fn get_real_state() -> ::core::ffi::c_int {
     if State.get() & MODE_NORMAL != 0 {
         if VIsual_active.get() {
             if VIsual_select.get() {
@@ -173,7 +173,7 @@ pub unsafe extern "C" fn get_real_state() -> ::core::ffi::c_int {
     }
     return State.get();
 }
-pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
+pub unsafe fn get_mode(mut buf: *mut ::core::ffi::c_char) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if State.get() == MODE_HITRETURN
         || State.get() == MODE_ASKMORE
@@ -292,7 +292,7 @@ pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
     }
     *buf.offset(i as isize) = NUL as ::core::ffi::c_char;
 }
-pub unsafe extern "C" fn may_trigger_modechanged() {
+pub unsafe fn may_trigger_modechanged() {
     if !has_event(EVENT_MODECHANGED) || got_int.get() as ::core::ffi::c_int != 0 {
         return;
     }
@@ -356,14 +356,14 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
     restore_v_event(v_event, &raw mut save_v_event);
 }
 static was_safe: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-unsafe extern "C" fn is_safe_now() -> bool {
+unsafe fn is_safe_now() -> bool {
     return stuff_empty() as ::core::ffi::c_int != 0
         && (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int
         && using_script() == 0
         && global_busy.get() == 0
         && !debug_mode.get();
 }
-pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
+pub unsafe fn may_trigger_safestate(mut safe: bool) {
     let mut is_safe: bool =
         safe as ::core::ffi::c_int != 0 && is_safe_now() as ::core::ffi::c_int != 0;
     if was_safe.get() as ::core::ffi::c_int != is_safe as ::core::ffi::c_int {
@@ -391,7 +391,7 @@ pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
     }
     was_safe.set(is_safe);
 }
-pub unsafe extern "C" fn state_no_longer_safe(mut reason: *const ::core::ffi::c_char) {
+pub unsafe fn state_no_longer_safe(mut reason: *const ::core::ffi::c_char) {
     if was_safe.get() as ::core::ffi::c_int != 0 && !reason.is_null() {
         logmsg_c!(
             LOGLVL_DBG,
@@ -405,7 +405,7 @@ pub unsafe extern "C" fn state_no_longer_safe(mut reason: *const ::core::ffi::c_
     }
     was_safe.set(false_0 != 0);
 }
-pub unsafe extern "C" fn get_was_safe_state() -> bool {
+pub unsafe fn get_was_safe_state() -> bool {
     return was_safe.get();
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

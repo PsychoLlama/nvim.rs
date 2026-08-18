@@ -51,7 +51,7 @@ const E_XATTR_OTHER: &CStr = c"E1509: Error occurred when reading or writing ext
 ///
 /// # Safety
 /// `name` must be null or a NUL-terminated string, and `statbuf` writable.
-pub(crate) unsafe extern "C" fn os_stat(name: *const c_char, statbuf: *mut uv_stat_t) -> c_int {
+pub(crate) unsafe fn os_stat(name: *const c_char, statbuf: *mut uv_stat_t) -> c_int {
     if name.is_null() {
         return UV_EINVAL;
     }
@@ -118,7 +118,7 @@ fn xattr_keys(blob: &[u8]) -> impl Iterator<Item = &CStr> {
 ///
 /// # Safety
 /// Both paths must be null or NUL-terminated strings.
-pub unsafe extern "C" fn os_copy_xattr(from_file: *const c_char, to_file: *const c_char) {
+pub unsafe fn os_copy_xattr(from_file: *const c_char, to_file: *const c_char) {
     if from_file.is_null() {
         return;
     }
@@ -198,13 +198,13 @@ pub unsafe extern "C" fn os_copy_xattr(from_file: *const c_char, to_file: *const
 /// upstream's `os_get_acl` answers NULL and the other two are `if (aclent
 /// == NULL) return;` followed by nothing. Kept because `fileio.c` calls all
 /// three around every write.
-pub unsafe extern "C" fn os_get_acl(_fname: *const c_char) -> vim_acl_T {
+pub unsafe fn os_get_acl(_fname: *const c_char) -> vim_acl_T {
     ptr::null_mut()
 }
 
-pub unsafe extern "C" fn os_set_acl(_fname: *const c_char, _aclent: vim_acl_T) {}
+pub unsafe fn os_set_acl(_fname: *const c_char, _aclent: vim_acl_T) {}
 
-pub unsafe extern "C" fn os_free_acl(_aclent: vim_acl_T) {}
+pub unsafe fn os_free_acl(_aclent: vim_acl_T) {}
 
 /// Whether the current user owns `fname`.
 ///
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn os_free_acl(_aclent: vim_acl_T) {}
 ///
 /// # Safety
 /// `fname` must be a NUL-terminated string.
-pub unsafe extern "C" fn os_file_owned(fname: *const c_char) -> bool {
+pub unsafe fn os_file_owned(fname: *const c_char) -> bool {
     // SAFETY: `getuid` cannot fail, and `fname` is the caller's path.
     unsafe {
         let uid = getuid() as uint64_t;
@@ -230,7 +230,7 @@ pub unsafe extern "C" fn os_file_owned(fname: *const c_char) -> bool {
 ///
 /// # Safety
 /// `path` must be a NUL-terminated string.
-pub unsafe extern "C" fn os_chown(path: *const c_char, owner: uv_uid_t, group: uv_gid_t) -> c_int {
+pub unsafe fn os_chown(path: *const c_char, owner: uv_uid_t, group: uv_gid_t) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     fs_result(|req| unsafe { uv_fs_chown(NO_LOOP, req, path, owner, group, None) })
 }
@@ -249,11 +249,7 @@ pub unsafe extern "C" fn os_fchown(fd: c_int, owner: uv_uid_t, group: uv_gid_t) 
 ///
 /// # Safety
 /// `path` must be a NUL-terminated string.
-pub unsafe extern "C" fn os_file_settime(
-    path: *const c_char,
-    atime: c_double,
-    mtime: c_double,
-) -> c_int {
+pub unsafe fn os_file_settime(path: *const c_char, atime: c_double, mtime: c_double) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     fs_result(|req| unsafe { uv_fs_utime(NO_LOOP, req, path, atime, mtime, None) })
 }

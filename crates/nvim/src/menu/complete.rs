@@ -66,7 +66,7 @@ impl Context {
 /// # Safety
 /// `xp` must be live, `cmd` a NUL-terminated string, and `arg` a position in
 /// the command line being completed.
-pub unsafe extern "C" fn set_context_in_menu_cmd(
+pub unsafe fn set_context_in_menu_cmd(
     xp: *mut expand_T,
     cmd: *const c_char,
     arg: *mut c_char,

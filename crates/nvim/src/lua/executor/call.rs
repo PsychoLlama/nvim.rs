@@ -171,7 +171,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_rpcnotify(lstate: *mut lua_State) ->
 ///
 /// # Safety
 /// As [`nlua_rpcrequest`].
-unsafe extern "C-unwind" fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
+unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
     unsafe {
         let mut name_len: size_t = 0;
         let chan_id = luaL_checkinteger(lstate, 1) as uint64_t;

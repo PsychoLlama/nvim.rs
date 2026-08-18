@@ -121,7 +121,7 @@ pub(crate) fn cmd_modes(cmd: &[u8], forceit: bool) -> (c_int, c_int, bool) {
 /// # Safety
 /// `cmd` must name a NUL-terminated string; `noremap` and `unmenu` must be
 /// null or writable.
-pub unsafe extern "C" fn get_menu_cmd_modes(
+pub unsafe fn get_menu_cmd_modes(
     cmd: *const c_char,
     forceit: bool,
     noremap: *mut c_int,

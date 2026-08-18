@@ -56,7 +56,7 @@ pub unsafe extern "C" fn tv_dict_item_free(item: *mut dictitem_T) {
 }
 
 /// A fresh item holding a copy of `di`'s key and value.
-pub unsafe extern "C" fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
+pub unsafe fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
     unsafe {
         let new_di = tv_dict_item_alloc(tv_dict_item_key(di));
         tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv);
@@ -109,7 +109,7 @@ pub unsafe extern "C" fn tv_dict_alloc() -> *mut dict_T {
 
 /// Free every item and watcher of `d`, leaving the `dict_T` itself allocated
 /// and empty.
-pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
+pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
     unsafe {
         // Lock the hashtab so `hash_remove` below cannot rehash it under the
         // walk.
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
 }
 
 /// Unlink `d` from the garbage collector's chain and free the `dict_T` itself.
-pub unsafe extern "C" fn tv_dict_free_dict(d: *mut dict_T) {
+pub unsafe fn tv_dict_free_dict(d: *mut dict_T) {
     unsafe {
         // Remove the dictionary from the list of dictionaries for garbage
         // collection.
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn tv_dict_add_list(
 }
 
 /// Add a copy of `tv` to `d` under `key`.
-pub unsafe extern "C" fn tv_dict_add_tv(
+pub unsafe fn tv_dict_add_tv(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -277,7 +277,7 @@ pub unsafe extern "C" fn tv_dict_add_float(
 }
 
 /// Add the boolean `val` to `d` under `key`.
-pub unsafe extern "C" fn tv_dict_add_bool(
+pub unsafe fn tv_dict_add_bool(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn tv_dict_add_str(
 
 /// Add a copy of `val`'s first `len` bytes to `d` under `key`.  A negative
 /// `len` means the whole NUL-terminated string; a NULL `val` stores NULL.
-pub unsafe extern "C" fn tv_dict_add_str_len(
+pub unsafe fn tv_dict_add_str_len(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn tv_dict_add_allocated_str(
 }
 
 /// Add a funcref to `fp` to `d` under `key`.
-pub unsafe extern "C" fn tv_dict_add_func(
+pub unsafe fn tv_dict_add_func(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -602,7 +602,7 @@ pub unsafe extern "C" fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
 }
 
 /// Allocate an empty dictionary with the given lock status.
-pub unsafe extern "C" fn tv_dict_alloc_lock(lock: VarLockStatus) -> *mut dict_T {
+pub unsafe fn tv_dict_alloc_lock(lock: VarLockStatus) -> *mut dict_T {
     unsafe {
         let d = tv_dict_alloc();
         (*d).dv_lock = lock;
@@ -620,7 +620,7 @@ pub unsafe extern "C" fn tv_dict_alloc_ret(ret_tv: *mut typval_T) {
 }
 
 /// `remove()` over a dictionary: move `argvars[0][argvars[1]]` into `rettv`.
-pub unsafe extern "C" fn tv_dict_remove(
+pub unsafe fn tv_dict_remove(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     arg_errmsg: *const ::core::ffi::c_char,

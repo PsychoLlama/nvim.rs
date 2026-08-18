@@ -102,11 +102,7 @@ fn current_win() -> Win {
 // Looking a name up
 
 /// The file name and remembered line number of buffer `fnum`.
-pub unsafe extern "C" fn buflist_name_nr(
-    fnum: c_int,
-    fname: *mut *mut c_char,
-    lnum: *mut linenr_T,
-) -> c_int {
+pub unsafe fn buflist_name_nr(fnum: c_int, fname: *mut *mut c_char, lnum: *mut linenr_T) -> c_int {
     let Some(mut buf) = find_buf(fnum) else {
         return FAIL;
     };
@@ -207,7 +203,7 @@ pub unsafe extern "C" fn setfname(
 
 /// A crude way of changing a buffer's name; use with care. The name is
 /// relative to the current directory.
-pub unsafe extern "C" fn buf_set_name(fnum: c_int, name: *mut c_char) {
+pub unsafe fn buf_set_name(fnum: c_int, name: *mut c_char) {
     let Some(mut b) = find_buf(fnum) else {
         return;
     };
@@ -225,7 +221,7 @@ pub unsafe extern "C" fn buf_set_name(fnum: c_int, name: *mut c_char) {
 }
 
 /// What has to happen once a buffer's name has changed.
-pub unsafe extern "C" fn buf_name_changed(buf: *mut buf_T) {
+pub unsafe fn buf_name_changed(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let b = unsafe { Buf::new(buf) };
     if !b.b_ml.ml_mfp.is_null() {
@@ -254,11 +250,7 @@ pub unsafe extern "C" fn buf_name_changed(buf: *mut buf_T) {
 // The alternate file
 
 /// Set the alternate file name for the current window.
-pub unsafe extern "C" fn setaltfname(
-    ffname: *mut c_char,
-    sfname: *mut c_char,
-    lnum: linenr_T,
-) -> *mut buf_T {
+pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: linenr_T) -> *mut buf_T {
     // Create a buffer; 'buflisted' is not set if it is a new one.
     // SAFETY: two names to hand over, either of which may be null.
     let buf = unsafe { buflist_new(ffname, sfname, lnum, 0) };
@@ -270,7 +262,7 @@ pub unsafe extern "C" fn setaltfname(
 }
 
 /// The alternate file name for the current window, null when there is none.
-pub unsafe extern "C" fn getaltfname(errmsg: bool) -> *mut c_char {
+pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
     let mut fname: *mut c_char = ptr::null_mut();
     let mut dummy: linenr_T = 0;
     // SAFETY: two locals to fill in.
@@ -285,7 +277,7 @@ pub unsafe extern "C" fn getaltfname(errmsg: bool) -> *mut c_char {
 
 /// Add a file name to the buffer list and answer its number. Takes
 /// [`buflist_new`]'s flags, except `BLN_DUMMY`.
-pub unsafe extern "C" fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
+pub unsafe fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
     // SAFETY: a name to hand over, which may be null.
     let buf = unsafe { buflist_new(fname, ptr::null_mut(), 0 as linenr_T, flags) };
     if buf.is_null() {
@@ -297,7 +289,7 @@ pub unsafe extern "C" fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int 
 
 /// Record the alternate cursor position for the current buffer in `win`,
 /// saving its window-local options too.
-pub unsafe extern "C" fn buflist_altfpos(win: *mut win_T) {
+pub unsafe fn buflist_altfpos(win: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     let w = unsafe { Win::new(win) };
     let (lnum, col) = (w.w_cursor.lnum, w.w_cursor.col);
@@ -310,7 +302,7 @@ pub unsafe extern "C" fn buflist_altfpos(win: *mut win_T) {
 
 /// Whether `ffname` (a full path) names a different file from the current
 /// buffer's.
-pub unsafe extern "C" fn otherfile(ffname: *mut c_char) -> bool {
+pub unsafe fn otherfile(ffname: *mut c_char) -> bool {
     // SAFETY: the current buffer and a NUL-terminated full path.
     unsafe { otherfile_buf(curbuf.get(), ffname, ptr::null_mut(), false) }
 }
@@ -319,7 +311,7 @@ pub unsafe extern "C" fn otherfile(ffname: *mut c_char) -> bool {
 ///
 /// `file_id_p` is the caller's already-computed file id for `ffname`, null to
 /// have it looked up here.
-pub(crate) unsafe extern "C" fn otherfile_buf(
+pub(crate) unsafe fn otherfile_buf(
     buf: *mut buf_T,
     ffname: *mut c_char,
     file_id_p: *mut FileID,
@@ -360,7 +352,7 @@ pub(crate) unsafe extern "C" fn otherfile_buf(
 }
 
 /// Record the file id of `buf`'s file, for recognising it under another name.
-pub unsafe extern "C" fn buf_set_file_id(buf: *mut buf_T) {
+pub unsafe fn buf_set_file_id(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut b = unsafe { Buf::new(buf) };
     if b.b_fname.is_null() {
@@ -377,11 +369,7 @@ pub unsafe extern "C" fn buf_set_file_id(buf: *mut buf_T) {
 /// Make `*ffname` a full file name and point `*sfname` at the name given, if
 /// it had none. The value `*ffname` comes back as should be treated as not
 /// allocated.
-pub unsafe extern "C" fn fname_expand(
-    _buf: *mut buf_T,
-    ffname: *mut *mut c_char,
-    sfname: *mut *mut c_char,
-) {
+pub unsafe fn fname_expand(_buf: *mut buf_T, ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
     // SAFETY: the caller's promise -- two name slots to read and write.
     let (ffname, sfname) = unsafe { (&mut *ffname, &mut *sfname) };
     if ffname.is_null() {

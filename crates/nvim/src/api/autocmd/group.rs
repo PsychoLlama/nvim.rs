@@ -85,7 +85,7 @@ pub unsafe extern "C" fn nvim_del_augroup_by_name(mut name: String_0, mut err: *
     }
 }
 
-pub(crate) unsafe extern "C" fn get_augroup_from_object(
+pub(crate) unsafe fn get_augroup_from_object(
     mut group: Object,
     mut err: *mut Error,
 ) -> ::core::ffi::c_int {

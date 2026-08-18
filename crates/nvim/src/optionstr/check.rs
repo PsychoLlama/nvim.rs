@@ -45,7 +45,7 @@ use crate::decoration::SCL_NUM;
 
 /// The options whose bitmask is derived from a value the startup sequence
 /// may have installed without going through `:set`.
-pub unsafe extern "C" fn didset_string_options() {
+pub unsafe fn didset_string_options() {
     for idx in [
         kOptCasemap,
         kOptBackupcopy,
@@ -119,7 +119,7 @@ pub(crate) unsafe fn illegal_char_after_chr(
 ///
 /// # Safety
 /// `buf` points at a live buffer.
-pub unsafe extern "C" fn check_buf_options(buf: *mut buf_T) {
+pub unsafe fn check_buf_options(buf: *mut buf_T) {
     // SAFETY: the caller's buffer; each field is one of its `char *`
     // options, and `parse_cino` re-derives the 'cinoptions' cache from the
     // string this just made non-null.
@@ -253,7 +253,7 @@ pub(crate) unsafe fn valid_filetype(val: *const c_char) -> bool {
 ///
 /// # Safety
 /// `scl` is null or a C string; `wp` is null or a live window.
-pub unsafe extern "C" fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
+pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
     let val = if !scl.is_null() {
         scl.cast_const()
     } else if !wp.is_null() {
@@ -347,7 +347,7 @@ const STL_ALL: &CStr = c"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#$TX@TX@";
 ///
 /// # Safety
 /// `s` is a C string.
-pub unsafe extern "C" fn check_stl_option(s: *mut c_char) -> *const c_char {
+pub unsafe fn check_stl_option(s: *mut c_char) -> *const c_char {
     // The message needs to outlive this call, and the caller passes no
     // buffer, so upstream formats into a function-local static.
     static ERRBUF: GlobalCell<[c_char; 80]> = GlobalCell::new([0; 80]);
@@ -439,7 +439,7 @@ pub unsafe extern "C" fn check_stl_option(s: *mut c_char) -> *const c_char {
 ///
 /// # Safety
 /// `val` is a C string.
-pub unsafe extern "C" fn check_illegal_path_names(val: *mut c_char, flags: uint32_t) -> bool {
+pub unsafe fn check_illegal_path_names(val: *mut c_char, flags: uint32_t) -> bool {
     // SAFETY: the caller's C string.
     let val = unsafe { CStr::from_ptr(val) }.to_bytes();
     let holds = |set: &[u8]| val.iter().any(|b| set.contains(b));

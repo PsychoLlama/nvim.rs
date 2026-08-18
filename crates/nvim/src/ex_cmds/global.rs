@@ -325,7 +325,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
 /// # Safety
 /// Main thread; `cmd` must be a live C string.  Every iteration re-enters
 /// `do_cmdline`, so nothing may be cached across the loop.
-pub unsafe extern "C" fn global_exe(cmd: *mut c_char) {
+pub unsafe fn global_exe(cmd: *mut c_char) {
     // Remember what buffer we started in.
     let old_buf = curbuf.get();
 

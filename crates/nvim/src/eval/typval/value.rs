@@ -40,7 +40,7 @@ pub unsafe extern "C" fn tv_clear(tv: *mut typval_T) {
 ///
 /// Unlike [`tv_clear`] this does not recurse into a container: it drops one
 /// reference and frees the box.
-pub unsafe extern "C" fn tv_free(tv: *mut typval_T) {
+pub unsafe fn tv_free(tv: *mut typval_T) {
     unsafe {
         if tv.is_null() {
             return;

@@ -74,11 +74,7 @@ unsafe fn free_chunk_buffer(buf: *mut c_char) {
 ///
 /// # Safety
 /// `str` must be a live api string and `ret_tv` writable.
-pub unsafe extern "C-unwind" fn nlua_typval_eval(
-    str: String_0,
-    arg: *mut typval_T,
-    ret_tv: *mut typval_T,
-) {
+pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut typval_T) {
     unsafe {
         let head = EVALHEADER.count_bytes();
         let lcmd_len = head + str.size + 1;
@@ -95,7 +91,7 @@ pub unsafe extern "C-unwind" fn nlua_typval_eval(
 ///
 /// # Safety
 /// `str`/`len` must name a Lua expression and `ret_tv` be writable.
-pub unsafe extern "C-unwind" fn nlua_typval_call(
+pub unsafe fn nlua_typval_call(
     str: *const c_char,
     len: size_t,
     args: *mut typval_T,
@@ -131,10 +127,7 @@ pub unsafe extern "C-unwind" fn nlua_typval_call(
 ///
 /// # Safety
 /// `xp` must carry a live `xp_luaref`, and `ret_tv` be writable.
-pub unsafe extern "C-unwind" fn nlua_call_user_expand_func(
-    xp: *mut expand_T,
-    ret_tv: *mut typval_T,
-) {
+pub unsafe fn nlua_call_user_expand_func(xp: *mut expand_T, ret_tv: *mut typval_T) {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, (*xp).xp_luaref);
@@ -158,7 +151,7 @@ pub unsafe extern "C-unwind" fn nlua_call_user_expand_func(
 /// # Safety
 /// `lcmd`/`lcmd_len` must name a readable chunk, and `ret_tv` be writable or
 /// null.
-pub(crate) unsafe extern "C-unwind" fn nlua_typval_exec(
+pub(crate) unsafe fn nlua_typval_exec(
     lcmd: *const c_char,
     lcmd_len: size_t,
     name: *const c_char,
@@ -222,7 +215,7 @@ unsafe fn push_typval_args(
 ///
 /// # Safety
 /// `ga` must be a live garray of strings.
-pub unsafe extern "C-unwind" fn nlua_exec_ga(ga: *mut garray_T, name: *mut c_char) {
+pub unsafe fn nlua_exec_ga(ga: *mut garray_T, name: *mut c_char) {
     unsafe {
         let code = ga_concat_strings(ga, c"\n".as_ptr());
         let len = strlen(code);
@@ -244,7 +237,7 @@ pub unsafe extern "C-unwind" fn nlua_exec_ga(ga: *mut garray_T, name: *mut c_cha
 /// # Safety
 /// `lua_cb` must be a live reference, `argvars` `argcount` live typvals, and
 /// `rettv` writable.
-pub unsafe extern "C-unwind" fn typval_exec_lua_callable(
+pub unsafe fn typval_exec_lua_callable(
     lua_cb: LuaRef,
     argcount: c_int,
     argvars: *mut typval_T,
@@ -267,7 +260,7 @@ pub unsafe extern "C-unwind" fn typval_exec_lua_callable(
 ///
 /// # Safety
 /// `str` must be a live api string and `err` the caller's error slot.
-pub unsafe extern "C-unwind" fn nlua_exec(
+pub unsafe fn nlua_exec(
     str: String_0,
     chunkname: *const c_char,
     args: Array,
@@ -314,7 +307,7 @@ unsafe fn set_lua_error(err: *mut Error, type_0: ErrorType, lstate: *mut lua_Sta
 ///
 /// # Safety
 /// As [`nlua_call_ref_ctx`].
-pub unsafe extern "C-unwind" fn nlua_call_ref(
+pub unsafe fn nlua_call_ref(
     ref_0: LuaRef,
     name: *const c_char,
     args: Array,
@@ -340,7 +333,7 @@ fn mode_ret(mode: LuaRetMode) -> c_int {
 /// # Safety
 /// `ref_0` must be a live reference and `err` the caller's error slot or
 /// null.
-pub unsafe extern "C-unwind" fn nlua_call_ref_ctx(
+pub unsafe fn nlua_call_ref_ctx(
     fast: bool,
     ref_0: LuaRef,
     name: *const c_char,
@@ -387,7 +380,7 @@ pub unsafe extern "C-unwind" fn nlua_call_ref_ctx(
 ///
 /// # Safety
 /// `lstate` must hold the call's results down to `pretop`.
-unsafe extern "C-unwind" fn nlua_call_pop_retval(
+unsafe fn nlua_call_pop_retval(
     lstate: *mut lua_State,
     mode: LuaRetMode,
     arena: *mut Arena,

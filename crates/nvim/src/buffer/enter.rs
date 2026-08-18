@@ -216,7 +216,7 @@ fn add_changedtick(mut buf: Buf) {
 ///
 /// # Safety
 /// `buf` must be a live buffer, and `curbuf`/`curwin` be set.
-pub unsafe extern "C" fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) {
+pub unsafe fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) {
     // SAFETY: the caller's promise -- a live buffer.
     let buf = unsafe { Buf::new(buf) };
     let unload = action == DOBUF_UNLOAD as c_int
@@ -443,7 +443,7 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
 ///
 /// # Safety
 /// `curbuf` must be set.
-pub unsafe extern "C" fn do_autochdir() {
+pub unsafe fn do_autochdir() {
     do_autochdir_now();
 }
 
@@ -463,7 +463,7 @@ fn do_autochdir_now() {
 
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn no_write_message_buf(buf: *mut buf_T) {
+pub unsafe fn no_write_message_buf(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     if !buf.terminal.is_null() && job_running(buf) {
@@ -476,7 +476,7 @@ pub unsafe extern "C" fn no_write_message_buf(buf: *mut buf_T) {
 
 /// # Safety
 /// `curbuf` must be set.
-pub unsafe extern "C" fn no_write_message() {
+pub unsafe fn no_write_message() {
     let buf = cur_buf();
     if !buf.terminal.is_null() && job_running(buf) {
         err_static(&raw const e_job_still_running_add_bang_to_end_the_job);
@@ -487,7 +487,7 @@ pub unsafe extern "C" fn no_write_message() {
 
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn no_write_message_nobang(buf: *const buf_T) {
+pub unsafe fn no_write_message_nobang(buf: *const buf_T) {
     // SAFETY: the caller's promise -- a live buffer, which is only read.
     let buf = unsafe { Buf::new(buf.cast_mut()) };
     if !buf.terminal.is_null() && job_running(buf) {

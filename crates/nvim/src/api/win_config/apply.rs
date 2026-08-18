@@ -10,7 +10,7 @@
 
 use super::*;
 
-unsafe extern "C" fn win_config_split(
+unsafe fn win_config_split(
     mut win: *mut win_T,
     mut config: *const KeyDict_win_config,
     mut fconfig: *mut WinConfig,
@@ -328,7 +328,7 @@ unsafe extern "C" fn win_config_split(
     }
 }
 
-unsafe extern "C" fn win_config_float_tp(
+unsafe fn win_config_float_tp(
     mut win: *mut win_T,
     mut config: *const KeyDict_win_config,
     mut fconfig: *const WinConfig,

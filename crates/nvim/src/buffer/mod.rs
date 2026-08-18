@@ -321,7 +321,7 @@ impl BufRef {
 ///
 /// # Safety
 /// `bufref` must be a writable `bufref_T`, and `buf` a live buffer or null.
-pub unsafe extern "C" fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T) {
+pub unsafe fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a slot to write.
     unsafe { *bufref = BufRef::of_raw(buf).0 };
 }
@@ -330,7 +330,7 @@ pub unsafe extern "C" fn set_bufref(bufref: *mut bufref_T, buf: *mut buf_T) {
 ///
 /// # Safety
 /// `bufref` must be a `bufref_T` [`set_bufref`] has filled in.
-pub unsafe extern "C" fn bufref_valid(bufref: *mut bufref_T) -> bool {
+pub unsafe fn bufref_valid(bufref: *mut bufref_T) -> bool {
     // SAFETY: the caller's promise -- a filled-in reference.
     BufRef(unsafe { *bufref }).valid()
 }

@@ -37,7 +37,7 @@ type StepFn = unsafe fn(*mut pos_T) -> c_int;
 ///
 /// # Safety
 /// There must be a current buffer and window.
-pub unsafe extern "C" fn findsent(dir: Direction, mut count: c_int) -> c_int {
+pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
     unsafe {
         let mut noskip = false; // do not skip blanks
         let mut pos = (*curwin.get()).w_cursor;
@@ -320,7 +320,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mu
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe extern "C" fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_int {
+pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_int {
     unsafe {
         let mut start_pos = (*curwin.get()).w_cursor;
         let mut pos = start_pos;

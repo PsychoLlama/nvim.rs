@@ -101,7 +101,7 @@ const DETACH: c_int = const { b'e' as c_int };
 /// command line in.
 type CmdBuf = [c_char; 40];
 
-pub unsafe extern "C" fn do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
+pub unsafe fn do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
     window_command(nchar, prenum, xchar);
 }
 

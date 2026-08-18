@@ -449,13 +449,13 @@ pub const SET_INIT: Set_ptr_t = Set_ptr_t {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
+unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
     unsafe {
         return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
     }
 }
 #[inline]
-unsafe extern "C" fn set_put_ptr_t(
+unsafe fn set_put_ptr_t(
     mut set: *mut Set_ptr_t,
     mut key: ptr_t,
     mut key_alloc: *mut *mut ptr_t,

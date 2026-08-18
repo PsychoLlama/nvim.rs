@@ -24,7 +24,7 @@ use crate::types::{MTKey, MarkTreeIter, buf_T, colnr_T, uint32_t};
 /// Remove the extmark `id` of namespace `ns_id`.
 ///
 /// Answers false when there is no such mark.
-pub unsafe extern "C" fn extmark_del_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> bool {
+pub unsafe fn extmark_del_id(buf: *mut buf_T, ns_id: uint32_t, id: uint32_t) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
     del_id(unsafe { Buf::new(buf) }, ns_id, id)
 }
@@ -40,12 +40,7 @@ pub(crate) fn del_id(mut buf: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
 }
 
 /// Remove the (possibly paired) extmark `key` that `itr` is on.
-pub unsafe extern "C" fn extmark_del(
-    buf: *mut buf_T,
-    itr: *mut MarkTreeIter,
-    key: MTKey,
-    restore: bool,
-) {
+pub unsafe fn extmark_del(buf: *mut buf_T, itr: *mut MarkTreeIter, key: MTKey, restore: bool) {
     // SAFETY: the caller's promise -- a live buffer and an iterator
     // positioned in its marktree, both of which outlive the call.
     del(unsafe { Buf::new(buf) }, unsafe { &mut *itr }, key, restore);
@@ -91,7 +86,7 @@ pub(crate) fn del(mut buf: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore:
 
 /// Free every mark of namespace `ns_id` (or of every namespace, when it is 0)
 /// between two positions.
-pub unsafe extern "C" fn extmark_clear(
+pub unsafe fn extmark_clear(
     buf: *mut buf_T,
     ns_id: uint32_t,
     l_row: c_int,

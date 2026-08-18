@@ -268,7 +268,7 @@ pub unsafe fn tabstop_first(ts: *mut colnr_T) -> c_int {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn get_sw_value(buf: *mut buf_T) -> c_int {
+pub unsafe fn get_sw_value(buf: *mut buf_T) -> c_int {
     unsafe { get_sw_value_col(buf, 0, false) }
 }
 
@@ -278,7 +278,7 @@ pub unsafe extern "C" fn get_sw_value(buf: *mut buf_T) -> c_int {
 /// # Safety
 /// `buf` must be a live buffer and `pos` a position in the current one: the
 /// cursor is moved there and restored.
-unsafe extern "C" fn get_sw_value_pos(buf: *mut buf_T, pos: *mut pos_T, left: bool) -> c_int {
+unsafe fn get_sw_value_pos(buf: *mut buf_T, pos: *mut pos_T, left: bool) -> c_int {
     unsafe {
         let save_cursor = (*curwin.get()).w_cursor;
         (*curwin.get()).w_cursor = *pos;
@@ -292,7 +292,7 @@ unsafe extern "C" fn get_sw_value_pos(buf: *mut buf_T, pos: *mut pos_T, left: bo
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn get_sw_value_indent(buf: *mut buf_T, left: bool) -> c_int {
+pub unsafe fn get_sw_value_indent(buf: *mut buf_T, left: bool) -> c_int {
     unsafe {
         let mut pos = (*curwin.get()).w_cursor;
         pos.col = getwhitecols_curline() as colnr_T;
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn get_sw_value_indent(buf: *mut buf_T, left: bool) -> c_i
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn get_sw_value_col(buf: *mut buf_T, col: colnr_T, left: bool) -> c_int {
+pub unsafe fn get_sw_value_col(buf: *mut buf_T, col: colnr_T, left: bool) -> c_int {
     unsafe {
         if (*buf).b_p_sw != 0 {
             (*buf).b_p_sw as c_int
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn get_sts_value() -> c_int {
 ///
 /// # Safety
 /// There must be a current line.
-pub unsafe extern "C" fn get_indent() -> c_int {
+pub unsafe fn get_indent() -> c_int {
     unsafe {
         indent_size_ts(
             get_cursor_line_ptr(),
@@ -348,7 +348,7 @@ pub unsafe extern "C" fn get_indent() -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line.
-pub unsafe extern "C" fn get_indent_lnum(lnum: linenr_T) -> c_int {
+pub unsafe fn get_indent_lnum(lnum: linenr_T) -> c_int {
     unsafe {
         indent_size_ts(
             ml_get(lnum),
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn get_indent_lnum(lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line of `buf`.
-pub unsafe extern "C" fn get_indent_buf(buf: *mut buf_T, lnum: linenr_T) -> c_int {
+pub unsafe fn get_indent_buf(buf: *mut buf_T, lnum: linenr_T) -> c_int {
     unsafe { indent_size_ts(ml_get_buf(buf, lnum), (*buf).b_p_ts, (*buf).b_p_vts_array) }
 }
 
@@ -374,7 +374,7 @@ pub unsafe extern "C" fn get_indent_buf(buf: *mut buf_T, lnum: linenr_T) -> c_in
 ///
 /// # Safety
 /// `ptr` must point at a NUL-terminated string.
-pub unsafe extern "C" fn indent_size_no_ts(ptr: *const c_char) -> c_int {
+pub unsafe fn indent_size_no_ts(ptr: *const c_char) -> c_int {
     unsafe {
         let tab_size = byte2cells(TAB);
         let mut vcol = 0;
@@ -605,7 +605,7 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
 ///
 /// # Safety
 /// There must be a current line, and it must be modifiable.
-pub unsafe extern "C" fn set_indent(size: c_int, flags: c_int) -> bool {
+pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
     unsafe {
         let buf = curbuf.get();
         let oldline = get_cursor_line_ptr();
@@ -802,7 +802,7 @@ pub unsafe extern "C" fn set_indent(size: c_int, flags: c_int) -> bool {
 ///
 /// # Safety
 /// There must be a current buffer and window.
-pub unsafe extern "C" fn get_number_indent(lnum: linenr_T) -> c_int {
+pub unsafe fn get_number_indent(lnum: linenr_T) -> c_int {
     unsafe {
         if lnum > (*curbuf.get()).b_ml.ml_line_count {
             return -1;

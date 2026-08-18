@@ -243,13 +243,13 @@ pub const MAP_INIT: Map_String_int = Map_String_int {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn set_has_String(mut set: *mut Set_String, mut key: String_0) -> bool {
+unsafe fn set_has_String(mut set: *mut Set_String, mut key: String_0) -> bool {
     unsafe {
         return mh_get_String(set, key) != MH_TOMBSTONE as uint32_t;
     }
 }
 #[inline]
-unsafe extern "C" fn set_put_String(
+unsafe fn set_put_String(
     mut set: *mut Set_String,
     mut key: String_0,
     mut key_alloc: *mut *mut String_0,
@@ -265,7 +265,7 @@ unsafe extern "C" fn set_put_String(
     }
 }
 #[inline]
-unsafe extern "C" fn map_put_String_int(
+unsafe fn map_put_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
     mut value: ::core::ffi::c_int,
@@ -281,7 +281,7 @@ unsafe extern "C" fn map_put_String_int(
     }
 }
 #[inline]
-unsafe extern "C" fn map_get_String_int(
+unsafe fn map_get_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {

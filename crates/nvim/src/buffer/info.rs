@@ -365,7 +365,7 @@ fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: linenr_T) {
 
 /// The message CTRL-G and `:file` print: the name, the flags, where the
 /// cursor is and how far through the file that is.
-pub unsafe extern "C" fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
+pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let mut out = Msg::new();
     let mut buf = current_buf();
 
@@ -583,12 +583,7 @@ impl Msg {
 
 /// The column indicator: `col` alone when the virtual column agrees with it,
 /// `col-vcol` when it does not.
-pub unsafe extern "C" fn col_print(
-    buf: *mut c_char,
-    buflen: size_t,
-    col: c_int,
-    vcol: c_int,
-) -> c_int {
+pub unsafe fn col_print(buf: *mut c_char, buflen: size_t, col: c_int, vcol: c_int) -> c_int {
     if col == vcol {
         // SAFETY: the caller's buffer, and a format taking one number.
         return unsafe { vim_snprintf_safelen(buf, buflen, c"%d".as_ptr(), col) } as c_int;
@@ -602,7 +597,7 @@ pub unsafe extern "C" fn col_print(
 // 'title' and 'icon'
 
 /// Build `'title'` and `'icon'` and, when either changed, tell the UI.
-pub unsafe extern "C" fn maketitle() {
+pub unsafe fn maketitle() {
     let mut scratch: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
 
     // SAFETY: reads the redraw state.
@@ -737,7 +732,7 @@ fn value_change(str: *mut c_char, last: &GlobalCell<*mut c_char>) -> bool {
 }
 
 /// Send the current window title and icon text to the UI.
-pub unsafe extern "C" fn resettitle() {
+pub unsafe fn resettitle() {
     // SAFETY: two NUL-terminated titles, or null, which `cstr_as_string`
     // answers the empty string for.
     unsafe { ui_call_set_icon(cstr_as_string(lasticon.get())) };
@@ -750,7 +745,7 @@ pub unsafe extern "C" fn resettitle() {
 
 /// The relative cursor position -- "All", "Top", "Bot" or a percentage --
 /// into `buf`.
-pub unsafe extern "C" fn get_rel_pos(wp: *mut win_T, buf: *mut c_char, buflen: c_int) -> c_int {
+pub unsafe fn get_rel_pos(wp: *mut win_T, buf: *mut c_char, buflen: c_int) -> c_int {
     // At least three characters are needed to write anything.
     if buflen < 3 {
         return 0;
@@ -795,11 +790,7 @@ pub unsafe extern "C" fn get_rel_pos(wp: *mut win_T, buf: *mut c_char, buflen: c
 
 /// Append "(2 of 8)" to `buf`, when more than one file is being edited.
 /// Answers how many characters that took.
-pub unsafe extern "C" fn append_arg_number(
-    wp: *mut win_T,
-    buf: *mut c_char,
-    buflen: size_t,
-) -> c_int {
+pub unsafe fn append_arg_number(wp: *mut win_T, buf: *mut c_char, buflen: size_t) -> c_int {
     // Upstream asks the CURRENT window for the argument list even when
     // reporting on another one.
     // SAFETY: the current window's argument list is live.

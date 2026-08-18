@@ -34,7 +34,7 @@ pub unsafe fn QUEUE_INIT(q: *mut QUEUE) {
 
 /// Splice `q` in as the last entry of the queue headed by `h`.
 #[inline(always)]
-pub(crate) unsafe extern "C" fn QUEUE_INSERT_TAIL(h: *mut QUEUE, q: *mut QUEUE) {
+pub(crate) unsafe fn QUEUE_INSERT_TAIL(h: *mut QUEUE, q: *mut QUEUE) {
     unsafe {
         (*q).next = h;
         (*q).prev = (*h).prev;
@@ -45,7 +45,7 @@ pub(crate) unsafe extern "C" fn QUEUE_INSERT_TAIL(h: *mut QUEUE, q: *mut QUEUE) 
 
 /// Unlink `q` from whatever queue it is on.
 #[inline(always)]
-pub(crate) unsafe extern "C" fn QUEUE_REMOVE(q: *mut QUEUE) {
+pub(crate) unsafe fn QUEUE_REMOVE(q: *mut QUEUE) {
     unsafe {
         (*(*q).prev).next = (*q).next;
         (*(*q).next).prev = (*q).prev;

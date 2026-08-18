@@ -39,7 +39,7 @@ unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_ch
 /// The name a deleted-but-still-referenced group lists under, translated
 /// once and cached.
 #[inline(always)]
-pub(crate) unsafe extern "C" fn get_deleted_augroup() -> *const ::core::ffi::c_char {
+pub(crate) unsafe fn get_deleted_augroup() -> *const ::core::ffi::c_char {
     unsafe {
         if deleted_augroup.get().is_null() {
             deleted_augroup.set(gettext(c"--Deleted--".as_ptr()));
@@ -50,7 +50,7 @@ pub(crate) unsafe extern "C" fn get_deleted_augroup() -> *const ::core::ffi::c_c
 
 /// The id of the group called `name`, creating one if there is not
 /// already an id for that name.
-pub unsafe extern "C" fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
         debug_assert!(strcasecmp(name, c"end".as_ptr()) != 0);
 
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn augroup_add(name: *const ::core::ffi::c_char) -> ::core
 /// autocommands keeps them and is merely renamed `--Deleted--`, leaving
 /// them defined and unreachable (O-B14-2).  Everywhere else the
 /// autocommands go with the group.
-pub unsafe extern "C" fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bool) {
+pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bool) {
     unsafe {
         let group = augroup_find(name);
         if group == AUGROUP_ERROR {
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn augroup_del(name: *mut ::core::ffi::c_char, stupid_lega
 /// The id of the group called `name`, or `AUGROUP_ERROR` when there is
 /// none.  `AUGROUP_DELETED` is an answer of its own: the name is known and
 /// belongs to a group `:augroup!` renamed.
-pub unsafe extern "C" fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+pub unsafe fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
         let existing_id = map_get_String_int(map_augroup_name_to_id.ptr(), cstr_as_string(name));
         if existing_id == AUGROUP_DELETED || existing_id > 0 {
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn augroup_find(name: *const ::core::ffi::c_char) -> ::cor
 /// the map shrinks when a group is deleted, so its size is not.  The id
 /// one past the last is spelled `END`, which is what makes `:augroup`
 /// completion terminate.
-pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
+pub unsafe fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     unsafe {
         debug_assert!(group != 0);
 
@@ -177,12 +177,12 @@ pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::c
 }
 
 /// Whether a group called `name` exists.
-pub unsafe extern "C" fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
+pub unsafe fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
     unsafe { augroup_find(name) > 0 }
 }
 
 /// `:augroup`: switch to a group, leave one, delete one, or list them.
-pub unsafe extern "C" fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
+pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
     unsafe {
         if del_group {
             if *arg == 0 {
@@ -230,9 +230,7 @@ pub unsafe extern "C" fn expand_get_augroup_name(
 /// A name that is not a group is *not* consumed and answers
 /// `AUGROUP_ALL`, which is how `:autocmd BufEnter …` is told from
 /// `:autocmd MyGroup BufEnter …` without a lookahead.
-pub(crate) unsafe extern "C" fn arg_augroup_get(
-    argp: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe fn arg_augroup_get(argp: *mut *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
         let arg = *argp;
         let bytes = CStr::from_ptr(arg).to_bytes();

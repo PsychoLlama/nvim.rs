@@ -225,7 +225,7 @@ pub unsafe extern "C" fn vterm_new(rows: c_int, cols: c_int) -> *mut VTerm {
     vt
 }
 
-pub unsafe extern "C" fn vterm_free(vt: *mut VTerm) {
+pub unsafe fn vterm_free(vt: *mut VTerm) {
     // Everything the terminal owns is read out before anything is freed, so
     // that the last release -- the terminal itself -- has nothing left to
     // invalidate.
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn vterm_free(vt: *mut VTerm) {
     unsafe { vterm_dealloc(vt.cast::<c_void>()) };
 }
 
-pub unsafe extern "C" fn vterm_get_size(vt: *const VTerm, rowsp: *mut c_int, colsp: *mut c_int) {
+pub unsafe fn vterm_get_size(vt: *const VTerm, rowsp: *mut c_int, colsp: *mut c_int) {
     // SAFETY: the caller hands over a live terminal.
     let (rows, cols) = unsafe { ((*vt).rows, (*vt).cols) };
     // A null out-parameter means "don't report this one".
@@ -313,11 +313,7 @@ pub unsafe extern "C" fn vterm_output_set_callback(
 
 /// Writes a reply back to the host. With no sink installed and no room left
 /// in the buffer, the reply is dropped whole rather than truncated.
-pub unsafe extern "C" fn vterm_push_output_bytes(
-    vt: *mut VTerm,
-    bytes: *const c_char,
-    len: size_t,
-) {
+pub unsafe fn vterm_push_output_bytes(vt: *mut VTerm, bytes: *const c_char, len: size_t) {
     // The consumer's sink is free to re-enter the terminal, so it is reached
     // with nothing borrowed.
     //
@@ -424,7 +420,7 @@ fn scroll_vacated(mut rect: VTermRect, downward: c_int, rightward: c_int) -> VTe
 
 /// Drives a scroll out of a consumer's move and erase primitives, for a
 /// consumer that did not want to take the whole scroll itself.
-pub unsafe extern "C" fn vterm_scroll_rect(
+pub unsafe fn vterm_scroll_rect(
     rect: VTermRect,
     downward: c_int,
     rightward: c_int,

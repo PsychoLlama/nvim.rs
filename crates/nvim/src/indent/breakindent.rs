@@ -116,7 +116,7 @@ unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
 /// # Safety
 /// `briopt` must be null or a NUL-terminated string, and `wp` null or a
 /// window.
-pub unsafe extern "C" fn briopt_check(briopt: *mut c_char, wp: *mut win_T) -> bool {
+pub unsafe fn briopt_check(briopt: *mut c_char, wp: *mut win_T) -> bool {
     // SAFETY: the caller's option string, or the window's own copy of it.
     let value = unsafe {
         if !briopt.is_null() {
@@ -303,7 +303,7 @@ impl BreakindentCache {
 ///
 /// # Safety
 /// `wp` must be a window and `line` a NUL-terminated string.
-pub unsafe extern "C" fn get_breakindent_win(wp: *mut win_T, line: *mut c_char) -> c_int {
+pub unsafe fn get_breakindent_win(wp: *mut win_T, line: *mut c_char) -> c_int {
     // SAFETY: the caller's window and its buffer.
     let (key, opt, eff_wwidth, col_off2, flp) = unsafe {
         let buf = (*wp).w_buffer;

@@ -14,14 +14,14 @@ use super::*;
 use crate::api::private::helpers::{array_add, dict_put_str, has_key, set_key};
 
 #[inline]
-unsafe extern "C" fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
+unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
     unsafe {
         return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
     }
 }
 
 #[inline]
-unsafe extern "C" fn set_put_ptr_t(
+unsafe fn set_put_ptr_t(
     mut set: *mut Set_ptr_t,
     mut key: ptr_t,
     mut key_alloc: *mut *mut ptr_t,
@@ -38,7 +38,7 @@ unsafe extern "C" fn set_put_ptr_t(
 }
 
 #[inline]
-unsafe extern "C" fn set_del_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> uint32_t {
+unsafe fn set_del_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> uint32_t {
     unsafe {
         mh_delete_uint32_t(set, &raw mut key);
         return key;
@@ -46,7 +46,7 @@ unsafe extern "C" fn set_del_uint32_t(mut set: *mut Set_uint32_t, mut key: uint3
 }
 
 #[inline]
-unsafe extern "C" fn set_put_uint32_t(
+unsafe fn set_put_uint32_t(
     mut set: *mut Set_uint32_t,
     mut key: uint32_t,
     mut key_alloc: *mut *mut uint32_t,
@@ -63,7 +63,7 @@ unsafe extern "C" fn set_put_uint32_t(
 }
 
 #[inline]
-unsafe extern "C" fn map_put_String_int(
+unsafe fn map_put_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
     mut value: ::core::ffi::c_int,
@@ -80,7 +80,7 @@ unsafe extern "C" fn map_put_String_int(
 }
 
 #[inline]
-unsafe extern "C" fn map_get_String_int(
+unsafe fn map_get_String_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {
@@ -134,7 +134,7 @@ pub unsafe extern "C" fn nvim_get_namespaces(mut arena: *mut Arena) -> Dict {
     }
 }
 
-pub unsafe extern "C" fn describe_ns(
+pub unsafe fn describe_ns(
     mut ns_id: NS,
     mut unknown: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn describe_ns(
     }
 }
 
-pub unsafe extern "C" fn ns_initialized(mut ns: uint32_t) -> bool {
+pub unsafe fn ns_initialized(mut ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false;
     }

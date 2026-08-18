@@ -262,11 +262,11 @@ static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> =
 static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static close_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static frame_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub unsafe extern "C" fn window_layout_lock() {
+pub unsafe fn window_layout_lock() {
     window_lock();
 }
 
-pub unsafe extern "C" fn window_layout_unlock() {
+pub unsafe fn window_layout_unlock() {
     window_unlock();
 }
 
@@ -282,11 +282,11 @@ fn window_unlock() {
     close_disallowed.set(close_disallowed.get() - 1);
 }
 
-pub unsafe extern "C" fn frames_locked() -> bool {
+pub unsafe fn frames_locked() -> bool {
     frame_locked.get() != 0
 }
 
-pub unsafe extern "C" fn window_layout_locked(cmd: cmdidx_T) -> bool {
+pub unsafe fn window_layout_locked(cmd: cmdidx_T) -> bool {
     layout_locked(cmd)
 }
 
@@ -303,7 +303,7 @@ fn layout_locked(cmd: cmdidx_T) -> bool {
     locked
 }
 
-pub unsafe extern "C" fn window_layout_locked_err(cmd: cmdidx_T, err: *mut Error) -> bool {
+pub unsafe fn window_layout_locked_err(cmd: cmdidx_T, err: *mut Error) -> bool {
     // SAFETY: the caller's promise -- a writable error slot.
     locked_err(cmd, unsafe { &mut *err })
 }
@@ -322,11 +322,11 @@ fn locked_err(cmd: cmdidx_T, err: &mut Error) -> bool {
     true
 }
 
-pub unsafe extern "C" fn check_can_set_curbuf_disabled() -> bool {
+pub unsafe fn check_can_set_curbuf_disabled() -> bool {
     winfixbuf_allows()
 }
 
-pub unsafe extern "C" fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
+pub unsafe fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
     forceit != 0 || winfixbuf_allows()
 }
 
@@ -340,7 +340,7 @@ fn winfixbuf_allows() -> bool {
     true
 }
 
-pub unsafe extern "C" fn prevwin_curwin() -> *mut win_T {
+pub unsafe fn prevwin_curwin() -> *mut win_T {
     // SAFETY: reads the cmdline-window state, which is always set up.
     let in_cmdwin = unsafe { is_in_cmdwin() };
     let prev = prevwin.get();
@@ -351,7 +351,7 @@ pub unsafe extern "C" fn prevwin_curwin() -> *mut win_T {
     }
 }
 
-pub unsafe extern "C" fn swbuf_goto_win_with_buf(buf: *mut buf_T) -> *mut win_T {
+pub unsafe fn swbuf_goto_win_with_buf(buf: *mut buf_T) -> *mut win_T {
     // SAFETY: the caller's promise -- a live buffer or null.
     raw_win(unsafe { Buf::from_raw(buf) }.and_then(swbuf_goto_win))
 }
@@ -379,12 +379,12 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 // mean promising exactly what the caller is asking about. `valid_win` below is
 // the bridge back for a caller that wants to go on and use the window.
 
-pub unsafe extern "C" fn win_valid(win: *const win_T) -> bool {
+pub unsafe fn win_valid(win: *const win_T) -> bool {
     // SAFETY: `win` is only compared, never read; `curtab` is always set.
     unsafe { tabpage_win_valid(curtab.get(), win) }
 }
 
-pub unsafe extern "C" fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool {
+pub unsafe fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool {
     // SAFETY: the caller's promise -- a live tab page. `win` is only compared.
     valid_win_in_tab(unsafe { TabPage::new(tp as *mut tabpage_T) }, win)
 }
@@ -394,13 +394,13 @@ fn valid_win_in_tab(tp: TabPage, win: *const win_T) -> bool {
     !win.is_null() && windows_in_tab(tp).any(|wp| wp.raw() as *const win_T == win)
 }
 
-pub unsafe extern "C" fn win_find_by_handle(handle: handle_T) -> *mut win_T {
+pub unsafe fn win_find_by_handle(handle: handle_T) -> *mut win_T {
     windows()
         .find(|wp| wp.handle == handle)
         .map_or(ptr::null_mut(), Win::raw)
 }
 
-pub unsafe extern "C" fn win_valid_any_tab(win: *mut win_T) -> bool {
+pub unsafe fn win_valid_any_tab(win: *mut win_T) -> bool {
     valid_win_any_tab(win)
 }
 
@@ -409,7 +409,7 @@ fn valid_win_any_tab(win: *mut win_T) -> bool {
     !win.is_null() && tab_windows().any(|wp| wp.raw() == win)
 }
 
-pub unsafe extern "C" fn win_count() -> ::core::ffi::c_int {
+pub unsafe fn win_count() -> ::core::ffi::c_int {
     windows().count() as ::core::ffi::c_int
 }
 

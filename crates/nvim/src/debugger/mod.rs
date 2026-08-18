@@ -221,7 +221,7 @@ static debug_skipped_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_m
 ///
 /// # Safety
 /// `eap` must be the live `exarg_T`.
-pub unsafe extern "C" fn dbg_check_breakpoint(eap: *mut exarg_T) {
+pub unsafe fn dbg_check_breakpoint(eap: *mut exarg_T) {
     debug_skipped.set(false);
     // SAFETY: caller contract.
     let skip = unsafe { (*eap).skip != 0 };
@@ -278,7 +278,7 @@ pub unsafe extern "C" fn dbg_check_breakpoint(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// As [`dbg_check_breakpoint`].
-pub unsafe extern "C" fn dbg_check_skipped(eap: *mut exarg_T) -> bool {
+pub unsafe fn dbg_check_skipped(eap: *mut exarg_T) -> bool {
     if !debug_skipped.get() {
         return false;
     }
@@ -299,7 +299,7 @@ pub unsafe extern "C" fn dbg_check_skipped(eap: *mut exarg_T) -> bool {
 
 /// Record that `name` has a breakpoint on `lnum`. Whether it is announced is
 /// [`dbg_check_breakpoint`]'s decision, since the line may not be executed.
-pub unsafe extern "C" fn dbg_breakpoint(name: *mut c_char, lnum: linenr_T) {
+pub unsafe fn dbg_breakpoint(name: *mut c_char, lnum: linenr_T) {
     debug_breakpoint_name.set(name);
     debug_breakpoint_lnum.set(lnum);
 }
@@ -679,11 +679,7 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `fname` must be NUL-terminated.
-pub unsafe extern "C" fn dbg_find_breakpoint(
-    file: bool,
-    fname: *mut c_char,
-    after: linenr_T,
-) -> linenr_T {
+pub unsafe fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: linenr_T) -> linenr_T {
     // SAFETY: caller contract.
     unsafe { debuggy_find(file, fname, after, BreakList::Debug, ptr::null_mut()) }
 }
@@ -693,7 +689,7 @@ pub unsafe extern "C" fn dbg_find_breakpoint(
 ///
 /// # Safety
 /// `fname` must be NUL-terminated; `fp` null or writable.
-pub unsafe extern "C" fn has_profiling(file: bool, fname: *mut c_char, fp: *mut bool) -> bool {
+pub unsafe fn has_profiling(file: bool, fname: *mut c_char, fp: *mut bool) -> bool {
     // SAFETY: caller contract.
     unsafe { debuggy_find(file, fname, 0 as linenr_T, BreakList::Profiling, fp) != 0 as linenr_T }
 }

@@ -249,7 +249,7 @@ pub unsafe fn utf_class_tab(c: c_int, chartab: *const uint64_t) -> c_int {
 }
 
 /// [`utf_class_tab`] against the current buffer's `'iskeyword'`.
-pub unsafe extern "C" fn utf_class(c: c_int) -> c_int {
+pub unsafe fn utf_class(c: c_int) -> c_int {
     unsafe { utf_class_tab(c, &raw const (*curbuf.get()).b_chartab as *const uint64_t) }
 }
 

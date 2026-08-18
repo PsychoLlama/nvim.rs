@@ -44,7 +44,7 @@ const NAMED_TYPES: [(&CStr, c_int); 3] = [
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with that table at -3.
-pub unsafe extern "C-unwind" fn nlua_init_types(lstate: *mut lua_State) {
+pub unsafe fn nlua_init_types(lstate: *mut lua_State) {
     unsafe {
         // A Lua string, without its terminator.
         let push_cstr = |s: &CStr| lua_pushlstring(lstate, s.as_ptr(), s.count_bytes());
@@ -81,7 +81,7 @@ pub unsafe extern "C-unwind" fn nlua_init_types(lstate: *mut lua_State) {
 /// # Safety
 /// `retval` must point at the keyset `hashy` belongs to, and `lstate` have a
 /// value on top.
-pub unsafe extern "C-unwind" fn nlua_pop_keydict(
+pub unsafe fn nlua_pop_keydict(
     lstate: *mut lua_State,
     retval: *mut c_void,
     hashy: FieldHashfn,
@@ -166,7 +166,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_keydict(
 /// # Safety
 /// `value` must point at the keyset `table` describes, terminated by a row
 /// with a null `str`.
-pub unsafe extern "C-unwind" fn nlua_push_keydict(
+pub unsafe fn nlua_push_keydict(
     lstate: *mut lua_State,
     value: *mut c_void,
     table: *mut KeySetLink,

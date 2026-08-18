@@ -36,7 +36,7 @@ static match_at: GlobalCell<pos_T> = GlobalCell::new(pos_T {
 /// # Safety
 /// `oap` must be null or valid; the current window and buffer must be
 /// valid.
-pub unsafe extern "C" fn findmatch(oap: *mut oparg_T, initc: c_int) -> *mut pos_T {
+pub unsafe fn findmatch(oap: *mut oparg_T, initc: c_int) -> *mut pos_T {
     unsafe { findmatchlimit(oap, initc, 0, 0) }
 }
 
@@ -61,7 +61,7 @@ pub unsafe extern "C" fn findmatch(oap: *mut oparg_T, initc: c_int) -> *mut pos_
 /// `oap` must be null or valid; the current window and buffer must be
 /// valid. The answer points at a static and is invalidated by the next
 /// call.
-pub unsafe extern "C" fn findmatchlimit(
+pub unsafe fn findmatchlimit(
     oap: *mut oparg_T,
     initc: c_int,
     flags: c_int,

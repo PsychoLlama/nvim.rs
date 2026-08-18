@@ -73,7 +73,7 @@ pub(crate) fn script_id_valid(sid: c_int) -> bool {
 }
 
 /// Was script `sid` written in Lua?
-pub unsafe extern "C" fn script_is_lua(sid: scid_T) -> bool {
+pub unsafe fn script_is_lua(sid: scid_T) -> bool {
     if sid == SID_LUA {
         return true;
     }
@@ -90,7 +90,7 @@ pub unsafe extern "C" fn script_is_lua(sid: scid_T) -> bool {
 /// does not work: a script that is edited and written may get a different inode
 /// even though to the user it is the same script, and a deleted script's inode
 /// may be re-used by a differently named one.
-pub unsafe extern "C" fn find_script_by_name(name: *mut c_char) -> c_int {
+pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
     // SAFETY: nothing below sources a script, so the borrow stays valid.
     for (idx, &si) in unsafe { scripts() }.iter().enumerate().rev() {
         // SAFETY: a registry slot always holds a live `scriptitem_T`, and
@@ -180,7 +180,7 @@ unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
 /// `--cmd` or `-c` command line, and so on.  When `should_free` is non-null and
 /// the name really is a file path, the result is a `home_replace_save()` copy
 /// and `*should_free` is set.
-pub unsafe extern "C" fn get_scriptname(script_ctx: sctx_T, should_free: *mut bool) -> *mut c_char {
+pub unsafe fn get_scriptname(script_ctx: sctx_T, should_free: *mut bool) -> *mut c_char {
     // SAFETY: an out-parameter the caller owns, when it passed one at all.
     unsafe {
         if !should_free.is_null() {
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn get_scriptname(script_ctx: sctx_T, should_free: *mut bo
 ///
 /// A sourced script tracks its own read position, because the execution stack's
 /// number lags behind by the one line `getsourceline` reads ahead.
-pub unsafe extern "C" fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut c_void) -> linenr_T {
+pub unsafe fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut c_void) -> linenr_T {
     if !getline_is_source(fgetline) {
         return sourcing_lnum();
     }
@@ -760,7 +760,7 @@ unsafe fn escaped_newline(buf: *const c_char, len: c_int) -> bool {
 // Leaving a script.
 
 /// Are we sourcing a script, from a file or a buffer or a string?
-pub unsafe extern "C" fn sourcing_a_script(eap: *mut exarg_T) -> c_int {
+pub unsafe fn sourcing_a_script(eap: *mut exarg_T) -> c_int {
     // SAFETY: `eap` is the running command's block.
     let same = unsafe {
         getline_equal(
@@ -814,7 +814,7 @@ pub unsafe fn ex_finish(eap: *mut exarg_T) {
 ///
 /// Also called for a pending finish at the `":endtry"` or after returning from
 /// an extra `do_cmdline()`; `reanimate` says which.
-pub unsafe extern "C" fn do_finish(eap: *mut exarg_T, reanimate: bool) {
+pub unsafe fn do_finish(eap: *mut exarg_T, reanimate: bool) {
     // SAFETY: `eap` is the running command's block, and its cookie is a
     // `source_cookie_T` because `ex_finish` checked before calling.
     unsafe {
@@ -846,7 +846,7 @@ unsafe fn source_cookie(eap: *mut exarg_T) -> *mut source_cookie_T {
 
 /// Did a sourced file have the `":finish"` command?  If so, don't give an error
 /// message for a missing `":endif"`.  False when not sourcing a file.
-pub unsafe extern "C" fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
+pub unsafe fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
     // SAFETY: `getline_equal` reads the reader's own bookkeeping; the cookie is
     // only dereferenced once that says it is a sourced script's.
     unsafe {
@@ -863,7 +863,7 @@ pub unsafe extern "C" fn source_finished(fgetline: LineGetter, cookie: *mut c_vo
 ///
 /// `foo#bar#baz` becomes `autoload/foo/bar.vim`.  The caller must make sure
 /// `name` contains `AUTOLOAD_CHAR`; the result is `xmalloc`ed.
-pub unsafe extern "C" fn autoload_name(name: *const c_char, name_len: size_t) -> *mut c_char {
+pub unsafe fn autoload_name(name: *const c_char, name_len: size_t) -> *mut c_char {
     // SAFETY: the caller's `name` is `name_len` readable bytes.
     let name = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };
     let mut out = Vec::with_capacity(AUTOLOAD_PREFIX.len() + name_len + AUTOLOAD_SUFFIX.len());
@@ -897,11 +897,7 @@ pub unsafe extern "C" fn autoload_name(name: *const c_char, name_len: size_t) ->
 ///
 /// Returns true if a package was loaded.  `reload` loads the script again even
 /// when it is already known.
-pub unsafe extern "C" fn script_autoload(
-    name: *const c_char,
-    name_len: size_t,
-    reload: bool,
-) -> bool {
+pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: bool) -> bool {
     // SAFETY: the caller's `name` is `name_len` readable bytes.
     let bytes = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };
     // If there is no `#` after name[0] there is no package name.

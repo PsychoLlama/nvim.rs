@@ -47,7 +47,7 @@ pub(crate) struct How {
 /// `lines_to_read` is `MAXLNUM`.
 ///
 /// @return  FAIL for failure, NOTDONE for a directory (also a failure), or OK
-pub unsafe extern "C" fn readfile(
+pub unsafe fn readfile(
     fname: *mut c_char,
     sfname: *mut c_char,
     from: linenr_T,

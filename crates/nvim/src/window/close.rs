@@ -32,7 +32,7 @@ use crate::state::MODE_INSERT;
 use crate::types::{CMD_SIZE, CMOD_CONFIRM, Error, buf_T, colnr_T, linenr_T};
 use crate::winlayer::tabs;
 
-pub unsafe extern "C" fn entering_window(win: *mut win_T) {
+pub unsafe fn entering_window(win: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     enter_window(unsafe { Win::new(win) });
 }
@@ -84,7 +84,7 @@ fn is_prompt(mut win: Win) -> bool {
     unsafe { bt_prompt(win.buffer().raw()) }
 }
 
-pub unsafe extern "C" fn win_init_empty(wp: *mut win_T) {
+pub unsafe fn win_init_empty(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     init_empty(unsafe { Win::new(wp) });
 }
@@ -110,11 +110,11 @@ pub(crate) fn init_empty(wp: Win) {
 }
 
 /// Init the current window. Called when a new file is being edited.
-pub unsafe extern "C" fn curwin_init() {
+pub unsafe fn curwin_init() {
     init_empty(cur_win());
 }
 
-pub unsafe extern "C" fn close_windows(buf: *mut buf_T, keep_curwin: bool) {
+pub unsafe fn close_windows(buf: *mut buf_T, keep_curwin: bool) {
     // SAFETY: the caller's promise -- a live buffer.
     close_all(unsafe { Buf::new(buf) }, keep_curwin);
 }
@@ -184,7 +184,7 @@ fn locked(mut wp: Win) -> bool {
     wp.w_locked || wp.buffer().b_locked > 0
 }
 
-pub unsafe extern "C" fn last_window(win: *mut win_T) -> bool {
+pub unsafe fn last_window(win: *mut win_T) -> bool {
     // SAFETY: the caller's promise -- a live window.
     is_last_window(unsafe { Win::new(win) })
 }
@@ -194,7 +194,7 @@ pub(crate) fn is_last_window(win: Win) -> bool {
     only_window(win, None) && first_tab().next().is_none()
 }
 
-pub unsafe extern "C" fn one_window(win: *mut win_T, tp: *mut tabpage_T) -> bool {
+pub unsafe fn one_window(win: *mut win_T, tp: *mut tabpage_T) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
     unsafe { only_window(Win::new(win), TabPage::from_raw(tp)) }
@@ -238,7 +238,7 @@ pub(crate) fn can_close_floats(tp: Option<TabPage>) -> bool {
     true
 }
 
-pub unsafe extern "C" fn can_close_in_cmdwin(win: *mut win_T, err: *mut Error) -> bool {
+pub unsafe fn can_close_in_cmdwin(win: *mut win_T, err: *mut Error) -> bool {
     // SAFETY: the caller's promise -- a live window and a writable error slot.
     unsafe { cmdwin_allows(Win::new(win), &mut *err) }
 }

@@ -866,7 +866,7 @@ unsafe fn register_class(state: *mut lua_State, name: *const c_char, methods: &[
 ///
 /// # Safety
 /// `state` must be a live Lua state with room for a few values.
-pub unsafe extern "C-unwind" fn luaopen_mpack(state: *mut lua_State) -> c_int {
+pub unsafe fn luaopen_mpack(state: *mut lua_State) -> c_int {
     unsafe {
         register_class(
             state,

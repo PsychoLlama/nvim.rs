@@ -781,7 +781,7 @@ impl FindContext {
 /// of the list).
 ///
 /// @return  a pointer to an allocated file name, or NULL if nothing found.
-pub unsafe extern "C" fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
+pub unsafe fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
     unsafe {
         if search_ctx_arg.is_null() {
             return ptr::null_mut();

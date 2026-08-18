@@ -20,7 +20,7 @@ pub unsafe extern "C" fn nvim_buf_get_number(mut buffer: Buffer, mut err: *mut E
     }
 }
 
-unsafe extern "C" fn src2ns(mut src_id: *mut Integer) -> uint32_t {
+unsafe fn src2ns(mut src_id: *mut Integer) -> uint32_t {
     unsafe {
         if *src_id == 0 as Integer {
             *src_id = nvim_create_namespace(String_0 {

@@ -80,7 +80,7 @@ unsafe fn set_cfunction(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with the `vim` table at -1.
-unsafe extern "C-unwind" fn nlua_state_add_internal(lstate: *mut lua_State) {
+unsafe fn nlua_state_add_internal(lstate: *mut lua_State) {
     unsafe {
         set_cfunction(lstate, c"_getvar", nlua_getvar);
         set_cfunction(lstate, c"_setvar", nlua_setvar);
@@ -96,7 +96,7 @@ unsafe extern "C-unwind" fn nlua_state_add_internal(lstate: *mut lua_State) {
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with the `vim` table on top.
-pub unsafe extern "C-unwind" fn nlua_state_add_stdlib(lstate: *mut lua_State, is_thread: bool) {
+pub unsafe fn nlua_state_add_stdlib(lstate: *mut lua_State, is_thread: bool) {
     unsafe {
         if !is_thread {
             // TODO(bfredl): some of the basic string functions should already

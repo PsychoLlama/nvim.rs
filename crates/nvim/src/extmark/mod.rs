@@ -454,7 +454,7 @@ fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice
 // file already spending the row.
 
 /// Adjust extmark rows for inserted or deleted rows; columns stay fixed.
-pub unsafe extern "C" fn extmark_adjust(
+pub unsafe fn extmark_adjust(
     buf: *mut buf_T,
     line1: linenr_T,
     line2: linenr_T,
@@ -472,7 +472,7 @@ pub unsafe extern "C" fn extmark_adjust(
 ///
 /// `old_col` and `new_col` encode an offset from `start_col` when the
 /// matching row extent is 0, and the end column of the region otherwise.
-pub unsafe extern "C" fn extmark_splice(
+pub unsafe fn extmark_splice(
     buf: *mut buf_T,
     start_row: c_int,
     start_col: colnr_T,
@@ -501,7 +501,7 @@ pub unsafe extern "C" fn extmark_splice(
 
 /// The single-line shorthand: the column delta is both the column count and
 /// the byte count.
-pub unsafe extern "C" fn extmark_splice_cols(
+pub unsafe fn extmark_splice_cols(
     buf: *mut buf_T,
     start_row: c_int,
     start_col: colnr_T,
@@ -525,7 +525,7 @@ pub unsafe extern "C" fn extmark_splice_cols(
 }
 
 /// Text removed from one place and inserted at another, as `:move` does it.
-pub unsafe extern "C" fn extmark_move_region(
+pub unsafe fn extmark_move_region(
     buf: *mut buf_T,
     start_row: c_int,
     start_col: colnr_T,

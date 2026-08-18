@@ -100,7 +100,7 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
     }
 }
 
-pub unsafe extern "C" fn create_user_command(
+pub unsafe fn create_user_command(
     mut channel_id: uint64_t,
     mut name: String_0,
     mut cmd: Object,

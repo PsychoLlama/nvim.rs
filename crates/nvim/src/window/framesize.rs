@@ -180,7 +180,7 @@ fn step_over_fixed(frp: Frame, topfirst: bool, wfh: bool) -> Option<Frame> {
     next
 }
 
-pub unsafe extern "C" fn frame_new_height(
+pub unsafe fn frame_new_height(
     topfrp: *mut frame_T,
     height: ::core::ffi::c_int,
     topfirst: bool,

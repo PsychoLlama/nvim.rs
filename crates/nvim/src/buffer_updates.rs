@@ -283,7 +283,7 @@ fn collect_lines(buf: Buf, n: size_t, first: linenr_T, arena: &mut Arena) -> Arr
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_register(
+pub unsafe fn buf_updates_register(
     buf: *mut buf_T,
     channel_id: uint64_t,
     cb: BufUpdateCallbacks,
@@ -357,7 +357,7 @@ fn send_whole_buffer(buf: Buf, channel_id: uint64_t) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_active(buf: *mut buf_T) -> bool {
+pub unsafe fn buf_updates_active(buf: *mut buf_T) -> bool {
     // SAFETY: the caller's promise.
     active(unsafe { Buf::new(buf) })
 }
@@ -370,7 +370,7 @@ fn active(mut buf: Buf) -> bool {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_send_end(buf: *mut buf_T, channelid: uint64_t) {
+pub unsafe fn buf_updates_send_end(buf: *mut buf_T, channelid: uint64_t) {
     // SAFETY: the caller's promise.
     send_end(unsafe { Buf::new(buf) }, channelid);
 }
@@ -385,7 +385,7 @@ fn send_end(buf: Buf, channelid: uint64_t) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_unregister(buf: *mut buf_T, channelid: uint64_t) {
+pub unsafe fn buf_updates_unregister(buf: *mut buf_T, channelid: uint64_t) {
     // SAFETY: the caller's promise.
     unregister(unsafe { Buf::new(buf) }, channelid);
 }
@@ -428,7 +428,7 @@ fn unregister(mut buf: Buf, channelid: uint64_t) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_free_callbacks(buf: *mut buf_T) {
+pub unsafe fn buf_free_callbacks(buf: *mut buf_T) {
     // SAFETY: the caller's promise.
     free_callbacks(unsafe { Buf::new(buf) });
 }
@@ -449,7 +449,7 @@ fn free_callbacks(mut buf: Buf) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_unload(buf: *mut buf_T, can_reload: bool) {
+pub unsafe fn buf_updates_unload(buf: *mut buf_T, can_reload: bool) {
     // SAFETY: the caller's promise.
     unload(unsafe { Buf::new(buf) }, can_reload);
 }
@@ -509,7 +509,7 @@ fn unload(mut buf: Buf, can_reload: bool) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_send_changes(
+pub unsafe fn buf_updates_send_changes(
     buf: *mut buf_T,
     firstline: linenr_T,
     num_added: int64_t,
@@ -626,7 +626,7 @@ fn tick_obj(buf: Buf, send_tick: bool) -> Object {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_send_splice(
+pub unsafe fn buf_updates_send_splice(
     buf: *mut buf_T,
     start_row: c_int,
     start_col: colnr_T,
@@ -707,7 +707,7 @@ fn send_splice(mut buf: Buf, start: Corner, old: Corner, new: Corner) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_changedtick(buf: *mut buf_T) {
+pub unsafe fn buf_updates_changedtick(buf: *mut buf_T) {
     // SAFETY: the caller's promise.
     changedtick_event(unsafe { Buf::new(buf) });
 }
@@ -750,7 +750,7 @@ fn changedtick_event(mut buf: Buf) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn buf_updates_changedtick_single(buf: *mut buf_T, channel_id: uint64_t) {
+pub unsafe fn buf_updates_changedtick_single(buf: *mut buf_T, channel_id: uint64_t) {
     // SAFETY: the caller's promise.
     changedtick_single(unsafe { Buf::new(buf) }, channel_id);
 }
@@ -767,6 +767,6 @@ fn changedtick_single(buf: Buf, channel_id: uint64_t) {
 ///
 /// # Safety
 /// The references must be ones the caller owns.
-pub unsafe extern "C" fn buffer_update_callbacks_free(cb: BufUpdateCallbacks) {
+pub unsafe fn buffer_update_callbacks_free(cb: BufUpdateCallbacks) {
     callbacks_free(cb);
 }

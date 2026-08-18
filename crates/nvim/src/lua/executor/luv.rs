@@ -149,7 +149,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_luv_thread_cfcpcall(
 ///
 /// # Safety
 /// As [`nlua_luv_thread_cb_cfpcall`].
-unsafe extern "C-unwind" fn nlua_luv_thread_common_cfpcall(
+unsafe fn nlua_luv_thread_common_cfpcall(
     lstate: *mut lua_State,
     nargs: c_int,
     mut nresult: c_int,

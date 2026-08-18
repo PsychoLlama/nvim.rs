@@ -7,7 +7,7 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::pos::MAXLNUM;
 use crate::{semsg_c, smsg_keep_c};
 
-pub unsafe extern "C" fn u_undo(mut count: c_int) {
+pub unsafe fn u_undo(mut count: c_int) {
     if !(*curbuf.get()).b_u_synced {
         u_sync(true);
         count = 1;
@@ -19,13 +19,13 @@ pub unsafe extern "C" fn u_undo(mut count: c_int) {
     }
     u_doit(count, false, true);
 }
-pub unsafe extern "C" fn u_redo(mut count: c_int) {
+pub unsafe fn u_redo(mut count: c_int) {
     if vim_strchr(p_cpo.get(), CPO_UNDO).is_null() {
         undo_undoes.set(false);
     }
     u_doit(count, false, true);
 }
-pub unsafe extern "C" fn u_undo_and_forget(mut count: c_int, mut do_buf_event: bool) -> bool {
+pub unsafe fn u_undo_and_forget(mut count: c_int, mut do_buf_event: bool) -> bool {
     if !(*curbuf.get()).b_u_synced {
         u_sync(true);
         count = 1;
@@ -61,11 +61,7 @@ pub unsafe extern "C" fn u_undo_and_forget(mut count: c_int, mut do_buf_event: b
     u_freebranch(curbuf.get(), to_forget, ptr::null_mut());
     return true;
 }
-pub(crate) unsafe extern "C" fn u_doit(
-    mut startcount: c_int,
-    mut quiet: bool,
-    mut do_buf_event: bool,
-) {
+pub(crate) unsafe fn u_doit(mut startcount: c_int, mut quiet: bool, mut do_buf_event: bool) {
     if !undo_allowed(curbuf.get()) {
         return;
     }
@@ -117,12 +113,7 @@ pub(crate) unsafe extern "C" fn u_doit(
     }
     u_undo_end(undo_undoes.get(), false, quiet);
 }
-pub unsafe extern "C" fn undo_time(
-    mut step: c_int,
-    mut sec: bool,
-    mut file: bool,
-    mut absolute: bool,
-) {
+pub unsafe fn undo_time(mut step: c_int, mut sec: bool, mut file: bool, mut absolute: bool) {
     if text_locked() {
         text_locked_msg();
         return;
@@ -400,7 +391,7 @@ pub unsafe extern "C" fn undo_time(
     }
     u_undo_end(did_undo, absolute, false);
 }
-pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
+pub(crate) unsafe fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
     let mut newarray: *mut *mut c_char = ptr::null_mut();
     let mut newlnum: linenr_T = MAXLNUM as c_int as linenr_T;
     let mut new_curpos: pos_T = (*curwin.get()).w_cursor;
@@ -678,11 +669,7 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
     (*curbuf.get()).b_u_time_cur = (*curhead).uh_time;
     unblock_autocmds();
 }
-pub(crate) unsafe extern "C" fn u_undo_end(
-    mut did_undo: bool,
-    mut absolute: bool,
-    mut quiet: bool,
-) {
+pub(crate) unsafe fn u_undo_end(mut did_undo: bool, mut absolute: bool, mut quiet: bool) {
     if fdo_flags.get() & kOptFdoFlagUndo as c_int as c_uint != 0 && KeyTyped.get() {
         foldOpenCursor();
     }

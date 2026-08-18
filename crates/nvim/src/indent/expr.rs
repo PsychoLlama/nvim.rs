@@ -413,7 +413,7 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
 /// # Safety
 /// There must be a current window and buffer, and the line must be
 /// modifiable.
-pub unsafe extern "C" fn fixthisline(get_the_indent: IndentGetter) {
+pub unsafe fn fixthisline(get_the_indent: IndentGetter) {
     // SAFETY: the caller's contract; `get_the_indent` is one of the three
     // indent engines, all of which read the current buffer.
     unsafe {
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn fixthisline(get_the_indent: IndentGetter) {
 ///
 /// # Safety
 /// There must be a current buffer.
-pub unsafe extern "C" fn use_indentexpr_for_lisp() -> bool {
+pub unsafe fn use_indentexpr_for_lisp() -> bool {
     // SAFETY: the caller's contract.
     unsafe {
         let buf = curbuf.get();

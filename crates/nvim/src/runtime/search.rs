@@ -87,7 +87,7 @@ pub unsafe fn ex_runtime(eap: *mut exarg_T) {
 /// The `[where]` qualifier is only offered for a single-argument command line;
 /// past the first argument [`runtime_expand_flags`] is forced non-zero so
 /// [`expand_runtime_cmd`] stops proposing the qualifiers.
-pub unsafe extern "C" fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub unsafe fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const c_char) {
     // SAFETY: `arg` is the NUL-terminated command line tail and `xp` is the
     // live expansion context.
     unsafe {
@@ -360,7 +360,7 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
 /// # Safety
 /// `path` and `prefix` must be NUL-terminated (`prefix` may be empty), `name`
 /// may be null, and `callback` must accept `cookie`.
-pub unsafe extern "C" fn do_in_path(
+pub unsafe fn do_in_path(
     path: *const c_char,
     prefix: *const c_char,
     name: *mut c_char,
@@ -503,7 +503,7 @@ fn dict_obj(dict: Dict) -> Object {
 ///
 /// # Safety
 /// `arena` may be null; the strings borrow the cache and live as long as it.
-pub unsafe extern "C" fn runtime_inspect(arena: *mut Arena) -> Array {
+pub unsafe fn runtime_inspect(arena: *mut Arena) -> Array {
     let path = runtime_search_path.get();
     let mut rv = arena_array(arena, path.size);
     for i in 0..path.size {
@@ -539,12 +539,7 @@ pub unsafe extern "C" fn runtime_inspect(arena: *mut Arena) -> Array {
 ///
 /// # Safety
 /// `pat` must hold `size` objects; `arena` may be null.
-pub unsafe extern "C" fn runtime_get_named(
-    lua: bool,
-    pat: Array,
-    all: bool,
-    arena: *mut Arena,
-) -> Array {
+pub unsafe fn runtime_get_named(lua: bool, pat: Array, all: bool, arena: *mut Arena) -> Array {
     let mut ref_0: c_int = 0;
     // SAFETY: the reference is released below, before this frame ends.
     unsafe {
@@ -562,7 +557,7 @@ pub unsafe extern "C" fn runtime_get_named(
 /// # Safety
 /// As [`runtime_get_named`]. Called off the main thread; nothing here may
 /// touch main-thread-only editor state.
-pub unsafe extern "C" fn runtime_get_named_thread(lua: bool, pat: Array, all: bool) -> Array {
+pub unsafe fn runtime_get_named_thread(lua: bool, pat: Array, all: bool) -> Array {
     // TODO(bfredl): avoid contention between multiple worker threads?
     // SAFETY: the mutex is initialised by `runtime_init` before any thread
     // exists, and guards every access to the snapshot on both sides.
@@ -679,7 +674,7 @@ unsafe fn matches_of<'a>(array: Array) -> &'a [Object] {
 ///
 /// # Safety
 /// As [`do_in_path`].
-pub unsafe extern "C" fn do_in_path_and_pp(
+pub unsafe fn do_in_path_and_pp(
     path: *mut c_char,
     name: *mut c_char,
     flags: c_int,
@@ -755,7 +750,7 @@ pub unsafe extern "C" fn do_in_path_and_pp(
 ///
 /// # Safety
 /// As [`do_in_path`].
-pub unsafe extern "C" fn do_in_runtimepath(
+pub unsafe fn do_in_runtimepath(
     name: *mut c_char,
     mut flags: c_int,
     callback: DoInRuntimepathCB,
@@ -791,7 +786,7 @@ pub unsafe extern "C" fn do_in_runtimepath(
 ///
 /// # Safety
 /// `name` must be NUL-terminated.
-pub unsafe extern "C" fn source_runtime(name: *mut c_char, flags: c_int) -> c_int {
+pub unsafe fn source_runtime(name: *mut c_char, flags: c_int) -> c_int {
     // SAFETY: `source_callback` takes a null cookie.
     unsafe {
         do_in_runtimepath(
@@ -807,7 +802,7 @@ pub unsafe extern "C" fn source_runtime(name: *mut c_char, flags: c_int) -> c_in
 ///
 /// # Safety
 /// As [`source_runtime`].
-pub unsafe extern "C" fn source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int {
+pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int {
     // SAFETY: as `source_runtime`.
     unsafe {
         do_in_runtimepath(
@@ -824,11 +819,7 @@ pub unsafe extern "C" fn source_runtime_vim_lua(name: *mut c_char, flags: c_int)
 ///
 /// # Safety
 /// Both must be NUL-terminated.
-pub unsafe extern "C" fn source_in_path_vim_lua(
-    path: *mut c_char,
-    name: *mut c_char,
-    flags: c_int,
-) -> c_int {
+pub unsafe fn source_in_path_vim_lua(path: *mut c_char, name: *mut c_char, flags: c_int) -> c_int {
     // SAFETY: as `source_runtime`.
     unsafe {
         do_in_path_and_pp(

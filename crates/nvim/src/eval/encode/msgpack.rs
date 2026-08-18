@@ -156,7 +156,7 @@ impl TypvalSink for MsgpackSink<'_> {
 ///
 /// # Safety
 /// `packer` and `tv` must be live, and `objname` NUL-terminated.
-pub unsafe extern "C" fn encode_vim_to_msgpack(
+pub unsafe fn encode_vim_to_msgpack(
     packer: *mut PackerBuffer,
     tv: *mut typval_T,
     objname: *const c_char,

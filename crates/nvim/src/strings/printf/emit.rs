@@ -870,7 +870,7 @@ unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, 
 ///
 /// Returns the length the result *would* have had, excluding the NUL, so a
 /// return value at or past `str_m` means the output was truncated.
-pub unsafe extern "C" fn vim_vsnprintf_typval<'f>(
+pub unsafe fn vim_vsnprintf_typval<'f>(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,

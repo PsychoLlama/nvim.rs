@@ -31,10 +31,7 @@ const TOSTRING: &CStr = c"__tostring";
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with the error value on top.
-pub(crate) unsafe extern "C-unwind" fn nlua_get_error(
-    lstate: *mut lua_State,
-    len: *mut size_t,
-) -> *const c_char {
+pub(crate) unsafe fn nlua_get_error(lstate: *mut lua_State, len: *mut size_t) -> *const c_char {
     unsafe {
         if luaL_getmetafield(lstate, -1, TOSTRING.as_ptr()) != 0 {
             if lua_type(lstate, -1) == LUA_TFUNCTION
@@ -56,7 +53,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_get_error(
 ///
 /// # Safety
 /// As [`nlua_get_error`].
-pub unsafe extern "C-unwind" fn nlua_error(lstate: *mut lua_State, msg: *const c_char) {
+pub unsafe fn nlua_error(lstate: *mut lua_State, msg: *const c_char) {
     unsafe {
         let mut len: size_t = 0;
         let str = nlua_get_error(lstate, &raw mut len);
@@ -80,11 +77,7 @@ pub unsafe extern "C-unwind" fn nlua_error(lstate: *mut lua_State, msg: *const c
 /// # Safety
 /// `lstate` must be a live Lua state with a function and `nargs` arguments
 /// on top.
-pub unsafe extern "C-unwind" fn nlua_pcall(
-    lstate: *mut lua_State,
-    nargs: c_int,
-    mut nresults: c_int,
-) -> c_int {
+pub unsafe fn nlua_pcall(lstate: *mut lua_State, nargs: c_int, mut nresults: c_int) -> c_int {
     unsafe {
         lua_getglobal(lstate, c"debug".as_ptr());
         lua_getfield(lstate, -1, c"traceback".as_ptr());

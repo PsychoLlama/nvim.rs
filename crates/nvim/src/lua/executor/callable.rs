@@ -70,7 +70,7 @@ unsafe fn lua_table_ref(arg: *const typval_T) -> LuaRef {
 ///
 /// # Safety
 /// `arg` must be a live typval.
-pub unsafe extern "C-unwind" fn nlua_is_table_from_lua(arg: *const typval_T) -> bool {
+pub unsafe fn nlua_is_table_from_lua(arg: *const typval_T) -> bool {
     unsafe { lua_table_ref(arg) != LUA_NOREF }
 }
 
@@ -81,9 +81,7 @@ pub unsafe extern "C-unwind" fn nlua_is_table_from_lua(arg: *const typval_T) -> 
 ///
 /// # Safety
 /// `arg` must be a live typval and the main state must exist.
-pub unsafe extern "C-unwind" fn nlua_register_table_as_callable(
-    arg: *const typval_T,
-) -> *mut c_char {
+pub unsafe fn nlua_register_table_as_callable(arg: *const typval_T) -> *mut c_char {
     unsafe {
         let table_ref = lua_table_ref(arg);
         if table_ref == LUA_NOREF {
@@ -128,7 +126,7 @@ pub unsafe extern "C-unwind" fn nlua_register_table_as_callable(
 /// # Safety
 /// `typed_buf` must be a NUL-terminated buffer the caller owns, and the main
 /// state must exist.
-pub unsafe extern "C-unwind" fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
+pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
     unsafe {
         static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
         if RECURSIVE.get() {
@@ -174,7 +172,7 @@ pub unsafe extern "C-unwind" fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_
 ///
 /// # Safety
 /// The main state must exist and `arena` be a live arena or null.
-pub unsafe extern "C-unwind" fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char {
+pub unsafe fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char {
     unsafe {
         let lstate = get_global_lstate();
         if lua_checkstack(lstate, 1) != 0 {
@@ -210,7 +208,7 @@ pub unsafe extern "C-unwind" fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Aren
 ///
 /// # Safety
 /// `lua_funcname` must be a NUL-terminated Lua expression.
-pub unsafe extern "C-unwind" fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
+pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
     unsafe {
         // `return %s` plus the terminator: the name is evaluated as an
         // expression rather than looked up, so `v:lua.pkg.fn` works.

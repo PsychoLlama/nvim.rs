@@ -29,7 +29,7 @@ use super::*;
 /// Returns the text for a closed fold
 ///
 /// Otherwise the result is in allocated memory.
-pub unsafe extern "C" fn get_foldtext(
+pub unsafe fn get_foldtext(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
     mut lnume: linenr_T,
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn get_foldtext(
 }
 
 /// Remove 'foldmarker' and 'commentstring' from "str" (in-place).
-pub(super) unsafe extern "C" fn foldtext_cleanup(mut str: *mut c_char) {
+pub(super) unsafe fn foldtext_cleanup(mut str: *mut c_char) {
     let mut cms_start: *mut c_char = skipwhite((*curbuf.get()).b_p_cms);
     let mut cms_slen: size_t = strlen(cms_start);
     while cms_slen > 0 && ascii_iswhite(*cms_start.add(cms_slen.wrapping_sub(1)) as c_int) {

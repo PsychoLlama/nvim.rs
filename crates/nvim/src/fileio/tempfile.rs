@@ -233,7 +233,7 @@ unsafe fn vim_mktempdir() {
 /// negative number to stop the walk.
 ///
 /// @return  OK for success, FAIL for failure.
-pub unsafe extern "C" fn readdir_core(
+pub unsafe fn readdir_core(
     gap: *mut garray_T,
     path: *const c_char,
     context: *mut c_void,
@@ -285,7 +285,7 @@ pub unsafe extern "C" fn readdir_core(
 /// Delete `name` and everything in it, recursively.
 ///
 /// @return  0 for success, -1 if some file was not deleted.
-pub unsafe extern "C" fn delete_recursive(name: *const c_char) -> c_int {
+pub unsafe fn delete_recursive(name: *const c_char) -> c_int {
     unsafe { delete_tree(CStr::from_ptr(name).to_bytes()) }
 }
 

@@ -213,11 +213,7 @@ unsafe extern "C" fn get_list_line(
 ///
 /// # Safety
 /// `argvars` is a dispatcher argument array and `rettv` its return value.
-pub unsafe extern "C" fn execute_common(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    arg_off: c_int,
-) {
+pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_off: c_int) {
     // SAFETY: the caller's obligation, which is `Args::new`'s.
     let args = unsafe { Args::new(argvars) };
     let cmd_idx = arg_off as usize;

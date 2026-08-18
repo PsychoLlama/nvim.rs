@@ -303,7 +303,7 @@ unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
 ///
 /// @return  the newly allocated search context, or NULL if an error occurred.
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn vim_findfile_init(
+pub unsafe fn vim_findfile_init(
     path: *mut c_char,
     filename: *mut c_char,
     filenamelen: size_t,
@@ -391,7 +391,7 @@ pub unsafe extern "C" fn vim_findfile_init(
 ///
 /// # Safety
 /// `buf` must be a writable NUL-terminated string.
-pub unsafe extern "C" fn vim_findfile_stopdir(buf: *mut c_char) -> *mut c_char {
+pub unsafe fn vim_findfile_stopdir(buf: *mut c_char) -> *mut c_char {
     unsafe {
         let at = |i: usize| *buf.add(i);
         // Nothing before the first escape needs moving.
@@ -445,7 +445,7 @@ pub(crate) unsafe fn vim_findfile_free_visited(ctx: *mut c_void) {
 }
 
 /// Clean up the given search context. Can handle a NULL pointer.
-pub unsafe extern "C" fn vim_findfile_cleanup(ctx: *mut c_void) {
+pub unsafe fn vim_findfile_cleanup(ctx: *mut c_void) {
     if ctx.is_null() {
         return;
     }

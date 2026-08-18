@@ -44,7 +44,7 @@ use ::libc::memset;
 ///
 /// # Safety
 /// There must be a current window and line.
-pub unsafe extern "C" fn inindent(extra: c_int) -> bool {
+pub unsafe fn inindent(extra: c_int) -> bool {
     // SAFETY: the caller's contract; the walk is stopped by the NUL, which
     // is not white space.
     unsafe {
@@ -82,7 +82,7 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
 ///
 /// # Safety
 /// `oap` must be a live operator argument.
-pub unsafe extern "C" fn op_reindent(oap: *mut oparg_T, how: Indenter) {
+pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
     // SAFETY: the caller's operator argument, and the buffer it names is
     // the current one.
     unsafe {
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn op_reindent(oap: *mut oparg_T, how: Indenter) {
 ///
 /// # Safety
 /// There must be a current buffer.
-pub unsafe extern "C" fn preprocs_left() -> bool {
+pub unsafe fn preprocs_left() -> bool {
     // SAFETY: the caller's contract.
     unsafe {
         let buf = curbuf.get();
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn preprocs_left() -> bool {
 ///
 /// # Safety
 /// There must be a current buffer.
-pub unsafe extern "C" fn may_do_si() -> bool {
+pub unsafe fn may_do_si() -> bool {
     // SAFETY: the caller's contract.
     unsafe {
         let buf = curbuf.get();
@@ -286,7 +286,7 @@ unsafe fn si_should_shift_back() -> bool {
 ///
 /// # Safety
 /// There must be a current window and buffer.
-pub unsafe extern "C" fn ins_try_si(c: c_int) {
+pub unsafe fn ins_try_si(c: c_int) {
     // SAFETY: the caller's contract; every helper below reads and restores
     // the cursor itself.
     unsafe {
@@ -488,12 +488,7 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: colnr_T) {
 ///
 /// # Safety
 /// There must be a current window and a modifiable line.
-pub unsafe extern "C" fn change_indent(
-    type_0: c_int,
-    amount: c_int,
-    round: c_int,
-    call_changed_bytes: bool,
-) {
+pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
     // SAFETY: the caller's contract; every deref is the current window.
     unsafe {
         let win = curwin.get();
@@ -569,7 +564,7 @@ pub unsafe extern "C" fn change_indent(
 ///
 /// # Safety
 /// `src` must be NUL-terminated, and there must be a current window.
-pub unsafe extern "C" fn copy_indent(size: c_int, src: *mut c_char) -> bool {
+pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
     let buf = curbuf.get();
     // SAFETY: `b_p_ts`/`b_p_vts_array` are the buffer's own tabstop
     // settings. Written as a closure inside the `unsafe`, so that the walk

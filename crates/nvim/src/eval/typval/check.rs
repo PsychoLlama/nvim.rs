@@ -86,7 +86,7 @@ pub unsafe extern "C" fn tv_check_str(tv: *const typval_T) -> bool {
 }
 
 /// `E1174`: argument `idx` must be a String.
-pub unsafe extern "C" fn tv_check_for_string_arg(
+pub unsafe fn tv_check_for_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn tv_check_for_string_arg(
 }
 
 /// `E1175`: argument `idx` must be a String that is not empty.
-pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
+pub unsafe fn tv_check_for_nonempty_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -119,7 +119,7 @@ pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
 }
 
 /// [`tv_check_for_string_arg`], accepting a missing argument.
-pub unsafe extern "C" fn tv_check_for_opt_string_arg(
+pub unsafe fn tv_check_for_opt_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn tv_check_for_opt_string_arg(
 }
 
 /// `E1210`: argument `idx` must be a Number.
-pub unsafe extern "C" fn tv_check_for_number_arg(
+pub unsafe fn tv_check_for_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn tv_check_for_number_arg(
 }
 
 /// [`tv_check_for_number_arg`], accepting a missing argument.
-pub unsafe extern "C" fn tv_check_for_opt_number_arg(
+pub unsafe fn tv_check_for_opt_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn tv_check_for_opt_number_arg(
 }
 
 /// `E1219`: argument `idx` must be a Float or a Number.
-pub unsafe extern "C" fn tv_check_for_float_or_nr_arg(
+pub unsafe fn tv_check_for_float_or_nr_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -175,7 +175,7 @@ pub unsafe extern "C" fn tv_check_for_float_or_nr_arg(
 }
 
 /// `E1212`: argument `idx` must be a Bool, or the Number 0 or 1.
-pub unsafe extern "C" fn tv_check_for_bool_arg(
+pub unsafe fn tv_check_for_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn tv_check_for_bool_arg(
 }
 
 /// [`tv_check_for_bool_arg`], accepting a missing argument.
-pub unsafe extern "C" fn tv_check_for_opt_bool_arg(
+pub unsafe fn tv_check_for_opt_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn tv_check_for_opt_bool_arg(
 }
 
 /// `E1238`: argument `idx` must be a Blob.
-pub unsafe extern "C" fn tv_check_for_blob_arg(
+pub unsafe fn tv_check_for_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -220,7 +220,7 @@ pub unsafe extern "C" fn tv_check_for_blob_arg(
 }
 
 /// `E1211`: argument `idx` must be a List.
-pub unsafe extern "C" fn tv_check_for_list_arg(
+pub unsafe fn tv_check_for_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -235,7 +235,7 @@ pub unsafe extern "C" fn tv_check_for_list_arg(
 }
 
 /// `E1206`: argument `idx` must be a Dictionary.
-pub unsafe extern "C" fn tv_check_for_dict_arg(
+pub unsafe fn tv_check_for_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn tv_check_for_dict_arg(
 }
 
 /// `E1297`: argument `idx` must be a Dictionary that is not the NULL one.
-pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
+pub unsafe fn tv_check_for_nonnull_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
 }
 
 /// [`tv_check_for_dict_arg`], accepting a missing argument.
-pub unsafe extern "C" fn tv_check_for_opt_dict_arg(
+pub unsafe fn tv_check_for_opt_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn tv_check_for_opt_dict_arg(
 }
 
 /// `E1220`: argument `idx` must be a String or a Number.
-pub unsafe extern "C" fn tv_check_for_string_or_number_arg(
+pub unsafe fn tv_check_for_string_or_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_number_arg(
 }
 
 /// Argument `idx` must name a buffer: a String or a Number.
-pub unsafe extern "C" fn tv_check_for_buffer_arg(
+pub unsafe fn tv_check_for_buffer_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn tv_check_for_buffer_arg(
 }
 
 /// Argument `idx` must name a line: a String or a Number.
-pub unsafe extern "C" fn tv_check_for_lnum_arg(
+pub unsafe fn tv_check_for_lnum_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -311,7 +311,7 @@ pub unsafe extern "C" fn tv_check_for_lnum_arg(
 }
 
 /// `E1222`: argument `idx` must be a String or a List.
-pub unsafe extern "C" fn tv_check_for_string_or_list_arg(
+pub unsafe fn tv_check_for_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_arg(
 }
 
 /// `E1252`: argument `idx` must be a String, a List or a Blob.
-pub unsafe extern "C" fn tv_check_for_string_or_list_or_blob_arg(
+pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_or_blob_arg(
 }
 
 /// [`tv_check_for_string_or_list_arg`], accepting a missing argument.
-pub unsafe extern "C" fn tv_check_for_opt_string_or_list_arg(
+pub unsafe fn tv_check_for_opt_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -354,7 +354,7 @@ pub unsafe extern "C" fn tv_check_for_opt_string_or_list_arg(
 }
 
 /// `E1256`: argument `idx` must be a String, a Funcref or a partial.
-pub unsafe extern "C" fn tv_check_for_string_or_func_arg(
+pub unsafe fn tv_check_for_string_or_func_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -369,7 +369,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_func_arg(
 }
 
 /// `E1226`: argument `idx` must be a List or a Blob.
-pub unsafe extern "C" fn tv_check_for_list_or_blob_arg(
+pub unsafe fn tv_check_for_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {

@@ -14,7 +14,7 @@ use super::jumplist::*;
 use super::*;
 use crate::search::{BACKWARD, FORWARD};
 
-pub unsafe extern "C" fn mark_get(
+pub unsafe fn mark_get(
     mut buf: *mut buf_T,
     mut win: *mut win_T,
     mut fmp: *mut fmark_T,
@@ -55,7 +55,7 @@ pub unsafe extern "C" fn mark_get(
 ///                 the mark fname and update the xfmark_T (expensive)).
 ///
 /// Returns mark
-pub unsafe extern "C" fn mark_get_global(mut resolve: bool, mut name: c_int) -> *mut xfmark_T {
+pub unsafe fn mark_get_global(mut resolve: bool, mut name: c_int) -> *mut xfmark_T {
     let mut mark: *mut xfmark_T = ptr::null_mut();
     if ascii_isdigit(name) {
         name = name - '0' as c_int + NMARKS;
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn mark_get_global(mut resolve: bool, mut name: c_int) -> 
 /// `buf` — buf to retrieve marks that belong to it.
 ///
 /// Returns mark, NULL if not found.
-pub unsafe extern "C" fn mark_get_local(
+pub unsafe fn mark_get_local(
     mut buf: *mut buf_T,
     mut win: *mut win_T,
     mut name: c_int,
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn mark_get_local(
 /// `buf` — buf to wrap motion marks with it's buffer number (fm->fnum).
 ///
 /// @return[static] Mark.
-pub unsafe extern "C" fn mark_get_motion(
+pub unsafe fn mark_get_motion(
     mut buf: *mut buf_T,
     mut win: *mut win_T,
     mut name: c_int,
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn mark_get_motion(
 /// `name` — Mark name '<' or '>'.
 ///
 /// @return[static]  Mark
-pub unsafe extern "C" fn mark_get_visual(mut buf: *mut buf_T, mut name: c_int) -> *mut fmark_T {
+pub unsafe fn mark_get_visual(mut buf: *mut buf_T, mut name: c_int) -> *mut fmark_T {
     let mut mark: *mut fmark_T = ptr::null_mut();
     if name == '<' as c_int || name == '>' as c_int {
         let mut startp: pos_T = (*buf).b_visual.vi_start;
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn mark_get_visual(mut buf: *mut buf_T, mut name: c_int) -
 /// `dir` — direction for search.
 ///
 /// Returns next mark or NULL if no mark is found.
-pub unsafe extern "C" fn getnextmark(
+pub unsafe fn getnextmark(
     mut startpos: *mut pos_T,
     mut dir: c_int,
     mut begin_line: c_int,
@@ -285,7 +285,7 @@ pub unsafe extern "C" fn getnextmark(
 /// `flags` — MarkMove flags to configure the movement to the mark.
 ///
 /// Returns markMovekRes flags representing the outcome
-pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove) -> MarkMoveRes {
+pub unsafe fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove) -> MarkMoveRes {
     let mut prev_pos: pos_T = pos_T {
         lnum: 0,
         col: 0,
@@ -377,7 +377,7 @@ pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove)
 /// `fm`
 /// `pcmark_on_switch` — leave a context mark when switching buffer.
 /// Returns whether the buffer was switched or not.
-pub(super) unsafe extern "C" fn switch_to_mark_buf(
+pub(super) unsafe fn switch_to_mark_buf(
     mut fm: *mut fmark_T,
     mut pcmark_on_switch: bool,
 ) -> MarkMoveRes {
@@ -399,7 +399,7 @@ pub(super) unsafe extern "C" fn switch_to_mark_buf(
 }
 
 #[inline]
-pub(super) unsafe extern "C" fn mark_global_index(name: c_char) -> c_int {
+pub(super) unsafe fn mark_global_index(name: c_char) -> c_int {
     return if name as c_uint >= 'A' as c_uint && name as c_uint <= 'Z' as c_uint {
         name as c_int - 'A' as c_int
     } else if ascii_isdigit(name as c_int) {

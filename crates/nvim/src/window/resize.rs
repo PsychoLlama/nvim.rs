@@ -122,7 +122,7 @@ pub(crate) fn free_click_defs(defs: *mut StlClickDefinition, size: size_t) {
 // ---------------------------------------------------------------------------
 // The cursor's place in the window
 
-pub unsafe extern "C" fn set_fraction(wp: *mut win_T) {
+pub unsafe fn set_fraction(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     save_fraction(unsafe { Win::new(wp) });
 }
@@ -136,7 +136,7 @@ pub(crate) fn save_fraction(wp: Win) {
     }
 }
 
-pub unsafe extern "C" fn win_fix_scroll(resize: bool) {
+pub unsafe fn win_fix_scroll(resize: bool) {
     fix_scroll(resize);
 }
 
@@ -190,7 +190,7 @@ pub(crate) fn fix_scroll(resize: bool) {
     }
 }
 
-pub(crate) unsafe extern "C" fn win_fix_cursor(normal: bool) {
+pub(crate) unsafe fn win_fix_cursor(normal: bool) {
     fix_cursor(normal);
 }
 
@@ -236,7 +236,7 @@ pub(crate) fn fix_cursor(normal: bool) {
     }
 }
 
-pub unsafe extern "C" fn win_new_height(wp: *mut win_T, height: c_int) {
+pub unsafe fn win_new_height(wp: *mut win_T, height: c_int) {
     // SAFETY: the caller's promise -- a live window.
     new_win_height(unsafe { Win::new(wp) }, height);
 }
@@ -255,7 +255,7 @@ pub(crate) fn new_win_height(wp: Win, height: c_int) {
     set_inner_size(wp, true);
 }
 
-pub unsafe extern "C" fn scroll_to_fraction(wp: *mut win_T, prev_height: c_int) {
+pub unsafe fn scroll_to_fraction(wp: *mut win_T, prev_height: c_int) {
     // SAFETY: the caller's promise -- a live window.
     to_fraction(unsafe { Win::new(wp) }, prev_height);
 }
@@ -346,7 +346,7 @@ pub(crate) fn to_fraction(wp: Win, prev_height: c_int) {
     invalidate_botline(wp);
 }
 
-pub unsafe extern "C" fn win_set_inner_size(wp: *mut win_T, valid_cursor: bool) {
+pub unsafe fn win_set_inner_size(wp: *mut win_T, valid_cursor: bool) {
     // SAFETY: the caller's promise -- a live window.
     set_inner_size(unsafe { Win::new(wp) }, valid_cursor);
 }
@@ -434,7 +434,7 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
     wp.w_redr_status = true;
 }
 
-pub unsafe extern "C" fn win_new_width(wp: *mut win_T, width: c_int) {
+pub unsafe fn win_new_width(wp: *mut win_T, width: c_int) {
     // SAFETY: the caller's promise -- a live window.
     new_win_width(unsafe { Win::new(wp) }, width);
 }
@@ -447,7 +447,7 @@ pub(crate) fn new_win_width(wp: Win, width: c_int) {
     set_inner_size(wp, true);
 }
 
-pub unsafe extern "C" fn win_default_scroll(wp: *mut win_T) -> OptInt {
+pub unsafe fn win_default_scroll(wp: *mut win_T) -> OptInt {
     // SAFETY: the caller's promise -- a live window.
     default_scroll(unsafe { Win::new(wp) })
 }
@@ -458,7 +458,7 @@ pub(crate) fn default_scroll(wp: Win) -> OptInt {
     (wp.w_view_height / 2).max(1) as OptInt
 }
 
-pub unsafe extern "C" fn win_comp_scroll(wp: *mut win_T) {
+pub unsafe fn win_comp_scroll(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     comp_scroll(unsafe { Win::new(wp) });
 }
@@ -479,7 +479,7 @@ pub(crate) fn comp_scroll(wp: Win) {
 // ---------------------------------------------------------------------------
 // The rows that are not text
 
-pub unsafe extern "C" fn command_height() {
+pub unsafe fn command_height() {
     let mut old_p_ch = cur_tab().tp_ch_used as c_int;
     // Find the last frame that spans the whole width and is not pinned by
     // 'winfixheight', which is the one the command line trades rows with.
@@ -546,7 +546,7 @@ fn add_height(frp: Frame, n: c_int) {
     }
 }
 
-pub unsafe extern "C" fn last_status(morewin: bool) {
+pub unsafe fn last_status(morewin: bool) {
     update_last_status(morewin);
 }
 
@@ -564,7 +564,7 @@ pub(crate) fn update_last_status(morewin: bool) {
     unsafe { win_float_anchor_laststatus() };
 }
 
-pub unsafe extern "C" fn win_remove_status_line(wp: *mut win_T, add_hsep: bool) {
+pub unsafe fn win_remove_status_line(wp: *mut win_T, add_hsep: bool) {
     // SAFETY: the caller's promise -- a live window.
     remove_status_line(unsafe { Win::new(wp) }, add_hsep);
 }
@@ -675,11 +675,7 @@ fn last_status_rec(fr: Frame, statusline: bool, is_stl_global: bool) {
     }
 }
 
-pub unsafe extern "C" fn set_winbar_win(
-    wp: *mut win_T,
-    make_room: bool,
-    valid_cursor: bool,
-) -> c_int {
+pub unsafe fn set_winbar_win(wp: *mut win_T, make_room: bool, valid_cursor: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     winbar_win(unsafe { Win::new(wp) }, make_room, valid_cursor)
 }
@@ -714,7 +710,7 @@ fn winbar_win(wp: Win, make_room: bool, valid_cursor: bool) -> c_int {
     OK
 }
 
-pub unsafe extern "C" fn set_winbar(make_room: bool) {
+pub unsafe fn set_winbar(make_room: bool) {
     for wp in windows() {
         if winbar_win(wp, make_room, true) == FAIL {
             break;
@@ -722,7 +718,7 @@ pub unsafe extern "C" fn set_winbar(make_room: bool) {
     }
 }
 
-pub unsafe extern "C" fn tabline_height() -> c_int {
+pub unsafe fn tabline_height() -> c_int {
     tabline_rows()
 }
 
@@ -741,7 +737,7 @@ pub(crate) fn tabline_rows() -> c_int {
     }
 }
 
-pub unsafe extern "C" fn global_winbar_height() -> c_int {
+pub unsafe fn global_winbar_height() -> c_int {
     global_winbar_rows()
 }
 
@@ -751,7 +747,7 @@ pub(crate) fn global_winbar_rows() -> c_int {
     (unsafe { *p_wbr.get() } as c_int != NUL) as c_int
 }
 
-pub unsafe extern "C" fn global_stl_height() -> c_int {
+pub unsafe fn global_stl_height() -> c_int {
     global_stl_rows()
 }
 
@@ -764,7 +760,7 @@ pub(crate) fn global_stl_rows() -> c_int {
     }
 }
 
-pub unsafe extern "C" fn last_stl_height(morewin: bool) -> c_int {
+pub unsafe fn last_stl_height(morewin: bool) -> c_int {
     last_stl_rows(morewin)
 }
 
@@ -784,7 +780,7 @@ fn first_window() -> Win {
     windows().next().expect("a tab page has a window")
 }
 
-pub unsafe extern "C" fn min_rows(tp: *mut tabpage_T) -> c_int {
+pub unsafe fn min_rows(tp: *mut tabpage_T) -> c_int {
     // SAFETY: the caller's promise -- a live tab page.
     min_rows_of(unsafe { TabPage::new(tp) })
 }
@@ -812,7 +808,7 @@ fn cmdheight_of(tp: TabPage) -> OptInt {
     }
 }
 
-pub unsafe extern "C" fn min_rows_for_all_tabpages() -> c_int {
+pub unsafe fn min_rows_for_all_tabpages() -> c_int {
     min_rows_all_tabpages()
 }
 
@@ -832,7 +828,7 @@ pub(crate) fn min_rows_all_tabpages() -> c_int {
     total + tabline_rows() + global_stl_rows()
 }
 
-pub unsafe extern "C" fn only_one_window() -> bool {
+pub unsafe fn only_one_window() -> bool {
     // If there is another tab page there always is another window.
     if tabs().nth(1).is_some() {
         return false;

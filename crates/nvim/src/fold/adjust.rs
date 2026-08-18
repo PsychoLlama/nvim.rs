@@ -20,7 +20,7 @@ use crate::types::kNone;
 /// Returns fAIL if not moved.
 ///
 /// `dir` — FORWARD or BACKWARD
-pub unsafe extern "C" fn foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c_int {
+pub unsafe fn foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c_int {
     let mut retval: c_int = FAIL;
     let mut fp: *mut fold_T = ptr::null_mut();
     checkupdate(curwin.get());
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c
 }
 
 /// Adjust the Visual area to include any fold at the start or end completely.
-pub unsafe extern "C" fn foldAdjustVisual() {
+pub unsafe fn foldAdjustVisual() {
     if !VIsual_active.get() || hasAnyFolding(curwin.get()) == 0 {
         return;
     }
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn foldAdjustVisual() {
 }
 
 /// Move the cursor to the first line of a closed fold.
-pub unsafe extern "C" fn foldAdjustCursor(mut wp: *mut win_T) {
+pub unsafe fn foldAdjustCursor(mut wp: *mut win_T) {
     hasFolding(
         wp,
         (*wp).w_cursor.lnum,
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn foldAdjustCursor(mut wp: *mut win_T) {
 ///
 /// We are adjusting the folds in the range from line1 til line2,
 /// make sure that line2 does not get smaller than line1
-pub unsafe extern "C" fn foldMarkAdjust(
+pub unsafe fn foldMarkAdjust(
     mut wp: *mut win_T,
     mut line1: linenr_T,
     mut line2: linenr_T,
@@ -187,7 +187,7 @@ pub unsafe extern "C" fn foldMarkAdjust(
     foldMarkAdjustRecurse(&raw mut (*wp).w_folds, line1, line2, amount, amount_after);
 }
 
-pub unsafe extern "C" fn foldMarkAdjustRecurse(
+pub unsafe fn foldMarkAdjustRecurse(
     mut gap: *mut garray_T,
     mut line1: linenr_T,
     mut line2: linenr_T,
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn foldMarkAdjustRecurse(
 }
 
 /// Insert a new fold in "gap" at position "i".
-pub(super) unsafe extern "C" fn foldInsert(mut gap: *mut garray_T, mut i: c_int) {
+pub(super) unsafe fn foldInsert(mut gap: *mut garray_T, mut i: c_int) {
     ga_grow(gap, 1);
     let mut fp: *mut fold_T = fold_at(&*gap, i);
     if (*gap).ga_len > 0 && i < (*gap).ga_len {
@@ -290,7 +290,7 @@ pub(super) unsafe extern "C" fn foldInsert(mut gap: *mut garray_T, mut i: c_int)
 /// "bot".
 /// The caller must first have taken care of any nested folds from "top" to
 /// "bot"!
-pub(super) unsafe extern "C" fn foldSplit(
+pub(super) unsafe fn foldSplit(
     mut _buf: *mut buf_T,
     gap: *mut garray_T,
     i: c_int,
@@ -343,7 +343,7 @@ pub(super) unsafe extern "C" fn foldSplit(
 /// 4: deleted
 /// 5: made to start below "bot".
 /// 6: not changed
-pub(super) unsafe extern "C" fn foldRemove(
+pub(super) unsafe fn foldRemove(
     wp: *mut win_T,
     mut gap: *mut garray_T,
     mut top: linenr_T,
@@ -396,7 +396,7 @@ pub(super) unsafe extern "C" fn foldRemove(
     }
 }
 
-pub(super) unsafe extern "C" fn foldReverseOrder(
+pub(super) unsafe fn foldReverseOrder(
     mut gap: *mut garray_T,
     start_arg: linenr_T,
     end_arg: linenr_T,
@@ -441,11 +441,7 @@ pub(super) unsafe extern "C" fn foldReverseOrder(
 /// 8. truncated below dest and shifted up.
 /// 9. shifted up
 /// 10. not changed
-pub(super) unsafe extern "C" fn truncate_fold(
-    wp: *mut win_T,
-    mut fp: *mut fold_T,
-    mut end: linenr_T,
-) {
+pub(super) unsafe fn truncate_fold(wp: *mut win_T, mut fp: *mut fold_T, mut end: linenr_T) {
     end = (end as c_int + 1) as linenr_T;
     foldRemove(
         wp,
@@ -456,7 +452,7 @@ pub(super) unsafe extern "C" fn truncate_fold(
     (*fp).fd_len = end - (*fp).fd_top;
 }
 
-pub unsafe extern "C" fn foldMoveRange(
+pub unsafe fn foldMoveRange(
     wp: *mut win_T,
     mut gap: *mut garray_T,
     line1: linenr_T,
@@ -565,11 +561,7 @@ pub unsafe extern "C" fn foldMoveRange(
 /// must end just above "fp2".
 /// The resulting fold is "fp1", nested folds are moved from "fp2" to "fp1".
 /// Fold entry "fp2" in "gap" is deleted.
-pub(super) unsafe extern "C" fn foldMerge(
-    mut fp1: *mut fold_T,
-    mut gap: *mut garray_T,
-    mut fp2: *mut fold_T,
-) {
+pub(super) unsafe fn foldMerge(mut fp1: *mut fold_T, mut gap: *mut garray_T, mut fp2: *mut fold_T) {
     let mut fp3: *mut fold_T = ptr::null_mut();
     let mut fp4: *mut fold_T = ptr::null_mut();
     let mut gap1: *mut garray_T = &raw mut (*fp1).fd_nested;

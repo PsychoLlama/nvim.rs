@@ -134,20 +134,16 @@ static u_newcount: GlobalCell<c_int> = GlobalCell::new(0);
 static u_oldcount: GlobalCell<c_int> = GlobalCell::new(0);
 static undo_undoes: GlobalCell<bool> = GlobalCell::new(false);
 static lastmark: GlobalCell<c_int> = GlobalCell::new(0);
-pub unsafe extern "C" fn u_save_cursor() -> c_int {
+pub unsafe fn u_save_cursor() -> c_int {
     let mut cur: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut top: linenr_T = if cur > 0 { cur - 1 } else { 0 };
     let mut bot: linenr_T = cur + 1;
     return u_save(top, bot);
 }
-pub unsafe extern "C" fn u_save(mut top: linenr_T, mut bot: linenr_T) -> c_int {
+pub unsafe fn u_save(mut top: linenr_T, mut bot: linenr_T) -> c_int {
     return u_save_buf(curbuf.get(), top, bot);
 }
-pub unsafe extern "C" fn u_save_buf(
-    mut buf: *mut buf_T,
-    mut top: linenr_T,
-    mut bot: linenr_T,
-) -> c_int {
+pub unsafe fn u_save_buf(mut buf: *mut buf_T, mut top: linenr_T, mut bot: linenr_T) -> c_int {
     if top >= bot || bot > (*buf).b_ml.ml_line_count + 1 {
         return FAIL;
     }
@@ -156,13 +152,13 @@ pub unsafe extern "C" fn u_save_buf(
     }
     return u_savecommon(buf, top, bot, 0, false);
 }
-pub unsafe extern "C" fn u_savesub(mut lnum: linenr_T) -> c_int {
+pub unsafe fn u_savesub(mut lnum: linenr_T) -> c_int {
     return u_savecommon(curbuf.get(), lnum - 1, lnum + 1, lnum + 1, false);
 }
-pub unsafe extern "C" fn u_inssub(mut lnum: linenr_T) -> c_int {
+pub unsafe fn u_inssub(mut lnum: linenr_T) -> c_int {
     return u_savecommon(curbuf.get(), lnum - 1, lnum, lnum + 1, false);
 }
-pub unsafe extern "C" fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> c_int {
+pub unsafe fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> c_int {
     return u_savecommon(
         curbuf.get(),
         lnum - 1,
@@ -175,7 +171,7 @@ pub unsafe extern "C" fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> 
         false,
     );
 }
-pub unsafe extern "C" fn undo_allowed(mut buf: *mut buf_T) -> bool {
+pub unsafe fn undo_allowed(mut buf: *mut buf_T) -> bool {
     if (*buf).b_p_ma == 0 {
         emsg(gettext(&raw const e_modifiable as *const c_char));
         return false;
@@ -190,14 +186,14 @@ pub unsafe extern "C" fn undo_allowed(mut buf: *mut buf_T) -> bool {
     }
     return true;
 }
-unsafe extern "C" fn get_undolevel(mut buf: *mut buf_T) -> OptInt {
+unsafe fn get_undolevel(mut buf: *mut buf_T) -> OptInt {
     if (*buf).b_p_ul == NO_LOCAL_UNDOLEVEL as OptInt {
         return p_ul.get();
     }
     return (*buf).b_p_ul;
 }
 #[inline]
-unsafe extern "C" fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
+unsafe fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
     let mut i: size_t = 0;
     while i < NMARKS as size_t {
         let slot = &raw mut (*fmarks.add(i)).additional_data;
@@ -206,7 +202,7 @@ unsafe extern "C" fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
         i = i.wrapping_add(1);
     }
 }
-pub unsafe extern "C" fn u_savecommon(
+pub unsafe fn u_savecommon(
     mut buf: *mut buf_T,
     mut top: linenr_T,
     mut bot: linenr_T,
@@ -413,7 +409,7 @@ pub unsafe extern "C" fn u_savecommon(
     undo_undoes.set(false);
     return OK;
 }
-pub unsafe extern "C" fn undo_fmt_time(mut buf: *mut c_char, mut buflen: size_t, mut tt: time_t) {
+pub unsafe fn undo_fmt_time(mut buf: *mut c_char, mut buflen: size_t, mut tt: time_t) {
     if time(ptr::null_mut()) - tt >= 100 {
         let mut curtime: tm = tm_zeroed();
         os_localtime_r(tt, &mut curtime);
@@ -440,7 +436,7 @@ pub unsafe extern "C" fn undo_fmt_time(mut buf: *mut c_char, mut buflen: size_t,
         );
     };
 }
-pub unsafe extern "C" fn u_sync(mut force: bool) {
+pub unsafe fn u_sync(mut force: bool) {
     if (*curbuf.get()).b_u_synced || !force && no_u_sync.get() > 0 {
         return;
     }
@@ -469,11 +465,11 @@ pub unsafe fn ex_undojoin(mut _eap: *mut exarg_T) {
     }
     (*curbuf.get()).b_u_synced = false;
 }
-pub unsafe extern "C" fn u_unchanged(mut buf: *mut buf_T) {
+pub unsafe fn u_unchanged(mut buf: *mut buf_T) {
     u_unch_branch((*buf).b_u_oldhead);
     (*buf).b_did_warn = false;
 }
-pub unsafe extern "C" fn u_find_first_changed() {
+pub unsafe fn u_find_first_changed() {
     let mut uhp: *mut u_header_T = (*curbuf.get()).b_u_newhead;
     if !(*curbuf.get()).b_u_curhead.is_null() || uhp.is_null() {
         return;
@@ -501,7 +497,7 @@ pub unsafe extern "C" fn u_find_first_changed() {
         (*uhp).uh_cursor.lnum = lnum;
     }
 }
-pub unsafe extern "C" fn u_update_save_nr(mut buf: *mut buf_T) {
+pub unsafe fn u_update_save_nr(mut buf: *mut buf_T) {
     (*buf).b_u_save_nr_last += 1;
     (*buf).b_u_save_nr_cur = (*buf).b_u_save_nr_last;
     let mut uhp: *mut u_header_T = (*buf).b_u_curhead;
@@ -514,14 +510,14 @@ pub unsafe extern "C" fn u_update_save_nr(mut buf: *mut buf_T) {
         (*uhp).uh_save_nr = (*buf).b_u_save_nr_last;
     }
 }
-pub unsafe extern "C" fn bufIsChanged(mut buf: *mut buf_T) -> bool {
+pub unsafe fn bufIsChanged(mut buf: *mut buf_T) -> bool {
     return if bt_prompt(buf) {
         (*buf).b_modified_was_set as c_int
     } else {
         (!bt_dontwrite(buf) && ((*buf).b_changed != 0 || file_ff_differs(buf, true))) as c_int
     } != 0;
 }
-pub unsafe extern "C" fn anyBufIsChanged() -> bool {
+pub unsafe fn anyBufIsChanged() -> bool {
     let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
         if bufIsChanged(buf) {
@@ -531,6 +527,6 @@ pub unsafe extern "C" fn anyBufIsChanged() -> bool {
     }
     return false;
 }
-pub unsafe extern "C" fn curbufIsChanged() -> bool {
+pub unsafe fn curbufIsChanged() -> bool {
     return bufIsChanged(curbuf.get());
 }

@@ -308,7 +308,7 @@ pub unsafe extern "C" fn tv_list_concat(
 
 /// `remove()` over a list: move one item, or the range `[idx, end]`, into
 /// `rettv`.
-pub unsafe extern "C" fn tv_list_remove(
+pub unsafe fn tv_list_remove(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     arg_errmsg: *const ::core::ffi::c_char,
@@ -415,7 +415,7 @@ pub unsafe extern "C" fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: boo
 }
 
 /// Reverse `l` in place.
-pub unsafe extern "C" fn tv_list_reverse(l: *mut list_T) {
+pub unsafe fn tv_list_reverse(l: *mut list_T) {
     unsafe {
         if tv_list_len(l) <= 1 {
             return;
@@ -527,7 +527,7 @@ pub unsafe extern "C" fn tv_list_find_str(
 /// [`tv_list_find`], clamping a negative index that fell off the front to 0.
 ///
 /// `*idx` is updated to the index actually used.
-pub(crate) unsafe extern "C" fn tv_list_find_index(
+pub(crate) unsafe fn tv_list_find_index(
     l: *mut list_T,
     idx: *mut ::core::ffi::c_int,
 ) -> *mut listitem_T {

@@ -12,7 +12,7 @@
 use super::*;
 use crate::api::private::helpers::{array_add, dict_put};
 
-pub unsafe extern "C" fn virt_text_to_array(
+pub unsafe fn virt_text_to_array(
     mut vt: VirtText,
     mut hl_name: bool,
     mut arena: *mut Arena,
@@ -62,7 +62,7 @@ pub unsafe extern "C" fn virt_text_to_array(
     }
 }
 
-unsafe extern "C" fn extmark_to_array(
+unsafe fn extmark_to_array(
     mut extmark: MTPair,
     mut id: bool,
     mut add_dict: bool,
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
     }
 }
 
-unsafe extern "C" fn extmark_get_index_from_obj(
+unsafe fn extmark_get_index_from_obj(
     mut buf: *mut buf_T,
     mut ns_id: Integer,
     mut obj: Object,

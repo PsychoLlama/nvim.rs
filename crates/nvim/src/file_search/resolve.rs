@@ -35,7 +35,7 @@ use core::{ptr, slice};
 /// @param[in,out] search_ctx  state of the search
 ///
 /// @return  an allocated string for the file name. NULL for error.
-pub unsafe extern "C" fn find_file_in_path(
+pub unsafe fn find_file_in_path(
     ptr: *mut c_char,
     len: size_t,
     options: c_int,
@@ -75,7 +75,7 @@ pub unsafe extern "C" fn find_file_in_path(
 /// @param[in,out] search_ctx  state of the search
 ///
 /// @return  an allocated string for the file name. NULL for error.
-pub unsafe extern "C" fn find_directory_in_path(
+pub unsafe fn find_directory_in_path(
     ptr: *mut c_char,
     len: size_t,
     options: c_int,
@@ -351,7 +351,7 @@ unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_c
 /// @param suffixes  list of suffixes, `'suffixesadd'` option
 /// @param[in,out] file_to_find  modified copy of file name
 /// @param[in,out] search_ctx_arg  state of the search
-pub unsafe extern "C" fn find_file_in_path_option(
+pub unsafe fn find_file_in_path_option(
     ptr: *mut c_char,
     len: size_t,
     options: c_int,

@@ -546,7 +546,7 @@ fn find_shortcuts(r: *mut bt_regprog_T, flags: c_int) {
 
 /// Did the pattern just compiled end with a `\n` that a search should treat
 /// as "match at end of line"? Read by the search code right after a compile.
-pub extern "C" fn vim_regcomp_had_eol() -> c_int {
+pub fn vim_regcomp_had_eol() -> c_int {
     had_eol.get()
 }
 

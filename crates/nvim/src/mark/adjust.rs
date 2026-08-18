@@ -103,7 +103,7 @@ impl ColShift {
 /// Example: Delete lines 34 and 35: mark_adjust(34, 35, MAXLNUM, -2);
 /// Example: Insert two lines below 55: mark_adjust(56, MAXLNUM, 2, 0);
 /// or: mark_adjust(56, 55, MAXLNUM, 2);
-pub unsafe extern "C" fn mark_adjust(
+pub unsafe fn mark_adjust(
     mut line1: linenr_T,
     mut line2: linenr_T,
     mut amount: linenr_T,
@@ -127,7 +127,7 @@ pub unsafe extern "C" fn mark_adjust(
 /// This is only useful when folds need to be moved in a way different to
 /// calling foldMarkAdjust() with arguments line1, line2, amount, amount_after,
 /// for an example of why this may be necessary, see do_move().
-pub unsafe extern "C" fn mark_adjust_nofold(
+pub unsafe fn mark_adjust_nofold(
     mut line1: linenr_T,
     mut line2: linenr_T,
     mut amount: linenr_T,
@@ -146,7 +146,7 @@ pub unsafe extern "C" fn mark_adjust_nofold(
     );
 }
 
-pub unsafe extern "C" fn mark_adjust_buf(
+pub unsafe fn mark_adjust_buf(
     mut buf: *mut buf_T,
     mut line1: linenr_T,
     mut line2: linenr_T,
@@ -357,7 +357,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
 /// position.
 /// "spaces_removed" is the number of spaces that were removed, matters when the
 /// cursor is inside them.
-pub unsafe extern "C" fn mark_col_adjust(
+pub unsafe fn mark_col_adjust(
     mut lnum: linenr_T,
     mut mincol: colnr_T,
     mut lnum_amount: linenr_T,

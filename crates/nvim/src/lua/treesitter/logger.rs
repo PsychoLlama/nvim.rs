@@ -9,7 +9,7 @@
 
 use super::*;
 
-pub(crate) unsafe extern "C-unwind" fn logger_gc(mut logger: TSLogger) {
+pub(crate) unsafe fn logger_gc(mut logger: TSLogger) {
     unsafe {
         if logger.log.is_none() {
             return;

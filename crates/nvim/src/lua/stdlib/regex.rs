@@ -40,7 +40,7 @@ const RE_STRICT: c_int = 4;
 ///
 /// # Safety
 /// `lstate` must be a live Lua state; this longjmps for a wrong argument.
-unsafe extern "C-unwind" fn regex_check(lstate: *mut lua_State) -> *mut *mut regprog_T {
+unsafe fn regex_check(lstate: *mut lua_State) -> *mut *mut regprog_T {
     unsafe { luaL_checkudata(lstate, 1, REGEX_TYPE.as_ptr()).cast::<*mut regprog_T>() }
 }
 
@@ -55,7 +55,7 @@ unsafe extern "C-unwind" fn regex_check(lstate: *mut lua_State) -> *mut *mut reg
 /// # Safety
 /// `lstate` must be a live Lua state, `prog` a live compiled program and
 /// `str` a NUL-terminated subject.
-unsafe extern "C-unwind" fn regex_match(
+unsafe fn regex_match(
     lstate: *mut lua_State,
     prog: *mut *mut regprog_T,
     str: *mut c_char,

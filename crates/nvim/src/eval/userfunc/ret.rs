@@ -631,7 +631,7 @@ pub unsafe extern "C" fn get_func_line(
 ///
 /// # Safety
 /// `cookie` is a `funccall_T`.
-pub unsafe extern "C" fn func_has_ended(cookie: *mut c_void) -> c_int {
+pub unsafe fn func_has_ended(cookie: *mut c_void) -> c_int {
     unsafe {
         let fcp = cookie as *mut funccall_T;
         (((*(*fcp).fc_func).uf_flags & FC_ABORT != 0 && did_emsg.get() != 0 && !aborted_in_try())
@@ -643,7 +643,7 @@ pub unsafe extern "C" fn func_has_ended(cookie: *mut c_void) -> c_int {
 ///
 /// # Safety
 /// `cookie` is a `funccall_T`.
-pub unsafe extern "C" fn func_has_abort(cookie: *mut c_void) -> c_int {
+pub unsafe fn func_has_abort(cookie: *mut c_void) -> c_int {
     unsafe { (*(*(cookie as *mut funccall_T)).fc_func).uf_flags & FC_ABORT }
 }
 
@@ -659,7 +659,7 @@ pub unsafe extern "C" fn func_name(cookie: *mut c_void) -> *mut c_char {
 ///
 /// # Safety
 /// `cookie` is a `funccall_T`.
-pub unsafe extern "C" fn func_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
+pub unsafe fn func_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
     unsafe { &raw mut (*(cookie as *mut funccall_T)).fc_breakpoint }
 }
 
@@ -667,7 +667,7 @@ pub unsafe extern "C" fn func_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
 ///
 /// # Safety
 /// `cookie` is a `funccall_T`.
-pub unsafe extern "C" fn func_dbg_tick(cookie: *mut c_void) -> *mut c_int {
+pub unsafe fn func_dbg_tick(cookie: *mut c_void) -> *mut c_int {
     unsafe { &raw mut (*(cookie as *mut funccall_T)).fc_dbg_tick }
 }
 
@@ -675,7 +675,7 @@ pub unsafe extern "C" fn func_dbg_tick(cookie: *mut c_void) -> *mut c_int {
 ///
 /// # Safety
 /// `cookie` is a `funccall_T`.
-pub unsafe extern "C" fn func_level(cookie: *mut c_void) -> c_int {
+pub unsafe fn func_level(cookie: *mut c_void) -> c_int {
     unsafe { (*(cookie as *mut funccall_T)).fc_level }
 }
 

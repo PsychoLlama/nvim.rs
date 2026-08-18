@@ -37,7 +37,7 @@ pub unsafe extern "C" fn nvim_exec2(
 
 /// Source `src` as an anonymous script, answering whatever it printed when
 /// `opts.output` asked for it (and the empty string otherwise, or on error).
-pub unsafe extern "C" fn exec_impl(
+pub unsafe fn exec_impl(
     channel_id: uint64_t,
     src: String_0,
     opts: *mut KeyDict_exec_opts,

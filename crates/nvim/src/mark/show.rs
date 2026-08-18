@@ -142,7 +142,7 @@ pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
 }
 
 /// `current` — in current file
-pub(super) unsafe extern "C" fn show_one_mark(
+pub(super) unsafe fn show_one_mark(
     mut c: c_int,
     mut arg: *mut c_char,
     mut p: *mut pos_T,
@@ -366,7 +366,7 @@ pub unsafe fn ex_delmarks(mut eap: *mut exarg_T) {
 
 /// Return the line at mark "mp".  Truncate to fit in window.
 /// The returned string has been allocated.
-pub(super) unsafe extern "C" fn mark_line(mut mp: *mut pos_T, mut lead_len: c_int) -> *mut c_char {
+pub(super) unsafe fn mark_line(mut mp: *mut pos_T, mut lead_len: c_int) -> *mut c_char {
     let mut p: *mut c_char = ptr::null_mut();
     if (*mp).lnum == 0 || (*mp).lnum > (*curbuf.get()).b_ml.ml_line_count {
         return xstrdup(c"-invalid-".as_ptr());
@@ -392,7 +392,7 @@ pub(super) unsafe extern "C" fn mark_line(mut mp: *mut pos_T, mut lead_len: c_in
 /// Get name of file from a filemark.
 /// When it's in the current buffer, return the text at the mark.
 /// Returns an allocated string.
-pub unsafe extern "C" fn fm_getname(mut fmark: *mut fmark_T, mut lead_len: c_int) -> *mut c_char {
+pub unsafe fn fm_getname(mut fmark: *mut fmark_T, mut lead_len: c_int) -> *mut c_char {
     if (*fmark).fnum == (*curbuf.get()).handle {
         return mark_line(&raw mut (*fmark).mark, lead_len);
     }

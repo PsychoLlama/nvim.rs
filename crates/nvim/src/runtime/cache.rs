@@ -41,7 +41,7 @@ pub(crate) fn search_path_mutex() -> *mut uv_mutex_t {
 }
 
 /// Initialise the runtime family's process-wide state.
-pub unsafe extern "C" fn runtime_init() {
+pub unsafe fn runtime_init() {
     // SAFETY: called once at startup, before any thread can reach the mutex.
     unsafe { uv_mutex_init(search_path_mutex()) };
 }
@@ -631,7 +631,7 @@ unsafe fn runtime_search_path_free(path: RuntimeSearchPath) {
 }
 
 /// Rebuild the cached search path if it has been invalidated.
-pub unsafe extern "C" fn runtime_search_path_validate() {
+pub unsafe fn runtime_search_path_validate() {
     // The path cannot be rebuilt in an async context. A plugin will invoke
     // itself asynchronously from sync code in the same plugin, so the lua or
     // autoload module it is looking for is almost certainly in the cached path
@@ -662,7 +662,7 @@ pub unsafe extern "C" fn runtime_search_path_validate() {
 /// Without `force` this is a no-op unless the main cache is valid and the
 /// snapshot is not — that is, it is the cheap "catch up if you are behind"
 /// call the `:packadd` family makes.
-pub unsafe extern "C" fn update_runtime_search_path_thread(force: bool) {
+pub unsafe fn update_runtime_search_path_thread(force: bool) {
     if !force && !(runtime_search_path_valid.get() && !runtime_search_path_valid_thread.get()) {
         return;
     }

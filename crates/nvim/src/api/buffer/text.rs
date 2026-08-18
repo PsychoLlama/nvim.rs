@@ -417,7 +417,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
     }
 }
 
-pub(crate) unsafe extern "C" fn fix_cursor(
+pub(crate) unsafe fn fix_cursor(
     mut win: *mut win_T,
     mut lo: linenr_T,
     mut hi: linenr_T,
@@ -440,7 +440,7 @@ pub(crate) unsafe extern "C" fn fix_cursor(
     }
 }
 
-unsafe extern "C" fn fix_pos_col(
+unsafe fn fix_pos_col(
     mut buf: *mut buf_T,
     mut pos: *mut pos_T,
     mut start_row: linenr_T,
@@ -495,7 +495,7 @@ unsafe extern "C" fn fix_pos_col(
     }
 }
 
-unsafe extern "C" fn fix_cursor_cols(
+unsafe fn fix_cursor_cols(
     mut win: *mut win_T,
     mut start_row: linenr_T,
     mut start_col: colnr_T,

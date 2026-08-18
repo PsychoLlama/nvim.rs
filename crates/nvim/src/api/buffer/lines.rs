@@ -473,7 +473,7 @@ pub unsafe extern "C" fn nvim_buf_get_offset(
 }
 
 #[inline]
-unsafe extern "C" fn init_line_array(
+unsafe fn init_line_array(
     mut lstate: *mut lua_State,
     mut a: *mut Array,
     mut size: size_t,
@@ -488,7 +488,7 @@ unsafe extern "C" fn init_line_array(
     }
 }
 
-unsafe extern "C" fn push_linestr(
+unsafe fn push_linestr(
     mut lstate: *mut lua_State,
     mut a: *mut Array,
     mut s: *const ::core::ffi::c_char,
@@ -542,7 +542,7 @@ unsafe extern "C" fn push_linestr(
     }
 }
 
-pub unsafe extern "C" fn buf_collect_lines(
+pub unsafe fn buf_collect_lines(
     mut buf: *mut buf_T,
     mut n: size_t,
     mut start: linenr_T,

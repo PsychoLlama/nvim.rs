@@ -436,7 +436,7 @@ fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
 /// # Safety
 /// `wp` must be null or a live window. Expanding the format re-enters the
 /// editor, so nothing may be held across this.
-pub(crate) unsafe extern "C" fn win_redr_custom(
+pub(crate) unsafe fn win_redr_custom(
     wp: *mut win_T,
     draw_winbar: bool,
     draw_ruler: bool,
@@ -523,7 +523,7 @@ unsafe fn draw_custom(wp: *mut win_T, draw_winbar: bool, draw_ruler: bool, ui_ev
 /// # Safety
 /// `wp` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe extern "C" fn win_redr_winbar(wp: *mut win_T) {
+pub unsafe fn win_redr_winbar(wp: *mut win_T) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // Reached recursively when the winbar contains an expression that
     // triggers a redraw.
@@ -555,7 +555,7 @@ static DID_RULER_COL: GlobalCell<c_int> = GlobalCell::new(-1);
 ///
 /// # Safety
 /// The editor must be up. This evaluates `'rulerformat'`, so it re-enters.
-pub unsafe extern "C" fn redraw_ruler() {
+pub unsafe fn redraw_ruler() {
     // The ruler belongs to the window it describes, unless that window has a
     // status line of its own to put it on -- then it is the last window's.
     // SAFETY: `curwin` is live from startup to exit.

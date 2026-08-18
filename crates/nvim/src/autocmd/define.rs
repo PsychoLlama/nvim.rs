@@ -23,7 +23,7 @@ const CALLBACK_INIT: Callback = Callback {
 
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
-pub unsafe extern "C" fn do_autocmd(
+pub unsafe fn do_autocmd(
     eap: *mut exarg_T,
     arg_in: *mut ::core::ffi::c_char,
     forceit: ::core::ffi::c_int,
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn do_autocmd(
 }
 
 /// [`do_autocmd_event`] for every event: what `:autocmd *` means.
-pub unsafe extern "C" fn do_all_autocmd_events(
+pub unsafe fn do_all_autocmd_events(
     pat: *const ::core::ffi::c_char,
     once: bool,
     nested: ::core::ffi::c_int,
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn do_all_autocmd_events(
 /// An empty `cmd` with `del` deletes; a non-empty one adds.  Both together
 /// are `:autocmd! {event} {pat} {cmd}`, which deletes the existing
 /// autocommands on the pattern and then appends to the same `AutoPat`.
-pub unsafe extern "C" fn do_autocmd_event(
+pub unsafe fn do_autocmd_event(
     event: event_T,
     mut pat: *const ::core::ffi::c_char,
     once: bool,
@@ -284,7 +284,7 @@ pub unsafe extern "C" fn do_autocmd_event(
 ///
 /// The handler is `handler_cmd` when that is non-null and `handler_fn`
 /// otherwise.
-pub unsafe extern "C" fn autocmd_register(
+pub unsafe fn autocmd_register(
     id: int64_t,
     event: event_T,
     mut pat: *const ::core::ffi::c_char,
@@ -464,7 +464,7 @@ pub unsafe extern "C" fn autocmd_register(
 ///
 /// Leading commas are skipped, and a comma inside braces or after a
 /// backslash (`*.\{obj,o\}`) does not end a pattern.
-pub unsafe extern "C" fn aucmd_span_pattern(
+pub unsafe fn aucmd_span_pattern(
     mut pat: *const ::core::ffi::c_char,
     start: *mut *const ::core::ffi::c_char,
 ) -> size_t {
@@ -495,7 +495,7 @@ pub unsafe extern "C" fn aucmd_span_pattern(
 
 /// Whether `do_modelines` should be called: false when `*argp` begins with
 /// `<nomodeline>`, which is then skipped.
-pub unsafe extern "C" fn check_nomodeline(argp: *mut *mut ::core::ffi::c_char) -> bool {
+pub unsafe fn check_nomodeline(argp: *mut *mut ::core::ffi::c_char) -> bool {
     unsafe {
         if strncmp(*argp, c"<nomodeline>".as_ptr(), 12) == 0 {
             *argp = skipwhite((*argp).add(12));
@@ -508,7 +508,7 @@ pub unsafe extern "C" fn check_nomodeline(argp: *mut *mut ::core::ffi::c_char) -
 /// Delete the autocommand with this id, wherever it is.
 ///
 /// Only autocommands created through the API have one.
-pub unsafe extern "C" fn autocmd_delete_id(id: int64_t) -> bool {
+pub unsafe fn autocmd_delete_id(id: int64_t) -> bool {
     unsafe {
         debug_assert!(id > 0);
 
@@ -530,7 +530,7 @@ pub unsafe extern "C" fn autocmd_delete_id(id: int64_t) -> bool {
 }
 
 /// An autocommand's handler as an allocated string, whichever kind it is.
-pub unsafe extern "C" fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
+pub unsafe fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
     unsafe {
         if (*ac).handler_cmd.is_null() {
             callback_to_string(&raw mut (*ac).handler_fn, ::core::ptr::null_mut())
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::cor
 ///
 /// `have_group` only picks the wording: without a group, the leading word
 /// could have been meant as one.
-pub(crate) unsafe extern "C" fn arg_event_skip(
+pub(crate) unsafe fn arg_event_skip(
     arg: *mut ::core::ffi::c_char,
     have_group: bool,
 ) -> *mut ::core::ffi::c_char {

@@ -512,7 +512,7 @@ unsafe fn saveas_exchange_names(alt_buf: *mut buf_T) -> Option<*mut c_char> {
 ///
 /// # Safety
 /// `eap`, `buf` and the two names must be live.
-pub unsafe extern "C" fn check_overwrite(
+pub unsafe fn check_overwrite(
     eap: *mut exarg_T,
     buf: *mut buf_T,
     fname: *mut c_char,

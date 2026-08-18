@@ -90,7 +90,7 @@ pub const COMPARED_BUFFER0: ::core::ffi::c_int =
     (1 as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;
 pub const COMPARED_BUFFER1: ::core::ffi::c_int =
     (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-unsafe extern "C" fn lua_pushhunk(
+unsafe fn lua_pushhunk(
     mut lstate: *mut lua_State,
     mut start_a: ::core::ffi::c_long,
     mut count_a: ::core::ffi::c_long,
@@ -119,7 +119,7 @@ unsafe extern "C" fn lua_pushhunk(
             + 1 as ::core::ffi::c_int,
     );
 }
-unsafe extern "C" fn get_linematch_results(
+unsafe fn get_linematch_results(
     mut lstate: *mut lua_State,
     mut ma: *mut mmfile_t,
     mut mb: *mut mmfile_t,
@@ -291,10 +291,7 @@ unsafe extern "C" fn call_on_hunk_cb(
     lua_settop(lstate, fidx);
     return r;
 }
-unsafe extern "C-unwind" fn get_string_arg(
-    mut lstate: *mut lua_State,
-    mut idx: ::core::ffi::c_int,
-) -> mmfile_t {
+unsafe fn get_string_arg(mut lstate: *mut lua_State, mut idx: ::core::ffi::c_int) -> mmfile_t {
     if lua_type(lstate, idx) != LUA_TSTRING {
         luaL_argerror(lstate, idx, c"expected string".as_ptr());
     }
@@ -310,7 +307,7 @@ unsafe extern "C-unwind" fn get_string_arg(
     mf.size = size as ::core::ffi::c_int;
     return mf;
 }
-unsafe extern "C-unwind" fn process_xdl_diff_opts(
+unsafe fn process_xdl_diff_opts(
     mut lstate: *mut lua_State,
     mut cfg: *mut xdemitconf_t,
     mut params: *mut xpparam_t,

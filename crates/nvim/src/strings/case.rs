@@ -28,7 +28,7 @@ pub(crate) fn ascii_upcase(s: &mut [u8]) {
 }
 
 /// ASCII-uppercased copy of `string`.
-pub unsafe extern "C" fn vim_strsave_up(string: *const c_char) -> *mut c_char {
+pub unsafe fn vim_strsave_up(string: *const c_char) -> *mut c_char {
     unsafe {
         let p1 = xmalloc(strlen(string).wrapping_add(1)) as *mut c_char;
         vim_strcpy_up(p1, string);
@@ -37,7 +37,7 @@ pub unsafe extern "C" fn vim_strsave_up(string: *const c_char) -> *mut c_char {
 }
 
 /// ASCII-uppercased copy of at most `len` bytes of `string`.
-pub unsafe extern "C" fn vim_strnsave_up(string: *const c_char, len: size_t) -> *mut c_char {
+pub unsafe fn vim_strnsave_up(string: *const c_char, len: size_t) -> *mut c_char {
     unsafe {
         let p1 = xmalloc(len.wrapping_add(1)) as *mut c_char;
         vim_strncpy_up(p1, string, len);
@@ -46,7 +46,7 @@ pub unsafe extern "C" fn vim_strnsave_up(string: *const c_char, len: size_t) -> 
 }
 
 /// ASCII-uppercase the C string in place.
-pub unsafe extern "C" fn vim_strup(p: *mut c_char) {
+pub unsafe fn vim_strup(p: *mut c_char) {
     unsafe {
         let len = CStr::from_ptr(p).to_bytes().len();
         ascii_upcase(slice::from_raw_parts_mut(p as *mut u8, len));
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn vim_strup(p: *mut c_char) {
 }
 
 /// `strcpy` that ASCII-uppercases while copying.
-pub unsafe extern "C" fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
+pub unsafe fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
     unsafe {
         let bytes = CStr::from_ptr(src).to_bytes_with_nul();
         let out = slice::from_raw_parts_mut(dst as *mut u8, bytes.len());
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
 }
 
 /// Like `vim_strcpy_up` but copies at most `n` bytes; always terminates.
-pub unsafe extern "C" fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
+pub unsafe fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
     unsafe {
         let len = strnlen(src, n);
         let out = slice::from_raw_parts_mut(dst as *mut u8, len + 1);
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n:
 
 /// `memcpy` that ASCII-uppercases while copying: exactly `n` bytes, no
 /// terminator.
-pub unsafe extern "C" fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
+pub unsafe fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
     unsafe {
         if n == 0 {
             return;
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: 
 
 /// Case-fold `orig` per character (multibyte-aware), growing the result
 /// when a folded character encodes longer than its original.
-pub unsafe extern "C" fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
+pub unsafe fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
     unsafe {
         let mut orig_len = strlen(orig);
         let mut res = xmalloc(orig_len.wrapping_add(1)) as *mut c_char;

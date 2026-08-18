@@ -538,7 +538,7 @@ impl Drop for EmptyCpo {
 /// # Safety
 /// `spat`, `mpat` and `epat` are non-null C strings; `skip` is null or a
 /// live typval; `match_pos` is null or writable.
-pub unsafe extern "C" fn do_searchpair(
+pub unsafe fn do_searchpair(
     spat: *const c_char,
     mpat: *const c_char,
     epat: *const c_char,

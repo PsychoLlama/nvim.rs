@@ -2,7 +2,7 @@ use super::*;
 use crate::types::{VAR_STRING, VAR_UNKNOWN, kListLenMayKnow, kListLenUnknown};
 
 /// Returns information about a window as a dictionary.
-unsafe extern "C" fn get_win_info(wp: *mut win_T, tpnr: int16_t, winnr: int16_t) -> *mut dict_T {
+unsafe fn get_win_info(wp: *mut win_T, tpnr: int16_t, winnr: int16_t) -> *mut dict_T {
     let dict: *mut dict_T = tv_dict_alloc();
     let nr = |key: &CStr, value: varnumber_T| {
         tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value);
@@ -41,7 +41,7 @@ unsafe extern "C" fn get_win_info(wp: *mut win_T, tpnr: int16_t, winnr: int16_t)
 }
 /// Returns information (variables, options, etc.) about a tab page
 ///          as a dictionary.
-unsafe extern "C" fn get_tabpage_info(tp: *mut tabpage_T, tp_idx: c_int) -> *mut dict_T {
+unsafe fn get_tabpage_info(tp: *mut tabpage_T, tp_idx: c_int) -> *mut dict_T {
     let dict: *mut dict_T = tv_dict_alloc();
     tv_dict_add_nr(
         dict,
@@ -135,7 +135,7 @@ pub unsafe fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     }
 }
 /// Get the layout of the given tab page for winlayout().
-unsafe extern "C" fn get_framelayout(fr: *const frame_T, mut l: *mut list_T, mut outer: bool) {
+unsafe fn get_framelayout(fr: *const frame_T, mut l: *mut list_T, mut outer: bool) {
     if fr.is_null() {
         return;
     }

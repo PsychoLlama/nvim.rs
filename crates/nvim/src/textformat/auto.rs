@@ -42,7 +42,7 @@ static did_add_space: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// # Safety
 /// There must be a current line, and it must be modifiable.
-pub unsafe extern "C" fn auto_format(trailblank: bool, prev_line: bool) {
+pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     unsafe {
         if !has_format_option(FO_AUTO) {
             return;
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn auto_format(trailblank: bool, prev_line: bool) {
 ///
 /// # Safety
 /// There must be a current line, and it must be modifiable.
-pub unsafe extern "C" fn check_auto_format(end_insert: bool) {
+pub unsafe fn check_auto_format(end_insert: bool) {
     unsafe {
         if !did_add_space.get() {
             return;

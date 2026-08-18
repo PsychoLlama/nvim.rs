@@ -3,7 +3,7 @@
 
 use super::*;
 
-pub(crate) unsafe extern "C" fn u_unch_branch(mut uhp: *mut u_header_T) {
+pub(crate) unsafe fn u_unch_branch(mut uhp: *mut u_header_T) {
     let mut uh: *mut u_header_T = uhp;
     while !uh.is_null() {
         (*uh).uh_flags |= UH_CHANGED as c_int;
@@ -13,14 +13,14 @@ pub(crate) unsafe extern "C" fn u_unch_branch(mut uhp: *mut u_header_T) {
         uh = (*uh).uh_prev.ptr;
     }
 }
-pub(crate) unsafe extern "C" fn u_get_headentry(mut buf: *mut buf_T) -> *mut u_entry_T {
+pub(crate) unsafe fn u_get_headentry(mut buf: *mut buf_T) -> *mut u_entry_T {
     if (*buf).b_u_newhead.is_null() || (*(*buf).b_u_newhead).uh_entry.is_null() {
         iemsg(gettext(c"E439: Undo list corrupt".as_ptr()));
         return ptr::null_mut();
     }
     return (*(*buf).b_u_newhead).uh_entry;
 }
-pub(crate) unsafe extern "C" fn u_getbot(mut buf: *mut buf_T) {
+pub(crate) unsafe fn u_getbot(mut buf: *mut buf_T) {
     let mut uep: *mut u_entry_T = u_get_headentry(buf);
     if uep.is_null() {
         return;
@@ -37,7 +37,7 @@ pub(crate) unsafe extern "C" fn u_getbot(mut buf: *mut buf_T) {
     }
     (*buf).b_u_synced = true;
 }
-pub(crate) unsafe extern "C" fn u_freeheader(
+pub(crate) unsafe fn u_freeheader(
     mut buf: *mut buf_T,
     mut uhp: *mut u_header_T,
     mut uhpp: *mut *mut u_header_T,
@@ -64,7 +64,7 @@ pub(crate) unsafe extern "C" fn u_freeheader(
     }
     u_freeentries(buf, uhp, uhpp);
 }
-pub(crate) unsafe extern "C" fn u_freebranch(
+pub(crate) unsafe fn u_freebranch(
     mut buf: *mut buf_T,
     mut uhp: *mut u_header_T,
     mut uhpp: *mut *mut u_header_T,
@@ -88,7 +88,7 @@ pub(crate) unsafe extern "C" fn u_freebranch(
         u_freeentries(buf, tofree, uhpp);
     }
 }
-pub(crate) unsafe extern "C" fn u_freeentries(
+pub(crate) unsafe fn u_freeentries(
     mut buf: *mut buf_T,
     mut uhp: *mut u_header_T,
     mut uhpp: *mut *mut u_header_T,
@@ -116,7 +116,7 @@ pub(crate) unsafe extern "C" fn u_freeentries(
     xfree(uhp as *mut c_void);
     (*buf).b_u_numhead -= 1;
 }
-pub(crate) unsafe extern "C" fn u_freeentry(mut uep: *mut u_entry_T, mut n: c_int) {
+pub(crate) unsafe fn u_freeentry(mut uep: *mut u_entry_T, mut n: c_int) {
     while n > 0 {
         n -= 1;
         xfree(*(*uep).ue_array.offset(n as isize) as *mut c_void);
@@ -124,7 +124,7 @@ pub(crate) unsafe extern "C" fn u_freeentry(mut uep: *mut u_entry_T, mut n: c_in
     xfree((*uep).ue_array as *mut c_void);
     xfree(uep as *mut c_void);
 }
-pub unsafe extern "C" fn u_clearall(mut buf: *mut buf_T) {
+pub unsafe fn u_clearall(mut buf: *mut buf_T) {
     (*buf).b_u_curhead = ptr::null_mut();
     (*buf).b_u_oldhead = (*buf).b_u_curhead;
     (*buf).b_u_newhead = (*buf).b_u_oldhead;
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn u_clearall(mut buf: *mut buf_T) {
     (*buf).b_u_line_ptr = ptr::null_mut();
     (*buf).b_u_line_lnum = 0;
 }
-pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
+pub unsafe fn u_blockfree(mut buf: *mut buf_T) {
     while !(*buf).b_u_oldhead.is_null() {
         let mut previous_oldhead: *mut u_header_T = (*buf).b_u_oldhead;
         u_freeheader(buf, (*buf).b_u_oldhead, ptr::null_mut());
@@ -144,11 +144,11 @@ pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
     }
     xfree((*buf).b_u_line_ptr as *mut c_void);
 }
-pub unsafe extern "C" fn u_clearallandblockfree(mut buf: *mut buf_T) {
+pub unsafe fn u_clearallandblockfree(mut buf: *mut buf_T) {
     u_blockfree(buf);
     u_clearall(buf);
 }
-pub(crate) unsafe extern "C" fn u_saveline(mut buf: *mut buf_T, mut lnum: linenr_T) {
+pub(crate) unsafe fn u_saveline(mut buf: *mut buf_T, mut lnum: linenr_T) {
     if lnum == (*buf).b_u_line_lnum {
         return;
     }
@@ -164,7 +164,7 @@ pub(crate) unsafe extern "C" fn u_saveline(mut buf: *mut buf_T, mut lnum: linenr
     }
     (*buf).b_u_line_ptr = u_save_line_buf(buf, lnum);
 }
-pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
+pub unsafe fn u_clearline(mut buf: *mut buf_T) {
     if (*buf).b_u_line_ptr.is_null() {
         return;
     }
@@ -172,7 +172,7 @@ pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
     (*buf).b_u_line_ptr = ptr::null_mut();
     (*buf).b_u_line_lnum = 0;
 }
-pub unsafe extern "C" fn u_undoline() {
+pub unsafe fn u_undoline() {
     if (*curbuf.get()).b_u_line_ptr.is_null()
         || (*curbuf.get()).b_u_line_lnum > (*curbuf.get()).b_ml.ml_line_count
     {
@@ -214,12 +214,9 @@ pub unsafe extern "C" fn u_undoline() {
     (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_u_line_lnum;
     check_cursor_col(curwin.get());
 }
-pub(crate) unsafe extern "C" fn u_save_line(mut lnum: linenr_T) -> *mut c_char {
+pub(crate) unsafe fn u_save_line(mut lnum: linenr_T) -> *mut c_char {
     return u_save_line_buf(curbuf.get(), lnum);
 }
-pub(crate) unsafe extern "C" fn u_save_line_buf(
-    mut buf: *mut buf_T,
-    mut lnum: linenr_T,
-) -> *mut c_char {
+pub(crate) unsafe fn u_save_line_buf(mut buf: *mut buf_T, mut lnum: linenr_T) -> *mut c_char {
     return xstrdup(ml_get_buf(buf, lnum));
 }

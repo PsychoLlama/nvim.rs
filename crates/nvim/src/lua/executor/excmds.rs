@@ -233,7 +233,7 @@ unsafe fn read_stdin() -> Option<*mut c_char> {
 ///
 /// # Safety
 /// `path` must be a NUL-terminated path.
-pub unsafe extern "C-unwind" fn nlua_exec_file(path: *const c_char) -> bool {
+pub unsafe fn nlua_exec_file(path: *const c_char) -> bool {
     unsafe {
         let lstate = get_global_lstate();
         if !strequal(path, c"-".as_ptr()) {

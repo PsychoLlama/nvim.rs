@@ -230,7 +230,7 @@ unsafe fn quoted_span(
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe extern "C" fn current_quote(
+pub unsafe fn current_quote(
     oap: *mut oparg_T,
     count: c_int,
     include: bool,

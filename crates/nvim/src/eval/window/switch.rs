@@ -6,7 +6,7 @@ use crate::types::VAR_STRING;
 /// Caller must call win_execute_after() later regardless of return value.
 ///
 /// Returns whether switching the window succeeded.
-pub unsafe extern "C" fn win_execute_before(
+pub unsafe fn win_execute_before(
     args: *mut win_execute_T,
     wp: *mut win_T,
     tp: *mut tabpage_T,
@@ -47,7 +47,7 @@ pub unsafe extern "C" fn win_execute_before(
     false
 }
 /// Restore the previous window after executing user code.
-pub unsafe extern "C" fn win_execute_after(args: *mut win_execute_T) {
+pub unsafe fn win_execute_after(args: *mut win_execute_T) {
     restore_win_noblock(&raw mut (*args).switchwin, true);
     if (*args).apply_acd {
         xfree((*args).save_sfname as *mut c_void);
@@ -92,7 +92,7 @@ pub unsafe fn f_win_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 ///                    triggered, another tabpage access is limited.
 ///
 /// Returns FAIL if switching to "win" failed.
-pub unsafe extern "C" fn switch_win(
+pub unsafe fn switch_win(
     switchwin: *mut switchwin_T,
     win: *mut win_T,
     tp: *mut tabpage_T,
@@ -102,7 +102,7 @@ pub unsafe extern "C" fn switch_win(
     switch_win_noblock(switchwin, win, tp, no_display)
 }
 /// As switch_win() but without blocking autocommands.
-pub unsafe extern "C" fn switch_win_noblock(
+pub unsafe fn switch_win_noblock(
     switchwin: *mut switchwin_T,
     win: *mut win_T,
     tp: *mut tabpage_T,
@@ -135,12 +135,12 @@ pub unsafe extern "C" fn switch_win_noblock(
 /// Restore current tabpage and window saved by switch_win(), if still valid.
 /// When "no_display" is true the display won't be affected, no redraw is
 /// triggered.
-pub unsafe extern "C" fn restore_win(switchwin: *mut switchwin_T, mut no_display: bool) {
+pub unsafe fn restore_win(switchwin: *mut switchwin_T, mut no_display: bool) {
     restore_win_noblock(switchwin, no_display);
     unblock_autocmds();
 }
 /// As restore_win() but without unblocking autocommands.
-pub unsafe extern "C" fn restore_win_noblock(switchwin: *mut switchwin_T, no_display: bool) {
+pub unsafe fn restore_win_noblock(switchwin: *mut switchwin_T, no_display: bool) {
     if !(*switchwin).sw_curtab.is_null() && valid_tabpage((*switchwin).sw_curtab) {
         if no_display {
             let old_tp_curwin: *mut win_T = (*curtab.get()).tp_curwin;

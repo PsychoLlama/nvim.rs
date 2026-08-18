@@ -51,7 +51,7 @@ const EMPTY_TV: typval_T = typval_T {
 ///
 /// # Safety
 /// `name` is a NUL-terminated string.
-pub unsafe extern "C" fn find_internal_func(name: *const c_char) -> *const EvalFuncDef {
+pub unsafe fn find_internal_func(name: *const c_char) -> *const EvalFuncDef {
     // SAFETY: `name` is NUL-terminated, so its first `len` bytes are
     // readable. `from_raw_parts` refuses a null pointer even for an empty
     // slice, and an empty name is not a builtin anyway.
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn find_internal_func(name: *const c_char) -> *const EvalF
 ///
 /// # Safety
 /// `fdef` is a live table row.
-pub unsafe extern "C" fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> c_int {
+pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> c_int {
     // SAFETY: the caller's obligation; the row's name is a `'static` string
     // in the generated table.
     unsafe {
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn check_internal_func(fdef: *const EvalFuncDef, argcount:
 /// `fname` is a NUL-terminated string; `argvars` points at an array of at
 /// least `MAX_FUNC_ARGS + 1` typvals of which the first `argcount` are
 /// filled; `rettv` is the cleared return value.
-pub unsafe extern "C" fn call_internal_func(
+pub unsafe fn call_internal_func(
     fname: *const c_char,
     argcount: c_int,
     argvars: *mut typval_T,
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn call_internal_func(
 ///
 /// # Safety
 /// As [`call_internal_func`], plus `basetv` is a live typval.
-pub unsafe extern "C" fn call_internal_method(
+pub unsafe fn call_internal_method(
     fname: *const c_char,
     argcount: c_int,
     argvars: *mut typval_T,
@@ -387,7 +387,7 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe extern "C" fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
+pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
     unsafe {
@@ -435,7 +435,7 @@ pub unsafe extern "C" fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *m
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe extern "C" fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
+pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
     // SAFETY: the caller's obligation; the `emsg_off` bracket is balanced.
     unsafe {
         if !tv_check_str_or_nr(tv) {
@@ -452,7 +452,7 @@ pub unsafe extern "C" fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
 ///
 /// # Safety
 /// `arg` is a live typval.
-pub unsafe extern "C" fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
+pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
     // SAFETY: the caller's obligation; the `emsg_off` bracket is balanced,
     // which is what makes E158 the *only* message this can produce.
     unsafe {
@@ -474,7 +474,7 @@ pub unsafe extern "C" fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
 ///
 /// # Safety
 /// `argvars` is a live call frame's argument array and `idx` is within it.
-pub unsafe extern "C" fn get_optional_window(argvars: *mut typval_T, idx: c_int) -> *mut win_T {
+pub unsafe fn get_optional_window(argvars: *mut typval_T, idx: c_int) -> *mut win_T {
     // SAFETY: the caller's obligation.
     unsafe {
         if (*argvars.add(idx as usize)).v_type == VAR_UNKNOWN {

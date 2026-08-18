@@ -33,7 +33,7 @@ use crate::winlayer::Frame;
 /// # Safety
 /// `wp` must be a live window. Evaluating `'statusline'` re-enters the
 /// editor, so nothing may be held across this.
-pub unsafe extern "C" fn win_redr_status(wp: *mut win_T) {
+pub unsafe fn win_redr_status(wp: *mut win_T) {
     // SAFETY: the caller's promise.
     let mut win = unsafe { Win::new(wp) };
     let is_stl_global = stl_is_global();
@@ -90,7 +90,7 @@ pub unsafe extern "C" fn win_redr_status(wp: *mut win_T) {
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe extern "C" fn stl_connected(wp: *mut win_T) -> bool {
+pub unsafe fn stl_connected(wp: *mut win_T) -> bool {
     // SAFETY: the caller's promise; a live window has a live frame.
     let mut fr = unsafe { Frame::new(Win::new(wp).w_frame) };
     while let Some(parent) = fr.parent() {
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn stl_connected(wp: *mut win_T) -> bool {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe extern "C" fn get_trans_bufname(buf: *mut buf_T) {
+pub unsafe fn get_trans_bufname(buf: *mut buf_T) {
     // SAFETY: the caller's promise.
     let spname = unsafe { buf_spname(buf) };
     with_name_buff(|name| {

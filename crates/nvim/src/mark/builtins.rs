@@ -13,7 +13,7 @@ use crate::pos::MAXCOL;
 use crate::types::kListLenMayKnow;
 
 /// Add information about mark 'mname' to list 'l'
-pub(super) unsafe extern "C" fn add_mark(
+pub(super) unsafe fn add_mark(
     mut l: *mut list_T,
     mut mname: *const c_char,
     mut pos: *const pos_T,
@@ -66,7 +66,7 @@ pub(super) unsafe extern "C" fn add_mark(
 ///
 /// `buf` — Buffer to get the marks from
 /// `l` — List to store marks
-pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut list_T) {
+pub unsafe fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut list_T) {
     let mut mname: [c_char; 3] = c_bytes(b"' \0");
     let mut i: c_int = 0;
     while i < NMARKS {
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut 
 /// Get information about global marks ('A' to 'Z' and '0' to '9')
 ///
 /// `l` — List to store global marks
-pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
+pub unsafe fn get_global_marks(mut l: *mut list_T) {
     let mut mname: [c_char; 3] = c_bytes(b"' \0");
     let mut name: *mut c_char = ptr::null_mut();
     let mut i: c_int = 0;

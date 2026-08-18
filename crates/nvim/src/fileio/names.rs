@@ -47,7 +47,7 @@ pub unsafe fn shorten_buf_fname(buf: *mut buf_T, dirname: *mut c_char, force: c_
 }
 
 /// Shorten file names for all buffers.
-pub unsafe extern "C" fn shorten_fnames(force: c_int) {
+pub unsafe fn shorten_fnames(force: c_int) {
     unsafe {
         let mut dirname = [0 as c_char; MAXPATHL as usize];
         os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t);
@@ -80,11 +80,7 @@ pub unsafe extern "C" fn shorten_fnames(force: c_int) {
 ///                     truncated basename was already underscores, the first
 ///                     becomes a `v`. NULL only when `fname` was empty and
 ///                     the current directory could not be read.
-pub unsafe extern "C" fn modname(
-    fname: *const c_char,
-    ext: *const c_char,
-    prepend_dot: bool,
-) -> *mut c_char {
+pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char {
     unsafe {
         let ext = CStr::from_ptr(ext).to_bytes();
         let mut prepend_dot = prepend_dot;
@@ -209,7 +205,7 @@ unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
 /// `os_rename` only works when both names are on the same file system.
 ///
 /// @return  -1 for failure, 0 for success
-pub unsafe extern "C" fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
+pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     unsafe {
         let mut use_tmp_file = false;
 
@@ -270,7 +266,7 @@ pub unsafe extern "C" fn vim_rename(from: *const c_char, to: *const c_char) -> c
 /// A symbolic link is copied as a link, not as its target.
 ///
 /// @return  FAIL for failure, OK for success
-pub unsafe extern "C" fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
+pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
     unsafe {
         let mut from_info = FileInfo::default();
         if os_fileinfo_link(from, &raw mut from_info)
@@ -312,7 +308,7 @@ pub unsafe extern "C" fn vim_copyfile(from: *const c_char, to: *const c_char) ->
 /// @param sfname     short file name, or NULL
 /// @param tail       tail of the path
 /// @param allow_dirs the pattern may match a directory
-pub unsafe extern "C" fn match_file_pat(
+pub unsafe fn match_file_pat(
     pattern: *mut c_char,
     prog: *mut *mut regprog_T,
     fname: *mut c_char,
@@ -357,11 +353,7 @@ pub unsafe extern "C" fn match_file_pat(
 /// @param list    comma-separated list of patterns, like `'wildignore'`
 /// @param sfname  short file name
 /// @param ffname  full file name
-pub unsafe extern "C" fn match_file_list(
-    list: *mut c_char,
-    sfname: *mut c_char,
-    ffname: *mut c_char,
-) -> bool {
+pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *mut c_char) -> bool {
     unsafe {
         let tail = path_tail(sfname);
         let mut p = list;

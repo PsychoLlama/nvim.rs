@@ -2,7 +2,7 @@ use super::*;
 use crate::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// Find a buffer by number or exact name.
-pub unsafe extern "C" fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
+pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
     let mut buf: *mut buf_T = ptr::null_mut();
     if (*avar).v_type == VAR_NUMBER {
         buf = buflist_findnr((*avar).vval.v_number as c_int);

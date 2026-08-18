@@ -21,7 +21,7 @@ const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
 ///
 /// `OK` unless the argument was malformed or an autocommand aborted;
 /// `did_something` (when given) says whether any autocommand ran.
-pub unsafe extern "C" fn do_doautocmd(
+pub unsafe fn do_doautocmd(
     arg_start: *mut ::core::ffi::c_char,
     do_msg: bool,
     did_something: *mut bool,
@@ -143,7 +143,7 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
 /// the code that noticed it.
 ///
 /// Everything is copied: `fname`, `fname_io` and `data` are the caller's.
-pub unsafe extern "C" fn aucmd_defer(
+pub unsafe fn aucmd_defer(
     event: event_T,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
@@ -243,7 +243,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
 }
 
 /// Fire `TermResponse` with the terminal's reply in `v:event.sequence`.
-pub unsafe extern "C" fn do_termresponse_autocmd(sequence: String_0) {
+pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
     unsafe {
         let mut data = DictBuf::<1>::new();
         let mut event_data = data.insert(c"sequence", Object::string(sequence)).object();
@@ -281,7 +281,7 @@ unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
 /// `pending_vimresume` is the three-state latch that makes that true:
 /// `kFalse` nothing pending, `kNone` an event is being fired right now,
 /// `kTrue` a resume is owed.
-pub unsafe extern "C" fn may_trigger_vim_suspend_resume(suspend: bool) {
+pub unsafe fn may_trigger_vim_suspend_resume(suspend: bool) {
     unsafe {
         if suspend && pending_vimresume.get() == kFalse {
             pending_vimresume.set(kNone);
@@ -307,7 +307,7 @@ pub unsafe extern "C" fn may_trigger_vim_suspend_resume(suspend: bool) {
 }
 
 /// Fire `UIEnter`/`UILeave` for the channel that attached or detached.
-pub unsafe extern "C" fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
+pub unsafe fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     unsafe {
         static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
 
 /// Fire `FocusGained`/`FocusLost`, and re-check file timestamps on a gain
 /// -- but not more often than every two seconds.
-pub unsafe extern "C" fn do_autocmd_focusgained(gained: bool) {
+pub unsafe fn do_autocmd_focusgained(gained: bool) {
     unsafe {
         static recursive: GlobalCell<bool> = GlobalCell::new(false);
         static last_time: GlobalCell<Timestamp> = GlobalCell::new(0 as Timestamp);
@@ -376,7 +376,7 @@ pub unsafe extern "C" fn do_autocmd_focusgained(gained: bool) {
 /// A nested `FileType` only fires when `force` says so; the *inner* one
 /// then does not `force` the autocommands themselves, which is what the
 /// `ft_recursive == 1` test says.
-pub unsafe extern "C" fn do_filetype_autocmd(buf: *mut buf_T, force: bool) -> bool {
+pub unsafe fn do_filetype_autocmd(buf: *mut buf_T, force: bool) -> bool {
     unsafe {
         static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 

@@ -25,7 +25,7 @@ use crate::semsg_c;
 ///
 /// With `keep_zero` clear, ties are broken by the items' original indexes,
 /// which is what makes the sort stable.
-pub(crate) unsafe extern "C" fn item_compare(
+pub(crate) unsafe fn item_compare(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
     keep_zero: bool,
@@ -140,7 +140,7 @@ pub(crate) unsafe extern "C" fn item_compare_not_keeping_zero(
 ///
 /// A failed call sets `item_compare_func_err`, which makes every later
 /// comparison answer 0 and the driver abandon the sort.
-pub(crate) unsafe extern "C" fn item_compare2(
+pub(crate) unsafe fn item_compare2(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
     keep_zero: bool,
@@ -245,7 +245,7 @@ fn sorter(info: *const sortinfo_T, keep_zero: bool) -> ListSorter {
 }
 
 /// `sort()` over `l`, in place.
-pub(crate) unsafe extern "C" fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
+pub(crate) unsafe fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
     unsafe {
         let len = tv_list_len(l);
 
@@ -288,7 +288,7 @@ pub(crate) unsafe extern "C" fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
 }
 
 /// `uniq()` over `l`, in place: drop each item equal to the one before it.
-pub(crate) unsafe extern "C" fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
+pub(crate) unsafe fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
     unsafe {
         let len = tv_list_len(l);
 
@@ -328,7 +328,7 @@ pub(crate) unsafe extern "C" fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
 
 /// Read `sort()`/`uniq()`'s optional `{how}` and `{dict}` arguments into
 /// `info`.
-pub(crate) unsafe extern "C" fn parse_sort_uniq_args(
+pub(crate) unsafe fn parse_sort_uniq_args(
     argvars: *mut typval_T,
     info: *mut sortinfo_T,
 ) -> ::core::ffi::c_int {
@@ -407,11 +407,7 @@ pub(crate) unsafe extern "C" fn parse_sort_uniq_args(
 ///
 /// `sortinfo` is saved and restored around the call because a user comparison
 /// function can itself call `sort()`.
-pub(crate) unsafe extern "C" fn do_sort_uniq(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    sort: bool,
-) {
+pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, sort: bool) {
     unsafe {
         if (*argvars).v_type != VAR_LIST {
             semsg_c!(

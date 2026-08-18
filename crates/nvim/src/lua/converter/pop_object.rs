@@ -68,7 +68,7 @@ const CANNOT_CONVERT: &CStr = c"Cannot convert given Lua type";
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top, and `err` the
 /// caller's error slot.
-pub unsafe extern "C-unwind" fn nlua_pop_Object(
+pub unsafe fn nlua_pop_Object(
     lstate: *mut lua_State,
     ref_0: bool,
     arena: *mut Arena,

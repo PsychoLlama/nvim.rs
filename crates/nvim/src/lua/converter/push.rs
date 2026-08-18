@@ -302,11 +302,7 @@ impl TypvalSink for LuaSink {
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `tv` a live typval.
-pub unsafe extern "C-unwind" fn nlua_push_typval(
-    lstate: *mut lua_State,
-    tv: *mut typval_T,
-    flags: c_int,
-) -> bool {
+pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut typval_T, flags: c_int) -> bool {
     unsafe {
         let initial_size = lua_gettop(lstate);
         if lua_checkstack(lstate, initial_size + 2) == 0 {

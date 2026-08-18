@@ -1,12 +1,12 @@
 use super::*;
 use crate::types::{VAR_UNKNOWN, kListLenMayKnow};
 
-pub unsafe extern "C" fn win_id2wp(id: c_int) -> *mut win_T {
+pub unsafe fn win_id2wp(id: c_int) -> *mut win_T {
     win_id2wp_tp(id, ptr::null_mut())
 }
 /// Return the window and tab pointer of window "id".
 /// Returns NULL when not found.
-pub unsafe extern "C" fn win_id2wp_tp(id: c_int, mut tpp: *mut *mut tabpage_T) -> *mut win_T {
+pub unsafe fn win_id2wp_tp(id: c_int, mut tpp: *mut *mut tabpage_T) -> *mut win_T {
     let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
         let mut wp: *mut win_T = tab_firstwin(tp);
@@ -28,7 +28,7 @@ pub unsafe extern "C" fn win_id2wp_tp(id: c_int, mut tpp: *mut *mut tabpage_T) -
 /// `tp` — NULL for current tab page
 /// Returns current window if "vp" is number zero.
 ///          NULL if not found.
-pub unsafe extern "C" fn find_win_by_nr(vp: *mut typval_T, tp: *mut tabpage_T) -> *mut win_T {
+pub unsafe fn find_win_by_nr(vp: *mut typval_T, tp: *mut tabpage_T) -> *mut win_T {
     let mut nr: c_int = tv_get_number_chk(vp, ptr::null_mut()) as c_int;
     if nr < 0 {
         return ptr::null_mut();
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn find_win_by_nr(vp: *mut typval_T, tp: *mut tabpage_T) -
 /// Find a window: When using a Window ID in any tab page, when using a number
 /// in the current tab page.
 /// Returns NULL when not found.
-pub unsafe extern "C" fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T {
+pub unsafe fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T {
     let mut nr: c_int = tv_get_number_chk(vp, ptr::null_mut()) as c_int;
     if nr >= LOWEST_WIN_ID as c_int {
         return win_id2wp(tv_get_number(vp) as c_int);
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T {
     find_win_by_nr(vp, ptr::null_mut())
 }
 /// Find window specified by "wvp" in tabpage "tvp".
-pub unsafe extern "C" fn find_tabwin(wvp: *mut typval_T, mut tvp: *mut typval_T) -> *mut win_T {
+pub unsafe fn find_tabwin(wvp: *mut typval_T, mut tvp: *mut typval_T) -> *mut win_T {
     let mut wp: *mut win_T = ptr::null_mut();
     let mut tp: *mut tabpage_T = ptr::null_mut();
     if (*wvp).v_type != VAR_UNKNOWN {
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn find_tabwin(wvp: *mut typval_T, mut tvp: *mut typval_T)
     wp
 }
 /// Common code for tabpagewinnr() and winnr().
-unsafe extern "C" fn get_winnr(tp: *mut tabpage_T, mut argvar: *mut typval_T) -> c_int {
+unsafe fn get_winnr(tp: *mut tabpage_T, mut argvar: *mut typval_T) -> c_int {
     let mut nr: c_int = 1;
     let mut twin: *mut win_T = if tp == curtab.get() {
         curwin.get()

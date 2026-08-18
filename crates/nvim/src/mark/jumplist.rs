@@ -18,7 +18,7 @@ use crate::types::CMOD_KEEPJUMPS;
 
 /// Set the previous context mark to the current position and add it to the
 /// jump list.
-pub unsafe extern "C" fn setpcmark() {
+pub unsafe fn setpcmark() {
     let mut fm: *mut xfmark_T = ptr::null_mut();
     if global_busy.get() != 0
         || listcmd_busy.get()
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn setpcmark() {
 /// where ever, then call checkpcmark().  This ensures that the previous
 /// context will only be changed if the cursor moved to a different line.
 /// If pcmark was deleted (with "dG") the previous mark is restored.
-pub unsafe extern "C" fn checkpcmark() {
+pub unsafe fn checkpcmark() {
     if (*curwin.get()).w_prev_pcmark.lnum != 0
         && (equalpos((*curwin.get()).w_pcmark, (*curwin.get()).w_cursor)
             || (*curwin.get()).w_pcmark.lnum == 0)
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn checkpcmark() {
 /// `count` — count to move may be negative.
 ///
 /// Returns mark, NULL if out of jumplist bounds.
-pub unsafe extern "C" fn get_jumplist(mut win: *mut win_T, mut count: c_int) -> *mut fmark_T {
+pub unsafe fn get_jumplist(mut win: *mut win_T, mut count: c_int) -> *mut fmark_T {
     let mut jmp: *mut xfmark_T = ptr::null_mut();
     cleanup_jumplist(win, true);
     if (*win).w_jumplistlen == 0 {
@@ -125,7 +125,7 @@ pub unsafe extern "C" fn get_jumplist(mut win: *mut win_T, mut count: c_int) -> 
 /// `count` — count to move may be negative.
 ///
 /// Returns mark, NULL if out of bounds.
-pub unsafe extern "C" fn get_changelist(
+pub unsafe fn get_changelist(
     mut buf: *mut buf_T,
     mut win: *mut win_T,
     mut count: c_int,
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn get_changelist(
 
 /// Remove every jump list entry referring to a given buffer.
 /// This function will also adjust the current jump list index.
-pub unsafe extern "C" fn mark_jumplist_forget_file(mut wp: *mut win_T, mut fnum: c_int) {
+pub unsafe fn mark_jumplist_forget_file(mut wp: *mut win_T, mut fnum: c_int) {
     let mut i: c_int = (*wp).w_jumplistlen - 1;
     while i >= 0 {
         if (*wp).w_jumplist[i as usize].fmark.fnum == fnum {
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn mark_jumplist_forget_file(mut wp: *mut win_T, mut fnum:
 /// jumplist. They will be removed here for the specified window.
 /// When "loadfiles" is true first ensure entries have the "fnum" field set
 /// (this may be a bit slow).
-pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: bool) {
+pub unsafe fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: bool) {
     let mut i: c_int = 0;
     if loadfiles {
         i = 0;
@@ -247,7 +247,7 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
 }
 
 /// Copy the jumplist from window "from" to window "to".
-pub unsafe extern "C" fn copy_jumplist(mut from: *mut win_T, mut to: *mut win_T) {
+pub unsafe fn copy_jumplist(mut from: *mut win_T, mut to: *mut win_T) {
     let mut i: c_int = 0;
     while i < (*from).w_jumplistlen {
         (*to).w_jumplist[i as usize] = (*from).w_jumplist[i as usize];
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn copy_jumplist(mut from: *mut win_T, mut to: *mut win_T)
 }
 
 /// Free items in the jumplist of window "wp".
-pub unsafe extern "C" fn free_jumplist(mut wp: *mut win_T) {
+pub unsafe fn free_jumplist(mut wp: *mut win_T) {
     let mut i: c_int = 0;
     while i < (*wp).w_jumplistlen {
         free_xfmark((*wp).w_jumplist[i as usize]);
@@ -399,7 +399,7 @@ pub unsafe fn ex_changes(mut _eap: *mut exarg_T) {
 ///
 /// Returns pointer that needs to be passed to next `mark_jumplist_iter` call or
 ///         NULL if iteration is over.
-pub unsafe extern "C" fn mark_jumplist_iter(
+pub unsafe fn mark_jumplist_iter(
     iter: *const c_void,
     win: *const win_T,
     fm: *mut xfmark_T,

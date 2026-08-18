@@ -16,7 +16,7 @@ use super::*;
 ///
 /// Returns pointer that needs to be passed to next `mark_global_iter` call or
 ///         NULL if iteration is over.
-pub unsafe extern "C" fn mark_global_iter(
+pub unsafe fn mark_global_iter(
     iter: *const c_void,
     name: *mut c_char,
     fm: *mut xfmark_T,
@@ -77,10 +77,7 @@ pub unsafe extern "C" fn mark_global_iter(
 }
 
 #[inline]
-pub(super) unsafe extern "C" fn next_buffer_mark(
-    buf: *const buf_T,
-    mark_name: *mut c_char,
-) -> *const fmark_T {
+pub(super) unsafe fn next_buffer_mark(buf: *const buf_T, mark_name: *mut c_char) -> *const fmark_T {
     match *mark_name as c_int {
         NUL => {
             *mark_name = '"' as c_char;
@@ -119,7 +116,7 @@ pub(super) unsafe extern "C" fn next_buffer_mark(
 ///
 /// Returns pointer that needs to be passed to next `mark_buffer_iter` call or
 ///         NULL if iteration is over.
-pub unsafe extern "C" fn mark_buffer_iter(
+pub unsafe fn mark_buffer_iter(
     iter: *const c_void,
     buf: *const buf_T,
     name: *mut c_char,
@@ -165,7 +162,7 @@ pub unsafe extern "C" fn mark_buffer_iter(
 ///                     later then existing one.
 ///
 /// Returns true on success, false on failure.
-pub unsafe extern "C" fn mark_set_global(name: c_char, fm: xfmark_T, update: bool) -> bool {
+pub unsafe fn mark_set_global(name: c_char, fm: xfmark_T, update: bool) -> bool {
     let idx: c_int = mark_global_index(name);
     if idx == -1 {
         return false;
@@ -190,12 +187,7 @@ pub unsafe extern "C" fn mark_set_global(name: c_char, fm: xfmark_T, update: boo
 ///                     later then existing one.
 ///
 /// Returns true on success, false on failure.
-pub unsafe extern "C" fn mark_set_local(
-    name: c_char,
-    buf: *mut buf_T,
-    fm: fmark_T,
-    update: bool,
-) -> bool {
+pub unsafe fn mark_set_local(name: c_char, buf: *mut buf_T, fm: fmark_T, update: bool) -> bool {
     let mut fm_tgt: *mut fmark_T = ptr::null_mut();
     if name as c_uint >= 'a' as c_uint && name as c_uint <= 'z' as c_uint {
         fm_tgt = (&raw mut (*buf).b_namedm as *mut fmark_T)

@@ -173,6 +173,6 @@ static require_ref: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);
 static main_thread: SharedCell<uv_thread_t> = SharedCell::new(0);
 
 /// The editor's Lua state, for the api code that has no state to hand.
-pub unsafe extern "C-unwind" fn get_global_lstate() -> *mut lua_State {
+pub unsafe fn get_global_lstate() -> *mut lua_State {
     global_lstate.get()
 }

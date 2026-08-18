@@ -11,7 +11,7 @@
 use super::*;
 use crate::api::private::helpers::{dict_put, has_key};
 
-pub unsafe extern "C" fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
+pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {

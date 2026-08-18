@@ -198,7 +198,7 @@ pub const STRING_INIT: String_0 = String_0 {
 /// rather than by a client.
 pub const INTERNAL_CALL_MASK: uint64_t = 1 << (::core::mem::size_of::<uint64_t>() * 8 - 1);
 #[inline(always)]
-unsafe extern "C" fn is_internal_call(channel_id: uint64_t) -> bool {
+unsafe fn is_internal_call(channel_id: uint64_t) -> bool {
     return channel_id & INTERNAL_CALL_MASK != 0;
 }
 pub const KEYSET_OPTIDX_context__types: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

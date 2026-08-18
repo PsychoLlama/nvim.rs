@@ -133,7 +133,7 @@ unsafe extern "C-unwind" fn querycursor_next_match(mut L: *mut lua_State) -> ::c
     }
 }
 
-unsafe extern "C-unwind" fn querycursor_check(
+unsafe fn querycursor_check(
     mut L: *mut lua_State,
     mut index: ::core::ffi::c_int,
 ) -> *mut TSQueryCursor {
@@ -163,7 +163,7 @@ pub(crate) static querymatch_meta: SharedCell<[luaL_Reg; 3]> = luaL_reg_table![
     c"captures" => querymatch_captures,
 ];
 
-unsafe extern "C-unwind" fn push_querymatch(
+unsafe fn push_querymatch(
     mut L: *mut lua_State,
     mut match_0: *mut TSQueryMatch,
     mut uindex: ::core::ffi::c_int,

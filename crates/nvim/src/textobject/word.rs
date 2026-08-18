@@ -99,7 +99,7 @@ unsafe fn back_in_line() {
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe extern "C" fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
+pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
     unsafe {
         (*curwin.get()).w_cursor.coladd = 0;
         cls_bigword.set(bigword);
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn fwd_word(mut count: c_int, bigword: bool, eol: bool) ->
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe extern "C" fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int {
+pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int {
     unsafe {
         (*curwin.get()).w_cursor.coladd = 0;
         cls_bigword.set(bigword);
@@ -225,12 +225,7 @@ pub unsafe extern "C" fn bck_word(mut count: c_int, bigword: bool, mut stop: boo
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe extern "C" fn end_word(
-    mut count: c_int,
-    bigword: bool,
-    mut stop: bool,
-    empty: bool,
-) -> c_int {
+pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: bool) -> c_int {
     unsafe {
         (*curwin.get()).w_cursor.coladd = 0;
         cls_bigword.set(bigword);
@@ -301,7 +296,7 @@ pub unsafe extern "C" fn end_word(
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe extern "C" fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
+pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
     unsafe {
         (*curwin.get()).w_cursor.coladd = 0;
         cls_bigword.set(bigword);
@@ -354,7 +349,7 @@ pub unsafe extern "C" fn bckend_word(mut count: c_int, bigword: bool, eol: bool)
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe extern "C" fn current_word(
+pub unsafe fn current_word(
     oap: *mut oparg_T,
     mut count: c_int,
     include: bool,

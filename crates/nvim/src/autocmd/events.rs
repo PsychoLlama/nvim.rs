@@ -26,7 +26,7 @@ pub(super) fn event_row(event: event_T) -> &'static EventName {
 /// The event named by the head of `start`: up to the first whitespace,
 /// comma or bar.  `*end` is left just past the name and its comma, so a
 /// caller can walk a list; `NUM_EVENTS` means no event is spelled that way.
-pub unsafe extern "C" fn event_name2nr(
+pub unsafe fn event_name2nr(
     start: *const ::core::ffi::c_char,
     end: *mut *mut ::core::ffi::c_char,
 ) -> event_T {
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn event_name2nr(
 }
 
 /// [`event_name2nr`] over a counted string, which is the whole name.
-pub unsafe extern "C" fn event_name2nr_str(str: String_0) -> event_T {
+pub unsafe fn event_name2nr_str(str: String_0) -> event_T {
     // An empty API string has a null `data`, which is not a valid pointer
     // even for a zero-length slice.
     let wanted: &[u8] = if str.size == 0 {
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn event_name2nr_str(str: String_0) -> event_T {
 ///
 /// Upstream also asks `event >= 0`, which `event_T` being unsigned makes
 /// vacuous; the answers are the same either way, so the test stays gone.
-pub unsafe extern "C" fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char {
+pub unsafe fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char {
     let name = match EVENT_NAMES.get(event as usize) {
         Some(row) => row.name,
         None => c"Unknown",
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn event_nr2name(event: event_T) -> *const ::core::ffi::c_
 /// that a `-name` exclusion answers immediately.  `all` in 'eventignorewin'
 /// covers only the window-local events, which is what the sign of a row's
 /// `event` records.
-pub unsafe extern "C" fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) -> bool {
+pub unsafe fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) -> bool {
     unsafe {
         let mut ignored = false;
         while *ei != 0 {
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn event_ignored(event: event_T, mut ei: *mut ::core::ffi:
 ///
 /// 'eventignorewin' is the value that is not `p_ei`, and it accepts only
 /// the window-local events.
-pub unsafe extern "C" fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
+pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
         let win = ei != p_ei.get();
         while *ei != 0 {
@@ -147,9 +147,7 @@ unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_c
 
 /// Append `what` (which starts with a comma) to 'eventignore', and answer
 /// the old value in allocated memory for [`au_event_restore`].
-pub unsafe extern "C" fn au_event_disable(
-    what: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+pub unsafe fn au_event_disable(what: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     unsafe {
         let p_ei_len = strlen(p_ei.get());
         let save_ei = xmemdupz(p_ei.get().cast::<::core::ffi::c_void>(), p_ei_len)
@@ -167,7 +165,7 @@ pub unsafe extern "C" fn au_event_disable(
 }
 
 /// Put back what [`au_event_disable`] saved, and free it.
-pub unsafe extern "C" fn au_event_restore(old_ei: *mut ::core::ffi::c_char) {
+pub unsafe fn au_event_restore(old_ei: *mut ::core::ffi::c_char) {
     unsafe {
         if !old_ei.is_null() {
             set_option_eventignore(old_ei);
@@ -194,7 +192,7 @@ unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
 }
 
 /// Whether any autocommand is defined for `event`.
-pub unsafe extern "C" fn has_event(event: event_T) -> bool {
+pub unsafe fn has_event(event: event_T) -> bool {
     unsafe { (*autocmds.ptr())[event as usize].size != 0 }
 }
 
@@ -211,7 +209,7 @@ unsafe fn has_cursorhold() -> bool {
 
 /// Whether `CursorHold` should fire now: one is defined, nothing else is
 /// pending, and we are in a mode that has one.
-pub unsafe extern "C" fn trigger_cursorhold() -> bool {
+pub unsafe fn trigger_cursorhold() -> bool {
     unsafe {
         if did_cursorhold.get()
             || !has_cursorhold()
@@ -251,7 +249,7 @@ pub unsafe extern "C" fn expand_get_event_name(
 
 /// Completion source for an 'eventignore' item: every event name, or --
 /// for 'eventignorewin' (`win`) -- only the window-local ones.
-pub unsafe extern "C" fn get_event_name_no_group(
+pub unsafe fn get_event_name_no_group(
     _xp: *mut expand_T,
     idx: ::core::ffi::c_int,
     win: bool,
@@ -272,7 +270,7 @@ pub unsafe extern "C" fn get_event_name_no_group(
 }
 
 /// Whether `event` -- a NUL-terminated name -- is an event nvim has.
-pub unsafe extern "C" fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool {
+pub unsafe fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool {
     unsafe {
         let mut end = ::core::ptr::null_mut::<::core::ffi::c_char>();
         event_name2nr(event, &raw mut end) != NUM_EVENTS

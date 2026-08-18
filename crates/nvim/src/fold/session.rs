@@ -7,7 +7,7 @@ use super::*;
 /// Write commands to "fd" to restore the manual folds in window "wp".
 ///
 /// Returns fAIL if writing fails.
-pub unsafe extern "C" fn put_folds(mut fd: *mut FILE, mut wp: *mut win_T) -> c_int {
+pub unsafe fn put_folds(mut fd: *mut FILE, mut wp: *mut win_T) -> c_int {
     if foldmethodIsManual(wp) {
         if put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) == FAIL
             || put_folds_recurse(fd, &raw mut (*wp).w_folds, 0) == FAIL
@@ -25,7 +25,7 @@ pub unsafe extern "C" fn put_folds(mut fd: *mut FILE, mut wp: *mut win_T) -> c_i
 /// Write commands to "fd" to recreate manually created folds.
 ///
 /// Returns fAIL when writing failed.
-pub(super) unsafe extern "C" fn put_folds_recurse(
+pub(super) unsafe fn put_folds_recurse(
     mut fd: *mut FILE,
     mut gap: *mut garray_T,
     mut off: linenr_T,
@@ -55,7 +55,7 @@ pub(super) unsafe extern "C" fn put_folds_recurse(
 /// Write commands to "fd" to open and close manually opened/closed folds.
 ///
 /// Returns fAIL when writing failed.
-pub(super) unsafe extern "C" fn put_foldopen_recurse(
+pub(super) unsafe fn put_foldopen_recurse(
     mut fd: *mut FILE,
     mut wp: *mut win_T,
     mut gap: *mut garray_T,
@@ -108,7 +108,7 @@ pub(super) unsafe extern "C" fn put_foldopen_recurse(
 /// Write the open or close command to "fd".
 ///
 /// Returns fAIL when writing failed.
-pub(super) unsafe extern "C" fn put_fold_open_close(
+pub(super) unsafe fn put_fold_open_close(
     mut fd: *mut FILE,
     mut fp: *mut fold_T,
     mut off: linenr_T,

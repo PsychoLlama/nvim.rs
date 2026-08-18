@@ -28,11 +28,7 @@ pub(super) fn getlevel_is(getlevel: LevelGetter, f: unsafe extern "C" fn(*mut fl
 
 /// Update the folding for window "wp", at least from lines "top" to "bot".
 /// IEMS = "Indent Expr Marker Syntax"
-pub(super) unsafe extern "C" fn foldUpdateIEMS(
-    wp: *mut win_T,
-    mut top: linenr_T,
-    mut bot: linenr_T,
-) {
+pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
     if invalid_top.get() != 0 {
         return;
     }
@@ -238,7 +234,7 @@ pub(super) unsafe extern "C" fn foldUpdateIEMS(
 ///
 /// Returns bot, which may have been increased for lines that also need to be
 /// updated as a result of a detected change in the fold.
-pub(super) unsafe extern "C" fn foldUpdateIEMSRecurse(
+pub(super) unsafe fn foldUpdateIEMSRecurse(
     gap: *mut garray_T,
     level: c_int,
     startlnum: linenr_T,

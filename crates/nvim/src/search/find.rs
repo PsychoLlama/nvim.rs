@@ -368,7 +368,7 @@ impl Searcher {
 ///
 /// @return  FAIL (zero) for failure, otherwise the index of the first
 ///          matching sub-pattern plus one; one if there was none.
-pub unsafe extern "C" fn searchit(
+pub unsafe fn searchit(
     win: *mut win_T,
     buf: *mut buf_T,
     pos: *mut pos_T,
@@ -703,7 +703,7 @@ unsafe fn first_submatch(rp: *mut regmmatch_T) -> c_int {
 /// `pos` must be writable and `pat` a NUL-terminated string.
 ///
 /// @return  OK for success, FAIL if no line was found.
-pub unsafe extern "C" fn search_for_exact_line(
+pub unsafe fn search_for_exact_line(
     buf: *mut buf_T,
     pos: *mut pos_T,
     dir: Direction,

@@ -45,7 +45,7 @@ const ANY_END_TAG: &::core::ffi::CStr = c"</[^>]*>";
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe extern "C" fn current_block(
+pub unsafe fn current_block(
     oap: *mut oparg_T,
     mut count: c_int,
     include: bool,
@@ -276,11 +276,7 @@ unsafe fn in_html_tag(end_tag: bool) -> bool {
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe extern "C" fn current_tagblock(
-    oap: *mut oparg_T,
-    count_arg: c_int,
-    include: bool,
-) -> c_int {
+pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: bool) -> c_int {
     unsafe {
         let mut count = count_arg;
         let mut do_include = include;

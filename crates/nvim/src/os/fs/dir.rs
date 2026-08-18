@@ -150,7 +150,7 @@ pub unsafe extern "C" fn os_mkdir_recurse(
 ///
 /// # Safety
 /// `fname` must be a writable NUL-terminated string.
-pub unsafe extern "C" fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
+pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
     // SAFETY: the caller's writable NUL-terminated file name. The tail is
     // cut off with a NUL for the duration and put back before returning.
     unsafe {
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_i
 /// # Safety
 /// `templ` must be a NUL-terminated string and `path` must address
 /// [`TEMP_FILE_PATH_MAXLEN`] writable bytes.
-pub unsafe extern "C" fn os_mkdtemp(templ: *const c_char, path: *mut c_char) -> c_int {
+pub unsafe fn os_mkdtemp(templ: *const c_char, path: *mut c_char) -> c_int {
     // `request.path` is the directory libuv made, and cleanup frees it.
     fs_request(
         // SAFETY: the caller's NUL-terminated template.
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn os_rmdir(path: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `dir` must be writable and `path` a NUL-terminated string.
-pub unsafe extern "C" fn os_scandir(dir: *mut Directory, path: *const c_char) -> bool {
+pub unsafe fn os_scandir(dir: *mut Directory, path: *const c_char) -> bool {
     // SAFETY: the caller's `Directory` and NUL-terminated path.
     let r = unsafe { uv_fs_scandir(NO_LOOP, &raw mut (*dir).request, path, 0, None) };
     if r < 0 {
@@ -237,7 +237,7 @@ pub unsafe extern "C" fn os_scandir(dir: *mut Directory, path: *const c_char) ->
 ///
 /// # Safety
 /// `dir` must be a `Directory` [`os_scandir`] succeeded on.
-pub unsafe extern "C" fn os_scandir_next(dir: *mut Directory) -> *const c_char {
+pub unsafe fn os_scandir_next(dir: *mut Directory) -> *const c_char {
     // SAFETY: the caller's open `Directory`; the name lives in its request.
     unsafe {
         let err = uv_fs_scandir_next(&raw mut (*dir).request, &raw mut (*dir).ent);
@@ -253,7 +253,7 @@ pub unsafe extern "C" fn os_scandir_next(dir: *mut Directory) -> *const c_char {
 ///
 /// # Safety
 /// `dir` must be a `Directory` [`os_scandir`] was called on.
-pub unsafe extern "C" fn os_closedir(dir: *mut Directory) {
+pub unsafe fn os_closedir(dir: *mut Directory) {
     // SAFETY: the caller's `Directory`, whose request is theirs to clean up.
     unsafe { uv_fs_req_cleanup(&raw mut (*dir).request) };
 }

@@ -187,12 +187,12 @@ pub unsafe extern "C" fn snprintf(
 /// hands it a raw pointer inside its own `unsafe` block, and a *safe* shim
 /// makes each of those an `unused_unsafe` error under `-D warnings`.
 #[cfg(miri)]
-pub unsafe extern "C" fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+pub unsafe fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     __msgid as *mut ::core::ffi::c_char
 }
 
 #[cfg(miri)]
-pub unsafe extern "C" fn memmove(
+pub unsafe fn memmove(
     __dest: *mut ::core::ffi::c_void,
     __src: *const ::core::ffi::c_void,
     __n: size_t,
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn memmove(
 }
 
 #[cfg(miri)]
-pub unsafe extern "C" fn strchr(
+pub unsafe fn strchr(
     __s: *const ::core::ffi::c_char,
     __c: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
@@ -221,7 +221,7 @@ pub unsafe extern "C" fn strchr(
 }
 
 #[cfg(miri)]
-pub unsafe extern "C" fn strstr(
+pub unsafe fn strstr(
     __haystack: *const ::core::ffi::c_char,
     __needle: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {

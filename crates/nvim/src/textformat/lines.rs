@@ -55,7 +55,7 @@ use crate::undo::{u_save, u_save_cursor};
 ///
 /// # Safety
 /// `oap` must be a live operator argument over the current buffer.
-pub unsafe extern "C" fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
+pub unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
     unsafe {
         let mut old_line_count = (*curbuf.get()).b_ml.ml_line_count;
 
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
 ///
 /// # Safety
 /// `oap` must be a live operator argument over the current buffer.
-pub unsafe extern "C" fn op_formatexpr(oap: *mut oparg_T) {
+pub unsafe fn op_formatexpr(oap: *mut oparg_T) {
     unsafe {
         if (*oap).is_VIsual {
             // When nothing changes, the Visual selection still has to go.
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn op_formatexpr(oap: *mut oparg_T) {
 ///
 /// # Safety
 /// There must be a current buffer and window.
-pub unsafe extern "C" fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_int {
+pub unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_int {
     unsafe {
         let use_sandbox = was_set_insecurely(curwin.get(), kOptFormatexpr, OPT_LOCAL as c_int);
         let save_sctx = current_sctx.get();
@@ -257,7 +257,7 @@ unsafe fn join_next_line(
 ///
 /// # Safety
 /// There must be a current line, and it must be modifiable.
-pub unsafe extern "C" fn format_lines(line_count: linenr_T, avoid_fex: bool) {
+pub unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
     unsafe {
         let mut prev_is_end_par = false;
         let mut next_is_start_par = false;

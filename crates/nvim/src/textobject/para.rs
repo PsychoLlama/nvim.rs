@@ -28,7 +28,7 @@ use crate::types::{linenr_T, oparg_T};
 ///
 /// # Safety
 /// `pincl` must be writable, and there must be a current window.
-pub unsafe extern "C" fn findpar(
+pub unsafe fn findpar(
     pincl: *mut bool,
     dir: c_int,
     mut count: c_int,
@@ -146,7 +146,7 @@ unsafe fn inmacro(opt: *mut c_char, s: *const c_char) -> bool {
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe extern "C" fn startPS(lnum: linenr_T, para: c_int, both: bool) -> bool {
+pub unsafe fn startPS(lnum: linenr_T, para: c_int, both: bool) -> bool {
     unsafe {
         let s = ml_get(lnum);
         if *s as u8 as c_int == para
@@ -239,12 +239,7 @@ unsafe fn extend_paragraphs(mut start_lnum: linenr_T, count: c_int, include: boo
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe extern "C" fn current_par(
-    oap: *mut oparg_T,
-    count: c_int,
-    include: bool,
-    type_0: c_int,
-) -> c_int {
+pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0: c_int) -> c_int {
     unsafe {
         if type_0 == 'S' as c_int {
             return FAIL; // not implemented yet

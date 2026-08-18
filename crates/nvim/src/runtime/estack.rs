@@ -71,7 +71,7 @@ fn push_entry(entry: estack_T) -> *mut estack_T {
 }
 
 /// Push the bottom frame, the one that stands for "not executing anything".
-pub unsafe extern "C" fn estack_init() {
+pub unsafe fn estack_init() {
     // SAFETY: the pre-grow is upstream's hint that ten frames of nesting are
     // the common case; `exestack` is empty at this point.
     unsafe { ga_grow(exestack.ptr(), 10) };
@@ -81,16 +81,12 @@ pub unsafe extern "C" fn estack_init() {
 /// Add an item to the execution stack.
 ///
 /// Returns the new entry, so the caller can fill in its `es_info`.
-pub unsafe extern "C" fn estack_push(
-    es_type: etype_T,
-    name: *mut c_char,
-    lnum: linenr_T,
-) -> *mut estack_T {
+pub unsafe fn estack_push(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> *mut estack_T {
     push_entry(entry_for(es_type, name, lnum))
 }
 
 /// Add a user function to the execution stack.
-pub unsafe extern "C" fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
+pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
     // SAFETY: `ufunc` is a live user function. `uf_name_exp` is the
     // `<SNR>`-expanded name when one was built; otherwise the name is the
     // struct's trailing inline buffer.
@@ -108,7 +104,7 @@ pub unsafe extern "C" fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) 
 }
 
 /// Take an item off of the execution stack. The bottom frame stays.
-pub unsafe extern "C" fn estack_pop() {
+pub unsafe fn estack_pop() {
     exestack.with_mut(|ga| {
         if ga.ga_len > 1 {
             ga.ga_len -= 1;
@@ -150,7 +146,7 @@ pub(crate) fn set_sourcing_lnum(lnum: linenr_T) {
 ///
 /// `which` is `ESTACK_SFILE` for `<sfile>`, `ESTACK_STACK` for `<stack>` or
 /// `ESTACK_SCRIPT` for `<script>`.
-pub unsafe extern "C" fn estack_sfile(which: estack_arg_T) -> *mut c_char {
+pub unsafe fn estack_sfile(which: estack_arg_T) -> *mut c_char {
     // SAFETY: nothing reached from here pushes onto the stack, so the borrow
     // outlives every use below.
     let stack = unsafe { entries() };
@@ -327,7 +323,7 @@ unsafe fn stacktrace_push_item(
 
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,
 /// outermost first.
-pub unsafe extern "C" fn stacktrace_create() -> *mut list_T {
+pub unsafe fn stacktrace_create() -> *mut list_T {
     // SAFETY: nothing below pushes onto the execution stack.
     let stack = unsafe { entries() };
     // SAFETY: a fresh list sized for the frames about to go into it.

@@ -157,7 +157,7 @@ pub unsafe extern "C" fn file_open_fd(
 }
 
 /// Open standard input as a `FileDescriptor`.
-pub unsafe extern "C" fn file_open_stdin(fp: *mut FileDescriptor) -> c_int {
+pub unsafe fn file_open_stdin(fp: *mut FileDescriptor) -> c_int {
     let error = file_open_fd(
         fp,
         os_open_stdin_fd(),
@@ -180,11 +180,7 @@ pub unsafe extern "C" fn file_open_stdin(fp: *mut FileDescriptor) -> c_int {
 /// Wrap an in-memory buffer for reading. `data` is borrowed, not owned:
 /// there is no block to free, and `file_close` is a no-op on the result
 /// (`fd` is -1).
-pub unsafe extern "C" fn file_open_buffer(
-    ret_fp: *mut FileDescriptor,
-    data: *mut c_char,
-    len: size_t,
-) {
+pub unsafe fn file_open_buffer(ret_fp: *mut FileDescriptor, data: *mut c_char, len: size_t) {
     (*ret_fp).wr = false;
     (*ret_fp).non_blocking = false;
     (*ret_fp).fd = -1;
@@ -337,10 +333,7 @@ pub unsafe extern "C" fn file_read(
 
 /// Hand out `size` already-buffered bytes in place, or NULL when the block
 /// does not hold that many. The pointer dies at the next [`file_read`].
-pub unsafe extern "C" fn file_try_read_buffered(
-    fp: *mut FileDescriptor,
-    size: size_t,
-) -> *mut c_char {
+pub unsafe fn file_try_read_buffered(fp: *mut FileDescriptor, size: size_t) -> *mut c_char {
     if buffered_len(&*fp) < size {
         return ptr::null_mut();
     }

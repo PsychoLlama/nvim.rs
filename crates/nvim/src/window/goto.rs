@@ -44,7 +44,7 @@ use crate::types::{
 use crate::undo::u_sync;
 use crate::winlayer::{frames, tabs, windows_in_tab};
 
-pub unsafe extern "C" fn win_goto(wp: *mut win_T) {
+pub unsafe fn win_goto(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     goto_win(unsafe { Win::new(wp) });
 }
@@ -90,7 +90,7 @@ fn redraw_winline(wp: Win) {
     unsafe { redrawWinline(wp.raw(), lnum) };
 }
 
-pub unsafe extern "C" fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T {
+pub unsafe fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T {
     // SAFETY: the caller's promise -- a live window.
     raw_tab(find_tab_of(unsafe { Win::new(win) }))
 }
@@ -148,7 +148,7 @@ impl Axis {
     }
 }
 
-pub unsafe extern "C" fn win_vert_neighbor(
+pub unsafe fn win_vert_neighbor(
     tp: *mut tabpage_T,
     wp: *mut win_T,
     up: bool,
@@ -166,7 +166,7 @@ pub(crate) fn goto_ver(up: bool, count: c_int) {
     }
 }
 
-pub unsafe extern "C" fn win_horz_neighbor(
+pub unsafe fn win_horz_neighbor(
     tp: *mut tabpage_T,
     wp: *mut win_T,
     left: bool,
@@ -240,7 +240,7 @@ fn neighbor(tp: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int) -> 
     foundfr.win()
 }
 
-pub unsafe extern "C" fn win_enter(wp: *mut win_T, undo_sync: bool) {
+pub unsafe fn win_enter(wp: *mut win_T, undo_sync: bool) {
     // SAFETY: the caller's promise -- a live window.
     enter(unsafe { Win::new(wp) }, undo_sync);
 }
@@ -391,7 +391,7 @@ fn current_prevwin() -> Option<Win> {
     unsafe { Win::from_raw(prevwin.get()) }
 }
 
-pub unsafe extern "C" fn win_fix_current_dir() {
+pub unsafe fn win_fix_current_dir() {
     fix_current_dir();
 }
 
@@ -461,7 +461,7 @@ fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
     unsafe { do_autocmd_dirchanged(dir, scope, kCdCauseWindow, pre) };
 }
 
-pub unsafe extern "C" fn buf_jump_open_win(buf: *mut buf_T) -> *mut win_T {
+pub unsafe fn buf_jump_open_win(buf: *mut buf_T) -> *mut win_T {
     // SAFETY: the caller's promise -- a live buffer.
     raw_win(jump_open_win(unsafe { Buf::new(buf) }))
 }
@@ -478,7 +478,7 @@ pub(crate) fn jump_open_win(buf: Buf) -> Option<Win> {
     Some(wp)
 }
 
-pub unsafe extern "C" fn buf_jump_open_tab(buf: *mut buf_T) -> *mut win_T {
+pub unsafe fn buf_jump_open_tab(buf: *mut buf_T) -> *mut win_T {
     // SAFETY: the caller's promise -- a live buffer.
     raw_win(jump_open_tab(unsafe { Buf::new(buf) }))
 }

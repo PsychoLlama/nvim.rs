@@ -383,7 +383,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
 ///
 /// # Safety
 /// `list` must be live, and `ret_len`/`ret_buf` must be writable.
-pub unsafe extern "C" fn encode_vim_list_to_buf(
+pub unsafe fn encode_vim_list_to_buf(
     list: *const list_T,
     ret_len: *mut size_t,
     ret_buf: *mut *mut c_char,
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn encode_vim_list_to_buf(
 /// # Safety
 /// `state` must describe a position in a live list, `buf` must be writable
 /// for `nbuf` bytes and `read_bytes` must be writable.
-pub unsafe extern "C" fn encode_read_from_list(
+pub unsafe fn encode_read_from_list(
     state: *mut ListReaderState,
     buf: *mut c_char,
     nbuf: size_t,
@@ -494,7 +494,7 @@ pub unsafe extern "C" fn encode_read_from_list(
 ///
 /// # Safety
 /// `list` must be live and must have at least one item.
-pub unsafe extern "C" fn encode_init_lrstate(list: *const list_T) -> ListReaderState {
+pub unsafe fn encode_init_lrstate(list: *const list_T) -> ListReaderState {
     // SAFETY: the caller's promise; the first item holds a string or NULL.
     let li = unsafe { tv_list_first(list) };
     ListReaderState {
@@ -742,7 +742,7 @@ pub(crate) unsafe fn convert_to_json_string(
 ///
 /// # Safety
 /// `tv` must be live, as must anything it points at.
-pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
+pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
     // SAFETY: the caller's promise about `tv`.
     let tv = unsafe { &*tv };
     if tv.v_type == VAR_STRING {
@@ -808,7 +808,7 @@ unsafe fn finish_tv2(mut ga: garray_T, len: *mut size_t) -> *mut c_char {
 ///
 /// # Safety
 /// `tv` must be live; `len` must be NULL or writable.
-pub unsafe extern "C" fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
     let mut ga = text_garray();
     // SAFETY: the caller's promise about `tv`; `string()` never refuses.
     let evs_ret =
@@ -823,7 +823,7 @@ pub unsafe extern "C" fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe extern "C" fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
     let mut ga = text_garray();
     // SAFETY: the caller's promise about `tv`.
     unsafe {
@@ -846,7 +846,7 @@ pub unsafe extern "C" fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> 
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe extern "C" fn encode_tv2json(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2json(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
     let mut ga = text_garray();
     // SAFETY: the caller's promise about `tv`.
     let evj_ret =

@@ -368,7 +368,7 @@ fn assert_children_fit(node: *mut ExprASTNode) {
 ///
 /// # Safety
 /// `ast` must be an AST [`viml_pexpr_parse`] built and nobody else has freed.
-pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
+pub unsafe fn viml_pexpr_free_ast(mut ast: ExprAST) {
     let mut stack = TeardownStack::default();
     stack.push(&raw mut ast.root, ast.root);
     while let Some(&cur_slot) = stack.slots.last() {

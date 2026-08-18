@@ -12,7 +12,7 @@ use super::*;
 use crate::api::private::helpers::array_add;
 use crate::kvec::InitVec;
 
-pub(crate) unsafe extern "C" fn unpack_string_or_array(
+pub(crate) unsafe fn unpack_string_or_array(
     mut v: Object,
     mut k: *mut ::core::ffi::c_char,
     mut required: bool,
@@ -56,7 +56,7 @@ pub(crate) unsafe extern "C" fn unpack_string_or_array(
     }
 }
 
-pub(crate) unsafe extern "C" fn get_patterns_from_pattern_or_buf(
+pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     mut pattern: Object,
     mut has_buf: bool,
     mut buf: Buffer,

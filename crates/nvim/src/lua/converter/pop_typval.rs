@@ -93,10 +93,7 @@ type TVPopStack = InlineStack<TVPopStackItem, 2>;
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top, and `ret_tv` a
 /// writable typval the caller owns.
-pub unsafe extern "C-unwind" fn nlua_pop_typval(
-    lstate: *mut lua_State,
-    ret_tv: *mut typval_T,
-) -> bool {
+pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> bool {
     unsafe {
         // Make `tv` a fresh, referenced, empty dictionary carrying `ref_`.
         let new_dict = |tv: *mut typval_T, ref_: LuaRef| {

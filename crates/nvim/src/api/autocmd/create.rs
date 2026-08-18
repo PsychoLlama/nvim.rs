@@ -359,7 +359,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
     }
 }
 
-unsafe extern "C" fn clear_autocmd(
+unsafe fn clear_autocmd(
     mut event: event_T,
     mut pat: *mut ::core::ffi::c_char,
     mut au_group: ::core::ffi::c_int,

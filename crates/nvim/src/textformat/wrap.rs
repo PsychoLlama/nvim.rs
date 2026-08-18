@@ -323,7 +323,7 @@ unsafe fn wrap_leader_len() -> colnr_T {
 /// # Safety
 /// There must be a current line, and it must be modifiable. Reentrant with
 /// `edit.rs` through `open_line`.
-pub unsafe extern "C" fn internal_format(
+pub unsafe fn internal_format(
     textwidth: c_int,
     mut second_indent: c_int,
     flags: c_int,

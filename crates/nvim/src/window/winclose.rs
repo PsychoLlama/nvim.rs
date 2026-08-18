@@ -37,7 +37,7 @@ use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::tabs;
 
-pub unsafe extern "C" fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
+pub unsafe fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     close(unsafe { Win::new(win) }, free_buf, force)
 }
@@ -411,7 +411,7 @@ fn fire_winclosed(mut win: Win) {
     RECURSIVE.set(false);
 }
 
-pub unsafe extern "C" fn trigger_tabclosedpre(tp: *mut tabpage_T) {
+pub unsafe fn trigger_tabclosedpre(tp: *mut tabpage_T) {
     tabclosedpre(tp);
 }
 
@@ -440,7 +440,7 @@ fn tabclosedpre(tp: *mut tabpage_T) {
     goto_tab(back, false, false);
 }
 
-pub unsafe extern "C" fn win_close_othertab(
+pub unsafe fn win_close_othertab(
     win: *mut win_T,
     free_buf: c_int,
     tp: *mut tabpage_T,

@@ -16,7 +16,7 @@ use core::{mem, ptr};
 ///
 /// Upstream also breaks out of the scan on a NUL, which cannot happen:
 /// `ascii_iswhite` has already answered false for one and returned.
-pub(crate) unsafe extern "C" fn string_iswhite(str: String_0) -> bool {
+pub(crate) unsafe fn string_iswhite(str: String_0) -> bool {
     unsafe {
         for i in 0..str.size {
             if !ascii_iswhite(*str.data.add(i) as c_int) {
@@ -125,7 +125,7 @@ unsafe fn concat_cmdmods(cmdline: *mut StringBuilder, cmdmod: &cmdmod_T) {
     }
 }
 
-pub(crate) unsafe extern "C" fn build_cmdline_str(
+pub(crate) unsafe fn build_cmdline_str(
     cmdlinep: *mut *mut c_char,
     eap: *mut exarg_T,
     cmdinfo: *mut CmdParseInfo,

@@ -66,7 +66,7 @@ fn clear_options(opt: *mut winopt_T) {
 // ---------------------------------------------------------------------------
 // The first window, and the one autocommands run in
 
-pub unsafe extern "C" fn win_alloc_first() {
+pub unsafe fn win_alloc_first() {
     if alloc_firstwin(None) == FAIL {
         // SAFETY: aborts the process; nothing comes back.
         unsafe { abort() };
@@ -77,7 +77,7 @@ pub unsafe extern "C" fn win_alloc_first() {
     unsafe { unuse_tabpage(first_tabpage.get()) };
 }
 
-pub unsafe extern "C" fn win_alloc_aucmd_win(idx: c_int) {
+pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
     let mut err = Error {
         type_0: kErrorTypeNone,
         msg: ptr::null_mut::<c_char>(),
@@ -100,7 +100,7 @@ pub unsafe extern "C" fn win_alloc_aucmd_win(idx: c_int) {
     win.w_onebuf_opt.wo_crb = false_0;
 }
 
-pub(crate) unsafe extern "C" fn win_alloc_firstwin(oldwin: *mut win_T) -> c_int {
+pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut win_T) -> c_int {
     // SAFETY: the caller's promise -- a live window or null.
     alloc_firstwin(unsafe { Win::from_raw(oldwin) })
 }
@@ -144,7 +144,7 @@ fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
     OK
 }
 
-pub(crate) unsafe extern "C" fn new_frame(wp: *mut win_T) {
+pub(crate) unsafe fn new_frame(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     attach_frame(unsafe { Win::new(wp) });
 }
@@ -160,7 +160,7 @@ pub(crate) fn attach_frame(wp: Win) -> Frame {
     frp
 }
 
-pub unsafe extern "C" fn win_init_size() {
+pub unsafe fn win_init_size() {
     let mut win = first_window();
     let mut top = current_topframe();
     let rows = (Rows.get() as OptInt
@@ -188,7 +188,7 @@ fn first_window() -> Win {
 // ---------------------------------------------------------------------------
 // One window's memory
 
-pub unsafe extern "C" fn win_alloc(after: *mut win_T, hidden: bool) -> *mut win_T {
+pub unsafe fn win_alloc(after: *mut win_T, hidden: bool) -> *mut win_T {
     // SAFETY: the caller's promise -- a live window or null.
     alloc(unsafe { Win::from_raw(after) }, hidden).raw()
 }
@@ -250,7 +250,7 @@ fn win_tabpage(win: Win) -> Option<TabPage> {
     unsafe { TabPage::from_raw(win_find_tabpage(win.raw())) }
 }
 
-pub unsafe extern "C" fn free_wininfo(wip: *mut WinInfo) {
+pub unsafe fn free_wininfo(wip: *mut WinInfo) {
     // SAFETY: the caller's promise -- a live entry, which this consumes.
     if unsafe { (*wip).wi_optset } {
         clear_options(unsafe { &raw mut (*wip).wi_opt });
@@ -260,7 +260,7 @@ pub unsafe extern "C" fn free_wininfo(wip: *mut WinInfo) {
     free(wip);
 }
 
-pub unsafe extern "C" fn win_free(wp: *mut win_T, tp: *mut tabpage_T) {
+pub unsafe fn win_free(wp: *mut win_T, tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
     unsafe { free_win(Win::new(wp), TabPage::from_raw(tp)) };
@@ -381,7 +381,7 @@ fn forget_window(buf: Buf, wp: Win) {
     }
 }
 
-pub unsafe extern "C" fn win_free_grid(wp: *mut win_T, reinit: bool) {
+pub unsafe fn win_free_grid(wp: *mut win_T, reinit: bool) {
     // SAFETY: the caller's promise -- a live window.
     free_grid(unsafe { Win::new(wp) }, reinit);
 }
@@ -404,7 +404,7 @@ pub(crate) fn free_grid(wp: Win, reinit: bool) {
 // ---------------------------------------------------------------------------
 // The lists
 
-pub unsafe extern "C" fn win_append(after: *mut win_T, wp: *mut win_T, tp: *mut tabpage_T) {
+pub unsafe fn win_append(after: *mut win_T, wp: *mut win_T, tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- live windows (`after` may be null) and a
     // live tab page or null.
     unsafe { append(Win::from_raw(after), Win::new(wp), TabPage::from_raw(tp)) };
@@ -436,7 +436,7 @@ pub(crate) fn append(after: Option<Win>, wp: Win, tp: Option<TabPage>) {
     }
 }
 
-pub unsafe extern "C" fn win_remove(wp: *mut win_T, tp: *mut tabpage_T) {
+pub unsafe fn win_remove(wp: *mut win_T, tp: *mut tabpage_T) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
     unsafe { remove(Win::new(wp), TabPage::from_raw(tp)) };

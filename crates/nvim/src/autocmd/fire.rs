@@ -114,7 +114,7 @@ fn keeps_changed_flag(event: event_T) -> bool {
 }
 
 /// Fire `event`, in every group.
-pub unsafe extern "C" fn apply_autocmds(
+pub unsafe fn apply_autocmds(
     event: event_T,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn apply_autocmds(
 
 /// [`apply_autocmds`], passing an `exarg_T` on so `v:cmdarg` and
 /// `v:cmdbang` are set for the handlers.
-pub unsafe extern "C" fn apply_autocmds_exarg(
+pub unsafe fn apply_autocmds_exarg(
     event: event_T,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
@@ -162,7 +162,7 @@ pub unsafe extern "C" fn apply_autocmds_exarg(
 /// [`apply_autocmds`] threaded through a caller's `OK`/`FAIL`: it does
 /// nothing once that says to abort, and turns it to `FAIL` if a handler
 /// aborted.
-pub unsafe extern "C" fn apply_autocmds_retval(
+pub unsafe fn apply_autocmds_retval(
     event: event_T,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn apply_autocmds_retval(
 /// leaves it, and the two things that happen either way -- wiping a
 /// buffer's own autocommands, and remembering that `FileType` ran -- are
 /// after it.
-pub unsafe extern "C" fn apply_autocmds_group(
+pub unsafe fn apply_autocmds_group(
     event: event_T,
     mut fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
@@ -591,6 +591,6 @@ pub unsafe extern "C" fn unblock_autocmds() {
 }
 
 /// Whether [`block_autocmds`] is in effect.
-pub unsafe extern "C" fn is_autocmd_blocked() -> bool {
+pub unsafe fn is_autocmd_blocked() -> bool {
     autocmd_blocked.get() != 0
 }

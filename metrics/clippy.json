@@ -1,3 +1,22 @@
 {
-  "files": {}
+  "files": {
+    "crates/nvim/src/api/buffer/lines.rs": 1,
+    "crates/nvim/src/api/buffer/text.rs": 1,
+    "crates/nvim/src/api/options.rs": 1,
+    "crates/nvim/src/autocmd/define.rs": 1,
+    "crates/nvim/src/autocmd/fire.rs": 1,
+    "crates/nvim/src/buffer_updates.rs": 1,
+    "crates/nvim/src/drawline/mod.rs": 1,
+    "crates/nvim/src/eval/funcs/search.rs": 1,
+    "crates/nvim/src/extmark/get.rs": 1,
+    "crates/nvim/src/extmark/mod.rs": 2,
+    "crates/nvim/src/extmark/set.rs": 1,
+    "crates/nvim/src/extmark/undo.rs": 1,
+    "crates/nvim/src/file_search/resolve.rs": 1,
+    "crates/nvim/src/fileio/read.rs": 1,
+    "crates/nvim/src/lua/xdiff.rs": 1,
+    "crates/nvim/src/mark/adjust.rs": 1,
+    "crates/nvim/src/search/command.rs": 1,
+    "crates/nvim/src/search/find.rs": 1
+  }
 }

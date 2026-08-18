@@ -38,7 +38,7 @@ use crate::winfloat::win_float_anchor_laststatus;
 use crate::winlayer::{Frame, Win, frames, tabs};
 use ::libc::memset;
 
-pub unsafe extern "C" fn win_split(size: c_int, flags: c_int) -> c_int {
+pub unsafe fn win_split(size: c_int, flags: c_int) -> c_int {
     split(size, flags)
 }
 
@@ -79,7 +79,7 @@ pub(crate) fn split(size: c_int, flags: c_int) -> c_int {
     }
 }
 
-pub unsafe extern "C" fn win_split_ins(
+pub unsafe fn win_split_ins(
     size: c_int,
     flags: c_int,
     new_wp: *mut win_T,
@@ -760,7 +760,7 @@ fn size_horizontal(
 // ---------------------------------------------------------------------------
 // Copying a window
 
-pub unsafe extern "C" fn win_init(newp: *mut win_T, oldp: *mut win_T, flags: c_int) {
+pub unsafe fn win_init(newp: *mut win_T, oldp: *mut win_T, flags: c_int) {
     // SAFETY: the caller's promise -- two live windows.
     unsafe { init(Win::new(newp), Win::new(oldp), flags) };
 }

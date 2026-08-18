@@ -59,7 +59,7 @@ const MOD_FLAGS: [(c_int, &CStr); 9] = [
 ///
 /// # Safety
 /// `current` must be a writable script context.
-pub unsafe extern "C-unwind" fn nlua_set_sctx(current: *mut sctx_T) {
+pub unsafe fn nlua_set_sctx(current: *mut sctx_T) {
     unsafe {
         if !script_is_lua((*current).sc_sid) {
             return;
@@ -113,11 +113,7 @@ pub unsafe extern "C-unwind" fn nlua_set_sctx(current: *mut sctx_T) {
 /// # Safety
 /// `cmd` and `eap` must be live, and the command must carry the `LuaRef`
 /// this is being asked for.
-pub unsafe extern "C-unwind" fn nlua_do_ucmd(
-    cmd: *mut ucmd_T,
-    eap: *mut exarg_T,
-    preview: bool,
-) -> c_int {
+pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -> c_int {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(

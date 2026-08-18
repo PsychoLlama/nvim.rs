@@ -9,7 +9,7 @@
 
 use super::*;
 
-pub(crate) unsafe extern "C-unwind" fn push_ranges(
+pub(crate) unsafe fn push_ranges(
     mut L: *mut lua_State,
     mut ranges: *const TSRange,
     length: size_t,
@@ -67,7 +67,7 @@ pub(crate) unsafe extern "C-unwind" fn push_ranges(
     }
 }
 
-unsafe extern "C-unwind" fn range_err(mut L: *mut lua_State) {
+unsafe fn range_err(mut L: *mut lua_State) {
     unsafe {
         luaL_error(
             L,
@@ -76,10 +76,7 @@ unsafe extern "C-unwind" fn range_err(mut L: *mut lua_State) {
     }
 }
 
-unsafe extern "C-unwind" fn lua_checkuint32(
-    mut L: *mut lua_State,
-    mut index: ::core::ffi::c_int,
-) -> uint32_t {
+unsafe fn lua_checkuint32(mut L: *mut lua_State, mut index: ::core::ffi::c_int) -> uint32_t {
     unsafe {
         let mut value: lua_Number = luaL_checknumber(L, index);
         let mut converted: uint32_t = value as uint32_t;
@@ -93,7 +90,7 @@ unsafe extern "C-unwind" fn lua_checkuint32(
     }
 }
 
-unsafe extern "C-unwind" fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
+unsafe fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
     unsafe {
         let mut node: TSNode = TSNode {
             context: [0; 4],

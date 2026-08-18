@@ -105,7 +105,7 @@ fn at(line: &[u8], i: usize) -> u8 {
 /// `'modelines'` lines of it.
 ///
 /// `flags` is `OPT_WINONLY` or `OPT_NOWIN`.
-pub unsafe extern "C" fn do_modelines(flags: c_int) {
+pub unsafe fn do_modelines(flags: c_int) {
     static entered: GlobalCell<c_int> = GlobalCell::new(0);
 
     if current_buf().b_p_ml == 0 {

@@ -13,7 +13,7 @@ use super::*;
 use crate::semsg_c;
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
-pub(crate) unsafe extern "C" fn tv_blob2items(argvars: *mut typval_T, rettv: *mut typval_T) {
+pub(crate) unsafe fn tv_blob2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         let blob = (*argvars).vval.v_blob;
         tv_list_alloc_ret(rettv, tv_blob_len(blob) as ptrdiff_t);
@@ -27,14 +27,14 @@ pub(crate) unsafe extern "C" fn tv_blob2items(argvars: *mut typval_T, rettv: *mu
 }
 
 /// `items()` over a dictionary: a list of `[key, value]` pairs.
-pub(crate) unsafe extern "C" fn tv_dict2items(argvars: *mut typval_T, rettv: *mut typval_T) {
+pub(crate) unsafe fn tv_dict2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         tv_dict2list(argvars, rettv, kDict2ListItems);
     }
 }
 
 /// `items()` over a list: a list of `[index, value]` pairs.
-pub(crate) unsafe extern "C" fn tv_list2items(argvars: *mut typval_T, rettv: *mut typval_T) {
+pub(crate) unsafe fn tv_list2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         let l = (*argvars).vval.v_list;
         tv_list_alloc_ret(rettv, tv_list_len(l) as ptrdiff_t);
@@ -51,7 +51,7 @@ pub(crate) unsafe extern "C" fn tv_list2items(argvars: *mut typval_T, rettv: *mu
 }
 
 /// `items()` over a string: a list of `[index, character]` pairs.
-pub(crate) unsafe extern "C" fn tv_string2items(argvars: *mut typval_T, rettv: *mut typval_T) {
+pub(crate) unsafe fn tv_string2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         let mut p = (*argvars).vval.v_string.cast_const();
 
@@ -102,15 +102,12 @@ pub unsafe extern "C" fn tv_dict_find(
 }
 
 /// Whether `d` has `key`.
-pub unsafe extern "C" fn tv_dict_has_key(
-    d: *const dict_T,
-    key: *const ::core::ffi::c_char,
-) -> bool {
+pub unsafe fn tv_dict_has_key(d: *const dict_T, key: *const ::core::ffi::c_char) -> bool {
     unsafe { !tv_dict_find(d, key, -1).is_null() }
 }
 
 /// Copy `d[key]` into `rettv`.  `FAIL` when there is no such key.
-pub unsafe extern "C" fn tv_dict_get_tv(
+pub unsafe fn tv_dict_get_tv(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     rettv: *mut typval_T,
@@ -135,7 +132,7 @@ pub unsafe extern "C" fn tv_dict_get_number(
 }
 
 /// `d[key]` as a number, or `def` when there is no such key.
-pub unsafe extern "C" fn tv_dict_get_number_def(
+pub unsafe fn tv_dict_get_number_def(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     def: ::core::ffi::c_int,
@@ -150,7 +147,7 @@ pub unsafe extern "C" fn tv_dict_get_number_def(
 }
 
 /// `d[key]` as a boolean, or `def` when there is no such key.
-pub unsafe extern "C" fn tv_dict_get_bool(
+pub unsafe fn tv_dict_get_bool(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     def: ::core::ffi::c_int,
@@ -168,7 +165,7 @@ pub unsafe extern "C" fn tv_dict_get_bool(
 ///
 /// Every string, and the array itself, is freshly allocated; the caller owns
 /// the lot.
-pub unsafe extern "C" fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char {
+pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char {
     unsafe {
         let env_size = tv_dict_len(denv) as size_t;
 
@@ -284,7 +281,7 @@ pub unsafe extern "C" fn tv_dict_get_callback(
 /// Whether storing `tv` under `name` in `d` would shadow a builtin function.
 ///
 /// Only the global scope and a function's local scope are guarded.
-pub unsafe extern "C" fn tv_dict_wrong_func_name(
+pub unsafe fn tv_dict_wrong_func_name(
     d: *mut dict_T,
     tv: *mut typval_T,
     name: *const ::core::ffi::c_char,
@@ -297,7 +294,7 @@ pub unsafe extern "C" fn tv_dict_wrong_func_name(
 }
 
 /// The shared body of `keys()`, `values()` and `items()` over a dictionary.
-pub(crate) unsafe extern "C" fn tv_dict2list(
+pub(crate) unsafe fn tv_dict2list(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     what: DictListType,

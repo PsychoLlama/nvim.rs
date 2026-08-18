@@ -7,7 +7,7 @@ use super::tree::*;
 use super::*;
 use crate::{semsg_c, smsg_c};
 
-pub unsafe extern "C" fn u_read_undo(
+pub unsafe fn u_read_undo(
     mut name: *mut c_char,
     mut hash: *const uint8_t,
     mut orig_name: *const c_char,

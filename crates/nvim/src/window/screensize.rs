@@ -48,7 +48,7 @@ fn frame_rows() -> c_int {
         as c_int
 }
 
-pub unsafe extern "C" fn win_new_screensize() {
+pub unsafe fn win_new_screensize() {
     static old_Rows: GlobalCell<c_int> = GlobalCell::new(0);
     static old_Columns: GlobalCell<c_int> = GlobalCell::new(0);
     if old_Rows.get() != Rows.get() {
@@ -67,7 +67,7 @@ pub unsafe extern "C" fn win_new_screensize() {
     }
 }
 
-pub unsafe extern "C" fn win_new_screen_rows() {
+pub unsafe fn win_new_screen_rows() {
     new_screen_rows();
 }
 
@@ -95,7 +95,7 @@ pub(crate) fn new_screen_rows() {
     }
 }
 
-pub unsafe extern "C" fn win_new_screen_cols() {
+pub unsafe fn win_new_screen_cols() {
     new_screen_cols();
 }
 
@@ -119,7 +119,7 @@ pub(crate) fn new_screen_cols() {
 // ---------------------------------------------------------------------------
 // WinScrolled and WinResized
 
-pub unsafe extern "C" fn snapshot_windows_scroll_size() {
+pub unsafe fn snapshot_windows_scroll_size() {
     for mut wp in windows() {
         snapshot_window(&mut wp);
     }
@@ -136,7 +136,7 @@ fn snapshot_window(wp: &mut Win) {
     wp.w_last_height = wp.w_height;
 }
 
-pub unsafe extern "C" fn may_make_initial_scroll_size_snapshot() {
+pub unsafe fn may_make_initial_scroll_size_snapshot() {
     if !did_initial_scroll_size_snapshot.get() {
         did_initial_scroll_size_snapshot.set(true);
         // SAFETY: reads the window list, which is live.
@@ -353,7 +353,7 @@ impl Subject {
     }
 }
 
-pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
+pub unsafe fn may_trigger_win_scrolled_resized() {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
     // SAFETY: reads the autocommand tables.
     let (do_resize, do_scroll) =
@@ -444,7 +444,7 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut dict_T) {
 // ---------------------------------------------------------------------------
 // Saving and restoring every window's size
 
-pub unsafe extern "C" fn win_size_save(gap: *mut garray_T) {
+pub unsafe fn win_size_save(gap: *mut garray_T) {
     let room = windows().count() as c_int * 2 + 1;
     // SAFETY: the caller's promise -- a growable array to initialise.
     unsafe { ga_init(gap, size_of::<c_int>() as c_int, 1) };
@@ -460,7 +460,7 @@ pub unsafe extern "C" fn win_size_save(gap: *mut garray_T) {
     }
 }
 
-pub unsafe extern "C" fn win_size_restore(gap: *mut garray_T) {
+pub unsafe fn win_size_restore(gap: *mut garray_T) {
     let sizes = Sizes(gap);
     if windows().count() as c_int * 2 + 1 != sizes.len()
         || sizes.at(0) as OptInt

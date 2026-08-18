@@ -234,7 +234,7 @@ fn current_win() -> Win {
 /// and folds) as where `win` was in `buf`.
 ///
 /// `win` may be null: `:badd` records a position for no window at all.
-pub unsafe extern "C" fn buflist_setfpos(
+pub unsafe fn buflist_setfpos(
     buf: *mut buf_T,
     win: *mut win_T,
     mut lnum: linenr_T,
@@ -350,7 +350,7 @@ fn find_wininfo(buf: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Op
 /// Reset the current window's buffer-local options to the values last used
 /// in this window; failing that, to the most recently used window's; failing
 /// that, to the window's own global values.
-pub unsafe extern "C" fn get_winopts(buf: *mut buf_T) {
+pub unsafe fn get_winopts(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     let mut cur = current_win();
@@ -405,7 +405,7 @@ pub unsafe extern "C" fn get_winopts(buf: *mut buf_T) {
 
 /// The mark for `buf` in the current window, or a pointer to `no_position`
 /// when there is none.
-pub unsafe extern "C" fn buflist_findfmark(buf: *mut buf_T) -> *mut fmark_T {
+pub unsafe fn buflist_findfmark(buf: *mut buf_T) -> *mut fmark_T {
     static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
         mark: pos_T {
             lnum: 1 as linenr_T,
@@ -431,7 +431,7 @@ pub unsafe extern "C" fn buflist_findfmark(buf: *mut buf_T) -> *mut fmark_T {
     }
 }
 
-pub unsafe extern "C" fn buflist_findlnum(buf: *mut buf_T) -> linenr_T {
+pub unsafe fn buflist_findlnum(buf: *mut buf_T) -> linenr_T {
     // SAFETY: the caller's promise -- a live buffer; the answer is a live
     // mark.
     unsafe { (*buflist_findfmark(buf)).mark.lnum }

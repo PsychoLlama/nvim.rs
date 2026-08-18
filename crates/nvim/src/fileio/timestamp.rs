@@ -109,7 +109,7 @@ pub fn time_differs(file_info: &FileInfo, mtime: i64, mtime_ns: i64) -> bool {
 ///
 /// @return  true if a message was written, so the screen should be redrawn
 ///          and the cursor positioned.
-pub unsafe extern "C" fn check_timestamps(focus: c_int) -> c_int {
+pub unsafe fn check_timestamps(focus: c_int) -> c_int {
     unsafe {
         // Don't check timestamps while system() or another low-level function
         // may cause us to lose and gain focus.
@@ -343,7 +343,7 @@ unsafe fn warn_changed(
 ///
 /// @return  1 if a changed buffer was found, 2 if a message has been
 ///          displayed, 0 otherwise.
-pub unsafe extern "C" fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
+pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
     unsafe {
         let orig_size = (*buf).b_orig_size;
         let orig_mode = (*buf).b_orig_mode;
@@ -521,7 +521,7 @@ pub unsafe extern "C" fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
 /// @param reload_options  re-detect `'fileformat'`, `'fileencoding'` and
 ///                        `'filetype'`, rather than forcing the ones the
 ///                        buffer already has.
-pub unsafe extern "C" fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool) {
+pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool) {
     unsafe {
         let old_ro = (*buf).b_p_ro;
         let mut saved = OK;
@@ -689,7 +689,7 @@ pub unsafe extern "C" fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_op
 
 /// Record the file's size, mode and modification time on the buffer, so that
 /// a later change to any of them can be noticed.
-pub unsafe extern "C" fn buf_store_file_info(buf: *mut buf_T, file_info: *mut FileInfo) {
+pub unsafe fn buf_store_file_info(buf: *mut buf_T, file_info: *mut FileInfo) {
     unsafe {
         (*buf).b_mtime = (*file_info).stat.st_mtim.tv_sec as int64_t;
         (*buf).b_mtime_ns = (*file_info).stat.st_mtim.tv_nsec as int64_t;
@@ -701,7 +701,7 @@ pub unsafe extern "C" fn buf_store_file_info(buf: *mut buf_T, file_info: *mut Fi
 /// Adjust the line with a missing end-of-line, used for the next write.
 ///
 /// Needed by `do_filter()`, where the input lines for the filter are deleted.
-pub unsafe extern "C" fn write_lnum_adjust(offset: linenr_T) {
+pub unsafe fn write_lnum_adjust(offset: linenr_T) {
     unsafe {
         if (*curbuf.get()).b_no_eol_lnum != 0 {
             // Only if there is a missing end-of-line.

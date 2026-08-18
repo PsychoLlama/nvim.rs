@@ -113,7 +113,7 @@ pub(crate) unsafe fn readfile_charconvert(
 }
 
 /// Does file encoding `fenc` need converting from or to `'encoding'`?
-pub unsafe extern "C" fn need_conversion(fenc: *const c_char) -> bool {
+pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
     unsafe {
         let fenc_flags;
         let same_encoding = if *fenc == 0 || strcmp(p_enc.get(), fenc) == 0 {
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn need_conversion(fenc: *const c_char) -> bool {
 
 /// The `FIO_*` flags for converting `name` internally, or 0 when only iconv
 /// can do it. An empty name means `'encoding'`.
-pub unsafe extern "C" fn get_fio_flags(name: *const c_char) -> c_int {
+pub unsafe fn get_fio_flags(name: *const c_char) -> c_int {
     unsafe {
         let name = if *name == 0 { p_enc.get() } else { name };
         let prop = enc_canon_props(name);

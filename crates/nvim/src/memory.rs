@@ -64,7 +64,7 @@ unsafe fn do_outofmem_msg(size: usize) {
     );
 }
 
-pub unsafe extern "C" fn try_malloc(size: usize) -> *mut c_void {
+pub unsafe fn try_malloc(size: usize) -> *mut c_void {
     let allocated_size = size.max(1);
     let mut ret = (*mem_malloc.ptr()).expect("non-null function pointer")(allocated_size);
     if ret.is_null() {
@@ -74,7 +74,7 @@ pub unsafe extern "C" fn try_malloc(size: usize) -> *mut c_void {
     ret
 }
 
-pub unsafe extern "C" fn verbose_try_malloc(size: usize) -> *mut c_void {
+pub unsafe fn verbose_try_malloc(size: usize) -> *mut c_void {
     let ret = try_malloc(size);
     if ret.is_null() {
         do_outofmem_msg(size);
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void 
     ret
 }
 
-pub unsafe extern "C" fn xmallocz(size: usize) -> *mut c_void {
+pub unsafe fn xmallocz(size: usize) -> *mut c_void {
     let total_size = size.wrapping_add(1);
     if total_size < size {
         preserve_exit(gettext(
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn xmemdupz(data: *const c_void, len: usize) -> *mut c_voi
     ret
 }
 
-pub unsafe extern "C" fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize) -> *mut c_void {
+pub unsafe fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize) -> *mut c_void {
     if len != 0 {
         slice::from_raw_parts_mut(dst as *mut u8, len)
             .copy_from_slice(slice::from_raw_parts(src as *const u8, len));
@@ -186,19 +186,19 @@ fn count_byte(s: &[u8], c: u8) -> usize {
 
 /// Like `strchr`, but absent characters yield the terminator instead of
 /// NULL.
-pub unsafe extern "C" fn xstrchrnul(str: *const c_char, c: c_char) -> *mut c_char {
+pub unsafe fn xstrchrnul(str: *const c_char, c: c_char) -> *mut c_char {
     let bytes = CStr::from_ptr(str).to_bytes();
     str.add(find_or_end(bytes, c as u8)) as *mut c_char
 }
 
 /// Like `memchr`, but absent characters yield `addr + size` instead of
 /// NULL.
-pub unsafe extern "C" fn xmemscan(addr: *const c_void, c: c_char, size: usize) -> *mut c_void {
+pub unsafe fn xmemscan(addr: *const c_void, c: c_char, size: usize) -> *mut c_void {
     let hay = slice::from_raw_parts(addr as *const u8, size);
     (addr as *mut u8).add(find_or_end(hay, c as u8)) as *mut c_void
 }
 
-pub unsafe extern "C" fn strchrsub(str: *mut c_char, c: c_char, x: c_char) {
+pub unsafe fn strchrsub(str: *mut c_char, c: c_char, x: c_char) {
     debug_assert!(c != 0, "c != NUL");
     let len = CStr::from_ptr(str).to_bytes().len();
     replace_bytes(
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn strchrsub(str: *mut c_char, c: c_char, x: c_char) {
     );
 }
 
-pub unsafe extern "C" fn memchrsub(data: *mut c_void, c: c_char, x: c_char, len: usize) {
+pub unsafe fn memchrsub(data: *mut c_void, c: c_char, x: c_char, len: usize) {
     if len != 0 {
         replace_bytes(
             slice::from_raw_parts_mut(data as *mut u8, len),
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn memchrsub(data: *mut c_void, c: c_char, x: c_char, len:
     }
 }
 
-pub unsafe extern "C" fn memcnt(data: *const c_void, c: c_char, len: usize) -> usize {
+pub unsafe fn memcnt(data: *const c_void, c: c_char, len: usize) -> usize {
     if len == 0 {
         return 0;
     }
@@ -236,7 +236,7 @@ unsafe fn strnlen(s: *const c_char, maxlen: usize) -> usize {
 
 /// `strcpy` returning a pointer to the written terminator rather than
 /// `dst`.
-pub unsafe extern "C" fn xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char {
+pub unsafe fn xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char {
     let bytes = CStr::from_ptr(src).to_bytes_with_nul();
     slice::from_raw_parts_mut(dst as *mut u8, bytes.len()).copy_from_slice(bytes);
     dst.add(bytes.len() - 1)
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c
 
 /// BSD `strlcpy`: bounded copy that always terminates (when `dsize > 0`)
 /// and returns the untruncated source length.
-pub unsafe extern "C" fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
+pub unsafe fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
     let slen = CStr::from_ptr(src).to_bytes().len();
     if dsize != 0 {
         let len = slen.min(dsize - 1);
@@ -270,7 +270,7 @@ fn lcat_copy(dlen: usize, slen: usize, dsize: usize) -> (usize, Option<usize>) {
 
 /// BSD `strlcat`. The unit suite calls this with `src` pointing into `dst`,
 /// so the copy stays a raw memmove.
-pub unsafe extern "C" fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
+pub unsafe fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
     debug_assert!(dsize > 0, "dsize > 0");
     let dlen = CStr::from_ptr(dst).to_bytes().len();
     debug_assert!(dlen < dsize, "dlen < dsize");
@@ -289,7 +289,7 @@ pub unsafe extern "C" fn xstrdup(str: *const c_char) -> *mut c_char {
 }
 
 /// `memrchr`: last occurrence of `c` in the first `len` bytes, or NULL.
-pub unsafe extern "C" fn xmemrchr(src: *const c_void, c: u8, len: usize) -> *mut c_void {
+pub unsafe fn xmemrchr(src: *const c_void, c: u8, len: usize) -> *mut c_void {
     if len == 0 {
         return ptr::null_mut();
     }
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn xmemrchr(src: *const c_void, c: u8, len: usize) -> *mut
 
 /// `strndup`: duplicate at most `len` bytes (stopping at a terminator),
 /// always NUL-terminating the copy.
-pub unsafe extern "C" fn xstrndup(str: *const c_char, len: usize) -> *mut c_char {
+pub unsafe fn xstrndup(str: *const c_char, len: usize) -> *mut c_char {
     xmemdupz(str as *const c_void, strnlen(str, len)) as *mut c_char
 }
 
@@ -323,7 +323,7 @@ fn eq_upto(a: &[u8], b: &[u8], n: usize) -> bool {
 }
 
 /// `strcmp` equality where NULL only equals NULL.
-pub unsafe extern "C" fn strequal(a: *const c_char, b: *const c_char) -> bool {
+pub unsafe fn strequal(a: *const c_char, b: *const c_char) -> bool {
     if a.is_null() || b.is_null() {
         return a.is_null() && b.is_null();
     }
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn strequal(a: *const c_char, b: *const c_char) -> bool {
 }
 
 /// `strncmp` equality where NULL only equals NULL.
-pub unsafe extern "C" fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
+pub unsafe fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
     if a.is_null() || b.is_null() {
         return a.is_null() && b.is_null();
     }
@@ -343,7 +343,7 @@ pub unsafe extern "C" fn strnequal(a: *const c_char, b: *const c_char, n: usize)
 }
 
 /// Big-endian encoding of a timestamp, as shada writes it.
-pub unsafe extern "C" fn time_to_bytes(time_: c_long, buf: *mut u8) {
+pub unsafe fn time_to_bytes(time_: c_long, buf: *mut u8) {
     slice::from_raw_parts_mut(buf, 8).copy_from_slice(&(time_ as u64).to_be_bytes());
 }
 
@@ -492,13 +492,13 @@ unsafe fn arena_free_reuse_blks() {
 
 /// Detach the arena's chain of consumed blocks for a later
 /// `arena_mem_free`, leaving the arena empty.
-pub unsafe extern "C" fn arena_finish(arena: *mut Arena) -> ArenaMem {
+pub unsafe fn arena_finish(arena: *mut Arena) -> ArenaMem {
     let res = (*arena).cur_blk as *mut consumed_blk;
     *arena = ARENA_EMPTY;
     res
 }
 
-pub unsafe extern "C" fn alloc_block() -> *mut c_void {
+pub unsafe fn alloc_block() -> *mut c_void {
     if arena_reuse_blk_count.get() > 0 {
         let retval = arena_reuse_blk.get() as *mut c_void;
         arena_reuse_blk.set((*arena_reuse_blk.get()).prev);
@@ -510,7 +510,7 @@ pub unsafe extern "C" fn alloc_block() -> *mut c_void {
     }
 }
 
-pub unsafe extern "C" fn arena_alloc_block(arena: *mut Arena) {
+pub unsafe fn arena_alloc_block(arena: *mut Arena) {
     let prev_blk = (*arena).cur_blk as *mut consumed_blk;
     (*arena).cur_blk = alloc_block() as *mut c_char;
     (*arena).pos = 0;
@@ -541,7 +541,7 @@ fn is_oversize(size: usize) -> bool {
     size > (ARENA_BLOCK_SIZE - core::mem::size_of::<consumed_blk>()) / 2
 }
 
-pub unsafe extern "C" fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_void {
+pub unsafe fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_void {
     if arena.is_null() {
         return xmalloc(size);
     }
@@ -594,7 +594,7 @@ pub unsafe extern "C" fn free_block(block: *mut c_void) {
     }
 }
 
-pub unsafe extern "C" fn arena_mem_free(mem: ArenaMem) {
+pub unsafe fn arena_mem_free(mem: ArenaMem) {
     let mut b = mem;
     // The first block may be reused; the rest of the chain is freed.
     if !b.is_null() {
@@ -609,17 +609,13 @@ pub unsafe extern "C" fn arena_mem_free(mem: ArenaMem) {
     }
 }
 
-pub unsafe extern "C" fn arena_allocz(arena: *mut Arena, size: usize) -> *mut c_char {
+pub unsafe fn arena_allocz(arena: *mut Arena, size: usize) -> *mut c_char {
     let mem = arena_alloc(arena, size.wrapping_add(1), false) as *mut c_char;
     *mem.add(size) = 0;
     mem
 }
 
-pub unsafe extern "C" fn arena_memdupz(
-    arena: *mut Arena,
-    buf: *const c_char,
-    size: usize,
-) -> *mut c_char {
+pub unsafe fn arena_memdupz(arena: *mut Arena, buf: *const c_char, size: usize) -> *mut c_char {
     let mem = arena_allocz(arena, size);
     if size != 0 {
         slice::from_raw_parts_mut(mem as *mut u8, size)
@@ -628,7 +624,7 @@ pub unsafe extern "C" fn arena_memdupz(
     mem
 }
 
-pub unsafe extern "C" fn arena_strdup(arena: *mut Arena, str: *const c_char) -> *mut c_char {
+pub unsafe fn arena_strdup(arena: *mut Arena, str: *const c_char) -> *mut c_char {
     arena_memdupz(arena, str, CStr::from_ptr(str).to_bytes().len())
 }
 

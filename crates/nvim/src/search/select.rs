@@ -108,7 +108,7 @@ unsafe fn search_around(
 ///
 /// # Safety
 /// The current window and buffer must be valid.
-pub unsafe extern "C" fn current_search(count: c_int, forward: bool) -> c_int {
+pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
     unsafe {
         let save_visual = VIsual.get();
 

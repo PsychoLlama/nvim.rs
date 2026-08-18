@@ -611,7 +611,7 @@ unsafe extern "C" fn add_opt_pack_plugins(
 }
 
 /// Add all packages in the `start` directories to 'runtimepath'.
-pub unsafe extern "C" fn add_pack_start_dirs() {
+pub unsafe fn add_pack_start_dirs() {
     // SAFETY: `add_pack_start_dir` ignores its cookie.
     unsafe {
         do_in_path(
@@ -688,7 +688,7 @@ unsafe extern "C" fn add_pack_start_dir(
 }
 
 /// Load the plugins of every package in the `start` directories.
-pub unsafe extern "C" fn load_start_packages() {
+pub unsafe fn load_start_packages() {
     did_source_packages.set(true);
     // SAFETY: `add_start_pack_plugins` takes a `PackWork` cookie.
     unsafe {
@@ -723,7 +723,7 @@ pub unsafe fn ex_packloadall(eap: *mut exarg_T) {
 }
 
 /// Read all the plugin files at startup.
-pub unsafe extern "C" fn load_plugins() {
+pub unsafe fn load_plugins() {
     if p_lpl.get() == 0 {
         return;
     }
