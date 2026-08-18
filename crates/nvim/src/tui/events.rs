@@ -10,7 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_write};
+use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::main::{stdin_isatty, ui_client_channel_id};
 use crate::memory::{strequal, xfree};
@@ -28,17 +28,12 @@ use crate::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::tui::terminfo::terminfo_info_msg;
 use crate::types::{
     Array, ArrayBuf, DictBuf, Integer, Object, ObjectType, String_0, TUIData, uv_buf_t,
-    uv_stream_t, uv_tty_mode_t, uv_tty_t, uv_write_t,
+    uv_stream_t, uv_tty_mode_t, uv_write_t,
 };
-use core::ffi::c_int;
 
 const UV_TTY_MODE_NORMAL: uv_tty_mode_t = 0;
 const UV_TTY_MODE_IO: uv_tty_mode_t = 2;
 const UV_RUN_DEFAULT: core::ffi::c_uint = 0;
-
-unsafe extern "C" {
-    fn uv_tty_set_mode(_: *mut uv_tty_t, mode: uv_tty_mode_t) -> c_int;
-}
 
 /// The longest title worth sending. Terminals truncate long ones anyway, and
 /// a title that does not fit the staging buffer would be cut mid-sequence.

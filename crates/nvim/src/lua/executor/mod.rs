@@ -20,7 +20,7 @@ use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_REFNIL;
 use crate::types::{
     LuaRef, LuaRetMode, dict_T, funcexe_T, garray_T, lua_CFunction, lua_State, partial_T, typval_T,
-    uint64_t,
+    uint64_t, uv_thread_t,
 };
 
 mod call;
@@ -61,8 +61,6 @@ pub(crate) use self::vim_module::*;
 unsafe extern "C" {
     pub(crate) fn lua_getstack(L: *mut lua_State, level: c_int, ar: *mut lua_Debug) -> c_int;
     pub(crate) fn lua_getinfo(L: *mut lua_State, what: *const c_char, ar: *mut lua_Debug) -> c_int;
-    pub(crate) fn uv_thread_self() -> uv_thread_t;
-    pub(crate) fn uv_thread_equal(t1: *const uv_thread_t, t2: *const uv_thread_t) -> c_int;
     pub(crate) fn luv_set_callback(L: *mut lua_State, pcall: luv_CFpcall);
     pub(crate) fn luv_set_thread(L: *mut lua_State, pcall: luv_CFpcall);
     pub(crate) fn luv_set_cthread(L: *mut lua_State, cpcall: luv_CFcpcall);
@@ -85,9 +83,6 @@ pub struct lua_Debug {
     pub short_src: [c_char; 60],
     pub i_ci: c_int,
 }
-
-pub type pthread_t = ::core::ffi::c_ulong;
-pub type uv_thread_t = pthread_t;
 
 /// luv's protected-call hook: `(L, nargs, nresults, flags)`.
 pub type luv_CFpcall =

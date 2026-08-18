@@ -6,7 +6,7 @@ use crate::memory::ARENA_EMPTY;
 use crate::types::{
     Array, Callback_data as C2Rust_Unnamed_22, ChannelPart, ChannelStreamType, Context, GRegFlags,
     LuaRetMode, MotionType, Object, ProcType, String_0, XDGVarType, cmd_addr_T, garray_T,
-    object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t, uv_req_type,
+    object_data as C2Rust_Unnamed_16, size_t, uint64_t,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -67,38 +67,6 @@ pub use self::strings::*;
 pub use self::timer::*;
 pub use self::variables::*;
 pub use self::wrappers::*;
-unsafe extern "C" {
-    fn uv_random(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_random_t,
-        buf: *mut ::core::ffi::c_void,
-        buflen: size_t,
-        flags: ::core::ffi::c_uint,
-        cb: uv_random_cb,
-    ) -> ::core::ffi::c_int;
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv_random_s {
-    pub data: *mut ::core::ffi::c_void,
-    pub type_0: uv_req_type,
-    pub reserved: [*mut ::core::ffi::c_void; 6],
-    pub loop_0: *mut uv_loop_t,
-    pub status: ::core::ffi::c_int,
-    pub buf: *mut ::core::ffi::c_void,
-    pub buflen: size_t,
-    pub cb: uv_random_cb,
-    pub work_req: uv__work,
-}
-pub type uv_random_cb = Option<
-    unsafe extern "C" fn(
-        *mut uv_random_t,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-        size_t,
-    ) -> (),
->;
-pub type uv_random_t = uv_random_s;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed_13 = 2;
 pub const MPACK_EOF: C2Rust_Unnamed_13 = 1;

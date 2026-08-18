@@ -16,8 +16,9 @@ use core::{mem, ptr};
 
 use crate::charset::try_getdigits;
 use crate::event::libuv::{
-    uv_accept, uv_close, uv_freeaddrinfo, uv_listen, uv_pipe_bind, uv_pipe_connect, uv_pipe_init,
-    uv_strerror, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname, uv_tcp_init, uv_tcp_nodelay,
+    uv_accept, uv_close, uv_freeaddrinfo, uv_getaddrinfo, uv_listen, uv_pipe_bind, uv_pipe_connect,
+    uv_pipe_init, uv_strerror, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname, uv_tcp_init,
+    uv_tcp_nodelay,
 };
 use crate::event::r#loop::{one_arg_event, process_events_until};
 use crate::event::multiqueue::multiqueue_put_event;
@@ -31,8 +32,8 @@ use crate::os::libc::{gettext, ntohs};
 use crate::path::path_tail;
 use crate::types::{
     Loop, RStream, SocketWatcher, Stream, addrinfo, intmax_t, sa_family_t, socket_cb,
-    socket_close_cb, uv__work, uv_connect_t, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t,
-    uv_req_type, uv_stream_t, uv_tcp_t,
+    socket_close_cb, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_pipe_t,
+    uv_stream_t, uv_tcp_t,
 };
 
 const UV_TCP: uv_handle_type = 12;
@@ -40,37 +41,6 @@ const UV_TCP: uv_handle_type = 12;
 const AF_UNSPEC: c_int = 0;
 const SOCK_STREAM: c_int = 1;
 const AI_NUMERICSERV: c_int = 0x400;
-
-unsafe extern "C" {
-    fn uv_getaddrinfo(
-        uv_loop: *mut uv_loop_t,
-        req: *mut uv_getaddrinfo_t,
-        getaddrinfo_cb: uv_getaddrinfo_cb,
-        node: *const c_char,
-        service: *const c_char,
-        hints: *const addrinfo,
-    ) -> c_int;
-}
-
-pub type uv_getaddrinfo_cb =
-    Option<unsafe extern "C" fn(*mut uv_getaddrinfo_t, c_int, *mut addrinfo)>;
-pub type uv_getaddrinfo_t = uv_getaddrinfo_s;
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct uv_getaddrinfo_s {
-    pub data: *mut c_void,
-    pub type_0: uv_req_type,
-    pub reserved: [*mut c_void; 6],
-    pub loop_0: *mut uv_loop_t,
-    pub work_req: uv__work,
-    pub cb: uv_getaddrinfo_cb,
-    pub hints: *mut addrinfo,
-    pub hostname: *mut c_char,
-    pub service: *mut c_char,
-    pub addrinfo: *mut addrinfo,
-    pub retcode: c_int,
-}
 
 /// The buffer `uv_tcp_getsockname` fills in.
 #[derive(Copy, Clone)]

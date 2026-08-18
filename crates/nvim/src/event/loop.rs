@@ -12,7 +12,7 @@ use core::ptr;
 use crate::event::libuv::{
     uv_async_init, uv_async_send, uv_close, uv_is_closing, uv_loop_close, uv_loop_init,
     uv_mutex_destroy, uv_mutex_init, uv_mutex_lock, uv_mutex_unlock, uv_run, uv_signal_init,
-    uv_stop, uv_timer_init, uv_timer_start, uv_timer_stop,
+    uv_stop, uv_timer_init, uv_timer_start, uv_timer_stop, uv_walk,
 };
 use crate::event::multiqueue::{
     multiqueue_empty, multiqueue_free, multiqueue_move_events, multiqueue_new,
@@ -29,12 +29,6 @@ use crate::types::{
 const UV_RUN_DEFAULT: uv_run_mode = 0;
 const UV_RUN_ONCE: uv_run_mode = 1;
 const UV_RUN_NOWAIT: uv_run_mode = 2;
-
-unsafe extern "C" {
-    fn uv_walk(uv_loop: *mut crate::types::uv_loop_t, walk_cb: uv_walk_cb, arg: *mut c_void);
-}
-
-type uv_walk_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, *mut c_void)>;
 
 // ---------------------------------------------------------------------------
 // Lifetime

@@ -14,9 +14,9 @@ use super::{
     nlua_common_vim_init, nlua_debug, nlua_exec_file, nlua_get_ref_state, nlua_in_fast_event,
     nlua_init_packages, nlua_pcall, nlua_print, nlua_ref_global, nlua_require, nlua_rpcnotify,
     nlua_rpcrequest, nlua_schedule, nlua_thr_api_nvim__get_runtime, nlua_thread_acquire_vm,
-    nlua_ui_attach, nlua_ui_detach, nlua_unref, nlua_wait, require_ref, uv_thread_equal,
-    uv_thread_self, uv_thread_t,
+    nlua_ui_attach, nlua_ui_detach, nlua_unref, nlua_wait, require_ref,
 };
+use crate::event::libuv::{uv_thread_equal, uv_thread_self};
 use crate::lua::api_wrappers::nlua_add_api_functions;
 use crate::lua::converter::nlua_init_types;
 use crate::lua::ffi::{
@@ -29,7 +29,7 @@ use crate::lua::treesitter::nlua_treesitter_init;
 use crate::main::{os_exit, time_fd};
 use crate::os::libc::{exit, fprintf, gettext, stderr};
 use crate::runtime::runtime_search_path_validate;
-use crate::types::{lua_Integer, lua_State, nlua_ref_state_t};
+use crate::types::{lua_Integer, lua_State, nlua_ref_state_t, uv_thread_t};
 
 /// Populate the global `arg` table from the command line, with `arg[0]` the
 /// script's own name.

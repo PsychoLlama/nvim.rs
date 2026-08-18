@@ -20,7 +20,8 @@
 
 use crate::eval::vars::get_vim_var_str;
 use crate::event::libuv::{
-    uv_mutex_init_recursive, uv_mutex_lock, uv_mutex_unlock, uv_print_all_handles, uv_strerror,
+    uv_gettimeofday, uv_mutex_init_recursive, uv_mutex_lock, uv_mutex_unlock, uv_print_all_handles,
+    uv_strerror,
 };
 use crate::global_cell::GlobalCell;
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
@@ -36,7 +37,8 @@ use crate::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::path_tail;
 use crate::types::{
-    FILE, VV_SEND_SERVER, XDGVarType, int32_t, int64_t, pthread_mutex_t, uv_loop_t, uv_mutex_t,
+    FILE, VV_SEND_SERVER, XDGVarType, int32_t, pthread_mutex_t, uv_loop_t, uv_mutex_t,
+    uv_timeval64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -45,17 +47,6 @@ use crate::os::libc::{
     __errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, snprintf, stderr, stdout,
     strerror, strftime,
 };
-
-unsafe extern "C" {
-    fn uv_gettimeofday(tv: *mut uv_timeval64_t) -> c_int;
-}
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-struct uv_timeval64_t {
-    tv_sec: int64_t,
-    tv_usec: int32_t,
-}
 
 /// The levels [`logmsg_c!`] takes, and 'verbose' compares against.
 pub const LOGLVL_DBG: c_int = 1;

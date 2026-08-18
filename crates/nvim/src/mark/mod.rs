@@ -114,7 +114,6 @@ pub const JUMPLISTSIZE: c_int = 100;
 
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_mark_adjust;
-unsafe extern "C" {}
 /// Set named mark "c" at current cursor position.
 /// Returns OK on success, FAIL if bad name given.
 pub unsafe extern "C" fn setmark(mut c: c_int) -> c_int {

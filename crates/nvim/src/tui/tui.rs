@@ -24,7 +24,8 @@
 
 use crate::event::libuv::{
     uv_close, uv_is_closing, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open, uv_run,
-    uv_strerror, uv_timer_init, uv_timer_start, uv_tty_reset_mode,
+    uv_strerror, uv_timer_init, uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode,
+    uv_tty_set_mode,
 };
 use crate::event::r#loop::{loop_poll_events, process_events_until};
 use crate::event::signal::{
@@ -60,16 +61,10 @@ use crate::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
 use crate::types::libc::STDOUT_FILENO;
 use crate::types::{
     HlAttrs, SignalWatcher, Staging, String_0, TUIData, TerminfoExt, uv_file, uv_handle_t,
-    uv_loop_t, uv_timer_t, uv_tty_mode_t, uv_tty_t,
+    uv_timer_t, uv_tty_mode_t,
 };
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use core::ffi::{CStr, c_char, c_int, c_void};
-
-unsafe extern "C" {
-    fn uv_tty_init(_: *mut uv_loop_t, _: *mut uv_tty_t, fd: uv_file, readable: c_int) -> c_int;
-    fn uv_tty_set_mode(_: *mut uv_tty_t, mode: uv_tty_mode_t) -> c_int;
-    fn uv_tty_get_winsize(_: *mut uv_tty_t, width: *mut c_int, height: *mut c_int) -> c_int;
-}
 
 // --------------------------------------------------------------- the state
 

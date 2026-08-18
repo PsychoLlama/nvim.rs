@@ -2,15 +2,16 @@
 //! generator.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::VARNUMBER_MAX;
 use super::args::{Args, frame};
 use super::wrappers::tv_get_float_chk;
-use super::{VARNUMBER_MAX, uv_random};
 use crate::charset::skipwhite;
 use crate::eval::string2float;
 use crate::eval::typval::{
     tv_get_number_chk, tv_get_string, tv_list_alloc_ret, tv_list_append_number, tv_list_find,
     tv_list_len,
 };
+use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
 use crate::main::e_invarg2;
 use crate::os::env::os_get_pid;

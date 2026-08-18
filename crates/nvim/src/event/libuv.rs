@@ -191,6 +191,15 @@ unsafe extern "C" {
         offset: int64_t,
         cb: uv_fs_cb,
     ) -> ::core::ffi::c_int;
+    pub fn uv_getaddrinfo(
+        uv_loop: *mut uv_loop_t,
+        req: *mut uv_getaddrinfo_t,
+        getaddrinfo_cb: uv_getaddrinfo_cb,
+        node: *const ::core::ffi::c_char,
+        service: *const ::core::ffi::c_char,
+        hints: *const addrinfo,
+    ) -> ::core::ffi::c_int;
+    pub fn uv_gettimeofday(tv: *mut uv_timeval64_t) -> ::core::ffi::c_int;
     pub fn uv_guess_handle(file: uv_file) -> uv_handle_type;
     pub fn uv_clock_gettime(clock_id: uv_clock_id, ts: *mut uv_timespec64_t) -> ::core::ffi::c_int;
     pub fn uv_hrtime() -> uint64_t;
@@ -246,6 +255,14 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
     pub fn uv_pipe_open(_: *mut uv_pipe_t, file: uv_file) -> ::core::ffi::c_int;
     pub fn uv_print_all_handles(loop_0: *mut uv_loop_t, stream: *mut FILE);
+    pub fn uv_random(
+        loop_0: *mut uv_loop_t,
+        req: *mut uv_random_t,
+        buf: *mut ::core::ffi::c_void,
+        buflen: size_t,
+        flags: ::core::ffi::c_uint,
+        cb: uv_random_cb,
+    ) -> ::core::ffi::c_int;
     pub fn uv_read_start(
         _: *mut uv_stream_t,
         alloc_cb_0: uv_alloc_cb,
@@ -257,6 +274,8 @@ unsafe extern "C" {
         value: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     pub fn uv_run(_: *mut uv_loop_t, mode: uv_run_mode) -> ::core::ffi::c_int;
+    pub fn uv_thread_self() -> uv_thread_t;
+    pub fn uv_thread_equal(t1: *const uv_thread_t, t2: *const uv_thread_t) -> ::core::ffi::c_int;
     pub fn uv_signal_init(loop_0: *mut uv_loop_t, handle: *mut uv_signal_t) -> ::core::ffi::c_int;
     pub fn uv_signal_start(
         handle: *mut uv_signal_t,
@@ -305,9 +324,22 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
     pub fn uv_timer_stop(handle: *mut uv_timer_t) -> ::core::ffi::c_int;
     pub fn uv_translate_sys_error(sys_errno: ::core::ffi::c_int) -> ::core::ffi::c_int;
+    pub fn uv_tty_get_winsize(
+        _: *mut uv_tty_t,
+        width: *mut ::core::ffi::c_int,
+        height: *mut ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
+    pub fn uv_tty_init(
+        _: *mut uv_loop_t,
+        _: *mut uv_tty_t,
+        fd: uv_file,
+        readable: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
     pub fn uv_tty_reset_mode() -> ::core::ffi::c_int;
+    pub fn uv_tty_set_mode(_: *mut uv_tty_t, mode: uv_tty_mode_t) -> ::core::ffi::c_int;
     pub fn uv_unref(_: *mut uv_handle_t);
     pub fn uv_uptime(uptime: *mut ::core::ffi::c_double) -> ::core::ffi::c_int;
+    pub fn uv_walk(uv_loop: *mut uv_loop_t, walk_cb: uv_walk_cb, arg: *mut ::core::ffi::c_void);
     pub fn uv_write(
         req: *mut uv_write_t,
         handle: *mut uv_stream_t,

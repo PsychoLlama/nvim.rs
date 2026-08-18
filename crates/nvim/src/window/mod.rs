@@ -102,7 +102,6 @@ pub use self::split::*;
 pub use self::tabpage::*;
 pub use self::winclose::*;
 
-unsafe extern "C" {}
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;

@@ -148,6 +148,7 @@ pub union pthread_rwlock_t {
     pub __size: [::core::ffi::c_char; 56],
     pub __align: ::core::ffi::c_long,
 }
+pub type pthread_t = ::core::ffi::c_ulong;
 pub type ptrdiff_t = isize;
 pub type sa_family_t = ::core::ffi::c_ushort;
 pub type size_t = usize;
