@@ -13,54 +13,50 @@ pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_buf_create_user_command",
-            c"RPC: ch %lu: invoke nvim_buf_create_user_command",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 4 as size_t {
-            wrong_arity(error, 4, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeBuffer) else {
-            wrong_type(error, 1, c"nvim_buf_create_user_command", c"Buffer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_buf_create_user_command", c"String");
-            return NIL;
-        };
-        let arg_3 = *args.items.add(2);
-        let item = *args.items.add(3);
-        let mut arg_4: KeyDict_user_command = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_4).cast(),
-                Some(KeyDict_user_command_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_buf_create_user_command",
+        c"nvim_buf_create_user_command",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 4 {
+        wrong_arity(error, 4, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
+        wrong_type(error, 1, c"nvim_buf_create_user_command", c"Buffer");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_buf_create_user_command", c"String");
+        return NIL;
+    };
+    let arg_3 = args[2];
+    let mut arg_4: KeyDict_user_command =
+        match read_keydict(Some(KeyDict_user_command_get_field), args[3], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(
+                    error,
+                    4,
+                    c"nvim_buf_create_user_command",
+                    c"Dict(user_command) *",
+                );
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(
-                error,
-                4,
-                c"nvim_buf_create_user_command",
-                c"Dict(user_command) *",
-            );
-            return NIL;
-        }
-        nvim_buf_create_user_command(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_buf_create_user_command(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
@@ -69,33 +65,35 @@ pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_buf_del_user_command",
-            c"RPC: ch %lu: invoke nvim_buf_del_user_command",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeBuffer) else {
-            wrong_type(error, 1, c"nvim_buf_del_user_command", c"Buffer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_buf_del_user_command", c"String");
-            return NIL;
-        };
-        nvim_buf_del_user_command(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_buf_del_user_command",
+        c"nvim_buf_del_user_command",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
+        wrong_type(error, 1, c"nvim_buf_del_user_command", c"Buffer");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_buf_del_user_command", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_buf_del_user_command(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_buf_get_commands(
@@ -104,43 +102,40 @@ pub unsafe extern "C" fn handle_nvim_buf_get_commands(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_buf_get_commands",
-            c"RPC: ch %lu: invoke nvim_buf_get_commands",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeBuffer) else {
-            wrong_type(error, 1, c"nvim_buf_get_commands", c"Buffer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let mut arg_2: KeyDict_get_commands = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_2).cast(),
-                Some(KeyDict_get_commands_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_buf_get_commands",
+        c"nvim_buf_get_commands",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
+        wrong_type(error, 1, c"nvim_buf_get_commands", c"Buffer");
+        return NIL;
+    };
+    let mut arg_2: KeyDict_get_commands =
+        match read_keydict(Some(KeyDict_get_commands_get_field), args[1], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 2, c"nvim_buf_get_commands", c"Dict(get_commands) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 2, c"nvim_buf_get_commands", c"Dict(get_commands) *");
-            return NIL;
-        }
-        let rv = nvim_buf_get_commands(arg_1, &raw mut arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeDict, object_data { dict: rv })
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_buf_get_commands(arg_1, &raw mut arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    obj(kObjectTypeDict, object_data { dict: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_cmd(
@@ -149,53 +144,44 @@ pub unsafe extern "C" fn handle_nvim_cmd(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_cmd",
-            c"RPC: ch %lu: invoke nvim_cmd",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let mut arg_1: KeyDict_cmd = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_1).cast(),
-                Some(KeyDict_cmd_get_field),
-                item.data.dict,
-                error,
-            ) {
-                return NIL;
-            }
-        } else if !is_empty_array(item) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_cmd",
+        c"nvim_cmd",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
+    }
+    let mut arg_1: KeyDict_cmd = match read_keydict(Some(KeyDict_cmd_get_field), args[0], error) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused => return NIL,
+        KeySetArg::WrongType => {
             wrong_type(error, 1, c"nvim_cmd", c"Dict(cmd) *");
             return NIL;
         }
-        let item = *args.items.add(1);
-        let mut arg_2: KeyDict_cmd_opts = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_2).cast(),
-                Some(KeyDict_cmd_opts_get_field),
-                item.data.dict,
-                error,
-            ) {
+    };
+    let mut arg_2: KeyDict_cmd_opts =
+        match read_keydict(Some(KeyDict_cmd_opts_get_field), args[1], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 2, c"nvim_cmd", c"Dict(cmd_opts) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 2, c"nvim_cmd", c"Dict(cmd_opts) *");
-            return NIL;
-        }
-        let rv = nvim_cmd(channel_id, &raw mut arg_1, &raw mut arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeString, object_data { string: rv })
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_cmd(channel_id, &raw mut arg_1, &raw mut arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    obj(kObjectTypeString, object_data { string: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_create_user_command(
@@ -204,49 +190,46 @@ pub unsafe extern "C" fn handle_nvim_create_user_command(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_create_user_command",
-            c"RPC: ch %lu: invoke nvim_create_user_command",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 3 as size_t {
-            wrong_arity(error, 3, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_string(item) else {
-            wrong_type(error, 1, c"nvim_create_user_command", c"String");
-            return NIL;
-        };
-        let arg_2 = *args.items.add(1);
-        let item = *args.items.add(2);
-        let mut arg_3: KeyDict_user_command = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_3).cast(),
-                Some(KeyDict_user_command_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_create_user_command",
+        c"nvim_create_user_command",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        wrong_arity(error, 3, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_create_user_command", c"String");
+        return NIL;
+    };
+    let arg_2 = args[1];
+    let mut arg_3: KeyDict_user_command =
+        match read_keydict(Some(KeyDict_user_command_get_field), args[2], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(
+                    error,
+                    3,
+                    c"nvim_create_user_command",
+                    c"Dict(user_command) *",
+                );
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(
-                error,
-                3,
-                c"nvim_create_user_command",
-                c"Dict(user_command) *",
-            );
-            return NIL;
-        }
-        nvim_create_user_command(channel_id, arg_1, arg_2, &raw mut arg_3, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_create_user_command(channel_id, arg_1, arg_2, &raw mut arg_3, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_del_user_command(
@@ -255,28 +238,31 @@ pub unsafe extern "C" fn handle_nvim_del_user_command(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_del_user_command",
-            c"RPC: ch %lu: invoke nvim_del_user_command",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_string(item) else {
-            wrong_type(error, 1, c"nvim_del_user_command", c"String");
-            return NIL;
-        };
-        nvim_del_user_command(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_del_user_command",
+        c"nvim_del_user_command",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_del_user_command", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_del_user_command(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_get_commands(
@@ -285,38 +271,36 @@ pub unsafe extern "C" fn handle_nvim_get_commands(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_get_commands",
-            c"RPC: ch %lu: invoke nvim_get_commands",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let mut arg_1: KeyDict_get_commands = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_1).cast(),
-                Some(KeyDict_get_commands_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_get_commands",
+        c"nvim_get_commands",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
+    }
+    let mut arg_1: KeyDict_get_commands =
+        match read_keydict(Some(KeyDict_get_commands_get_field), args[0], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 1, c"nvim_get_commands", c"Dict(get_commands) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 1, c"nvim_get_commands", c"Dict(get_commands) *");
-            return NIL;
-        }
-        let rv = nvim_get_commands(&raw mut arg_1, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeDict, object_data { dict: rv })
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_get_commands(&raw mut arg_1, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    obj(kObjectTypeDict, object_data { dict: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_parse_cmd(
@@ -325,51 +309,48 @@ pub unsafe extern "C" fn handle_nvim_parse_cmd(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_parse_cmd",
-            c"RPC: ch %lu: invoke nvim_parse_cmd",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_string(item) else {
-            wrong_type(error, 1, c"nvim_parse_cmd", c"String");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let mut arg_2: KeyDict_empty = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_2).cast(),
-                Some(KeyDict_empty_get_field),
-                item.data.dict,
-                error,
-            ) {
-                return NIL;
-            }
-        } else if !is_empty_array(item) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_parse_cmd",
+        c"nvim_parse_cmd",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_parse_cmd", c"String");
+        return NIL;
+    };
+    let mut arg_2: KeyDict_empty = match read_keydict(Some(KeyDict_empty_get_field), args[1], error)
+    {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused => return NIL,
+        KeySetArg::WrongType => {
             wrong_type(error, 2, c"nvim_parse_cmd", c"Dict(empty) *");
             return NIL;
         }
-        let mut rv = nvim_parse_cmd(arg_1, &raw mut arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(
-            kObjectTypeDict,
-            object_data {
-                dict: api_keydict_to_dict(
-                    (&raw mut rv).cast(),
-                    cmd_table.ptr().cast(),
-                    12 as size_t,
-                    arena,
-                ),
-            },
-        )
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let mut rv = unsafe { nvim_parse_cmd(arg_1, &raw mut arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    // SAFETY: `rv` is a `KeyDict_cmd`, whose field table is
+    // `cmd_table` and whose length is 12.
+    let dict = unsafe {
+        api_keydict_to_dict(
+            (&raw mut rv).cast(),
+            cmd_table.ptr().cast(),
+            12 as size_t,
+            arena,
+        )
+    };
+    obj(kObjectTypeDict, object_data { dict })
 }

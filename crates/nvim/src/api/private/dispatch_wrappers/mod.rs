@@ -147,15 +147,15 @@ use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::log::logmsg_c;
 use crate::main::{e_textlock, textlock};
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, Float, Integer, KeyDict_buf_attach, KeyDict_buf_delete,
-    KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context,
-    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty,
-    KeyDict_eval_statusline, KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds,
-    KeyDict_get_commands, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight,
-    KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term,
-    KeyDict_option, KeyDict_redraw, KeyDict_runtime, KeyDict_set_extmark, KeyDict_tabpage_config,
-    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, Object, ObjectType,
-    String_0, handle_T, object_data, size_t, uint64_t,
+    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeyDict_buf_attach,
+    KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
+    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
+    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
+    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
+    KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
+    KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
+    KeyDict_win_text_height, Object, ObjectType, String_0, handle_T, object_data, size_t, uint64_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -192,52 +192,65 @@ const fn obj(type_0: ObjectType, data: object_data) -> Object {
     Object { type_0, data }
 }
 
-/// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
-/// level — the default — this is a load and a compare.
+/// The arguments a client sent, as a slice. An empty array need not carry a
+/// pointer at all, so that case answers without forming one.
 ///
 /// # Safety
-/// Both strings outlive the call; the payload is formatted by C `printf`.
-unsafe fn log_invoke(handler: &CStr, fmt: &CStr, line: c_int, channel_id: uint64_t) {
+/// `args.items` points at `args.size` initialized `Object`s that outlive the
+/// borrow.
+unsafe fn args_slice(args: &Array) -> &[Object] {
+    if args.size == 0 {
+        return &[];
+    }
+    // SAFETY: the caller vouches for `size` objects at `items`.
+    unsafe { core::slice::from_raw_parts(args.items, args.size) }
+}
+
+/// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
+/// level — the default — this is a load and a compare.
+fn log_invoke(handler: &CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
+    let fmt = c"RPC: ch %lu: invoke %s".as_ptr();
+    let (handler, method) = (handler.as_ptr(), method.as_ptr());
+    // SAFETY: the format string is this function's own and matches the two
+    // arguments after it; every string here is NUL-terminated and outlives
+    // the call.
     unsafe {
         logmsg_c!(
             LOGLVL_DBG,
             core::ptr::null(),
-            handler.as_ptr(),
+            handler,
             line,
             true,
-            fmt.as_ptr(),
+            fmt,
             channel_id,
+            method
         );
     }
 }
 
-/// # Safety
-/// `error` points at a live `Error`.
-unsafe fn wrong_arity(error: *mut Error, expected: usize, got: size_t) {
+/// Refuses a call that arrived with the wrong number of arguments.
+fn wrong_arity(error: &mut Error, expected: usize, got: usize) {
+    let fmt = c"Wrong number of arguments: expecting %zu but got %zu".as_ptr();
+    // SAFETY: `error` is live and the format string matches its two arguments.
     unsafe {
         api_set_error(
             error,
             kErrorTypeException,
-            c"Wrong number of arguments: expecting %zu but got %zu".as_ptr(),
+            fmt,
             expected as size_t,
-            got,
-        );
-    }
+            got as size_t,
+        )
+    };
 }
 
-/// # Safety
-/// `error` points at a live `Error`; the names outlive the call.
-unsafe fn wrong_type(error: *mut Error, slot: usize, func: &CStr, expected: &CStr) {
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            c"Wrong type for argument %zu when calling %s, expecting %s".as_ptr(),
-            slot as size_t,
-            func.as_ptr(),
-            expected.as_ptr(),
-        );
-    }
+/// Refuses a call whose argument in `slot` carried a tag the parameter does
+/// not accept.
+fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
+    let fmt = c"Wrong type for argument %zu when calling %s, expecting %s".as_ptr();
+    let (slot, func, expected) = (slot as size_t, func.as_ptr(), expected.as_ptr());
+    // SAFETY: `error` is live, the format string matches its three arguments,
+    // and both names are NUL-terminated and outlive the call.
+    unsafe { api_set_error(error, kErrorTypeException, fmt, slot, func, expected) };
 }
 
 /// A nonnegative integer is accepted as a boolean, truncated to C `int`
@@ -310,4 +323,59 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
 fn is_empty_array(o: Object) -> bool {
     // SAFETY: the tag says which union arm is live.
     o.type_0 == kObjectTypeArray && unsafe { o.data.array }.size == 0
+}
+
+/// What reading a keyset argument produced.
+enum KeySetArg<K> {
+    /// Decoded, with `error` untouched.
+    Read(K),
+    /// The decoder rejected a key; `error` says which and why.
+    Refused,
+    /// The argument was neither a Dict nor the empty list that stands in for
+    /// an empty one.
+    WrongType,
+}
+
+/// Decode one keyset argument into a fresh `K`.
+///
+/// `get_field` must be `K`'s own generated field lookup: the decoder writes
+/// through the offsets it hands back, so pairing it with a different keyset
+/// would write outside `K`.
+fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> KeySetArg<K> {
+    if item.type_0 != kObjectTypeDict {
+        if !is_empty_array(item) {
+            return KeySetArg::WrongType;
+        }
+        // SAFETY: as below; an empty list sets no field.
+        return KeySetArg::Read(unsafe { core::mem::zeroed() });
+    }
+    // SAFETY: as above.
+    let mut out: K = unsafe { core::mem::zeroed() };
+    // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
+    // offsets it hands back are inside `out`; the tag says the dict arm of the
+    // union is the live one.
+    let read =
+        unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, item.data.dict, error) };
+    if read {
+        KeySetArg::Read(out)
+    } else {
+        KeySetArg::Refused
+    }
+}
+
+/// Refuses a call made while the text is locked.
+fn text_locked_error(error: &mut Error) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: `error` is live and `get_text_locked_msg` answers with a static
+    // NUL-terminated message, which is what `%s` takes.
+    unsafe { api_set_error(error, kErrorTypeException, fmt, get_text_locked_msg()) };
+}
+
+/// Refuses a call made from an expression mapping, which the cmdline window
+/// alone would have allowed.
+fn expr_map_locked_error(error: &mut Error) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: `error` is live and `e_textlock` is a static NUL-terminated
+    // message, which is what `%s` takes.
+    unsafe { api_set_error(error, kErrorTypeException, fmt, &raw const e_textlock) };
 }

@@ -13,62 +13,54 @@ pub unsafe extern "C" fn handle_nvim_open_tabpage(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_open_tabpage",
-            c"RPC: ch %lu: invoke nvim_open_tabpage",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 3 as size_t {
-            wrong_arity(error, 3, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeBuffer) else {
-            wrong_type(error, 1, c"nvim_open_tabpage", c"Buffer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_boolean(item) else {
-            wrong_type(error, 2, c"nvim_open_tabpage", c"Boolean");
-            return NIL;
-        };
-        let item = *args.items.add(2);
-        let mut arg_3: KeyDict_tabpage_config = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_3).cast(),
-                Some(KeyDict_tabpage_config_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_open_tabpage",
+        c"nvim_open_tabpage",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        wrong_arity(error, 3, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
+        wrong_type(error, 1, c"nvim_open_tabpage", c"Buffer");
+        return NIL;
+    };
+    let Some(arg_2) = as_boolean(args[1]) else {
+        wrong_type(error, 2, c"nvim_open_tabpage", c"Boolean");
+        return NIL;
+    };
+    let mut arg_3: KeyDict_tabpage_config =
+        match read_keydict(Some(KeyDict_tabpage_config_get_field), args[2], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 3, c"nvim_open_tabpage", c"Dict(tabpage_config) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 3, c"nvim_open_tabpage", c"Dict(tabpage_config) *");
-            return NIL;
-        }
-        if textlock.get() != 0 || expr_map_locked() {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                &raw const e_textlock,
-            );
-            return NIL;
-        }
-        let rv = nvim_open_tabpage(arg_1, arg_2, &raw mut arg_3, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(
-            kObjectTypeTabpage,
-            object_data {
-                integer: rv as Integer,
-            },
-        )
+        };
+    // SAFETY: a wrapper runs on the main loop.
+    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        expr_map_locked_error(error);
+        return NIL;
     }
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_open_tabpage(arg_1, arg_2, &raw mut arg_3, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(
+        kObjectTypeTabpage,
+        object_data {
+            integer: rv as Integer,
+        },
+    )
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
@@ -77,33 +69,35 @@ pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_del_var",
-            c"RPC: ch %lu: invoke nvim_tabpage_del_var",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_del_var", c"Tabpage");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_tabpage_del_var", c"String");
-            return NIL;
-        };
-        nvim_tabpage_del_var(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_del_var",
+        c"nvim_tabpage_del_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_del_var", c"Tabpage");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_tabpage_del_var", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_tabpage_del_var(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
@@ -112,28 +106,31 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_get_number",
-            c"RPC: ch %lu: invoke nvim_tabpage_get_number",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_get_number", c"Tabpage");
-            return NIL;
-        };
-        let rv = nvim_tabpage_get_number(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeInteger, object_data { integer: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_get_number",
+        c"nvim_tabpage_get_number",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_get_number", c"Tabpage");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_tabpage_get_number(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_get_var(
@@ -142,33 +139,35 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_var(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_get_var",
-            c"RPC: ch %lu: invoke nvim_tabpage_get_var",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_get_var", c"Tabpage");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_tabpage_get_var", c"String");
-            return NIL;
-        };
-        let rv = nvim_tabpage_get_var(arg_1, arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        rv
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_get_var",
+        c"nvim_tabpage_get_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_get_var", c"Tabpage");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_tabpage_get_var", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    rv
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
@@ -177,33 +176,36 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_get_win",
-            c"RPC: ch %lu: invoke nvim_tabpage_get_win",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_get_win", c"Tabpage");
-            return NIL;
-        };
-        let rv = nvim_tabpage_get_win(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(
-            kObjectTypeWindow,
-            object_data {
-                integer: rv as Integer,
-            },
-        )
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_get_win",
+        c"nvim_tabpage_get_win",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_get_win", c"Tabpage");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_tabpage_get_win(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(
+        kObjectTypeWindow,
+        object_data {
+            integer: rv as Integer,
+        },
+    )
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
@@ -212,25 +214,28 @@ pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_is_valid",
-            c"RPC: ch %lu: invoke nvim_tabpage_is_valid",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_is_valid", c"Tabpage");
-            return NIL;
-        };
-        let rv = nvim_tabpage_is_valid(arg_1);
-        obj(kObjectTypeBoolean, object_data { boolean: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_is_valid",
+        c"nvim_tabpage_is_valid",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_is_valid", c"Tabpage");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_tabpage_is_valid(arg_1) };
+    obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_list_wins(
@@ -239,28 +244,31 @@ pub unsafe extern "C" fn handle_nvim_tabpage_list_wins(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_list_wins",
-            c"RPC: ch %lu: invoke nvim_tabpage_list_wins",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_list_wins", c"Tabpage");
-            return NIL;
-        };
-        let rv = nvim_tabpage_list_wins(arg_1, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeArray, object_data { array: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_list_wins",
+        c"nvim_tabpage_list_wins",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_list_wins", c"Tabpage");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_tabpage_list_wins(arg_1, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(kObjectTypeArray, object_data { array: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
@@ -269,34 +277,36 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_set_var",
-            c"RPC: ch %lu: invoke nvim_tabpage_set_var",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 3 as size_t {
-            wrong_arity(error, 3, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_set_var", c"Tabpage");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_tabpage_set_var", c"String");
-            return NIL;
-        };
-        let arg_3 = *args.items.add(2);
-        nvim_tabpage_set_var(arg_1, arg_2, arg_3, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_set_var",
+        c"nvim_tabpage_set_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        wrong_arity(error, 3, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_set_var", c"Tabpage");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_tabpage_set_var", c"String");
+        return NIL;
+    };
+    let arg_3 = args[2];
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
@@ -305,31 +315,33 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_tabpage_set_win",
-            c"RPC: ch %lu: invoke nvim_tabpage_set_win",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeTabpage) else {
-            wrong_type(error, 1, c"nvim_tabpage_set_win", c"Tabpage");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 2, c"nvim_tabpage_set_win", c"Window");
-            return NIL;
-        };
-        nvim_tabpage_set_win(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_tabpage_set_win",
+        c"nvim_tabpage_set_win",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+        wrong_type(error, 1, c"nvim_tabpage_set_win", c"Tabpage");
+        return NIL;
+    };
+    let Some(arg_2) = as_handle(args[1], kObjectTypeWindow) else {
+        wrong_type(error, 2, c"nvim_tabpage_set_win", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_tabpage_set_win(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }

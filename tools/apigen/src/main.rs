@@ -793,18 +793,19 @@ fn object_tag(ty: &ApiType) -> &'static str {
     }
 }
 
-/// The `as_*` reader that turns an `Object` into a parameter, or `None` if the
-/// tag does not match.
-fn reader(ty: &ApiType) -> String {
+/// The `as_*` reader that turns argument `index` into a parameter, or `None`
+/// if the tag does not match.
+fn reader(ty: &ApiType, index: usize) -> String {
+    let item = format!("args[{index}]");
     match ty {
-        ApiType::Boolean => "as_boolean(item)".into(),
-        ApiType::Integer => "as_integer(item)".into(),
-        ApiType::Float => "as_float(item)".into(),
-        ApiType::String => "as_string(item)".into(),
-        ApiType::Array => "as_array(item)".into(),
-        ApiType::Dict => "as_dict(item)".into(),
-        ApiType::LuaRef => "as_luaref(item)".into(),
-        ApiType::Handle(_) => format!("as_handle(item, {})", object_tag(ty)),
+        ApiType::Boolean => format!("as_boolean({item})"),
+        ApiType::Integer => format!("as_integer({item})"),
+        ApiType::Float => format!("as_float({item})"),
+        ApiType::String => format!("as_string({item})"),
+        ApiType::Array => format!("as_array({item})"),
+        ApiType::Dict => format!("as_dict({item})"),
+        ApiType::LuaRef => format!("as_luaref({item})"),
+        ApiType::Handle(_) => format!("as_handle({item}, {})", object_tag(ty)),
         ApiType::Object | ApiType::KeyDict(_) => unreachable!("handled inline"),
     }
 }
@@ -848,12 +849,27 @@ fn emit_fn(
     .unwrap();
     writeln!(out, "    error: *mut Error,").unwrap();
     writeln!(out, ") -> Object {{").unwrap();
-    writeln!(out, "    unsafe {{").unwrap();
-    writeln!(out, "        log_invoke(c\"{handler}\", c\"RPC: ch %lu: invoke {name}\", line!() as c_int, channel_id);").unwrap();
-    writeln!(out, "        if args.size != {arity} as size_t {{").unwrap();
-    writeln!(out, "            wrong_arity(error, {arity}, args.size);").unwrap();
-    writeln!(out, "            return NIL;").unwrap();
-    writeln!(out, "        }}").unwrap();
+    writeln!(
+        out,
+        "    // SAFETY: the dispatcher hands over an argument array of `size` initialized\n\
+         \x20   // objects and an `Error` slot that is live and ours alone until we return;\n\
+         \x20   // both outlive the call."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    let (args, error) = unsafe {{ (args_slice(&args), &mut *error) }};"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    log_invoke(c\"{handler}\", c\"{name}\", line!() as c_int, channel_id);"
+    )
+    .unwrap();
+    writeln!(out, "    if args.len() != {arity} {{").unwrap();
+    writeln!(out, "        wrong_arity(error, {arity}, args.len());").unwrap();
+    writeln!(out, "        return NIL;").unwrap();
+    writeln!(out, "    }}").unwrap();
 
     for (index, ty) in &values {
         let slot = index + 1;
@@ -869,62 +885,56 @@ fn emit_fn(
         match ty {
             // Any Object is acceptable, so there is nothing to check.
             ApiType::Object => {
-                writeln!(out, "        let arg_{slot} = *args.items.add({index});").unwrap();
+                writeln!(out, "    let arg_{slot} = args[{index}];").unwrap();
             }
             ApiType::KeyDict(keyset) => {
                 let get_field = format!("KeyDict_{keyset}_get_field");
-                writeln!(out, "        let item = *args.items.add({index});").unwrap();
+                writeln!(out, "    let mut arg_{slot}: KeyDict_{keyset} =").unwrap();
                 writeln!(
                     out,
-                    "        let mut arg_{slot}: KeyDict_{keyset} = core::mem::zeroed();"
+                    "        match read_keydict(Some({get_field}), args[{index}], error) {{"
                 )
                 .unwrap();
-                writeln!(out, "        if item.type_0 == kObjectTypeDict {{").unwrap();
-                writeln!(out, "            if !api_dict_to_keydict(").unwrap();
-                writeln!(out, "                (&raw mut arg_{slot}).cast(),").unwrap();
-                writeln!(out, "                Some({get_field}),").unwrap();
-                writeln!(out, "                item.data.dict,").unwrap();
-                writeln!(out, "                error,").unwrap();
-                writeln!(out, "            ) {{").unwrap();
+                writeln!(out, "            KeySetArg::Read(v) => v,").unwrap();
+                writeln!(out, "            KeySetArg::Refused => return NIL,").unwrap();
+                writeln!(out, "            KeySetArg::WrongType => {{").unwrap();
+                writeln!(out, "                {bad}").unwrap();
                 writeln!(out, "                return NIL;").unwrap();
                 writeln!(out, "            }}").unwrap();
-                writeln!(out, "        }} else if !is_empty_array(item) {{").unwrap();
-                writeln!(out, "            {bad}").unwrap();
-                writeln!(out, "            return NIL;").unwrap();
-                writeln!(out, "        }}").unwrap();
+                writeln!(out, "        }};").unwrap();
             }
             _ => {
-                writeln!(out, "        let item = *args.items.add({index});").unwrap();
-                writeln!(out, "        let Some(arg_{slot}) = {} else {{", reader(ty)).unwrap();
-                writeln!(out, "            {bad}").unwrap();
-                writeln!(out, "            return NIL;").unwrap();
-                writeln!(out, "        }};").unwrap();
+                writeln!(
+                    out,
+                    "    let Some(arg_{slot}) = {} else {{",
+                    reader(ty, *index)
+                )
+                .unwrap();
+                writeln!(out, "        {bad}").unwrap();
+                writeln!(out, "        return NIL;").unwrap();
+                writeln!(out, "    }};").unwrap();
             }
         }
     }
 
+    // The two locks a wrapper may be refused by. Reading them touches editor
+    // globals, which only the main loop -- where a wrapper runs -- has set up.
     if spec.textlock {
-        writeln!(out, "        if text_locked() {{").unwrap();
-        writeln!(
-            out,
-            "            api_set_error(error, kErrorTypeException, c\"%s\".as_ptr(), get_text_locked_msg());"
-        )
-        .unwrap();
-        writeln!(out, "            return NIL;").unwrap();
-        writeln!(out, "        }}").unwrap();
+        writeln!(out, "    // SAFETY: a wrapper runs on the main loop.").unwrap();
+        writeln!(out, "    if unsafe {{ text_locked() }} {{").unwrap();
+        writeln!(out, "        text_locked_error(error);").unwrap();
+        writeln!(out, "        return NIL;").unwrap();
+        writeln!(out, "    }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
+        writeln!(out, "    // SAFETY: a wrapper runs on the main loop.").unwrap();
         writeln!(
             out,
-            "        if textlock.get() != 0 || expr_map_locked() {{"
+            "    if textlock.get() != 0 || unsafe {{ expr_map_locked() }} {{"
         )
         .unwrap();
-        writeln!(
-            out,
-            "            api_set_error(error, kErrorTypeException, c\"%s\".as_ptr(), &raw const e_textlock);"
-        )
-        .unwrap();
-        writeln!(out, "            return NIL;").unwrap();
-        writeln!(out, "        }}").unwrap();
+        writeln!(out, "        expr_map_locked_error(error);").unwrap();
+        writeln!(out, "        return NIL;").unwrap();
+        writeln!(out, "    }}").unwrap();
     }
 
     // The call, with the dispatcher's own values threaded back into the
@@ -945,12 +955,19 @@ fn emit_fn(
             Param::Value { index, .. } => format!("arg_{}", index + 1),
         })
         .collect();
-    let call = format!("{name}({})", call_args.join(", "));
+    let call = format!("unsafe {{ {name}({}) }}", call_args.join(", "));
+    // The API layer is still `unsafe extern "C"`, so the call is the one edge
+    // every wrapper has. Everything it is handed was checked above.
+    writeln!(
+        out,
+        "    // SAFETY: each argument was checked against the type the signature declares;\n\
+         \x20   // `arena` and `error` are the dispatcher's own."
+    )
+    .unwrap();
     // An `Object` result needs no boxing, so when nothing follows the call it
     // is the wrapper's tail expression rather than a binding.
     if f.ret == RetType::Object && !can_fail {
-        writeln!(out, "        {call}").unwrap();
-        writeln!(out, "    }}").unwrap();
+        writeln!(out, "    {call}").unwrap();
         writeln!(out, "}}").unwrap();
         return Ok(());
     }
@@ -960,11 +977,11 @@ fn emit_fn(
         RetType::KeyDict(_) => "let mut rv = ",
         _ => "let rv = ",
     };
-    writeln!(out, "        {bind}{call};").unwrap();
+    writeln!(out, "    {bind}{call};").unwrap();
     if can_fail {
-        writeln!(out, "        if (*error).type_0 != kErrorTypeNone {{").unwrap();
-        writeln!(out, "            return NIL;").unwrap();
-        writeln!(out, "        }}").unwrap();
+        writeln!(out, "    if error.type_0 != kErrorTypeNone {{").unwrap();
+        writeln!(out, "        return NIL;").unwrap();
+        writeln!(out, "    }}").unwrap();
     }
 
     let boxed = match &f.ret {
@@ -983,13 +1000,23 @@ fn emit_fn(
             let size = tables
                 .get(keyset.as_str())
                 .ok_or_else(|| format!("{name}: no {keyset}_table to bound the conversion"))?;
-            format!(
-                "obj(kObjectTypeDict, object_data {{ dict: api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.ptr().cast(), {size} as size_t, arena) }})"
+            writeln!(
+                out,
+                "    // SAFETY: `rv` is a `KeyDict_{keyset}`, whose field table is\n\
+                 \x20   // `{keyset}_table` and whose length is {size}."
             )
+            .unwrap();
+            writeln!(out, "    let dict = unsafe {{").unwrap();
+            writeln!(
+                out,
+                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.ptr().cast(), {size} as size_t, arena)"
+            )
+            .unwrap();
+            writeln!(out, "    }};").unwrap();
+            "obj(kObjectTypeDict, object_data { dict })".into()
         }
     };
-    writeln!(out, "        {boxed}").unwrap();
-    writeln!(out, "    }}").unwrap();
+    writeln!(out, "    {boxed}").unwrap();
     writeln!(out, "}}").unwrap();
     Ok(())
 }
@@ -1061,52 +1088,48 @@ const fn obj(type_0: ObjectType, data: object_data) -> Object {
     Object { type_0, data }
 }
 
-/// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
-/// level — the default — this is a load and a compare.
+/// The arguments a client sent, as a slice. An empty array need not carry a
+/// pointer at all, so that case answers without forming one.
 ///
 /// # Safety
-/// Both strings outlive the call; the payload is formatted by C `printf`.
-unsafe fn log_invoke(handler: &CStr, fmt: &CStr, line: c_int, channel_id: uint64_t) {
+/// `args.items` points at `args.size` initialized `Object`s that outlive the
+/// borrow.
+unsafe fn args_slice(args: &Array) -> &[Object] {
+    if args.size == 0 {
+        return &[];
+    }
+    // SAFETY: the caller vouches for `size` objects at `items`.
+    unsafe { core::slice::from_raw_parts(args.items, args.size) }
+}
+
+/// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
+/// level — the default — this is a load and a compare.
+fn log_invoke(handler: &CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
+    let fmt = c"RPC: ch %lu: invoke %s".as_ptr();
+    let (handler, method) = (handler.as_ptr(), method.as_ptr());
+    // SAFETY: the format string is this function's own and matches the two
+    // arguments after it; every string here is NUL-terminated and outlives
+    // the call.
     unsafe {
-        logmsg_c!(
-            LOGLVL_DBG,
-            core::ptr::null(),
-            handler.as_ptr(),
-            line,
-            true,
-            fmt.as_ptr(),
-            channel_id,
-        );
+        logmsg_c!(LOGLVL_DBG, core::ptr::null(), handler, line, true, fmt, channel_id, method);
     }
 }
 
-/// # Safety
-/// `error` points at a live `Error`.
-unsafe fn wrong_arity(error: *mut Error, expected: usize, got: size_t) {
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            c"Wrong number of arguments: expecting %zu but got %zu".as_ptr(),
-            expected as size_t,
-            got,
-        );
-    }
+/// Refuses a call that arrived with the wrong number of arguments.
+fn wrong_arity(error: &mut Error, expected: usize, got: usize) {
+    let fmt = c"Wrong number of arguments: expecting %zu but got %zu".as_ptr();
+    // SAFETY: `error` is live and the format string matches its two arguments.
+    unsafe { api_set_error(error, kErrorTypeException, fmt, expected as size_t, got as size_t) };
 }
 
-/// # Safety
-/// `error` points at a live `Error`; the names outlive the call.
-unsafe fn wrong_type(error: *mut Error, slot: usize, func: &CStr, expected: &CStr) {
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            c"Wrong type for argument %zu when calling %s, expecting %s".as_ptr(),
-            slot as size_t,
-            func.as_ptr(),
-            expected.as_ptr(),
-        );
-    }
+/// Refuses a call whose argument in `slot` carried a tag the parameter does
+/// not accept.
+fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
+    let fmt = c"Wrong type for argument %zu when calling %s, expecting %s".as_ptr();
+    let (slot, func, expected) = (slot as size_t, func.as_ptr(), expected.as_ptr());
+    // SAFETY: `error` is live, the format string matches its three arguments,
+    // and both names are NUL-terminated and outlive the call.
+    unsafe { api_set_error(error, kErrorTypeException, fmt, slot, func, expected) };
 }
 "#;
 
@@ -1227,6 +1250,72 @@ fn is_empty_array(o: Object) -> bool {
 }
 "#,
     ),
+    (
+        "read_keydict",
+        r#"
+/// What reading a keyset argument produced.
+enum KeySetArg<K> {
+    /// Decoded, with `error` untouched.
+    Read(K),
+    /// The decoder rejected a key; `error` says which and why.
+    Refused,
+    /// The argument was neither a Dict nor the empty list that stands in for
+    /// an empty one.
+    WrongType,
+}
+
+/// Decode one keyset argument into a fresh `K`.
+///
+/// `get_field` must be `K`'s own generated field lookup: the decoder writes
+/// through the offsets it hands back, so pairing it with a different keyset
+/// would write outside `K`.
+fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> KeySetArg<K> {
+    if item.type_0 != kObjectTypeDict {
+        if !is_empty_array(item) {
+            return KeySetArg::WrongType;
+        }
+        // SAFETY: as below; an empty list sets no field.
+        return KeySetArg::Read(unsafe { core::mem::zeroed() });
+    }
+    // SAFETY: as above.
+    let mut out: K = unsafe { core::mem::zeroed() };
+    // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
+    // offsets it hands back are inside `out`; the tag says the dict arm of the
+    // union is the live one.
+    let read = unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, item.data.dict, error) };
+    if read {
+        KeySetArg::Read(out)
+    } else {
+        KeySetArg::Refused
+    }
+}
+"#,
+    ),
+    (
+        "text_locked_error",
+        r#"
+/// Refuses a call made while the text is locked.
+fn text_locked_error(error: &mut Error) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: `error` is live and `get_text_locked_msg` answers with a static
+    // NUL-terminated message, which is what `%s` takes.
+    unsafe { api_set_error(error, kErrorTypeException, fmt, get_text_locked_msg()) };
+}
+"#,
+    ),
+    (
+        "expr_map_locked_error",
+        r#"
+/// Refuses a call made from an expression mapping, which the cmdline window
+/// alone would have allowed.
+fn expr_map_locked_error(error: &mut Error) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: `error` is live and `e_textlock` is a static NUL-terminated
+    // message, which is what `%s` takes.
+    unsafe { api_set_error(error, kErrorTypeException, fmt, &raw const e_textlock) };
+}
+"#,
+    ),
 ];
 
 /// Constants that belong to other modules. Only the referenced ones are
@@ -1257,6 +1346,7 @@ const TYPE_NAMES: &[&str] = &[
     "Dict",
     "Error",
     "ErrorType",
+    "FieldHashfn",
     "Float",
     "Integer",
     "LuaRef",

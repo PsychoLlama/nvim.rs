@@ -13,38 +13,36 @@ pub unsafe extern "C" fn handle_nvim_clear_autocmds(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_clear_autocmds",
-            c"RPC: ch %lu: invoke nvim_clear_autocmds",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let mut arg_1: KeyDict_clear_autocmds = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_1).cast(),
-                Some(KeyDict_clear_autocmds_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_clear_autocmds",
+        c"nvim_clear_autocmds",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
+    }
+    let mut arg_1: KeyDict_clear_autocmds =
+        match read_keydict(Some(KeyDict_clear_autocmds_get_field), args[0], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 1, c"nvim_clear_autocmds", c"Dict(clear_autocmds) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 1, c"nvim_clear_autocmds", c"Dict(clear_autocmds) *");
-            return NIL;
-        }
-        nvim_clear_autocmds(&raw mut arg_1, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_clear_autocmds(&raw mut arg_1, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_create_augroup(
@@ -53,43 +51,40 @@ pub unsafe extern "C" fn handle_nvim_create_augroup(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_create_augroup",
-            c"RPC: ch %lu: invoke nvim_create_augroup",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_string(item) else {
-            wrong_type(error, 1, c"nvim_create_augroup", c"String");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let mut arg_2: KeyDict_create_augroup = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_2).cast(),
-                Some(KeyDict_create_augroup_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_create_augroup",
+        c"nvim_create_augroup",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_create_augroup", c"String");
+        return NIL;
+    };
+    let mut arg_2: KeyDict_create_augroup =
+        match read_keydict(Some(KeyDict_create_augroup_get_field), args[1], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 2, c"nvim_create_augroup", c"Dict(create_augroup) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 2, c"nvim_create_augroup", c"Dict(create_augroup) *");
-            return NIL;
-        }
-        let rv = nvim_create_augroup(channel_id, arg_1, &raw mut arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeInteger, object_data { integer: rv })
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_create_augroup(channel_id, arg_1, &raw mut arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_create_autocmd(
@@ -98,39 +93,37 @@ pub unsafe extern "C" fn handle_nvim_create_autocmd(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_create_autocmd",
-            c"RPC: ch %lu: invoke nvim_create_autocmd",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let arg_1 = *args.items.add(0);
-        let item = *args.items.add(1);
-        let mut arg_2: KeyDict_create_autocmd = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_2).cast(),
-                Some(KeyDict_create_autocmd_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_create_autocmd",
+        c"nvim_create_autocmd",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
+    }
+    let arg_1 = args[0];
+    let mut arg_2: KeyDict_create_autocmd =
+        match read_keydict(Some(KeyDict_create_autocmd_get_field), args[1], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 2, c"nvim_create_autocmd", c"Dict(create_autocmd) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 2, c"nvim_create_autocmd", c"Dict(create_autocmd) *");
-            return NIL;
-        }
-        let rv = nvim_create_autocmd(channel_id, arg_1, &raw mut arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeInteger, object_data { integer: rv })
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_create_autocmd(channel_id, arg_1, &raw mut arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
@@ -139,28 +132,31 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_del_augroup_by_id",
-            c"RPC: ch %lu: invoke nvim_del_augroup_by_id",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_integer(item) else {
-            wrong_type(error, 1, c"nvim_del_augroup_by_id", c"Integer");
-            return NIL;
-        };
-        nvim_del_augroup_by_id(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_del_augroup_by_id",
+        c"nvim_del_augroup_by_id",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_integer(args[0]) else {
+        wrong_type(error, 1, c"nvim_del_augroup_by_id", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_del_augroup_by_id(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
@@ -169,28 +165,31 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_del_augroup_by_name",
-            c"RPC: ch %lu: invoke nvim_del_augroup_by_name",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_string(item) else {
-            wrong_type(error, 1, c"nvim_del_augroup_by_name", c"String");
-            return NIL;
-        };
-        nvim_del_augroup_by_name(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_del_augroup_by_name",
+        c"nvim_del_augroup_by_name",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_del_augroup_by_name", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_del_augroup_by_name(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_del_autocmd(
@@ -199,28 +198,31 @@ pub unsafe extern "C" fn handle_nvim_del_autocmd(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_del_autocmd",
-            c"RPC: ch %lu: invoke nvim_del_autocmd",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_integer(item) else {
-            wrong_type(error, 1, c"nvim_del_autocmd", c"Integer");
-            return NIL;
-        };
-        nvim_del_autocmd(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_del_autocmd",
+        c"nvim_del_autocmd",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_integer(args[0]) else {
+        wrong_type(error, 1, c"nvim_del_autocmd", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_del_autocmd(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_exec_autocmds(
@@ -229,39 +231,37 @@ pub unsafe extern "C" fn handle_nvim_exec_autocmds(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_exec_autocmds",
-            c"RPC: ch %lu: invoke nvim_exec_autocmds",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let arg_1 = *args.items.add(0);
-        let item = *args.items.add(1);
-        let mut arg_2: KeyDict_exec_autocmds = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_2).cast(),
-                Some(KeyDict_exec_autocmds_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_exec_autocmds",
+        c"nvim_exec_autocmds",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
+    }
+    let arg_1 = args[0];
+    let mut arg_2: KeyDict_exec_autocmds =
+        match read_keydict(Some(KeyDict_exec_autocmds_get_field), args[1], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 2, c"nvim_exec_autocmds", c"Dict(exec_autocmds) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 2, c"nvim_exec_autocmds", c"Dict(exec_autocmds) *");
-            return NIL;
-        }
-        nvim_exec_autocmds(arg_1, &raw mut arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_exec_autocmds(arg_1, &raw mut arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_get_autocmds(
@@ -270,36 +270,34 @@ pub unsafe extern "C" fn handle_nvim_get_autocmds(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_get_autocmds",
-            c"RPC: ch %lu: invoke nvim_get_autocmds",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let mut arg_1: KeyDict_get_autocmds = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_1).cast(),
-                Some(KeyDict_get_autocmds_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_get_autocmds",
+        c"nvim_get_autocmds",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
+    }
+    let mut arg_1: KeyDict_get_autocmds =
+        match read_keydict(Some(KeyDict_get_autocmds_get_field), args[0], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 1, c"nvim_get_autocmds", c"Dict(get_autocmds) *");
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(error, 1, c"nvim_get_autocmds", c"Dict(get_autocmds) *");
-            return NIL;
-        }
-        let rv = nvim_get_autocmds(&raw mut arg_1, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeArray, object_data { array: rv })
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_get_autocmds(&raw mut arg_1, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    obj(kObjectTypeArray, object_data { array: rv })
 }

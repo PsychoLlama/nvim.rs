@@ -13,38 +13,39 @@ pub unsafe extern "C" fn handle_nvim_ui_attach(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_attach",
-            c"RPC: ch %lu: invoke nvim_ui_attach",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 3 as size_t {
-            wrong_arity(error, 3, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_integer(item) else {
-            wrong_type(error, 1, c"nvim_ui_attach", c"Integer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_integer(item) else {
-            wrong_type(error, 2, c"nvim_ui_attach", c"Integer");
-            return NIL;
-        };
-        let item = *args.items.add(2);
-        let Some(arg_3) = as_dict(item) else {
-            wrong_type(error, 3, c"nvim_ui_attach", c"Dict");
-            return NIL;
-        };
-        nvim_ui_attach(channel_id, arg_1, arg_2, arg_3, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_attach",
+        c"nvim_ui_attach",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        wrong_arity(error, 3, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_integer(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_attach", c"Integer");
+        return NIL;
+    };
+    let Some(arg_2) = as_integer(args[1]) else {
+        wrong_type(error, 2, c"nvim_ui_attach", c"Integer");
+        return NIL;
+    };
+    let Some(arg_3) = as_dict(args[2]) else {
+        wrong_type(error, 3, c"nvim_ui_attach", c"Dict");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_attach(channel_id, arg_1, arg_2, arg_3, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_detach(
@@ -53,23 +54,27 @@ pub unsafe extern "C" fn handle_nvim_ui_detach(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_detach",
-            c"RPC: ch %lu: invoke nvim_ui_detach",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 0 as size_t {
-            wrong_arity(error, 0, args.size);
-            return NIL;
-        }
-        nvim_ui_detach(channel_id, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_detach",
+        c"nvim_ui_detach",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 0 {
+        wrong_arity(error, 0, args.len());
+        return NIL;
     }
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_detach(channel_id, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
@@ -78,43 +83,43 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_pum_set_bounds",
-            c"RPC: ch %lu: invoke nvim_ui_pum_set_bounds",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 4 as size_t {
-            wrong_arity(error, 4, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_float(item) else {
-            wrong_type(error, 1, c"nvim_ui_pum_set_bounds", c"Float");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_float(item) else {
-            wrong_type(error, 2, c"nvim_ui_pum_set_bounds", c"Float");
-            return NIL;
-        };
-        let item = *args.items.add(2);
-        let Some(arg_3) = as_float(item) else {
-            wrong_type(error, 3, c"nvim_ui_pum_set_bounds", c"Float");
-            return NIL;
-        };
-        let item = *args.items.add(3);
-        let Some(arg_4) = as_float(item) else {
-            wrong_type(error, 4, c"nvim_ui_pum_set_bounds", c"Float");
-            return NIL;
-        };
-        nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_pum_set_bounds",
+        c"nvim_ui_pum_set_bounds",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 4 {
+        wrong_arity(error, 4, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_float(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_pum_set_bounds", c"Float");
+        return NIL;
+    };
+    let Some(arg_2) = as_float(args[1]) else {
+        wrong_type(error, 2, c"nvim_ui_pum_set_bounds", c"Float");
+        return NIL;
+    };
+    let Some(arg_3) = as_float(args[2]) else {
+        wrong_type(error, 3, c"nvim_ui_pum_set_bounds", c"Float");
+        return NIL;
+    };
+    let Some(arg_4) = as_float(args[3]) else {
+        wrong_type(error, 4, c"nvim_ui_pum_set_bounds", c"Float");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
@@ -123,28 +128,31 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_pum_set_height",
-            c"RPC: ch %lu: invoke nvim_ui_pum_set_height",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_integer(item) else {
-            wrong_type(error, 1, c"nvim_ui_pum_set_height", c"Integer");
-            return NIL;
-        };
-        nvim_ui_pum_set_height(channel_id, arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_pum_set_height",
+        c"nvim_ui_pum_set_height",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_integer(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_pum_set_height", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_pum_set_height(channel_id, arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_send(
@@ -153,28 +161,31 @@ pub unsafe extern "C" fn handle_nvim_ui_send(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_send",
-            c"RPC: ch %lu: invoke nvim_ui_send",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_string(item) else {
-            wrong_type(error, 1, c"nvim_ui_send", c"String");
-            return NIL;
-        };
-        nvim_ui_send(channel_id, arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_send",
+        c"nvim_ui_send",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_send", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_send(channel_id, arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_set_focus(
@@ -183,28 +194,31 @@ pub unsafe extern "C" fn handle_nvim_ui_set_focus(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_set_focus",
-            c"RPC: ch %lu: invoke nvim_ui_set_focus",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_boolean(item) else {
-            wrong_type(error, 1, c"nvim_ui_set_focus", c"Boolean");
-            return NIL;
-        };
-        nvim_ui_set_focus(channel_id, arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_set_focus",
+        c"nvim_ui_set_focus",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_boolean(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_set_focus", c"Boolean");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_set_focus(channel_id, arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_set_option(
@@ -213,29 +227,32 @@ pub unsafe extern "C" fn handle_nvim_ui_set_option(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_set_option",
-            c"RPC: ch %lu: invoke nvim_ui_set_option",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_string(item) else {
-            wrong_type(error, 1, c"nvim_ui_set_option", c"String");
-            return NIL;
-        };
-        let arg_2 = *args.items.add(1);
-        nvim_ui_set_option(channel_id, arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_set_option",
+        c"nvim_ui_set_option",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_set_option", c"String");
+        return NIL;
+    };
+    let arg_2 = args[1];
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_set_option(channel_id, arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_try_resize(
@@ -244,33 +261,35 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_try_resize",
-            c"RPC: ch %lu: invoke nvim_ui_try_resize",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_integer(item) else {
-            wrong_type(error, 1, c"nvim_ui_try_resize", c"Integer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_integer(item) else {
-            wrong_type(error, 2, c"nvim_ui_try_resize", c"Integer");
-            return NIL;
-        };
-        nvim_ui_try_resize(channel_id, arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_try_resize",
+        c"nvim_ui_try_resize",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_integer(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_try_resize", c"Integer");
+        return NIL;
+    };
+    let Some(arg_2) = as_integer(args[1]) else {
+        wrong_type(error, 2, c"nvim_ui_try_resize", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_try_resize(channel_id, arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
@@ -279,38 +298,39 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_ui_try_resize_grid",
-            c"RPC: ch %lu: invoke nvim_ui_try_resize_grid",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 3 as size_t {
-            wrong_arity(error, 3, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_integer(item) else {
-            wrong_type(error, 1, c"nvim_ui_try_resize_grid", c"Integer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_integer(item) else {
-            wrong_type(error, 2, c"nvim_ui_try_resize_grid", c"Integer");
-            return NIL;
-        };
-        let item = *args.items.add(2);
-        let Some(arg_3) = as_integer(item) else {
-            wrong_type(error, 3, c"nvim_ui_try_resize_grid", c"Integer");
-            return NIL;
-        };
-        nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_ui_try_resize_grid",
+        c"nvim_ui_try_resize_grid",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        wrong_arity(error, 3, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_integer(args[0]) else {
+        wrong_type(error, 1, c"nvim_ui_try_resize_grid", c"Integer");
+        return NIL;
+    };
+    let Some(arg_2) = as_integer(args[1]) else {
+        wrong_type(error, 2, c"nvim_ui_try_resize_grid", c"Integer");
+        return NIL;
+    };
+    let Some(arg_3) = as_integer(args[2]) else {
+        wrong_type(error, 3, c"nvim_ui_try_resize_grid", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_ui_attach(
@@ -319,36 +339,37 @@ pub unsafe extern "C" fn handle_ui_attach(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_ui_attach",
-            c"RPC: ch %lu: invoke ui_attach",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 3 as size_t {
-            wrong_arity(error, 3, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_integer(item) else {
-            wrong_type(error, 1, c"ui_attach", c"Integer");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_integer(item) else {
-            wrong_type(error, 2, c"ui_attach", c"Integer");
-            return NIL;
-        };
-        let item = *args.items.add(2);
-        let Some(arg_3) = as_boolean(item) else {
-            wrong_type(error, 3, c"ui_attach", c"Boolean");
-            return NIL;
-        };
-        ui_attach(channel_id, arg_1, arg_2, arg_3, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_ui_attach",
+        c"ui_attach",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        wrong_arity(error, 3, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_integer(args[0]) else {
+        wrong_type(error, 1, c"ui_attach", c"Integer");
+        return NIL;
+    };
+    let Some(arg_2) = as_integer(args[1]) else {
+        wrong_type(error, 2, c"ui_attach", c"Integer");
+        return NIL;
+    };
+    let Some(arg_3) = as_boolean(args[2]) else {
+        wrong_type(error, 3, c"ui_attach", c"Boolean");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { ui_attach(channel_id, arg_1, arg_2, arg_3, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }

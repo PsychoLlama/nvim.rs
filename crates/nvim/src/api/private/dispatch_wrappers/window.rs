@@ -13,42 +13,40 @@ pub unsafe extern "C" fn handle_nvim_win_close(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_close",
-            c"RPC: ch %lu: invoke nvim_win_close",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_close", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_boolean(item) else {
-            wrong_type(error, 2, c"nvim_win_close", c"Boolean");
-            return NIL;
-        };
-        if textlock.get() != 0 || expr_map_locked() {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                &raw const e_textlock,
-            );
-            return NIL;
-        }
-        nvim_win_close(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_close",
+        c"nvim_win_close",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_close", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_boolean(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_close", c"Boolean");
+        return NIL;
+    };
+    // SAFETY: a wrapper runs on the main loop.
+    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        expr_map_locked_error(error);
+        return NIL;
+    }
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_close(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_del_var(
@@ -57,33 +55,35 @@ pub unsafe extern "C" fn handle_nvim_win_del_var(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_del_var",
-            c"RPC: ch %lu: invoke nvim_win_del_var",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_del_var", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_win_del_var", c"String");
-            return NIL;
-        };
-        nvim_win_del_var(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_del_var",
+        c"nvim_win_del_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_del_var", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_del_var", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_del_var(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_buf(
@@ -92,33 +92,36 @@ pub unsafe extern "C" fn handle_nvim_win_get_buf(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_buf",
-            c"RPC: ch %lu: invoke nvim_win_get_buf",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_buf", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_get_buf(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(
-            kObjectTypeBuffer,
-            object_data {
-                integer: rv as Integer,
-            },
-        )
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_buf",
+        c"nvim_win_get_buf",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_buf", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_buf(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(
+        kObjectTypeBuffer,
+        object_data {
+            integer: rv as Integer,
+        },
+    )
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_cursor(
@@ -127,28 +130,31 @@ pub unsafe extern "C" fn handle_nvim_win_get_cursor(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_cursor",
-            c"RPC: ch %lu: invoke nvim_win_get_cursor",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_cursor", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_get_cursor(arg_1, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeArray, object_data { array: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_cursor",
+        c"nvim_win_get_cursor",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_cursor", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_cursor(arg_1, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(kObjectTypeArray, object_data { array: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_height(
@@ -157,28 +163,31 @@ pub unsafe extern "C" fn handle_nvim_win_get_height(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_height",
-            c"RPC: ch %lu: invoke nvim_win_get_height",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_height", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_get_height(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeInteger, object_data { integer: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_height",
+        c"nvim_win_get_height",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_height", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_height(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_number(
@@ -187,28 +196,31 @@ pub unsafe extern "C" fn handle_nvim_win_get_number(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_number",
-            c"RPC: ch %lu: invoke nvim_win_get_number",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_number", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_get_number(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeInteger, object_data { integer: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_number",
+        c"nvim_win_get_number",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_number", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_number(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_position(
@@ -217,28 +229,31 @@ pub unsafe extern "C" fn handle_nvim_win_get_position(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_position",
-            c"RPC: ch %lu: invoke nvim_win_get_position",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_position", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_get_position(arg_1, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeArray, object_data { array: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_position",
+        c"nvim_win_get_position",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_position", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_position(arg_1, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(kObjectTypeArray, object_data { array: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
@@ -247,33 +262,36 @@ pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_tabpage",
-            c"RPC: ch %lu: invoke nvim_win_get_tabpage",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_tabpage", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_get_tabpage(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(
-            kObjectTypeTabpage,
-            object_data {
-                integer: rv as Integer,
-            },
-        )
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_tabpage",
+        c"nvim_win_get_tabpage",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_tabpage", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_tabpage(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(
+        kObjectTypeTabpage,
+        object_data {
+            integer: rv as Integer,
+        },
+    )
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_var(
@@ -282,33 +300,35 @@ pub unsafe extern "C" fn handle_nvim_win_get_var(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_var",
-            c"RPC: ch %lu: invoke nvim_win_get_var",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_var", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_win_get_var", c"String");
-            return NIL;
-        };
-        let rv = nvim_win_get_var(arg_1, arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        rv
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_var",
+        c"nvim_win_get_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_var", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_get_var", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_var(arg_1, arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    rv
 }
 
 pub unsafe extern "C" fn handle_nvim_win_get_width(
@@ -317,28 +337,31 @@ pub unsafe extern "C" fn handle_nvim_win_get_width(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_get_width",
-            c"RPC: ch %lu: invoke nvim_win_get_width",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_get_width", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_get_width(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeInteger, object_data { integer: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_get_width",
+        c"nvim_win_get_width",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_get_width", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_get_width(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_win_hide(
@@ -347,37 +370,36 @@ pub unsafe extern "C" fn handle_nvim_win_hide(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_hide",
-            c"RPC: ch %lu: invoke nvim_win_hide",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_hide", c"Window");
-            return NIL;
-        };
-        if textlock.get() != 0 || expr_map_locked() {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                &raw const e_textlock,
-            );
-            return NIL;
-        }
-        nvim_win_hide(arg_1, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_hide",
+        c"nvim_win_hide",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_hide", c"Window");
+        return NIL;
+    };
+    // SAFETY: a wrapper runs on the main loop.
+    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        expr_map_locked_error(error);
+        return NIL;
+    }
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_hide(arg_1, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_is_valid(
@@ -386,25 +408,28 @@ pub unsafe extern "C" fn handle_nvim_win_is_valid(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_is_valid",
-            c"RPC: ch %lu: invoke nvim_win_is_valid",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 1 as size_t {
-            wrong_arity(error, 1, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_is_valid", c"Window");
-            return NIL;
-        };
-        let rv = nvim_win_is_valid(arg_1);
-        obj(kObjectTypeBoolean, object_data { boolean: rv })
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_is_valid",
+        c"nvim_win_is_valid",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_is_valid", c"Window");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_is_valid(arg_1) };
+    obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
 pub unsafe extern "C" fn handle_nvim_win_set_buf(
@@ -413,42 +438,40 @@ pub unsafe extern "C" fn handle_nvim_win_set_buf(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_set_buf",
-            c"RPC: ch %lu: invoke nvim_win_set_buf",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_set_buf", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_handle(item, kObjectTypeBuffer) else {
-            wrong_type(error, 2, c"nvim_win_set_buf", c"Buffer");
-            return NIL;
-        };
-        if textlock.get() != 0 || expr_map_locked() {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                &raw const e_textlock,
-            );
-            return NIL;
-        }
-        nvim_win_set_buf(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_set_buf",
+        c"nvim_win_set_buf",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_set_buf", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_handle(args[1], kObjectTypeBuffer) else {
+        wrong_type(error, 2, c"nvim_win_set_buf", c"Buffer");
+        return NIL;
+    };
+    // SAFETY: a wrapper runs on the main loop.
+    if textlock.get() != 0 || unsafe { expr_map_locked() } {
+        expr_map_locked_error(error);
+        return NIL;
+    }
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_set_buf(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_set_cursor(
@@ -457,33 +480,35 @@ pub unsafe extern "C" fn handle_nvim_win_set_cursor(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_set_cursor",
-            c"RPC: ch %lu: invoke nvim_win_set_cursor",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_set_cursor", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_array(item) else {
-            wrong_type(error, 2, c"nvim_win_set_cursor", c"ArrayOf(Integer, 2)");
-            return NIL;
-        };
-        nvim_win_set_cursor(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_set_cursor",
+        c"nvim_win_set_cursor",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_set_cursor", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_array(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_set_cursor", c"ArrayOf(Integer, 2)");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_set_cursor(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_set_height(
@@ -492,33 +517,35 @@ pub unsafe extern "C" fn handle_nvim_win_set_height(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_set_height",
-            c"RPC: ch %lu: invoke nvim_win_set_height",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_set_height", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_integer(item) else {
-            wrong_type(error, 2, c"nvim_win_set_height", c"Integer");
-            return NIL;
-        };
-        nvim_win_set_height(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_set_height",
+        c"nvim_win_set_height",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_set_height", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_integer(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_set_height", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_set_height(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
@@ -527,33 +554,35 @@ pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_set_hl_ns",
-            c"RPC: ch %lu: invoke nvim_win_set_hl_ns",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_set_hl_ns", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_integer(item) else {
-            wrong_type(error, 2, c"nvim_win_set_hl_ns", c"Integer");
-            return NIL;
-        };
-        nvim_win_set_hl_ns(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_set_hl_ns",
+        c"nvim_win_set_hl_ns",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_set_hl_ns", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_integer(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_set_hl_ns", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_set_hl_ns(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_set_var(
@@ -562,34 +591,36 @@ pub unsafe extern "C" fn handle_nvim_win_set_var(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_set_var",
-            c"RPC: ch %lu: invoke nvim_win_set_var",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 3 as size_t {
-            wrong_arity(error, 3, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_set_var", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_string(item) else {
-            wrong_type(error, 2, c"nvim_win_set_var", c"String");
-            return NIL;
-        };
-        let arg_3 = *args.items.add(2);
-        nvim_win_set_var(arg_1, arg_2, arg_3, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_set_var",
+        c"nvim_win_set_var",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        wrong_arity(error, 3, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_set_var", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_string(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_set_var", c"String");
+        return NIL;
+    };
+    let arg_3 = args[2];
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_set_var(arg_1, arg_2, arg_3, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_set_width(
@@ -598,33 +629,35 @@ pub unsafe extern "C" fn handle_nvim_win_set_width(
     _arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_set_width",
-            c"RPC: ch %lu: invoke nvim_win_set_width",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_set_width", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let Some(arg_2) = as_integer(item) else {
-            wrong_type(error, 2, c"nvim_win_set_width", c"Integer");
-            return NIL;
-        };
-        nvim_win_set_width(arg_1, arg_2, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        NIL
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_set_width",
+        c"nvim_win_set_width",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
     }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_set_width", c"Window");
+        return NIL;
+    };
+    let Some(arg_2) = as_integer(args[1]) else {
+        wrong_type(error, 2, c"nvim_win_set_width", c"Integer");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    unsafe { nvim_win_set_width(arg_1, arg_2, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
+    }
+    NIL
 }
 
 pub unsafe extern "C" fn handle_nvim_win_text_height(
@@ -633,46 +666,43 @@ pub unsafe extern "C" fn handle_nvim_win_text_height(
     arena: *mut Arena,
     error: *mut Error,
 ) -> Object {
-    unsafe {
-        log_invoke(
-            c"handle_nvim_win_text_height",
-            c"RPC: ch %lu: invoke nvim_win_text_height",
-            line!() as c_int,
-            channel_id,
-        );
-        if args.size != 2 as size_t {
-            wrong_arity(error, 2, args.size);
-            return NIL;
-        }
-        let item = *args.items.add(0);
-        let Some(arg_1) = as_handle(item, kObjectTypeWindow) else {
-            wrong_type(error, 1, c"nvim_win_text_height", c"Window");
-            return NIL;
-        };
-        let item = *args.items.add(1);
-        let mut arg_2: KeyDict_win_text_height = core::mem::zeroed();
-        if item.type_0 == kObjectTypeDict {
-            if !api_dict_to_keydict(
-                (&raw mut arg_2).cast(),
-                Some(KeyDict_win_text_height_get_field),
-                item.data.dict,
-                error,
-            ) {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_win_text_height",
+        c"nvim_win_text_height",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+        wrong_type(error, 1, c"nvim_win_text_height", c"Window");
+        return NIL;
+    };
+    let mut arg_2: KeyDict_win_text_height =
+        match read_keydict(Some(KeyDict_win_text_height_get_field), args[1], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(
+                    error,
+                    2,
+                    c"nvim_win_text_height",
+                    c"Dict(win_text_height) *",
+                );
                 return NIL;
             }
-        } else if !is_empty_array(item) {
-            wrong_type(
-                error,
-                2,
-                c"nvim_win_text_height",
-                c"Dict(win_text_height) *",
-            );
-            return NIL;
-        }
-        let rv = nvim_win_text_height(arg_1, &raw mut arg_2, arena, error);
-        if (*error).type_0 != kErrorTypeNone {
-            return NIL;
-        }
-        obj(kObjectTypeDict, object_data { dict: rv })
+        };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_win_text_height(arg_1, &raw mut arg_2, arena, error) };
+    if error.type_0 != kErrorTypeNone {
+        return NIL;
     }
+    obj(kObjectTypeDict, object_data { dict: rv })
 }
