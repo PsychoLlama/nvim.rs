@@ -7,422 +7,250 @@
 
 use super::*;
 
+/// Every binding, by the name it answers to.
+static BINDINGS: [(&CStr, unsafe extern "C-unwind" fn(*mut lua_State) -> c_int); 181] = [
+    (
+        c"nvim__buf_debug_extmarks",
+        nlua_api_nvim__buf_debug_extmarks,
+    ),
+    (c"nvim__buf_stats", nlua_api_nvim__buf_stats),
+    (c"nvim__complete_set", nlua_api_nvim__complete_set),
+    (c"nvim__get_lib_dir", nlua_api_nvim__get_lib_dir),
+    (c"nvim__get_runtime", nlua_api_nvim__get_runtime),
+    (c"nvim__id", nlua_api_nvim__id),
+    (c"nvim__id_array", nlua_api_nvim__id_array),
+    (c"nvim__id_dict", nlua_api_nvim__id_dict),
+    (c"nvim__id_float", nlua_api_nvim__id_float),
+    (c"nvim__inspect_cell", nlua_api_nvim__inspect_cell),
+    (
+        c"nvim__invalidate_glyph_cache",
+        nlua_api_nvim__invalidate_glyph_cache,
+    ),
+    (c"nvim__ns_get", nlua_api_nvim__ns_get),
+    (c"nvim__ns_set", nlua_api_nvim__ns_set),
+    (c"nvim__redraw", nlua_api_nvim__redraw),
+    (c"nvim__runtime_inspect", nlua_api_nvim__runtime_inspect),
+    (c"nvim__screenshot", nlua_api_nvim__screenshot),
+    (c"nvim__stats", nlua_api_nvim__stats),
+    (c"nvim__unpack", nlua_api_nvim__unpack),
+    (c"nvim_buf_add_highlight", nlua_api_nvim_buf_add_highlight),
+    (c"nvim_buf_attach", nlua_api_nvim_buf_attach),
+    (c"nvim_buf_call", nlua_api_nvim_buf_call),
+    (
+        c"nvim_buf_clear_highlight",
+        nlua_api_nvim_buf_clear_highlight,
+    ),
+    (
+        c"nvim_buf_clear_namespace",
+        nlua_api_nvim_buf_clear_namespace,
+    ),
+    (
+        c"nvim_buf_create_user_command",
+        nlua_api_nvim_buf_create_user_command,
+    ),
+    (c"nvim_buf_del_extmark", nlua_api_nvim_buf_del_extmark),
+    (c"nvim_buf_del_keymap", nlua_api_nvim_buf_del_keymap),
+    (c"nvim_buf_del_mark", nlua_api_nvim_buf_del_mark),
+    (
+        c"nvim_buf_del_user_command",
+        nlua_api_nvim_buf_del_user_command,
+    ),
+    (c"nvim_buf_del_var", nlua_api_nvim_buf_del_var),
+    (c"nvim_buf_delete", nlua_api_nvim_buf_delete),
+    (
+        c"nvim_buf_get_changedtick",
+        nlua_api_nvim_buf_get_changedtick,
+    ),
+    (c"nvim_buf_get_commands", nlua_api_nvim_buf_get_commands),
+    (
+        c"nvim_buf_get_extmark_by_id",
+        nlua_api_nvim_buf_get_extmark_by_id,
+    ),
+    (c"nvim_buf_get_extmarks", nlua_api_nvim_buf_get_extmarks),
+    (c"nvim_buf_get_keymap", nlua_api_nvim_buf_get_keymap),
+    (c"nvim_buf_get_lines", nlua_api_nvim_buf_get_lines),
+    (c"nvim_buf_get_mark", nlua_api_nvim_buf_get_mark),
+    (c"nvim_buf_get_name", nlua_api_nvim_buf_get_name),
+    (c"nvim_buf_get_number", nlua_api_nvim_buf_get_number),
+    (c"nvim_buf_get_offset", nlua_api_nvim_buf_get_offset),
+    (c"nvim_buf_get_option", nlua_api_nvim_buf_get_option),
+    (c"nvim_buf_get_text", nlua_api_nvim_buf_get_text),
+    (c"nvim_buf_get_var", nlua_api_nvim_buf_get_var),
+    (c"nvim_buf_is_loaded", nlua_api_nvim_buf_is_loaded),
+    (c"nvim_buf_is_valid", nlua_api_nvim_buf_is_valid),
+    (c"nvim_buf_line_count", nlua_api_nvim_buf_line_count),
+    (c"nvim_buf_set_extmark", nlua_api_nvim_buf_set_extmark),
+    (c"nvim_buf_set_keymap", nlua_api_nvim_buf_set_keymap),
+    (c"nvim_buf_set_lines", nlua_api_nvim_buf_set_lines),
+    (c"nvim_buf_set_mark", nlua_api_nvim_buf_set_mark),
+    (c"nvim_buf_set_name", nlua_api_nvim_buf_set_name),
+    (c"nvim_buf_set_option", nlua_api_nvim_buf_set_option),
+    (c"nvim_buf_set_text", nlua_api_nvim_buf_set_text),
+    (c"nvim_buf_set_var", nlua_api_nvim_buf_set_var),
+    (
+        c"nvim_buf_set_virtual_text",
+        nlua_api_nvim_buf_set_virtual_text,
+    ),
+    (c"nvim_call_dict_function", nlua_api_nvim_call_dict_function),
+    (c"nvim_call_function", nlua_api_nvim_call_function),
+    (c"nvim_chan_send", nlua_api_nvim_chan_send),
+    (c"nvim_clear_autocmds", nlua_api_nvim_clear_autocmds),
+    (c"nvim_cmd", nlua_api_nvim_cmd),
+    (c"nvim_command", nlua_api_nvim_command),
+    (c"nvim_command_output", nlua_api_nvim_command_output),
+    (c"nvim_create_augroup", nlua_api_nvim_create_augroup),
+    (c"nvim_create_autocmd", nlua_api_nvim_create_autocmd),
+    (c"nvim_create_buf", nlua_api_nvim_create_buf),
+    (c"nvim_create_namespace", nlua_api_nvim_create_namespace),
+    (
+        c"nvim_create_user_command",
+        nlua_api_nvim_create_user_command,
+    ),
+    (c"nvim_del_augroup_by_id", nlua_api_nvim_del_augroup_by_id),
+    (
+        c"nvim_del_augroup_by_name",
+        nlua_api_nvim_del_augroup_by_name,
+    ),
+    (c"nvim_del_autocmd", nlua_api_nvim_del_autocmd),
+    (c"nvim_del_current_line", nlua_api_nvim_del_current_line),
+    (c"nvim_del_keymap", nlua_api_nvim_del_keymap),
+    (c"nvim_del_mark", nlua_api_nvim_del_mark),
+    (c"nvim_del_user_command", nlua_api_nvim_del_user_command),
+    (c"nvim_del_var", nlua_api_nvim_del_var),
+    (c"nvim_echo", nlua_api_nvim_echo),
+    (c"nvim_err_write", nlua_api_nvim_err_write),
+    (c"nvim_err_writeln", nlua_api_nvim_err_writeln),
+    (c"nvim_eval", nlua_api_nvim_eval),
+    (c"nvim_eval_statusline", nlua_api_nvim_eval_statusline),
+    (c"nvim_exec", nlua_api_nvim_exec),
+    (c"nvim_exec2", nlua_api_nvim_exec2),
+    (c"nvim_exec_autocmds", nlua_api_nvim_exec_autocmds),
+    (c"nvim_feedkeys", nlua_api_nvim_feedkeys),
+    (
+        c"nvim_get_all_options_info",
+        nlua_api_nvim_get_all_options_info,
+    ),
+    (c"nvim_get_autocmds", nlua_api_nvim_get_autocmds),
+    (c"nvim_get_chan_info", nlua_api_nvim_get_chan_info),
+    (c"nvim_get_color_by_name", nlua_api_nvim_get_color_by_name),
+    (c"nvim_get_color_map", nlua_api_nvim_get_color_map),
+    (c"nvim_get_commands", nlua_api_nvim_get_commands),
+    (c"nvim_get_context", nlua_api_nvim_get_context),
+    (c"nvim_get_current_buf", nlua_api_nvim_get_current_buf),
+    (c"nvim_get_current_line", nlua_api_nvim_get_current_line),
+    (
+        c"nvim_get_current_tabpage",
+        nlua_api_nvim_get_current_tabpage,
+    ),
+    (c"nvim_get_current_win", nlua_api_nvim_get_current_win),
+    (c"nvim_get_hl", nlua_api_nvim_get_hl),
+    (c"nvim_get_hl_by_id", nlua_api_nvim_get_hl_by_id),
+    (c"nvim_get_hl_by_name", nlua_api_nvim_get_hl_by_name),
+    (c"nvim_get_hl_id_by_name", nlua_api_nvim_get_hl_id_by_name),
+    (c"nvim_get_hl_ns", nlua_api_nvim_get_hl_ns),
+    (c"nvim_get_keymap", nlua_api_nvim_get_keymap),
+    (c"nvim_get_mark", nlua_api_nvim_get_mark),
+    (c"nvim_get_mode", nlua_api_nvim_get_mode),
+    (c"nvim_get_namespaces", nlua_api_nvim_get_namespaces),
+    (c"nvim_get_option", nlua_api_nvim_get_option),
+    (c"nvim_get_option_info", nlua_api_nvim_get_option_info),
+    (c"nvim_get_option_info2", nlua_api_nvim_get_option_info2),
+    (c"nvim_get_option_value", nlua_api_nvim_get_option_value),
+    (c"nvim_get_proc", nlua_api_nvim_get_proc),
+    (c"nvim_get_proc_children", nlua_api_nvim_get_proc_children),
+    (c"nvim_get_runtime_file", nlua_api_nvim_get_runtime_file),
+    (c"nvim_get_var", nlua_api_nvim_get_var),
+    (c"nvim_get_vvar", nlua_api_nvim_get_vvar),
+    (c"nvim_input", nlua_api_nvim_input),
+    (c"nvim_input_mouse", nlua_api_nvim_input_mouse),
+    (c"nvim_list_bufs", nlua_api_nvim_list_bufs),
+    (c"nvim_list_chans", nlua_api_nvim_list_chans),
+    (c"nvim_list_runtime_paths", nlua_api_nvim_list_runtime_paths),
+    (c"nvim_list_tabpages", nlua_api_nvim_list_tabpages),
+    (c"nvim_list_uis", nlua_api_nvim_list_uis),
+    (c"nvim_list_wins", nlua_api_nvim_list_wins),
+    (c"nvim_load_context", nlua_api_nvim_load_context),
+    (c"nvim_notify", nlua_api_nvim_notify),
+    (c"nvim_open_tabpage", nlua_api_nvim_open_tabpage),
+    (c"nvim_open_term", nlua_api_nvim_open_term),
+    (c"nvim_open_win", nlua_api_nvim_open_win),
+    (c"nvim_out_write", nlua_api_nvim_out_write),
+    (c"nvim_parse_cmd", nlua_api_nvim_parse_cmd),
+    (c"nvim_parse_expression", nlua_api_nvim_parse_expression),
+    (c"nvim_paste", nlua_api_nvim_paste),
+    (c"nvim_put", nlua_api_nvim_put),
+    (c"nvim_replace_termcodes", nlua_api_nvim_replace_termcodes),
+    (
+        c"nvim_select_popupmenu_item",
+        nlua_api_nvim_select_popupmenu_item,
+    ),
+    (c"nvim_set_current_buf", nlua_api_nvim_set_current_buf),
+    (c"nvim_set_current_dir", nlua_api_nvim_set_current_dir),
+    (c"nvim_set_current_line", nlua_api_nvim_set_current_line),
+    (
+        c"nvim_set_current_tabpage",
+        nlua_api_nvim_set_current_tabpage,
+    ),
+    (c"nvim_set_current_win", nlua_api_nvim_set_current_win),
+    (
+        c"nvim_set_decoration_provider",
+        nlua_api_nvim_set_decoration_provider,
+    ),
+    (c"nvim_set_hl", nlua_api_nvim_set_hl),
+    (c"nvim_set_hl_ns", nlua_api_nvim_set_hl_ns),
+    (c"nvim_set_hl_ns_fast", nlua_api_nvim_set_hl_ns_fast),
+    (c"nvim_set_keymap", nlua_api_nvim_set_keymap),
+    (c"nvim_set_option", nlua_api_nvim_set_option),
+    (c"nvim_set_option_value", nlua_api_nvim_set_option_value),
+    (c"nvim_set_var", nlua_api_nvim_set_var),
+    (c"nvim_set_vvar", nlua_api_nvim_set_vvar),
+    (c"nvim_strwidth", nlua_api_nvim_strwidth),
+    (c"nvim_tabpage_del_var", nlua_api_nvim_tabpage_del_var),
+    (c"nvim_tabpage_get_number", nlua_api_nvim_tabpage_get_number),
+    (c"nvim_tabpage_get_var", nlua_api_nvim_tabpage_get_var),
+    (c"nvim_tabpage_get_win", nlua_api_nvim_tabpage_get_win),
+    (c"nvim_tabpage_is_valid", nlua_api_nvim_tabpage_is_valid),
+    (c"nvim_tabpage_list_wins", nlua_api_nvim_tabpage_list_wins),
+    (c"nvim_tabpage_set_var", nlua_api_nvim_tabpage_set_var),
+    (c"nvim_tabpage_set_win", nlua_api_nvim_tabpage_set_win),
+    (c"nvim_ui_send", nlua_api_nvim_ui_send),
+    (c"nvim_win_call", nlua_api_nvim_win_call),
+    (c"nvim_win_close", nlua_api_nvim_win_close),
+    (c"nvim_win_del_var", nlua_api_nvim_win_del_var),
+    (c"nvim_win_get_buf", nlua_api_nvim_win_get_buf),
+    (c"nvim_win_get_config", nlua_api_nvim_win_get_config),
+    (c"nvim_win_get_cursor", nlua_api_nvim_win_get_cursor),
+    (c"nvim_win_get_height", nlua_api_nvim_win_get_height),
+    (c"nvim_win_get_number", nlua_api_nvim_win_get_number),
+    (c"nvim_win_get_option", nlua_api_nvim_win_get_option),
+    (c"nvim_win_get_position", nlua_api_nvim_win_get_position),
+    (c"nvim_win_get_tabpage", nlua_api_nvim_win_get_tabpage),
+    (c"nvim_win_get_var", nlua_api_nvim_win_get_var),
+    (c"nvim_win_get_width", nlua_api_nvim_win_get_width),
+    (c"nvim_win_hide", nlua_api_nvim_win_hide),
+    (c"nvim_win_is_valid", nlua_api_nvim_win_is_valid),
+    (c"nvim_win_set_buf", nlua_api_nvim_win_set_buf),
+    (c"nvim_win_set_config", nlua_api_nvim_win_set_config),
+    (c"nvim_win_set_cursor", nlua_api_nvim_win_set_cursor),
+    (c"nvim_win_set_height", nlua_api_nvim_win_set_height),
+    (c"nvim_win_set_hl_ns", nlua_api_nvim_win_set_hl_ns),
+    (c"nvim_win_set_option", nlua_api_nvim_win_set_option),
+    (c"nvim_win_set_var", nlua_api_nvim_win_set_var),
+    (c"nvim_win_set_width", nlua_api_nvim_win_set_width),
+    (c"nvim_win_text_height", nlua_api_nvim_win_text_height),
+];
+
 /// Build the `vim.api` table and set it on the table at the top of the stack.
 ///
 /// # Safety
 /// `lstate` is the running Lua state, with a table on top.
 pub unsafe extern "C-unwind" fn nlua_add_api_functions(lstate: *mut lua_State) {
+    // SAFETY: the caller's stack.
     unsafe {
-        lua_createtable(lstate, 0, 181);
-        bind(
-            lstate,
-            nlua_api_nvim__buf_debug_extmarks,
-            c"nvim__buf_debug_extmarks",
-        );
-        bind(lstate, nlua_api_nvim__buf_stats, c"nvim__buf_stats");
-        bind(lstate, nlua_api_nvim__complete_set, c"nvim__complete_set");
-        bind(lstate, nlua_api_nvim__get_lib_dir, c"nvim__get_lib_dir");
-        bind(lstate, nlua_api_nvim__get_runtime, c"nvim__get_runtime");
-        bind(lstate, nlua_api_nvim__id, c"nvim__id");
-        bind(lstate, nlua_api_nvim__id_array, c"nvim__id_array");
-        bind(lstate, nlua_api_nvim__id_dict, c"nvim__id_dict");
-        bind(lstate, nlua_api_nvim__id_float, c"nvim__id_float");
-        bind(lstate, nlua_api_nvim__inspect_cell, c"nvim__inspect_cell");
-        bind(
-            lstate,
-            nlua_api_nvim__invalidate_glyph_cache,
-            c"nvim__invalidate_glyph_cache",
-        );
-        bind(lstate, nlua_api_nvim__ns_get, c"nvim__ns_get");
-        bind(lstate, nlua_api_nvim__ns_set, c"nvim__ns_set");
-        bind(lstate, nlua_api_nvim__redraw, c"nvim__redraw");
-        bind(
-            lstate,
-            nlua_api_nvim__runtime_inspect,
-            c"nvim__runtime_inspect",
-        );
-        bind(lstate, nlua_api_nvim__screenshot, c"nvim__screenshot");
-        bind(lstate, nlua_api_nvim__stats, c"nvim__stats");
-        bind(lstate, nlua_api_nvim__unpack, c"nvim__unpack");
-        bind(
-            lstate,
-            nlua_api_nvim_buf_add_highlight,
-            c"nvim_buf_add_highlight",
-        );
-        bind(lstate, nlua_api_nvim_buf_attach, c"nvim_buf_attach");
-        bind(lstate, nlua_api_nvim_buf_call, c"nvim_buf_call");
-        bind(
-            lstate,
-            nlua_api_nvim_buf_clear_highlight,
-            c"nvim_buf_clear_highlight",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_buf_clear_namespace,
-            c"nvim_buf_clear_namespace",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_buf_create_user_command,
-            c"nvim_buf_create_user_command",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_buf_del_extmark,
-            c"nvim_buf_del_extmark",
-        );
-        bind(lstate, nlua_api_nvim_buf_del_keymap, c"nvim_buf_del_keymap");
-        bind(lstate, nlua_api_nvim_buf_del_mark, c"nvim_buf_del_mark");
-        bind(
-            lstate,
-            nlua_api_nvim_buf_del_user_command,
-            c"nvim_buf_del_user_command",
-        );
-        bind(lstate, nlua_api_nvim_buf_del_var, c"nvim_buf_del_var");
-        bind(lstate, nlua_api_nvim_buf_delete, c"nvim_buf_delete");
-        bind(
-            lstate,
-            nlua_api_nvim_buf_get_changedtick,
-            c"nvim_buf_get_changedtick",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_buf_get_commands,
-            c"nvim_buf_get_commands",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_buf_get_extmark_by_id,
-            c"nvim_buf_get_extmark_by_id",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_buf_get_extmarks,
-            c"nvim_buf_get_extmarks",
-        );
-        bind(lstate, nlua_api_nvim_buf_get_keymap, c"nvim_buf_get_keymap");
-        bind(lstate, nlua_api_nvim_buf_get_lines, c"nvim_buf_get_lines");
-        bind(lstate, nlua_api_nvim_buf_get_mark, c"nvim_buf_get_mark");
-        bind(lstate, nlua_api_nvim_buf_get_name, c"nvim_buf_get_name");
-        bind(lstate, nlua_api_nvim_buf_get_number, c"nvim_buf_get_number");
-        bind(lstate, nlua_api_nvim_buf_get_offset, c"nvim_buf_get_offset");
-        bind(lstate, nlua_api_nvim_buf_get_option, c"nvim_buf_get_option");
-        bind(lstate, nlua_api_nvim_buf_get_text, c"nvim_buf_get_text");
-        bind(lstate, nlua_api_nvim_buf_get_var, c"nvim_buf_get_var");
-        bind(lstate, nlua_api_nvim_buf_is_loaded, c"nvim_buf_is_loaded");
-        bind(lstate, nlua_api_nvim_buf_is_valid, c"nvim_buf_is_valid");
-        bind(lstate, nlua_api_nvim_buf_line_count, c"nvim_buf_line_count");
-        bind(
-            lstate,
-            nlua_api_nvim_buf_set_extmark,
-            c"nvim_buf_set_extmark",
-        );
-        bind(lstate, nlua_api_nvim_buf_set_keymap, c"nvim_buf_set_keymap");
-        bind(lstate, nlua_api_nvim_buf_set_lines, c"nvim_buf_set_lines");
-        bind(lstate, nlua_api_nvim_buf_set_mark, c"nvim_buf_set_mark");
-        bind(lstate, nlua_api_nvim_buf_set_name, c"nvim_buf_set_name");
-        bind(lstate, nlua_api_nvim_buf_set_option, c"nvim_buf_set_option");
-        bind(lstate, nlua_api_nvim_buf_set_text, c"nvim_buf_set_text");
-        bind(lstate, nlua_api_nvim_buf_set_var, c"nvim_buf_set_var");
-        bind(
-            lstate,
-            nlua_api_nvim_buf_set_virtual_text,
-            c"nvim_buf_set_virtual_text",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_call_dict_function,
-            c"nvim_call_dict_function",
-        );
-        bind(lstate, nlua_api_nvim_call_function, c"nvim_call_function");
-        bind(lstate, nlua_api_nvim_chan_send, c"nvim_chan_send");
-        bind(lstate, nlua_api_nvim_clear_autocmds, c"nvim_clear_autocmds");
-        bind(lstate, nlua_api_nvim_cmd, c"nvim_cmd");
-        bind(lstate, nlua_api_nvim_command, c"nvim_command");
-        bind(lstate, nlua_api_nvim_command_output, c"nvim_command_output");
-        bind(lstate, nlua_api_nvim_create_augroup, c"nvim_create_augroup");
-        bind(lstate, nlua_api_nvim_create_autocmd, c"nvim_create_autocmd");
-        bind(lstate, nlua_api_nvim_create_buf, c"nvim_create_buf");
-        bind(
-            lstate,
-            nlua_api_nvim_create_namespace,
-            c"nvim_create_namespace",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_create_user_command,
-            c"nvim_create_user_command",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_del_augroup_by_id,
-            c"nvim_del_augroup_by_id",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_del_augroup_by_name,
-            c"nvim_del_augroup_by_name",
-        );
-        bind(lstate, nlua_api_nvim_del_autocmd, c"nvim_del_autocmd");
-        bind(
-            lstate,
-            nlua_api_nvim_del_current_line,
-            c"nvim_del_current_line",
-        );
-        bind(lstate, nlua_api_nvim_del_keymap, c"nvim_del_keymap");
-        bind(lstate, nlua_api_nvim_del_mark, c"nvim_del_mark");
-        bind(
-            lstate,
-            nlua_api_nvim_del_user_command,
-            c"nvim_del_user_command",
-        );
-        bind(lstate, nlua_api_nvim_del_var, c"nvim_del_var");
-        bind(lstate, nlua_api_nvim_echo, c"nvim_echo");
-        bind(lstate, nlua_api_nvim_err_write, c"nvim_err_write");
-        bind(lstate, nlua_api_nvim_err_writeln, c"nvim_err_writeln");
-        bind(lstate, nlua_api_nvim_eval, c"nvim_eval");
-        bind(
-            lstate,
-            nlua_api_nvim_eval_statusline,
-            c"nvim_eval_statusline",
-        );
-        bind(lstate, nlua_api_nvim_exec, c"nvim_exec");
-        bind(lstate, nlua_api_nvim_exec2, c"nvim_exec2");
-        bind(lstate, nlua_api_nvim_exec_autocmds, c"nvim_exec_autocmds");
-        bind(lstate, nlua_api_nvim_feedkeys, c"nvim_feedkeys");
-        bind(
-            lstate,
-            nlua_api_nvim_get_all_options_info,
-            c"nvim_get_all_options_info",
-        );
-        bind(lstate, nlua_api_nvim_get_autocmds, c"nvim_get_autocmds");
-        bind(lstate, nlua_api_nvim_get_chan_info, c"nvim_get_chan_info");
-        bind(
-            lstate,
-            nlua_api_nvim_get_color_by_name,
-            c"nvim_get_color_by_name",
-        );
-        bind(lstate, nlua_api_nvim_get_color_map, c"nvim_get_color_map");
-        bind(lstate, nlua_api_nvim_get_commands, c"nvim_get_commands");
-        bind(lstate, nlua_api_nvim_get_context, c"nvim_get_context");
-        bind(
-            lstate,
-            nlua_api_nvim_get_current_buf,
-            c"nvim_get_current_buf",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_get_current_line,
-            c"nvim_get_current_line",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_get_current_tabpage,
-            c"nvim_get_current_tabpage",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_get_current_win,
-            c"nvim_get_current_win",
-        );
-        bind(lstate, nlua_api_nvim_get_hl, c"nvim_get_hl");
-        bind(lstate, nlua_api_nvim_get_hl_by_id, c"nvim_get_hl_by_id");
-        bind(lstate, nlua_api_nvim_get_hl_by_name, c"nvim_get_hl_by_name");
-        bind(
-            lstate,
-            nlua_api_nvim_get_hl_id_by_name,
-            c"nvim_get_hl_id_by_name",
-        );
-        bind(lstate, nlua_api_nvim_get_hl_ns, c"nvim_get_hl_ns");
-        bind(lstate, nlua_api_nvim_get_keymap, c"nvim_get_keymap");
-        bind(lstate, nlua_api_nvim_get_mark, c"nvim_get_mark");
-        bind(lstate, nlua_api_nvim_get_mode, c"nvim_get_mode");
-        bind(lstate, nlua_api_nvim_get_namespaces, c"nvim_get_namespaces");
-        bind(lstate, nlua_api_nvim_get_option, c"nvim_get_option");
-        bind(
-            lstate,
-            nlua_api_nvim_get_option_info,
-            c"nvim_get_option_info",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_get_option_info2,
-            c"nvim_get_option_info2",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_get_option_value,
-            c"nvim_get_option_value",
-        );
-        bind(lstate, nlua_api_nvim_get_proc, c"nvim_get_proc");
-        bind(
-            lstate,
-            nlua_api_nvim_get_proc_children,
-            c"nvim_get_proc_children",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_get_runtime_file,
-            c"nvim_get_runtime_file",
-        );
-        bind(lstate, nlua_api_nvim_get_var, c"nvim_get_var");
-        bind(lstate, nlua_api_nvim_get_vvar, c"nvim_get_vvar");
-        bind(lstate, nlua_api_nvim_input, c"nvim_input");
-        bind(lstate, nlua_api_nvim_input_mouse, c"nvim_input_mouse");
-        bind(lstate, nlua_api_nvim_list_bufs, c"nvim_list_bufs");
-        bind(lstate, nlua_api_nvim_list_chans, c"nvim_list_chans");
-        bind(
-            lstate,
-            nlua_api_nvim_list_runtime_paths,
-            c"nvim_list_runtime_paths",
-        );
-        bind(lstate, nlua_api_nvim_list_tabpages, c"nvim_list_tabpages");
-        bind(lstate, nlua_api_nvim_list_uis, c"nvim_list_uis");
-        bind(lstate, nlua_api_nvim_list_wins, c"nvim_list_wins");
-        bind(lstate, nlua_api_nvim_load_context, c"nvim_load_context");
-        bind(lstate, nlua_api_nvim_notify, c"nvim_notify");
-        bind(lstate, nlua_api_nvim_open_tabpage, c"nvim_open_tabpage");
-        bind(lstate, nlua_api_nvim_open_term, c"nvim_open_term");
-        bind(lstate, nlua_api_nvim_open_win, c"nvim_open_win");
-        bind(lstate, nlua_api_nvim_out_write, c"nvim_out_write");
-        bind(lstate, nlua_api_nvim_parse_cmd, c"nvim_parse_cmd");
-        bind(
-            lstate,
-            nlua_api_nvim_parse_expression,
-            c"nvim_parse_expression",
-        );
-        bind(lstate, nlua_api_nvim_paste, c"nvim_paste");
-        bind(lstate, nlua_api_nvim_put, c"nvim_put");
-        bind(
-            lstate,
-            nlua_api_nvim_replace_termcodes,
-            c"nvim_replace_termcodes",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_select_popupmenu_item,
-            c"nvim_select_popupmenu_item",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_set_current_buf,
-            c"nvim_set_current_buf",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_set_current_dir,
-            c"nvim_set_current_dir",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_set_current_line,
-            c"nvim_set_current_line",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_set_current_tabpage,
-            c"nvim_set_current_tabpage",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_set_current_win,
-            c"nvim_set_current_win",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_set_decoration_provider,
-            c"nvim_set_decoration_provider",
-        );
-        bind(lstate, nlua_api_nvim_set_hl, c"nvim_set_hl");
-        bind(lstate, nlua_api_nvim_set_hl_ns, c"nvim_set_hl_ns");
-        bind(lstate, nlua_api_nvim_set_hl_ns_fast, c"nvim_set_hl_ns_fast");
-        bind(lstate, nlua_api_nvim_set_keymap, c"nvim_set_keymap");
-        bind(lstate, nlua_api_nvim_set_option, c"nvim_set_option");
-        bind(
-            lstate,
-            nlua_api_nvim_set_option_value,
-            c"nvim_set_option_value",
-        );
-        bind(lstate, nlua_api_nvim_set_var, c"nvim_set_var");
-        bind(lstate, nlua_api_nvim_set_vvar, c"nvim_set_vvar");
-        bind(lstate, nlua_api_nvim_strwidth, c"nvim_strwidth");
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_del_var,
-            c"nvim_tabpage_del_var",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_get_number,
-            c"nvim_tabpage_get_number",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_get_var,
-            c"nvim_tabpage_get_var",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_get_win,
-            c"nvim_tabpage_get_win",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_is_valid,
-            c"nvim_tabpage_is_valid",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_list_wins,
-            c"nvim_tabpage_list_wins",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_set_var,
-            c"nvim_tabpage_set_var",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_tabpage_set_win,
-            c"nvim_tabpage_set_win",
-        );
-        bind(lstate, nlua_api_nvim_ui_send, c"nvim_ui_send");
-        bind(lstate, nlua_api_nvim_win_call, c"nvim_win_call");
-        bind(lstate, nlua_api_nvim_win_close, c"nvim_win_close");
-        bind(lstate, nlua_api_nvim_win_del_var, c"nvim_win_del_var");
-        bind(lstate, nlua_api_nvim_win_get_buf, c"nvim_win_get_buf");
-        bind(lstate, nlua_api_nvim_win_get_config, c"nvim_win_get_config");
-        bind(lstate, nlua_api_nvim_win_get_cursor, c"nvim_win_get_cursor");
-        bind(lstate, nlua_api_nvim_win_get_height, c"nvim_win_get_height");
-        bind(lstate, nlua_api_nvim_win_get_number, c"nvim_win_get_number");
-        bind(lstate, nlua_api_nvim_win_get_option, c"nvim_win_get_option");
-        bind(
-            lstate,
-            nlua_api_nvim_win_get_position,
-            c"nvim_win_get_position",
-        );
-        bind(
-            lstate,
-            nlua_api_nvim_win_get_tabpage,
-            c"nvim_win_get_tabpage",
-        );
-        bind(lstate, nlua_api_nvim_win_get_var, c"nvim_win_get_var");
-        bind(lstate, nlua_api_nvim_win_get_width, c"nvim_win_get_width");
-        bind(lstate, nlua_api_nvim_win_hide, c"nvim_win_hide");
-        bind(lstate, nlua_api_nvim_win_is_valid, c"nvim_win_is_valid");
-        bind(lstate, nlua_api_nvim_win_set_buf, c"nvim_win_set_buf");
-        bind(lstate, nlua_api_nvim_win_set_config, c"nvim_win_set_config");
-        bind(lstate, nlua_api_nvim_win_set_cursor, c"nvim_win_set_cursor");
-        bind(lstate, nlua_api_nvim_win_set_height, c"nvim_win_set_height");
-        bind(lstate, nlua_api_nvim_win_set_hl_ns, c"nvim_win_set_hl_ns");
-        bind(lstate, nlua_api_nvim_win_set_option, c"nvim_win_set_option");
-        bind(lstate, nlua_api_nvim_win_set_var, c"nvim_win_set_var");
-        bind(lstate, nlua_api_nvim_win_set_width, c"nvim_win_set_width");
-        bind(
-            lstate,
-            nlua_api_nvim_win_text_height,
-            c"nvim_win_text_height",
-        );
+        lua_createtable(lstate, 0, BINDINGS.len() as c_int);
+        for (name, binding) in BINDINGS {
+            bind(lstate, binding, name);
+        }
         lua_setfield(lstate, -2, c"api".as_ptr());
     }
 }

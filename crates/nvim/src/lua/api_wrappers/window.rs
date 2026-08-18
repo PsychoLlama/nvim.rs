@@ -8,877 +8,736 @@
 use super::*;
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_call(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_call".as_ptr(),
-                );
-            }
-            let arg_2: LuaRef;
-            'free_arg_2: {
-                arg_2 = nlua_pop_LuaRef(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 != kErrorTypeNone {
-                    err_param = c"fun".as_ptr().cast_mut();
-                    break 'done;
-                }
-                let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 != kErrorTypeNone {
-                    err_param = c"win".as_ptr().cast_mut();
-                    break 'free_arg_2;
-                }
-                let saved_lstate = active_lstate.get();
-                active_lstate.set(lstate);
-                let mut ret = nvim_win_call(arg_1, arg_2, &raw mut err);
-                nlua_push_Object(lstate, &raw mut ret, PUSH_SPECIAL);
-                active_lstate.set(saved_lstate);
-            }
-            api_free_luaref(arg_2);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_LuaRef(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"fun".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: the conversion took the references and nothing else
+        // releases them.
+        let arg_2 = unsafe { LuaRefArg::new(arg_2) };
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let mut ret = unsafe { nvim_win_call(arg_1, arg_2.value, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Object(lstate, &raw mut ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_call", 2, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_close(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_close".as_ptr(),
-                );
-            }
-            if textlock.get() != 0 || expr_map_locked() {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeException,
-                    c"%s".as_ptr(),
-                    &raw const e_textlock,
-                );
-                break 'done;
-            }
-            let arg_2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"force".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_close(arg_1, arg_2, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+            expr_map_locked_error(err);
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_Boolean(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"force".as_ptr().cast_mut();
+            return;
         }
-        0
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
+        }
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_close(arg_1, arg_2, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_close", 2, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_del_var(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_del_var".as_ptr(),
-                );
-            }
-            let arg_2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"name".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_del_var(arg_1, arg_2, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_String(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"name".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        0
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_del_var(arg_1, arg_2, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_del_var", 2, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_buf(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_buf".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_get_buf(arg_1, &raw mut err);
-            nlua_push_handle(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_get_buf(arg_1, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_handle(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_buf", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_cursor(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_cursor".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_get_cursor(arg_1, &raw mut arena, &raw mut err);
-            nlua_push_Array(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_get_cursor(arg_1, arena, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Array(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_cursor", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_height(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_height".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_get_height(arg_1, &raw mut err);
-            nlua_push_Integer(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_get_height(arg_1, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Integer(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_height", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_number(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_number".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_get_number(arg_1, &raw mut err);
-            nlua_push_Integer(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_get_number(arg_1, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Integer(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_number", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_position(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_position".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_get_position(arg_1, &raw mut arena, &raw mut err);
-            nlua_push_Array(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_get_position(arg_1, arena, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Array(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_position", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_tabpage(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_tabpage".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_get_tabpage(arg_1, &raw mut err);
-            nlua_push_handle(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_get_tabpage(arg_1, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_handle(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_tabpage", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_var(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_var".as_ptr(),
-                );
-            }
-            let arg_2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"name".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let mut ret = nvim_win_get_var(arg_1, arg_2, &raw mut arena, &raw mut err);
-            nlua_push_Object(lstate, &raw mut ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_String(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"name".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let mut ret = unsafe { nvim_win_get_var(arg_1, arg_2, arena, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Object(lstate, &raw mut ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_var", 2, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_width(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_get_width".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_get_width(arg_1, &raw mut err);
-            nlua_push_Integer(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_get_width(arg_1, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Integer(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_get_width", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_hide(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_hide".as_ptr(),
-                );
-            }
-            if textlock.get() != 0 || expr_map_locked() {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeException,
-                    c"%s".as_ptr(),
-                    &raw const e_textlock,
-                );
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_hide(arg_1, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+            expr_map_locked_error(err);
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        0
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_hide(arg_1, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_hide", 1, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_is_valid(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 1 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 1 argument".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_is_valid".as_ptr(),
-                );
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            let ret = nvim_win_is_valid(arg_1);
-            nlua_push_Boolean(lstate, ret, PUSH_SPECIAL);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
-        }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_is_valid(arg_1) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Boolean(lstate, ret, PUSH_SPECIAL) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_is_valid", 1, 1, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_buf(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_set_buf".as_ptr(),
-                );
-            }
-            if textlock.get() != 0 || expr_map_locked() {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeException,
-                    c"%s".as_ptr(),
-                    &raw const e_textlock,
-                );
-                break 'done;
-            }
-            let arg_2 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"buf".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_set_buf(arg_1, arg_2, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        if textlock.get() != 0 || unsafe { expr_map_locked() } {
+            expr_map_locked_error(err);
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"buf".as_ptr().cast_mut();
+            return;
         }
-        0
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
+        }
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_set_buf(arg_1, arg_2, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_set_buf", 2, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_cursor(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_set_cursor".as_ptr(),
-                );
-            }
-            let arg_2 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"pos".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_set_cursor(arg_1, arg_2, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_Array(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"pos".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        0
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_set_cursor(arg_1, arg_2, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_set_cursor", 2, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_height(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_set_height".as_ptr(),
-                );
-            }
-            let arg_2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"height".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_set_height(arg_1, arg_2, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_Integer(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"height".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        0
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_set_height(arg_1, arg_2, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_set_height", 2, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_hl_ns(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_set_hl_ns".as_ptr(),
-                );
-            }
-            let arg_2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"ns_id".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_set_hl_ns(arg_1, arg_2, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_Integer(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"ns_id".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        0
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_set_hl_ns(arg_1, arg_2, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_set_hl_ns", 2, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_var(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 3 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 3 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_set_var".as_ptr(),
-                );
-            }
-            let arg_3: Object;
-            'free_arg_3: {
-                arg_3 = nlua_pop_Object(lstate, true, &raw mut arena, &raw mut err);
-                if err.type_0 != kErrorTypeNone {
-                    err_param = c"value".as_ptr().cast_mut();
-                    break 'done;
-                }
-                let arg_2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 != kErrorTypeNone {
-                    err_param = c"name".as_ptr().cast_mut();
-                    break 'free_arg_3;
-                }
-                let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 != kErrorTypeNone {
-                    err_param = c"win".as_ptr().cast_mut();
-                    break 'free_arg_3;
-                }
-                let saved_lstate = active_lstate.get();
-                active_lstate.set(lstate);
-                nvim_win_set_var(arg_1, arg_2, arg_3, &raw mut err);
-                active_lstate.set(saved_lstate);
-            }
-            api_luarefs_free_object(arg_3);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_3 = unsafe { nlua_pop_Object(lstate, true, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"value".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: the conversion took the references and nothing else
+        // releases them.
+        let arg_3 = unsafe { ObjectArg::new(arg_3) };
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_String(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"name".as_ptr().cast_mut();
+            return;
         }
-        0
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
+        }
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_set_var(arg_1, arg_2, arg_3.value, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_set_var", 3, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_width(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_set_width".as_ptr(),
-                );
-            }
-            let arg_2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"width".as_ptr().cast_mut();
-                break 'done;
-            }
-            let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
-                err_param = c"win".as_ptr().cast_mut();
-                break 'done;
-            }
-            let saved_lstate = active_lstate.get();
-            active_lstate.set(lstate);
-            nvim_win_set_width(arg_1, arg_2, &raw mut err);
-            active_lstate.set(saved_lstate);
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        // SAFETY: as above.
+        let arg_2 = unsafe { nlua_pop_Integer(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"width".as_ptr().cast_mut();
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        0
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        unsafe { nvim_win_set_width(arg_1, arg_2, err) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_set_width", 2, 0, convert) }
 }
 
 pub unsafe extern "C-unwind" fn nlua_api_nvim_win_text_height(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut err = ERROR_INIT;
-        let mut arena = ARENA_EMPTY;
-        let mut err_param: *mut c_char = ptr::null_mut();
-        'done: {
-            if lua_gettop(lstate) != 2 {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Expected 2 arguments".as_ptr(),
-                );
-                break 'done;
-            }
-            if !nlua_is_deferred_safe() {
-                return luaL_error(
-                    lstate,
-                    (&raw const e_fast_api_disabled).cast(),
-                    c"nvim_win_text_height".as_ptr(),
-                );
-            }
-            let mut arg_2: KeyDict_win_text_height = core::mem::zeroed();
-            'free_arg_2: {
-                nlua_pop_keydict(
-                    lstate,
-                    (&raw mut arg_2).cast(),
-                    Some(KeyDict_win_text_height_get_field),
-                    &raw mut err_param,
-                    &raw mut arena,
-                    &raw mut err,
-                );
-                if err.type_0 != kErrorTypeNone {
-                    break 'free_arg_2;
-                }
-                let arg_1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 != kErrorTypeNone {
-                    err_param = c"win".as_ptr().cast_mut();
-                    break 'free_arg_2;
-                }
-                let saved_lstate = active_lstate.get();
-                active_lstate.set(lstate);
-                let ret = nvim_win_text_height(arg_1, &raw mut arg_2, &raw mut arena, &raw mut err);
-                nlua_push_Dict(lstate, ret, PUSH);
-                active_lstate.set(saved_lstate);
-            }
-            api_luarefs_free_keydict((&raw mut arg_2).cast(), win_text_height_table.ptr().cast());
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
+        let Call {
+            arena,
+            err,
+            err_param,
+        } = call;
+        let mut arg_2 = KeyDictArg::<KeyDict_win_text_height>::zeroed();
+        // SAFETY: as above.
+        unsafe { pop_keydict(lstate, &mut arg_2, arena, err, err_param) };
+        if err.type_0 != kErrorTypeNone {
+            return;
         }
-        if finish(lstate, &raw mut arena, &raw mut err, err_param) {
-            return lua_error(lstate);
+        // SAFETY: as above.
+        let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
+        if err.type_0 != kErrorTypeNone {
+            *err_param = c"win".as_ptr().cast_mut();
+            return;
         }
-        1
+        let saved_lstate = active_lstate.get();
+        active_lstate.set(lstate);
+        // SAFETY: as above; the arguments are this binding's own.
+        let ret = unsafe { nvim_win_text_height(arg_1, &raw mut arg_2.dict, arena, err) };
+        // SAFETY: as above.
+        unsafe { nlua_push_Dict(lstate, ret, PUSH) };
+        active_lstate.set(saved_lstate);
     }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_win_text_height", 2, 1, convert) }
 }

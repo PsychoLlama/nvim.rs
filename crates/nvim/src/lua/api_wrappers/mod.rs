@@ -12,11 +12,11 @@
 //! Everything that fails — the wrong number of arguments, a value Lua cannot
 //! convert, the API function itself — leaves its reason in one `Error`, and
 //! the binding raises it as a Lua error on the way out. Getting there means
-//! unwinding past whatever was already converted, which is what the labelled
-//! blocks in each binding are for: breaking out of one runs the releases
-//! between it and the end, and nothing else. That is the shape upstream's
-//! generator built out of `goto exit_N` (src/gen/gen_api_dispatch.lua at tag
-//! v0.12.4).
+//! releasing whatever was already converted, and only that: each converted
+//! argument arms a guard, so returning from a failed conversion drops the
+//! guards armed before it and no others, in declaration order. Upstream's
+//! generator wrote that order out by hand as a chain of `goto exit_N`
+//! (src/gen/gen_api_dispatch.lua at tag v0.12.4).
 //!
 //! This module holds the shared support code and the imports; the bindings
 //! themselves live in one child module per API source file, re-exported here
@@ -152,6 +152,7 @@ use crate::api::window::{
 };
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
+use crate::global_cell::GlobalCell;
 use crate::lua::converter::{
     kNluaPushFreeRefs, kNluaPushSpecial, nlua_pop_Array, nlua_pop_Boolean, nlua_pop_Dict,
     nlua_pop_Float, nlua_pop_Integer, nlua_pop_LuaRef, nlua_pop_Object, nlua_pop_String,
@@ -169,15 +170,15 @@ use crate::lua::ffi::{
 use crate::main::{e_fast_api_disabled, e_textlock, textlock};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::types::{
-    Arena, Error, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd,
-    KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
+    Arena, Error, FieldHashfn, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
+    KeyDict_cmd, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
     KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands,
     KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns,
     KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option,
     KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark,
     KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height,
-    LuaRef, Object, lua_State,
+    KeySetLink, LuaRef, Object, lua_State,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -205,31 +206,277 @@ const ERROR_INIT: Error = Error {
 const PUSH: c_int = kNluaPushFreeRefs as c_int;
 const PUSH_SPECIAL: c_int = (kNluaPushSpecial | kNluaPushFreeRefs) as c_int;
 
-/// Release the request arena and, if the call failed, stage the Lua error:
-/// the source position, the parameter a failed conversion blamed, and the
-/// message itself, left on the stack as one string. Returns whether the
-/// caller must now raise it — which it has to do itself, so that the
-/// non-returning `lua_error` unwinds out of the binding's own frame.
+/// What one binding carries from its first conversion to its last release.
+struct Call {
+    /// Where the conversions and the API function allocate. Released once
+    /// every argument has been, since the values the releases walk live in
+    /// it.
+    arena: Arena,
+    /// Why the call failed, if it did.
+    err: Error,
+    /// The parameter a failed conversion blamed, named in the message.
+    err_param: *mut c_char,
+}
+
+impl Call {
+    const fn new() -> Self {
+        Call {
+            arena: ARENA_EMPTY,
+            err: ERROR_INIT,
+            err_param: ptr::null_mut(),
+        }
+    }
+}
+
+/// A binding's own half: pop each argument off the Lua stack, call the API
+/// function, hand the result back. Returning — off the end or out of a failed
+/// conversion — releases exactly the arguments that were converted, in
+/// declaration order, because each one's release is a guard dropped on the
+/// way out.
+type Convert = unsafe fn(*mut lua_State, &mut Call);
+
+// -- keysets ---------------------------------------------------------------
+
+/// A generated keyset, tied to the two generated items that describe it.
 ///
 /// # Safety
-/// `lstate` is the running Lua state; `arena` and `err` point at the
-/// binding's own locals; `err_param`, when set, points at a NUL-terminated
-/// name that outlives the call.
-unsafe fn finish(
-    lstate: *mut lua_State,
-    arena: *mut Arena,
-    err: *mut Error,
-    err_param: *const c_char,
-) -> bool {
-    unsafe {
-        arena_mem_free(arena_finish(arena));
-        if (*err).type_0 == kErrorTypeNone {
-            return false;
+/// `GET_FIELD` must be `Self`'s own field lookup and [`table`](Self::table)
+/// answer `Self`'s own key table: the decoder writes through the offsets the
+/// first hands back and the release walks the second, so either one belonging
+/// to a different keyset would read and write outside `Self`. All zeroes must
+/// be a valid `Self`, which is how a keyset argument starts out.
+unsafe trait KeySet: Sized {
+    const GET_FIELD: FieldHashfn;
+
+    fn table() -> *mut KeySetLink;
+}
+
+/// A keyset's generated table, as the code that walks one takes it.
+fn keyset_table<const N: usize>(table: &GlobalCell<[KeySetLink; N]>) -> *mut KeySetLink {
+    table.ptr().cast()
+}
+
+/// A keyset argument, with its release armed from the moment it exists: the
+/// decoder fills it field by field, and a fill that stops halfway still holds
+/// whatever references it took before it stopped.
+struct KeyDictArg<K: KeySet> {
+    dict: K,
+}
+
+impl<K: KeySet> KeyDictArg<K> {
+    fn zeroed() -> Self {
+        // SAFETY: all zeroes is a valid `K`, per `KeySet`'s contract.
+        KeyDictArg {
+            dict: unsafe { core::mem::zeroed() },
         }
+    }
+}
+
+impl<K: KeySet> Drop for KeyDictArg<K> {
+    fn drop(&mut self) {
+        // SAFETY: `K::table()` describes `K`'s fields, per `KeySet`'s
+        // contract, and the binding owns the references they name.
+        unsafe { api_luarefs_free_keydict((&raw mut self.dict).cast(), K::table()) };
+    }
+}
+
+/// Fill a keyset argument from the Lua value on top of the stack. On refusal
+/// `*err_param` names the key that failed.
+///
+/// # Safety
+/// `lstate` is the running Lua state with the argument on top; `arena`,
+/// `err` and `err_param` are the binding's own.
+unsafe fn pop_keydict<K: KeySet>(
+    lstate: *mut lua_State,
+    arg: &mut KeyDictArg<K>,
+    arena: &mut Arena,
+    err: &mut Error,
+    err_param: &mut *mut c_char,
+) {
+    // SAFETY: the caller's stack, and `K::GET_FIELD` is `K`'s own lookup per
+    // `KeySet`'s contract, which is what the decoder needs of it.
+    unsafe {
+        nlua_pop_keydict(
+            lstate,
+            (&raw mut arg.dict).cast(),
+            K::GET_FIELD,
+            err_param,
+            arena,
+            err,
+        )
+    };
+}
+
+/// Hand a keyset result back as a Lua table.
+///
+/// # Safety
+/// `lstate` is the running Lua state and `value` points at the binding's own
+/// result.
+unsafe fn push_keydict<K: KeySet>(lstate: *mut lua_State, value: *mut K) {
+    // SAFETY: the caller's stack, and `K::table()` describes `K`'s fields per
+    // `KeySet`'s contract.
+    unsafe { nlua_push_keydict(lstate, value.cast(), K::table()) };
+}
+
+// -- argument guards -------------------------------------------------------
+
+/// An `Object` argument, which puts the Lua references the conversion took
+/// out of the registry back when the binding leaves.
+struct ObjectArg {
+    value: Object,
+}
+
+impl ObjectArg {
+    /// # Safety
+    /// The binding owns the references `value` names and nothing else
+    /// releases them.
+    unsafe fn new(value: Object) -> Self {
+        ObjectArg { value }
+    }
+}
+
+impl Drop for ObjectArg {
+    fn drop(&mut self) {
+        // SAFETY: `new`'s contract.
+        unsafe { api_luarefs_free_object(self.value) };
+    }
+}
+
+/// A `LuaRef` argument, released the same way.
+struct LuaRefArg {
+    value: LuaRef,
+}
+
+impl LuaRefArg {
+    /// # Safety
+    /// As [`ObjectArg::new`].
+    unsafe fn new(value: LuaRef) -> Self {
+        LuaRefArg { value }
+    }
+}
+
+impl Drop for LuaRefArg {
+    fn drop(&mut self) {
+        // SAFETY: `new`'s contract.
+        unsafe { api_free_luaref(self.value) };
+    }
+}
+
+// -- refusals --------------------------------------------------------------
+
+/// Refuses a call that arrived with a different number of arguments than the
+/// API function declares.
+fn wrong_arity(err: &mut Error, argc: c_int) {
+    let fmt = if argc == 1 {
+        c"Expected %d argument".as_ptr()
+    } else {
+        c"Expected %d arguments".as_ptr()
+    };
+    // SAFETY: `err` is live and the format string matches its one argument.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt, argc) };
+}
+
+// -- the shared half of every binding --------------------------------------
+
+/// Everything a binding does around its own conversions: check that Lua
+/// handed it the arguments the API function declares, hand over to `convert`,
+/// release the request arena, and raise whatever error the call left behind.
+/// Answers the number of results `convert` left on the stack.
+///
+/// `deferred` names the binding when its API function is not `fast` and so
+/// may not run from a context where deferring is unsafe; it is `None` for one
+/// that may run anywhere.
+///
+/// The error is raised from here rather than from `convert`, because by the
+/// time `convert` has returned every argument guard has been dropped and the
+/// arena is gone — and `lua_error` does not come back.
+///
+/// # Safety
+/// `lstate` is the running Lua state with the binding's arguments on top;
+/// `deferred`, when set, outlives the call; `convert` reads `argc` arguments
+/// and leaves `nret` results.
+unsafe fn run(
+    lstate: *mut lua_State,
+    deferred: Option<&CStr>,
+    argc: c_int,
+    nret: c_int,
+    convert: Convert,
+) -> c_int {
+    let mut call = Call::new();
+    // SAFETY: the caller's stack.
+    if unsafe { lua_gettop(lstate) } != argc {
+        wrong_arity(&mut call.err, argc);
+    } else {
+        // SAFETY: as above; the query has no side effects.
+        let refused = deferred.filter(|_| !unsafe { nlua_is_deferred_safe() });
+        if let Some(name) = refused {
+            let (fmt, name) = ((&raw const e_fast_api_disabled).cast(), name.as_ptr());
+            // SAFETY: as above; both strings are static and NUL-terminated,
+            // and nothing is left to release.
+            return unsafe { luaL_error(lstate, fmt, name) };
+        }
+        // SAFETY: as above; `call` is this frame's own.
+        unsafe { convert(lstate, &mut call) };
+    }
+    // SAFETY: the arena is this frame's own, and every argument that borrowed
+    // from it has been released.
+    unsafe { arena_mem_free(arena_finish(&raw mut call.arena)) };
+    if call.err.type_0 == kErrorTypeNone {
+        return nret;
+    }
+    // SAFETY: as above; `call.err` carries a message.
+    unsafe { stage_error(lstate, &mut call) };
+    // SAFETY: the message is on the stack, and `lua_error` does not return.
+    unsafe { lua_error(lstate) }
+}
+
+/// [`run`] for a binding whose API function is not `fast`.
+///
+/// # Safety
+/// As [`run`].
+unsafe fn dispatch(
+    lstate: *mut lua_State,
+    name: &CStr,
+    argc: c_int,
+    nret: c_int,
+    convert: Convert,
+) -> c_int {
+    // SAFETY: the caller's.
+    unsafe { run(lstate, Some(name), argc, nret, convert) }
+}
+
+/// [`run`] for a binding whose API function is `fast`, and so has no context
+/// to refuse.
+///
+/// # Safety
+/// As [`run`].
+unsafe fn dispatch_fast(
+    lstate: *mut lua_State,
+    argc: c_int,
+    nret: c_int,
+    convert: Convert,
+) -> c_int {
+    // SAFETY: the caller's.
+    unsafe { run(lstate, None, argc, nret, convert) }
+}
+
+/// Leave the failed call's message on the Lua stack as one string: the source
+/// position, the parameter a failed conversion blamed, and the message
+/// itself, ready for `lua_error` to raise.
+///
+/// # Safety
+/// `lstate` is the running Lua state and `call` is the binding's own, with
+/// an error set.
+unsafe fn stage_error(lstate: *mut lua_State, call: &mut Call) {
+    let err = &raw mut call.err;
+    // SAFETY: the caller's stack; `err` points at the binding's own error,
+    // whose message this consumes, and `err_param`, when set, at a static
+    // NUL-terminated name.
+    unsafe {
         luaL_where(lstate, 1);
-        if !err_param.is_null() {
+        if !call.err_param.is_null() {
             lua_pushstring(lstate, c"Invalid '".as_ptr());
-            lua_pushstring(lstate, err_param);
+            lua_pushstring(lstate, call.err_param);
             lua_pushstring(lstate, c"': ".as_ptr());
             lua_pushstring(lstate, (*err).msg);
             api_clear_error(err);
@@ -239,7 +486,6 @@ unsafe fn finish(
             api_clear_error(err);
             lua_concat(lstate, 2);
         }
-        true
     }
 }
 
@@ -255,5 +501,388 @@ unsafe fn bind(
     unsafe {
         lua_pushcclosure(lstate, Some(f), 0);
         lua_setfield(lstate, -2, name.as_ptr());
+    }
+}
+
+/// Refuses a call made while the text is locked.
+fn text_locked_error(err: &mut Error) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: `err` is live and `get_text_locked_msg` answers with a static
+    // NUL-terminated message, which is what `%s` takes.
+    unsafe { api_set_error(err, kErrorTypeException, fmt, get_text_locked_msg()) };
+}
+
+/// Refuses a call made from an expression mapping, which the cmdline window
+/// alone would have allowed.
+fn expr_map_locked_error(err: &mut Error) {
+    let fmt = c"%s".as_ptr();
+    // SAFETY: `err` is live and `e_textlock` is a static NUL-terminated
+    // message, which is what `%s` takes.
+    unsafe { api_set_error(err, kErrorTypeException, fmt, &raw const e_textlock) };
+}
+
+// The keysets the bindings name, each tied to its own generated table
+// and lookup.
+
+// SAFETY: `buf_attach_table` and `KeyDict_buf_attach_get_field` are the
+// generated table and lookup for `KeyDict_buf_attach`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_buf_attach {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_buf_attach_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&buf_attach_table)
+    }
+}
+
+// SAFETY: `buf_delete_table` and `KeyDict_buf_delete_get_field` are the
+// generated table and lookup for `KeyDict_buf_delete`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_buf_delete {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_buf_delete_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&buf_delete_table)
+    }
+}
+
+// SAFETY: `clear_autocmds_table` and `KeyDict_clear_autocmds_get_field` are the
+// generated table and lookup for `KeyDict_clear_autocmds`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_clear_autocmds {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_clear_autocmds_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&clear_autocmds_table)
+    }
+}
+
+// SAFETY: `cmd_table` and `KeyDict_cmd_get_field` are the
+// generated table and lookup for `KeyDict_cmd`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_cmd {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_cmd_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&cmd_table)
+    }
+}
+
+// SAFETY: `cmd_opts_table` and `KeyDict_cmd_opts_get_field` are the
+// generated table and lookup for `KeyDict_cmd_opts`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_cmd_opts {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_cmd_opts_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&cmd_opts_table)
+    }
+}
+
+// SAFETY: `complete_set_table` and `KeyDict_complete_set_get_field` are the
+// generated table and lookup for `KeyDict_complete_set`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_complete_set {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_complete_set_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&complete_set_table)
+    }
+}
+
+// SAFETY: `context_table` and `KeyDict_context_get_field` are the
+// generated table and lookup for `KeyDict_context`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_context {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_context_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&context_table)
+    }
+}
+
+// SAFETY: `create_augroup_table` and `KeyDict_create_augroup_get_field` are the
+// generated table and lookup for `KeyDict_create_augroup`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_create_augroup {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_create_augroup_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&create_augroup_table)
+    }
+}
+
+// SAFETY: `create_autocmd_table` and `KeyDict_create_autocmd_get_field` are the
+// generated table and lookup for `KeyDict_create_autocmd`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_create_autocmd {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_create_autocmd_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&create_autocmd_table)
+    }
+}
+
+// SAFETY: `echo_opts_table` and `KeyDict_echo_opts_get_field` are the
+// generated table and lookup for `KeyDict_echo_opts`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_echo_opts {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_echo_opts_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&echo_opts_table)
+    }
+}
+
+// SAFETY: `empty_table` and `KeyDict_empty_get_field` are the
+// generated table and lookup for `KeyDict_empty`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_empty {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_empty_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&empty_table)
+    }
+}
+
+// SAFETY: `eval_statusline_table` and `KeyDict_eval_statusline_get_field` are the
+// generated table and lookup for `KeyDict_eval_statusline`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_eval_statusline {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_eval_statusline_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&eval_statusline_table)
+    }
+}
+
+// SAFETY: `exec_autocmds_table` and `KeyDict_exec_autocmds_get_field` are the
+// generated table and lookup for `KeyDict_exec_autocmds`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_exec_autocmds {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_exec_autocmds_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&exec_autocmds_table)
+    }
+}
+
+// SAFETY: `exec_opts_table` and `KeyDict_exec_opts_get_field` are the
+// generated table and lookup for `KeyDict_exec_opts`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_exec_opts {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_exec_opts_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&exec_opts_table)
+    }
+}
+
+// SAFETY: `get_autocmds_table` and `KeyDict_get_autocmds_get_field` are the
+// generated table and lookup for `KeyDict_get_autocmds`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_get_autocmds {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_get_autocmds_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&get_autocmds_table)
+    }
+}
+
+// SAFETY: `get_commands_table` and `KeyDict_get_commands_get_field` are the
+// generated table and lookup for `KeyDict_get_commands`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_get_commands {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_get_commands_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&get_commands_table)
+    }
+}
+
+// SAFETY: `get_extmark_table` and `KeyDict_get_extmark_get_field` are the
+// generated table and lookup for `KeyDict_get_extmark`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_get_extmark {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_get_extmark_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&get_extmark_table)
+    }
+}
+
+// SAFETY: `get_extmarks_table` and `KeyDict_get_extmarks_get_field` are the
+// generated table and lookup for `KeyDict_get_extmarks`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_get_extmarks {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_get_extmarks_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&get_extmarks_table)
+    }
+}
+
+// SAFETY: `get_highlight_table` and `KeyDict_get_highlight_get_field` are the
+// generated table and lookup for `KeyDict_get_highlight`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_get_highlight {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_get_highlight_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&get_highlight_table)
+    }
+}
+
+// SAFETY: `get_ns_table` and `KeyDict_get_ns_get_field` are the
+// generated table and lookup for `KeyDict_get_ns`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_get_ns {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_get_ns_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&get_ns_table)
+    }
+}
+
+// SAFETY: `highlight_table` and `KeyDict_highlight_get_field` are the
+// generated table and lookup for `KeyDict_highlight`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_highlight {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_highlight_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&highlight_table)
+    }
+}
+
+// SAFETY: `keymap_table` and `KeyDict_keymap_get_field` are the
+// generated table and lookup for `KeyDict_keymap`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_keymap {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_keymap_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&keymap_table)
+    }
+}
+
+// SAFETY: `ns_opts_table` and `KeyDict_ns_opts_get_field` are the
+// generated table and lookup for `KeyDict_ns_opts`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_ns_opts {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_ns_opts_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&ns_opts_table)
+    }
+}
+
+// SAFETY: `open_term_table` and `KeyDict_open_term_get_field` are the
+// generated table and lookup for `KeyDict_open_term`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_open_term {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_open_term_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&open_term_table)
+    }
+}
+
+// SAFETY: `option_table` and `KeyDict_option_get_field` are the
+// generated table and lookup for `KeyDict_option`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_option {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_option_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&option_table)
+    }
+}
+
+// SAFETY: `redraw_table` and `KeyDict_redraw_get_field` are the
+// generated table and lookup for `KeyDict_redraw`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_redraw {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_redraw_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&redraw_table)
+    }
+}
+
+// SAFETY: `runtime_table` and `KeyDict_runtime_get_field` are the
+// generated table and lookup for `KeyDict_runtime`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_runtime {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_runtime_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&runtime_table)
+    }
+}
+
+// SAFETY: `set_decoration_provider_table` and `KeyDict_set_decoration_provider_get_field` are the
+// generated table and lookup for `KeyDict_set_decoration_provider`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_set_decoration_provider {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_set_decoration_provider_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&set_decoration_provider_table)
+    }
+}
+
+// SAFETY: `set_extmark_table` and `KeyDict_set_extmark_get_field` are the
+// generated table and lookup for `KeyDict_set_extmark`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_set_extmark {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_set_extmark_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&set_extmark_table)
+    }
+}
+
+// SAFETY: `tabpage_config_table` and `KeyDict_tabpage_config_get_field` are the
+// generated table and lookup for `KeyDict_tabpage_config`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_tabpage_config {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_tabpage_config_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&tabpage_config_table)
+    }
+}
+
+// SAFETY: `user_command_table` and `KeyDict_user_command_get_field` are the
+// generated table and lookup for `KeyDict_user_command`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_user_command {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_user_command_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&user_command_table)
+    }
+}
+
+// SAFETY: `win_config_table` and `KeyDict_win_config_get_field` are the
+// generated table and lookup for `KeyDict_win_config`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_win_config {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_win_config_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&win_config_table)
+    }
+}
+
+// SAFETY: `win_text_height_table` and `KeyDict_win_text_height_get_field` are the
+// generated table and lookup for `KeyDict_win_text_height`, which is all integers
+// and pointers, so all zeroes is one.
+unsafe impl KeySet for KeyDict_win_text_height {
+    const GET_FIELD: FieldHashfn = Some(KeyDict_win_text_height_get_field);
+
+    fn table() -> *mut KeySetLink {
+        keyset_table(&win_text_height_table)
     }
 }
