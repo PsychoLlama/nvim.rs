@@ -30,10 +30,9 @@ use crate::os::fs::os_set_cloexec;
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
 use crate::types::{Loop, Proc, PtyProc, speed_t, uv_file, uv_pipe_t, uv_signal_t};
 use ::libc::{
-    __errno_location, _exit, cfsetispeed, cfsetospeed, close, dup, execvp, fcntl, forkpty, ioctl,
-    kill, killpg, ptsname, setsid, strerror, waitpid,
+    __errno_location, _exit, SIG_DFL, cfsetispeed, cfsetospeed, close, dup, execvp, fcntl, forkpty,
+    ioctl, kill, killpg, poll, pollfd, ptsname, setsid, signal, strerror, waitpid,
 };
-use ::libc::{SIG_DFL, poll, pollfd, signal};
 use core::ffi::{c_char, c_int, c_short, c_ulong, c_void};
 use core::ptr;
 use wait_status::ChildState;
