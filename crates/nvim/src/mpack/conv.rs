@@ -10,6 +10,9 @@
 //! IEEE-754 double by repeated multiplication, for a host whose `double` is
 //! not IEEE-754; `MPACK_USE_CONV` never selected them in this build and no
 //! caller referenced them.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

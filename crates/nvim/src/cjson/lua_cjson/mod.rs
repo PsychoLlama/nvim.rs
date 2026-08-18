@@ -21,6 +21,9 @@
 //! duration of a call rather than borrowed, so a metamethod that re-enters
 //! `encode` on the same module table gets a fresh buffer instead of
 //! scribbling over its caller's — see [`Config::take_buffer`].
+//!
+//! Ported from Lua CJSON, Copyright (c) 2010-2012 Mark Pulford, under the
+//! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

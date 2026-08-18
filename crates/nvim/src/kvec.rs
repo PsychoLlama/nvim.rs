@@ -9,6 +9,9 @@
 //! invariant lives. The containing structs stay `repr(C)` — they are embedded
 //! by value all over the tree — so this borrows their fields rather than
 //! owning anything.
+//!
+//! Ported from klib's `kvec.h`, Copyright (c) 2008 Attractive Chaos, under
+//! the MIT license; the notice is reproduced in licenses/klib-LICENSE.txt.
 
 use core::ffi::c_void;
 use core::{mem, ptr, slice};

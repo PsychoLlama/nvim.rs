@@ -12,6 +12,9 @@
 //! raises (`encode_skip_unsupported_value_types` is 0, so the "skip it and
 //! roll the output back" bookkeeping every container carried is unreachable
 //! too, and is gone).
+//!
+//! Ported from Lua CJSON, Copyright (c) 2010-2012 Mark Pulford, under the
+//! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
 use core::ffi::{CStr, c_char, c_int};
 

@@ -18,6 +18,9 @@
 //! `mtdict` field, which carries `vim.empty_dict()`'s metatable so an empty
 //! *map* round-trips as a dict rather than a list, and `luaopen_mpack` being
 //! called from `nlua_state_add_stdlib` instead of by `require`.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

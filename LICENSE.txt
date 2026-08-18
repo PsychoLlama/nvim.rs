@@ -188,13 +188,19 @@ contributed under the Vim license and (2) externally maintained libraries.
 
 The externally maintained libraries used by Neovim are:
 
-  - Klib: a Generic Library in C. MIT/X11 license.
+  - Klib: a Generic Library in C (ported to Rust as
+    crates/nvim/src/kvec.rs from kvec.h, and crates/nvim/src/map/ from
+    the khash.h derivation in upstream's map.c): MIT license, Copyright
+    (c) 2008, 2009, 2011 Attractive Chaos <attractor@live.co.uk>; the
+    notice is reproduced in licenses/klib-LICENSE.txt
   - Lua: MIT license
   - LuaJIT: a Just-In-Time Compiler for Lua. Copyright Mike Pall. MIT license.
-  - Luv: Apache 2.0 license
+  - Luv: Apache 2.0 license. Linked in as a library; not ported.
   - gettext
   - libiconv
-  - libmpack: MIT license
+  - libmpack (ported to Rust as crates/nvim/src/mpack/): MIT license,
+    Copyright (c) 2016 Thiago de Arruda; the notice is reproduced in
+    licenses/libmpack-LICENSE.txt
   - libtermkey (ported to Rust as crates/nvim/src/tui/termkey/, with its
     types in crates/nvim/src/types/termkey*.rs): MIT license, Copyright
     (c) 2007-2011 Paul Evans <leonerd@leonerd.org.uk>; the notice is
@@ -205,7 +211,9 @@ The externally maintained libraries used by Neovim are:
     2008 Paul Evans <leonerd@leonerd.org.uk>; the notice is reproduced in
     licenses/libvterm-LICENSE.txt
   - lua-bitop: MIT license
-  - lua-cjson: MIT license
+  - lua-cjson (ported to Rust as crates/nvim/src/cjson/): MIT license,
+    Copyright (c) 2010-2012 Mark Pulford <mark@kyne.com.au>; the notice
+    is reproduced in licenses/lua-cjson-LICENSE.txt
   - lua-compat: MIT license
   - lua-inspect: MIT license
   - lua-lpeg: MIT license
@@ -218,6 +226,9 @@ The externally maintained libraries used by Neovim are:
   - utf8proc (ported to Rust as crates/nvim/src/utf8proc/): MIT
     license, with Unicode-derived data tables under the Unicode, Inc.
     license; both notices are reproduced in licenses/utf8proc-LICENSE.md
+
+Every in-tree port names its upstream and license in the ported file's
+own header comment as well.
 
 The GNU license texts for the in-tree LGPL ports are included in the
 licenses/ directory: LGPL-2.1.txt for xdiff, and LGPL-3.0.txt (which

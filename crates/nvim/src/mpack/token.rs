@@ -17,6 +17,9 @@
 //! `MPACK_TOKEN_CHUNK` has no [`Tok`] spelling: a chunk is a borrowed slice
 //! of the caller's buffer, not a value, and both the reader and the writer
 //! handle it before they reach this module.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

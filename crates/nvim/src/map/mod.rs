@@ -17,6 +17,10 @@
 //! `Set_*`/`Map_*` — an all-zero one counts as initialized and empty. Keys of
 //! pointer type (`cstr_t`, `ptr_t`, `String`) must stay valid and unchanged
 //! for as long as they are in the table.
+//!
+//! Derived, via upstream's `map.c`, from klib's `khash.h`, Copyright (c)
+//! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
+//! reproduced in licenses/klib-LICENSE.txt.
 
 mod policy;
 mod table;

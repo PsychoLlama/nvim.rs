@@ -10,6 +10,9 @@
 //!
 //! Nvim itself does not use this; `vim.mpack.Session` is exposed because
 //! upstream's vendored libmpack-lua exposes it.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

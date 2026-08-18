@@ -19,6 +19,9 @@
 //! and `nvim/eval/decode/msgpack` drive them from raw pointers they own, and
 //! `test/unit/msgpack_spec.lua` sizes `Unpacker` (which embeds a tokbuf)
 //! through the FFI. Each is a thin shim over a safe core below.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

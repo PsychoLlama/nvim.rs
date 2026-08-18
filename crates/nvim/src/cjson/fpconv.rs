@@ -19,6 +19,10 @@
 //! than delegated, because `format!("{}")` and `str::parse` are neither one
 //! of them. `decodediff` section 3 is the gate; `tests/unit/fpconv.rs`
 //! cross-checks both against libc over a randomised sample.
+//!
+//! Ported from Lua CJSON's `fpconv.c`, Copyright (c) 2011-2012 Mark Pulford,
+//! under the MIT license; the notice is reproduced in
+//! licenses/lua-cjson-LICENSE.txt.
 
 #![forbid(unsafe_code)]
 

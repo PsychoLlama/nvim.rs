@@ -19,6 +19,9 @@
 //! reached by offset from `items`, not by indexing the declared array. Every
 //! function here keeps the parser as a raw pointer for that reason, and
 //! because the callbacks are handed the same pointer and write through it.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

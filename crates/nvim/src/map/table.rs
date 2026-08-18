@@ -15,6 +15,10 @@
 //! The probe sequence, the load factors and the placement are bit-exact with
 //! the C: `mh_delete`'s swap and the one-based encoding are observable through
 //! the raw arrays, which callers walk directly.
+//!
+//! Derived, via upstream's `map.c`, from klib's `khash.h`, Copyright (c)
+//! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
+//! reproduced in licenses/klib-LICENSE.txt.
 
 use core::ffi::c_void;
 use core::slice;

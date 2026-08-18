@@ -13,6 +13,9 @@
 //! the whole C `strtod` grammar — hex floats included — is reachable
 //! through `vim.json.decode`. `decode_array_with_array_mt` is 0, so a
 //! decoded array carries no metatable.
+//!
+//! Ported from Lua CJSON, Copyright (c) 2010-2012 Mark Pulford, under the
+//! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
 use core::ffi::{CStr, c_char, c_int};
 

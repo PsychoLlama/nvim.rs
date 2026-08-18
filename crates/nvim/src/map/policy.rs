@@ -5,6 +5,10 @@
 //! tombstones, and how the dense keys array grows. All of it is upstream's,
 //! bit for bit — the numbers decide where keys land, and callers walk the
 //! arrays directly.
+//!
+//! Derived, via upstream's `map.c`, from klib's `khash.h`, Copyright (c)
+//! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
+//! reproduced in licenses/klib-LICENSE.txt.
 
 use crate::types::uint32_t;
 

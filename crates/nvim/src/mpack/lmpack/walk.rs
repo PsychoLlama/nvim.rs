@@ -12,6 +12,9 @@
 //! Getting that stack discipline right is the whole difficulty here, and the
 //! comments say what is *on* the stack at each step rather than what the
 //! call does.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

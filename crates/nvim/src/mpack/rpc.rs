@@ -19,6 +19,9 @@
 //! The session is a C flexible array member, so the table is reached by
 //! offset from `slots`; every entry point turns it into a slice once and the
 //! insert/lookup half below is ordinary safe code over that slice.
+//!
+//! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
+//! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
