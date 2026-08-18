@@ -192,7 +192,7 @@ static ENUMERATOR: GlobalCell<CompleteListItemGetter> = GlobalCell::new(None);
 /// # Safety
 /// Only reached from `ExpandGeneric`, between the two assignments in
 /// [`expand_set_opt_generic`].
-unsafe extern "C" fn expand_set_opt_callback(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+unsafe fn expand_set_opt_callback(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if idx == 0 {
         let original = ORIGINAL_VALUE.get();
         return if original.is_null() {
@@ -462,7 +462,7 @@ static WINDOW_EVENTS: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// # Safety
 /// Called by `ExpandGeneric` with its expansion context.
-pub(crate) unsafe extern "C" fn get_eventignore_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_eventignore_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: the expansion context's pattern is a C string.
     let subtract = unsafe { *(*xp).xp_pattern } == b'-' as c_char;
     if !subtract && idx == 0 {
@@ -511,7 +511,7 @@ pub unsafe fn expand_set_eventignore(
 ///
 /// # Safety
 /// Called by `ExpandGeneric`.
-pub unsafe extern "C" fn get_fileformat_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_fileformat_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: the table's own array. Its last entry is the null terminator,
     // which is also how `ExpandGeneric` learns the list has ended.
     unsafe { *opt_ff_values.ptr() }

@@ -41,7 +41,7 @@ pub type Stream = stream;
 pub type TimeWatcher = time_watcher;
 pub type WBuffer = wbuffer;
 pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
-pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
+pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
 #[derive(Copy, Clone)]
 pub struct loop_0 {
     pub uv: uv_loop_t,
@@ -90,9 +90,8 @@ pub struct proc {
     pub events: *mut MultiQueue,
 }
 pub type proc_exit_cb =
-    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
-pub type proc_state_cb =
-    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+    Option<unsafe fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_state_cb = Option<unsafe fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct rstream {
@@ -108,11 +107,9 @@ pub struct rstream {
     pub read_cb: stream_read_cb,
     pub num_bytes: size_t,
 }
-pub type signal_cb = Option<
-    unsafe extern "C" fn(*mut SignalWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
-pub type signal_close_cb =
-    Option<unsafe extern "C" fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> ()>;
+pub type signal_cb =
+    Option<unsafe fn(*mut SignalWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
+pub type signal_close_cb = Option<unsafe fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct signal_watcher {
@@ -122,11 +119,9 @@ pub struct signal_watcher {
     pub close_cb: signal_close_cb,
     pub events: *mut MultiQueue,
 }
-pub type socket_cb = Option<
-    unsafe extern "C" fn(*mut SocketWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
-pub type socket_close_cb =
-    Option<unsafe extern "C" fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
+pub type socket_cb =
+    Option<unsafe fn(*mut SocketWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
+pub type socket_close_cb = Option<unsafe fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 pub struct socket_watcher {
     pub addr: [::core::ffi::c_char; 256],
@@ -174,10 +169,9 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_close_cb =
-    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
+pub type stream_close_cb = Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type stream_read_cb = Option<
-    unsafe extern "C" fn(
+    unsafe fn(
         *mut RStream,
         *const ::core::ffi::c_char,
         size_t,
@@ -193,8 +187,8 @@ pub union stream_uv {
     pub idle: uv_idle_t,
 }
 pub type stream_write_cb =
-    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
-pub type time_cb = Option<unsafe extern "C" fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> ()>;
+    Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type time_cb = Option<unsafe fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct time_watcher {

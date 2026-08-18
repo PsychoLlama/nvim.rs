@@ -280,7 +280,7 @@ unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
                 && (*curbuf.get()).b_p_lisp != 0
                 && (*curbuf.get()).b_p_ai != 0
             {
-                fixthisline(Some(get_lisp_indent as unsafe extern "C" fn() -> c_int));
+                fixthisline(Some(get_lisp_indent as unsafe fn() -> c_int));
                 ai_col.set(getwhitecols_curline() as colnr_T);
             } else if do_cindent || ((*curbuf.get()).b_p_ai != 0 && use_indentexpr_for_lisp()) {
                 do_c_expr_indent();

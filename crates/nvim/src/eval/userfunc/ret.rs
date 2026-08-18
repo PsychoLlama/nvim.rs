@@ -570,7 +570,7 @@ pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
 ///
 /// # Safety
 /// `cookie` is the `funccall_T` of the call in progress.
-pub unsafe extern "C" fn get_func_line(
+pub unsafe fn get_func_line(
     _c: c_int,
     cookie: *mut c_void,
     _indent: c_int,

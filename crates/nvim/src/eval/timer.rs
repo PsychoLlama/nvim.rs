@@ -131,7 +131,7 @@ pub unsafe fn add_timer_info_all(rettv: *mut typval_T) {
 ///
 /// # Safety
 /// Called by the event loop with `data` a live `timer_T`.
-pub unsafe extern "C" fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
+pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     unsafe {
         let timer = data as *mut timer_T;
         let save_did_emsg = did_emsg.get();
@@ -240,7 +240,7 @@ pub unsafe fn timer_stop(timer: *mut timer_T) {
 ///
 /// # Safety
 /// Called by the event loop with `data` the `timer_T` being closed.
-pub(crate) unsafe extern "C" fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
+pub(crate) unsafe fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     unsafe {
         let timer = data as *mut timer_T;
         multiqueue_free((*timer).tw.events);

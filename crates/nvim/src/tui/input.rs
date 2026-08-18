@@ -262,7 +262,7 @@ fn send_term_event(response: &mut [u8]) {
 ///
 /// # Safety
 /// Called by the read stream with the [`TermInput`] it was started with.
-unsafe extern "C" fn tinput_read_cb(
+unsafe fn tinput_read_cb(
     _stream: *mut RStream,
     buf: *const c_char,
     count: size_t,

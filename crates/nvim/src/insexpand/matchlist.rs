@@ -344,24 +344,24 @@ pub(crate) unsafe fn ins_compl_make_linear() {
 // score comparators it orders it by.  All six are held as function pointers,
 // so they keep their C ABI.
 
-pub(crate) unsafe extern "C" fn cp_get_next(node: *mut c_void) -> *mut c_void {
+pub(crate) unsafe fn cp_get_next(node: *mut c_void) -> *mut c_void {
     unsafe { (*(node as *mut compl_T)).cp_next as *mut c_void }
 }
 
-pub(crate) unsafe extern "C" fn cp_set_next(node: *mut c_void, next: *mut c_void) {
+pub(crate) unsafe fn cp_set_next(node: *mut c_void, next: *mut c_void) {
     unsafe { (*(node as *mut compl_T)).cp_next = next as *mut compl_T };
 }
 
-pub(crate) unsafe extern "C" fn cp_get_prev(node: *mut c_void) -> *mut c_void {
+pub(crate) unsafe fn cp_get_prev(node: *mut c_void) -> *mut c_void {
     unsafe { (*(node as *mut compl_T)).cp_prev as *mut c_void }
 }
 
-pub(crate) unsafe extern "C" fn cp_set_prev(node: *mut c_void, prev: *mut c_void) {
+pub(crate) unsafe fn cp_set_prev(node: *mut c_void, prev: *mut c_void) {
     unsafe { (*(node as *mut compl_T)).cp_prev = prev as *mut compl_T };
 }
 
 /// Highest fuzzy score first.
-pub(crate) unsafe extern "C" fn cp_compare_fuzzy(a: *const c_void, b: *const c_void) -> c_int {
+pub(crate) unsafe fn cp_compare_fuzzy(a: *const c_void, b: *const c_void) -> c_int {
     let (score_a, score_b) = unsafe {
         (
             (*(a as *const compl_T)).cp_score,
@@ -372,7 +372,7 @@ pub(crate) unsafe extern "C" fn cp_compare_fuzzy(a: *const c_void, b: *const c_v
 }
 
 /// Nearest to the cursor first; unscored matches compare equal to everything.
-pub(crate) unsafe extern "C" fn cp_compare_nearest(a: *const c_void, b: *const c_void) -> c_int {
+pub(crate) unsafe fn cp_compare_nearest(a: *const c_void, b: *const c_void) -> c_int {
     let (score_a, score_b) = unsafe {
         (
             (*(a as *const compl_T)).cp_score,

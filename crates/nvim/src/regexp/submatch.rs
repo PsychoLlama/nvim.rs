@@ -40,7 +40,7 @@ pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: linenr_T) -> colnr_T {
 /// function that does not take a submatches argument gets none: the list
 /// stays as the caller left it, which is what tells [`super::substitute`]
 /// there is nothing to free.
-pub(crate) unsafe extern "C" fn fill_submatch_list(
+pub(crate) unsafe fn fill_submatch_list(
     _argc: c_int,
     argv: *mut typval_T,
     argskip: c_int,

@@ -22,7 +22,7 @@ use crate::types::{VV_LNUM, kNone};
 // The fold-level strategy is dispatched by comparing function addresses, as
 // the C code did; the helper spells the address comparison out so the intent
 // survives the `unpredictable_function_pointer_comparisons` lint.
-pub(super) fn getlevel_is(getlevel: LevelGetter, f: unsafe extern "C" fn(*mut fline_T)) -> bool {
+pub(super) fn getlevel_is(getlevel: LevelGetter, f: unsafe fn(*mut fline_T)) -> bool {
     getlevel.is_some_and(|g| ::core::ptr::fn_addr_eq(g, f))
 }
 
@@ -74,7 +74,7 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
     invalid_bot.set(bot);
     let mut getlevel: LevelGetter = None;
     if foldmethodIsMarker(wp) {
-        getlevel = Some(foldlevelMarker as unsafe extern "C" fn(*mut fline_T) -> ()) as LevelGetter;
+        getlevel = Some(foldlevelMarker as unsafe fn(*mut fline_T) -> ());
         parseMarker(wp);
         if top > 1 {
             let level: c_int = foldLevelWin(wp, top - 1);
@@ -92,20 +92,16 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
     } else {
         fline.lnum = top;
         if foldmethodIsExpr(wp) {
-            getlevel =
-                Some(foldlevelExpr as unsafe extern "C" fn(*mut fline_T) -> ()) as LevelGetter;
+            getlevel = Some(foldlevelExpr as unsafe fn(*mut fline_T) -> ());
             if top > 1 {
                 fline.lnum -= 1;
             }
         } else if foldmethodIsSyntax(wp) {
-            getlevel =
-                Some(foldlevelSyntax as unsafe extern "C" fn(*mut fline_T) -> ()) as LevelGetter;
+            getlevel = Some(foldlevelSyntax as unsafe fn(*mut fline_T) -> ());
         } else if foldmethodIsDiff(wp) {
-            getlevel =
-                Some(foldlevelDiff as unsafe extern "C" fn(*mut fline_T) -> ()) as LevelGetter;
+            getlevel = Some(foldlevelDiff as unsafe fn(*mut fline_T) -> ());
         } else {
-            getlevel =
-                Some(foldlevelIndent as unsafe extern "C" fn(*mut fline_T) -> ()) as LevelGetter;
+            getlevel = Some(foldlevelIndent as unsafe fn(*mut fline_T) -> ());
             if top > 1 {
                 fline.lnum -= 1;
             }
@@ -556,7 +552,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-pub(super) unsafe extern "C" fn foldlevelIndent(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevelIndent(mut flp: *mut fline_T) {
     let mut lnum: linenr_T = (*flp).lnum + (*flp).off;
     let mut buf: *mut buf_T = (*(*flp).wp).w_buffer;
     let mut s: *mut c_char = skipwhite(ml_get_buf(buf, lnum));
@@ -590,7 +586,7 @@ pub(super) unsafe extern "C" fn foldlevelIndent(mut flp: *mut fline_T) {
 
 /// Low level function to get the foldlevel for the "diff" method.
 /// Doesn't use any caching.
-pub(super) unsafe extern "C" fn foldlevelDiff(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevelDiff(mut flp: *mut fline_T) {
     (*flp).lvl = if diff_infold((*flp).wp, (*flp).lnum + (*flp).off) {
         1
     } else {
@@ -602,7 +598,7 @@ pub(super) unsafe extern "C" fn foldlevelDiff(mut flp: *mut fline_T) {
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-pub(super) unsafe extern "C" fn foldlevelExpr(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevelExpr(mut flp: *mut fline_T) {
     let mut lnum: linenr_T = (*flp).lnum + (*flp).off;
     let mut win: *mut win_T = curwin.get();
     curwin.set((*flp).wp);
@@ -676,7 +672,7 @@ pub(super) unsafe extern "C" fn foldlevelExpr(mut flp: *mut fline_T) {
 
 /// Low level function to get the foldlevel for the "syntax" method.
 /// Doesn't use any caching.
-pub(super) unsafe extern "C" fn foldlevelSyntax(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevelSyntax(mut flp: *mut fline_T) {
     let mut lnum: linenr_T = (*flp).lnum + (*flp).off;
     (*flp).lvl = syn_get_foldlevel((*flp).wp, lnum);
     (*flp).start = 0;

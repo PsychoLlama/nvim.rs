@@ -231,7 +231,7 @@ unsafe fn cluster_op(rest: *const c_char) -> Option<(c_int, c_int)> {
 }
 
 /// `:syntax cluster {name} [contains=..] [add=..] [remove=..]`.
-pub(crate) unsafe extern "C" fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         let arg = (*eap).arg;
         let mut group_name_end = ::core::ptr::null_mut::<c_char>();

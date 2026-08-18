@@ -385,7 +385,7 @@ pub unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char
 ///
 /// # Safety
 /// Main thread only.
-pub unsafe extern "C" fn get_highlight_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_highlight_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: as the callee.
     unsafe { get_highlight_name_ext(xp, idx, true).cast_mut() }
 }

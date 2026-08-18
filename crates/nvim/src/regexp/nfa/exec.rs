@@ -330,7 +330,7 @@ fn try_match(
 /// # Safety
 ///
 /// `expr` must be null or a NUL-terminated pattern.
-pub(crate) unsafe extern "C" fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut regprog_T {
+pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut regprog_T {
     unsafe {
         if expr.is_null() {
             return core::ptr::null_mut();
@@ -383,7 +383,7 @@ pub(crate) unsafe extern "C" fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int)
 /// # Safety
 ///
 /// `prog` must be null or such a program.
-pub(crate) unsafe extern "C" fn nfa_regfree(prog: *mut regprog_T) {
+pub(crate) unsafe fn nfa_regfree(prog: *mut regprog_T) {
     unsafe {
         if prog.is_null() {
             return;
@@ -402,7 +402,7 @@ pub(crate) unsafe extern "C" fn nfa_regfree(prog: *mut regprog_T) {
 ///
 /// `rmp` must hold a program this engine compiled, and `line` be a
 /// NUL-terminated string.
-pub(crate) unsafe extern "C" fn nfa_regexec_nl(
+pub(crate) unsafe fn nfa_regexec_nl(
     rmp: *mut regmatch_T,
     line: *mut uint8_t,
     col: colnr_T,
@@ -421,7 +421,7 @@ pub(crate) unsafe extern "C" fn nfa_regexec_nl(
 ///
 /// `rmp` must hold a program this engine compiled, and `buf`/`win` be the
 /// buffer and window the match runs over.
-pub(crate) unsafe extern "C" fn nfa_regexec_multi(
+pub(crate) unsafe fn nfa_regexec_multi(
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,

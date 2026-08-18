@@ -587,7 +587,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
 ///
 /// Kept `extern "C"`: it is installed as a `state_execute_callback` and
 /// `state_enter` calls it through that pointer.
-pub(crate) unsafe extern "C" fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
+pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
     const K_EVENT: c_int = -(253 + ((KE_EVENT as c_int) << 8));
 

@@ -204,7 +204,7 @@ unsafe fn do_in_runtimepath_cb(name: *mut c_char, flags: c_int, sl: *mut spelloa
 ///
 /// NOBREAK is sticky in both directions: a `.add` file inherits it from the
 /// base language, and a base language that declares it passes it on.
-unsafe extern "C" fn spell_load_cb(
+unsafe fn spell_load_cb(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,

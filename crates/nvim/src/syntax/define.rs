@@ -41,7 +41,7 @@ pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut c_int) {
 }
 
 /// `:syntax include [@{cluster}] {file}`.
-pub(crate) unsafe extern "C" fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         let mut arg = (*eap).arg;
         let mut sgl_id = 1;
@@ -164,7 +164,7 @@ unsafe fn free_opt_lists(opt: &syn_opt_arg_T) {
 
 /// `:syntax match {group} [{options}] {pattern} [{options}]`, and
 /// `:syntax sync match {group} [[grouphere|groupthere] {group}] ..`.
-pub(crate) unsafe extern "C" fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
     unsafe {
         let arg = (*eap).arg;
         let mut group_name_end = ::core::ptr::null_mut::<c_char>();
@@ -378,7 +378,7 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
 
 /// `:syntax region {group} [matchgroup={group}] start={pat} .. [skip={pat}]
 /// end={pat} .. [{options}]`.
-pub(crate) unsafe extern "C" fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
     unsafe {
         let arg = (*eap).arg;
         let mut group_name_end = ::core::ptr::null_mut::<c_char>();

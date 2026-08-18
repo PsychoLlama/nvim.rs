@@ -5,7 +5,7 @@
 use super::*;
 
 pub type CompleteListItemGetter =
-    Option<unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
+    Option<unsafe fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct expand_T {

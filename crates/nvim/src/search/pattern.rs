@@ -718,7 +718,7 @@ pub(crate) unsafe fn is_zero_width(
 ///
 /// # Safety
 /// `pat` must be writable. The answer borrows the live slot's string.
-pub unsafe extern "C" fn get_search_pattern(pat: *mut SearchPattern) {
+pub unsafe fn get_search_pattern(pat: *mut SearchPattern) {
     unsafe { *pat = spat(RE_SEARCH) }
 }
 
@@ -727,7 +727,7 @@ pub unsafe extern "C" fn get_search_pattern(pat: *mut SearchPattern) {
 ///
 /// # Safety
 /// `pat` must be writable. The answer borrows the live slot's string.
-pub unsafe extern "C" fn get_substitute_pattern(pat: *mut SearchPattern) {
+pub unsafe fn get_substitute_pattern(pat: *mut SearchPattern) {
     unsafe {
         *pat = spat(RE_SUBST);
         (*pat).off = NO_OFFSET;

@@ -229,7 +229,7 @@ pub(crate) unsafe fn insert_handle_key(s: *mut InsertState) -> c_int {
                     ::core::ptr::null_mut(),
                     Some(
                         getcmdkeycmd
-                            as unsafe extern "C" fn(
+                            as unsafe fn(
                                 c_int,
                                 *mut ::core::ffi::c_void,
                                 c_int,

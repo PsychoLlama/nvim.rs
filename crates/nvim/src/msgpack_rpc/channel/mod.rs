@@ -486,7 +486,7 @@ unsafe extern "C" fn internal_read_event(argv: *mut *mut c_void) {
 
 /// The channel's read callback: decodes as much as the buffer holds and
 /// reports how many bytes were consumed.
-unsafe extern "C" fn receive_msgpack(
+unsafe fn receive_msgpack(
     stream: *mut RStream,
     rbuf: *const c_char,
     c: size_t,

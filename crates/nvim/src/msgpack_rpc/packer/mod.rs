@@ -346,7 +346,7 @@ pub fn packer_string_buffer() -> PackerBuffer {
     }
 }
 
-unsafe extern "C" fn flush_string_buffer(buffer: *mut PackerBuffer) {
+unsafe fn flush_string_buffer(buffer: *mut PackerBuffer) {
     let buffer = &mut *buffer;
     let capacity = buffer.endptr.addr() - buffer.startptr.addr();
     let len = buffer.ptr.addr() - buffer.startptr.addr();

@@ -31,11 +31,11 @@ use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::syn_stack_free_all;
-use crate::types::{OP_NOP, cmdarg_T, linenr_T};
+use crate::types::{LineGetter, OP_NOP, cmdarg_T, linenr_T};
 use crate::ui::vim_beep;
 use crate::undo::anyBufIsChanged;
 use crate::window::do_window;
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint};
 
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
@@ -98,9 +98,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
         let cmd_result = if is_lua {
             map_execute_lua(true, false)
         } else {
-            let getline: Option<
-                unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
-            > = if is_cmdkey {
+            let getline: LineGetter = if is_cmdkey {
                 Some(getcmdkeycmd)
             } else {
                 Some(getexline)

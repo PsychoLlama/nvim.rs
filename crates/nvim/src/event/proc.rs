@@ -423,7 +423,7 @@ unsafe extern "C" fn proc_close_event(argv: *mut *mut c_void) {
 }
 
 /// Drop one reference to `proc`; unlink and report it when the last one goes.
-unsafe extern "C" fn decref(proc: *mut Proc) {
+unsafe fn decref(proc: *mut Proc) {
     (*proc).refcount -= 1;
     if (*proc).refcount != 0 {
         return;
@@ -564,7 +564,7 @@ unsafe extern "C" fn exit_event(argv: *mut *mut c_void) {
 ///
 /// There may still be output to read, but we are inside the libuv loop and
 /// cannot poll for more from here — so the draining is queued as an event.
-unsafe extern "C" fn on_proc_exit(proc: *mut Proc) {
+unsafe fn on_proc_exit(proc: *mut Proc) {
     let uv_loop = (*proc).loop_0;
     logmsg_c!(
         LOGLVL_INF,
@@ -587,6 +587,6 @@ unsafe extern "C" fn on_proc_exit(proc: *mut Proc) {
 }
 
 /// One of the child's streams finished closing.
-unsafe extern "C" fn on_proc_stream_close(_stream: *mut Stream, data: *mut c_void) {
+unsafe fn on_proc_stream_close(_stream: *mut Stream, data: *mut c_void) {
     decref(data as *mut Proc);
 }

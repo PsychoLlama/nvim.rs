@@ -32,7 +32,7 @@ fn byte_garray() -> garray_T {
 ///
 /// # Safety
 /// Callable at any time; reads from the typeahead.
-pub unsafe extern "C" fn getcmdkeycmd(
+pub unsafe fn getcmdkeycmd(
     _promptc: c_int,
     _cookie: *mut c_void,
     _indent: c_int,

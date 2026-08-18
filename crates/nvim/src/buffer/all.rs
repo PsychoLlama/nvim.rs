@@ -41,7 +41,7 @@ use crate::winlayer::{Buf, TabPage, Win};
 // The neighbours, wrapped
 //
 // window.rs, the mark stack and the exception machinery are all still
-// transpiled `unsafe extern "C"` functions over raw pointers; each is reached
+// transpiled `unsafe fn`s over raw pointers; each is reached
 // through one wrapper here rather than through an `unsafe` at every call
 // site.
 

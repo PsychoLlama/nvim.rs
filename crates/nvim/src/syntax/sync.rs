@@ -414,7 +414,7 @@ const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
 
 /// `:syntax sync {settings}`, `:syntax sync match|region|clear ..`, and with no
 /// argument the sync listing.
-pub(crate) unsafe extern "C" fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         let mut arg_start = (*eap).arg;
         if ends_excmd(*arg_start as c_int) != 0 {

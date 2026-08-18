@@ -127,7 +127,7 @@ unsafe fn push_str(lstate: *mut lua_State, s: &core::ffi::CStr) {
 ///
 /// # Safety
 /// Called by the event loop with the watcher it was started on.
-unsafe extern "C" fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
+unsafe fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
     unsafe {
         if (*main_loop.ptr()).closing {
             time_watcher_stop(tw);
@@ -138,7 +138,7 @@ unsafe extern "C" fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void
 
 /// # Safety
 /// Called by the event loop with the watcher being closed.
-unsafe extern "C" fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
+unsafe fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
     unsafe { xfree(tw.cast::<c_void>()) };
 }
 

@@ -737,10 +737,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
         getline_equal(
             (*eap).ea_getline,
             (*eap).cookie,
-            Some(
-                getsourceline
-                    as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
-            ),
+            Some(getsourceline as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
         )
     };
     if !sourced {

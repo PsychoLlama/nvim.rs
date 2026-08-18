@@ -151,7 +151,7 @@ unsafe fn syn_clear_cluster(block: *mut synblock_T, i: c_int) {
 }
 
 /// `:syntax clear [{group}|@{cluster}] ..` and `:syntax sync clear ..`.
-pub(crate) unsafe extern "C" fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int) {
     unsafe {
         let mut arg = (*eap).arg;
         (*eap).nextcmd = find_nextcmd(arg);

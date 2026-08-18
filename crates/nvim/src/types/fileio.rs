@@ -4,9 +4,8 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type CheckItem = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void, *const ::core::ffi::c_char) -> varnumber_T,
->;
+pub type CheckItem =
+    Option<unsafe fn(*mut ::core::ffi::c_void, *const ::core::ffi::c_char) -> varnumber_T>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct FileDescriptor {

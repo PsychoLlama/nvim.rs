@@ -53,7 +53,7 @@ impl Line {
 ///
 /// # Safety
 /// Reads and restores the cursor; unlocks the current line freely.
-pub unsafe extern "C" fn get_c_indent() -> c_int {
+pub unsafe fn get_c_indent() -> c_int {
     unsafe {
         // Remember where the cursor was when we started.
         let cur_curpos = (*curwin.get()).w_cursor;

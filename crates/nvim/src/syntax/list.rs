@@ -17,7 +17,7 @@ const LIST_HL: c_int = HLF_D;
 
 /// `:syntax [list] [{group}|@{cluster}] ..` and `:syntax sync` with no
 /// argument.
-pub(crate) unsafe extern "C" fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
     unsafe {
         let mut arg = (*eap).arg;
 

@@ -225,7 +225,7 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
 }
 
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
-pub(crate) unsafe extern "C" fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         let arg = (*eap).arg;
         let mut group_name_end = ::core::ptr::null_mut::<c_char>();

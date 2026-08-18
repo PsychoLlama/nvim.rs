@@ -505,7 +505,7 @@ pub(crate) unsafe fn command_line_enter(
 
 /// The key loop's `state_check` callback, run before every key is fetched.
 /// Installed in a `VimState`, so this one keeps its C ABI.
-pub(crate) unsafe extern "C" fn command_line_check(state: *mut VimState) -> ::core::ffi::c_int {
+pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_int {
     unsafe {
         let s: *mut CommandLineState = state as *mut CommandLineState;
         let cc = ccline.ptr();

@@ -211,7 +211,7 @@ pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
 /// # Safety
 /// Called with `idx` 0 first, then increasing, with no change to the
 /// function table in between.
-pub unsafe extern "C" fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         static done: GlobalCell<size_t> = GlobalCell::new(0);
         static changed: GlobalCell<c_int> = GlobalCell::new(0);

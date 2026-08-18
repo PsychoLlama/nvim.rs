@@ -9,7 +9,7 @@ use super::*;
 ///
 /// Spelled separately from [`DoInRuntimepathCB`] so a caller can name the bare
 /// function type when it hands one over.
-pub type DoInRuntimepathCBFn = unsafe extern "C" fn(
+pub type DoInRuntimepathCBFn = unsafe fn(
     ::core::ffi::c_int,
     *mut *mut ::core::ffi::c_char,
     bool,

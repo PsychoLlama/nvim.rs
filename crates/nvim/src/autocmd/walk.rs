@@ -164,7 +164,7 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
 /// The `_c`/`_indent`/`_do_concat` parameters exist for `do_cmdline`'s
 /// signature.  A callback handler has no line to give back, so this
 /// answers an empty allocated string -- "not null, keep going".
-pub unsafe extern "C" fn getnextac(
+pub unsafe fn getnextac(
     _c: ::core::ffi::c_int,
     cookie: *mut ::core::ffi::c_void,
     _indent: ::core::ffi::c_int,

@@ -492,7 +492,7 @@ fn normal_redraw() {
 ///
 /// Kept `extern "C"`: it is installed as a `state_check_callback` and
 /// `state_enter` calls it through that pointer.
-pub(crate) unsafe extern "C" fn normal_check(state: *mut VimState) -> c_int {
+pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
     // SAFETY: `state` is the `VimState` at the head of our own `NormalState`,
     // which is what we handed to `state_enter`.
     unsafe {

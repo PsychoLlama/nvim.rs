@@ -11,8 +11,8 @@
 //!
 //! Nothing here is unchecked: the three [`Extent`]s are plain numbers and
 //! everything the stage reaches for is behind the parent's wrappers, so the
-//! four `extern "C"` entry points that wrap a raw `buf_T *` live in the
-//! parent instead and this file forbids `unsafe` outright.
+//! four raw-pointer entry points that wrap a `buf_T *` live in the parent
+//! instead and this file forbids `unsafe` outright.
 //!
 //! Original: `src/nvim/extmark.c`, Vim/Neovim, Vim license.
 

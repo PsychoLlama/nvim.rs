@@ -347,9 +347,9 @@ pub unsafe fn time_to_bytes(time_: c_long, buf: *mut u8) {
     slice::from_raw_parts_mut(buf, 8).copy_from_slice(&(time_ as u64).to_be_bytes());
 }
 
-pub type MergeSortGetFunc = Option<unsafe extern "C" fn(*mut c_void) -> *mut c_void>;
-pub type MergeSortSetFunc = Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>;
-pub type MergeSortCompareFunc = Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>;
+pub type MergeSortGetFunc = Option<unsafe fn(*mut c_void) -> *mut c_void>;
+pub type MergeSortSetFunc = Option<unsafe fn(*mut c_void, *mut c_void)>;
+pub type MergeSortCompareFunc = Option<unsafe fn(*const c_void, *const c_void) -> c_int>;
 
 /// Bottom-up mergesort over an intrusive doubly-linked list, generic via
 /// accessor callbacks. All list knowledge lives behind the callbacks, so

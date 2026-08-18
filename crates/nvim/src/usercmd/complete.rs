@@ -224,7 +224,7 @@ pub unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe extern "C" fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: module contract.
     let (local, global) = unsafe {
         (
@@ -271,7 +271,7 @@ pub unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
 /// # Safety
 /// Nothing is dereferenced; the signature is the one the item-getter table
 /// requires.
-pub unsafe extern "C" fn get_user_cmd_addr_type(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_cmd_addr_type(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     ADDR_TYPES
         .get(idx as usize)
         .map_or(ptr::null_mut(), |row| row.name.as_ptr().cast_mut())
@@ -281,7 +281,7 @@ pub unsafe extern "C" fn get_user_cmd_addr_type(_xp: *mut expand_T, idx: c_int) 
 ///
 /// # Safety
 /// As [`get_user_cmd_addr_type`].
-pub unsafe extern "C" fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// Must stay alphabetical bar the last, which upstream appended.
     static USER_CMD_FLAGS: [&CStr; 10] = [
         c"addr",
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *
 ///
 /// # Safety
 /// As [`get_user_cmd_addr_type`].
-pub unsafe extern "C" fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static USER_CMD_NARGS: [&CStr; 5] = [c"0", c"1", c"*", c"?", c"+"];
     USER_CMD_NARGS
         .get(idx as usize)
@@ -319,7 +319,7 @@ pub unsafe extern "C" fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *
 ///
 /// # Safety
 /// As [`get_user_cmd_addr_type`].
-pub unsafe extern "C" fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if idx >= COMMAND_COMPLETE.len() as c_int {
         return ptr::null_mut();
     }

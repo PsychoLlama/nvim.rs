@@ -30,8 +30,7 @@ pub struct ParserLine {
     pub size: size_t,
     pub allocated: bool,
 }
-pub type ParserLineGetter =
-    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
+pub type ParserLineGetter = Option<unsafe fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ParserPosition {

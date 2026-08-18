@@ -388,7 +388,7 @@ pub unsafe fn buf_meta_total(b: *const buf_T, m: MetaIndex) -> uint32_t {
 // ---------------------------------------------------------------------------
 // The neighbours more than one child reaches
 //
-// Every one of these is still an `unsafe extern "C" fn` over raw pointers, and
+// Every one of these is still an `unsafe fn` over raw pointers, and
 // all any of them needs is a live buffer or window -- which `Buf`/`Win` carry.
 // One wrapper per *exit* therefore makes each call site ordinary code, and the
 // cost is the number of distinct neighbours rather than the number of calls.

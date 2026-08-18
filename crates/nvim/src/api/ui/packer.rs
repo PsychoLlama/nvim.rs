@@ -150,7 +150,7 @@ pub(super) unsafe fn push_call(ui: *mut RemoteUI, name: &'static CStr, args: Arr
 /// # Safety
 ///
 /// Called by the packer with `packer` belonging to a live [`RemoteUI`].
-pub(super) unsafe extern "C" fn ui_flush_callback(packer: *mut PackerBuffer) {
+pub(super) unsafe fn ui_flush_callback(packer: *mut PackerBuffer) {
     unsafe {
         let ui = (*packer).anydata.cast::<RemoteUI>();
         ui_flush_buf(ui, true);

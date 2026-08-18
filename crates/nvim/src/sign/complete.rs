@@ -56,7 +56,7 @@ fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// None; `xp` is unused.
-pub unsafe extern "C" fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match EXPAND_WHAT.get() {
         Expand::Subcmd => nth(&CMDS, idx),
         Expand::Define => nth(

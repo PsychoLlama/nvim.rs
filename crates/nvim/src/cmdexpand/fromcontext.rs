@@ -17,7 +17,7 @@ use core::ptr;
 
 /// The bare function type behind [`CompleteListItemGetter`], for the one
 /// place that compares a generator against a particular function.
-pub(crate) type ItemGetter = unsafe extern "C" fn(*mut expand_T, c_int) -> *mut c_char;
+pub(crate) type ItemGetter = unsafe fn(*mut expand_T, c_int) -> *mut c_char;
 
 /// The `WILD_*` options that name an `EW_*` flag one-for-one.
 const WILDOPT_TO_EW: [(WildOpts, ExpandFlags); 6] = [

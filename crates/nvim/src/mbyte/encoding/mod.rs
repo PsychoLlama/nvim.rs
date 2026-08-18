@@ -361,7 +361,7 @@ fn alnum_lowered(c: c_char) -> c_char {
 ///
 /// The returned pointer is into a `'static` table; the caller must not free
 /// it.
-pub unsafe extern "C" fn get_encoding_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_encoding_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match usize::try_from(idx) {
         Ok(i) if i < IDX_COUNT => ENCODINGS[i].name.as_ptr() as *mut c_char,
         _ => core::ptr::null_mut(),

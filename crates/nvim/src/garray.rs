@@ -1,11 +1,12 @@
-//! Growable array of items (`garray_T`): safe core + C-ABI shims.
+//! Growable array of items (`garray_T`): safe core + raw-pointer shims.
 //!
 //! The struct layout is frozen: call sites all over the crate (and the unit
 //! suite, via FFI) poke the fields directly and `xfree` the data pointer.
 //! Every heap byte stays on the `xmalloc` family so the unit suite's
 //! allocator seam observes the same allocation sequence as before. The
-//! `extern "C"` shims keep the raw-pointer plumbing; the growth policy and
-//! joining logic live in safe code below them.
+//! `unsafe fn` shims keep the raw-pointer plumbing; the growth policy and
+//! joining logic live in safe code below them. Only `ga_clear`/`ga_init`
+//! still carry the C ABI, and only because the unit suite calls them.
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};

@@ -259,7 +259,7 @@ impl HelpTags {
 /// # Safety
 /// `cookie` must be the `Vec<Name>` [`HelpTags::collect`] passed in, and
 /// `fnames` must hold `num_fnames` NUL-terminated names.
-unsafe extern "C" fn found_tagfile_cb(
+unsafe fn found_tagfile_cb(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,

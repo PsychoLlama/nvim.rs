@@ -280,12 +280,9 @@ pub struct TerminalOptions {
     pub close_cb: terminal_close_cb,
     pub force_crlf: bool,
 }
-pub type terminal_close_cb = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
-pub type terminal_read_pause_cb =
-    Option<unsafe extern "C" fn(bool, *mut ::core::ffi::c_void) -> ()>;
-pub type terminal_resize_cb =
-    Option<unsafe extern "C" fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> ()>;
-pub type terminal_resume_cb = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
-pub type terminal_write_cb = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> (),
->;
+pub type terminal_close_cb = Option<unsafe fn(*mut ::core::ffi::c_void) -> ()>;
+pub type terminal_read_pause_cb = Option<unsafe fn(bool, *mut ::core::ffi::c_void) -> ()>;
+pub type terminal_resize_cb = Option<unsafe fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> ()>;
+pub type terminal_resume_cb = Option<unsafe fn(*mut ::core::ffi::c_void) -> ()>;
+pub type terminal_write_cb =
+    Option<unsafe fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ()>;

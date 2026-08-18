@@ -277,7 +277,7 @@ unsafe fn restore_ctrl_o_column() {
 ///
 /// # Safety
 /// `state` must be an `InsertState`.
-unsafe extern "C" fn insert_check(state: *mut VimState) -> c_int {
+unsafe fn insert_check(state: *mut VimState) -> c_int {
     unsafe {
         let s = state as *mut InsertState;
 
@@ -447,7 +447,7 @@ unsafe fn may_scroll_for_wrap(s: *mut InsertState) {
 ///
 /// # Safety
 /// `state` must be an `InsertState`.
-unsafe extern "C" fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
+unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
     unsafe {
         let s = state as *mut InsertState;
 
@@ -723,10 +723,8 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
 
         let mut s = InsertState {
             state: VimState {
-                check: Some(insert_check as unsafe extern "C" fn(*mut VimState) -> c_int),
-                execute: Some(
-                    insert_execute as unsafe extern "C" fn(*mut VimState, c_int) -> c_int,
-                ),
+                check: Some(insert_check as unsafe fn(*mut VimState) -> c_int),
+                execute: Some(insert_execute as unsafe fn(*mut VimState, c_int) -> c_int),
             },
             ca: ::core::ptr::null_mut(),
             mincol: 0,

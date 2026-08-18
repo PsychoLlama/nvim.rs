@@ -868,24 +868,18 @@ unsafe fn indent_or_colon(oap: *mut oparg_T) {
         }
         if (*curbuf.get()).b_p_lisp != 0 {
             if use_indentexpr_for_lisp() {
-                op_reindent(
-                    oap,
-                    Some(get_expr_indent as unsafe extern "C" fn() -> c_int),
-                );
+                op_reindent(oap, Some(get_expr_indent as unsafe fn() -> c_int));
             } else {
-                op_reindent(
-                    oap,
-                    Some(get_lisp_indent as unsafe extern "C" fn() -> c_int),
-                );
+                op_reindent(oap, Some(get_lisp_indent as unsafe fn() -> c_int));
             }
             return;
         }
         op_reindent(
             oap,
             if *(*curbuf.get()).b_p_inde as c_int != NUL {
-                Some(get_expr_indent as unsafe extern "C" fn() -> c_int)
+                Some(get_expr_indent as unsafe fn() -> c_int)
             } else {
-                Some(get_c_indent as unsafe extern "C" fn() -> c_int)
+                Some(get_c_indent as unsafe fn() -> c_int)
             },
         );
     }

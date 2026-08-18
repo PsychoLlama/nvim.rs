@@ -462,7 +462,7 @@ fn empty_dict() -> Dict {
 }
 
 /// The stream layer's close callback: the channel is what owns the stream.
-pub(super) unsafe extern "C" fn close_cb(_stream: *mut Stream, data: *mut c_void) {
+pub(super) unsafe fn close_cb(_stream: *mut Stream, data: *mut c_void) {
     // SAFETY: `data` is the channel the stream was set up with, and the stream
     // held one reference to it.
     unsafe { channel_decref(data.cast()) };

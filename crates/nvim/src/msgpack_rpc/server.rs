@@ -360,7 +360,7 @@ pub unsafe fn server_address_list(size: *mut size_t) -> *mut *mut c_char {
     })
 }
 
-unsafe extern "C" fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut c_void) {
+unsafe fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut c_void) {
     if result != 0 {
         logmsg_c!(
             LOGLVL_ERR,
@@ -376,6 +376,6 @@ unsafe extern "C" fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _
     channel_from_connection(watcher);
 }
 
-unsafe extern "C" fn free_server(watcher: *mut SocketWatcher, _data: *mut c_void) {
+unsafe fn free_server(watcher: *mut SocketWatcher, _data: *mut c_void) {
     xfree(watcher.cast::<c_void>());
 }

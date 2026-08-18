@@ -37,7 +37,7 @@ unsafe fn mode_cmd_start(eap: *mut exarg_T) -> bool {
 }
 
 /// `:syntax conceal [on|off]`.
-pub(crate) unsafe extern "C" fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         if !mode_cmd_start(eap) {
             return;
@@ -60,7 +60,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_i
 }
 
 /// `:syntax case [match|ignore]`.
-pub(crate) unsafe extern "C" fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         if !mode_cmd_start(eap) {
             return;
@@ -83,7 +83,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int)
 }
 
 /// `:syntax foldlevel [start|minimum]`.
-pub(crate) unsafe extern "C" fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         if !mode_cmd_start(eap) {
             return;
@@ -118,7 +118,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c
 }
 
 /// `:syntax spell [toplevel|notoplevel|default]`.
-pub(crate) unsafe extern "C" fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         if !mode_cmd_start(eap) {
             return;
@@ -153,7 +153,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int
 /// The value is installed by running it through `'iskeyword'`'s own parser on
 /// the current buffer and keeping the character table that produces, so the
 /// buffer's own table has to be saved and put back around the call.
-pub(crate) unsafe extern "C" fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         if (*eap).skip != 0 {
             return;
@@ -205,12 +205,12 @@ pub(crate) unsafe extern "C" fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c
 }
 
 /// `:syntax on` / `:syntax enable`.
-pub(crate) unsafe extern "C" fn syn_cmd_on(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_on(eap: *mut exarg_T, _syncing: c_int) {
     unsafe { syn_cmd_onoff(eap, c"syntax") }
 }
 
 /// `:syntax reset`. It actually resets highlighting, not syntax.
-pub(crate) unsafe extern "C" fn syn_cmd_reset(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_reset(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         (*eap).nextcmd = check_nextcmd((*eap).arg);
         if (*eap).skip == 0 {
@@ -220,12 +220,12 @@ pub(crate) unsafe extern "C" fn syn_cmd_reset(eap: *mut exarg_T, _syncing: c_int
 }
 
 /// `:syntax manual`.
-pub(crate) unsafe extern "C" fn syn_cmd_manual(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_manual(eap: *mut exarg_T, _syncing: c_int) {
     unsafe { syn_cmd_onoff(eap, c"manual") }
 }
 
 /// `:syntax off`.
-pub(crate) unsafe extern "C" fn syn_cmd_off(eap: *mut exarg_T, _syncing: c_int) {
+pub(crate) unsafe fn syn_cmd_off(eap: *mut exarg_T, _syncing: c_int) {
     unsafe { syn_cmd_onoff(eap, c"nosyntax") }
 }
 
@@ -270,11 +270,11 @@ pub unsafe fn syn_maybe_enable() {
 /// One `:syntax` subcommand.
 pub(crate) struct SubCommand {
     pub(crate) name: &'static CStr,
-    func: unsafe extern "C" fn(*mut exarg_T, c_int),
+    func: unsafe fn(*mut exarg_T, c_int),
 }
 
 /// A `const fn` constructor keeps each entry on one line under rustfmt.
-const fn sub(name: &'static CStr, func: unsafe extern "C" fn(*mut exarg_T, c_int)) -> SubCommand {
+const fn sub(name: &'static CStr, func: unsafe fn(*mut exarg_T, c_int)) -> SubCommand {
     SubCommand { name, func }
 }
 

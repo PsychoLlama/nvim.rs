@@ -361,7 +361,7 @@ fn scan_columns(
 ///
 /// `rmp` must hold a program this engine compiled, and `line` be a
 /// NUL-terminated string.
-pub(crate) unsafe extern "C" fn bt_regexec_nl(
+pub(crate) unsafe fn bt_regexec_nl(
     rmp: *mut regmatch_T,
     line: *mut uint8_t,
     col: colnr_T,
@@ -380,7 +380,7 @@ pub(crate) unsafe extern "C" fn bt_regexec_nl(
 ///
 /// `rmp` must hold a program this engine compiled, and `buf`/`win` be the
 /// buffer and window the match runs over.
-pub(crate) unsafe extern "C" fn bt_regexec_multi(
+pub(crate) unsafe fn bt_regexec_multi(
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,

@@ -125,7 +125,7 @@ const SYNC_ARGS: [&CStr; 10] = [
 
 /// `ExpandGeneric`'s callback: the `idx`th completion candidate, or NULL past
 /// the end.
-pub unsafe extern "C" fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         let nth = |names: &[&CStr]| {
             usize::try_from(idx)

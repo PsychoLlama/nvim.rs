@@ -48,7 +48,7 @@ pub unsafe fn channel_terminal_alloc(buf: *mut buf_T, chan: *mut Channel) {
 }
 
 /// Back-pressure from the terminal: stop reading while it catches up.
-unsafe extern "C" fn term_read_pause(pause: bool, data: *mut c_void) {
+unsafe fn term_read_pause(pause: bool, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on.
     unsafe {
         let out = &raw mut (*data.cast::<Channel>()).stream.proc.out;
@@ -64,7 +64,7 @@ unsafe extern "C" fn term_read_pause(pause: bool, data: *mut c_void) {
 }
 
 /// The user typed into the terminal; forward it to the child.
-unsafe extern "C" fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
+unsafe fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on, and
     // `buf` is `size` readable bytes for the duration of the call.
     unsafe {
@@ -85,18 +85,18 @@ unsafe extern "C" fn term_write(buf: *const c_char, size: size_t, data: *mut c_v
     }
 }
 
-unsafe extern "C" fn term_resize(width: uint16_t, height: uint16_t, data: *mut c_void) {
+unsafe fn term_resize(width: uint16_t, height: uint16_t, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on.
     unsafe { pty_proc_resize(channel_pty(data.cast()), width, height) };
 }
 
-unsafe extern "C" fn term_resume(data: *mut c_void) {
+unsafe fn term_resume(data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on.
     unsafe { pty_proc_resume(channel_pty(data.cast())) };
 }
 
 /// The terminal window went away: stop the child and wait for its streams.
-unsafe extern "C" fn term_close(data: *mut c_void) {
+unsafe fn term_close(data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on; its
     // queue outlives the event this puts on it.
     unsafe {

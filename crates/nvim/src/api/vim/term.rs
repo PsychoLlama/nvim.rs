@@ -65,23 +65,20 @@ pub unsafe extern "C" fn nvim_open_term(
                 0 as ::core::ffi::c_int
             }) as uint16_t,
             height: (*curwin.get()).w_view_height as uint16_t,
-            read_pause_cb: Some(
-                term_read_pause as unsafe extern "C" fn(bool, *mut ::core::ffi::c_void) -> (),
-            ),
+            read_pause_cb: Some(term_read_pause as unsafe fn(bool, *mut ::core::ffi::c_void) -> ()),
             write_cb: Some(
                 term_write
-                    as unsafe extern "C" fn(
+                    as unsafe fn(
                         *const ::core::ffi::c_char,
                         size_t,
                         *mut ::core::ffi::c_void,
                     ) -> (),
             ),
             resize_cb: Some(
-                term_resize
-                    as unsafe extern "C" fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> (),
+                term_resize as unsafe fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> (),
             ),
-            resume_cb: Some(term_resume as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
-            close_cb: Some(term_close as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
+            resume_cb: Some(term_resume as unsafe fn(*mut ::core::ffi::c_void) -> ()),
+            close_cb: Some(term_close as unsafe fn(*mut ::core::ffi::c_void) -> ()),
             force_crlf: if has_key(
                 (*opts).is_set__open_term_,
                 KEYSET_OPTIDX_open_term__force_crlf,
@@ -123,9 +120,9 @@ pub unsafe extern "C" fn nvim_open_term(
     }
 }
 
-unsafe extern "C" fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
+unsafe fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
 
-unsafe extern "C" fn term_write(
+unsafe fn term_write(
     mut buf: *const ::core::ffi::c_char,
     mut size: size_t,
     mut data: *mut ::core::ffi::c_void,
@@ -169,16 +166,16 @@ unsafe extern "C" fn term_write(
     }
 }
 
-unsafe extern "C" fn term_resize(
+unsafe fn term_resize(
     mut _width: uint16_t,
     mut _height: uint16_t,
     mut _data: *mut ::core::ffi::c_void,
 ) {
 }
 
-unsafe extern "C" fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
+unsafe fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
 
-unsafe extern "C" fn term_close(mut data: *mut ::core::ffi::c_void) {
+unsafe fn term_close(mut data: *mut ::core::ffi::c_void) {
     unsafe {
         let mut chan: *mut Channel = data as *mut Channel;
         terminal_destroy(&raw mut (*chan).term);

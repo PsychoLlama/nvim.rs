@@ -181,7 +181,7 @@ struct ListLines {
 ///
 /// # Safety
 /// `cookie` points at a live [`ListLines`].
-unsafe extern "C" fn get_list_line(
+unsafe fn get_list_line(
     _c: c_int,
     cookie: *mut c_void,
     _indent: c_int,
@@ -285,10 +285,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
             };
             do_cmdline(
                 ptr::null_mut(),
-                Some(
-                    get_list_line
-                        as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
-                ),
+                Some(get_list_line as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
                 &raw mut cookie as *mut c_void,
                 DOCMD_NOWAIT as c_int
                     | DOCMD_VERBOSE as c_int

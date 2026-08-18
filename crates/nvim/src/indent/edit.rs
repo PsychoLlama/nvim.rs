@@ -130,7 +130,7 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
                 let lisp_first = i as linenr_T == line_count - 1
                     && line_count != 1
                     && how.is_some_and(|f| {
-                        ptr::fn_addr_eq(f, get_lisp_indent as unsafe extern "C" fn() -> c_int)
+                        ptr::fn_addr_eq(f, get_lisp_indent as unsafe fn() -> c_int)
                     });
                 if !lisp_first {
                     // A blank line gets no indent rather than the engine's.

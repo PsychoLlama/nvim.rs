@@ -190,7 +190,7 @@ unsafe fn packer_buffer_finish(packer: &mut PackerBuffer) {
 }
 
 /// The packer ran out of room: send what there is and start a fresh block.
-unsafe extern "C" fn channel_flush_callback(packer: *mut PackerBuffer) {
+unsafe fn channel_flush_callback(packer: *mut PackerBuffer) {
     packer_buffer_finish(&mut *packer);
     *packer = packer_buffer_init(
         (*packer).anydata as *mut *mut Channel,

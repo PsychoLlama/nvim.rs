@@ -242,7 +242,7 @@ impl Generator {
 ///
 /// # Safety
 /// Called by the completion machinery with the indices `0..` in order.
-pub unsafe extern "C" fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -262,7 +262,7 @@ pub unsafe extern "C" fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c
 ///
 /// # Safety
 /// As [`get_menu_name`].
-pub unsafe extern "C" fn get_menu_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_menu_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// Scratch for the one candidate at a time a submenu is answered with.
     static TBUFFER: GlobalCell<[u8; TBUFFER_LEN]> = GlobalCell::new([0; TBUFFER_LEN]);
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);

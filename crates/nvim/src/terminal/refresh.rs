@@ -124,7 +124,7 @@ pub unsafe fn terminal_check_refresh() {
     unsafe { multiqueue_process_events(refresh_queue()) };
 }
 
-unsafe extern "C" fn refresh_timer_cb(_watcher: *mut TimeWatcher, _data: *mut c_void) {
+unsafe fn refresh_timer_cb(_watcher: *mut TimeWatcher, _data: *mut c_void) {
     REFRESH_PENDING.set(false);
     if exiting.get() {
         return;

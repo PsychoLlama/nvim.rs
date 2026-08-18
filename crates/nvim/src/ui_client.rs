@@ -439,7 +439,7 @@ pub unsafe fn handle_ui_client_redraw(
 /// One event's name and the wrapper that decodes it.
 struct Handler {
     event: &'static CStr,
-    wrapper: unsafe extern "C" fn(Array),
+    wrapper: unsafe fn(Array),
 }
 
 /// Every `redraw` event this client understands.
@@ -592,7 +592,7 @@ macro_rules! forward {
         /// # Safety
         ///
         /// `args` must be the array the decoder produced for this event.
-        pub unsafe extern "C" fn $wrapper(args: Array) {
+        pub unsafe fn $wrapper(args: Array) {
             // An event may take no arguments, in which case neither of
             // these is read; borrowing them keeps that case warning-free
             // without an allow on every wrapper.
@@ -663,7 +663,7 @@ forward! {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe extern "C" fn ui_client_event_grid_resize(args: Array) {
+pub unsafe fn ui_client_event_grid_resize(args: Array) {
     unsafe {
         let (Some(grid), Some(width), Some(height)) = (
             arg(args, 0, Some(kObjectTypeInteger)),
@@ -696,7 +696,7 @@ pub unsafe extern "C" fn ui_client_event_grid_resize(args: Array) {
 /// # Safety
 ///
 /// Trivially; it exists to be named.
-pub unsafe extern "C" fn ui_client_event_grid_line(_args: Array) {
+pub unsafe fn ui_client_event_grid_line(_args: Array) {
     unreachable!("grid_line is decoded by the unpacker, not dispatched");
 }
 
@@ -733,7 +733,7 @@ pub unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe extern "C" fn ui_client_event_hl_attr_define(args: Array) {
+pub unsafe fn ui_client_event_hl_attr_define(args: Array) {
     unsafe {
         let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
             arg(args, 0, Some(kObjectTypeInteger)),
@@ -796,7 +796,7 @@ unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe extern "C" fn ui_client_event_error_exit(args: Array) {
+pub unsafe fn ui_client_event_error_exit(args: Array) {
     let Some(status) = (unsafe { arg(args, 0, Some(kObjectTypeInteger)) }) else {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
@@ -812,7 +812,7 @@ pub unsafe extern "C" fn ui_client_event_error_exit(args: Array) {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe extern "C" fn ui_client_event_connect(args: Array) {
+pub unsafe fn ui_client_event_connect(args: Array) {
     let Some(address) = (unsafe { arg(args, 0, Some(kObjectTypeString)) }) else {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
@@ -900,7 +900,7 @@ static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe extern "C" fn ui_client_event_restart(args: Array) {
+pub unsafe fn ui_client_event_restart(args: Array) {
     unsafe {
         api_free_array(restart_args.get());
         restart_args.set(copy_array(args, core::ptr::null_mut::<Arena>()));

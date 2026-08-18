@@ -104,7 +104,7 @@ pub unsafe fn ex_helptags(eap: *mut exarg_T) {
 /// # Safety
 /// `fnames` holds `num_fnames` NUL-terminated directory names and `cookie`
 /// points at the caller's `bool`.
-unsafe extern "C" fn helptags_cb(
+unsafe fn helptags_cb(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,

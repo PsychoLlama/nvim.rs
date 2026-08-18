@@ -659,11 +659,7 @@ unsafe fn tui_suspend_cb(tui: *mut TUIData) {
 ///
 /// # Safety
 /// Called by the signal watcher with the TUI as its data.
-unsafe extern "C" fn sigwinch_cb(
-    _watcher: *mut SignalWatcher,
-    _signum: c_int,
-    cbdata: *mut c_void,
-) {
+unsafe fn sigwinch_cb(_watcher: *mut SignalWatcher, _signum: c_int, cbdata: *mut c_void) {
     let tui: *mut TUIData = cbdata.cast();
     // SAFETY: the watcher holds this TUI's own pointer.
     unsafe {

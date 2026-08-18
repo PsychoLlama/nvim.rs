@@ -69,7 +69,7 @@ pub(super) fn callback_reader_set(reader: CallbackReader) -> bool {
     reader.cb.type_0 != kCallbackNone || !reader.self_0.is_null()
 }
 
-pub unsafe extern "C" fn on_channel_data(
+pub unsafe fn on_channel_data(
     stream: *mut RStream,
     buf: *const c_char,
     count: size_t,
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn on_channel_data(
     unsafe { on_channel_output(stream, chan, buf, count, eof, &raw mut (*chan).on_data) }
 }
 
-pub unsafe extern "C" fn on_job_stderr(
+pub unsafe fn on_job_stderr(
     stream: *mut RStream,
     buf: *const c_char,
     count: size_t,

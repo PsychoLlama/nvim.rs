@@ -200,7 +200,7 @@ pub(crate) unsafe fn do_os_system(
 /// # Safety
 /// An `stream_read_cb`: `buf` readable for `count` bytes, `data` a live
 /// [`StringBuilder`].
-unsafe extern "C" fn system_data_cb(
+unsafe fn system_data_cb(
     _stream: *mut RStream,
     buf: *const c_char,
     count: size_t,
@@ -236,7 +236,7 @@ unsafe extern "C" fn system_data_cb(
 ///
 /// # Safety
 /// A `stream_write_cb`; `stream` must be live.
-unsafe extern "C" fn shell_write_cb(stream: *mut Stream, _data: *mut c_void, status: c_int) {
+unsafe fn shell_write_cb(stream: *mut Stream, _data: *mut c_void, status: c_int) {
     // SAFETY: the caller's contract; `msg_schedule_semsg` is printf-shaped
     // and `uv_err_name` answers a static string.
     unsafe {

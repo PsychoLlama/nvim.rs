@@ -92,7 +92,7 @@ fn init_users() {
 }
 
 /// Given to `ExpandGeneric()` to obtain user names. NULL past the end.
-pub unsafe extern "C" fn get_users(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_users(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     init_users();
     COMPLETION_USERS.with(|users| {
         usize::try_from(idx)

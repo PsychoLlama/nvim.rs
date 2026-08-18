@@ -332,7 +332,7 @@ pub unsafe fn channel_from_stdio(
 
 /// The child exited, or its handles closed. `status` is negative for the
 /// latter, which is what "closed without an exit status" means here.
-unsafe extern "C" fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data: *mut c_void) {
+unsafe fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data: *mut c_void) {
     // SAFETY: `data` is the channel the process was set up with, and the
     // process held one reference to it.
     unsafe {
@@ -359,7 +359,7 @@ unsafe extern "C" fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data:
 }
 
 /// The child was stopped or continued; only a terminal cares.
-unsafe extern "C" fn channel_proc_state_cb(_proc: *mut Proc, suspended: bool, data: *mut c_void) {
+unsafe fn channel_proc_state_cb(_proc: *mut Proc, suspended: bool, data: *mut c_void) {
     // SAFETY: `data` is the channel the process was set up with.
     unsafe {
         let chan = data.cast::<Channel>();

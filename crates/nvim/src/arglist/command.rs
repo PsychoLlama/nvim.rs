@@ -471,7 +471,7 @@ unsafe fn delete_arg_range(eap: *mut exarg_T) {
 /// # Safety
 ///
 /// Standard `ExpandGeneric()` contract.
-pub unsafe extern "C" fn get_arglist_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_arglist_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if idx >= argcount() {
         return ptr::null_mut();
     }

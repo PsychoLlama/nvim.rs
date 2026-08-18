@@ -242,7 +242,7 @@ pub(crate) fn out_data_append_to_screen(output: &[u8], count: &mut usize, fd: c_
 /// # Safety
 /// An `stream_read_cb`: `ptr` must be readable for `count` bytes and `stream`
 /// live.
-pub(crate) unsafe extern "C" fn out_data_cb(
+pub(crate) unsafe fn out_data_cb(
     stream: *mut RStream,
     ptr: *const c_char,
     mut count: size_t,

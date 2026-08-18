@@ -476,7 +476,7 @@ unsafe fn dict_add_bool(d: *mut dict_T, key: &CStr, val: BoolVarValue) {
 /// `do_source()`.
 ///
 /// Returns the line in allocated memory, or null at end of file or on error.
-pub unsafe extern "C" fn getsourceline(
+pub unsafe fn getsourceline(
     _c: c_int,
     cookie: *mut c_void,
     _indent: c_int,

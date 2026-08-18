@@ -79,7 +79,7 @@ pub const DONE_ACTION: c_int = 1;
 pub const DONE_FOLD: c_int = 2;
 
 /// One of the six per-'foldmethod' level computations in this file.
-pub type LevelGetter = Option<unsafe extern "C" fn(*mut fline_T) -> ()>;
+pub type LevelGetter = Option<unsafe fn(*mut fline_T) -> ()>;
 
 #[derive(Copy, Clone)]
 pub struct fold_T {

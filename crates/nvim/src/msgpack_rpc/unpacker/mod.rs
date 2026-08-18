@@ -621,7 +621,7 @@ unsafe fn parse_redraw(p: *mut Unpacker, cursor: &mut Cursor) -> Result<bool, Ha
         (*p).read_size = cursor.size;
 
         let is_grid_line = (*p).ui_handler.fn_0.is_some_and(|f| {
-            core::ptr::fn_addr_eq(f, ui_client_event_grid_line as unsafe extern "C" fn(Array))
+            core::ptr::fn_addr_eq(f, ui_client_event_grid_line as unsafe fn(Array))
         });
         if !is_grid_line {
             (*p).state = protocol::REDRAW_ARGS;

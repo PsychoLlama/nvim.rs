@@ -422,7 +422,7 @@ fn had_endbrace_seen(parno: c_int) {
 /// # Safety
 ///
 /// `expr` must be a NUL-terminated pattern.
-pub(crate) unsafe extern "C" fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut regprog_T {
+pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut regprog_T {
     // SAFETY: `expr` is a NUL-terminated pattern. `r` is this function's own
     // allocation, sized by the pass that runs before anything is written into
     // it, and is either handed to the caller or freed here.
@@ -581,7 +581,7 @@ pub(crate) fn coll_get_char() -> c_int {
 /// # Safety
 ///
 /// `prog` must be a program this module compiled, or null.
-pub(crate) unsafe extern "C" fn bt_regfree(prog: *mut regprog_T) {
+pub(crate) unsafe fn bt_regfree(prog: *mut regprog_T) {
     // SAFETY: one `xmalloc` block, with nothing owned inside it.
     unsafe { xfree(prog.cast()) };
 }

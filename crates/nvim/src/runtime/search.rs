@@ -166,7 +166,7 @@ pub(crate) unsafe fn matches<'a>(num_fnames: c_int, fnames: *mut *mut c_char) ->
 ///
 /// # Safety
 /// As [`source_matching`].
-pub(crate) unsafe extern "C" fn source_callback_vim_lua(
+pub(crate) unsafe fn source_callback_vim_lua(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,
@@ -187,7 +187,7 @@ pub(crate) unsafe extern "C" fn source_callback_vim_lua(
 ///
 /// # Safety
 /// As [`source_matching`].
-pub(crate) unsafe extern "C" fn source_callback(
+pub(crate) unsafe fn source_callback(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,

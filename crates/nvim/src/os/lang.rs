@@ -347,7 +347,7 @@ fn locale_name(idx: c_int) -> *mut c_char {
 /// # Safety
 /// Nothing is dereferenced; the signature is the one the `ItemGetter`
 /// function-pointer table demands.
-pub unsafe extern "C" fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match SELECTORS.get(idx as usize) {
         Some((name, ..)) => name.as_ptr().cast::<c_char>().cast_mut(),
         None => locale_name(idx - SELECTORS.len() as c_int),
@@ -359,7 +359,7 @@ pub unsafe extern "C" fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_
 /// # Safety
 /// Nothing is dereferenced; the signature is the one the `ItemGetter`
 /// function-pointer table demands.
-pub unsafe extern "C" fn get_locales(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_locales(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     locale_name(idx)
 }
 

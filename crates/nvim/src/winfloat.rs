@@ -11,8 +11,8 @@
 //!
 //! Every entry point keeps the C's raw signature and wraps its window in
 //! [`Win`] on the first line, so the bodies below are ordinary field access.
-//! The neighbours this file reaches into are all still transpiled
-//! `unsafe extern "C"` functions over raw pointers, and each is reached through
+//! The neighbours this file reaches into are all still transpiled `unsafe fn`s
+//! over raw pointers, and each is reached through
 //! exactly one wrapper below rather than through an `unsafe` at every call
 //! site; those wrappers are safe because their whole precondition is "a live
 //! window, tab page or buffer", which [`Win`], [`TabPage`] and [`Buf`] carry.
@@ -215,7 +215,7 @@ fn concat(old: *const c_char, tail: &'static CStr) -> *mut c_char {
 // ---------------------------------------------------------------------------
 // window.rs and the API helpers, wrapped
 //
-// Each of these is still an `unsafe extern "C" fn` over raw pointers, and all
+// Each of these is still an `unsafe fn` over raw pointers, and all
 // any of them needs is a live window, tab page or buffer -- which the argument
 // types below already carry. So the obligation is discharged once here, and
 // every call site in this file is ordinary code. They collapse to nothing when

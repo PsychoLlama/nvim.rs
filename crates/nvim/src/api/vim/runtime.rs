@@ -123,7 +123,7 @@ pub unsafe extern "C" fn nvim_get_runtime_file(
             flags,
             Some(
                 find_runtime_cb
-                    as unsafe extern "C" fn(
+                    as unsafe fn(
                         ::core::ffi::c_int,
                         *mut *mut ::core::ffi::c_char,
                         bool,
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn nvim_get_runtime_file(
     }
 }
 
-unsafe extern "C" fn find_runtime_cb(
+unsafe fn find_runtime_cb(
     mut num_fnames: ::core::ffi::c_int,
     mut fnames: *mut *mut ::core::ffi::c_char,
     mut all: bool,

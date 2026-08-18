@@ -479,7 +479,7 @@ pub(crate) unsafe fn packer_buffer_for_file(file: *mut FileDescriptor) -> Packer
 
 /// Hand what has been packed to the file, and start again at whatever it
 /// leaves in its buffer.
-unsafe extern "C" fn flush_file_buffer(buffer: *mut PackerBuffer) {
+unsafe fn flush_file_buffer(buffer: *mut PackerBuffer) {
     unsafe {
         let fd = (*buffer).anydata.cast::<FileDescriptor>();
         (*fd).write_pos = (*buffer).ptr;

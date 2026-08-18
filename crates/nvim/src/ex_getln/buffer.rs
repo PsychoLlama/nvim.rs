@@ -136,7 +136,7 @@ fn stuff_char(c: ::core::ffi::c_int) {
 /// `c` is normally `:`, and NUL for `:append`; `indent` is the indent for
 /// inside conditionals.  Registered as a `LineGetter` in several tables, so
 /// this one keeps its C ABI.
-pub unsafe extern "C" fn getexline(
+pub unsafe fn getexline(
     c: ::core::ffi::c_int,
     _cookie: *mut ::core::ffi::c_void,
     indent: ::core::ffi::c_int,

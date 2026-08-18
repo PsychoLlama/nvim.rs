@@ -513,7 +513,7 @@ fn terminal_check_focus(mut s: Session) -> bool {
 
 /// The mode loop's per-iteration work: refresh, redraw, and place the
 /// cursor. Returning zero leaves terminal mode.
-unsafe extern "C" fn terminal_check(state: *mut VimState) -> c_int {
+unsafe fn terminal_check(state: *mut VimState) -> c_int {
     // SAFETY: the state stack hands back the session this module pushed.
     let mut s = unsafe { Session::of(state) };
     debug_assert!(
@@ -584,7 +584,7 @@ unsafe extern "C" fn terminal_check(state: *mut VimState) -> c_int {
 }
 
 /// Dispatch one key. Returning zero leaves terminal mode.
-unsafe extern "C" fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
+unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
     // SAFETY: the state stack hands back the session this module pushed.
     let mut s = unsafe { Session::of(state) };
     // `merge_modifiers` folds a pending modifier into the key so that e.g.

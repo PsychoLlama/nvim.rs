@@ -494,7 +494,7 @@ unsafe extern "C" fn connect_cb(req: *mut uv_connect_t, status: c_int) {
 }
 
 /// A stream opened by [`socket_connect`] finished closing.
-unsafe extern "C" fn connect_close_cb(_stream: *mut Stream, data: *mut c_void) {
+unsafe fn connect_close_cb(_stream: *mut Stream, data: *mut c_void) {
     *data.cast::<bool>() = true;
 }
 

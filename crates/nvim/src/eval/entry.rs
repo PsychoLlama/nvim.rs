@@ -625,7 +625,7 @@ pub unsafe fn call_vim_function(
 ///
 /// # Safety
 /// As `call_vim_function`.
-pub unsafe extern "C" fn call_func_retstr(
+pub unsafe fn call_func_retstr(
     func: *const c_char,
     argc: c_int,
     argv: *mut typval_T,
@@ -646,7 +646,7 @@ pub unsafe extern "C" fn call_func_retstr(
 ///
 /// # Safety
 /// As `call_vim_function`.
-pub unsafe extern "C" fn call_func_retlist(
+pub unsafe fn call_func_retlist(
     func: *const c_char,
     argc: c_int,
     argv: *mut typval_T,

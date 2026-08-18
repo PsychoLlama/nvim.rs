@@ -226,7 +226,7 @@ pub unsafe fn trigger_cursorhold() -> bool {
 
 /// Completion source for `:autocmd`'s event argument: the augroup names
 /// first (when [`autocmd_include_groups`] is set), then every event name.
-pub unsafe extern "C" fn expand_get_event_name(
+pub unsafe fn expand_get_event_name(
     _xp: *mut expand_T,
     idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {

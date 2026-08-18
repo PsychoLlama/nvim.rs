@@ -47,7 +47,7 @@ pub struct RemoteUI {
 #[repr(C)]
 pub struct UIClientHandler {
     pub name: *const ::core::ffi::c_char,
-    pub fn_0: Option<unsafe extern "C" fn(Array) -> ()>,
+    pub fn_0: Option<unsafe fn(Array) -> ()>,
 }
 pub type UIExtension = ::core::ffi::c_uint;
 /// The `ext_*` UI capabilities, indexing `ui_ext` and the `ui_options`

@@ -584,7 +584,7 @@ unsafe fn add_pack_plugins(
 ///
 /// # Safety
 /// As [`add_pack_plugins`].
-unsafe extern "C" fn add_start_pack_plugins(
+unsafe fn add_start_pack_plugins(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,
@@ -599,7 +599,7 @@ unsafe extern "C" fn add_start_pack_plugins(
 ///
 /// # Safety
 /// As [`add_pack_plugins`].
-unsafe extern "C" fn add_opt_pack_plugins(
+unsafe fn add_opt_pack_plugins(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,
@@ -656,7 +656,7 @@ const START_PATTERNS: [&CStr; 2] = [c"/start/*", c"/pack/*/start/*"];
 ///
 /// # Safety
 /// `fnames` must hold `num_fnames` NUL-terminated directories.
-unsafe extern "C" fn add_pack_start_dir(
+unsafe fn add_pack_start_dir(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
     all: bool,

@@ -195,7 +195,7 @@ pub unsafe fn call_internal_method(
 ///
 /// # Safety
 /// `xp` is a live expansion context.
-pub unsafe extern "C" fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// How far into the builtin table the walk has got. Negative while the
     /// user's own functions are still being offered.
     static BUILTIN_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
@@ -245,7 +245,7 @@ pub unsafe extern "C" fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mu
 ///
 /// # Safety
 /// `xp` is a live expansion context.
-pub unsafe extern "C" fn get_expr_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_expr_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// How far into the variable list the walk has got. Negative while the
     /// functions are still being offered.
     static VAR_IDX: GlobalCell<c_int> = GlobalCell::new(-1);

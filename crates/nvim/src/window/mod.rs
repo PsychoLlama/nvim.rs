@@ -425,7 +425,7 @@ pub(crate) fn valid_win(win: *mut win_T) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // The neighbours more than one child reaches
 //
-// Everything the window family calls outside it is still `unsafe extern "C"`
+// Everything the window family calls outside it is still an `unsafe fn`
 // over raw pointers, and all any of these needs is a live window or tab page --
 // which `Win` and `TabPage` already carry. Wrapping each *exit* once here, in
 // the module every child can see through `use super::*`, costs one unchecked

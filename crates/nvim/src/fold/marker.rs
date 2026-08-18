@@ -218,7 +218,7 @@ pub(super) unsafe fn parseMarker(mut wp: *mut win_T) {
 /// Careful: This means you can't call this function twice on the same line.
 /// Doesn't use any caching.
 /// Sets flp->start when a start marker was found.
-pub(super) unsafe extern "C" fn foldlevelMarker(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevelMarker(mut flp: *mut fline_T) {
     let mut start_lvl: c_int = (*flp).lvl;
     let mut startmarker: *mut c_char = (*(*flp).wp).w_onebuf_opt.wo_fmr;
     let mut cstart: c_char = *startmarker;

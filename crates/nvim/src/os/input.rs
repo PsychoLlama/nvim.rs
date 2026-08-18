@@ -721,7 +721,7 @@ fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> TriState {
 ///
 /// # Safety
 /// An `stream_read_cb`; `buf` must be readable for `count` bytes.
-unsafe extern "C" fn input_read_cb(
+unsafe fn input_read_cb(
     _stream: *mut RStream,
     buf: *const c_char,
     count: size_t,

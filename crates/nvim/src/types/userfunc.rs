@@ -5,7 +5,7 @@
 use super::*;
 
 pub type ArgvFunc = Option<
-    unsafe extern "C" fn(
+    unsafe fn(
         ::core::ffi::c_int,
         *mut typval_T,
         ::core::ffi::c_int,

@@ -338,7 +338,7 @@ pub unsafe fn excmd_get_argt(idx: cmdidx_T) -> uint32_t {
 ///
 /// Keeps `extern "C"`: cmdexpand's generator table holds it as a function
 /// pointer of that ABI.
-pub unsafe extern "C" fn get_command_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_command_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         if idx >= CMD_SIZE as c_int {
             return expand_user_command_name(idx);

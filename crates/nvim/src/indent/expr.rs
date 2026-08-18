@@ -34,7 +34,7 @@ use ::libc::strcmp;
 ///
 /// # Safety
 /// There must be a current window and buffer.
-pub unsafe extern "C" fn get_expr_indent() -> c_int {
+pub unsafe fn get_expr_indent() -> c_int {
     let win = curwin.get();
     let buf = curbuf.get();
     // SAFETY: the caller's contract; `curwin` and `curbuf` are the current
@@ -357,7 +357,7 @@ unsafe fn measure_first_argument(
 ///
 /// # Safety
 /// There must be a current window and buffer.
-pub unsafe extern "C" fn get_lisp_indent() -> c_int {
+pub unsafe fn get_lisp_indent() -> c_int {
     // SAFETY: the caller's contract; the cursor is put back before returning
     // whichever path answers.
     unsafe {

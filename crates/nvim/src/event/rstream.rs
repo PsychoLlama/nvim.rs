@@ -244,7 +244,7 @@ pub unsafe fn rstream_consume(stream: *mut RStream, consumed: size_t) {
 }
 
 /// The stream's close callback: give the arena block back.
-unsafe extern "C" fn rstream_close_cb(s: *mut Stream, data: *mut c_void) {
+unsafe fn rstream_close_cb(s: *mut Stream, data: *mut c_void) {
     let stream = data as *mut RStream;
     debug_assert!(!stream.is_null() && s == &raw mut (*stream).s);
     if !(*stream).buffer.is_null() {

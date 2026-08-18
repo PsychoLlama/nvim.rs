@@ -365,10 +365,7 @@ pub unsafe fn call_user_func(
             // Call do_cmdline() to execute the lines.
             do_cmdline(
                 ptr::null_mut(),
-                Some(
-                    get_func_line
-                        as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
-                ),
+                Some(get_func_line as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
                 fc as *mut c_void,
                 DOCMD_NOWAIT | DOCMD_VERBOSE | DOCMD_REPEAT,
             );

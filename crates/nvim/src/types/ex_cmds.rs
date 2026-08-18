@@ -19,7 +19,7 @@ pub struct CmdParseInfo_magic {
 ///
 /// Spelled separately from [`LineGetter`] so a caller can name the bare
 /// function type -- comparing two readers means `ptr::fn_addr_eq` on it.
-pub type LineGetterFn = unsafe extern "C" fn(
+pub type LineGetterFn = unsafe fn(
     ::core::ffi::c_int,
     *mut ::core::ffi::c_void,
     ::core::ffi::c_int,

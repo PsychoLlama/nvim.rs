@@ -293,7 +293,7 @@ pub unsafe fn handle_did_throw() {
 /// and replayed with everything else.
 ///
 /// Keeps `extern "C"`: `LineGetter` is a C fn-pointer type.
-pub(crate) unsafe extern "C" fn get_loop_line(
+pub(crate) unsafe fn get_loop_line(
     c: c_int,
     cookie: *mut c_void,
     indent: c_int,

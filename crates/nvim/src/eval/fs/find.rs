@@ -429,7 +429,7 @@ pub unsafe fn f_globpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// `context` is the `typval_T` `f_readdir` handed `readdir_core`, and `name`
 /// a NUL-terminated entry name.
-unsafe extern "C" fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnumber_T {
+unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnumber_T {
     // SAFETY: the caller's contract.
     let expr = unsafe { &mut *context.cast::<typval_T>() };
     if expr.v_type == VAR_UNKNOWN {

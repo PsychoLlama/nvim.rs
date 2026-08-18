@@ -153,7 +153,7 @@ pub(crate) unsafe fn command_line_end_wildmenu(
 /// The key loop's `state_execute` callback: one key, dispatched.  Installed
 /// in a `VimState`, so this one keeps its C ABI.  Answers -1 to fetch
 /// another key, 0 to leave the command line and 1 to keep going.
-pub(crate) unsafe extern "C" fn command_line_execute(
+pub(crate) unsafe fn command_line_execute(
     state: *mut VimState,
     key: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {

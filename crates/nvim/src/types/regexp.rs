@@ -15,25 +15,32 @@ pub struct regprog {
     pub re_in_use: bool,
 }
 pub type regengine_T = regengine;
+/// Compile a pattern, or null if it does not parse.
+pub type RegComp = Option<unsafe fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T>;
+/// Release a compiled pattern.
+pub type RegFree = Option<unsafe fn(*mut regprog_T) -> ()>;
+/// Match within one line.
+pub type RegExecNl =
+    Option<unsafe fn(*mut regmatch_T, *mut uint8_t, colnr_T, bool) -> ::core::ffi::c_int>;
+/// Match across lines of a buffer, with a timeout.
+pub type RegExecMulti = Option<
+    unsafe fn(
+        *mut regmmatch_T,
+        *mut win_T,
+        *mut buf_T,
+        linenr_T,
+        colnr_T,
+        *mut proftime_T,
+        *mut ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int,
+>;
 /// The vtable of a regexp engine (backtracking or NFA).
 #[derive(Copy, Clone)]
 pub struct regengine {
-    pub regcomp: Option<unsafe extern "C" fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T>,
-    pub regfree: Option<unsafe extern "C" fn(*mut regprog_T) -> ()>,
-    pub regexec_nl: Option<
-        unsafe extern "C" fn(*mut regmatch_T, *mut uint8_t, colnr_T, bool) -> ::core::ffi::c_int,
-    >,
-    pub regexec_multi: Option<
-        unsafe extern "C" fn(
-            *mut regmmatch_T,
-            *mut win_T,
-            *mut buf_T,
-            linenr_T,
-            colnr_T,
-            *mut proftime_T,
-            *mut ::core::ffi::c_int,
-        ) -> ::core::ffi::c_int,
-    >,
+    pub regcomp: RegComp,
+    pub regfree: RegFree,
+    pub regexec_nl: RegExecNl,
+    pub regexec_multi: RegExecMulti,
 }
 
 pub type magic_T = ::core::ffi::c_uint;

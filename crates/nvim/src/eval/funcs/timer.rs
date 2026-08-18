@@ -45,7 +45,7 @@ const EMPTY_TV: typval_T = typval_T {
 ///
 /// # Safety
 /// A libuv callback: `tw` is the watcher this module allocated.
-unsafe extern "C" fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
+unsafe fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
     // SAFETY: the caller's obligation; `main_loop` is live for the process.
     unsafe {
         if (*main_loop.ptr()).closing {
@@ -59,7 +59,7 @@ unsafe extern "C" fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void
 ///
 /// # Safety
 /// A libuv callback: `tw` is the watcher this module allocated.
-unsafe extern "C" fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
+unsafe fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
     // SAFETY: the caller's obligation; nothing else holds the watcher by
     // the time libuv reports it closed.
     unsafe { xfree(tw as *mut c_void) }

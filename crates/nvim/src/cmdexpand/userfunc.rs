@@ -20,7 +20,7 @@ use core::ptr;
 /// Only [`call_user_expand_func`] takes one, and both of its callers pass a
 /// real function, so this is the bare pointer rather than upstream's nullable
 /// `user_expand_func_T`.
-type UserExpandFunc = unsafe extern "C" fn(*const c_char, c_int, *mut typval_T) -> *mut c_void;
+type UserExpandFunc = unsafe fn(*const c_char, c_int, *mut typval_T) -> *mut c_void;
 
 /// The length of `PATHSEPSTR`, which is what upstream's
 /// `STRLEN_LITERAL(PATHSEPSTR)` comes to on every platform this port builds

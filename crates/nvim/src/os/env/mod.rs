@@ -433,7 +433,7 @@ fn os_uv_homedir() -> *mut c_char {
 ///
 /// # Safety
 /// Called through the `ItemGetter` table; `xp` must be a live [`expand_T`].
-pub unsafe extern "C" fn get_env_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_env_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     debug_assert!(idx >= 0);
     // SAFETY: the caller's contract; `xp_buf` is `EXPAND_BUF_LEN` bytes.
     unsafe {
