@@ -589,7 +589,11 @@ pub unsafe fn charsize_regular(
     }
 
     let mut mb_added = 0;
-    if is_doublewidth && wp.w_onebuf_opt.wo_wrap != 0 && in_win_border(wp, vcol + size - 2) {
+    // SAFETY: `csarg`'s window is live.
+    if is_doublewidth
+        && wp.w_onebuf_opt.wo_wrap != 0
+        && unsafe { in_win_border(wp.raw(), vcol + size - 2) }
+    {
         // Count the ">" in the last column.
         size += 1;
         mb_added = 1;
@@ -628,14 +632,15 @@ unsafe fn charsize_fast_impl(
     vcol: colnr_T,
     cur_char: int32_t,
 ) -> CharSize {
-    // SAFETY: the caller's window.
-    let win = unsafe { Win::new(wp) };
     // A tab is expanded according to the column it starts at.
     if cur_char == TAB && use_tabstop {
-        return CharSize {
-            width: win.buffer().tab_width(vcol),
-            head: 0,
+        // SAFETY: a live window's buffer is live, and its 'vartabstop' array
+        // is its own.
+        let width = unsafe {
+            let buf = (*wp).w_buffer;
+            tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array)
         };
+        return CharSize { width, head: 0 };
     }
 
     let width = if cur_char < 0 {
@@ -647,7 +652,12 @@ unsafe fn charsize_fast_impl(
 
     // A double-width char that does not fit at the end of a screen line
     // wraps to the next one, and the last column shows a '>'.
-    if width == 2 && cur_char >= 0x80 && win.w_onebuf_opt.wo_wrap != 0 && in_win_border(win, vcol) {
+    // SAFETY: the caller's window, on both sides of the `&&`.
+    if width == 2
+        && cur_char >= 0x80
+        && unsafe { (*wp).w_onebuf_opt.wo_wrap } != 0
+        && unsafe { in_win_border(wp, vcol) }
+    {
         CharSize { width: 3, head: 1 }
     } else {
         CharSize { width, head: 0 }
@@ -715,16 +725,23 @@ pub unsafe fn charsize_nowrap(
 
 /// Whether `vcol` lands in the rightmost column of `wp`.
 ///
+/// Takes the raw pointer rather than a [`Win`]: this is inlined into the
+/// per-character fast loop, and going through the wrapper there costs
+/// measurable throughput (F-P17-10).
+///
 /// # Safety
 /// `wp` must be live.
 #[inline]
-fn in_win_border(win: Win, vcol: colnr_T) -> bool {
-    if win.w_view_width == 0 {
+unsafe fn in_win_border(wp: *mut win_T, vcol: colnr_T) -> bool {
+    // SAFETY: the caller's window.
+    let view_width = unsafe { (*wp).w_view_width };
+    if view_width == 0 {
         // There is no border.
         return false;
     }
     // Width of the first screen line, after the line number.
-    let width1 = win.w_view_width - win.col_off();
+    // SAFETY: as above.
+    let width1 = view_width - unsafe { win_col_off(wp) };
     if vcol < width1 - 1 {
         return false;
     }
@@ -732,7 +749,8 @@ fn in_win_border(win: Win, vcol: colnr_T) -> bool {
         return true;
     }
     // Width of the wrapped screen lines after it.
-    let width2 = width1 + win.col_off2();
+    // SAFETY: as above.
+    let width2 = width1 + unsafe { win_col_off2(wp) };
     if width2 <= 0 {
         return false;
     }
@@ -800,10 +818,10 @@ pub unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: colnr
     let mut ci: StrCharInfo = unsafe { utf_ptr2StrCharInfo(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are
     // inside it.
-    while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { byte_at(ci.ptr) } != 0 {
+    while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { *ci.ptr } != NUL {
         // SAFETY: as above, plus the live window `csarg` was built from.
-        let size = unsafe { charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value) };
-        vcol += size.width as int64_t;
+        vcol += unsafe { charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value) }.width
+            as int64_t;
         // SAFETY: as above.
         ci = unsafe { utfc_next(ci) };
         if vcol > MAXCOL as int64_t {

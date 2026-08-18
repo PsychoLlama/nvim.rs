@@ -731,7 +731,7 @@
     "crates/nvim/src/path/names.rs": {"no_mangle": 7, "unsafe_lines": 122},
     "crates/nvim/src/path/unique.rs": {"no_mangle": 2, "unsafe_lines": 259},
     "crates/nvim/src/plines/lines.rs": {"unsafe_lines": 240},
-    "crates/nvim/src/plines/mod.rs": {"unsafe_lines": 56},
+    "crates/nvim/src/plines/mod.rs": {"unsafe_lines": 65},
     "crates/nvim/src/plines/vcol.rs": {"unsafe_lines": 139},
     "crates/nvim/src/popupmenu/draw.rs": {"cell_ptr": 13, "unsafe_lines": 510},
     "crates/nvim/src/popupmenu/layout.rs": {"cell_ptr": 2, "unsafe_lines": 170},
