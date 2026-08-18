@@ -26,6 +26,29 @@ pub const KV_INITIAL_VALUE: Array = Array {
 };
 pub const KEYSET_OPTIDX_tabpage_config__after: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
+/// A fresh, unset error, to lend to a helper that still reports through an
+/// out-parameter.
+const ERROR_INIT: Error = Error {
+    type_0: kErrorTypeNone,
+    msg: ::core::ptr::null_mut(),
+};
+const NIL: Object = object {
+    type_0: kObjectTypeNil,
+    data: C2Rust_Unnamed { boolean: false },
+};
+
+/// What a call that reports through an `*mut Error` out-parameter answered
+/// with, unless the slot it was lent says why it could not.
+///
+/// A lookup that misses without setting the error — only a missing current
+/// tabpage does that — keeps answering the value upstream answered with, so
+/// the caller stays exactly as forgiving as it was.
+fn reported<T>(err: Error, value: T) -> Result<T, Error> {
+    match err.type_0 {
+        kErrorTypeNone => Ok(value),
+        _ => Err(err),
+    }
+}
 pub unsafe extern "C" fn nvim_tabpage_list_wins(
     mut tabpage: Tabpage,
     mut arena: *mut Arena,
@@ -66,40 +89,47 @@ pub unsafe extern "C" fn nvim_tabpage_list_wins(
     }
     return rv;
 }
-pub unsafe extern "C" fn nvim_tabpage_get_var(
-    mut tabpage: Tabpage,
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
-    let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
+pub unsafe fn nvim_tabpage_get_var(
+    tabpage: Tabpage,
+    name: String_0,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut err = ERROR_INIT;
+    // SAFETY: `err` is this frame's own, and the lookup dereferences nothing
+    // else.
+    let tab: *mut tabpage_T = unsafe { find_tab_by_handle(tabpage, &raw mut err) };
     if tab.is_null() {
-        return object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        return reported(err, NIL);
     }
-    return dict_get_value((*tab).tp_vars, name, arena, err);
+    // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
+    // `name` and `arena` are the caller's, per this function's contract.
+    let value = unsafe { dict_get_value((*tab).tp_vars, name, arena, &raw mut err) };
+    reported(err, value)
 }
-pub unsafe extern "C" fn nvim_tabpage_set_var(
-    mut tabpage: Tabpage,
-    mut name: String_0,
-    mut value: Object,
-    mut err: *mut Error,
-) {
-    let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
+pub unsafe fn nvim_tabpage_set_var(
+    tabpage: Tabpage,
+    name: String_0,
+    value: Object,
+) -> Result<(), Error> {
+    let mut err = ERROR_INIT;
+    // SAFETY: as `nvim_tabpage_get_var`.
+    let tab: *mut tabpage_T = unsafe { find_tab_by_handle(tabpage, &raw mut err) };
     if tab.is_null() {
-        return;
+        return reported(err, ());
     }
-    dict_set_var(
-        (*tab).tp_vars,
-        name,
-        value,
-        false,
-        false,
-        ::core::ptr::null_mut::<Arena>(),
-        err,
-    );
+    // SAFETY: as above; `value` is the caller's and the store takes it over.
+    unsafe {
+        dict_set_var(
+            (*tab).tp_vars,
+            name,
+            value,
+            false,
+            false,
+            ::core::ptr::null_mut::<Arena>(),
+            &raw mut err,
+        )
+    };
+    reported(err, ())
 }
 pub unsafe extern "C" fn nvim_tabpage_del_var(
     mut tabpage: Tabpage,
@@ -123,26 +153,32 @@ pub unsafe extern "C" fn nvim_tabpage_del_var(
         err,
     );
 }
-pub unsafe extern "C" fn nvim_tabpage_get_win(mut tabpage: Tabpage, mut err: *mut Error) -> Window {
-    let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
-    if tab.is_null() || !valid_tabpage(tab) {
-        return 0 as Window;
+pub fn nvim_tabpage_get_win(tabpage: Tabpage) -> Result<Window, Error> {
+    let mut err = ERROR_INIT;
+    // SAFETY: `err` is this frame's own, and the lookup dereferences nothing
+    // else.
+    let tab: *mut tabpage_T = unsafe { find_tab_by_handle(tabpage, &raw mut err) };
+    // SAFETY: the short-circuit is the proof — `valid_tabpage` is only reached
+    // for a `tab` the null check let through.
+    if tab.is_null() || !unsafe { valid_tabpage(tab) } {
+        return reported(err, 0 as Window);
     }
     if tab == curtab.get() {
-        return nvim_get_current_win();
+        // SAFETY: the current window is whatever `curwin` names.
+        return Ok(unsafe { nvim_get_current_win() });
     }
-    let mut wp: *mut win_T = if tab == curtab.get() {
-        firstwin.get()
-    } else {
-        (*tab).tp_firstwin
-    };
-    while !wp.is_null() {
-        if wp == (*tab).tp_curwin {
-            return (*wp).handle as Window;
+    // SAFETY: `tab` is a live tabpage, so its window list is its own and every
+    // link in it is live for as long as the tabpage is.
+    unsafe {
+        let mut wp: *mut win_T = (*tab).tp_firstwin;
+        while !wp.is_null() {
+            if wp == (*tab).tp_curwin {
+                return Ok((*wp).handle as Window);
+            }
+            wp = (*wp).w_next;
         }
-        wp = (*wp).w_next;
+        abort();
     }
-    abort();
 }
 pub unsafe extern "C" fn nvim_tabpage_set_win(
     mut tabpage: Tabpage,
@@ -184,21 +220,19 @@ pub unsafe extern "C" fn nvim_tabpage_set_win(
         (*tp).tp_curwin = wp;
     }
 }
-pub unsafe extern "C" fn nvim_tabpage_get_number(
-    mut tabpage: Tabpage,
-    mut err: *mut Error,
-) -> Integer {
-    let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
+pub fn nvim_tabpage_get_number(tabpage: Tabpage) -> Result<Integer, Error> {
+    let mut err = ERROR_INIT;
+    // SAFETY: `err` is this frame's own, and the lookup dereferences nothing
+    // else.
+    let tab: *mut tabpage_T = unsafe { find_tab_by_handle(tabpage, &raw mut err) };
     if tab.is_null() {
-        return 0 as Integer;
+        return reported(err, 0 as Integer);
     }
-    return tabpage_index(tab) as Integer;
+    // SAFETY: `tab` is a live tabpage, which is all the walk to it needs.
+    Ok(unsafe { tabpage_index(tab) } as Integer)
 }
 pub unsafe extern "C" fn nvim_tabpage_is_valid(mut tabpage: Tabpage) -> Boolean {
-    let mut stub: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+    let mut stub: Error = ERROR_INIT;
     let mut ret: Boolean = !find_tab_by_handle(tabpage, &raw mut stub).is_null();
     api_clear_error(&raw mut stub);
     return ret;

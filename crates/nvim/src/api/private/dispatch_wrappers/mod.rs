@@ -379,3 +379,11 @@ fn expr_map_locked_error(error: &mut Error) {
     // message, which is what `%s` takes.
     unsafe { api_set_error(error, kErrorTypeException, fmt, &raw const e_textlock) };
 }
+
+/// Hands the error an API function answered with to the dispatcher, which
+/// reads it out of the slot it lent the wrapper. The wrapper's own result is
+/// nil, as it is for every other way of refusing.
+fn failure(error: &mut Error, e: Error) -> Object {
+    *error = e;
+    NIL
+}

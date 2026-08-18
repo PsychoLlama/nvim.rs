@@ -124,12 +124,10 @@ pub unsafe fn handle_nvim_tabpage_get_number(
         wrong_type(error, 1, c"nvim_tabpage_get_number", c"Tabpage");
         return NIL;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_tabpage_get_number(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match nvim_tabpage_get_number(arg_1) {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
@@ -163,10 +161,10 @@ pub unsafe fn handle_nvim_tabpage_get_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     rv
 }
 
@@ -194,12 +192,10 @@ pub unsafe fn handle_nvim_tabpage_get_win(
         wrong_type(error, 1, c"nvim_tabpage_get_win", c"Tabpage");
         return NIL;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_tabpage_get_win(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match nvim_tabpage_get_win(arg_1) {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(
         kObjectTypeWindow,
         object_data {
@@ -302,9 +298,8 @@ pub unsafe fn handle_nvim_tabpage_set_var(
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3) } {
+        return failure(error, e);
     }
     NIL
 }
