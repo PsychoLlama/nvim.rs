@@ -7,6 +7,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Took the editor's own hand-written declarations of the C library out and
+  put the `libc` crate in their place, leaving a small module for the
+  handful of things that crate does not carry. Nothing observable changed.
+
 ## [2026.08.18-0975a8efd3]
 
 ### Changed
