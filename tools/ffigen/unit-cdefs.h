@@ -14,7 +14,6 @@ typedef struct VirtTextChunk VirtTextChunk;
 typedef struct alist_T alist_T;
 typedef struct bhdr_T bhdr_T;
 typedef struct blobvar_S blobvar_S;
-typedef struct buffblock buffblock;
 typedef struct chunksize_T chunksize_T;
 typedef struct cleanup_stuff cleanup_stuff;
 typedef struct cmdline_info cmdline_info;
@@ -295,6 +294,7 @@ typedef struct syn_time_T syn_time_T;
 typedef struct synblock_T synblock_T;
 typedef struct visualinfo_T visualinfo_T;
 typedef struct file_buffer file_buffer;
+typedef struct buffblock buffblock;
 typedef struct bufstate_T bufstate_T;
 typedef struct cmdarg_T cmdarg_T;
 typedef struct regmatch_T regmatch_T;
@@ -577,7 +577,7 @@ typedef unsigned int bfa_values;
 typedef unsigned int bln_values;
 typedef blobvar_S blob_T;
 typedef int64_t blocknr_T;
-typedef buffblock buffblock_T;
+typedef struct buffblock buffblock_T;
 typedef cleanup_stuff cleanup_T;
 typedef unsigned int cmd_addr_T;
 typedef CMD_index cmdidx_T;
@@ -2867,6 +2867,11 @@ struct file_buffer {
   size_t deleted_codepoints;
   size_t deleted_codeunits;
   int flush_count;
+};
+struct buffblock {
+  buffblock *b_next;
+  size_t b_strlen;
+  char b_str[1];
 };
 struct bufstate_T {
   int bs_idx;

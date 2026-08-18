@@ -5,7 +5,18 @@
 use super::*;
 
 pub type RemapValues = ::core::ffi::c_int;
+/// One block of a [`buffheader_T`]'s byte string.
+///
+/// The layout is pinned, and load-bearing: `b_str` is a flexible array member
+/// — the type declares one byte, the allocation holds as many as the block was
+/// sized for, and `getchar::buffers::add_buff` sizes it as
+/// `offset_of!(buffblock_T, b_str) + len + 1`. That arithmetic only describes
+/// the allocation when `b_str` is the *last* field, so every append past the
+/// first byte would otherwise land on another field. `#[repr(C)]` is what
+/// guarantees declaration order here; `add_buff` carries the matching
+/// compile-time assertion.
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct buffblock {
     pub b_next: *mut buffblock,
     pub b_strlen: size_t,

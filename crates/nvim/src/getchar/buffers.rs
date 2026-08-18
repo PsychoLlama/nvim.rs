@@ -24,6 +24,17 @@ use core::ptr;
 /// Smallest block `add_buff` will allocate; upstream's `MINIMAL_SIZE`.
 const MINIMAL_SIZE: usize = 20;
 
+/// [`add_buff`] sizes a block as `offset_of!(buffblock_T, b_str) + len + 1`,
+/// which only describes the allocation while `b_str` is the last field — a
+/// layout that put it anywhere else would make every append overwrite
+/// `b_next`/`b_strlen`. `#[repr(C)]` on [`buffblock_T`] is what holds that; if
+/// it is ever dropped again this stops the build instead of the suite.
+const _: () = {
+    let tail = offset_of!(buffblock_T, b_str);
+    assert!(tail > offset_of!(buffblock_T, b_next));
+    assert!(tail > offset_of!(buffblock_T, b_strlen));
+};
+
 /// The bytes of one block, as a pointer over the whole allocation.
 ///
 /// # Safety
