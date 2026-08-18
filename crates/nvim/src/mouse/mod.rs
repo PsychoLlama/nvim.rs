@@ -646,11 +646,7 @@ pub fn setmouse() {
 ///
 /// # Safety
 /// `rettv` must be a live, unset return value.
-pub unsafe extern "C" fn f_getmousepos(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getmousepos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
     let d = unsafe {
         tv_dict_alloc_ret(rettv);

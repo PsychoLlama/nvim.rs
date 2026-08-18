@@ -420,11 +420,7 @@ fn size(info: &FileInfo) -> uint64_t {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
-pub unsafe extern "C" fn f_executable(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_executable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     if !is_string_arg(args, 0) {
         return;
@@ -436,11 +432,7 @@ pub unsafe extern "C" fn f_executable(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_exepath(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_exepath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     if !is_nonempty_string_arg(args, 0) {
         return;
@@ -452,11 +444,7 @@ pub unsafe extern "C" fn f_exepath(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_filereadable(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_filereadable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let p = str_arg(args, 0);
     let readable = !p.to_bytes().is_empty() && !is_dir(p) && is_readable(p);
@@ -468,11 +456,7 @@ pub unsafe extern "C" fn f_filereadable(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_filewritable(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_filewritable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = writability(str_arg(args, 0)) as varnumber_T;
 }
@@ -482,11 +466,7 @@ pub unsafe extern "C" fn f_filewritable(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_getfperm(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let file_perm = getperm(str_arg(args, 0));
     let mut perm = ptr::null_mut();
@@ -507,11 +487,7 @@ pub unsafe extern "C" fn f_getfperm(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_getfsize(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getfsize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let fname = str_arg(args, 0);
     rettv.v_type = VAR_NUMBER;
@@ -536,11 +512,7 @@ pub unsafe extern "C" fn f_getfsize(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_getftime(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mtime = stat(str_arg(args, 0)).map(|info| info.stat.st_mtim.tv_sec);
     rettv.vval.v_number = mtime.map_or(-1 as varnumber_T, |t| t as varnumber_T);
@@ -551,11 +523,7 @@ pub unsafe extern "C" fn f_getftime(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_getftype(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getftype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     let named = lstat(str_arg(args, 0)).map(|info| {
@@ -579,11 +547,7 @@ pub unsafe extern "C" fn f_getftype(
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe extern "C" fn f_isdirectory(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_isdirectory(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = is_dir(str_arg(args, 0)) as varnumber_T;
 }
@@ -593,11 +557,7 @@ pub unsafe extern "C" fn f_isdirectory(
 ///
 /// # Safety
 /// As [`f_executable`], arity 4.
-pub unsafe extern "C" fn f_browse(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_browse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_, rettv) = frame!(argvars, rettv);
     ret_string(rettv, ptr::null_mut());
 }
@@ -606,11 +566,7 @@ pub unsafe extern "C" fn f_browse(
 ///
 /// # Safety
 /// As [`f_browse`], arity 2.
-pub unsafe extern "C" fn f_browsedir(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    fptr: EvalFuncData,
-) {
+pub unsafe fn f_browsedir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY: forwarded unchanged to a function with the same contract.
     unsafe { f_browse(argvars, rettv, fptr) };
 }

@@ -549,11 +549,7 @@ unsafe fn set_bool_ret(rettv: *mut typval_T, value: bool) {
 /// # Safety
 ///
 /// Standard eval-function contract: `argvars` and `rettv` are valid.
-pub unsafe extern "C" fn f_digraph_get(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_digraph_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: caller contract; the result slot starts out empty.
     let digraphs = unsafe {
         (*rettv).v_type = VAR_STRING;
@@ -589,11 +585,7 @@ pub unsafe extern "C" fn f_digraph_get(
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe extern "C" fn f_digraph_getlist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_digraph_getlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
     if unsafe { tv_check_for_opt_bool_arg(argvars, 0) } == FAIL {
         return;
@@ -610,11 +602,7 @@ pub unsafe extern "C" fn f_digraph_getlist(
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe extern "C" fn f_digraph_set(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_digraph_set(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: caller contract; `digraph_set()` takes two arguments.
     let set = unsafe { digraph_set_common(argvars, argvars.offset(1)) };
     // SAFETY: caller contract.
@@ -626,11 +614,7 @@ pub unsafe extern "C" fn f_digraph_set(
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe extern "C" fn f_digraph_setlist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_digraph_setlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
     let set = unsafe { digraph_setlist_common(argvars) };
     // SAFETY: caller contract.

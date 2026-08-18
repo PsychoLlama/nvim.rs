@@ -553,6 +553,8 @@ fn declared(line: &str, in_extern: bool) -> Option<&str> {
         &[
             "unsafe extern \"C\" fn ",
             "extern \"C\" fn ",
+            "unsafe fn ",
+            "fn ",
             "static ",
             "const ",
         ]

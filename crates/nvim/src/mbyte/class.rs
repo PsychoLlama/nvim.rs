@@ -289,11 +289,7 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
 }
 
 /// `charclass({string})` — the class of the string's first character.
-pub unsafe extern "C" fn f_charclass(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_charclass(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if tv_check_for_string_arg(argvars, 0) == FAIL || (*argvars).vval.v_string.is_null() {
             return;

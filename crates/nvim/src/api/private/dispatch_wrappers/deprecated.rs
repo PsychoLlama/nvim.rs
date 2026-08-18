@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_buffer_del_line(
+pub unsafe fn handle_buffer_del_line(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -44,7 +44,7 @@ pub unsafe extern "C" fn handle_buffer_del_line(
     NIL
 }
 
-pub unsafe extern "C" fn handle_buffer_del_var(
+pub unsafe fn handle_buffer_del_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn handle_buffer_del_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_buffer_get_line(
+pub unsafe fn handle_buffer_get_line(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn handle_buffer_get_line(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
-pub unsafe extern "C" fn handle_buffer_get_line_slice(
+pub unsafe fn handle_buffer_get_line_slice(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn handle_buffer_get_line_slice(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_buffer_insert(
+pub unsafe fn handle_buffer_insert(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn handle_buffer_insert(
     NIL
 }
 
-pub unsafe extern "C" fn handle_buffer_set_line(
+pub unsafe fn handle_buffer_set_line(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn handle_buffer_set_line(
     NIL
 }
 
-pub unsafe extern "C" fn handle_buffer_set_line_slice(
+pub unsafe fn handle_buffer_set_line_slice(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn handle_buffer_set_line_slice(
     NIL
 }
 
-pub unsafe extern "C" fn handle_buffer_set_var(
+pub unsafe fn handle_buffer_set_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn handle_buffer_set_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_add_highlight(
+pub unsafe fn handle_nvim_buf_add_highlight(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -393,7 +393,7 @@ pub unsafe extern "C" fn handle_nvim_buf_add_highlight(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_clear_highlight(
+pub unsafe fn handle_nvim_buf_clear_highlight(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -438,7 +438,7 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_highlight(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_get_number(
+pub unsafe fn handle_nvim_buf_get_number(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -471,7 +471,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_number(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_get_option(
+pub unsafe fn handle_nvim_buf_get_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -508,7 +508,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_option(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_set_option(
+pub unsafe fn handle_nvim_buf_set_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_option(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_set_virtual_text(
+pub unsafe fn handle_nvim_buf_set_virtual_text(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -601,7 +601,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_virtual_text(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_call_atomic(
+pub unsafe fn handle_nvim_call_atomic(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -634,7 +634,7 @@ pub unsafe extern "C" fn handle_nvim_call_atomic(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_command_output(
+pub unsafe fn handle_nvim_command_output(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -667,7 +667,7 @@ pub unsafe extern "C" fn handle_nvim_command_output(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_err_write(
+pub unsafe fn handle_nvim_err_write(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -697,7 +697,7 @@ pub unsafe extern "C" fn handle_nvim_err_write(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_err_writeln(
+pub unsafe fn handle_nvim_err_writeln(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -727,7 +727,7 @@ pub unsafe extern "C" fn handle_nvim_err_writeln(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_exec(
+pub unsafe fn handle_nvim_exec(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -764,7 +764,7 @@ pub unsafe extern "C" fn handle_nvim_exec(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_execute_lua(
+pub unsafe fn handle_nvim_execute_lua(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -801,7 +801,7 @@ pub unsafe extern "C" fn handle_nvim_execute_lua(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_get_hl_by_id(
+pub unsafe fn handle_nvim_get_hl_by_id(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -838,7 +838,7 @@ pub unsafe extern "C" fn handle_nvim_get_hl_by_id(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_hl_by_name(
+pub unsafe fn handle_nvim_get_hl_by_name(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -875,7 +875,7 @@ pub unsafe extern "C" fn handle_nvim_get_hl_by_name(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_option(
+pub unsafe fn handle_nvim_get_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -908,7 +908,7 @@ pub unsafe extern "C" fn handle_nvim_get_option(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_get_option_info(
+pub unsafe fn handle_nvim_get_option_info(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -941,7 +941,7 @@ pub unsafe extern "C" fn handle_nvim_get_option_info(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_notify(
+pub unsafe fn handle_nvim_notify(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

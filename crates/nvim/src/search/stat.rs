@@ -361,11 +361,7 @@ unsafe fn list_number(list: *mut list_T, index: c_int, current: c_int) -> Option
 /// # Safety
 /// The Vimscript function ABI: `argvars` is the argument array and
 /// `rettv` the return value.
-pub unsafe extern "C" fn f_searchcount(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let mut pos = (*curwin.get()).w_cursor;
         let mut pattern = ptr::null_mut::<c_char>();

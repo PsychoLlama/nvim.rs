@@ -54,7 +54,7 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 
 /// 'paste': switch off everything that would reformat pasted text, and
 /// remember what to switch back on.
-pub unsafe extern "C" fn did_set_paste(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
     static old_p_paste: GlobalCell<c_int> = GlobalCell::new(0);
     static save_sm: GlobalCell<c_int> = GlobalCell::new(0);
     static save_sta: GlobalCell<c_int> = GlobalCell::new(0);

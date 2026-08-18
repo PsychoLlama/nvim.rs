@@ -181,9 +181,8 @@ pub(crate) unsafe fn findfunc_find_file(
 /// 'findfunc' changed: recompile the callback, and shorten a
 /// script-local function name to its `<SNR>` form.
 ///
-/// Keeps `extern "C"`: the generated option table holds it as an
-/// `opt_did_set_cb` fn pointer.
-pub unsafe extern "C" fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
+/// The generated option table holds it as an `opt_did_set_cb` fn pointer.
+pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
         let retval = if (*args).os_flags & OPT_LOCAL as c_int != 0 {

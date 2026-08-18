@@ -22,11 +22,7 @@ const NUMBUFLEN: usize = 65;
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe extern "C" fn f_hasmapto(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_hasmapto(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let name = tv_get_string(argvars);
         let mut buf = [0 as c_char; NUMBUFLEN];
@@ -304,11 +300,7 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe extern "C" fn f_maplist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
         let abbr = (*argvars).v_type != VAR_UNKNOWN as _ && tv_get_bool(argvars) != 0;
@@ -369,11 +361,7 @@ pub unsafe extern "C" fn f_maplist(
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe extern "C" fn f_maparg(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_maparg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { get_maparg(argvars, rettv, true) }
 }
 
@@ -381,11 +369,7 @@ pub unsafe extern "C" fn f_maparg(
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe extern "C" fn f_mapcheck(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_mapcheck(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { get_maparg(argvars, rettv, false) }
 }
 

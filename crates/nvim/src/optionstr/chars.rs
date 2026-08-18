@@ -682,7 +682,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame.
     let (win, varp, flags, errbuf, errbuflen) = unsafe {
         (

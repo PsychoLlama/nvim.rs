@@ -267,11 +267,7 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
 /// The install is provisional even then: `'listchars'` and `'fillchars'` must
 /// still agree with the new widths, and the old table comes back if they do
 /// not.
-pub unsafe extern "C" fn f_setcellwidths(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if (*argvars).v_type as c_uint != VAR_LIST as c_uint || (*argvars).vval.v_list.is_null() {
             emsg(gettext(&raw const e_listreq as *const c_char));
@@ -402,11 +398,7 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
 
 /// `getcellwidths()` — the table `setcellwidths()` installed, as a List of
 /// `[first, last, width]`.
-pub unsafe extern "C" fn f_getcellwidths(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcellwidths(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let rows = CELL_WIDTHS.with(|t| t.clone());
         tv_list_alloc_ret(rettv, rows.len() as ptrdiff_t);

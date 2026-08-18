@@ -274,11 +274,7 @@ fn number_of(tv: &typval_T) -> varnumber_T {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1..2, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_chdir(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     ret_string(rettv, ptr::null_mut());
     if args.ty(0) != VAR_STRING {
@@ -327,11 +323,7 @@ pub unsafe extern "C" fn f_chdir(
 ///
 /// # Safety
 /// As [`f_chdir`].
-pub unsafe extern "C" fn f_delete(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1 as varnumber_T;
     if secure() {
@@ -368,11 +360,7 @@ pub unsafe extern "C" fn f_delete(
 ///
 /// # Safety
 /// As [`f_chdir`], arity 2.
-pub unsafe extern "C" fn f_filecopy(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_filecopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = false as varnumber_T;
     if secure() || !is_string_arg(args, 0) || !is_string_arg(args, 1) {
@@ -399,11 +387,7 @@ pub unsafe extern "C" fn f_filecopy(
 ///
 /// # Safety
 /// As [`f_chdir`], arity 0..2.
-pub unsafe extern "C" fn f_getcwd(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcwd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     ret_string(rettv, ptr::null_mut());
     let Some(s) = Scope::read(args, false) else {
@@ -443,11 +427,7 @@ pub unsafe extern "C" fn f_getcwd(
 ///
 /// # Safety
 /// As [`f_getcwd`].
-pub unsafe extern "C" fn f_haslocaldir(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_haslocaldir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0 as varnumber_T;
@@ -480,11 +460,7 @@ pub unsafe extern "C" fn f_haslocaldir(
 ///
 /// # Safety
 /// As [`f_chdir`], arity 1..3.
-pub unsafe extern "C" fn f_mkdir(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // Upstream's default, which is *not* the 0777 the shell's `mkdir` uses.
     let mut prot: c_int = 0o755;
@@ -592,11 +568,7 @@ fn defer_delete(created: *mut c_char, recurse: bool) {
 ///
 /// # Safety
 /// As [`f_chdir`], arity 2.
-pub unsafe extern "C" fn f_rename(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_rename(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     if secure() {
         rettv.vval.v_number = -1 as varnumber_T;
@@ -615,11 +587,7 @@ pub unsafe extern "C" fn f_rename(
 ///
 /// # Safety
 /// As [`f_chdir`], arity 0.
-pub unsafe extern "C" fn f_tempname(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_tempname(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_, rettv) = frame!(argvars, rettv);
     // SAFETY: answers a fresh string in nvim's heap, or NULL.
     ret_string(rettv, unsafe { vim_tempname() });

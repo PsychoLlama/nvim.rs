@@ -6,7 +6,8 @@
 //! comparison error can stop the sort.  [`parse_sort_uniq_args`] reads the
 //! optional `{how}` and `{dict}` arguments both builtins share.
 //!
-//! The four comparators keep `extern "C"` and the sort keeps `qsort`.  A
+//! The four comparators keep `extern "C"` — `qsort` calls them — and the
+//! sort keeps `qsort`.  A
 //! `sort_by` is not a provable substitute here: a user comparison function can
 //! answer inconsistently (or fail part-way), so which permutation of equal
 //! items comes out is whatever the C library's sort did.  The `_not_keeping_zero`
@@ -450,14 +451,14 @@ pub(crate) unsafe extern "C" fn do_sort_uniq(
 }
 
 /// `sort()`.
-pub unsafe extern "C" fn f_sort(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_sort(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         do_sort_uniq(argvars, rettv, true);
     }
 }
 
 /// `uniq()`.
-pub unsafe extern "C" fn f_uniq(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_uniq(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         do_sort_uniq(argvars, rettv, false);
     }

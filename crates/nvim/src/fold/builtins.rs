@@ -42,7 +42,7 @@ pub(super) unsafe extern "C" fn foldclosed_both(
 }
 
 /// "foldclosed()" function
-pub unsafe extern "C" fn f_foldclosed(
+pub unsafe fn f_foldclosed(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -51,7 +51,7 @@ pub unsafe extern "C" fn f_foldclosed(
 }
 
 /// "foldclosedend()" function
-pub unsafe extern "C" fn f_foldclosedend(
+pub unsafe fn f_foldclosedend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn f_foldclosedend(
 }
 
 /// "foldlevel()" function
-pub unsafe extern "C" fn f_foldlevel(
+pub unsafe fn f_foldlevel(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -72,7 +72,7 @@ pub unsafe extern "C" fn f_foldlevel(
 }
 
 /// "foldtext()" function
-pub unsafe extern "C" fn f_foldtext(
+pub unsafe fn f_foldtext(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -123,7 +123,7 @@ pub unsafe extern "C" fn f_foldtext(
 }
 
 /// "foldtextresult(lnum)" function
-pub unsafe extern "C" fn f_foldtextresult(
+pub unsafe fn f_foldtextresult(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,

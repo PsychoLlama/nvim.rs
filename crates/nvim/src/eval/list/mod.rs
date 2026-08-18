@@ -903,11 +903,7 @@ pub(crate) fn starts_with_ic(hay: &[u8], needle: &[u8]) -> bool {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_remove(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_remove(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let arg_errmsg = c"remove() argument".as_ptr();
     // SAFETY: the caller's contract.
     let mut args = unsafe { Args::new(argvars) };
@@ -929,11 +925,7 @@ pub unsafe extern "C" fn f_remove(
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
-pub unsafe extern "C" fn f_reverse(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reverse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract; the check reports E1252 for a type that
     // cannot be reversed, and answers FAIL -- which is zero -- for it.
     if unsafe { tv_check_for_string_or_list_or_blob_arg(argvars, 0) } == 0 {

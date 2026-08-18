@@ -333,11 +333,7 @@ pub unsafe fn textpos2screenpos(
 ///
 /// # Safety
 /// The evaluator's calling convention: `argvars` and `rettv` must be valid.
-pub unsafe extern "C" fn f_screenpos(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
     let (dict, wp) = unsafe { (alloc_dict_ret(rettv), find_win_by_nr_or_id(argvars)) };
     if wp.is_null() {
@@ -442,11 +438,7 @@ unsafe fn virtcol2col(win: Win, lnum: linenr_T, vcol: c_int) -> c_int {
 ///
 /// # Safety
 /// The evaluator's calling convention: `argvars` and `rettv` must be valid.
-pub unsafe extern "C" fn f_virtcol2col(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_virtcol2col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
     unsafe { (*rettv).vval.v_number = -1 };
     // SAFETY: the evaluator's calling convention: three arguments.

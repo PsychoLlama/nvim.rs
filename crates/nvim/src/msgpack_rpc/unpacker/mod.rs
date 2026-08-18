@@ -444,8 +444,7 @@ pub unsafe extern "C" fn unpacker_advance(p: *mut Unpacker) -> bool {
         let is_redraw = (*p).handler.fn_0.is_some_and(|f| {
             core::ptr::fn_addr_eq(
                 f,
-                handle_ui_client_redraw
-                    as unsafe extern "C" fn(u64, Array, *mut Arena, *mut Error) -> Object,
+                handle_ui_client_redraw as unsafe fn(u64, Array, *mut Arena, *mut Error) -> Object,
             )
         });
         if (*p).type_0 == kMessageTypeNotification && is_redraw {

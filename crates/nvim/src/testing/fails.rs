@@ -287,11 +287,7 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char) {
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
-pub unsafe extern "C" fn f_assert_fails(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_assert_fails(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`
     // runs user code that is expected to fail; every flag disturbed for it is
     // restored by `finish_assert_fails`.

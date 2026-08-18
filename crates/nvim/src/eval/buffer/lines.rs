@@ -174,11 +174,7 @@ unsafe fn getbufline(argvars: *mut typval_T, rettv: *mut typval_T, retlist: bool
     get_buffer_lines(buf, lnum, end, retlist, rettv);
 }
 /// "append(lnum, string/list)" function
-pub unsafe extern "C" fn f_append(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_append(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let did_emsg_before: c_int = did_emsg.get();
     let lnum: linenr_T = tv_get_lnum(argvars.offset(0));
     if did_emsg.get() == did_emsg_before {
@@ -186,27 +182,15 @@ pub unsafe extern "C" fn f_append(
     }
 }
 /// "appendbufline(buf, lnum, string/list)" function
-pub unsafe extern "C" fn f_appendbufline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_appendbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     buf_set_append_line(argvars, rettv, true);
 }
 /// "setbufline()" function
-pub unsafe extern "C" fn f_setbufline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     buf_set_append_line(argvars, rettv, false);
 }
 /// "setline()" function
-pub unsafe extern "C" fn f_setline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let did_emsg_before: c_int = did_emsg.get();
     let lnum: linenr_T = tv_get_lnum(argvars.offset(0));
     if did_emsg.get() == did_emsg_before {
@@ -214,11 +198,7 @@ pub unsafe extern "C" fn f_setline(
     }
 }
 /// "getline(lnum, [end])" function
-pub unsafe extern "C" fn f_getline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let lnum: linenr_T = tv_get_lnum(argvars);
     // One argument answers a string, a range answers a list.
     let (end, retlist) = if (*argvars.offset(1)).v_type == VAR_UNKNOWN {
@@ -229,27 +209,15 @@ pub unsafe extern "C" fn f_getline(
     get_buffer_lines(curbuf.get(), lnum, end, retlist, rettv);
 }
 /// "getbufline()" function
-pub unsafe extern "C" fn f_getbufline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     getbufline(argvars, rettv, true);
 }
 /// "getbufoneline()" function
-pub unsafe extern "C" fn f_getbufoneline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getbufoneline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     getbufline(argvars, rettv, false);
 }
 /// "deletebufline()" function
-pub unsafe extern "C" fn f_deletebufline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let did_emsg_before: c_int = did_emsg.get();
     (*rettv).vval.v_number = 1;
     let buf: *mut buf_T = tv_get_buf(argvars.offset(0), false_0);

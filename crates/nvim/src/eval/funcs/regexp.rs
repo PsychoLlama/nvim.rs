@@ -396,11 +396,7 @@ unsafe fn get_matches_in_str(
 }
 
 /// `matchbufline({buf}, {pat}, {lnum}, {end} [, {dict}])`.
-pub unsafe extern "C" fn f_matchbufline(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the buffer comes from the buffer list and is checked for a
     // memfile before any line is read.
@@ -500,62 +496,42 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe extern "C" fn f_match(argvars: *mut typval_T, rettv: *mut typval_T, _f: EvalFuncData) {
+pub unsafe fn f_match(argvars: *mut typval_T, rettv: *mut typval_T, _f: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, rettv, kSomeMatch) }
 }
 
 /// `matchend({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe extern "C" fn f_matchend(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _f: EvalFuncData,
-) {
+pub unsafe fn f_matchend(argvars: *mut typval_T, rettv: *mut typval_T, _f: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, rettv, kSomeMatchEnd) }
 }
 
 /// `matchlist({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe extern "C" fn f_matchlist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _f: EvalFuncData,
-) {
+pub unsafe fn f_matchlist(argvars: *mut typval_T, rettv: *mut typval_T, _f: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, rettv, kSomeMatchList) }
 }
 
 /// `matchstr({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe extern "C" fn f_matchstr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _f: EvalFuncData,
-) {
+pub unsafe fn f_matchstr(argvars: *mut typval_T, rettv: *mut typval_T, _f: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, rettv, kSomeMatchStr) }
 }
 
 /// `matchstrpos({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe extern "C" fn f_matchstrpos(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _f: EvalFuncData,
-) {
+pub unsafe fn f_matchstrpos(argvars: *mut typval_T, rettv: *mut typval_T, _f: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, rettv, kSomeMatchStrPos) }
 }
 
 /// `matchstrlist({list}, {pat} [, {dict}])`.
-pub unsafe extern "C" fn f_matchstrlist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matchstrlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the List and its items outlive the call.
     unsafe {

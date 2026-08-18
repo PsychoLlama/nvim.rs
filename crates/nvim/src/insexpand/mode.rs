@@ -650,11 +650,7 @@ pub fn ins_compl_enable_autocomplete() {
 }
 
 /// `preinserted()`: is a previewed match currently in the buffer?
-pub unsafe extern "C" fn f_preinserted(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_preinserted(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if ins_compl_preinsert_effect() {
             (*rettv).vval.v_number = 1;

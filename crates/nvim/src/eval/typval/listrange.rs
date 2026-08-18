@@ -394,7 +394,7 @@ pub unsafe extern "C" fn tv_list_join(
 }
 
 /// `join()` the builtin.
-pub unsafe extern "C" fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if (*argvars).v_type != VAR_LIST {
             emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
@@ -425,11 +425,7 @@ pub unsafe extern "C" fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _f
 }
 
 /// `list2str()`: a list of codepoints as a string.
-pub unsafe extern "C" fn f_list2str(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_list2str(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = ::core::ptr::null_mut();

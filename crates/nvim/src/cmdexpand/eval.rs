@@ -3,8 +3,8 @@
 //!
 //! [`f_getcompletion`] runs the whole classify-then-expand pipeline against a
 //! string instead of the real command line, which is what makes it the
-//! completion layer's differential oracle.  All three keep `extern "C"`:
-//! they are rows in the generated eval function table.
+//! completion layer's differential oracle.  All three are rows in the
+//! generated eval function table.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -27,11 +27,7 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
 /// `ExpandOne`'s `orig` argument, which this caller never has.
 const NO_ORIG: *mut c_char = ptr::null_mut();
 
-pub unsafe extern "C" fn f_getcompletion(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let mut xpc: expand_T = core::mem::zeroed();
         let mut filtered = false;
@@ -159,7 +155,7 @@ pub unsafe extern "C" fn f_getcompletion(
 }
 
 /// `getcompletiontype()`: the completion type name a command line would use.
-pub unsafe extern "C" fn f_getcompletiontype(
+pub unsafe fn f_getcompletiontype(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
@@ -191,7 +187,7 @@ pub unsafe extern "C" fn f_getcompletiontype(
 }
 
 /// `cmdcomplete_info()`: the state of the completion in progress.
-pub unsafe extern "C" fn f_cmdcomplete_info(
+pub unsafe fn f_cmdcomplete_info(
     _argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,

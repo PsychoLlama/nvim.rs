@@ -63,7 +63,7 @@ use crate::pos::MAXLNUM;
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_backspace(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_backspace(args: *mut optset_T) -> *const c_char {
     // SAFETY: the option's own C string value.
     if unsafe { ascii_isdigit(c_int::from(*p_bs.get())) } {
         if unsafe { *p_bs.get() } != b'2' as c_char {
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn did_set_backspace(args: *mut optset_T) -> *const c_char
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     let local = opt_flags & OPT_LOCAL as c_int != 0;
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn did_set_backupcopy(args: *mut optset_T) -> *const c_cha
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_backupext_or_patchmode(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_backupext_or_patchmode(_args: *mut optset_T) -> *const c_char {
     // SAFETY: both are the process's own C string option values.
     unsafe {
         let undotted = |value: *mut c_char| {
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn did_set_backupext_or_patchmode(_args: *mut optset_T) ->
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_bufhidden(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_bufhidden(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer, and the table's own word list.
     unsafe {
         let buf = (*args).os_buf.cast::<buf_T>();
@@ -173,7 +173,7 @@ pub unsafe extern "C" fn did_set_bufhidden(args: *mut optset_T) -> *const c_char
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_buftype(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, buffer and window.
     let (buf, wp) = unsafe { ((*args).os_buf.cast::<buf_T>(), win(args)) };
     // SAFETY: the buffer's own C string value; only the first letter is
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn did_set_buftype(args: *mut optset_T) -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_cinoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_cinoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer; `parse_cino` re-derives its cache.
     unsafe { parse_cino((*args).os_buf.cast::<buf_T>()) };
     ptr::null()
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn did_set_cinoptions(args: *mut optset_T) -> *const c_cha
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_comments(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_comments(args: *mut optset_T) -> *const c_char {
     let (buf, buflen) = unsafe { errbuf(args) };
     let mut errmsg: *const c_char = ptr::null();
     // SAFETY: the frame's C string value, walked to its terminator.
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn did_set_comments(args: *mut optset_T) -> *const c_char 
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_commentstring(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_commentstring(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
     unsafe {
         let value = *varp(args);
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn did_set_commentstring(args: *mut optset_T) -> *const c_
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_cpoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_cpoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
     unsafe {
         let (buf, len) = errbuf(args);
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn did_set_cpoptions(args: *mut optset_T) -> *const c_char
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_diffanchors(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_diffanchors(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame.
     let local = unsafe { (*args).os_flags } & OPT_LOCAL as c_int != 0;
     // SAFETY: re-reads the option's own value.
@@ -337,7 +337,7 @@ pub unsafe extern "C" fn did_set_diffanchors(args: *mut optset_T) -> *const c_ch
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_diffopt(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_diffopt(_args: *mut optset_T) -> *const c_char {
     // SAFETY: re-reads the option's own value.
     if unsafe { diffopt_changed() } == FAIL {
         return invalid();
@@ -351,7 +351,7 @@ pub unsafe extern "C" fn did_set_diffopt(_args: *mut optset_T) -> *const c_char 
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_encoding(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, varp, opt_flags, idx) = unsafe {
         (
@@ -400,7 +400,7 @@ pub unsafe extern "C" fn did_set_encoding(args: *mut optset_T) -> *const c_char 
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_eventignore(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_eventignore(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
     if unsafe { check_ei(*varp(args)) } == FAIL {
         return invalid();
@@ -410,7 +410,7 @@ pub unsafe extern "C" fn did_set_eventignore(args: *mut optset_T) -> *const c_ch
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     // Changing a buffer's line endings changes its text.
@@ -439,7 +439,7 @@ pub unsafe extern "C" fn did_set_fileformat(args: *mut optset_T) -> *const c_cha
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_filetype_or_syntax(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_filetype_or_syntax(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value and its old one.
     unsafe {
         let value = *varp(args);
@@ -454,7 +454,7 @@ pub unsafe extern "C" fn did_set_filetype_or_syntax(args: *mut optset_T) -> *con
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_foldexpr(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldexpr(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and window.
     unsafe {
         did_set_optexpr(args);
@@ -468,7 +468,7 @@ pub unsafe extern "C" fn did_set_foldexpr(args: *mut optset_T) -> *const c_char 
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_foldignore(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldignore(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's window.
     unsafe {
         let wp = win(args);
@@ -481,7 +481,7 @@ pub unsafe extern "C" fn did_set_foldignore(args: *mut optset_T) -> *const c_cha
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_foldmarker(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldmarker(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value and window.
     unsafe {
         let value = *varp(args);
@@ -503,7 +503,7 @@ pub unsafe extern "C" fn did_set_foldmarker(args: *mut optset_T) -> *const c_cha
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_foldmethod(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldmethod(args: *mut optset_T) -> *const c_char {
     let errmsg = unsafe { did_set_str_generic(args) };
     if !errmsg.is_null() {
         return errmsg;
@@ -523,7 +523,7 @@ pub unsafe extern "C" fn did_set_foldmethod(args: *mut optset_T) -> *const c_cha
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_formatoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_formatoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
     unsafe {
         let (buf, len) = errbuf(args);
@@ -537,7 +537,7 @@ pub unsafe extern "C" fn did_set_formatoptions(args: *mut optset_T) -> *const c_
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
     let varp = unsafe { varp(args) };
     if varp != p_isk.ptr() {
         return unsafe { did_set_isopt(args) };
@@ -555,7 +555,7 @@ pub unsafe extern "C" fn did_set_iskeyword(args: *mut optset_T) -> *const c_char
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_isopt(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_isopt(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer.
     unsafe {
         if !buf_init_chartab((*args).os_buf.cast::<buf_T>(), true) {
@@ -573,7 +573,7 @@ pub unsafe extern "C" fn did_set_isopt(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_keymap(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, varp, opt_flags) =
         unsafe { ((*args).os_buf.cast::<buf_T>(), varp(args), (*args).os_flags) };
@@ -621,7 +621,7 @@ pub unsafe extern "C" fn did_set_keymap(args: *mut optset_T) -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
     unsafe {
         let value = *varp(args);
@@ -641,7 +641,7 @@ pub unsafe extern "C" fn did_set_lispoptions(args: *mut optset_T) -> *const c_ch
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_matchpairs(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_matchpairs(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value, walked by character length.
     unsafe {
         let mut p = *varp(args);
@@ -674,7 +674,7 @@ pub unsafe extern "C" fn did_set_matchpairs(args: *mut optset_T) -> *const c_cha
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_varsofttabstop(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_varsofttabstop(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     unsafe {
         let buf = (*args).os_buf.cast::<buf_T>();
@@ -684,7 +684,7 @@ pub unsafe extern "C" fn did_set_varsofttabstop(args: *mut optset_T) -> *const c
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_vartabstop(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_vartabstop(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, buffer and window.
     unsafe {
         let buf = (*args).os_buf.cast::<buf_T>();

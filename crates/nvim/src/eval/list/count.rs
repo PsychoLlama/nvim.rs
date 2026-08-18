@@ -25,7 +25,7 @@ use crate::types::{EvalFuncData, int64_t, typval_T, uint8_t, varnumber_T};
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
 /// cleared result.
-pub unsafe extern "C" fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     // Default: failed.
@@ -134,11 +134,7 @@ fn count_dict(d: Dict, needle: &mut typval_T, ic: bool) -> varnumber_T {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..4, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_count(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_count(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     let mut error = false;

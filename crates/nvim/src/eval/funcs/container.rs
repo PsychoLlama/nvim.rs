@@ -40,7 +40,7 @@ const NIL: typval_T = typval_T {
 };
 
 /// `copy({expr})` — one level deep.
-pub unsafe extern "C" fn f_copy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_copy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `args.ptr(0)` and `rettv` are live typvals.
     unsafe { var_item_copy(ptr::null(), args.ptr(0), rettv, false, 0) };
@@ -50,11 +50,7 @@ pub unsafe extern "C" fn f_copy(argvars: *mut typval_T, rettv: *mut typval_T, _f
 ///
 /// Without `noref` the copy is given a copy id, which is what lets it
 /// reproduce a self-referential structure rather than recursing forever.
-pub unsafe extern "C" fn f_deepcopy(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_deepcopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe {
@@ -68,11 +64,7 @@ pub unsafe extern "C" fn f_deepcopy(
 }
 
 /// `empty({expr})` — what "empty" means for each type.
-pub unsafe extern "C" fn f_empty(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_empty(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let tv = args.get(0);
     // SAFETY: every read below is guarded by the type tag that says which
@@ -104,22 +96,14 @@ pub unsafe extern "C" fn f_empty(
 }
 
 /// `flatten({list} [, {maxdepth}])` — in place.
-pub unsafe extern "C" fn f_flatten(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_flatten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe { flatten_common(args, rettv, false) };
 }
 
 /// `flattennew({list} [, {maxdepth}])` — into a copy.
-pub unsafe extern "C" fn f_flattennew(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_flattennew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe { flatten_common(args, rettv, true) };
@@ -188,7 +172,7 @@ unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) 
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
 /// Funcref or Partial.
-pub unsafe extern "C" fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; each union read
     // is guarded by the type tag above it.
@@ -392,11 +376,7 @@ unsafe fn func_arity(pt: *mut partial_T, rettv: &mut typval_T) {
 }
 
 /// `index({object}, {expr} [, {start} [, {ic}]])`.
-pub unsafe extern "C" fn f_index(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_index(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals.
@@ -487,11 +467,7 @@ unsafe fn index_list(args: Args<'_>, rettv: &mut typval_T) {
 
 /// `indexof({object}, {expr} [, {opts}])` — the first index whose value
 /// satisfies `expr`, which sees the item as `v:key` and `v:val`.
-pub unsafe extern "C" fn f_indexof(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals; the two `v:` variables are
@@ -634,7 +610,7 @@ unsafe fn indexof_list(l: *mut list_T, startidx: varnumber_T, expr: *mut typval_
 }
 
 /// `len({expr})` — bytes for a String or Number, items otherwise.
-pub unsafe extern "C" fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let tv = args.get(0);
     // SAFETY: every union read is guarded by the type tag above it, and a
@@ -656,7 +632,7 @@ pub unsafe extern "C" fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 }
 
 /// `type({expr})` — the `v:t_*` number for the value's type.
-pub unsafe extern "C" fn f_type(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_type(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let n: c_int = match args.ty(0) {
         VAR_NUMBER => VAR_TYPE_NUMBER as c_int,

@@ -14,4 +14,4 @@ pub struct EvalFuncDef {
     pub func: VimLFunc,
     pub data: EvalFuncData,
 }
-pub type VimLFunc = Option<unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> ()>;
+pub type VimLFunc = Option<unsafe fn(*mut typval_T, *mut typval_T, EvalFuncData) -> ()>;

@@ -230,11 +230,7 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut dict_
 ///
 /// # Safety
 /// The eval layer must pass live argument and return typvals.
-pub unsafe extern "C" fn f_menu_info(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_menu_info(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's obligation.
     let (retdict, menu_name) = unsafe {
         tv_dict_alloc_ret(rettv);

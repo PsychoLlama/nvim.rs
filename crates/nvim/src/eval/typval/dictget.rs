@@ -346,11 +346,7 @@ pub(crate) unsafe extern "C" fn tv_dict2list(
 }
 
 /// `items()`: index/value pairs of a string, list, blob or dictionary.
-pub unsafe extern "C" fn f_items(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_items(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         match (*argvars).v_type {
             VAR_STRING => tv_string2items(argvars, rettv),
@@ -368,29 +364,21 @@ pub unsafe extern "C" fn f_items(
 }
 
 /// `keys()`: the keys of a dictionary.
-pub unsafe extern "C" fn f_keys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_keys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         tv_dict2list(argvars, rettv, kDict2ListKeys);
     }
 }
 
 /// `values()`: the values of a dictionary.
-pub unsafe extern "C" fn f_values(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_values(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         tv_dict2list(argvars, rettv, kDict2ListValues);
     }
 }
 
 /// `has_key()`: whether a dictionary has a key.
-pub unsafe extern "C" fn f_has_key(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_has_key(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if tv_check_for_dict_arg(argvars, 0) == FAIL {
             return;

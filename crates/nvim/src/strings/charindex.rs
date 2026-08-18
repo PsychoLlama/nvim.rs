@@ -104,29 +104,17 @@ unsafe fn byteidx_common(argvars: *mut typval_T, rettv: *mut typval_T, comp: boo
 }
 
 /// "byteidx()" function
-pub unsafe extern "C" fn f_byteidx(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_byteidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { byteidx_common(argvars, rettv, false) }
 }
 
 /// "byteidxcomp()" function
-pub unsafe extern "C" fn f_byteidxcomp(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_byteidxcomp(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { byteidx_common(argvars, rettv, true) }
 }
 
 /// "charidx()" function: the character index of a byte (or UTF-16) offset.
-pub unsafe extern "C" fn f_charidx(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).vval.v_number = -1;
 
@@ -188,11 +176,7 @@ pub unsafe extern "C" fn f_charidx(
 }
 
 /// "strgetchar()" function: the code point of the `idx`-th character.
-pub unsafe extern "C" fn f_strgetchar(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_strgetchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).vval.v_number = -1;
 
@@ -220,11 +204,7 @@ pub unsafe extern "C" fn f_strgetchar(
 }
 
 /// "strutf16len()" function: the string's length in UTF-16 code units.
-pub unsafe extern "C" fn f_strutf16len(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_strutf16len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).vval.v_number = -1;
 
@@ -252,11 +232,7 @@ pub unsafe extern "C" fn f_strutf16len(
 }
 
 /// "strcharpart()" function: a substring measured in characters.
-pub unsafe extern "C" fn f_strcharpart(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let p = tv_get_string(argvars);
         let slen = strlen(p);
@@ -325,11 +301,7 @@ pub unsafe extern "C" fn f_strcharpart(
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
 /// fourth argument -- in characters starting from a byte offset.
-pub unsafe extern "C" fn f_strpart(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let mut error = false;
         let p = tv_get_string(argvars);
@@ -374,11 +346,7 @@ pub unsafe extern "C" fn f_strpart(
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
-pub unsafe extern "C" fn f_utf16idx(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).vval.v_number = -1;
 

@@ -90,11 +90,7 @@ unsafe fn job_id(arg: &typval_T) -> Option<uint64_t> {
 }
 
 /// `jobpid({job})`
-pub unsafe extern "C" fn f_jobpid(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_jobpid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -116,11 +112,7 @@ pub unsafe extern "C" fn f_jobpid(
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
-pub unsafe extern "C" fn f_jobresize(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -154,11 +146,7 @@ pub unsafe extern "C" fn f_jobresize(
 }
 
 /// `jobstop({job})`
-pub unsafe extern "C" fn f_jobstop(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_jobstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -190,11 +178,7 @@ pub unsafe extern "C" fn f_jobstop(
 }
 
 /// `jobwait({jobs} [, {timeout}])`
-pub unsafe extern "C" fn f_jobwait(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -420,11 +404,7 @@ unsafe fn create_environment(
 }
 
 /// `jobstart({cmd} [, {opts}])`
-pub unsafe extern "C" fn f_jobstart(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;

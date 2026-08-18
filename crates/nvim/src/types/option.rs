@@ -22,10 +22,9 @@ pub union OptValData {
     pub string: String_0,
 }
 pub type OptValType = ::core::ffi::c_int;
-pub type opt_did_set_cb_T =
-    Option<unsafe extern "C" fn(*mut optset_T) -> *const ::core::ffi::c_char>;
+pub type opt_did_set_cb_T = Option<unsafe fn(*mut optset_T) -> *const ::core::ffi::c_char>;
 pub type opt_expand_cb_T = Option<
-    unsafe extern "C" fn(
+    unsafe fn(
         *mut optexpand_T,
         *mut ::core::ffi::c_int,
         *mut *mut *mut ::core::ffi::c_char,

@@ -167,7 +167,7 @@ pub(crate) unsafe fn expand_set_opt_string(
 ///
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_str_generic(
+pub unsafe fn expand_set_str_generic(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -304,7 +304,7 @@ pub(crate) unsafe fn expand_set_opt_listflag(
 ///
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_chars_option(
+pub unsafe fn expand_set_chars_option(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn expand_set_chars_option(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_concealcursor(
+pub unsafe fn expand_set_concealcursor(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn expand_set_concealcursor(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_cpoptions(
+pub unsafe fn expand_set_cpoptions(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -343,7 +343,7 @@ pub unsafe extern "C" fn expand_set_cpoptions(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_formatoptions(
+pub unsafe fn expand_set_formatoptions(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -353,7 +353,7 @@ pub unsafe extern "C" fn expand_set_formatoptions(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_mouse(
+pub unsafe fn expand_set_mouse(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn expand_set_mouse(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_shortmess(
+pub unsafe fn expand_set_shortmess(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -373,7 +373,7 @@ pub unsafe extern "C" fn expand_set_shortmess(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_whichwrap(
+pub unsafe fn expand_set_whichwrap(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -401,7 +401,7 @@ unsafe fn directly_after(at: *const c_char, start: *const c_char, prefix: &CStr)
 ///
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_diffopt(
+pub unsafe fn expand_set_diffopt(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn expand_set_diffopt(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_encoding(
+pub unsafe fn expand_set_encoding(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -443,7 +443,7 @@ pub unsafe extern "C" fn expand_set_encoding(
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_winhighlight(
+pub unsafe fn expand_set_winhighlight(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -496,7 +496,7 @@ pub(crate) unsafe extern "C" fn get_eventignore_name(xp: *mut expand_T, idx: c_i
 
 /// # Safety
 /// `args` points at the completion frame.
-pub unsafe extern "C" fn expand_set_eventignore(
+pub unsafe fn expand_set_eventignore(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,

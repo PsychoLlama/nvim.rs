@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_win_close(
+pub unsafe fn handle_nvim_win_close(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn handle_nvim_win_close(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_del_var(
+pub unsafe fn handle_nvim_win_del_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn handle_nvim_win_del_var(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_buf(
+pub unsafe fn handle_nvim_win_get_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_buf(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_cursor(
+pub unsafe fn handle_nvim_win_get_cursor(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_cursor(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_height(
+pub unsafe fn handle_nvim_win_get_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_height(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_number(
+pub unsafe fn handle_nvim_win_get_number(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_number(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_position(
+pub unsafe fn handle_nvim_win_get_position(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -256,7 +256,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_position(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
+pub unsafe fn handle_nvim_win_get_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_var(
+pub unsafe fn handle_nvim_win_get_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_width(
+pub unsafe fn handle_nvim_win_get_width(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -364,7 +364,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_width(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_win_hide(
+pub unsafe fn handle_nvim_win_hide(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -402,7 +402,7 @@ pub unsafe extern "C" fn handle_nvim_win_hide(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_is_valid(
+pub unsafe fn handle_nvim_win_is_valid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -432,7 +432,7 @@ pub unsafe extern "C" fn handle_nvim_win_is_valid(
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_buf(
+pub unsafe fn handle_nvim_win_set_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -474,7 +474,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_buf(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_cursor(
+pub unsafe fn handle_nvim_win_set_cursor(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -511,7 +511,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_cursor(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_height(
+pub unsafe fn handle_nvim_win_set_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -548,7 +548,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_height(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
+pub unsafe fn handle_nvim_win_set_hl_ns(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -585,7 +585,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_var(
+pub unsafe fn handle_nvim_win_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -623,7 +623,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_var(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_width(
+pub unsafe fn handle_nvim_win_set_width(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -660,7 +660,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_width(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_text_height(
+pub unsafe fn handle_nvim_win_text_height(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

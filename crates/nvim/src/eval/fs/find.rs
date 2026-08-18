@@ -307,11 +307,7 @@ fn findfilendir(args: Args<'_>, rettv: &mut typval_T, find_what: c_int) {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1..3, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_finddir(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_finddir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     findfilendir(args, rettv, FINDFILE_DIR as c_int);
 }
@@ -320,11 +316,7 @@ pub unsafe extern "C" fn f_finddir(
 ///
 /// # Safety
 /// As [`f_finddir`].
-pub unsafe extern "C" fn f_findfile(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_findfile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     findfilendir(args, rettv, FINDFILE_FILE as c_int);
 }
@@ -338,7 +330,7 @@ pub unsafe extern "C" fn f_findfile(
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1..4, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL;
     let mut error = false;
@@ -385,11 +377,7 @@ pub unsafe extern "C" fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _f
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..5, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_globpath(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_globpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut flags = WildOpts::IGNORE_COMPLETESLASH;
     let mut error = false;
@@ -487,11 +475,7 @@ unsafe extern "C" fn readdir_checkitem(context: *mut c_void, name: *const c_char
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1..2, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_readdir(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_readdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (mut args, rettv) = frame!(argvars, rettv);
     let list = RetList::alloc(rettv, kListLenUnknown as c_int as ptrdiff_t);
     let path = str_arg(args, 0).as_ptr();

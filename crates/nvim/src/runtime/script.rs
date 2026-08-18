@@ -303,11 +303,7 @@ enum ScriptQuery {
 }
 
 /// `"getscriptinfo()"` function
-pub unsafe extern "C" fn f_getscriptinfo(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the caller's return slot, `argvars` its arguments.
     unsafe {
         tv_list_alloc_ret(rettv, script_items.get().ga_len as ptrdiff_t);

@@ -326,11 +326,7 @@ unsafe fn arg_histtype(arg: *const typval_T) -> HistoryType {
 }
 
 /// "histadd()" function
-pub unsafe extern "C" fn f_histadd(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_histadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
     unsafe { (*rettv).vval.v_number = 0 };
     // SAFETY: reads the 'secure'/sandbox globals.
@@ -360,11 +356,7 @@ pub unsafe extern "C" fn f_histadd(
 }
 
 /// "histdel()" function
-pub unsafe extern "C" fn f_histdel(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
     // the second argument is only read once its type says it is present.
     let n = unsafe {
@@ -392,11 +384,7 @@ pub unsafe extern "C" fn f_histdel(
 }
 
 /// "histget()" function
-pub unsafe extern "C" fn f_histget(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_histget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
     let name = unsafe { tv_get_string_chk(argvars) };
     let text = if name.is_null() {
@@ -427,11 +415,7 @@ pub unsafe extern "C" fn f_histget(
 }
 
 /// "histnr()" function
-pub unsafe extern "C" fn f_histnr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_histnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
     let histype = unsafe { arg_histtype(argvars) };
     let n = if histype == HIST_INVALID {

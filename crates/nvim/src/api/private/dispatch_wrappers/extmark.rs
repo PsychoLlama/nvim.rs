@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim__buf_debug_extmarks(
+pub unsafe fn handle_nvim__buf_debug_extmarks(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -48,7 +48,7 @@ pub unsafe extern "C" fn handle_nvim__buf_debug_extmarks(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim__ns_get(
+pub unsafe fn handle_nvim__ns_get(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn handle_nvim__ns_get(
     obj(kObjectTypeDict, object_data { dict })
 }
 
-pub unsafe extern "C" fn handle_nvim__ns_set(
+pub unsafe fn handle_nvim__ns_set(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn handle_nvim__ns_set(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_clear_namespace(
+pub unsafe fn handle_nvim_buf_clear_namespace(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_namespace(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_del_extmark(
+pub unsafe fn handle_nvim_buf_del_extmark(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -219,7 +219,7 @@ pub unsafe extern "C" fn handle_nvim_buf_del_extmark(
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_get_extmark_by_id(
+pub unsafe fn handle_nvim_buf_get_extmark_by_id(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -275,7 +275,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_extmark_by_id(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_get_extmarks(
+pub unsafe fn handle_nvim_buf_get_extmarks(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -324,7 +324,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_extmarks(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_set_extmark(
+pub unsafe fn handle_nvim_buf_set_extmark(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -378,7 +378,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_extmark(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_create_namespace(
+pub unsafe fn handle_nvim_create_namespace(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -408,7 +408,7 @@ pub unsafe extern "C" fn handle_nvim_create_namespace(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_namespaces(
+pub unsafe fn handle_nvim_get_namespaces(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

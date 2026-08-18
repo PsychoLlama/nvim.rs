@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_put(
+pub unsafe fn handle_nvim_put(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn handle_nvim_put(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_replace_termcodes(
+pub unsafe fn handle_nvim_replace_termcodes(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn handle_nvim_replace_termcodes(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_select_popupmenu_item(
+pub unsafe fn handle_nvim_select_popupmenu_item(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -149,7 +149,7 @@ pub unsafe extern "C" fn handle_nvim_select_popupmenu_item(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_client_info(
+pub unsafe fn handle_nvim_set_client_info(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -198,7 +198,7 @@ pub unsafe extern "C" fn handle_nvim_set_client_info(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_current_buf(
+pub unsafe fn handle_nvim_set_current_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_buf(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_current_dir(
+pub unsafe fn handle_nvim_set_current_dir(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -269,7 +269,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_dir(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_current_line(
+pub unsafe fn handle_nvim_set_current_line(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -307,7 +307,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_line(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_current_tabpage(
+pub unsafe fn handle_nvim_set_current_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -345,7 +345,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_tabpage(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_current_win(
+pub unsafe fn handle_nvim_set_current_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -383,7 +383,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_win(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_hl(
+pub unsafe fn handle_nvim_set_hl(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -429,7 +429,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_hl_ns(
+pub unsafe fn handle_nvim_set_hl_ns(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -462,7 +462,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_hl_ns_fast(
+pub unsafe fn handle_nvim_set_hl_ns_fast(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -495,7 +495,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns_fast(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_keymap(
+pub unsafe fn handle_nvim_set_keymap(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -545,7 +545,7 @@ pub unsafe extern "C" fn handle_nvim_set_keymap(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_var(
+pub unsafe fn handle_nvim_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -579,7 +579,7 @@ pub unsafe extern "C" fn handle_nvim_set_var(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_vvar(
+pub unsafe fn handle_nvim_set_vvar(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -613,7 +613,7 @@ pub unsafe extern "C" fn handle_nvim_set_vvar(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_strwidth(
+pub unsafe fn handle_nvim_strwidth(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,

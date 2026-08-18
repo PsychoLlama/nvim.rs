@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_call_dict_function(
+pub unsafe fn handle_nvim_call_dict_function(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn handle_nvim_call_dict_function(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_call_function(
+pub unsafe fn handle_nvim_call_function(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn handle_nvim_call_function(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_command(
+pub unsafe fn handle_nvim_command(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -115,7 +115,7 @@ pub unsafe extern "C" fn handle_nvim_command(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_eval(
+pub unsafe fn handle_nvim_eval(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -148,7 +148,7 @@ pub unsafe extern "C" fn handle_nvim_eval(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_exec2(
+pub unsafe fn handle_nvim_exec2(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn handle_nvim_exec2(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_parse_expression(
+pub unsafe fn handle_nvim_parse_expression(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

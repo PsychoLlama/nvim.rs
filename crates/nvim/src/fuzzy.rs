@@ -961,11 +961,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
 ///
 /// # Safety
 /// Called with a Vimscript function's arguments and result slot.
-pub unsafe extern "C" fn f_matchfuzzy(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matchfuzzy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { do_fuzzymatch(argvars, rettv, false) }
 }
 
@@ -974,10 +970,6 @@ pub unsafe extern "C" fn f_matchfuzzy(
 ///
 /// # Safety
 /// Called with a Vimscript function's arguments and result slot.
-pub unsafe extern "C" fn f_matchfuzzypos(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matchfuzzypos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { do_fuzzymatch(argvars, rettv, true) }
 }

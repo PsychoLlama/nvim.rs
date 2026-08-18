@@ -25,7 +25,7 @@ use core::ptr;
 /// `abs({expr})` — magnitude, as a Float for a Float and as a Number
 /// otherwise. A value that is not coercible to a number reports through
 /// `tv_get_number_chk` and yields -1, as upstream does.
-pub unsafe extern "C" fn f_abs(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_abs(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     if args.ty(0) == VAR_FLOAT {
         rettv.v_type = VAR_FLOAT;
@@ -52,26 +52,22 @@ pub unsafe extern "C" fn f_abs(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 /// The bitwise operators. Each coerces both arguments with a null error
 /// pointer, so a non-coercible argument reports its own message and
 /// contributes zero.
-pub unsafe extern "C" fn f_and(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_and(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = number(args, 0) & number(args, 1);
 }
 
-pub unsafe extern "C" fn f_or(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_or(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = number(args, 0) | number(args, 1);
 }
 
-pub unsafe extern "C" fn f_xor(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_xor(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = number(args, 0) ^ number(args, 1);
 }
 
-pub unsafe extern "C" fn f_invert(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_invert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = !number(args, 0);
 }
@@ -87,22 +83,18 @@ fn number(args: Args<'_>, i: usize) -> varnumber_T {
 /// The two-argument float builtins. Both arguments are read left to right
 /// and the second is only read once the first succeeded, so a pair of bad
 /// arguments reports E808 once.
-pub unsafe extern "C" fn f_atan2(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_atan2(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     float2(args, rettv, |x, y| x.atan2(y));
 }
 
-pub unsafe extern "C" fn f_fmod(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_fmod(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // Rust's `%` on floats is C's `fmod`.
     float2(args, rettv, |x, y| x % y);
 }
 
-pub unsafe extern "C" fn f_pow(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_pow(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     float2(args, rettv, c_double::powf);
 }
@@ -127,11 +119,7 @@ fn float_arg(args: Args<'_>, i: usize) -> Option<float_T> {
 
 /// `float2nr({expr})` — truncation towards zero, saturating at the Number
 /// range rather than invoking the undefined behaviour C's cast would.
-pub unsafe extern "C" fn f_float2nr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_float2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let Some(f) = float_arg(args, 0) else {
         return;
@@ -149,11 +137,7 @@ pub unsafe extern "C" fn f_float2nr(
 
 /// `isinf({expr})` — 1, -1, or (for anything that is not an infinite Float)
 /// the return value left as it was, which is 0.
-pub unsafe extern "C" fn f_isinf(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_isinf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     if let Some(f) = as_float(args, 0) {
         if f.is_infinite() {
@@ -163,11 +147,7 @@ pub unsafe extern "C" fn f_isinf(
 }
 
 /// `isnan({expr})`.
-pub unsafe extern "C" fn f_isnan(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_isnan(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = as_float(args, 0).is_some_and(c_double::is_nan) as varnumber_T;
 }
@@ -229,7 +209,7 @@ fn xoshiro128starstar(s: &mut [u32; 4]) -> u32 {
 
 /// `rand([{expr}])` — the next value of the process-wide generator, or of
 /// the four-Number list handed in, which is advanced in place.
-pub unsafe extern "C" fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     /// The process-wide generator, seeded from the OS on first use.
     static STATE: GlobalCell<Option<[u32; 4]>> = GlobalCell::new(None);
 
@@ -307,11 +287,7 @@ fn seed_list(tv: &typval_T) -> Option<[*mut typval_T; 4]> {
 
 /// `srand([{expr}])` — a four-Number seed list, from the OS or from the
 /// Number handed in.
-pub unsafe extern "C" fn f_srand(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_srand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `rettv` is the dispatcher's cleared return value.
     unsafe { tv_list_alloc_ret(rettv, 4) };
@@ -334,11 +310,7 @@ pub unsafe extern "C" fn f_srand(
 }
 
 /// `range({expr} [, {max} [, {stride}]])`.
-pub unsafe extern "C" fn f_range(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_range(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut error = false;
     // SAFETY: each `args.ptr(i)` is a live typval. The errors accumulate
@@ -404,11 +376,7 @@ pub unsafe extern "C" fn f_range(
 
 /// `str2float({string})` — the leading sign and any whitespace around it are
 /// consumed here; `string2float` parses what is left.
-pub unsafe extern "C" fn f_str2float(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_str2float(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `args.ptr(0)` is a live typval; `tv_get_string` hands back a
     // NUL-terminated buffer that outlives this call, and `skipwhite` only

@@ -163,11 +163,7 @@ unsafe extern "C" fn get_winnr(tp: *mut tabpage_T, mut argvar: *mut typval_T) ->
     nr
 }
 /// "win_getid()" function
-pub unsafe extern "C" fn f_win_getid(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_win_getid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     if (*argvars.offset(0)).v_type == VAR_UNKNOWN {
         (*rettv).vval.v_number = (*curwin.get()).handle as varnumber_T;
         return;
@@ -213,11 +209,7 @@ pub unsafe extern "C" fn f_win_getid(
     (*rettv).vval.v_number = 0;
 }
 /// "win_id2tabwin()" function
-pub unsafe extern "C" fn f_win_id2tabwin(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let id: handle_T = tv_get_number(argvars.offset(0)) as handle_T;
     let mut winnr: c_int = 1;
     let mut tabnr: c_int = 1;
@@ -227,11 +219,7 @@ pub unsafe extern "C" fn f_win_id2tabwin(
     tv_list_append_number(list, winnr as varnumber_T);
 }
 /// "win_id2win()" function
-pub unsafe extern "C" fn f_win_id2win(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_win_id2win(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let id: c_int = tv_get_number(argvars.offset(0)) as c_int;
     let mut nr: c_int = 1;
     let mut wp: *mut win_T = tab_firstwin(curtab.get());
@@ -251,11 +239,7 @@ pub unsafe extern "C" fn f_win_id2win(
     (*rettv).vval.v_number = 0;
 }
 /// "win_findbuf()" function
-pub unsafe extern "C" fn f_win_findbuf(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_win_findbuf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let list = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
     let bufnr: c_int = tv_get_number(argvars.offset(0)) as c_int;
     let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
@@ -271,11 +255,7 @@ pub unsafe extern "C" fn f_win_findbuf(
     }
 }
 /// "win_gotoid()" function
-pub unsafe extern "C" fn f_win_gotoid(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_win_gotoid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut id: c_int = tv_get_number(argvars.offset(0)) as c_int;
     if (*curwin.get()).handle == id {
         (*rettv).vval.v_number = 1;
@@ -302,19 +282,11 @@ pub unsafe extern "C" fn f_win_gotoid(
     }
 }
 /// "winnr()" function
-pub unsafe extern "C" fn f_winnr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_winnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     (*rettv).vval.v_number = get_winnr(curtab.get(), argvars.offset(0)) as varnumber_T;
 }
 /// "tabpagenr()" function
-pub unsafe extern "C" fn f_tabpagenr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_tabpagenr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut nr: c_int = 1;
     if (*argvars.offset(0)).v_type != VAR_UNKNOWN {
         let arg: *const c_char = tv_get_string_chk(argvars.offset(0));
@@ -341,11 +313,7 @@ pub unsafe extern "C" fn f_tabpagenr(
     (*rettv).vval.v_number = nr as varnumber_T;
 }
 /// "tabpagewinnr()" function
-pub unsafe extern "C" fn f_tabpagewinnr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_tabpagewinnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut nr: c_int = 1;
     let tp: *mut tabpage_T = find_tabpage(tv_get_number(argvars.offset(0)) as c_int);
     if tp.is_null() {
@@ -356,11 +324,7 @@ pub unsafe extern "C" fn f_tabpagewinnr(
     (*rettv).vval.v_number = nr as varnumber_T;
 }
 /// "winbufnr(nr)" function
-pub unsafe extern "C" fn f_winbufnr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_winbufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0));
     if wp.is_null() {
         (*rettv).vval.v_number = -1;

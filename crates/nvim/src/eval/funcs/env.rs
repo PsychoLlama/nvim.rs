@@ -39,11 +39,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// `environ()` — the process environment as a Dictionary.
-pub unsafe extern "C" fn f_environ(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_environ(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY: `env` is an array of `env_size` strings plus a NULL, filled by
     // `os_copy_fullenv` and released by `os_free_fullenv`. Every string is
@@ -82,11 +78,7 @@ pub unsafe extern "C" fn f_environ(
 }
 
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
-pub unsafe extern "C" fn f_getenv(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getenv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `vim_getenv` returns an owned string or null.
     let p = unsafe { vim_getenv(tv_get_string(args.ptr(0))) };
@@ -100,11 +92,7 @@ pub unsafe extern "C" fn f_getenv(
 }
 
 /// `expand({string} [, {nosuf} [, {list}]])`.
-pub unsafe extern "C" fn f_expand(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
     let mut error = false;
@@ -196,11 +184,7 @@ pub unsafe extern "C" fn f_expand(
 
 /// `expandcmd({string} [, {options}])` — expand the `%`, `#` and wildcard
 /// items in a command line.
-pub unsafe extern "C" fn f_expandcmd(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: `cmdstr` is owned here and handed to the return value;
@@ -240,11 +224,7 @@ pub unsafe extern "C" fn f_expandcmd(
 }
 
 /// `setenv({name}, {val})` — `v:null` unsets.
-pub unsafe extern "C" fn f_setenv(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setenv(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: the two scratch buffers outlive the strings coerced into them.
     unsafe {
@@ -266,11 +246,7 @@ pub unsafe extern "C" fn f_setenv(
 
 /// `setfperm({fname}, {mode})` — `{mode}` is nine "rwxrwxrwx" characters,
 /// any of which is "off" only when it is a `-`.
-pub unsafe extern "C" fn f_setfperm(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
     // SAFETY: both strings are coerced from the frame and NUL-terminated;
@@ -341,11 +317,7 @@ unsafe fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
 }
 
 /// `stdpath({what})`.
-pub unsafe extern "C" fn f_stdpath(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -377,11 +349,7 @@ pub unsafe extern "C" fn f_stdpath(
 }
 
 /// `swapfilelist()` — every swap file in 'directory'.
-pub unsafe extern "C" fn f_swapfilelist(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY: `recover_names` appends to the list just allocated.
     unsafe {
@@ -397,11 +365,7 @@ pub unsafe extern "C" fn f_swapfilelist(
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.
-pub unsafe extern "C" fn f_swapinfo(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_swapinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the dict is allocated into the return value first, so
     // `swapfile_dict` has somewhere to write.
@@ -412,11 +376,7 @@ pub unsafe extern "C" fn f_swapinfo(
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.
-pub unsafe extern "C" fn f_swapname(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_swapname(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: the buffer comes from the buffer list; the memfile and its

@@ -26,11 +26,7 @@ pub unsafe extern "C" fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
     buf
 }
 /// "bufadd(expr)" function
-pub unsafe extern "C" fn f_bufadd(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let name: *mut c_char = tv_get_string(argvars.offset(0)) as *mut c_char;
     (*rettv).vval.v_number = buflist_add(
         if *name as c_int == NUL {
@@ -42,28 +38,16 @@ pub unsafe extern "C" fn f_bufadd(
     ) as varnumber_T;
 }
 /// "bufexists(expr)" function
-pub unsafe extern "C" fn f_bufexists(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufexists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     (*rettv).vval.v_number = !find_buffer(argvars.offset(0)).is_null() as varnumber_T;
 }
 /// "buflisted(expr)" function
-pub unsafe extern "C" fn f_buflisted(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_buflisted(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let buf: *mut buf_T = find_buffer(argvars.offset(0));
     (*rettv).vval.v_number = (!buf.is_null() && (*buf).b_p_bl != 0) as varnumber_T;
 }
 /// "bufload(expr)" function
-pub unsafe extern "C" fn f_bufload(
-    argvars: *mut typval_T,
-    _unused: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufload(argvars: *mut typval_T, _unused: *mut typval_T, _fptr: EvalFuncData) {
     let buf: *mut buf_T = get_buf_arg(argvars.offset(0));
     if !buf.is_null() {
         if swap_exists_action.get() != SEA_READONLY {
@@ -73,20 +57,12 @@ pub unsafe extern "C" fn f_bufload(
     }
 }
 /// "bufloaded(expr)" function
-pub unsafe extern "C" fn f_bufloaded(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufloaded(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let buf: *mut buf_T = find_buffer(argvars.offset(0));
     (*rettv).vval.v_number = (!buf.is_null() && !(*buf).b_ml.ml_mfp.is_null()) as varnumber_T;
 }
 /// "bufname(expr)" function
-pub unsafe extern "C" fn f_bufname(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufname(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ptr::null_mut();
     let buf: *const buf_T = if (*argvars.offset(0)).v_type == VAR_UNKNOWN {
@@ -99,11 +75,7 @@ pub unsafe extern "C" fn f_bufname(
     }
 }
 /// "bufnr(expr)" function
-pub unsafe extern "C" fn f_bufnr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut error: bool = false;
     (*rettv).vval.v_number = -1;
     let mut buf: *const buf_T = if (*argvars.offset(0)).v_type == VAR_UNKNOWN {
@@ -163,18 +135,10 @@ unsafe fn buf_win_common(argvars: *mut typval_T, rettv: *mut typval_T, get_nr: b
     }) as varnumber_T;
 }
 /// "bufwinid(nr)" function
-pub unsafe extern "C" fn f_bufwinid(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufwinid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     buf_win_common(argvars, rettv, false);
 }
 /// "bufwinnr(nr)" function
-pub unsafe extern "C" fn f_bufwinnr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_bufwinnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     buf_win_common(argvars, rettv, true);
 }

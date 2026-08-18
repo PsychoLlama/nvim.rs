@@ -133,14 +133,14 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
 }
 
 /// `max({expr})`.
-pub unsafe extern "C" fn f_max(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_max(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the argument is the frame's.
     unsafe { max_min(args.ptr(0), rettv, true) }
 }
 
 /// `min({expr})`.
-pub unsafe extern "C" fn f_min(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_min(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the argument is the frame's.
     unsafe { max_min(args.ptr(0), rettv, false) }
@@ -340,11 +340,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
 }
 
 /// `reduce({object}, {func} [, {initial}])`.
-pub unsafe extern "C" fn f_reduce(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: everything read below is the frame's.
     unsafe {

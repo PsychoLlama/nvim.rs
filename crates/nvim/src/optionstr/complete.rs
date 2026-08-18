@@ -46,7 +46,7 @@ const CPT_WITH_ARGUMENT: &CStr = c"ksF";
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_complete(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_complete(args: *mut optset_T) -> *const c_char {
     let (buf, buflen) = unsafe { errbuf(args) };
     // SAFETY: the frame's C string value, walked to its terminator.
     unsafe {
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn did_set_complete(args: *mut optset_T) -> *const c_char 
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_completeitemalign(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_completeitemalign(_args: *mut optset_T) -> *const c_char {
     const COLUMNS: [(&CStr, c_int); 3] = [
         (c"abbr", CPT_ABBR as c_int),
         (c"kind", CPT_KIND as c_int),
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn did_set_completeitemalign(_args: *mut optset_T) -> *con
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_completeopt(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_completeopt(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     // SAFETY: the frame's buffer.
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn did_set_completeopt(args: *mut optset_T) -> *const c_ch
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_helpfile(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_helpfile(_args: *mut optset_T) -> *const c_char {
     // SAFETY: unsets this process's own environment variables.
     unsafe {
         if didset_vim.get() {
@@ -221,7 +221,7 @@ pub unsafe extern "C" fn did_set_helpfile(_args: *mut optset_T) -> *const c_char
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_helplang(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_helplang(_args: *mut optset_T) -> *const c_char {
     // SAFETY: the option's own C string value; each test below is reached
     // only once the byte before it is known not to be the terminator.
     unsafe {
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn did_set_helplang(_args: *mut optset_T) -> *const c_char
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_mkspellmem(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_mkspellmem(_args: *mut optset_T) -> *const c_char {
     // SAFETY: re-reads the option's own value.
     if unsafe { spell_check_msm() } != OK {
         return invalid();
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn did_set_mkspellmem(_args: *mut optset_T) -> *const c_ch
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_optexpr(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_optexpr(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's own variable; `get_scriptlocal_funcname` returns
     // a fresh allocation or null, and the old value is freed here.
     unsafe {
@@ -277,14 +277,14 @@ pub unsafe extern "C" fn did_set_optexpr(args: *mut optset_T) -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_spellcapcheck(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_spellcapcheck(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's window and its syntax block.
     unsafe { compile_cap_prog((*win(args)).w_s) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_spellfile(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_spellfile(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
     if !unsafe { valid_spellfile(*varp(args)) } {
         return invalid();
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn did_set_spellfile(args: *mut optset_T) -> *const c_char
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_spelllang(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_spelllang(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
     if !unsafe { valid_spelllang(*varp(args)) } {
         return invalid();
@@ -311,7 +311,7 @@ pub unsafe extern "C" fn did_set_spelllang(args: *mut optset_T) -> *const c_char
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, window and new value.
     let (wp, opt_flags, value) =
         unsafe { (win(args), (*args).os_flags, (*args).os_newval.string.data) };
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn did_set_spelloptions(args: *mut optset_T) -> *const c_c
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_spellsuggest(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_spellsuggest(_args: *mut optset_T) -> *const c_char {
     // SAFETY: re-reads the option's own value.
     if unsafe { spell_check_sps() } != OK {
         return invalid();
@@ -344,7 +344,7 @@ pub unsafe extern "C" fn did_set_spellsuggest(_args: *mut optset_T) -> *const c_
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_tagcase(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_tagcase(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     let local = opt_flags & OPT_LOCAL as c_int != 0;

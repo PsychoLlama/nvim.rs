@@ -89,7 +89,7 @@ unsafe fn skip_escaped_char(p: *mut c_char) -> *mut c_char {
 /// # Safety
 /// `args` must point at a live `optset_T` whose `os_errbuf` has room for
 /// `os_errbuflen` bytes.
-pub unsafe extern "C" fn did_set_langmap(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
     unsafe {
         langmap_init(); // back to a one-to-one map
         let mut p = p_langmap.get();

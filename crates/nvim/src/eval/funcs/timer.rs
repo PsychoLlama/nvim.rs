@@ -68,7 +68,7 @@ unsafe extern "C" fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_vo
 /// `wait({timeout}, {condition} [, {interval}])` — pump the event loop until
 /// `condition` evaluates true. 0 when it did, -1 on timeout, -2 on CTRL-C,
 /// -3 when evaluating `condition` failed.
-pub unsafe extern "C" fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = -1;
@@ -134,11 +134,7 @@ pub unsafe extern "C" fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _f
 }
 
 /// `localtime()` — seconds since the epoch.
-pub unsafe extern "C" fn f_localtime(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_localtime(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY: `time(NULL)` writes nothing.
     rettv.vval.v_number = unsafe { time(ptr::null_mut::<time_t>()) } as varnumber_T;
@@ -187,11 +183,7 @@ unsafe fn list2proftime(arg: *const typval_T) -> Option<proftime_T> {
 
 /// `reltime([{start} [, {end}]])` — a timestamp, an elapsed time, or the
 /// difference between two timestamps, as a `[high, low]` List.
-pub unsafe extern "C" fn f_reltime(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reltime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the list entry points take the frame's return value, which is
     // cleared and owned by the caller.
@@ -223,11 +215,7 @@ pub unsafe extern "C" fn f_reltime(
 }
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.
-pub unsafe extern "C" fn f_reltimestr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reltimestr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -241,11 +229,7 @@ pub unsafe extern "C" fn f_reltimestr(
 }
 
 /// `reltimefloat({time})` — the elapsed time in seconds.
-pub unsafe extern "C" fn f_reltimefloat(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reltimefloat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_FLOAT;
     rettv.vval.v_float = 0.0;
@@ -256,11 +240,7 @@ pub unsafe extern "C" fn f_reltimefloat(
 }
 
 /// `timer_info([{id}])` — one timer's state, or every live timer's.
-pub unsafe extern "C" fn f_timer_info(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_timer_info(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the timer list is main-thread state; the return value is the
     // caller's cleared typval.
@@ -284,11 +264,7 @@ pub unsafe extern "C" fn f_timer_info(
 
 /// `timer_pause({id}, {pause})` — stop or restart a timer's clock without
 /// forgetting it.
-pub unsafe extern "C" fn f_timer_pause(
-    argvars: *mut typval_T,
-    _unused: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_timer_pause(argvars: *mut typval_T, _unused: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _unused);
     // SAFETY: the timer comes from the main-thread timer table and its
     // watcher is embedded in it.
@@ -320,11 +296,7 @@ pub unsafe extern "C" fn f_timer_pause(
 
 /// `timer_start({time}, {callback} [, {options}])` — the new timer's id, or
 /// -1 when it could not be started.
-pub unsafe extern "C" fn f_timer_start(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_timer_start(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the options dict and the callback typval are the frame's;
@@ -362,11 +334,7 @@ pub unsafe extern "C" fn f_timer_start(
 }
 
 /// `timer_stop({id})`.
-pub unsafe extern "C" fn f_timer_stop(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_timer_stop(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: the timer comes from the main-thread timer table.
     unsafe {
@@ -381,7 +349,7 @@ pub unsafe extern "C" fn f_timer_stop(
 }
 
 /// `timer_stopall()`.
-pub unsafe extern "C" fn f_timer_stopall(
+pub unsafe fn f_timer_stopall(
     _argvars: *mut typval_T,
     _unused: *mut typval_T,
     _fptr: EvalFuncData,

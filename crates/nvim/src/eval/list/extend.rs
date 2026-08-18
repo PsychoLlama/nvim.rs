@@ -164,11 +164,7 @@ fn extend(mut args: Args<'_>, rettv: &mut typval_T, arg_errmsg: &CStr, is_new: b
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_extend(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_extend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extend() argument", false);
@@ -179,11 +175,7 @@ pub unsafe extern "C" fn f_extend(
 ///
 /// # Safety
 /// As [`f_extend`].
-pub unsafe extern "C" fn f_extendnew(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_extendnew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extendnew() argument", true);
@@ -195,11 +187,7 @@ pub unsafe extern "C" fn f_extendnew(
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
 /// a cleared result.
-pub unsafe extern "C" fn f_insert(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     let mut error = false;

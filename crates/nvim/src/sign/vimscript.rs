@@ -289,11 +289,7 @@ unsafe fn sign_define_from_dict(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_define(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_define(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         if (*argvars).v_type == VAR_LIST && (*argvars.offset(1)).v_type == VAR_UNKNOWN {
@@ -329,11 +325,7 @@ pub unsafe extern "C" fn f_sign_define(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_getdefined(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_getdefined(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let l = tv_list_alloc_ret(rettv, 0);
@@ -354,11 +346,7 @@ pub unsafe extern "C" fn f_sign_getdefined(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_getplaced(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_getplaced(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let mut buf = ::core::ptr::null_mut();
@@ -417,11 +405,7 @@ pub unsafe extern "C" fn f_sign_getplaced(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_jump(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_jump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         (*rettv).vval.v_number = -1;
@@ -566,11 +550,7 @@ unsafe fn sign_place_from_dict(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_place(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_place(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let mut dict = ::core::ptr::null_mut();
@@ -595,11 +575,7 @@ pub unsafe extern "C" fn f_sign_place(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_placelist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_placelist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let retlist = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
@@ -625,11 +601,7 @@ pub unsafe extern "C" fn f_sign_placelist(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_undefine(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_undefine(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         if (*argvars).v_type == VAR_LIST && (*argvars.offset(1)).v_type == VAR_UNKNOWN {
@@ -704,11 +676,7 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> 
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_unplace(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sign_unplace(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         (*rettv).vval.v_number = -1;
@@ -730,7 +698,7 @@ pub unsafe extern "C" fn f_sign_unplace(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_sign_unplacelist(
+pub unsafe fn f_sign_unplacelist(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,

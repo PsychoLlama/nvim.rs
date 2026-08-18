@@ -163,11 +163,7 @@ fn simplify(s: *mut c_char) {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
-pub unsafe extern "C" fn f_glob2regpat(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_glob2regpat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let pat = str_arg_chk(args, 0);
     ret_string(
@@ -186,11 +182,7 @@ pub unsafe extern "C" fn f_glob2regpat(
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe extern "C" fn f_isabsolutepath(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_isabsolutepath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = is_absolute(str_arg(args, 0)) as varnumber_T;
 }
@@ -203,11 +195,7 @@ pub unsafe extern "C" fn f_isabsolutepath(
 ///
 /// # Safety
 /// As [`f_glob2regpat`], arity 1..2.
-pub unsafe extern "C" fn f_pathshorten(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_pathshorten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let trim_len = if args.has(1) {
         // SAFETY: a live typval; `tv_get_number` reports its own error and
@@ -233,11 +221,7 @@ pub unsafe extern "C" fn f_pathshorten(
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe extern "C" fn f_simplify(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_simplify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let simplified = Owned::dup(str_arg(args, 0)).into_raw();
     simplify(simplified);
@@ -248,11 +232,7 @@ pub unsafe extern "C" fn f_simplify(
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe extern "C" fn f_resolve(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_resolve(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     ret_string(rettv, ptr::null_mut());
     if let Some(resolved) = resolve(str_arg(args, 0)) {

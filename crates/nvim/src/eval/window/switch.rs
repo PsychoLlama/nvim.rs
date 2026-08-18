@@ -69,11 +69,7 @@ pub unsafe extern "C" fn win_execute_after(args: *mut win_execute_T) {
     }
 }
 /// "win_execute(win_id, command)" function
-pub unsafe extern "C" fn f_win_execute(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_win_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ptr::null_mut();
     let mut id: c_int = tv_get_number(argvars) as c_int;

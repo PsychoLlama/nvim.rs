@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_clear_autocmds(
+pub unsafe fn handle_nvim_clear_autocmds(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn handle_nvim_clear_autocmds(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_create_augroup(
+pub unsafe fn handle_nvim_create_augroup(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn handle_nvim_create_augroup(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_create_autocmd(
+pub unsafe fn handle_nvim_create_autocmd(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -126,7 +126,7 @@ pub unsafe extern "C" fn handle_nvim_create_autocmd(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
+pub unsafe fn handle_nvim_del_augroup_by_id(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -159,7 +159,7 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
+pub unsafe fn handle_nvim_del_augroup_by_name(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_del_autocmd(
+pub unsafe fn handle_nvim_del_autocmd(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -225,7 +225,7 @@ pub unsafe extern "C" fn handle_nvim_del_autocmd(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_exec_autocmds(
+pub unsafe fn handle_nvim_exec_autocmds(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn handle_nvim_exec_autocmds(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_get_autocmds(
+pub unsafe fn handle_nvim_get_autocmds(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

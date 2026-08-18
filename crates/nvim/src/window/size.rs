@@ -383,7 +383,7 @@ pub(crate) fn set_frame_width(curfrp: Frame, width: c_int) {
     }
 }
 
-pub unsafe extern "C" fn did_set_winminheight(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_winminheight(_args: *mut optset_T) -> *const c_char {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
     while p_wmh.get() > 0 as OptInt {
@@ -400,7 +400,7 @@ pub unsafe extern "C" fn did_set_winminheight(_args: *mut optset_T) -> *const c_
     ::core::ptr::null()
 }
 
-pub unsafe extern "C" fn did_set_winminwidth(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_winminwidth(_args: *mut optset_T) -> *const c_char {
     let mut first = true;
     while p_wmw.get() > 0 as OptInt {
         if Columns.get() >= minwidth(current_topframe(), NextCurwin::Unset) {

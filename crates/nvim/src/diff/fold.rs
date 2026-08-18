@@ -269,11 +269,7 @@ pub(crate) unsafe fn diff_fold_update(dp: *mut diff_T, skip_idx: c_int) {
 }
 
 /// `diff_filler(lnum)`.
-pub unsafe extern "C" fn f_diff_filler(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_diff_filler(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         // c2rust expanded `MAX(0, ..)` into two calls of an argument that is
         // not free: `diff_check_fill` can trigger a whole recompute, and it

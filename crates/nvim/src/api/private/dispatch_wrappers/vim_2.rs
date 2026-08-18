@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_get_color_by_name(
+pub unsafe fn handle_nvim_get_color_by_name(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -37,7 +37,7 @@ pub unsafe extern "C" fn handle_nvim_get_color_by_name(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_color_map(
+pub unsafe fn handle_nvim_get_color_map(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn handle_nvim_get_color_map(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_context(
+pub unsafe fn handle_nvim_get_context(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn handle_nvim_get_context(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_current_buf(
+pub unsafe fn handle_nvim_get_current_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn handle_nvim_get_current_buf(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_get_current_line(
+pub unsafe fn handle_nvim_get_current_line(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn handle_nvim_get_current_line(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_current_tabpage(
+pub unsafe fn handle_nvim_get_current_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn handle_nvim_get_current_tabpage(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_get_current_win(
+pub unsafe fn handle_nvim_get_current_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn handle_nvim_get_current_win(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_get_hl(
+pub unsafe fn handle_nvim_get_hl(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn handle_nvim_get_hl(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_hl_id_by_name(
+pub unsafe fn handle_nvim_get_hl_id_by_name(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn handle_nvim_get_hl_id_by_name(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_hl_ns(
+pub unsafe fn handle_nvim_get_hl_ns(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn handle_nvim_get_hl_ns(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_keymap(
+pub unsafe fn handle_nvim_get_keymap(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn handle_nvim_get_keymap(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_mark(
+pub unsafe fn handle_nvim_get_mark(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -405,7 +405,7 @@ pub unsafe extern "C" fn handle_nvim_get_mark(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_mode(
+pub unsafe fn handle_nvim_get_mode(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -431,7 +431,7 @@ pub unsafe extern "C" fn handle_nvim_get_mode(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_proc(
+pub unsafe fn handle_nvim_get_proc(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -464,7 +464,7 @@ pub unsafe extern "C" fn handle_nvim_get_proc(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_get_proc_children(
+pub unsafe fn handle_nvim_get_proc_children(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -497,7 +497,7 @@ pub unsafe extern "C" fn handle_nvim_get_proc_children(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_runtime_file(
+pub unsafe fn handle_nvim_get_runtime_file(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -534,7 +534,7 @@ pub unsafe extern "C" fn handle_nvim_get_runtime_file(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_var(
+pub unsafe fn handle_nvim_get_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -567,7 +567,7 @@ pub unsafe extern "C" fn handle_nvim_get_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_get_vvar(
+pub unsafe fn handle_nvim_get_vvar(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -600,7 +600,7 @@ pub unsafe extern "C" fn handle_nvim_get_vvar(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_input(
+pub unsafe fn handle_nvim_input(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -630,7 +630,7 @@ pub unsafe extern "C" fn handle_nvim_input(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_input_mouse(
+pub unsafe fn handle_nvim_input_mouse(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -683,7 +683,7 @@ pub unsafe extern "C" fn handle_nvim_input_mouse(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_list_bufs(
+pub unsafe fn handle_nvim_list_bufs(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -709,7 +709,7 @@ pub unsafe extern "C" fn handle_nvim_list_bufs(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_list_chans(
+pub unsafe fn handle_nvim_list_chans(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -735,7 +735,7 @@ pub unsafe extern "C" fn handle_nvim_list_chans(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_list_runtime_paths(
+pub unsafe fn handle_nvim_list_runtime_paths(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -764,7 +764,7 @@ pub unsafe extern "C" fn handle_nvim_list_runtime_paths(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_list_tabpages(
+pub unsafe fn handle_nvim_list_tabpages(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -790,7 +790,7 @@ pub unsafe extern "C" fn handle_nvim_list_tabpages(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_list_uis(
+pub unsafe fn handle_nvim_list_uis(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -816,7 +816,7 @@ pub unsafe extern "C" fn handle_nvim_list_uis(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_list_wins(
+pub unsafe fn handle_nvim_list_wins(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -842,7 +842,7 @@ pub unsafe extern "C" fn handle_nvim_list_wins(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_load_context(
+pub unsafe fn handle_nvim_load_context(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -875,7 +875,7 @@ pub unsafe extern "C" fn handle_nvim_load_context(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_open_term(
+pub unsafe fn handle_nvim_open_term(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -922,7 +922,7 @@ pub unsafe extern "C" fn handle_nvim_open_term(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_paste(
+pub unsafe fn handle_nvim_paste(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

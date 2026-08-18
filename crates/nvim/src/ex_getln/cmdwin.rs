@@ -84,7 +84,7 @@ pub fn cmdline_init() {
 }
 
 /// `'cedit'` changed: re-derive the key that opens the command-line window.
-pub unsafe extern "C" fn did_set_cedit(_args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe fn did_set_cedit(_args: *mut optset_T) -> *const ::core::ffi::c_char {
     unsafe {
         if *p_cedit.get() as ::core::ffi::c_int == NUL {
             cedit_key.set(-1);

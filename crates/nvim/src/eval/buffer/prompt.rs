@@ -4,7 +4,7 @@ use crate::eval::typval::kCallbackNone;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
 
 /// "prompt_appendbuf({buffer}, string/list)" function
-pub unsafe extern "C" fn f_prompt_appendbuf(
+pub unsafe fn f_prompt_appendbuf(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
     }
 }
 /// "prompt_setcallback({buffer}, {callback})" function
-pub unsafe extern "C" fn f_prompt_setcallback(
+pub unsafe fn f_prompt_setcallback(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn f_prompt_setcallback(
     (*buf).b_prompt_callback = prompt_callback;
 }
 /// "prompt_setinterrupt({buffer}, {callback})" function
-pub unsafe extern "C" fn f_prompt_setinterrupt(
+pub unsafe fn f_prompt_setinterrupt(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
@@ -123,7 +123,7 @@ pub unsafe extern "C" fn f_prompt_setinterrupt(
     (*buf).b_prompt_interrupt = interrupt_callback;
 }
 /// "prompt_setprompt({buffer}, {text})" function
-pub unsafe extern "C" fn f_prompt_setprompt(
+pub unsafe fn f_prompt_setprompt(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,

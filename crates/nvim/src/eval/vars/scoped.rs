@@ -367,11 +367,7 @@ unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: *mut typval
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_gettabvar(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_gettabvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let varname = tv_get_string_chk(argvars.add(1));
         let tp = find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int);
@@ -399,11 +395,7 @@ pub unsafe extern "C" fn f_gettabvar(
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_gettabwinvar(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_gettabwinvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { getwinvar(argvars, rettv, 1) }
 }
 
@@ -411,11 +403,7 @@ pub unsafe extern "C" fn f_gettabwinvar(
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_getwinvar(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { getwinvar(argvars, rettv, 0) }
 }
 
@@ -423,11 +411,7 @@ pub unsafe extern "C" fn f_getwinvar(
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_getbufvar(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getbufvar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let varname = tv_get_string_chk(argvars.add(1));
         let buf = tv_get_buf_from_arg(argvars);
@@ -447,11 +431,7 @@ pub unsafe extern "C" fn f_getbufvar(
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_settabvar(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_settabvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if check_secure() {
             return;
@@ -483,11 +463,7 @@ pub unsafe extern "C" fn f_settabvar(
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_settabwinvar(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_settabwinvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { setwinvar(argvars, 1) }
 }
 
@@ -495,11 +471,7 @@ pub unsafe extern "C" fn f_settabwinvar(
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_setwinvar(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setwinvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { setwinvar(argvars, 0) }
 }
 
@@ -507,11 +479,7 @@ pub unsafe extern "C" fn f_setwinvar(
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe extern "C" fn f_setbufvar(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setbufvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if check_secure() || !tv_check_str_or_nr(argvars) {
             return;

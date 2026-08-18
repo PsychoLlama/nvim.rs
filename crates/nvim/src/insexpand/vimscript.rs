@@ -291,12 +291,8 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
     }
 }
 
-/// The `complete()` function; a `VimLFunc` row, so it stays `extern "C"`.
-pub unsafe extern "C" fn f_complete(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+/// The `complete()` function; a `VimLFunc` row in the builtin table.
+pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if State.get() & MODE_INSERT == 0 {
             emsg(gettext(
@@ -323,23 +319,15 @@ pub unsafe extern "C" fn f_complete(
     }
 }
 
-/// The `complete_add()` function; a `VimLFunc` row, so it stays `extern "C"`.
-pub unsafe extern "C" fn f_complete_add(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+/// The `complete_add()` function; a `VimLFunc` row in the builtin table.
+pub unsafe fn f_complete_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).vval.v_number = ins_compl_add_tv(argvars, kDirectionNotSet, false) as varnumber_T;
     }
 }
 
-/// The `complete_check()` function; a `VimLFunc` row, so it stays `extern "C"`.
-pub unsafe extern "C" fn f_complete_check(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+/// The `complete_check()` function; a `VimLFunc` row in the builtin table.
+pub unsafe fn f_complete_check(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let saved = RedrawingDisabled.get();
         RedrawingDisabled.set(0);
@@ -517,12 +505,8 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
     }
 }
 
-/// The `complete_info()` function; a `VimLFunc` row, so it stays `extern "C"`.
-pub unsafe extern "C" fn f_complete_info(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+/// The `complete_info()` function; a `VimLFunc` row in the builtin table.
+pub unsafe fn f_complete_info(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         tv_dict_alloc_ret(rettv);
 

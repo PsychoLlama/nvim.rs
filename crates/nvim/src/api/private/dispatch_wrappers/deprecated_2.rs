@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_out_write(
+pub unsafe fn handle_nvim_out_write(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -37,7 +37,7 @@ pub unsafe extern "C" fn handle_nvim_out_write(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_set_option(
+pub unsafe fn handle_nvim_set_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn handle_nvim_set_option(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_subscribe(
+pub unsafe fn handle_nvim_subscribe(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn handle_nvim_subscribe(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_unsubscribe(
+pub unsafe fn handle_nvim_unsubscribe(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn handle_nvim_unsubscribe(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_option(
+pub unsafe fn handle_nvim_win_get_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_option(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_option(
+pub unsafe fn handle_nvim_win_set_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_option(
     NIL
 }
 
-pub unsafe extern "C" fn handle_tabpage_del_var(
+pub unsafe fn handle_tabpage_del_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -243,7 +243,7 @@ pub unsafe extern "C" fn handle_tabpage_del_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_tabpage_set_var(
+pub unsafe fn handle_tabpage_set_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -281,7 +281,7 @@ pub unsafe extern "C" fn handle_tabpage_set_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_vim_del_var(
+pub unsafe fn handle_vim_del_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -314,7 +314,7 @@ pub unsafe extern "C" fn handle_vim_del_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_vim_set_var(
+pub unsafe fn handle_vim_set_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -348,7 +348,7 @@ pub unsafe extern "C" fn handle_vim_set_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_window_del_var(
+pub unsafe fn handle_window_del_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -385,7 +385,7 @@ pub unsafe extern "C" fn handle_window_del_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_window_set_var(
+pub unsafe fn handle_window_set_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

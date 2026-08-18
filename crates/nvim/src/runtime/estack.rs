@@ -396,11 +396,7 @@ unsafe fn script_path(sctx: sctx_T) -> *mut c_char {
 }
 
 /// `getstacktrace()` function
-pub unsafe extern "C" fn f_getstacktrace(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getstacktrace(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the caller's return slot.
     unsafe { tv_list_set_ret(rettv, stacktrace_create()) };
 }

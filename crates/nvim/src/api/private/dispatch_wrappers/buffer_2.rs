@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_buf_set_var(
+pub unsafe fn handle_nvim_buf_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,

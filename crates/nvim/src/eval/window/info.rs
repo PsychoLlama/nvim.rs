@@ -66,11 +66,7 @@ unsafe extern "C" fn get_tabpage_info(tp: *mut tabpage_T, tp_idx: c_int) -> *mut
     dict
 }
 /// "gettabinfo()" function
-pub unsafe extern "C" fn f_gettabinfo(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_gettabinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut tparg: *mut tabpage_T = ptr::null_mut();
     tv_list_alloc_ret(
         rettv,
@@ -101,11 +97,7 @@ pub unsafe extern "C" fn f_gettabinfo(
     }
 }
 /// "getwininfo()" function
-pub unsafe extern "C" fn f_getwininfo(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut wparg: *mut win_T = ptr::null_mut();
     tv_list_alloc_ret(rettv, kListLenMayKnow as c_int as ptrdiff_t);
     if (*argvars.offset(0)).v_type != VAR_UNKNOWN {
@@ -175,11 +167,7 @@ unsafe extern "C" fn get_framelayout(fr: *const frame_T, mut l: *mut list_T, mut
     };
 }
 /// "winlayout()" function
-pub unsafe extern "C" fn f_winlayout(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_winlayout(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut tp: *mut tabpage_T = ptr::null_mut();
     tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
     if (*argvars.offset(0)).v_type == VAR_UNKNOWN {
@@ -193,11 +181,7 @@ pub unsafe extern "C" fn f_winlayout(
     get_framelayout((*tp).tp_topframe, (*rettv).vval.v_list, true);
 }
 /// "win_gettype(nr)" function
-pub unsafe extern "C" fn f_win_gettype(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut wp: *mut win_T = curwin.get();
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ptr::null_mut();
@@ -225,11 +209,7 @@ pub unsafe extern "C" fn f_win_gettype(
     }
 }
 /// "getcmdwintype()" function
-pub unsafe extern "C" fn f_getcmdwintype(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcmdwintype(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ptr::null_mut();
     (*rettv).vval.v_string = xmallocz(1) as *mut c_char;

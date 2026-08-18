@@ -33,13 +33,13 @@ use super::{
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_iconstring(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_iconstring(args: *mut optset_T) -> *const c_char {
     unsafe { did_set_titleiconstring(args, STL_IN_ICON) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_titlestring(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_titlestring(args: *mut optset_T) -> *const c_char {
     unsafe { did_set_titleiconstring(args, STL_IN_TITLE) }
 }
 
@@ -83,25 +83,25 @@ fn check_ruf() -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_rulerformat(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_rulerformat(args: *mut optset_T) -> *const c_char {
     unsafe { did_set_statustabline_rulerformat(args, true, false) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_statuscolumn(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_statuscolumn(args: *mut optset_T) -> *const c_char {
     unsafe { did_set_statustabline_rulerformat(args, false, true) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_statusline(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_statusline(args: *mut optset_T) -> *const c_char {
     unsafe { did_set_statustabline_rulerformat(args, false, false) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_tabline(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_tabline(args: *mut optset_T) -> *const c_char {
     unsafe { did_set_statustabline_rulerformat(args, false, false) }
 }
 
@@ -193,7 +193,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_sessionoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_sessionoptions(args: *mut optset_T) -> *const c_char {
     let errmsg = unsafe { did_set_str_generic(args) };
     if !errmsg.is_null() {
         return errmsg;
@@ -220,7 +220,7 @@ const SHADA_ITEMS: &[u8] = b"!\"%'/:<@cfhnrs";
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_shada(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_shada(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's error buffer and the option's own C string value.
     let (buf, buflen) = unsafe { errbuf(args) };
     // SAFETY: the option's own value, which is NUL-terminated.
@@ -293,7 +293,7 @@ pub unsafe extern "C" fn did_set_shada(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_shellpipe_redir(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_shellpipe_redir(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's new value is a C string.
     let value = unsafe { CStr::from_ptr((*args).os_newval.string.data) }.to_bytes();
     let bad = e_invalid_format_string_single_percent_s
@@ -320,7 +320,7 @@ pub unsafe extern "C" fn did_set_shellpipe_redir(args: *mut optset_T) -> *const 
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_shortmess(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_shortmess(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame, its value and its error buffer.
     unsafe {
         let (buf, len) = errbuf(args);
@@ -330,7 +330,7 @@ pub unsafe extern "C" fn did_set_shortmess(args: *mut optset_T) -> *const c_char
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_verbosefile(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_verbosefile(_args: *mut optset_T) -> *const c_char {
     // SAFETY: closes and reopens this process's own log file.
     unsafe {
         verbose_stop();

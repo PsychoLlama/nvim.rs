@@ -193,11 +193,7 @@ unsafe fn iconv_string(
 }
 
 /// `iconv({string}, {from}, {to})`.
-pub unsafe extern "C" fn f_iconv(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = core::ptr::null_mut();

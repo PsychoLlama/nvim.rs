@@ -347,11 +347,7 @@ pub unsafe extern "C" fn tv_blob_remove(
 }
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
-pub unsafe extern "C" fn f_blob2list(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_blob2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
         if tv_check_for_blob_arg(argvars, 0) == FAIL {
@@ -368,11 +364,7 @@ pub unsafe extern "C" fn f_blob2list(
 /// `list2blob()`: a list of byte numbers as a blob.
 ///
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
-pub unsafe extern "C" fn f_list2blob(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_list2blob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let blob = tv_blob_alloc_ret(rettv);
         if tv_check_for_list_arg(argvars, 0) == FAIL {

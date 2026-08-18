@@ -138,7 +138,7 @@ pub(crate) unsafe fn did_set_opt_flags(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe extern "C" fn did_set_str_generic(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_str_generic(args: *mut optset_T) -> *const c_char {
     let (idx, varp) = unsafe { ((*args).os_idx, (*args).os_varp.cast::<*mut c_char>()) };
     if unsafe { check_str_opt(idx, varp) } != OK {
         e_invarg.as_ptr()

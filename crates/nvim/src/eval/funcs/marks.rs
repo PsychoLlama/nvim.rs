@@ -23,11 +23,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
-pub unsafe extern "C" fn f_changenr(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_changenr(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `rettv` is the cleared return value.
     unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as varnumber_T };
 }
@@ -50,11 +46,7 @@ unsafe fn append_mark(l: *mut list_T, mark: pos_T) -> *mut dict_T {
 }
 
 /// `getchangelist([{buf}])` — `[changes, index]`.
-pub unsafe extern "C" fn f_getchangelist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `curwin` and its
     // buffer's window-info vector are live for the whole call.
@@ -102,11 +94,7 @@ pub unsafe extern "C" fn f_getchangelist(
 }
 
 /// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
-pub unsafe extern "C" fn f_getjumplist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals, and the jump
     // list is compacted before it is read so no entry is stale.
@@ -136,11 +124,7 @@ pub unsafe extern "C" fn f_getjumplist(
 }
 
 /// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
-pub unsafe extern "C" fn f_getmarklist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getmarklist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe {
@@ -158,11 +142,7 @@ pub unsafe extern "C" fn f_getmarklist(
 }
 
 /// `gettagstack([{winnr}])`.
-pub unsafe extern "C" fn f_gettagstack(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals. The dict is
     // allocated before the window is resolved, so a bad window still
@@ -182,11 +162,7 @@ pub unsafe extern "C" fn f_gettagstack(
 }
 
 /// `settagstack({winnr}, {dict} [, {action}])`.
-pub unsafe extern "C" fn f_settagstack(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals; after the check argument 1's
@@ -226,11 +202,7 @@ pub unsafe extern "C" fn f_settagstack(
 }
 
 /// `tagfiles()` — the tags files that would be searched, in order.
-pub unsafe extern "C" fn f_tagfiles(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_tagfiles(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value; each name the walk
     // answers is NUL-terminated and lives until the next round.
     unsafe {
@@ -243,11 +215,7 @@ pub unsafe extern "C" fn f_tagfiles(
 }
 
 /// `taglist({expr} [, {filename}])`.
-pub unsafe extern "C" fn f_taglist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_taglist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; both strings are
     // NUL-terminated and outlive the search.

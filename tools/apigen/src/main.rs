@@ -838,7 +838,7 @@ fn emit_fn(
         }
     }
 
-    writeln!(out, "pub unsafe extern \"C\" fn {handler}(").unwrap();
+    writeln!(out, "pub unsafe fn {handler}(").unwrap();
     writeln!(out, "    channel_id: uint64_t,").unwrap();
     writeln!(out, "    args: Array,").unwrap();
     writeln!(
@@ -1419,7 +1419,7 @@ fn generate(
     // together and in order. The split is decided on formatted text — rustfmt
     // both joins and breaks lines, so the unformatted count is not even an
     // upper bound — which is why a module's wrappers go through rustfmt as one
-    // batch here and are re-split on their `pub unsafe extern` openers.
+    // batch here and are re-split on their `pub unsafe fn` openers.
     let mut children: Vec<(&str, String)> = Vec::new();
     for (module, fns) in &by_module {
         let mut all = String::new();
@@ -1714,7 +1714,7 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// arena.
 const fn handler(
     name: &'static CStr,
-    f: unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+    f: unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
     fast: bool,
     ret_alloc: bool,
 ) -> MsgpackRpcRequestHandler {
@@ -1739,7 +1739,7 @@ const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
 ///
 /// # Safety
 /// `name` points at `name_len` readable bytes; `error` at a live `Error`.
-pub unsafe extern "C" fn msgpack_rpc_get_handler_for(
+pub unsafe fn msgpack_rpc_get_handler_for(
     name: *const c_char,
     name_len: size_t,
     error: *mut Error,

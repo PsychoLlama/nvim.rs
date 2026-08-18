@@ -612,7 +612,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
-pub unsafe extern "C" fn did_set_runtimepackpath(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_runtimepackpath(_args: *mut optset_T) -> *const c_char {
     runtime_search_path_valid.set(false);
     ptr::null()
 }

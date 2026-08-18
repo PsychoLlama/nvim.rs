@@ -188,11 +188,7 @@ pub(crate) unsafe fn check_can_index(rettv: *mut typval_T, evaluate: bool, verbo
 ///
 /// # Safety
 /// Called through the builtin table with a terminated argument array.
-pub unsafe extern "C" fn f_slice(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if check_can_index(argvars, true, false) != OK {
             return;

@@ -263,14 +263,10 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 
 /// `fullcommand()`: the full name of the command an abbreviation means.
 ///
-/// Keeps `extern "C"`: the generated builtin-function table holds it as a
-/// `VimLFunc` fn pointer, and apigen's line-based scan needs the
-/// declaration spelled out literally.
-pub unsafe extern "C" fn f_fullcommand(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+/// The generated builtin-function table holds it as a `VimLFunc` fn
+/// pointer, and apigen's line-based scan needs the declaration spelled out
+/// literally.
+pub unsafe fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         let mut name = tv_get_string(argvars) as *mut c_char;
         (*rettv).v_type = VAR_STRING;

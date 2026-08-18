@@ -178,11 +178,7 @@ fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
 /// cleared result.
-pub unsafe extern "C" fn f_filter(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_filter(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Filter);
 }
@@ -191,7 +187,7 @@ pub unsafe extern "C" fn f_filter(
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe extern "C" fn f_map(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_map(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Map);
 }
@@ -201,11 +197,7 @@ pub unsafe extern "C" fn f_map(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe extern "C" fn f_mapnew(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_mapnew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::MapNew);
 }
@@ -215,11 +207,7 @@ pub unsafe extern "C" fn f_mapnew(
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe extern "C" fn f_foreach(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_foreach(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Foreach);
 }

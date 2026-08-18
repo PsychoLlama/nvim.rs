@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
+pub unsafe fn handle_nvim_buf_create_user_command(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -59,7 +59,7 @@ pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
+pub unsafe fn handle_nvim_buf_del_user_command(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_buf_get_commands(
+pub unsafe fn handle_nvim_buf_get_commands(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_commands(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_cmd(
+pub unsafe fn handle_nvim_cmd(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn handle_nvim_cmd(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_create_user_command(
+pub unsafe fn handle_nvim_create_user_command(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -232,7 +232,7 @@ pub unsafe extern "C" fn handle_nvim_create_user_command(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_del_user_command(
+pub unsafe fn handle_nvim_del_user_command(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn handle_nvim_del_user_command(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_get_commands(
+pub unsafe fn handle_nvim_get_commands(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn handle_nvim_get_commands(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_parse_cmd(
+pub unsafe fn handle_nvim_parse_cmd(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,

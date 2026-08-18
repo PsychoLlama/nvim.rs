@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_ui_attach(
+pub unsafe fn handle_nvim_ui_attach(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -48,7 +48,7 @@ pub unsafe extern "C" fn handle_nvim_ui_attach(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_detach(
+pub unsafe fn handle_nvim_ui_detach(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -77,7 +77,7 @@ pub unsafe extern "C" fn handle_nvim_ui_detach(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
+pub unsafe fn handle_nvim_ui_pum_set_bounds(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -122,7 +122,7 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
+pub unsafe fn handle_nvim_ui_pum_set_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_send(
+pub unsafe fn handle_nvim_ui_send(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn handle_nvim_ui_send(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_set_focus(
+pub unsafe fn handle_nvim_ui_set_focus(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -221,7 +221,7 @@ pub unsafe extern "C" fn handle_nvim_ui_set_focus(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_set_option(
+pub unsafe fn handle_nvim_ui_set_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -255,7 +255,7 @@ pub unsafe extern "C" fn handle_nvim_ui_set_option(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_try_resize(
+pub unsafe fn handle_nvim_ui_try_resize(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -292,7 +292,7 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
+pub unsafe fn handle_nvim_ui_try_resize_grid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
     NIL
 }
 
-pub unsafe extern "C" fn handle_ui_attach(
+pub unsafe fn handle_ui_attach(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,

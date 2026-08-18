@@ -420,7 +420,7 @@ pub unsafe fn ui_client_get_redraw_handler(
 /// # Safety
 ///
 /// `error` must be writable.
-pub unsafe extern "C" fn handle_ui_client_redraw(
+pub unsafe fn handle_ui_client_redraw(
     _channel_id: u64,
     _args: Array,
     _arena: *mut Arena,

@@ -160,7 +160,7 @@ pub(crate) unsafe extern "C" fn u_eval_tree(
     }
     return list;
 }
-pub unsafe extern "C" fn f_undofile(
+pub unsafe fn f_undofile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -177,7 +177,7 @@ pub unsafe extern "C" fn f_undofile(
         xfree(ffname as *mut c_void);
     };
 }
-pub unsafe extern "C" fn f_undotree(
+pub unsafe fn f_undotree(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,

@@ -31,11 +31,7 @@ const NO_CALLBACK: Callback = Callback {
 };
 
 /// `dictwatcheradd({dict}, {pattern}, {callback})`.
-pub unsafe extern "C" fn f_dictwatcheradd(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: every callee below is a C entry point taking live typvals from
     // the frame; the callback is handed to the watcher, which takes it over.
@@ -77,11 +73,7 @@ pub unsafe extern "C" fn f_dictwatcheradd(
 }
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
-pub unsafe extern "C" fn f_dictwatcherdel(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY: as `f_dictwatcheradd`; the callback built here is only used to
     // identify a watcher and is freed before returning.
@@ -119,11 +111,7 @@ pub unsafe extern "C" fn f_dictwatcherdel(
 
 /// `islocked({expr})` — 1 when the variable the name resolves to is locked,
 /// 0 when it is not, -1 when there is no such variable.
-pub unsafe extern "C" fn f_islocked(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: `get_lval` clears `lv` before writing to it, and every pointer
@@ -175,7 +163,7 @@ pub unsafe extern "C" fn f_islocked(
 /// The address is formatted by `vim_vsnprintf_typval`'s `%p`, which reads
 /// its operand from the typval array rather than from a `va_list`; the
 /// `va_list` handed in is a zeroed placeholder that is never read.
-pub unsafe extern "C" fn f_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the measuring call writes nothing; the second is handed a
     // buffer of exactly the size it reported plus the terminator.

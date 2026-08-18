@@ -681,7 +681,7 @@ unsafe fn handle_request(channel: *mut Channel, p: *mut Unpacker, args: Array) {
             ptr::fn_addr_eq(
                 f,
                 handle_nvim_get_mode
-                    as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+                    as unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
             )
         });
         if is_get_mode && !input_blocking() {
@@ -699,7 +699,7 @@ unsafe fn handle_request(channel: *mut Channel, p: *mut Unpacker, args: Array) {
         ptr::fn_addr_eq(
             f,
             handle_nvim_ui_try_resize
-                as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+                as unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
         )
     });
     if is_resize {

@@ -117,11 +117,7 @@ unsafe fn err(msg: &[c_char]) {
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe extern "C" fn f_rpcstart(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise about `rettv`.
     let rettv = unsafe { &mut *rettv };
     rettv.v_type = VAR_NUMBER;
@@ -223,11 +219,7 @@ pub unsafe extern "C" fn f_rpcstart(
 ///
 /// # Safety
 /// As the module doc; arity 1.
-pub unsafe extern "C" fn f_rpcstop(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    fptr: EvalFuncData,
-) {
+pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY: the caller's promise about `rettv`.
     let ret = unsafe { &mut *rettv };
     ret.v_type = VAR_NUMBER;
@@ -273,11 +265,7 @@ pub unsafe extern "C" fn f_rpcstop(
 ///
 /// # Safety
 /// As the module doc; arity 0.
-pub unsafe extern "C" fn f_last_buffer_nr(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_last_buffer_nr(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut n = 0;
     let mut buf = firstbuf.get();
     while !buf.is_null() {
@@ -295,11 +283,7 @@ pub unsafe extern "C" fn f_last_buffer_nr(
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe extern "C" fn f_termopen(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    fptr: EvalFuncData,
-) {
+pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY: `check_secure` only reads the option and reports.
     if unsafe { check_secure() } {
         return;

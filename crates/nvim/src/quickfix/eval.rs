@@ -169,11 +169,7 @@ unsafe fn get_qf_loc_list(
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe extern "C" fn f_getloclist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least two values.
     unsafe {
         let wp = find_win_by_nr_or_id(argvars);
@@ -186,11 +182,7 @@ pub unsafe extern "C" fn f_getloclist(
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe extern "C" fn f_getqflist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least one value.
     unsafe { get_qf_loc_list(true, ptr::null_mut(), argvars, rettv) }
 }
@@ -278,11 +270,7 @@ unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe extern "C" fn f_setloclist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least four values.
     unsafe {
         (*rettv).vval.v_number = -1;
@@ -298,11 +286,7 @@ pub unsafe extern "C" fn f_setloclist(
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe extern "C" fn f_setqflist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least three values.
     unsafe { set_qf_ll_list(ptr::null_mut(), argvars, rettv) }
 }

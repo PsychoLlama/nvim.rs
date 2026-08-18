@@ -313,11 +313,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
 
 /// The body every one-argument float builtin shares. The generated table
 /// puts the libm function in the row's payload.
-pub unsafe extern "C" fn float_op_wrapper(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    fptr: EvalFuncData,
-) {
+pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value; the row's
     // payload is the float function for exactly these rows.
     unsafe {
@@ -333,11 +329,7 @@ pub unsafe extern "C" fn float_op_wrapper(
 
 /// The body every builtin that is really an API function shares. The
 /// generated table puts the RPC handler in the row's payload.
-pub unsafe extern "C" fn api_wrapper(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    fptr: EvalFuncData,
-) {
+pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value; `items`
     // outlives the `Array` that borrows it, and the arena owns what the
     // conversion allocates until it is freed below.

@@ -106,11 +106,7 @@ unsafe fn trailing_args(
 }
 
 /// `chanclose({id} [, {stream}])`
-pub unsafe extern "C" fn f_chanclose(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -150,11 +146,7 @@ pub unsafe extern "C" fn f_chanclose(
 }
 
 /// `chansend({id}, {data})`
-pub unsafe extern "C" fn f_chansend(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -204,11 +196,7 @@ pub unsafe extern "C" fn f_chansend(
 }
 
 /// `rpcnotify({channel}, {event} [, {args}...])`
-pub unsafe extern "C" fn f_rpcnotify(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -325,11 +313,7 @@ impl ProviderScope {
 }
 
 /// `rpcrequest({channel}, {method} [, {args}...])`
-pub unsafe extern "C" fn f_rpcrequest(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -414,11 +398,7 @@ pub unsafe extern "C" fn f_rpcrequest(
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
 /// peers Lua knows about when asked for them.
-pub unsafe extern "C" fn f_serverlist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; `addrs` is an allocation this body owns,
     // and the strings in it are handed to the List one at a time.
@@ -495,11 +475,7 @@ pub unsafe extern "C" fn f_serverlist(
 }
 
 /// `serverstart([{address}])`
-pub unsafe extern "C" fn f_serverstart(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -545,11 +521,7 @@ pub unsafe extern "C" fn f_serverstart(
 }
 
 /// `serverstop({address})`
-pub unsafe extern "C" fn f_serverstop(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
     unsafe {
@@ -573,11 +545,7 @@ pub unsafe extern "C" fn f_serverstop(
 }
 
 /// `sockconnect({mode}, {address} [, {opts}])`
-pub unsafe extern "C" fn f_sockconnect(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; `on_data` is moved into `channel_connect`,
     // which adopts its callback.
@@ -630,11 +598,7 @@ pub unsafe extern "C" fn f_sockconnect(
 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
 /// channel.
-pub unsafe extern "C" fn f_stdioopen(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; `on_stdin` is moved into
     // `channel_from_stdio`, which adopts its callback.

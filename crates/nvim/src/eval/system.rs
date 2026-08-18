@@ -241,11 +241,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe extern "C" fn f_system(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_system(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { get_system_output_as_rettv(argvars, rettv, false) }
 }
 
@@ -253,11 +249,7 @@ pub unsafe extern "C" fn f_system(
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe extern "C" fn f_systemlist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_systemlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { get_system_output_as_rettv(argvars, rettv, true) }
 }
 

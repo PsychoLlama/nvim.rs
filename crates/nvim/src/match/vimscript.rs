@@ -92,11 +92,7 @@ unsafe fn matchadd_dict_arg(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_clearmatches(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_clearmatches(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let win = get_optional_window(argvars, 0);
@@ -110,11 +106,7 @@ pub unsafe extern "C" fn f_clearmatches(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_getmatches(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getmatches(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let win = get_optional_window(argvars, 0);
@@ -172,11 +164,7 @@ pub unsafe extern "C" fn f_getmatches(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_setmatches(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setmatches(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let win = get_optional_window(argvars, 1);
@@ -344,11 +332,7 @@ unsafe fn optional_args(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_matchadd(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let mut grpbuf = [0 as c_char; NUMBUFLEN];
@@ -387,11 +371,7 @@ pub unsafe extern "C" fn f_matchadd(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_matchaddpos(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matchaddpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         (*rettv).vval.v_number = -1;
@@ -435,11 +415,7 @@ pub unsafe extern "C" fn f_matchaddpos(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_matcharg(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matcharg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let id = tv_get_number(argvars) as c_int;
@@ -464,11 +440,7 @@ pub unsafe extern "C" fn f_matcharg(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe extern "C" fn f_matchdelete(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_matchdelete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     unsafe {
         let win = get_optional_window(argvars, 1);

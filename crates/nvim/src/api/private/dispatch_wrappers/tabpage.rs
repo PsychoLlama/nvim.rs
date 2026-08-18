@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_open_tabpage(
+pub unsafe fn handle_nvim_open_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn handle_nvim_open_tabpage(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
+pub unsafe fn handle_nvim_tabpage_del_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -100,7 +100,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
+pub unsafe fn handle_nvim_tabpage_get_number(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_get_var(
+pub unsafe fn handle_nvim_tabpage_get_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -170,7 +170,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_var(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
+pub unsafe fn handle_nvim_tabpage_get_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
+pub unsafe fn handle_nvim_tabpage_is_valid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_list_wins(
+pub unsafe fn handle_nvim_tabpage_list_wins(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_list_wins(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
+pub unsafe fn handle_nvim_tabpage_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -309,7 +309,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
     NIL
 }
 
-pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
+pub unsafe fn handle_nvim_tabpage_set_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,

@@ -34,7 +34,7 @@ unsafe fn selected_arglist(arg: *mut typval_T) -> Option<*mut alist_T> {
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe extern "C" fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
     unsafe {
@@ -48,11 +48,7 @@ pub unsafe extern "C" fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, _f
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe extern "C" fn f_argidx(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_argidx(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
     unsafe { (*rettv).vval.v_number = (*curwin.get()).w_arg_idx as varnumber_T };
 }
@@ -62,11 +58,7 @@ pub unsafe extern "C" fn f_argidx(
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe extern "C" fn f_arglistid(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_arglistid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; `find_tabwin` answers a live window or
     // null, and every window has an argument list.
     unsafe {
@@ -110,7 +102,7 @@ unsafe fn arglist_as_rettv(entries: *mut aentry_T, count: c_int, rettv: *mut typ
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe extern "C" fn f_argv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_argv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; both arguments are optional and are
     // only read once their type says they are present.
     unsafe {

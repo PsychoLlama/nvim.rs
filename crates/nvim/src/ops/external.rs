@@ -106,7 +106,7 @@ static OPFUNC_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
 ///
 /// # Safety
 /// The option's current value must be a valid C string.
-pub unsafe extern "C" fn did_set_operatorfunc(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_operatorfunc(_args: *mut optset_T) -> *const c_char {
     unsafe {
         if option_set_callback_func(p_opfunc.get(), OPFUNC_CB.ptr()) == FAIL {
             return &raw const e_invarg as *const c_char;

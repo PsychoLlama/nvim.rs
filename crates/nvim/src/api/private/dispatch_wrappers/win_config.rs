@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_open_win(
+pub unsafe fn handle_nvim_open_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn handle_nvim_open_win(
     )
 }
 
-pub unsafe extern "C" fn handle_nvim_win_get_config(
+pub unsafe fn handle_nvim_win_get_config(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -106,7 +106,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_config(
     obj(kObjectTypeDict, object_data { dict })
 }
 
-pub unsafe extern "C" fn handle_nvim_win_set_config(
+pub unsafe fn handle_nvim_win_set_config(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,

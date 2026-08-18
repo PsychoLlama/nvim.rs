@@ -635,11 +635,7 @@ pub unsafe extern "C" fn modify_fname(
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
 /// cleared result.
-pub unsafe extern "C" fn f_fnamemodify(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_fnamemodify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut buf = numbuf();
     let (fname, mods) = (str_arg_chk(args, 0), str_arg_buf(args, 1, &mut buf));

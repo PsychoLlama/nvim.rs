@@ -260,16 +260,11 @@ pub(crate) unsafe fn getchar_common(
 
 /// The `getchar()` Vimscript function.
 ///
-/// Keeps the `extern "C"` ABI: the eval function table holds it as an
-/// `extern "C"` pointer.
+/// The eval function table holds it as a `VimLFunc` pointer.
 ///
 /// # Safety
 /// As [`getchar_common`].
-pub unsafe extern "C" fn f_getchar(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { getchar_common(argvars, rettv, true) };
 }
 
@@ -277,11 +272,7 @@ pub unsafe extern "C" fn f_getchar(
 ///
 /// # Safety
 /// As [`getchar_common`].
-pub unsafe extern "C" fn f_getcharstr(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { getchar_common(argvars, rettv, false) };
 }
 
@@ -289,10 +280,6 @@ pub unsafe extern "C" fn f_getcharstr(
 ///
 /// # Safety
 /// `rettv` must be a valid return slot.
-pub unsafe extern "C" fn f_getcharmod(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcharmod(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { (*rettv).vval.v_number = mod_mask.get() as varnumber_T };
 }

@@ -66,11 +66,7 @@ unsafe fn get_buffer_info(buf: *mut buf_T) -> *mut dict_T {
     dict
 }
 /// "getbufinfo()" function
-pub unsafe extern "C" fn f_getbufinfo(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut argbuf: *mut buf_T = ptr::null_mut();
     let mut filtered: bool = false;
     let mut sel_buflisted: bool = false;

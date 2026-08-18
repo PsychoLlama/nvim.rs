@@ -7,7 +7,7 @@
 
 use super::*;
 
-pub unsafe extern "C" fn handle_nvim_get_all_options_info(
+pub unsafe fn handle_nvim_get_all_options_info(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -36,7 +36,7 @@ pub unsafe extern "C" fn handle_nvim_get_all_options_info(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_option_info2(
+pub unsafe fn handle_nvim_get_option_info2(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn handle_nvim_get_option_info2(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
-pub unsafe extern "C" fn handle_nvim_get_option_value(
+pub unsafe fn handle_nvim_get_option_value(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn handle_nvim_get_option_value(
     rv
 }
 
-pub unsafe extern "C" fn handle_nvim_set_option_value(
+pub unsafe fn handle_nvim_set_option_value(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,

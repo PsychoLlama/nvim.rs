@@ -41,7 +41,7 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 ///
 /// # Safety
 /// `args` must describe the option being set.
-pub unsafe extern "C" fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
     unsafe {

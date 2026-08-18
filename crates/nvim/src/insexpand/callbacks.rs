@@ -59,8 +59,8 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 /// Parse the `'completefunc'` value and set the callback function; the value
 /// may be a function name, `function(<name>)`, `funcref(<name>)` or a lambda.
 ///
-/// This is an `opt_did_set_cb` table row, so it stays `extern "C"`.
-pub unsafe extern "C" fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
+/// This is an `opt_did_set_cb` row in the generated option table.
+pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
         let retval = if (*args).os_flags & OPT_LOCAL != 0 {
@@ -86,8 +86,8 @@ pub unsafe fn set_buflocal_cfu_callback(buf: *mut buf_T) {
 }
 
 /// Parse the `'omnifunc'` value and set the callback function; an
-/// `opt_did_set_cb` table row, so it stays `extern "C"`.
-pub unsafe extern "C" fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
+/// `opt_did_set_cb` row in the generated option table.
+pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
         let retval = if (*args).os_flags & OPT_LOCAL != 0 {
@@ -230,8 +230,8 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
 }
 
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
-/// `opt_did_set_cb` table row, so it stays `extern "C"`.
-pub unsafe extern "C" fn did_set_thesaurusfunc(args: *mut optset_T) -> *const c_char {
+/// `opt_did_set_cb` row in the generated option table.
+pub unsafe fn did_set_thesaurusfunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
         let retval = if (*args).os_flags & OPT_LOCAL != 0 {

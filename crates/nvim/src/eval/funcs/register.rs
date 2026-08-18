@@ -62,11 +62,7 @@ unsafe fn regname(args: Args<'_>) -> Option<c_int> {
 }
 
 /// `getreg([{regname} [, 1 [, {list}]]])`.
-pub unsafe extern "C" fn f_getreg(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe {
@@ -104,11 +100,7 @@ pub unsafe extern "C" fn f_getreg(
 }
 
 /// `getregtype([{regname}])`.
-pub unsafe extern "C" fn f_getregtype(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getregtype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -127,11 +119,7 @@ pub unsafe extern "C" fn f_getregtype(
 }
 
 /// `getreginfo([{regname}])`.
-pub unsafe extern "C" fn f_getreginfo(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getreginfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `buf` outlives
     // the two `tv_dict_add_str` calls that copy from it.
@@ -202,31 +190,19 @@ unsafe fn return_register(regname: c_int, rettv: &mut typval_T) {
 }
 
 /// `reg_executing()` — the register a macro is being played from.
-pub unsafe extern "C" fn f_reg_executing(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reg_executing(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the dispatcher's cleared return value.
     unsafe { return_register(reg_executing.get(), &mut *rettv) };
 }
 
 /// `reg_recording()` — the register `q` is recording into.
-pub unsafe extern "C" fn f_reg_recording(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reg_recording(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the dispatcher's cleared return value.
     unsafe { return_register(reg_recording.get(), &mut *rettv) };
 }
 
 /// `reg_recorded()` — the register the last recording went into.
-pub unsafe extern "C" fn f_reg_recorded(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_reg_recorded(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the dispatcher's cleared return value.
     unsafe { return_register(reg_recorded.get(), &mut *rettv) };
 }
@@ -266,11 +242,7 @@ unsafe fn get_yank_type(
 }
 
 /// `setreg({regname}, {value} [, {options}])`.
-pub unsafe extern "C" fn f_setreg(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; every string
     // read below is NUL-terminated and outlives its use.
