@@ -291,7 +291,11 @@ mod write {
 
     /// "overwrites an existing undo file". The spec slept a second and
     /// compared mtimes to a one-second resolution; the writer unlinks and
-    /// re-creates, so the inode says the same thing without the sleep.
+    /// re-creates instead, so an open handle on the first file answers the
+    /// same question without the sleep. Its link count drops to zero exactly
+    /// when the file it names has been unlinked. Comparing inode numbers
+    /// would not do: the new file is free to land on the number the old one
+    /// just released, and on ext4 it usually does.
     #[test]
     fn a_second_write_replaces_the_existing_undo_file() {
         let mut fixture = Fixture::new("overwrite");
@@ -299,14 +303,16 @@ mod write {
 
         fixture.write(None, false);
         let written = fixture.undo_file_name();
-        let first = fs::metadata(&written).unwrap();
+        let first = fs::File::open(&written).unwrap();
+        let first_meta = first.metadata().unwrap();
 
         fixture.buf.b_u_numhead = 1; // Mark it as if there are changes again.
         fixture.write(None, false);
 
+        let replaced = first.metadata().unwrap();
+        assert_eq!(replaced.nlink(), 0, "the undo file was not replaced");
         let second = fs::metadata(&written).unwrap();
-        assert_ne!(first.ino(), second.ino(), "the undo file was not replaced");
-        assert!(second.modified().unwrap() >= first.modified().unwrap());
+        assert!(second.modified().unwrap() >= first_meta.modified().unwrap());
         assert!(is_undo_file(&written));
     }
 
