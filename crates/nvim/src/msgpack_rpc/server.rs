@@ -26,14 +26,10 @@ use crate::event::socket::address::SOCKET_ADDR_LEN;
 mod known {
     use core::ffi::{c_int, c_uint};
 
-    /// `VimVarIndex` of `v:servername`.
-    pub const VV_SEND_SERVER: c_uint = 28;
     /// `XDGVarType` of the runtime directory generated addresses live in.
     pub const XDG_RUNTIME_DIR: c_int = 4;
     /// libuv's handle type for a TCP socket.
     pub const UV_TCP: c_uint = 12;
-    pub const LOGLVL_WRN: c_int = 3;
-    pub const LOGLVL_ERR: c_int = 4;
     /// The capacity of `IObuff`.
     pub const IOSIZE: usize = 1025;
     /// How many connections the kernel may queue behind a listening socket.

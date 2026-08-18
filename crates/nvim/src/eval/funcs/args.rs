@@ -80,13 +80,6 @@ impl<'a> Args<'a> {
     pub(crate) fn has(&self, i: usize) -> bool {
         self.ty(i) != VAR_UNKNOWN
     }
-
-    /// How many arguments were supplied.
-    pub(crate) fn len(&self) -> usize {
-        (0..=MAX_ARGS)
-            .find(|&i| !self.has(i))
-            .unwrap_or(MAX_ARGS + 1)
-    }
 }
 
 /// Open a builtin: bind the argument list and the return value.

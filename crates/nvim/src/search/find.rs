@@ -56,7 +56,6 @@ struct Searcher {
     /// Set when the limit was passed, or null.
     timed_out: *mut c_int,
     options: c_int,
-    dir: Direction,
     /// `'cpo'` contains `c`: a repeated search continues from the end of
     /// the previous match rather than one character past its start.
     from_match_end: bool,
@@ -411,7 +410,6 @@ pub unsafe fn searchit(
             tm: ptr::null_mut(),
             timed_out: ptr::null_mut(),
             options,
-            dir,
             from_match_end: !vim_strchr(p_cpo.get(), CPO_SEARCH).is_null(),
             called_emsg_before: called_emsg.get(),
         };

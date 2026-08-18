@@ -32,7 +32,7 @@ enum Line {
     /// The line break counts as one match; here is the new cursor.
     Crossed(*mut uint8_t),
     /// The user interrupted while fetching the line.
-    Interrupted(*mut uint8_t),
+    Interrupted,
     /// This node does not cross line breaks, or there is no next line.
     End,
 }
@@ -63,7 +63,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
             }
             reg_nextline(rex);
             if got_int.get() {
-                Line::Interrupted(rex.input())
+                Line::Interrupted
             } else {
                 Line::Crossed(rex.input())
             }
@@ -84,7 +84,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                     if at_nul && $nul_first {
                         match next_line() {
                             Line::Crossed(next) => scan = next,
-                            Line::Interrupted(_) => break 'walk,
+                            Line::Interrupted => break 'walk,
                             Line::End => break 'walk,
                         }
                     } else if $accept(scan) {
@@ -92,7 +92,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                     } else if at_nul {
                         match next_line() {
                             Line::Crossed(next) => scan = next,
-                            Line::Interrupted(_) => break 'walk,
+                            Line::Interrupted => break 'walk,
                             Line::End => break 'walk,
                         }
                     } else if literal_newline(scan) {
@@ -131,7 +131,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                             count += 1;
                             scan = next;
                         }
-                        Line::Interrupted(_) => {
+                        Line::Interrupted => {
                             count += 1;
                             break 'any;
                         }
@@ -214,7 +214,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                     if *scan as c_int == NUL {
                         match next_line() {
                             Line::Crossed(next) => scan = next,
-                            Line::Interrupted(_) | Line::End => break 'coll,
+                            Line::Interrupted | Line::End => break 'coll,
                         }
                     } else if literal_newline(scan) {
                         scan = scan.add(1);
@@ -268,7 +268,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                     if *scan as c_int == NUL {
                         match next_line() {
                             Line::Crossed(next) => scan = next,
-                            Line::Interrupted(_) | Line::End => break 'bytes,
+                            Line::Interrupted | Line::End => break 'bytes,
                         }
                     } else {
                         let len = utfc_ptr2len(scan.cast());

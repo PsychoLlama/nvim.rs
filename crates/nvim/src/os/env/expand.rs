@@ -15,11 +15,9 @@ use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
-use crate::types::{Direction, expand_T, xp_prefix_T};
+use crate::types::expand_T;
 
 const EXPAND_FILES: c_int = 2;
-const kDirectionNotSet: Direction = 0;
-const XP_PREFIX_NONE: xp_prefix_T = 0;
 
 /// [`expand_env`] into a newly allocated `MAXPATHL` buffer.
 ///

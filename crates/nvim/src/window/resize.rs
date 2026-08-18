@@ -189,12 +189,8 @@ pub(crate) fn fix_scroll(resize: bool) {
     }
 }
 
-pub(crate) fn win_fix_cursor(normal: bool) {
-    fix_cursor(normal);
-}
-
 /// Move the cursor into the visible part of the window when a resize left it
-/// outside `'scrolloff'`, from `win_fix_cursor()`.
+/// outside `'scrolloff'`.
 pub(crate) fn fix_cursor(normal: bool) {
     let mut wp = cur_win();
     if skip_win_fix_cursor.get()

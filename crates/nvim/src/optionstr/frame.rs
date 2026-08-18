@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_char;
 use core::ptr;
 
 use crate::main::e_invarg;
@@ -77,13 +77,4 @@ pub(crate) unsafe fn old_value(args: *mut optset_T) -> *const c_char {
 pub(crate) unsafe fn errbuf(args: *mut optset_T) -> (*mut c_char, usize) {
     // SAFETY: the caller's frame.
     unsafe { ((*args).os_errbuf, (*args).os_errbuflen) }
-}
-
-/// A `*mut c_void` field of the frame, as the pointer it really is.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub(crate) unsafe fn buf_of(args: *mut optset_T) -> *mut c_void {
-    // SAFETY: the caller's frame.
-    unsafe { (*args).os_buf }
 }

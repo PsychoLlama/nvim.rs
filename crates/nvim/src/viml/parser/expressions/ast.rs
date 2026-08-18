@@ -49,12 +49,6 @@ pub(super) fn node_start(node: *mut ExprASTNode) -> ParserPosition {
     unsafe { (*node).start }
 }
 
-/// How many bytes of input the node spans.
-#[inline(always)]
-pub(super) fn node_len(node: *mut ExprASTNode) -> size_t {
-    unsafe { (*node).len }
-}
-
 #[inline(always)]
 pub(super) fn set_node_span(node: *mut ExprASTNode, start: ParserPosition, len: size_t) {
     unsafe {

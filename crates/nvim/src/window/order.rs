@@ -80,10 +80,6 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
     count - todo
 }
 
-pub(crate) fn win_exchange(prenum: c_int) {
-    exchange(prenum);
-}
-
 /// Exchange the current window with the `prenum`th window of its row or
 /// column, or with the next one when `prenum` is zero.
 pub(crate) fn exchange(prenum: c_int) {
@@ -172,10 +168,6 @@ pub(crate) fn exchange(prenum: c_int) {
     unsafe { win_enter(wp.raw(), true) };
     cur_win().redraw_later(UPD_NOT_VALID);
     wp.redraw_later(UPD_NOT_VALID);
-}
-
-pub(crate) fn win_rotate(upwards: bool, count: c_int) {
-    rotate(upwards, count);
 }
 
 /// Rotate the windows in the current row or column `count` places, upwards or
@@ -370,13 +362,8 @@ fn move_after(win1: Win, win2: Win) {
     unsafe { win_enter(win1.raw(), false) };
 }
 
-pub(crate) unsafe fn get_maximum_wincount(fr: *mut frame_T, height: c_int) -> c_int {
-    // SAFETY: the caller's promise -- a live frame.
-    max_wincount(unsafe { Frame::new(fr) }, height)
-}
-
-/// How many windows would fit in `height` rows of frame `fr`, from
-/// `get_maximum_wincount()`: each costs `'winminheight'` plus a status line,
+/// How many windows would fit in `height` rows of frame `fr`: each costs
+/// `'winminheight'` plus a status line,
 /// plus its window bar where there is one.
 pub(crate) fn max_wincount(fr: Frame, height: c_int) -> c_int {
     let per_win = p_wmh.get() as c_int + STATUS_HEIGHT as c_int;

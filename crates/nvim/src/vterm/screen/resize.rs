@@ -38,7 +38,6 @@ use super::{BUFIDX_ALTSCREEN, BUFIDX_PRIMARY, Screen, line_popcount, row_cells};
 struct NewBuffer {
     cells: *mut ScreenCell,
     lineinfo: *mut VTermLineInfo,
-    rows: c_int,
     cols: c_int,
 }
 
@@ -53,7 +52,6 @@ impl NewBuffer {
         NewBuffer {
             cells: cells as *mut ScreenCell,
             lineinfo: lineinfo as *mut VTermLineInfo,
-            rows,
             cols,
         }
     }

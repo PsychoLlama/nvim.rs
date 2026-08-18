@@ -663,6 +663,4 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     },
 ]);
-static default_shada_file: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

@@ -34,20 +34,6 @@ pub(crate) struct AltWin {
     pub dir: c_int,
 }
 
-pub(crate) unsafe fn win_free_mem(
-    win: *mut win_T,
-    dirp: *mut c_int,
-    tp: *mut tabpage_T,
-) -> *mut win_T {
-    // SAFETY: the caller's promise -- a live window, a live tab page or null,
-    // and a writable `dirp`.
-    unsafe {
-        let (wp, dir) = free_mem(Win::new(win), TabPage::from_raw(tp));
-        *dirp = dir;
-        wp.map_or(ptr::null_mut(), Win::raw)
-    }
-}
-
 /// Free `win`'s frame and the window itself, and say which neighbour took its
 /// room and along which axis.
 pub(crate) fn free_mem(win: Win, tp: Option<TabPage>) -> (Option<Win>, c_int) {
@@ -241,11 +227,6 @@ pub(crate) fn find_altwin(win: Win, tp: Option<TabPage>) -> Option<AltWin> {
     })
 }
 
-pub(crate) unsafe fn frame_flatten(frp: *mut frame_T) {
-    // SAFETY: the caller's promise -- a live frame.
-    flatten(unsafe { Frame::new(frp) });
-}
-
 /// Collapse `frp` into its parent when it is the only child left, and then the
 /// parent into *its* parent when the two have the same layout.
 pub(crate) fn flatten(frp: Frame) {
@@ -353,11 +334,6 @@ fn restore(wp: Win, dir: c_int, unflat_altfr: Frame) {
     }
 }
 
-pub(crate) unsafe fn win_altframe(win: *mut win_T, tp: *mut tabpage_T) -> *mut frame_T {
-    // SAFETY: the caller's promise -- a live window and a live tab page or null.
-    unsafe { alt_frame(Win::new(win), TabPage::from_raw(tp)).raw() }
-}
-
 /// The frame that would take `win`'s room, before `'winfix*'` is considered.
 ///
 /// The neighbour after `win` unless `'splitbelow'`/`'splitright'` says the one
@@ -393,10 +369,6 @@ pub(crate) fn alt_frame(win: Win, tp: Option<TabPage>) -> Frame {
     } else {
         target
     }
-}
-
-pub(crate) fn alt_tabpage() -> *mut tabpage_T {
-    alt_tab_page().raw()
 }
 
 /// The tab page to go to when the current one closes: the last used one when

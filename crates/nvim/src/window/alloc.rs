@@ -143,11 +143,6 @@ fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
     OK
 }
 
-pub(crate) unsafe fn new_frame(wp: *mut win_T) {
-    // SAFETY: the caller's promise -- a live window.
-    attach_frame(unsafe { Win::new(wp) });
-}
-
 /// Give `wp` a fresh leaf frame of its own.
 pub(crate) fn attach_frame(wp: Win) -> Frame {
     let mut wp = wp;

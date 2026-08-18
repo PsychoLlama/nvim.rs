@@ -96,12 +96,6 @@ impl Rex {
         unsafe { (*self.0).line = line }
     }
 
-    /// Above line 1 the match has no text at all.
-    #[inline(always)]
-    pub(crate) fn line_is_null(self) -> bool {
-        self.line().is_null()
-    }
-
     /// Where in that line the match has got to.
     #[inline(always)]
     pub(crate) fn input(self) -> *mut uint8_t {
@@ -119,23 +113,11 @@ impl Rex {
         self.input().cast()
     }
 
-    /// `off` bytes past the cursor, which the callers keep within the line.
-    #[inline(always)]
-    pub(crate) fn input_at(self, off: c_int) -> *mut uint8_t {
-        unsafe { (*self.0).input.offset(off as isize) }
-    }
-
     /// The byte at the cursor. NUL at the end of the line — which is a
     /// position both engines test for, not a bound they stop short of.
     #[inline(always)]
     pub(crate) fn byte(self) -> uint8_t {
         unsafe { *(*self.0).input }
-    }
-
-    /// The byte `off` past the cursor, up to and including the NUL.
-    #[inline(always)]
-    pub(crate) fn byte_at(self, off: c_int) -> uint8_t {
-        unsafe { *self.input_at(off) }
     }
 
     /// The whole character at the cursor.

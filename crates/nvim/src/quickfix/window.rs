@@ -504,16 +504,6 @@ pub unsafe fn ex_cclose(eap: *mut exarg_T) {
 // ---------------------------------------------------------------------------
 // The cursor in the window.
 
-/// Move the cursor in the quickfix window to `lnum`.
-///
-/// # Safety
-///
-/// `win` must be a live window.
-pub(crate) unsafe fn qf_win_goto(win: *mut win_T, lnum: linenr_T) {
-    // SAFETY: the caller's promise -- a live window.
-    win_goto_line(unsafe { Win::new(win) }, lnum);
-}
-
 /// The window is made current for the cursor move only; nothing in between
 /// can leave it current.
 fn win_goto_line(mut win: Win, lnum: linenr_T) {

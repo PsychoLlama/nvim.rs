@@ -346,15 +346,6 @@ impl Link {
         Link(slot)
     }
 
-    pub(crate) fn raw(self) -> *mut *mut vimmenu_T {
-        self.0
-    }
-
-    /// Whether both name the same slot.
-    pub(crate) fn same(self, other: Link) -> bool {
-        ptr::eq(self.0, other.0)
-    }
-
     /// The node in the slot, if any.
     pub(crate) fn get(self) -> Option<Menu> {
         // SAFETY: the invariant; the slot holds null or a live node.

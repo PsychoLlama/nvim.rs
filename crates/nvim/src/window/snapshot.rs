@@ -151,11 +151,6 @@ fn make_snapshot_rec(fr: Frame, slot: *mut *mut frame_T) {
     }
 }
 
-pub(crate) unsafe fn clear_snapshot(tp: *mut tabpage_T, idx: c_int) {
-    // SAFETY: the caller's promise -- a live tab page.
-    drop_snapshot(unsafe { TabPage::new(tp) }, idx);
-}
-
 /// Free the saved tree in slot `idx` of `tp`, if there is one.
 pub(crate) fn drop_snapshot(tp: TabPage, idx: c_int) {
     let mut tp = tp;

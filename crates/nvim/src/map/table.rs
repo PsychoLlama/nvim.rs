@@ -57,19 +57,6 @@ fn mix64(k: uint64_t) -> uint32_t {
     (k >> 33 ^ k ^ k << 11) as uint32_t
 }
 
-/// Hash a value by its bytes, padding included — which is what `memcmp`-based
-/// equality compares, so the two agree.
-fn fold_value<T>(value: &T) -> uint32_t {
-    fold_bytes(unsafe { slice::from_raw_parts((value as *const T).cast::<u8>(), size_of::<T>()) })
-}
-
-fn bytes_eq<T>(a: &T, b: &T) -> bool {
-    unsafe {
-        slice::from_raw_parts((a as *const T).cast::<u8>(), size_of::<T>())
-            == slice::from_raw_parts((b as *const T).cast::<u8>(), size_of::<T>())
-    }
-}
-
 impl MapKey for core::ffi::c_int {
     fn map_hash(&self) -> uint32_t {
         *self as uint32_t

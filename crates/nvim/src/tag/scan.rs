@@ -684,20 +684,6 @@ unsafe fn lang_is(at: *const c_char, lang: [u8; 2], whole: bool) -> bool {
     }
 }
 
-/// A NUL-terminated string as an owned [`Match`], terminator included.
-///
-/// # Safety
-/// `p` must be NUL-terminated.
-unsafe fn match_of(p: *const c_char) -> Match {
-    // SAFETY: the caller's promise.
-    unsafe {
-        let bytes = CStr::from_ptr(p).to_bytes_with_nul();
-        let mut mfp = Match::zeroed(bytes.len());
-        mfp.bytes().copy_from_slice(bytes);
-        mfp
-    }
-}
-
 /// Search the tags files that apply for tags matching `pat`.
 ///
 /// Answers `FAIL` if the search failed completely — `num_matches` is then

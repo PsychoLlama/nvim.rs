@@ -72,7 +72,6 @@ const kOptValTypeString: OptValType = 2;
 const kOptVartabstop: OptIndex = 338;
 const NUL: c_int = 0;
 const TAB: c_int = 9;
-const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 const OPT_LOCAL: c_int = 2;
 const SIN_CHANGED: c_uint = 1;
 const SIN_INSERT: c_uint = 2;

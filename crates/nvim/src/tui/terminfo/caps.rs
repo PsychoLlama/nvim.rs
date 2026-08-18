@@ -18,7 +18,6 @@ use core::ffi::{CStr, c_uint};
 /// namespace the unit-test cdefs are generated into -- they are an
 /// implementation detail of the tables below.
 mod unibi_cap {
-    pub const UNIBI_STRING_ABSENT: super::UnibiString = 85;
     pub const BACK_COLOR_ERASE: super::UnibiCap = 29;
     pub const MAX_COLORS: super::UnibiCap = 59;
     pub const LINES: super::UnibiCap = 48;

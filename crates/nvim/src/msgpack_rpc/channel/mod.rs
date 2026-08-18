@@ -61,7 +61,6 @@ use envelope::{serialize_request, serialize_response};
 /// namespace the unit-test header generator collects constants into.
 mod known {
     use super::{ChannelPart, ChannelStreamType, ClientType, MessageType};
-    use core::ffi::c_int;
 
     pub const kMessageTypeRequest: MessageType = 0;
     pub const kMessageTypeResponse: MessageType = 1;
@@ -74,10 +73,6 @@ mod known {
     pub const kChannelPartRpc: ChannelPart = 3;
 
     pub const kClientTypeMsgpackRpc: ClientType = 5;
-
-    pub const LOGLVL_DBG: c_int = 1;
-    pub const LOGLVL_INF: c_int = 2;
-    pub const LOGLVL_ERR: c_int = 4;
 
     /// libuv's "the peer hung up" error.
     /// The arena block size the RPC packer writes into.

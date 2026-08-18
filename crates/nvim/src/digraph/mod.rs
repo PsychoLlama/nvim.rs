@@ -48,7 +48,6 @@ use std::ffi::CString;
 const NUL: c_int = 0;
 const ESC: c_int = 27;
 const CTRL_H: c_int = 8;
-const OK: c_int = 1;
 const FAIL: c_int = 0;
 
 const K_BOOL_VAR_FALSE: BoolVarValue = 0;

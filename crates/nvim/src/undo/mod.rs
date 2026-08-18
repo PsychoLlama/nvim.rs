@@ -66,8 +66,6 @@ mod header {
     use super::{ExtmarkOp, UndoObjectType, c_int, c_ulong};
 
     pub const NUL: c_int = 0;
-    pub const OK: c_int = 1;
-    pub const FAIL: c_int = 0;
     pub const EOF: c_int = -1;
     pub const SIZE_MAX: c_ulong = 18446744073709551615;
     pub const MAXPATHL: c_int = 4096;
@@ -92,7 +90,6 @@ mod header {
     pub const UH_EMPTYBUF: c_int = 2;
     pub const UH_RELOAD: c_int = 4;
 
-    pub const UPD_NOT_VALID: c_int = 40;
     pub const kExtmarkNOOP: ExtmarkOp = 0;
     pub const kExtmarkUndo: ExtmarkOp = 1;
     pub const kExtmarkSplice: UndoObjectType = 0;

@@ -300,10 +300,6 @@ impl ClickDefs {
         unsafe { Self::new(tab_page_click_defs.get()) }
     }
 
-    fn raw(self) -> *mut StlClickDefinition {
-        self.0
-    }
-
     /// The definition recorded for screen column `col`.
     fn at(self, col: c_int) -> StlClickDefinition {
         // SAFETY: the constructor's promise.

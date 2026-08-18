@@ -22,7 +22,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::main::{
     Columns, Rows, cmdline_row, e_noroom, lastwin, p_ch, p_wmh, p_wmw, redraw_cmdline,
 };
-use crate::types::{OptInt, frame_T, kFloatRelativeWindow, optset_T, win_T};
+use crate::types::{OptInt, kFloatRelativeWindow, optset_T, win_T};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{Frame, Win, frames, frames_back};
 
@@ -609,9 +609,4 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
     }
     comp_positions();
     redraw_all(UPD_NOT_VALID);
-}
-
-pub(crate) unsafe fn frame_setwidth(curfrp: *mut frame_T, width: c_int) {
-    // SAFETY: the caller's promise -- a live frame.
-    set_frame_width(unsafe { Frame::new(curfrp) }, width);
 }
