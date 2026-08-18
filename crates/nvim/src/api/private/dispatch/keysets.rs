@@ -547,10 +547,7 @@ pub unsafe fn KeyDict_echo_opts_get_field(str: *const c_char, len: size_t) -> *m
     table.wrapping_add(index)
 }
 
-pub static empty_table: GlobalCell<[KeySetLink; 1]> = GlobalCell::new({
-    type K = KeyDict_empty;
-    [END]
-});
+pub static empty_table: GlobalCell<[KeySetLink; 1]> = GlobalCell::new([END]);
 
 /// Look a key up in [`empty_table`].
 ///

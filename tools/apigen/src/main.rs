@@ -1925,13 +1925,22 @@ const TAGS: &[(&str, &str, &str)] = &[
 /// One keyset's table plus the lookup that indexes it.
 fn emit_keyset(out: &mut String, k: &Keyset) {
     let name = &k.name;
+    // A keyset with no keys has no `offset_of!`, so it needs neither the type
+    // alias nor the block that would hold it.
+    let (open, close) = if k.keys.is_empty() {
+        ("", "")
+    } else {
+        ("{", "}")
+    };
     writeln!(
         out,
-        "pub static {name}_table: GlobalCell<[KeySetLink; {}]> = GlobalCell::new({{",
+        "pub static {name}_table: GlobalCell<[KeySetLink; {}]> = GlobalCell::new({open}",
         k.len()
     )
     .unwrap();
-    writeln!(out, "    type K = KeyDict_{name};").unwrap();
+    if !k.keys.is_empty() {
+        writeln!(out, "    type K = KeyDict_{name};").unwrap();
+    }
     writeln!(out, "    [").unwrap();
     for (i, key) in k.keys.iter().enumerate() {
         let opt_index: i64 = if k.has_optional { i as i64 + 1 } else { -1 };
@@ -1949,7 +1958,7 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     }
     writeln!(out, "        END,").unwrap();
     writeln!(out, "    ]").unwrap();
-    writeln!(out, "}});").unwrap();
+    writeln!(out, "{close});").unwrap();
     out.push('\n');
 
     writeln!(out, "/// Look a key up in [`{name}_table`].").unwrap();
@@ -2201,7 +2210,12 @@ fn generate_tables(
     ]
     .iter()
     .map(|s| (*s).to_string())
-    .chain(keysets.iter().map(|k| format!("KeyDict_{}", k.name)))
+    .chain(
+        keysets
+            .iter()
+            .filter(|k| !k.keys.is_empty())
+            .map(|k| format!("KeyDict_{}", k.name)),
+    )
     .collect();
     types.sort();
     writeln!(out, "use crate::types::{{{}}};", types.join(", ")).unwrap();

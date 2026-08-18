@@ -49,13 +49,13 @@ use crate::types::{
     KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
     KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
     KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
-    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
-    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
-    KeyDict_highlight_cterm, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option,
-    KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark,
-    KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height,
-    KeyDict_xdl_diff, KeySetLink, MsgpackRpcRequestHandler, Object, size_t, uint64_t,
+    KeyDict_echo_opts, KeyDict_eval_statusline, KeyDict_exec_autocmds, KeyDict_exec_opts,
+    KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark, KeyDict_get_extmarks,
+    KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_highlight_cterm,
+    KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw,
+    KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark, KeyDict_tabpage_config,
+    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, KeyDict_xdl_diff,
+    KeySetLink, MsgpackRpcRequestHandler, Object, size_t, uint64_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 
