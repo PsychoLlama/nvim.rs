@@ -3,7 +3,9 @@ local clear = n.clear
 local api = n.api
 local fn = n.fn
 
-local keycodes = require('src.nvim.keycodes')
+-- Resolved through the `crates/nvim/src/?.lua` package path the runner adds,
+-- not through the `src` symlink in its sandbox cwd.
+local keycodes = require('keycodes')
 
 describe('nvim_replace_termcodes performance', function()
   it('200 calls with a key repeated 5000 times', function()
