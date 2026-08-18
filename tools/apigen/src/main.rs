@@ -550,6 +550,14 @@ fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
                 continue;
             }
             let name = f.sig.ident.to_string();
+            // A `Result` is not FFI-safe, so a converted function cannot keep
+            // the calling convention it no longer needs.
+            if fallible && f.sig.abi.is_some() {
+                return Err(format!(
+                    "{name} answers with a Result and is still `extern`; a Result is not \
+                     FFI-safe, so drop the calling convention"
+                ));
+            }
             let Ok(params) = classify(&f.sig) else {
                 continue;
             };
