@@ -9,16 +9,16 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- Moved the sources into a normal Rust crate layout, so every module path in
-  the editor lost its `src::nvim::` prefix. Nothing observable changed.
-- Took the C memory layout off 239 of the editor's own struct types, leaving
-  it only where something outside the editor really reads the bytes; threaded
-  the regular-expression engines' match state through both engines instead of
-  reaching for it as a global on every character; gave each option row a typed
-  handle on the variable it keeps its value in, so a row naming a variable of
-  the wrong type no longer compiles; and turned the shell, wildcard-expansion,
-  file-expansion and libuv-error constants into real types instead of loose
-  integers. Nothing observable changed.
+- Rewrote signs and the decorations drawn beside and inside a line, covering
+  `:sign` and the `sign_define()`/`sign_place()` family, the sign column and
+  its width, and the extmark highlights, virtual text, conceal and URLs drawn
+  on a row.
+- Rewrote the width arithmetic behind every wrapped line, covering
+  `'linebreak'`, `'showbreak'`, `'breakindent'`,
+  `'tabstop'`/`'vartabstop'` and inline virtual text.
+- Reworked the types and shared state the whole tree is built on, covering
+  pattern matching in `/`, `:substitute` and the `match*()` family, the
+  values `:set` writes, and shell, wildcard and file-name expansion.
 
 ## [2026.08.15-2b1aee84f3]
 
