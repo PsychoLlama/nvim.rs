@@ -92,8 +92,7 @@ tags
 
 CMakeUserPresets.json
 
-# Rewriter/generator build artifacts
+# Generator build artifacts. Both tools carry their own workspace and
+# lockfile, so they build into their own target/ rather than the repo's.
 /tools/apigen/target/
-/tools/globalize/target/
-/tools/unify/target/
 /tools/ffigen/target/
