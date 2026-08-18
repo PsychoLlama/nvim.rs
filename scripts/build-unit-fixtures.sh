@@ -25,7 +25,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:?usage: $0 <output.so>}
 
 # The fixtures include the generated cdefs chunk; (re)generate it if stale.
-"$root/scripts/gen-unit-cdefs.sh"
+"$root/scripts/gen-unit-cdefs.sh" --if-stale
 
 chunk=$root/target/ffi/unit-cdefs.h
 unit_fixtures=$root/test/unit/fixtures

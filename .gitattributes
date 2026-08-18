@@ -6,5 +6,10 @@ runtime/doc/builtin.txt linguist-generated
 # api.gen.lua, vimfn.gen.lua, etc.
 runtime/lua/vim/_meta/*.gen.lua linguist-generated
 
+# The unit suite's ffi.cdef golden: 9k declarations tools/ffigen emits from the
+# crate. Never hand-edited (`just ffigen` rewrites it), and reviewing its diff
+# by eye is not the point — the point is that it changed.
+tools/ffigen/unit-cdefs.h linguist-generated
+
 src/xdiff/**    linguist-vendored
 src/cjson/**    linguist-vendored

@@ -90,6 +90,21 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
+# Run clippy over the two generators (tools/apigen, tools/ffigen). They carry
+# their own workspace and lockfile on purpose — membership would make every
+# `just build` compile syn — so `cargo clippy` in the root workspace never sees
+# them, and this recipe names their manifests explicitly.
+#
+# Pass/fail at -D warnings rather than ratcheted like the crate: both baselines
+# are zero and these are ~8k lines of ordinary hand-written Rust, not
+# transpiler output. `--` scopes the denial to the tool itself, leaving the
+# vendored syn/proc-macro2 alone. Their formatting needs no recipe: treefmt's
+# rustfmt formatter globs *.rs tree-wide, so `just fmt-check` already covers
+# them.
+lint-tools:
+  @cargo clippy --quiet --all-targets --manifest-path tools/apigen/Cargo.toml -- -D warnings
+  @cargo clippy --quiet --all-targets --manifest-path tools/ffigen/Cargo.toml -- -D warnings
+
 # Run clippy over every target and ratchet the warning count
 # (metrics/clippy.json): per-file counts may only shrink, and deny-level
 # findings (the `correctness` group) fail the run outright. Lint levels live
@@ -97,7 +112,7 @@ benchmark *args: build
 # shell's `-D warnings` can't promote the counted groups to errors first.
 # `--check` compares against the committed baseline instead of writing;
 # `--allow-growth` mirrors the ratchet's override.
-lint *args:
+lint *args: lint-tools
   @scripts/lint.py {{ args }}
 
 # Run the crate's Rust tests: the #[cfg(test)] modules (safe cores' pure
@@ -123,6 +138,14 @@ miri *args:
 # signatures can't carry. `--check` fails on drift instead of writing.
 apigen *args:
   @scripts/gen-api-dispatch.sh {{ args }}
+
+# Regenerate the unit suite's ffi.cdef chunk (tools/ffigen/unit-cdefs.h) from
+# the crate's #[repr(C)] types and #[unsafe(no_mangle)] exports. The committed
+# copy is a golden, not an input: the harness regenerates its own under
+# target/ffi, and this one exists so `--check` can fail when ffigen's output
+# drifts — the tool's only test. `--check` regenerates and diffs.
+ffigen *args:
+  @scripts/gen-unit-cdefs.sh {{ args }}
 
 # Regenerate crates/nvim/src/keycodes.lua from the Rust key-name table
 # (crates/nvim/src/keycodes/tables.rs). Nothing in the editor reads it —
@@ -153,6 +176,9 @@ ratchet *args:
 # longer exists.
 #
 # Code generation leads because it writes crate source every later step reads.
+# The cdefs golden regenerates after formatting rather than with the other
+# generators: it is derived from the crate source apigen just wrote, and it is
+# not crate source itself, so nothing downstream reads it.
 # Formatting comes next because rustfmt rewrapping a line changes the line counts
 # the ratchet measures — and `fmt-check` (the pre-commit hook) rewrites the tree, so
 # a baseline taken before it silently stops matching mid-commit. The ledger
@@ -165,17 +191,19 @@ ratchet *args:
 # fixed point that the pre-commit hook can't move.
 #
 # Args are forwarded to the ratchet and lint, e.g. `just refresh --allow-growth`.
-refresh *args: apigen keycodes-lua fmt abi-ledger (ratchet args) (lint args)
+refresh *args: apigen keycodes-lua fmt ffigen abi-ledger (ratchet args) (lint args)
   @treefmt --no-cache --fail-on-change --quiet
 
 # This is the gate CI runs on every push. It deliberately skips the slow
 # suites, which are worth invoking directly (`just functionaltest`,
 # `just oldtest`, ...); only the fast Rust-side tests run here.
 #
-# Check that the tree is formatted, the ABI ledger is current and the ratchet
-# holds, the crate still compiles, and the safe-core tests pass. fmt-check
-# leads because it rewrites the tree. The ledger check precedes the ratchet
-# check because the ratchet snapshots the ledger's internal-export count and
-# cannot tell a stale ledger from a fresh one (both also run as pre-commit
-# hooks, see .gitconfig).
-minimal-ci: fmt-check (apigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (ratchet "--check") build cargo-test
+# Check that the tree is formatted, every generator still reproduces its
+# committed output, the ABI ledger is current and the ratchet holds, the
+# generators and the crate compile clean, and the safe-core tests pass.
+# fmt-check leads because it rewrites the tree. The ledger check precedes the
+# ratchet check because the ratchet snapshots the ledger's internal-export
+# count and cannot tell a stale ledger from a fresh one (both also run as
+# pre-commit hooks, see .gitconfig). lint-tools is here rather than in `lint`
+# alone because it is seconds, where the crate's clippy pass is minutes.
+minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (ratchet "--check") lint-tools build cargo-test

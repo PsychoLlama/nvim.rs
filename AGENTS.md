@@ -19,6 +19,12 @@
 - After reducing any of them, run `just refresh` and commit the refreshed `metrics/*.{json,jsonl}`.
 - Justified growth requires `just refresh --allow-growth`.
 
+# Generators
+
+- `tools/apigen` and `tools/ffigen` live outside the workspace; `just lint-tools` clippies them at `-D warnings` (baseline: zero) and `just fmt-check` already reaches them.
+- Never hand-edit generated output. `just apigen`/`just ffigen` rewrite it; the `--check` form of each fails on drift and runs in `just minimal-ci`.
+- `tools/ffigen/unit-cdefs.h` is a committed golden, not an input: the unit suite regenerates its own copy under `target/ffi`.
+
 # Testing
 
 Tests only run local, not in CI. Any failure, even out of scope, is your responsibility to fix.
