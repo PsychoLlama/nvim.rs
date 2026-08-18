@@ -321,7 +321,7 @@ unsafe fn process_xdl_diff_opts(
         &raw mut opts as *mut ::core::ffi::c_void,
         Some(
             KeyDict_xdl_diff_get_field
-                as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
+                as unsafe fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
         ),
         &raw mut err_param,
         ::core::ptr::null_mut::<Arena>(),

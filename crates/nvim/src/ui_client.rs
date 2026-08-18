@@ -767,10 +767,7 @@ unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
         let mut dict: KeyDict_highlight = core::mem::zeroed();
         if !api_dict_to_keydict(
             (&raw mut dict).cast::<c_void>(),
-            Some(
-                KeyDict_highlight_get_field
-                    as unsafe extern "C" fn(*const c_char, usize) -> *mut KeySetLink,
-            ),
+            Some(KeyDict_highlight_get_field as unsafe fn(*const c_char, usize) -> *mut KeySetLink),
             d,
             &raw mut err,
         ) {

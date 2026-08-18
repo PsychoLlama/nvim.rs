@@ -67,8 +67,7 @@ pub struct ExtmarkInfoArray {
     pub capacity: size_t,
     pub items: *mut MTPair,
 }
-pub type FieldHashfn =
-    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
+pub type FieldHashfn = Option<unsafe fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 pub type Float = ::core::ffi::c_double;
 pub type HLGroupID = Integer;
 #[derive(Copy, Clone)]

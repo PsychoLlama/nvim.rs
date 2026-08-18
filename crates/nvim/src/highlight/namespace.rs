@@ -253,7 +253,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
                 let mut dict = KeyDict_highlight::default();
                 let field = Some(
                     KeyDict_highlight_get_field
-                        as unsafe extern "C" fn(*const c_char, size_t) -> *mut KeySetLink,
+                        as unsafe fn(*const c_char, size_t) -> *mut KeySetLink,
                 );
                 let target = (&raw mut dict).cast();
                 if api_dict_to_keydict(target, field, ret.data.dict, &raw mut err) {

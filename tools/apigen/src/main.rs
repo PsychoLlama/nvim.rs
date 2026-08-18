@@ -1956,7 +1956,7 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     if k.keys.is_empty() {
         writeln!(
             out,
-            "pub unsafe extern \"C\" fn KeyDict_{name}_get_field(_str: *const c_char, _len: size_t) -> *mut KeySetLink {{"
+            "pub unsafe fn KeyDict_{name}_get_field(_str: *const c_char, _len: size_t) -> *mut KeySetLink {{"
         )
         .unwrap();
         writeln!(out, "    // The keyset has no keys, so nothing matches.").unwrap();
@@ -1967,7 +1967,7 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     }
     writeln!(
         out,
-        "pub unsafe extern \"C\" fn KeyDict_{name}_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {{"
+        "pub unsafe fn KeyDict_{name}_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {{"
     )
     .unwrap();
     writeln!(

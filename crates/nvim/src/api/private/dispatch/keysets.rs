@@ -23,7 +23,7 @@ pub static _shada_buflist_item_table: GlobalCell<[KeySetLink; 4]> = GlobalCell::
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict__shada_buflist_item_get_field(
+pub unsafe fn KeyDict__shada_buflist_item_get_field(
     str: *const c_char,
     len: size_t,
 ) -> *mut KeySetLink {
@@ -53,10 +53,7 @@ pub static _shada_mark_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict__shada_mark_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict__shada_mark_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"c" => 0,
@@ -85,7 +82,7 @@ pub static _shada_register_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new(
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict__shada_register_get_field(
+pub unsafe fn KeyDict__shada_register_get_field(
     str: *const c_char,
     len: size_t,
 ) -> *mut KeySetLink {
@@ -123,7 +120,7 @@ pub static _shada_search_pat_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::n
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict__shada_search_pat_get_field(
+pub unsafe fn KeyDict__shada_search_pat_get_field(
     str: *const c_char,
     len: size_t,
 ) -> *mut KeySetLink {
@@ -168,10 +165,7 @@ pub static buf_attach_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_buf_attach_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_buf_attach_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"preview" => 0,
@@ -200,10 +194,7 @@ pub static buf_delete_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_buf_delete_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_buf_delete_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"force" => 0,
@@ -230,10 +221,7 @@ pub static clear_autocmds_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_clear_autocmds_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_clear_autocmds_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"buf" => 0,
@@ -269,7 +257,7 @@ pub static cmd_table: GlobalCell<[KeySetLink; 12]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_cmd_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn KeyDict_cmd_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"cmd" => 0,
@@ -302,10 +290,7 @@ pub static cmd_magic_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_cmd_magic_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_cmd_magic_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"bar" => 0,
@@ -352,10 +337,7 @@ pub static cmd_mods_table: GlobalCell<[KeySetLink; 21]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_cmd_mods_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_cmd_mods_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"tab" => 0,
@@ -397,7 +379,7 @@ pub static cmd_mods_filter_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new(
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_cmd_mods_filter_get_field(
+pub unsafe fn KeyDict_cmd_mods_filter_get_field(
     str: *const c_char,
     len: size_t,
 ) -> *mut KeySetLink {
@@ -420,10 +402,7 @@ pub static cmd_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_cmd_opts_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_cmd_opts_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"output" => 0,
@@ -442,10 +421,7 @@ pub static complete_set_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_complete_set_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_complete_set_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"info" => 0,
@@ -464,10 +440,7 @@ pub static context_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_context_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_context_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"types" => 0,
@@ -486,10 +459,7 @@ pub static create_augroup_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_create_augroup_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_create_augroup_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"clear" => 0,
@@ -519,10 +489,7 @@ pub static create_autocmd_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new(
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_create_autocmd_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_create_autocmd_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"buf" => 0,
@@ -561,10 +528,7 @@ pub static echo_opts_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_echo_opts_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_echo_opts_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"id" => 0,
@@ -592,10 +556,7 @@ pub static empty_table: GlobalCell<[KeySetLink; 1]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_empty_get_field(
-    _str: *const c_char,
-    _len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_empty_get_field(_str: *const c_char, _len: size_t) -> *mut KeySetLink {
     // The keyset has no keys, so nothing matches.
     ptr::null_mut()
 }
@@ -623,7 +584,7 @@ pub static eval_statusline_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new(
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_eval_statusline_get_field(
+pub unsafe fn KeyDict_eval_statusline_get_field(
     str: *const c_char,
     len: size_t,
 ) -> *mut KeySetLink {
@@ -659,10 +620,7 @@ pub static exec_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_exec_autocmds_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_exec_autocmds_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"buf" => 0,
@@ -686,10 +644,7 @@ pub static exec_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_exec_opts_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_exec_opts_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"output" => 0,
@@ -716,10 +671,7 @@ pub static get_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_get_autocmds_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_get_autocmds_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"id" => 0,
@@ -746,10 +698,7 @@ pub static get_commands_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_get_commands_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_get_commands_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"builtin" => 0,
@@ -772,10 +721,7 @@ pub static get_extmark_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_get_extmark_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_get_extmark_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"details" => 0,
@@ -802,10 +748,7 @@ pub static get_extmarks_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_get_extmarks_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_get_extmarks_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"type" => 0,
@@ -834,10 +777,7 @@ pub static get_highlight_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_get_highlight_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_get_highlight_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"id" => 0,
@@ -859,10 +799,7 @@ pub static get_ns_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_get_ns_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_get_ns_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"winid" => 0,
@@ -923,10 +860,7 @@ pub static highlight_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe extern "C" fn KeyDict_highlight_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *mut KeySetLink {
+pub unsafe fn KeyDict_highlight_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"bg" => 0,
@@ -969,3 +903,84 @@ pub unsafe extern "C" fn KeyDict_highlight_get_field(
     let table: *mut KeySetLink = highlight_table.ptr().cast();
     table.wrapping_add(index)
 }
+
+pub static highlight_cterm_table: GlobalCell<[KeySetLink; 17]> = GlobalCell::new({
+    type K = KeyDict_highlight_cterm;
+    [
+        key(c"dim", offset_of!(K, dim), TAG_BOOLEAN, -1),
+        key(c"bold", offset_of!(K, bold), TAG_BOOLEAN, -1),
+        key(c"blink", offset_of!(K, blink), TAG_BOOLEAN, -1),
+        key(c"italic", offset_of!(K, italic), TAG_BOOLEAN, -1),
+        key(c"altfont", offset_of!(K, altfont), TAG_BOOLEAN, -1),
+        key(c"conceal", offset_of!(K, conceal), TAG_BOOLEAN, -1),
+        key(c"reverse", offset_of!(K, reverse), TAG_BOOLEAN, -1),
+        key(c"overline", offset_of!(K, overline), TAG_BOOLEAN, -1),
+        key(c"standout", offset_of!(K, standout), TAG_BOOLEAN, -1),
+        key(c"nocombine", offset_of!(K, nocombine), TAG_BOOLEAN, -1),
+        key(c"undercurl", offset_of!(K, undercurl), TAG_BOOLEAN, -1),
+        key(c"underline", offset_of!(K, underline), TAG_BOOLEAN, -1),
+        key(c"underdashed", offset_of!(K, underdashed), TAG_BOOLEAN, -1),
+        key(c"underdotted", offset_of!(K, underdotted), TAG_BOOLEAN, -1),
+        key(c"underdouble", offset_of!(K, underdouble), TAG_BOOLEAN, -1),
+        key(
+            c"strikethrough",
+            offset_of!(K, strikethrough),
+            TAG_BOOLEAN,
+            -1,
+        ),
+        END,
+    ]
+});
+
+/// Look a key up in [`highlight_cterm_table`].
+///
+/// # Safety
+/// `str` points at `len` readable bytes.
+pub unsafe fn KeyDict_highlight_cterm_get_field(
+    str: *const c_char,
+    len: size_t,
+) -> *mut KeySetLink {
+    // SAFETY: the caller passes a key of `len` bytes.
+    let index: usize = match unsafe { key_bytes(str, len) } {
+        b"dim" => 0,
+        b"bold" => 1,
+        b"blink" => 2,
+        b"italic" => 3,
+        b"altfont" => 4,
+        b"conceal" => 5,
+        b"reverse" => 6,
+        b"overline" => 7,
+        b"standout" => 8,
+        b"nocombine" => 9,
+        b"undercurl" => 10,
+        b"underline" => 11,
+        b"underdashed" => 12,
+        b"underdotted" => 13,
+        b"underdouble" => 14,
+        b"strikethrough" => 15,
+        _ => return ptr::null_mut(),
+    };
+    let table: *mut KeySetLink = highlight_cterm_table.ptr().cast();
+    table.wrapping_add(index)
+}
+
+pub static keymap_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new({
+    type K = KeyDict_keymap;
+    [
+        key(c"desc", offset_of!(K, desc), TAG_STRING, 1),
+        key(c"expr", offset_of!(K, expr), TAG_BOOLEAN, 2),
+        key(c"script", offset_of!(K, script), TAG_BOOLEAN, 3),
+        key(c"silent", offset_of!(K, silent), TAG_BOOLEAN, 4),
+        key(c"unique", offset_of!(K, unique), TAG_BOOLEAN, 5),
+        key(c"nowait", offset_of!(K, nowait), TAG_BOOLEAN, 6),
+        key(c"noremap", offset_of!(K, noremap), TAG_BOOLEAN, 7),
+        key(c"callback", offset_of!(K, callback), TAG_LUAREF, 8),
+        key(
+            c"replace_keycodes",
+            offset_of!(K, replace_keycodes),
+            TAG_BOOLEAN,
+            9,
+        ),
+        END,
+    ]
+});

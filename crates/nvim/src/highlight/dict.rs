@@ -491,7 +491,7 @@ pub unsafe fn dict2hlattrs(
             let mut cterm = KeyDict_highlight_cterm::default();
             let field = Some(
                 KeyDict_highlight_cterm_get_field
-                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
+                    as unsafe fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             );
             let target = (&raw mut cterm).cast();
             if !api_dict_to_keydict(target, field, dict.cterm, err) {
