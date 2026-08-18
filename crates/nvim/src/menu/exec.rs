@@ -325,8 +325,7 @@ fn script_id() -> c_int {
 }
 
 fn real_state() -> c_int {
-    // SAFETY: reads mode globals only.
-    unsafe { get_real_state() }
+    get_real_state()
 }
 
 fn check_cursor_now() {

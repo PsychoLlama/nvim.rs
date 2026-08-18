@@ -160,7 +160,7 @@ pub unsafe fn virtual_active(mut wp: *mut win_T) -> bool {
         || cur_ve_flags & kOptVeFlagInsert as ::core::ffi::c_int as ::core::ffi::c_uint != 0
             && State.get() & MODE_INSERT != 0;
 }
-pub unsafe fn get_real_state() -> ::core::ffi::c_int {
+pub fn get_real_state() -> ::core::ffi::c_int {
     if State.get() & MODE_NORMAL != 0 {
         if VIsual_active.get() {
             if VIsual_select.get() {
@@ -405,7 +405,7 @@ pub unsafe fn state_no_longer_safe(mut reason: *const ::core::ffi::c_char) {
     }
     was_safe.set(false_0 != 0);
 }
-pub unsafe fn get_was_safe_state() -> bool {
+pub fn get_was_safe_state() -> bool {
     return was_safe.get();
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

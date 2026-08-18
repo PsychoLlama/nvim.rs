@@ -155,8 +155,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     }
 
     if opts.has(kOptSsopFlagTabpages) {
-        // SAFETY: `curtab` is live.
-        let index = unsafe { tabpage_index(curtab.get()) };
+        let index = tabpage_index(curtab.get());
         if !out.write(format_args!("tabnext {index}\n")) {
             return false;
         }

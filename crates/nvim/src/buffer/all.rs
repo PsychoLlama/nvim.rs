@@ -104,8 +104,7 @@ fn move_win_after(mut win: Win, mut after: Win) {
 }
 
 fn split_below_room() -> c_int {
-    // SAFETY: splits the current window; the flags are upstream's.
-    unsafe { win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int) }
+    win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int)
 }
 
 fn is_locked(mut win: Win) -> bool {
@@ -128,18 +127,15 @@ fn is_aucmd(mut win: Win) -> bool {
 }
 
 fn tab_index() -> c_int {
-    // SAFETY: null asks for the current tab page's index.
-    unsafe { tabpage_index(ptr::null_mut()) }
+    tabpage_index(ptr::null_mut())
 }
 
 fn tabline_rows() -> c_int {
-    // SAFETY: reads the 'showtabline' globals.
-    unsafe { tabline_height() }
+    tabline_height()
 }
 
 fn global_stl_rows() -> c_int {
-    // SAFETY: reads the 'laststatus' globals.
-    unsafe { global_stl_height() }
+    global_stl_height()
 }
 
 fn buf_changed(mut buf: Buf) -> bool {

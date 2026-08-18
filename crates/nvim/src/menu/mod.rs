@@ -726,7 +726,7 @@ pub(crate) fn get_menu_mode() -> c_int {
 }
 
 /// [`get_menu_mode`] as a `MENU_*_MODE` bit, or 0 for no mode at all.
-pub unsafe fn get_menu_mode_flag() -> c_int {
+pub fn get_menu_mode_flag() -> c_int {
     let mode = get_menu_mode();
     if mode == MENU_INDEX_INVALID {
         return 0;

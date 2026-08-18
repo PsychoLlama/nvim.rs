@@ -711,18 +711,12 @@ pub unsafe fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
 }
 
 /// Enumerate the field names of 'fillchars', for completion.
-///
-/// # Safety
-/// Called by `ExpandGeneric`.
-pub unsafe fn get_fillchars_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_fillchars_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     field_name(&FCS_TAB, idx)
 }
 
 /// Enumerate the field names of 'listchars', for completion.
-///
-/// # Safety
-/// Called by `ExpandGeneric`.
-pub unsafe fn get_listchars_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_listchars_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     field_name(&LCS_TAB, idx)
 }
 

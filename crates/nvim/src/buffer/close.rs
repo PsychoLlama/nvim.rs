@@ -660,10 +660,7 @@ pub unsafe fn buf_clear_file(buf: *mut buf_T) {
 }
 
 /// Clear the current buffer's contents.
-///
-/// # Safety
-/// `curbuf` must be set, which it is from startup to exit.
-pub unsafe fn buf_clear() {
+pub fn buf_clear() {
     let buf = cur_buf();
     let line_count = buf.line_count();
     free_extmarks(buf); // delete any extmarks

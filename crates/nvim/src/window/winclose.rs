@@ -411,7 +411,7 @@ fn fire_winclosed(mut win: Win) {
     RECURSIVE.set(false);
 }
 
-pub unsafe fn trigger_tabclosedpre(tp: *mut tabpage_T) {
+pub fn trigger_tabclosedpre(tp: *mut tabpage_T) {
     tabclosedpre(tp);
 }
 

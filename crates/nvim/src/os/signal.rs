@@ -221,7 +221,7 @@ fn deadly_signal(signum: c_int) -> ! {
 }
 
 /// The `signal_cb` libuv's watchers are started with: unpack and hand over.
-unsafe fn on_signal(_watcher: *mut SignalWatcher, signum: c_int, _data: *mut c_void) {
+fn on_signal(_watcher: *mut SignalWatcher, signum: c_int, _data: *mut c_void) {
     handle_signal(signum);
 }
 

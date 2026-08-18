@@ -207,7 +207,7 @@ fn in_buffer<R>(mut buf: Buf, f: impl FnOnce() -> R) -> R {
 // Small answers about the buffer list
 
 /// Calculate the percentage that `part` is of the `whole`.
-pub unsafe fn calc_percentage(part: int64_t, whole: int64_t) -> c_int {
+pub fn calc_percentage(part: int64_t, whole: int64_t) -> c_int {
     // With 32 bit longs and more than 21,474,836 lines multiplying by 100
     // causes an overflow, thus for large numbers divide instead.
     if part > 1000000 {
@@ -218,7 +218,7 @@ pub unsafe fn calc_percentage(part: int64_t, whole: int64_t) -> c_int {
 }
 
 /// The highest buffer number handed out so far.
-pub unsafe fn get_highest_fnum() -> c_int {
+pub fn get_highest_fnum() -> c_int {
     top_file_num.get() - 1
 }
 
@@ -457,8 +457,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     };
     // Go to the buffer that was opened, make sure it is in a window.
     in_buffer(old, || {
-        // SAFETY: `aucmd_prepbuf` has made a buffer current.
-        unsafe { do_modelines(0) };
+        do_modelines(0);
         cur_buf().b_flags &= !(BF_CHECK_RO | BF_NEVERLOADED);
 
         if flags & READ_NOWINENTER as c_int == 0 {

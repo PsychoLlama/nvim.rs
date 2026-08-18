@@ -289,12 +289,6 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
 
 /// Clamp the screen size to something the editor can lay out and index.
 pub unsafe fn check_screensize() {
-    // SAFETY: `min_rows_for_all_tabpages` walks the window layout on the main
-    // thread.
-    unsafe {
-        // Room for one window and the command line at the low end; a bound on
-        // `Rows * Columns` at the high end.
-        Rows.set(Rows.get().max(min_rows_for_all_tabpages()).min(MAX_ROWS));
-        Columns.set(Columns.get().max(MIN_COLUMNS as c_int).min(MAX_COLUMNS));
-    }
+    Rows.set(Rows.get().max(min_rows_for_all_tabpages()).min(MAX_ROWS));
+    Columns.set(Columns.get().max(MIN_COLUMNS as c_int).min(MAX_COLUMNS));
 }

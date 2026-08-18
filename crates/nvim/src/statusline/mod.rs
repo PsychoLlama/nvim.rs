@@ -654,8 +654,7 @@ pub(crate) fn combine_attr(under: c_int, over: c_int) -> c_int {
 /// Whether `'laststatus'` puts one status line at the bottom of the screen
 /// instead of one per window.
 pub(crate) fn stl_is_global() -> bool {
-    // SAFETY: reads the option and the window layout.
-    unsafe { global_stl_height() > 0 }
+    global_stl_height() > 0
 }
 
 /// The window a drawing entry point was handed, or `None` for the tab line.

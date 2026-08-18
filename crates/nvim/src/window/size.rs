@@ -26,7 +26,7 @@ use crate::types::{OptInt, frame_T, kFloatRelativeWindow, optset_T, win_T};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{Frame, Win, frames, frames_back};
 
-pub unsafe fn win_comp_pos() -> c_int {
+pub fn win_comp_pos() -> c_int {
     comp_positions()
 }
 
@@ -80,7 +80,7 @@ pub(crate) fn comp_pos(topfrp: Frame, row: &mut c_int, col: &mut c_int) {
     }
 }
 
-pub unsafe fn win_setheight(height: c_int) {
+pub fn win_setheight(height: c_int) {
     setheight_win(height, cur_win());
 }
 
@@ -252,7 +252,7 @@ fn set_frame_height(curfrp: Frame, height: c_int) {
     }
 }
 
-pub unsafe fn win_setwidth(width: c_int) {
+pub fn win_setwidth(width: c_int) {
     setwidth_win(width, cur_win());
 }
 

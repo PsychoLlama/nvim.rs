@@ -468,11 +468,7 @@ pub(crate) unsafe fn get_eventignore_name(xp: *mut expand_T, idx: c_int) -> *mut
     if !subtract && idx == 0 {
         return c"all".as_ptr().cast_mut();
     }
-    // SAFETY: the expansion context; `get_event_name_no_group` bounds its
-    // own index and answers null past the end.
-    let name = unsafe {
-        get_event_name_no_group(xp, idx - 1 + c_int::from(subtract), WINDOW_EVENTS.get())
-    };
+    let name = get_event_name_no_group(xp, idx - 1 + c_int::from(subtract), WINDOW_EVENTS.get());
     if name.is_null() {
         return ptr::null_mut();
     }

@@ -193,8 +193,7 @@ fn set_mouse_topline(win: Win) {
 
 /// The rows a global status line takes, zero when each window has its own.
 fn global_stl_height() -> c_int {
-    // SAFETY: reads the 'laststatus' option and the window list.
-    unsafe { window::global_stl_height() }
+    window::global_stl_height()
 }
 
 /// The leftmost and rightmost virtual column two positions span.
@@ -437,8 +436,7 @@ fn move_tab_to_mouse(defs: ClickDefs) {
     let tabnr = defs.at(mouse_col.get()).tabnr;
     // The index is read even where the C would not ask for it, which is a
     // pure walk of the tab page list.
-    // SAFETY: the tab page list is live from startup to exit.
-    let current = unsafe { tabpage_index(curtab.get()) };
+    let current = tabpage_index(curtab.get());
     let target = if tabnr <= 0 {
         9999
     } else if tabnr < current {
@@ -446,22 +444,18 @@ fn move_tab_to_mouse(defs: ClickDefs) {
     } else {
         tabnr
     };
-    // SAFETY: as above.
-    unsafe { tabpage_move(target) };
+    tabpage_move(target);
 }
 
 /// Close tab page `c1`, or the current one when it is 999.
 fn mouse_tab_close(c1: c_int) {
-    // SAFETY: the tab page globals and list are live from startup to exit.
-    let tp: *mut tabpage_T = unsafe {
-        if c1 == 999 {
-            curtab.get()
-        } else {
-            find_tabpage(c1)
-        }
+    let tp: *mut tabpage_T = if c1 == 999 {
+        curtab.get()
+    } else {
+        find_tabpage(c1)
     };
     if tp == curtab.get() {
-        // SAFETY: as above.
+        // SAFETY: the tab page globals and list are live from startup to exit.
         if unsafe { !(*first_tabpage.get()).tp_next.is_null() } {
             // SAFETY: as above.
             unsafe { tabpage_close(false as c_int) };

@@ -126,8 +126,7 @@ fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
             win.w_s = &raw mut buf.b_s;
             buf.b_nwindows = 1;
             win.w_alist = global_alist.ptr();
-            // SAFETY: `curwin` and `curbuf` have just been set.
-            unsafe { curwin_init() };
+            curwin_init();
         }
         Some(oldwin) => {
             // Make the new window a copy of the old one.
@@ -160,7 +159,7 @@ pub(crate) fn attach_frame(wp: Win) -> Frame {
     frp
 }
 
-pub unsafe fn win_init_size() {
+pub fn win_init_size() {
     let mut win = first_window();
     let mut top = current_topframe();
     let rows = (Rows.get() as OptInt
@@ -331,8 +330,7 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     unsafe { qf_free_all(wp.raw()) };
     free(wp.w_p_cc_cols);
     free_grid(wp, false);
-    // SAFETY: only compares the pointer against the window lists.
-    if unsafe { win_valid_any_tab(wp.raw()) } {
+    if win_valid_any_tab(wp.raw()) {
         remove(wp, tp);
     }
     if autocmd_busy.get() {

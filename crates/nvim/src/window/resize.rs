@@ -136,7 +136,7 @@ pub(crate) fn save_fraction(wp: Win) {
     }
 }
 
-pub unsafe fn win_fix_scroll(resize: bool) {
+pub fn win_fix_scroll(resize: bool) {
     fix_scroll(resize);
 }
 
@@ -181,8 +181,7 @@ pub(crate) fn fix_scroll(resize: bool) {
         wp.w_prev_winrow = wp.w_winrow;
     }
     skip_update_topline.set(false);
-    // SAFETY: reads the editor's mode.
-    let state = unsafe { get_real_state() };
+    let state = get_real_state();
     if state & (MODE_NORMAL | MODE_CMDLINE | MODE_TERMINAL) == 0 {
         fix_cursor(false);
     } else if resize {
@@ -190,7 +189,7 @@ pub(crate) fn fix_scroll(resize: bool) {
     }
 }
 
-pub(crate) unsafe fn win_fix_cursor(normal: bool) {
+pub(crate) fn win_fix_cursor(normal: bool) {
     fix_cursor(normal);
 }
 
@@ -546,7 +545,7 @@ fn add_height(frp: Frame, n: c_int) {
     }
 }
 
-pub unsafe fn last_status(morewin: bool) {
+pub fn last_status(morewin: bool) {
     update_last_status(morewin);
 }
 
@@ -560,8 +559,7 @@ pub(crate) fn update_last_status(morewin: bool) {
         last_stl_rows(morewin) > 0,
         global_stl_rows() > 0,
     );
-    // SAFETY: reparents the floats anchored to the last status line.
-    unsafe { win_float_anchor_laststatus() };
+    win_float_anchor_laststatus();
 }
 
 pub unsafe fn win_remove_status_line(wp: *mut win_T, add_hsep: bool) {
@@ -710,7 +708,7 @@ fn winbar_win(wp: Win, make_room: bool, valid_cursor: bool) -> c_int {
     OK
 }
 
-pub unsafe fn set_winbar(make_room: bool) {
+pub fn set_winbar(make_room: bool) {
     for wp in windows() {
         if winbar_win(wp, make_room, true) == FAIL {
             break;
@@ -718,7 +716,7 @@ pub unsafe fn set_winbar(make_room: bool) {
     }
 }
 
-pub unsafe fn tabline_height() -> c_int {
+pub fn tabline_height() -> c_int {
     tabline_rows()
 }
 
@@ -737,7 +735,7 @@ pub(crate) fn tabline_rows() -> c_int {
     }
 }
 
-pub unsafe fn global_winbar_height() -> c_int {
+pub fn global_winbar_height() -> c_int {
     global_winbar_rows()
 }
 
@@ -747,7 +745,7 @@ pub(crate) fn global_winbar_rows() -> c_int {
     (unsafe { *p_wbr.get() } as c_int != NUL) as c_int
 }
 
-pub unsafe fn global_stl_height() -> c_int {
+pub fn global_stl_height() -> c_int {
     global_stl_rows()
 }
 
@@ -760,7 +758,7 @@ pub(crate) fn global_stl_rows() -> c_int {
     }
 }
 
-pub unsafe fn last_stl_height(morewin: bool) -> c_int {
+pub fn last_stl_height(morewin: bool) -> c_int {
     last_stl_rows(morewin)
 }
 
@@ -808,7 +806,7 @@ fn cmdheight_of(tp: TabPage) -> OptInt {
     }
 }
 
-pub unsafe fn min_rows_for_all_tabpages() -> c_int {
+pub fn min_rows_for_all_tabpages() -> c_int {
     min_rows_all_tabpages()
 }
 

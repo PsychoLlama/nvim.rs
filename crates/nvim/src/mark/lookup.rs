@@ -399,7 +399,7 @@ pub(super) unsafe fn switch_to_mark_buf(
 }
 
 #[inline]
-pub(super) unsafe fn mark_global_index(name: c_char) -> c_int {
+pub(super) fn mark_global_index(name: c_char) -> c_int {
     return if name as c_uint >= 'A' as c_uint && name as c_uint <= 'Z' as c_uint {
         name as c_int - 'A' as c_int
     } else if ascii_isdigit(name as c_int) {

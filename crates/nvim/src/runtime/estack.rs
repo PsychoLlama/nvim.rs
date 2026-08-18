@@ -81,7 +81,7 @@ pub unsafe fn estack_init() {
 /// Add an item to the execution stack.
 ///
 /// Returns the new entry, so the caller can fill in its `es_info`.
-pub unsafe fn estack_push(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> *mut estack_T {
+pub fn estack_push(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> *mut estack_T {
     push_entry(entry_for(es_type, name, lnum))
 }
 
@@ -104,7 +104,7 @@ pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
 }
 
 /// Take an item off of the execution stack. The bottom frame stays.
-pub unsafe fn estack_pop() {
+pub fn estack_pop() {
     exestack.with_mut(|ga| {
         if ga.ga_len > 1 {
             ga.ga_len -= 1;

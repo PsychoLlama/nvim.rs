@@ -45,8 +45,7 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
 
     // add status line now, otherwise first window will be too big
     if count > 1 {
-        // SAFETY: reads the frame tree.
-        unsafe { last_status(true) };
+        last_status(true);
     }
 
     // Don't execute autocommands while creating the windows: `curwin` and
@@ -70,8 +69,7 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
                 WSP_ABOVE as c_int,
             )
         };
-        // SAFETY: splits the current window, which is live.
-        if unsafe { win_split(size, flags) } == FAIL {
+        if win_split(size, flags) == FAIL {
             break;
         }
         todo -= 1;
@@ -82,7 +80,7 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
     count - todo
 }
 
-pub(crate) unsafe fn win_exchange(prenum: c_int) {
+pub(crate) fn win_exchange(prenum: c_int) {
     exchange(prenum);
 }
 
@@ -176,7 +174,7 @@ pub(crate) fn exchange(prenum: c_int) {
     wp.redraw_later(UPD_NOT_VALID);
 }
 
-pub(crate) unsafe fn win_rotate(upwards: bool, count: c_int) {
+pub(crate) fn win_rotate(upwards: bool, count: c_int) {
     rotate(upwards, count);
 }
 
@@ -284,8 +282,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
         unsafe { winframe_remove(wp.raw(), d, ptr::null_mut(), alt) };
         debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
         remove(wp, None);
-        // SAFETY: reads the frame tree.
-        unsafe { last_status(false) };
+        last_status(false);
         comp_positions();
     }
 

@@ -67,7 +67,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(
     }
 }
 
-unsafe fn query_err_to_string(mut error_type: TSQueryError) -> *const ::core::ffi::c_char {
+fn query_err_to_string(mut error_type: TSQueryError) -> *const ::core::ffi::c_char {
     match error_type as ::core::ffi::c_uint {
         1 => return c"Invalid syntax:\n".as_ptr(),
         2 => return c"Invalid node type ".as_ptr(),

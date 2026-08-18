@@ -268,12 +268,10 @@ fn free_window(win: Win, tp: Option<TabPage>) {
     unsafe { win_free(win.raw(), raw_tab(tp)) };
 }
 fn update_last_status(morewin: bool) {
-    // SAFETY: the window list is live from startup to exit.
-    unsafe { last_status(morewin) };
+    last_status(morewin);
 }
 fn recompute_positions() {
-    // SAFETY: the window list is live from startup to exit.
-    unsafe { win_comp_pos() };
+    win_comp_pos();
 }
 fn remove_status_line(win: Win) {
     // SAFETY: a live window.
@@ -780,7 +778,7 @@ pub unsafe fn win_check_anchored_floats(win: *mut win_T) {
     }
 }
 
-pub unsafe fn win_float_update_statusline() {
+pub fn win_float_update_statusline() {
     for wp in floats() {
         let has_status = wp.w_status_height > 0;
         let should_show = opt_is_set(wp.w_onebuf_opt.wo_stl) && show_statusline();
@@ -790,7 +788,7 @@ pub unsafe fn win_float_update_statusline() {
     }
 }
 
-pub unsafe fn win_float_anchor_laststatus() {
+pub fn win_float_anchor_laststatus() {
     for mut win in windows_in_tab(current_tab()) {
         if win.w_config.relative == kFloatRelativeLaststatus {
             win.w_pos_changed = true;
@@ -798,13 +796,13 @@ pub unsafe fn win_float_anchor_laststatus() {
     }
 }
 
-pub unsafe fn win_reconfig_floats() {
+pub fn win_reconfig_floats() {
     for wp in floats() {
         config_float(wp, wp.w_config);
     }
 }
 
-pub unsafe fn win_float_find_preview() -> *mut win_T {
+pub fn win_float_find_preview() -> *mut win_T {
     floats()
         .find(|wp| wp.w_float_is_info)
         .map_or(ptr::null_mut(), Win::raw)
@@ -855,7 +853,7 @@ fn handle_error_and_cleanup(win: Option<Win>, err: &mut Error) -> *mut win_T {
 
 /// Create a floating preview window. `enter` makes it current; `new_buf`
 /// gives it a scratch buffer of its own.
-pub unsafe fn win_float_create_preview(enter: bool, new_buf: bool) -> *mut win_T {
+pub fn win_float_create_preview(enter: bool, new_buf: bool) -> *mut win_T {
     let mut config = WIN_CONFIG_INIT;
     let cur = current_win();
     config.col = f64::from(cur.w_wcol);

@@ -854,11 +854,10 @@ pub unsafe fn getfile(
     lnum: linenr_T,
     forceit: bool,
 ) -> c_int {
-    // SAFETY: main thread.
-    if !unsafe { check_can_set_curbuf_forceit(forceit as c_int) } {
+    if !check_can_set_curbuf_forceit(forceit as c_int) {
         return GETFILE_ERROR;
     }
-    // SAFETY: as above.
+    // SAFETY: main thread.
     if unsafe { text_locked() } || unsafe { curbuf_locked() } {
         return GETFILE_ERROR;
     }
@@ -901,8 +900,7 @@ pub unsafe fn getfile(
         if unsafe { curbufIsChanged() } {
             no_wait_return.set(no_wait_return.get() - 1);
             // File has been changed.
-            // SAFETY: message state.
-            unsafe { no_write_message() };
+            no_write_message();
             return GETFILE_NOT_WRITTEN;
         }
     }

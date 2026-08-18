@@ -49,7 +49,7 @@ unsafe fn syntime_clear() {
 }
 
 /// The arguments `:syntime` takes, for command-line completion.
-pub unsafe fn get_syntime_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_syntime_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     const ARGS: [&CStr; 4] = [c"on", c"off", c"clear", c"report"];
     match ARGS.get(idx as usize) {
         Some(s) => s.as_ptr().cast_mut(),

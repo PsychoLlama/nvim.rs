@@ -230,13 +230,10 @@ impl Env {
 
     /// `%p`: how far through the buffer the cursor is, as a percentage.
     pub fn percentage(&self) -> c_int {
-        // SAFETY: two plain integers.
-        unsafe {
-            calc_percentage(
-                self.win.w_cursor.lnum as int64_t,
-                self.buf.b_ml.ml_line_count as int64_t,
-            )
-        }
+        calc_percentage(
+            self.win.w_cursor.lnum as int64_t,
+            self.buf.b_ml.ml_line_count as int64_t,
+        )
     }
 
     /// `%P`: the same, but as `Top`/`Bot`/`All` when it has a name.

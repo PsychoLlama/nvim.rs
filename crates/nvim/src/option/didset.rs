@@ -189,8 +189,7 @@ fn cstr_optval(value: &'static CStr) -> OptVal {
 
 /// 'autochdir': follow the current file's directory from now on.
 pub unsafe fn did_set_autochdir(_args: *mut optset_T) -> *const c_char {
-    // SAFETY: `curbuf` is live.
-    unsafe { do_autochdir() };
+    do_autochdir();
     ptr::null()
 }
 
@@ -587,8 +586,7 @@ pub unsafe fn did_set_shiftwidth_tabstop(args: *mut optset_T) -> *const c_char {
 
 /// 'showtabline': the tab line takes a screen row from the windows.
 pub unsafe fn did_set_showtabline(_args: *mut optset_T) -> *const c_char {
-    // SAFETY: the window layout is the editor's own.
-    unsafe { win_new_screen_rows() };
+    win_new_screen_rows();
     ptr::null()
 }
 

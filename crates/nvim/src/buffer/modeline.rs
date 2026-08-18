@@ -73,13 +73,11 @@ fn set_options(text: &mut [u8], off: usize, flags: c_int) -> c_int {
 }
 
 fn push_estack(lnum: linenr_T) {
-    // SAFETY: a NUL-terminated name for the "modelines" script level.
-    unsafe { estack_push(ETYPE_MODELINE, c"modelines".as_ptr().cast_mut(), lnum) };
+    estack_push(ETYPE_MODELINE, c"modelines".as_ptr().cast_mut(), lnum);
 }
 
 fn pop_estack() {
-    // SAFETY: matches the `push_estack` above.
-    unsafe { estack_pop() };
+    estack_pop();
 }
 
 /// The first byte at or after `off` that is not a space or tab --
@@ -105,7 +103,7 @@ fn at(line: &[u8], i: usize) -> u8 {
 /// `'modelines'` lines of it.
 ///
 /// `flags` is `OPT_WINONLY` or `OPT_NOWIN`.
-pub unsafe fn do_modelines(flags: c_int) {
+pub fn do_modelines(flags: c_int) {
     static entered: GlobalCell<c_int> = GlobalCell::new(0);
 
     if current_buf().b_p_ml == 0 {

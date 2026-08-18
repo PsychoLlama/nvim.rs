@@ -68,7 +68,7 @@ pub unsafe fn event_name2nr_str(str: String_0) -> event_T {
 ///
 /// Upstream also asks `event >= 0`, which `event_T` being unsigned makes
 /// vacuous; the answers are the same either way, so the test stays gone.
-pub unsafe fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char {
+pub fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char {
     let name = match EVENT_NAMES.get(event as usize) {
         Some(row) => row.name,
         None => c"Unknown",
@@ -249,7 +249,7 @@ pub unsafe fn expand_get_event_name(
 
 /// Completion source for an 'eventignore' item: every event name, or --
 /// for 'eventignorewin' (`win`) -- only the window-local ones.
-pub unsafe fn get_event_name_no_group(
+pub fn get_event_name_no_group(
     _xp: *mut expand_T,
     idx: ::core::ffi::c_int,
     win: bool,

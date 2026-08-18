@@ -349,8 +349,7 @@ pub unsafe fn add_win_cmd_modifiers(
         let mut text = Scratch::new();
         // For compatibility, a tab number that is `:tab`'s own default is
         // left off.
-        // SAFETY: caller contract.
-        if unsafe { tabnr == tabpage_index(curtab.get()) } {
+        if tabnr == tabpage_index(curtab.get()) {
             add(c"tab".as_ptr(), true);
         } else {
             let _ = write!(text, "{tabnr}tab");

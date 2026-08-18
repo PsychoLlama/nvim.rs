@@ -430,8 +430,7 @@ pub unsafe fn terminal_enter() -> bool {
         // registered with it.
         unsafe { close_cb.expect("non-null function pointer")(data) };
         if buf_handle != 0 {
-            // SAFETY: wipes a buffer the editor still knows by handle.
-            unsafe { do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, 1) };
+            do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, 1);
         }
     }
     s.got_bsl_o

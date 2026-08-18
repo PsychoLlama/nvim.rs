@@ -323,8 +323,7 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
     } else {
         // Make sure the cursor position is valid, either by moving the cursor
         // or by scrolling the text.
-        // SAFETY: reads the editor's mode.
-        let state = unsafe { get_real_state() };
+        let state = get_real_state();
         fix_cursor(state & (MODE_NORMAL | MODE_CMDLINE | MODE_TERMINAL) != 0);
     }
     fix_current_dir();
@@ -374,8 +373,7 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
 
     setmouse(); // in case jumped to/from help buffer
     // Change directories when the 'acd' option is set.
-    // SAFETY: reads the current buffer's file name.
-    unsafe { do_autochdir() };
+    do_autochdir();
 }
 
 /// Whether `'splitkeep'` is `"cursor"`, which keeps the cursor line put and
@@ -391,7 +389,7 @@ fn current_prevwin() -> Option<Win> {
     unsafe { Win::from_raw(prevwin.get()) }
 }
 
-pub unsafe fn win_fix_current_dir() {
+pub fn win_fix_current_dir() {
     fix_current_dir();
 }
 

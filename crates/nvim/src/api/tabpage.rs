@@ -158,9 +158,7 @@ pub fn nvim_tabpage_get_win(tabpage: Tabpage) -> Result<Window, Error> {
     // SAFETY: `err` is this frame's own, and the lookup dereferences nothing
     // else.
     let tab: *mut tabpage_T = unsafe { find_tab_by_handle(tabpage, &raw mut err) };
-    // SAFETY: the short-circuit is the proof — `valid_tabpage` is only reached
-    // for a `tab` the null check let through.
-    if tab.is_null() || !unsafe { valid_tabpage(tab) } {
+    if tab.is_null() || !valid_tabpage(tab) {
         return reported(err, 0 as Window);
     }
     if tab == curtab.get() {
@@ -228,8 +226,7 @@ pub fn nvim_tabpage_get_number(tabpage: Tabpage) -> Result<Integer, Error> {
     if tab.is_null() {
         return reported(err, 0 as Integer);
     }
-    // SAFETY: `tab` is a live tabpage, which is all the walk to it needs.
-    Ok(unsafe { tabpage_index(tab) } as Integer)
+    Ok(tabpage_index(tab) as Integer)
 }
 pub unsafe extern "C" fn nvim_tabpage_is_valid(mut tabpage: Tabpage) -> Boolean {
     let mut stub: Error = ERROR_INIT;

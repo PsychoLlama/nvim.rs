@@ -343,11 +343,7 @@ fn locale_name(idx: c_int) -> *mut c_char {
 
 /// `ExpandGeneric` source for `:language`'s argument: the four sub-commands
 /// first, then every locale (because `:language {name}` takes one directly).
-///
-/// # Safety
-/// Nothing is dereferenced; the signature is the one the `ItemGetter`
-/// function-pointer table demands.
-pub unsafe fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match SELECTORS.get(idx as usize) {
         Some((name, ..)) => name.as_ptr().cast::<c_char>().cast_mut(),
         None => locale_name(idx - SELECTORS.len() as c_int),
@@ -355,11 +351,7 @@ pub unsafe fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 }
 
 /// `ExpandGeneric` source for `:language`'s locale names alone.
-///
-/// # Safety
-/// Nothing is dereferenced; the signature is the one the `ItemGetter`
-/// function-pointer table demands.
-pub unsafe fn get_locales(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_locales(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     locale_name(idx)
 }
 

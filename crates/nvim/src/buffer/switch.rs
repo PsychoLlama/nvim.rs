@@ -106,8 +106,7 @@ fn is_autocmd_window(win: *mut win_T) -> bool {
     unsafe { is_aucmd_win(win) }
 }
 fn split_window() -> c_int {
-    // SAFETY: reads the current window and the layout.
-    unsafe { win_split(0, 0) }
+    win_split(0, 0)
 }
 
 /// Jump to a window of this tab page already showing `buf`, if `'switchbuf'`
@@ -117,8 +116,7 @@ fn window_showing(mut buf: Buf) -> bool {
     !unsafe { swbuf_goto_win_with_buf(buf.raw()) }.is_null()
 }
 fn may_change_buffer(forceit: bool) -> bool {
-    // SAFETY: reads the current window's option.
-    unsafe { check_can_set_curbuf_forceit(forceit as c_int) }
+    check_can_set_curbuf_forceit(forceit as c_int)
 }
 fn forget_jumps(mut win: Win, fnum: c_int) {
     // SAFETY: a live window.
@@ -321,8 +319,7 @@ fn handle_swap_exists_opt(old_curbuf: Option<BufRef>) {
         recover_swapfile();
         put_message(c"\n"); // don't overwrite the last message
         cmdline_row.set(msg_row.get());
-        // SAFETY: reads the current buffer, which `ml_recover` has left set.
-        unsafe { do_modelines(0) };
+        do_modelines(0);
         leave_cleanup_now(&mut cs);
     }
     swap_exists_action.set(SEA_NONE);
@@ -575,8 +572,7 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
             }
         }
         if is_changed(cur_buf()) {
-            // SAFETY: reads the current buffer.
-            unsafe { no_write_message() };
+            no_write_message();
             return FAIL;
         }
     }
@@ -985,15 +981,6 @@ fn err_fname(fmt: &CStr, mut buf: Buf) {
 }
 
 /// [`do_buffer_ext`] with just the `forceit` flag.
-///
-/// # Safety
-/// `curbuf` and `curwin` must be set.
-pub unsafe fn do_buffer(
-    action: c_int,
-    start: c_int,
-    dir: c_int,
-    count: c_int,
-    forceit: c_int,
-) -> c_int {
+pub fn do_buffer(action: c_int, start: c_int, dir: c_int, count: c_int, forceit: c_int) -> c_int {
     do_buffer_ext(action, start, dir, count, forceit_flag(forceit))
 }

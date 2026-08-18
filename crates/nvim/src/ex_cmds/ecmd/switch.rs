@@ -86,8 +86,7 @@ pub(super) unsafe fn switch_to_other_buffer(
 
     let buf;
     if fnum != 0 {
-        // SAFETY: main thread.
-        buf = unsafe { buflist_findnr(fnum) };
+        buf = buflist_findnr(fnum);
     } else if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) != 0 {
         // Default the line number to zero to avoid that a wininfo item is
         // added for the current window.  Add BLN_NOCURWIN for the same reason.

@@ -415,8 +415,7 @@ pub(crate) unsafe fn ex_tabmove(eap: *mut exarg_T) {
 fn tabmove(ea: Ex) {
     let tab_number = tabpage_arg(ea);
     if ea.errmsg.is_null() {
-        // SAFETY: moves the current tab page over the tab page list.
-        unsafe { tabpage_move(tab_number) };
+        tabpage_move(tab_number);
     }
 }
 
@@ -648,8 +647,7 @@ fn wincmd(mut ea: Ex) {
         postponed_split_flags.set(cmdmod.with(|m| m.cmod_split));
         postponed_split_tab.set(cmdmod.with(|m| m.cmod_tab));
         let (nchar, prenum) = (byte(ea.arg), ea.count(0));
-        // SAFETY: runs a window command over the window list.
-        unsafe { do_window(nchar, prenum, xchar) };
+        do_window(nchar, prenum, xchar);
         postponed_split_flags.set(0);
         postponed_split_tab.set(0);
     }

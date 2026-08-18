@@ -692,11 +692,7 @@ pub unsafe fn ui_client_event_grid_resize(args: Array) {
 /// Never called: the decoder recognises `grid_line` by this function's
 /// address and decodes the cells itself, ending at
 /// [`ui_client_event_raw_line`].
-///
-/// # Safety
-///
-/// Trivially; it exists to be named.
-pub unsafe fn ui_client_event_grid_line(_args: Array) {
+pub fn ui_client_event_grid_line(_args: Array) {
     unreachable!("grid_line is decoded by the unpacker, not dispatched");
 }
 

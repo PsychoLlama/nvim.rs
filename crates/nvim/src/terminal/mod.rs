@@ -525,8 +525,7 @@ pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
         return;
     }
     let Some(buf) = buf else { return };
-    // SAFETY: reads the "autocommands are blocked" counter.
-    if unsafe { is_autocmd_blocked() } {
+    if is_autocmd_blocked() {
         return;
     }
     // SAFETY: a plain save area `get_v_event` fills in, restored below.

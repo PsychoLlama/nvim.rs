@@ -158,7 +158,7 @@ pub unsafe fn describe_ns(
     }
 }
 
-pub unsafe fn ns_initialized(mut ns: uint32_t) -> bool {
+pub fn ns_initialized(mut ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false;
     }

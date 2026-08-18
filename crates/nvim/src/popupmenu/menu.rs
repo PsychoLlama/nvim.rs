@@ -205,8 +205,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut vimmenu_T) {
     let menu = unsafe { Menu::new(menu) };
     // SAFETY: takes the completion menu down, if one was up.
     unsafe { pum_undisplay(true) };
-    // SAFETY: reads the editor's mode.
-    let mode = unsafe { get_menu_mode_flag() };
+    let mode = get_menu_mode_flag();
     let entries = pum_menu_entries(menu, mode);
 
     // "popup Edit" with only Terminal-mode entries lands here.

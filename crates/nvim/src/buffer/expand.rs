@@ -350,7 +350,7 @@ fn fname_match(rmp: &mut regmatch_T, name: *mut c_char, ignore_case: bool) -> *m
 // Looking one up by number
 
 /// The buffer numbered `nr`, or the alternate file for 0.
-pub unsafe fn buflist_findnr(nr: c_int) -> *mut buf_T {
+pub fn buflist_findnr(nr: c_int) -> *mut buf_T {
     let nr = if nr == 0 {
         current_win().w_alt_fnum
     } else {
@@ -372,7 +372,7 @@ pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
 
 /// The name of buffer `n`, shortened with `home_replace`, freshly allocated;
 /// null when there is no such buffer.
-pub unsafe fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> *mut c_char {
+pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> *mut c_char {
     let Some(mut buf) = find_buf(n) else {
         return ptr::null_mut();
     };

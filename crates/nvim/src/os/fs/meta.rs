@@ -198,13 +198,13 @@ pub unsafe fn os_copy_xattr(from_file: *const c_char, to_file: *const c_char) {
 /// upstream's `os_get_acl` answers NULL and the other two are `if (aclent
 /// == NULL) return;` followed by nothing. Kept because `fileio.c` calls all
 /// three around every write.
-pub unsafe fn os_get_acl(_fname: *const c_char) -> vim_acl_T {
+pub fn os_get_acl(_fname: *const c_char) -> vim_acl_T {
     ptr::null_mut()
 }
 
-pub unsafe fn os_set_acl(_fname: *const c_char, _aclent: vim_acl_T) {}
+pub fn os_set_acl(_fname: *const c_char, _aclent: vim_acl_T) {}
 
-pub unsafe fn os_free_acl(_aclent: vim_acl_T) {}
+pub fn os_free_acl(_aclent: vim_acl_T) {}
 
 /// Whether the current user owns `fname`.
 ///

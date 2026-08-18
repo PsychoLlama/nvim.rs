@@ -26,15 +26,15 @@ static lastc_bytelen: GlobalCell<c_int> = GlobalCell::new(1);
 /// One `schar_T`'s bytes plus its NUL — what `lastc_bytes` holds.
 const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
 
-pub unsafe fn last_csearch() -> *const c_char {
+pub fn last_csearch() -> *const c_char {
     lastc_bytes.ptr() as *const c_char
 }
 
-pub unsafe fn last_csearch_forward() -> c_int {
+pub fn last_csearch_forward() -> c_int {
     c_int::from(lastcdir.get() as c_int == FORWARD as c_int)
 }
 
-pub unsafe fn last_csearch_until() -> c_int {
+pub fn last_csearch_until() -> c_int {
     c_int::from(last_t_cmd.get())
 }
 
@@ -55,11 +55,11 @@ pub unsafe fn set_last_csearch(c: c_int, s: *mut c_char, len: c_int) {
     }
 }
 
-pub unsafe fn set_csearch_direction(cdir: Direction) {
+pub fn set_csearch_direction(cdir: Direction) {
     lastcdir.set(cdir);
 }
 
-pub unsafe fn set_csearch_until(t_cmd: c_int) {
+pub fn set_csearch_until(t_cmd: c_int) {
     last_t_cmd.set(t_cmd != 0);
 }
 

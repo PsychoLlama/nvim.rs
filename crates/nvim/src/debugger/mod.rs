@@ -299,7 +299,7 @@ pub unsafe fn dbg_check_skipped(eap: *mut exarg_T) -> bool {
 
 /// Record that `name` has a breakpoint on `lnum`. Whether it is announced is
 /// [`dbg_check_breakpoint`]'s decision, since the line may not be executed.
-pub unsafe fn dbg_breakpoint(name: *mut c_char, lnum: linenr_T) {
+pub fn dbg_breakpoint(name: *mut c_char, lnum: linenr_T) {
     debug_breakpoint_name.set(name);
     debug_breakpoint_lnum.set(lnum);
 }

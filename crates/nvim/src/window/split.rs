@@ -38,7 +38,7 @@ use crate::winfloat::win_float_anchor_laststatus;
 use crate::winlayer::{Frame, Win, frames, tabs};
 use ::libc::memset;
 
-pub unsafe fn win_split(size: c_int, flags: c_int) -> c_int {
+pub fn win_split(size: c_int, flags: c_int) -> c_int {
     split(size, flags)
 }
 
@@ -152,8 +152,7 @@ fn split_ins(
             return None;
         }
         need_status = STATUS_HEIGHT as c_int;
-        // SAFETY: re-places the floats anchored to the last status line.
-        unsafe { win_float_anchor_laststatus() };
+        win_float_anchor_laststatus();
     }
 
     let room = if vertical {

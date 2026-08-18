@@ -109,7 +109,7 @@ pub(crate) unsafe fn au_cleanup() {
 }
 
 /// The autocommand list for `event`, for the API's readers.
-pub unsafe fn au_get_autocmds_for_event(event: event_T) -> *mut AutoCmdVec {
+pub fn au_get_autocmds_for_event(event: event_T) -> *mut AutoCmdVec {
     au_event_vec(event)
 }
 

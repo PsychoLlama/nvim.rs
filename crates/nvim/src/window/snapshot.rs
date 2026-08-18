@@ -67,15 +67,15 @@ fn check_lnums_both(do_curwin: bool, nested: bool) {
     }
 }
 
-pub unsafe fn check_lnums(do_curwin: bool) {
+pub fn check_lnums(do_curwin: bool) {
     check_lnums_both(do_curwin, false);
 }
 
-pub unsafe fn check_lnums_nested(do_curwin: bool) {
+pub fn check_lnums_nested(do_curwin: bool) {
     check_lnums_both(do_curwin, true);
 }
 
-pub unsafe fn reset_lnums() {
+pub fn reset_lnums() {
     for mut wp in tab_windows() {
         if wp.w_buffer != curbuf.get() {
             continue;
@@ -116,7 +116,7 @@ fn snapshot_of(tp: TabPage, idx: c_int) -> Option<Frame> {
     unsafe { Frame::from_raw(tp.tp_snapshot[idx as usize]) }
 }
 
-pub unsafe fn make_snapshot(idx: c_int) {
+pub fn make_snapshot(idx: c_int) {
     take_snapshot(idx);
 }
 
@@ -200,7 +200,7 @@ pub(crate) fn snapshot_curwin(idx: c_int) -> Option<Win> {
     snapshot_of(cur_tab(), idx).and_then(snapshot_curwin_rec)
 }
 
-pub unsafe fn restore_snapshot(idx: c_int, close_curwin: c_int) {
+pub fn restore_snapshot(idx: c_int, close_curwin: c_int) {
     restore_layout(idx, close_curwin != 0);
 }
 
@@ -382,7 +382,7 @@ fn digits(s: &mut *mut c_char) -> c_int {
 // ---------------------------------------------------------------------------
 // Odds and ends
 
-pub unsafe fn get_last_winid() -> c_int {
+pub fn get_last_winid() -> c_int {
     last_win_id.get()
 }
 

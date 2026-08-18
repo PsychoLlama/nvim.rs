@@ -395,7 +395,7 @@ pub(crate) fn alt_frame(win: Win, tp: Option<TabPage>) -> Frame {
     }
 }
 
-pub(crate) unsafe fn alt_tabpage() -> *mut tabpage_T {
+pub(crate) fn alt_tabpage() -> *mut tabpage_T {
     alt_tab_page().raw()
 }
 
@@ -404,8 +404,7 @@ pub(crate) unsafe fn alt_tabpage() -> *mut tabpage_T {
 /// is last (or `'tabclose'` says "left" and it is not first).
 pub(crate) fn alt_tab_page() -> TabPage {
     if tcl_flags.get() & kOptTclFlagUselast != 0 {
-        // SAFETY: `valid_tabpage` only compares the pointer against the list.
-        if unsafe { valid_tabpage(lastused_tabpage.get()) } {
+        if valid_tabpage(lastused_tabpage.get()) {
             // SAFETY: just proved live.
             return unsafe { TabPage::new(lastused_tabpage.get()) };
         }

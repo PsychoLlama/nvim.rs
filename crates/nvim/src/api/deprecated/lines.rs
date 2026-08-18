@@ -163,7 +163,7 @@ pub unsafe extern "C" fn buffer_set_line_slice(
     }
 }
 
-unsafe fn convert_index(mut index: int64_t) -> int64_t {
+fn convert_index(mut index: int64_t) -> int64_t {
     return if index < 0 as int64_t {
         index - 1 as int64_t
     } else {

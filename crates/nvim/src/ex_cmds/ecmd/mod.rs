@@ -437,8 +437,7 @@ pub unsafe fn do_ecmd(
         }
 
         // Check if cursors in other windows on the same buffer are still valid
-        // SAFETY: main thread, editor state.
-        unsafe { check_lnums(false) };
+        check_lnums(false);
 
         // Did not read the file, need to show some info about the file.
         // Do this after setting the cursor.
@@ -467,8 +466,7 @@ pub unsafe fn do_ecmd(
         }
 
         // Change directories when the 'acd' option is set.
-        // SAFETY: main thread.
-        unsafe { do_autochdir() };
+        do_autochdir();
     }
 
     // SAFETY: the two buffers are live when their bufrefs say so.
@@ -642,8 +640,7 @@ unsafe fn enter_new_buffer(
     let (eap, flags) = (args.eap, args.flags);
     // Set cursor and init window before reading the file and executing
     // autocommands.  This allows for the autocommands to position the cursor.
-    // SAFETY: caller's contract.
-    unsafe { curwin_init() };
+    curwin_init();
 
     // It's possible that all lines in the buffer changed.  Need to update
     // automatic folding for all windows where it's used.
@@ -655,8 +652,7 @@ unsafe fn enter_new_buffer(
     }
 
     // Change directories when the 'acd' option is set.
-    // SAFETY: main thread.
-    unsafe { do_autochdir() };
+    do_autochdir();
 
     // Careful: open_buffer() and apply_autocmds() may change the current
     // buffer and window.

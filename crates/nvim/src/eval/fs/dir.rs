@@ -120,8 +120,7 @@ fn tab_localdir(tp: *mut tabpage_T) -> *mut c_char {
 
 /// Tabpage number `n`, or NULL when there is none.
 fn find_tab(n: c_int) -> *mut tabpage_T {
-    // SAFETY: a plain lookup over the tabpage list.
-    unsafe { find_tabpage(n) }
+    find_tabpage(n)
 }
 
 /// The window argument 0 names within `tp`, or NULL when there is none.

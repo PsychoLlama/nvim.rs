@@ -591,6 +591,6 @@ pub unsafe extern "C" fn unblock_autocmds() {
 }
 
 /// Whether [`block_autocmds`] is in effect.
-pub unsafe fn is_autocmd_blocked() -> bool {
+pub fn is_autocmd_blocked() -> bool {
     autocmd_blocked.get() != 0
 }

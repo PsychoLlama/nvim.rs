@@ -599,13 +599,11 @@ pub(crate) fn edit_file(
 }
 
 fn layout_lock() {
-    // SAFETY: paired with `layout_unlock` below.
-    unsafe { window_layout_lock() };
+    window_layout_lock();
 }
 
 fn layout_unlock() {
-    // SAFETY: paired with `layout_lock` above.
-    unsafe { window_layout_unlock() };
+    window_layout_unlock();
 }
 
 fn run_cmdline(cmd: &CStr) {

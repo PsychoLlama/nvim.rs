@@ -239,10 +239,7 @@ impl Generator {
 }
 
 /// `ExpandGeneric()`'s source for the list of (sub)menus, not entries.
-///
-/// # Safety
-/// Called by the completion machinery with the indices `0..` in order.
-pub unsafe fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 

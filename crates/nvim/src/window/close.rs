@@ -110,7 +110,7 @@ pub(crate) fn init_empty(wp: Win) {
 }
 
 /// Init the current window. Called when a new file is being edited.
-pub unsafe fn curwin_init() {
+pub fn curwin_init() {
     init_empty(cur_win());
 }
 

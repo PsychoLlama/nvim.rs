@@ -187,8 +187,7 @@ pub unsafe fn draw_tabline() {
         unsafe { ui_ext_tabline_update() };
         return;
     }
-    // SAFETY: reads the window layout.
-    if unsafe { tabline_height() } < 1 {
+    if tabline_height() < 1 {
         return;
     }
 

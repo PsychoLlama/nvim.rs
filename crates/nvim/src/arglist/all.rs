@@ -365,8 +365,7 @@ unsafe fn open_window_for_arg(
         // Split the current window, taking space from all of them.
         let p_ea_save = p_ea.get() != 0;
         p_ea.set(c_int::from(true));
-        // SAFETY: a plain window split with no reference held across it.
-        let split_ret = unsafe { win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int) };
+        let split_ret = win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int);
         p_ea.set(c_int::from(p_ea_save));
         if split_ret == FAIL {
             return FAIL;
@@ -452,8 +451,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
         if !split_failed {
             os_breakcheck();
             // With ":tab", open a new tab page for each new window.
-            // SAFETY: `tabpage_index(NULL)` counts the live tab pages.
-            let room = unsafe { tabpage_index(ptr::null_mut()) } as OptInt <= p_tpm.get();
+            let room = tabpage_index(ptr::null_mut()) as OptInt <= p_tpm.get();
             if aall.had_tab > 0 && room {
                 cmdmod.with_mut(|m| m.cmod_tab = 9999);
             }

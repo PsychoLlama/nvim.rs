@@ -302,9 +302,7 @@ pub(crate) unsafe fn show_sub(
     };
 
     let mut pv = if preview {
-        // SAFETY: `cmdpreview_bufnr` names the buffer `cmdpreview_may_show`
-        // created for this call.
-        let buf = unsafe { buflist_findnr(cmdpreview_bufnr as c_int) };
+        let buf = buflist_findnr(cmdpreview_bufnr as c_int);
         debug_assert!(!buf.is_null(), "cmdpreview_buf != NULL");
         // Width of the "|lnum|..." column, from the highest line number in
         // the last match -- whose `end.lnum` may be 0 under the `n` flag.

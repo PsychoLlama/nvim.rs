@@ -262,11 +262,11 @@ static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> =
 static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static close_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static frame_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub unsafe fn window_layout_lock() {
+pub fn window_layout_lock() {
     window_lock();
 }
 
-pub unsafe fn window_layout_unlock() {
+pub fn window_layout_unlock() {
     window_unlock();
 }
 
@@ -282,11 +282,11 @@ fn window_unlock() {
     close_disallowed.set(close_disallowed.get() - 1);
 }
 
-pub unsafe fn frames_locked() -> bool {
+pub fn frames_locked() -> bool {
     frame_locked.get() != 0
 }
 
-pub unsafe fn window_layout_locked(cmd: cmdidx_T) -> bool {
+pub fn window_layout_locked(cmd: cmdidx_T) -> bool {
     layout_locked(cmd)
 }
 
@@ -322,11 +322,11 @@ fn locked_err(cmd: cmdidx_T, err: &mut Error) -> bool {
     true
 }
 
-pub unsafe fn check_can_set_curbuf_disabled() -> bool {
+pub fn check_can_set_curbuf_disabled() -> bool {
     winfixbuf_allows()
 }
 
-pub unsafe fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
+pub fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
     forceit != 0 || winfixbuf_allows()
 }
 
@@ -394,13 +394,13 @@ fn valid_win_in_tab(tp: TabPage, win: *const win_T) -> bool {
     !win.is_null() && windows_in_tab(tp).any(|wp| wp.raw() as *const win_T == win)
 }
 
-pub unsafe fn win_find_by_handle(handle: handle_T) -> *mut win_T {
+pub fn win_find_by_handle(handle: handle_T) -> *mut win_T {
     windows()
         .find(|wp| wp.handle == handle)
         .map_or(ptr::null_mut(), Win::raw)
 }
 
-pub unsafe fn win_valid_any_tab(win: *mut win_T) -> bool {
+pub fn win_valid_any_tab(win: *mut win_T) -> bool {
     valid_win_any_tab(win)
 }
 
@@ -409,7 +409,7 @@ fn valid_win_any_tab(win: *mut win_T) -> bool {
     !win.is_null() && tab_windows().any(|wp| wp.raw() == win)
 }
 
-pub unsafe fn win_count() -> ::core::ffi::c_int {
+pub fn win_count() -> ::core::ffi::c_int {
     windows().count() as ::core::ffi::c_int
 }
 

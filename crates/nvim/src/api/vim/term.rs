@@ -120,7 +120,7 @@ pub unsafe extern "C" fn nvim_open_term(
     }
 }
 
-unsafe fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
+fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
 
 unsafe fn term_write(
     mut buf: *const ::core::ffi::c_char,
@@ -166,14 +166,9 @@ unsafe fn term_write(
     }
 }
 
-unsafe fn term_resize(
-    mut _width: uint16_t,
-    mut _height: uint16_t,
-    mut _data: *mut ::core::ffi::c_void,
-) {
-}
+fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::core::ffi::c_void) {}
 
-unsafe fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
+fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
 
 unsafe fn term_close(mut data: *mut ::core::ffi::c_void) {
     unsafe {

@@ -356,12 +356,7 @@ fn alnum_lowered(c: c_char) -> c_char {
 }
 
 /// `:set fileencoding=<Tab>` completion: the `idx`th canonical name.
-///
-/// # Safety
-///
-/// The returned pointer is into a `'static` table; the caller must not free
-/// it.
-pub unsafe fn get_encoding_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_encoding_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match usize::try_from(idx) {
         Ok(i) if i < IDX_COUNT => ENCODINGS[i].name.as_ptr() as *mut c_char,
         _ => core::ptr::null_mut(),

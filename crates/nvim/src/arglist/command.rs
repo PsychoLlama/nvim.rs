@@ -210,8 +210,7 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     unsafe { setpcmark() };
     if is_split_cmd || cmdmod.with(|m| m.cmod_tab) != 0 {
         // Split the window, or create a new tab page, first.
-        // SAFETY: no reference is held across the split.
-        if unsafe { win_split(0, 0) } == FAIL {
+        if win_split(0, 0) == FAIL {
             return;
         }
         // RESET_BINDING: the new window scrolls and cursors on its own.
@@ -467,11 +466,7 @@ unsafe fn delete_arg_range(eap: *mut exarg_T) {
 }
 
 /// Completion source for `:argedit` and `:argdelete`: the argument names.
-///
-/// # Safety
-///
-/// Standard `ExpandGeneric()` contract.
-pub unsafe fn get_arglist_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_arglist_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if idx >= argcount() {
         return ptr::null_mut();
     }

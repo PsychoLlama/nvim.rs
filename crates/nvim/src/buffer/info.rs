@@ -483,8 +483,7 @@ fn curbuf_changed() -> bool {
 }
 
 fn percentage(part: linenr_T, whole: linenr_T) -> c_int {
-    // SAFETY: plain arithmetic over two line numbers.
-    unsafe { calc_percentage(part as int64_t, whole as int64_t) }
+    calc_percentage(part as int64_t, whole as int64_t)
 }
 
 /// The `IOSIZE` message [`fileinfo`] assembles, and how much of it is used.

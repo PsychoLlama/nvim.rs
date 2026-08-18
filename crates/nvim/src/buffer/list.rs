@@ -666,8 +666,7 @@ fn goto_existing_window(mut buf: Buf) -> bool {
     } else {
         let vertical = swb_flags.get() & kOptSwbFlagVsplit as c_int as u32 != 0;
         let flags = if vertical { WSP_VERT as c_int } else { 0 };
-        // SAFETY: splits the current window.
-        if unsafe { win_split(0, flags) } == FAIL {
+        if win_split(0, flags) == FAIL {
             return false;
         }
     }

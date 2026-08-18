@@ -343,7 +343,7 @@ const PEXPAND_CMDS: [&[u8]; 7] = [
 
 /// ExpandGeneric callback for `:profile` subcommands (fn pointer in the
 /// cmdexpand context table).
-pub unsafe fn get_profile_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_profile_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     usize::try_from(idx)
         .ok()
         .and_then(|i| PEXPAND_CMDS.get(i))

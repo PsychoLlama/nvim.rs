@@ -222,8 +222,7 @@ pub(crate) fn new_tabpage(
     newtp.tp_lastwin = newtp.tp_curwin;
     newtp.tp_firstwin = newtp.tp_lastwin;
 
-    // SAFETY: the layout globals now describe the new tab page.
-    unsafe { win_init_size() };
+    win_init_size();
     let mut firstw = first_win();
     firstw.w_winrow = tabline_rows();
     firstw.w_prev_winrow = firstw.w_winrow;
@@ -335,7 +334,7 @@ pub unsafe fn make_tabpages(maxcount: c_int) -> c_int {
     count - todo
 }
 
-pub unsafe fn valid_tabpage(tpc: *mut tabpage_T) -> bool {
+pub fn valid_tabpage(tpc: *mut tabpage_T) -> bool {
     valid_tab(tpc).is_some()
 }
 
@@ -348,7 +347,7 @@ pub(crate) fn valid_tab(tpc: *mut tabpage_T) -> Option<TabPage> {
     tabs().find(|tp| tp.raw() == tpc)
 }
 
-pub unsafe fn valid_tabpage_win(tpc: *mut tabpage_T) -> c_int {
+pub fn valid_tabpage_win(tpc: *mut tabpage_T) -> c_int {
     let Some(tp) = valid_tab(tpc) else {
         return false_0; // shouldn't happen
     };
@@ -377,7 +376,7 @@ fn close_tab(tab: TabPage) {
     free_tab(tab);
 }
 
-pub unsafe fn find_tabpage(n: c_int) -> *mut tabpage_T {
+pub fn find_tabpage(n: c_int) -> *mut tabpage_T {
     raw_tab(nth_tab(n))
 }
 
@@ -393,7 +392,7 @@ fn nth_tab(n: c_int) -> Option<TabPage> {
     tabs().nth(n as usize - 1)
 }
 
-pub unsafe fn tabpage_index(ftp: *mut tabpage_T) -> c_int {
+pub fn tabpage_index(ftp: *mut tabpage_T) -> c_int {
     index_of_tab(ftp)
 }
 
@@ -502,8 +501,7 @@ fn enter_tab(
     prevwin.set(next_prevwin);
 
     update_last_status(false); // a status line may appear or disappear
-    // SAFETY: reparents the floats anchored to the status line.
-    unsafe { win_float_update_statusline() };
+    win_float_update_statusline();
     comp_positions(); // recompute `w_winrow` for all windows
     diff_need_scrollbind.set(true);
     // A click in a window is not usable for a following drag.
@@ -581,7 +579,7 @@ fn config_float(mut wp: Win) {
     unsafe { win_config_float(raw, config) };
 }
 
-pub unsafe fn goto_tabpage(n: c_int) {
+pub fn goto_tabpage(n: c_int) {
     goto_tab_number(n);
 }
 
@@ -668,7 +666,7 @@ pub(crate) fn goto_tab(tp: TabPage, trigger_enter_autocmds: bool, trigger_leave_
     skip_win_fix_scroll.set(false);
 }
 
-pub unsafe fn goto_tabpage_lastused() -> bool {
+pub fn goto_tabpage_lastused() -> bool {
     goto_last_used_tab()
 }
 
@@ -697,7 +695,7 @@ pub(crate) fn goto_tab_win(tp: TabPage, wp: Win) {
     }
 }
 
-pub unsafe fn tabpage_move(nr: c_int) {
+pub fn tabpage_move(nr: c_int) {
     debug_assert!(!curtab.get().is_null(), "curtab != NULL");
     if first_tab().next().is_none() || tabpage_move_disallowed.get() != 0 {
         return;

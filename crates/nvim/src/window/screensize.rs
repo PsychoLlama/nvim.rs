@@ -48,7 +48,7 @@ fn frame_rows() -> c_int {
         as c_int
 }
 
-pub unsafe fn win_new_screensize() {
+pub fn win_new_screensize() {
     static old_Rows: GlobalCell<c_int> = GlobalCell::new(0);
     static old_Columns: GlobalCell<c_int> = GlobalCell::new(0);
     if old_Rows.get() != Rows.get() {
@@ -67,7 +67,7 @@ pub unsafe fn win_new_screensize() {
     }
 }
 
-pub unsafe fn win_new_screen_rows() {
+pub fn win_new_screen_rows() {
     new_screen_rows();
 }
 
@@ -85,8 +85,7 @@ pub(crate) fn new_screen_rows() {
         new_height(top, h, false, false, false);
     }
     comp_positions();
-    // SAFETY: reads the window list and re-places the floats on it.
-    unsafe { win_reconfig_floats() };
+    win_reconfig_floats();
     // SAFETY: recomputes the row the command line starts on.
     unsafe { compute_cmdrow() };
     cur_tab().tp_ch_used = p_ch.get();
@@ -95,7 +94,7 @@ pub(crate) fn new_screen_rows() {
     }
 }
 
-pub unsafe fn win_new_screen_cols() {
+pub fn win_new_screen_cols() {
     new_screen_cols();
 }
 
@@ -112,14 +111,13 @@ pub(crate) fn new_screen_cols() {
         new_width(top, Columns.get(), false, false);
     }
     comp_positions();
-    // SAFETY: reads the window list and re-places the floats on it.
-    unsafe { win_reconfig_floats() };
+    win_reconfig_floats();
 }
 
 // ---------------------------------------------------------------------------
 // WinScrolled and WinResized
 
-pub unsafe fn snapshot_windows_scroll_size() {
+pub fn snapshot_windows_scroll_size() {
     for mut wp in windows() {
         snapshot_window(&mut wp);
     }
@@ -139,8 +137,7 @@ fn snapshot_window(wp: &mut Win) {
 pub unsafe fn may_make_initial_scroll_size_snapshot() {
     if !did_initial_scroll_size_snapshot.get() {
         did_initial_scroll_size_snapshot.set(true);
-        // SAFETY: reads the window list, which is live.
-        unsafe { snapshot_windows_scroll_size() };
+        snapshot_windows_scroll_size();
     }
 }
 
@@ -390,8 +387,7 @@ pub unsafe fn may_trigger_win_scrolled_resized() {
 
     // Both events use the same snapshot, so take the new one before either
     // fires.
-    // SAFETY: reads the window list.
-    unsafe { snapshot_windows_scroll_size() };
+    snapshot_windows_scroll_size();
     recursive.set(true);
 
     let mut resize = first_size.map(Subject::of);
@@ -460,7 +456,7 @@ pub unsafe fn win_size_save(gap: *mut garray_T) {
     }
 }
 
-pub unsafe fn win_size_restore(gap: *mut garray_T) {
+pub fn win_size_restore(gap: *mut garray_T) {
     let sizes = Sizes(gap);
     if windows().count() as c_int * 2 + 1 != sizes.len()
         || sizes.at(0) as OptInt

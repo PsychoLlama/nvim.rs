@@ -58,8 +58,7 @@ use ::libc::time;
 /// The id the last window created was given -- the C's cheap "did an
 /// autocommand open a window?" probe.
 fn last_winid() -> c_int {
-    // SAFETY: reads a counter only.
-    unsafe { get_last_winid() }
+    get_last_winid()
 }
 
 /// The window `win` names, if it is still in the current tab page.
@@ -110,7 +109,7 @@ fn diff_add(mut buf: Buf) {
 
 /// Load the buffer that has just been made current.
 fn load_current_buffer() {
-    // SAFETY: `curbuf` and `curwin` are set.
+    // SAFETY: `curbuf` and `curwin` are set; a null `eap` is the no-command form.
     unsafe { open_buffer(false, ptr::null_mut(), 0) };
 }
 
@@ -440,10 +439,7 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
 }
 
 /// Change to the directory of the current buffer, unless still starting up.
-///
-/// # Safety
-/// `curbuf` must be set.
-pub unsafe fn do_autochdir() {
+pub fn do_autochdir() {
     do_autochdir_now();
 }
 
@@ -474,9 +470,7 @@ pub unsafe fn no_write_message_buf(buf: *mut buf_T) {
     }
 }
 
-/// # Safety
-/// `curbuf` must be set.
-pub unsafe fn no_write_message() {
+pub fn no_write_message() {
     let buf = cur_buf();
     if !buf.terminal.is_null() && job_running(buf) {
         err_static(&raw const e_job_still_running_add_bang_to_end_the_job);

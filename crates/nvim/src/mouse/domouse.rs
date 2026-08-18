@@ -597,13 +597,11 @@ fn tab_line_click(
                 // Double click opens a new page.
                 end_visual_mode();
                 tabpage_new();
-                // SAFETY: walks the tab page list.
-                unsafe { tabpage_move(if def.tabnr == 0 { 9999 } else { def.tabnr - 1 }) };
+                tabpage_move(if def.tabnr == 0 { 9999 } else { def.tabnr - 1 });
             } else {
                 // Go to specified tab page, or next one if not clicking on a
                 // label.
-                // SAFETY: walks the tab page list.
-                unsafe { goto_tabpage(def.tabnr) };
+                goto_tabpage(def.tabnr);
                 // It's like clicking on the status line of a window.
                 if !old_curwin.is_current() {
                     end_visual_mode();
