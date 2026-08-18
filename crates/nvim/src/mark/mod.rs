@@ -116,7 +116,7 @@ use crate::pos::MAXLNUM;
 use crate::quickfix::qf_mark_adjust;
 /// Set named mark "c" at current cursor position.
 /// Returns OK on success, FAIL if bad name given.
-pub unsafe extern "C" fn setmark(mut c: c_int) -> c_int {
+pub unsafe fn setmark(mut c: c_int) -> c_int {
     let mut view: fmarkv_T = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
     return setmark_pos(
         c,

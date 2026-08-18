@@ -950,7 +950,7 @@ unsafe fn do_source_ext(req: &SourceRequest) -> c_int {
 ///
 /// # Safety
 /// `fname` is NUL-terminated and `ret_sid` is null or writable.
-pub unsafe extern "C" fn do_source(
+pub unsafe fn do_source(
     fname: *mut c_char,
     check_other: bool,
     is_vimrc: c_int,

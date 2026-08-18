@@ -366,7 +366,7 @@ pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) 
     }
 }
 
-pub unsafe extern "C" fn close_others(message: c_int, forceit: c_int) {
+pub unsafe fn close_others(message: c_int, forceit: c_int) {
     close_all_others(message != 0, forceit != 0);
 }
 

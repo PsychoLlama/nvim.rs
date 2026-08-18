@@ -651,7 +651,7 @@ pub unsafe fn func_has_abort(cookie: *mut c_void) -> c_int {
 ///
 /// # Safety
 /// `cookie` is a `funccall_T`.
-pub unsafe extern "C" fn func_name(cookie: *mut c_void) -> *mut c_char {
+pub unsafe fn func_name(cookie: *mut c_void) -> *mut c_char {
     unsafe { uf_name_ptr((*(cookie as *mut funccall_T)).fc_func) }
 }
 

@@ -448,7 +448,7 @@ pub unsafe fn use_indentexpr_for_lisp() -> bool {
 ///
 /// # Safety
 /// There must be a current window and buffer.
-pub unsafe extern "C" fn fix_indent() {
+pub unsafe fn fix_indent() {
     if p_paste.get() != 0 {
         return; // no auto-indenting when 'paste' is set
     }
