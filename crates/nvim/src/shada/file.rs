@@ -436,7 +436,7 @@ unsafe fn replace_original(
         // Running as root, the new file is given the old one's owner: it is
         // not friendly to leave a user with a ShaDa file they cannot read
         // after a `su root`.
-        if getuid() == ROOT_UID as __uid_t
+        if getuid() == ROOT_UID as uid_t
             && (old_info.stat.st_uid != ROOT_UID as uint64_t
                 || old_info.stat.st_gid != getgid() as uint64_t)
         {
@@ -478,7 +478,7 @@ fn writable_by_us(info: &FileInfo) -> bool {
     }
     // SAFETY: `getuid`/`getgid` take nothing and cannot fail.
     let (uid, gid) = unsafe { (getuid(), getgid()) };
-    if uid == ROOT_UID as __uid_t {
+    if uid == ROOT_UID as uid_t {
         return true;
     }
     let bit = if info.stat.st_uid == uid as uint64_t {

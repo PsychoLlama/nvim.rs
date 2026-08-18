@@ -34,8 +34,8 @@ use crate::os::libc::{fclose, fileno, fread, fseeko, gettext, memcpy, memmove};
 use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::types::{
-    __off_t, EvalFuncData, FILE, FileInfo, VAR_STRING, VAR_UNLOCKED, blob_T, int64_t,
-    kListLenUnknown, list_T, off_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
+    EvalFuncData, FILE, FileInfo, VAR_STRING, VAR_UNLOCKED, blob_T, int64_t, kListLenUnknown,
+    list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -79,7 +79,7 @@ impl File {
     /// Seek to `offset` relative to `whence`; false when the seek failed.
     fn seek(&self, offset: off_T, whence: c_int) -> bool {
         // SAFETY: a live stream.
-        unsafe { fseeko(self.0, offset as __off_t, whence) == 0 }
+        unsafe { fseeko(self.0, offset as off_t, whence) == 0 }
     }
 
     /// Fill `buf` from the stream, answering how many bytes arrived.

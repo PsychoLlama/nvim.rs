@@ -5,7 +5,8 @@
 # defining them. Extend this list if a future spec's system import collides
 # with the generated chunk ("attempt to redefine 'X'" from ffi.cdef).
 iovec
-_IO_FILE
+termios
+winsize
 __pthread_internal_list
 __pthread_mutex_s
 __pthread_rwlock_arch_t

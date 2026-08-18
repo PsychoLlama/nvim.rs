@@ -37,8 +37,7 @@ use crate::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::path_tail;
 use crate::types::{
-    FILE, VV_SEND_SERVER, XDGVarType, int32_t, pthread_mutex_t, uv_loop_t, uv_mutex_t,
-    uv_timeval64_t,
+    FILE, UV_MUTEX_INIT, VV_SEND_SERVER, XDGVarType, int32_t, uv_loop_t, uv_mutex_t, uv_timeval64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -67,9 +66,7 @@ const ENV_NVIM: &CStr = c"NVIM";
 /// writable).
 static LOG_FILE_PATH: GlobalCell<Option<CString>> = GlobalCell::new(None);
 static DID_LOG_INIT: GlobalCell<bool> = GlobalCell::new(false);
-static MUTEX: GlobalCell<uv_mutex_t> = GlobalCell::new(pthread_mutex_t {
-    __data: unsafe { core::mem::zeroed() },
-});
+static MUTEX: GlobalCell<uv_mutex_t> = GlobalCell::new(UV_MUTEX_INIT);
 
 /// The mutex's address, which is the only way libuv can be handed it. The
 /// sole raw-pointer escape left in this module; every other piece of state
@@ -99,7 +96,7 @@ fn log_try_create(fname: &[u8]) -> bool {
     // SAFETY: a NUL-terminated name, and the handle is closed here or never
     // escapes.
     unsafe {
-        let log_file = fopen(fname.as_ptr(), c"a".as_ptr()) as *mut FILE;
+        let log_file = fopen(fname.as_ptr(), c"a".as_ptr());
         if log_file.is_null() {
             return false;
         }
@@ -433,7 +430,7 @@ fn open_log_file() -> *mut FILE {
     let f = unsafe {
         *__errno_location() = 0;
         LOG_FILE_PATH.with(|path| match path {
-            Some(path) => fopen(path.as_ptr(), c"a".as_ptr()) as *mut FILE,
+            Some(path) => fopen(path.as_ptr(), c"a".as_ptr()),
             None => core::ptr::null_mut(),
         })
     };

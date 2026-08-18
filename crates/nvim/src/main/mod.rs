@@ -11,16 +11,15 @@ use crate::options::{
 };
 use crate::profile::time_msg;
 use crate::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     AdditionalData, Array, Callback, Callback_data, DecorState, FILE, GridView, Loop, LuaRef,
     LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, RgbValue,
     ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
-    TriState, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T,
-    caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, estack_T_es_info, etype_T, evalarg_T,
-    except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t,
-    int32_t, int64_t, kFalse, kNone, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t,
-    nvim_stats_s, optmagic_T, pos_T, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t,
+    TriState, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T,
+    bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T,
+    estack_T_es_info, etype_T, evalarg_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T,
+    garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, kFalse, kNone, linenr_T, lpos_T, match_T,
+    msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T, ptr_t,
     reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t,
     tabpage_T, typebuf_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u,
     uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
@@ -1505,21 +1504,7 @@ pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
             next: ::core::ptr::null_mut::<uv__queue>(),
             prev: ::core::ptr::null_mut::<uv__queue>(),
         },
-        wq_mutex: pthread_mutex_t {
-            __data: __pthread_mutex_s {
-                __lock: 0,
-                __count: 0,
-                __owner: 0,
-                __nusers: 0,
-                __kind: 0,
-                __spins: 0,
-                __elision: 0,
-                __list: __pthread_list_t {
-                    __prev: ::core::ptr::null_mut::<__pthread_internal_list>(),
-                    __next: ::core::ptr::null_mut::<__pthread_internal_list>(),
-                },
-            },
-        },
+        wq_mutex: UV_MUTEX_INIT,
         wq_async: uv_async_t {
             data: ::core::ptr::null_mut::<c_void>(),
             loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
@@ -1539,22 +1524,7 @@ pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
             },
             pending: 0,
         },
-        cloexec_lock: pthread_rwlock_t {
-            __data: __pthread_rwlock_arch_t {
-                __readers: 0,
-                __writers: 0,
-                __wrphase_futex: 0,
-                __writers_futex: 0,
-                __pad3: 0,
-                __pad4: 0,
-                __cur_writer: 0,
-                __shared: 0,
-                __rwelision: 0,
-                __pad1: [0; 7],
-                __pad2: 0,
-                __flags: 0,
-            },
-        },
+        cloexec_lock: UV_RWLOCK_INIT,
         closing_handles: ::core::ptr::null_mut::<uv_handle_t>(),
         process_handles: uv__queue {
             next: ::core::ptr::null_mut::<uv__queue>(),
@@ -1760,21 +1730,7 @@ pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
         },
         pending: 0,
     },
-    mutex: pthread_mutex_t {
-        __data: __pthread_mutex_s {
-            __lock: 0,
-            __count: 0,
-            __owner: 0,
-            __nusers: 0,
-            __kind: 0,
-            __spins: 0,
-            __elision: 0,
-            __list: __pthread_list_t {
-                __prev: ::core::ptr::null_mut::<__pthread_internal_list>(),
-                __next: ::core::ptr::null_mut::<__pthread_internal_list>(),
-            },
-        },
-    },
+    mutex: UV_MUTEX_INIT,
     recursive: 0,
     closing: false,
 });

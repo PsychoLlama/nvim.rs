@@ -256,6 +256,9 @@ pub struct uv_loop_s_timer_heap {
 }
 pub type uv_loop_t = uv_loop_s;
 pub type uv_mutex_t = pthread_mutex_t;
+/// glibc's `PTHREAD_MUTEX_INITIALIZER`, which is all-zero: what a `static`
+/// libuv mutex starts as before `uv_mutex_init` runs.
+pub const UV_MUTEX_INIT: uv_mutex_t = pthread_mutex_t { __size: [0; 40] };
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_tty_s {
@@ -388,6 +391,8 @@ pub type uv_read_cb =
 pub type uv_req_type = ::core::ffi::c_uint;
 pub type uv_run_mode = ::core::ffi::c_uint;
 pub type uv_rwlock_t = pthread_rwlock_t;
+/// glibc's `PTHREAD_RWLOCK_INITIALIZER`, which is all-zero.
+pub const UV_RWLOCK_INIT: uv_rwlock_t = pthread_rwlock_t { __size: [0; 56] };
 pub type uv_thread_t = pthread_t;
 pub type uv_shutdown_cb =
     Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;

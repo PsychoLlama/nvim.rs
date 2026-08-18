@@ -56,6 +56,22 @@ struct __pthread_mutex_s {
   short __elision;
   struct __pthread_internal_list __list;
 };
+struct termios {
+  unsigned int c_iflag;
+  unsigned int c_oflag;
+  unsigned int c_cflag;
+  unsigned int c_lflag;
+  unsigned char c_line;
+  unsigned char c_cc[32];
+  unsigned int c_ispeed;
+  unsigned int c_ospeed;
+};
+struct winsize {
+  unsigned short ws_row;
+  unsigned short ws_col;
+  unsigned short ws_xpixel;
+  unsigned short ws_ypixel;
+};
 struct __pthread_rwlock_arch_t {
   unsigned int __readers;
   unsigned int __writers;

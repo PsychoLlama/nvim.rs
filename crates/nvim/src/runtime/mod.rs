@@ -99,16 +99,15 @@ use crate::profile::{
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, BoolVarValue,
-    CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error, EvalFuncData, FILE, Integer,
-    LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int, MapHash, Object, ObjectType,
-    OptVal, OptValData, OptValType, Set_String, String_0, TriState, VAR_DICT, VAR_FIXED,
-    VAR_LOCKED, XDGVarType, cmd_addr_T, dict_T, estack_T, estack_T_es_info, estack_arg_T, etype_T,
-    exarg_T, expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse, kErrorTypeNone,
-    kFalse, kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    kTrue, linenr_T, list_T, object_data, optset_T, proftime_T, pthread_mutex_t, ptrdiff_t,
-    regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union,
-    ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
+    Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
+    EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int,
+    MapHash, Object, ObjectType, OptVal, OptValData, OptValType, Set_String, String_0, TriState,
+    UV_MUTEX_INIT, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType, cmd_addr_T, dict_T, estack_T,
+    estack_T_es_info, estack_arg_T, etype_T, exarg_T, expand_T, funccal_entry_T, garray_T,
+    handle_T, int64_t, kBoolVarFalse, kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean,
+    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, kTrue, linenr_T, list_T, object_data,
+    optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t,
+    typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::{semsg_c, smsg_c};
@@ -363,21 +362,7 @@ static runtime_search_path_thread: SharedCell<RuntimeSearchPath> =
         capacity: 0,
         items: ::core::ptr::null_mut::<SearchPathItem>(),
     });
-static runtime_search_path_mutex: SharedCell<uv_mutex_t> = SharedCell::new(pthread_mutex_t {
-    __data: __pthread_mutex_s {
-        __lock: 0,
-        __count: 0,
-        __owner: 0,
-        __nusers: 0,
-        __kind: 0,
-        __spins: 0,
-        __elision: 0,
-        __list: __pthread_list_t {
-            __prev: ::core::ptr::null_mut::<__pthread_internal_list>(),
-            __next: ::core::ptr::null_mut::<__pthread_internal_list>(),
-        },
-    },
-});
+static runtime_search_path_mutex: SharedCell<uv_mutex_t> = SharedCell::new(UV_MUTEX_INIT);
 static runtime_expand_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

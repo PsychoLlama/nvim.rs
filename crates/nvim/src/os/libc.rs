@@ -118,11 +118,11 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
     pub fn fseeko(
         __stream: *mut FILE,
-        __off: __off_t,
+        __off: off_t,
         __whence: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     pub fn ftell(__stream: *mut FILE) -> ::core::ffi::c_long;
-    pub fn ftello(__stream: *mut FILE) -> __off_t;
+    pub fn ftello(__stream: *mut FILE) -> off_t;
     pub fn fwrite(
         __ptr: *const ::core::ffi::c_void,
         __size: size_t,
@@ -130,11 +130,11 @@ unsafe extern "C" {
         __s: *mut FILE,
     ) -> ::core::ffi::c_ulong;
     pub fn getc(__stream: *mut FILE) -> ::core::ffi::c_int;
-    pub fn getgid() -> __gid_t;
-    pub fn getpid() -> __pid_t;
+    pub fn getgid() -> gid_t;
+    pub fn getpid() -> pid_t;
     #[cfg(not(miri))]
     pub fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    pub fn getuid() -> __uid_t;
+    pub fn getuid() -> uid_t;
     pub fn getxattr(
         __path: *const ::core::ffi::c_char,
         __name: *const ::core::ffi::c_char,
@@ -158,8 +158,8 @@ unsafe extern "C" {
         __request: ::core::ffi::c_ulong,
         ...
     ) -> ::core::ffi::c_int;
-    pub fn kill(__pid: __pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    pub fn killpg(__pgrp: __pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
+    pub fn kill(__pid: pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
+    pub fn killpg(__pgrp: pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn labs(__x: ::core::ffi::c_long) -> ::core::ffi::c_long;
     pub fn listxattr(
         __path: *const ::core::ffi::c_char,
@@ -170,11 +170,7 @@ unsafe extern "C" {
     pub fn localtime_r(__timer: *const time_t, __tp: *mut tm) -> *mut tm;
     pub fn log(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn log10(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    pub fn lseek(
-        __fd: ::core::ffi::c_int,
-        __offset: __off_t,
-        __whence: ::core::ffi::c_int,
-    ) -> __off_t;
+    pub fn lseek(__fd: ::core::ffi::c_int, __offset: off_t, __whence: ::core::ffi::c_int) -> off_t;
     pub fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
     pub fn memchr(
         __s: *const ::core::ffi::c_void,
@@ -248,7 +244,7 @@ unsafe extern "C" {
         __locale: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
     pub fn setpwent();
-    pub fn setsid() -> __pid_t;
+    pub fn setsid() -> pid_t;
     pub fn setvbuf(
         __stream: *mut FILE,
         __buf: *mut ::core::ffi::c_char,
@@ -401,7 +397,7 @@ unsafe extern "C" {
     pub fn toupper(__c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn trunc(__x: ::core::ffi::c_double) -> ::core::ffi::c_double;
     pub fn tzset();
-    pub fn umask(__mask: __mode_t) -> __mode_t;
+    pub fn umask(__mask: mode_t) -> mode_t;
     pub fn ungetc(__c: ::core::ffi::c_int, __stream: *mut FILE) -> ::core::ffi::c_int;
     pub fn vfprintf(
         __s: *mut FILE,
@@ -415,10 +411,10 @@ unsafe extern "C" {
         __arg: ::core::ffi::VaList,
     ) -> ::core::ffi::c_int;
     pub fn waitpid(
-        __pid: __pid_t,
+        __pid: pid_t,
         __stat_loc: *mut ::core::ffi::c_int,
         __options: ::core::ffi::c_int,
-    ) -> __pid_t;
+    ) -> pid_t;
     pub fn write(
         __fd: ::core::ffi::c_int,
         __buf: *const ::core::ffi::c_void,

@@ -2,63 +2,29 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+//
+// The nominal C aggregates every libc prototype names -- `FILE`, `termios`,
+// `winsize`, `tm`, `iovec` -- are re-exports of the `libc` crate's, so a
+// declaration there and a call site here agree by construction instead of by
+// inspection.
+//
+// The scalar typedefs stay spelled out on purpose. A type alias is
+// transparent, so `time_t = c_long` already *is* `libc::time_t`; re-exporting
+// would buy no type identity and would cost the unit-test chunk its
+// derivation (tools/ffigen treats a `::libc::` path as owned by the harness's
+// system preamble, which does not declare all of these).
+//
+// `pthread_mutex_t`/`pthread_rwlock_t` stay for the same reason plus one
+// more: nothing here hands one to libc. They are reached only as libuv's
+// `uv_mutex_t`/`uv_rwlock_t`, embedded by value in `uv_loop_t` and friends,
+// so the chunk needs their layout and this crate is the only place that
+// describes libuv's ABI.
 
 // The standard descriptors, which a dozen modules had each spelled out.
-pub const STDIN_FILENO: ::core::ffi::c_int = 0;
-pub const STDOUT_FILENO: ::core::ffi::c_int = 1;
-pub const STDERR_FILENO: ::core::ffi::c_int = 2;
+pub use ::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 
-// Opaque C types: layout unknown here, only ever used behind a pointer.
-#[repr(C)]
-pub struct _IO_codecvt {
-    _data: [u8; 0],
-    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
-}
-#[repr(C)]
-pub struct _IO_marker {
-    _data: [u8; 0],
-    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
-}
-#[repr(C)]
-pub struct _IO_wide_data {
-    _data: [u8; 0],
-    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
-}
+pub use ::libc::{FILE, iovec, termios, tm, winsize};
 
-pub type FILE = _IO_FILE;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct _IO_FILE {
-    pub _flags: ::core::ffi::c_int,
-    pub _IO_read_ptr: *mut ::core::ffi::c_char,
-    pub _IO_read_end: *mut ::core::ffi::c_char,
-    pub _IO_read_base: *mut ::core::ffi::c_char,
-    pub _IO_write_base: *mut ::core::ffi::c_char,
-    pub _IO_write_ptr: *mut ::core::ffi::c_char,
-    pub _IO_write_end: *mut ::core::ffi::c_char,
-    pub _IO_buf_base: *mut ::core::ffi::c_char,
-    pub _IO_buf_end: *mut ::core::ffi::c_char,
-    pub _IO_save_base: *mut ::core::ffi::c_char,
-    pub _IO_backup_base: *mut ::core::ffi::c_char,
-    pub _IO_save_end: *mut ::core::ffi::c_char,
-    pub _markers: *mut _IO_marker,
-    pub _chain: *mut _IO_FILE,
-    pub _fileno: ::core::ffi::c_int,
-    pub _flags2: ::core::ffi::c_int,
-    pub _old_offset: __off_t,
-    pub _cur_column: ::core::ffi::c_ushort,
-    pub _vtable_offset: ::core::ffi::c_schar,
-    pub _shortbuf: [::core::ffi::c_char; 1],
-    pub _lock: *mut ::core::ffi::c_void,
-    pub _offset: __off64_t,
-    pub _codecvt: *mut _IO_codecvt,
-    pub _wide_data: *mut _IO_wide_data,
-    pub _freeres_list: *mut _IO_FILE,
-    pub _freeres_buf: *mut ::core::ffi::c_void,
-    pub _prevchain: *mut *mut _IO_FILE,
-    pub _mode: ::core::ffi::c_int,
-    pub _unused2: [::core::ffi::c_char; 20],
-}
 pub type __builtin_va_list = [__va_list_tag; 1];
 pub type __compar_fn_t = Option<
     unsafe extern "C" fn(
@@ -66,12 +32,7 @@ pub type __compar_fn_t = Option<
         *const ::core::ffi::c_void,
     ) -> ::core::ffi::c_int,
 >;
-pub type __gid_t = ::core::ffi::c_uint;
 pub type __gnuc_va_list = __builtin_va_list;
-pub type __mode_t = ::core::ffi::c_uint;
-pub type __off64_t = ::core::ffi::c_long;
-pub type __off_t = ::core::ffi::c_long;
-pub type __pid_t = ::core::ffi::c_int;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct __pthread_internal_list {
@@ -107,9 +68,6 @@ pub struct __pthread_rwlock_arch_t {
     pub __pad2: ::core::ffi::c_ulong,
     pub __flags: ::core::ffi::c_uint,
 }
-pub type __socklen_t = ::core::ffi::c_uint;
-pub type __time_t = ::core::ffi::c_long;
-pub type __uid_t = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct __va_list_tag {
@@ -119,7 +77,7 @@ pub struct __va_list_tag {
     pub reg_save_area: *mut ::core::ffi::c_void,
 }
 pub type cc_t = ::core::ffi::c_uchar;
-pub type gid_t = __gid_t;
+pub type gid_t = ::core::ffi::c_uint;
 pub type iconv_t = *mut ::core::ffi::c_void;
 pub type int16_t = i16;
 pub type int32_t = i32;
@@ -127,13 +85,8 @@ pub type int64_t = i64;
 pub type int8_t = i8;
 pub type intmax_t = ::libc::intmax_t;
 pub type intptr_t = isize;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct iovec {
-    pub iov_base: *mut ::core::ffi::c_void,
-    pub iov_len: size_t,
-}
-pub type off_t = __off_t;
+pub type off_t = ::core::ffi::c_long;
+pub type pid_t = ::core::ffi::c_int;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union pthread_mutex_t {
@@ -152,38 +105,11 @@ pub type pthread_t = ::core::ffi::c_ulong;
 pub type ptrdiff_t = isize;
 pub type sa_family_t = ::core::ffi::c_ushort;
 pub type size_t = usize;
-pub type socklen_t = __socklen_t;
+pub type socklen_t = ::core::ffi::c_uint;
 pub type speed_t = ::core::ffi::c_uint;
 pub type tcflag_t = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct termios {
-    pub c_iflag: tcflag_t,
-    pub c_oflag: tcflag_t,
-    pub c_cflag: tcflag_t,
-    pub c_lflag: tcflag_t,
-    pub c_line: cc_t,
-    pub c_cc: [cc_t; 32],
-    pub c_ispeed: speed_t,
-    pub c_ospeed: speed_t,
-}
-pub type time_t = __time_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct tm {
-    pub tm_sec: ::core::ffi::c_int,
-    pub tm_min: ::core::ffi::c_int,
-    pub tm_hour: ::core::ffi::c_int,
-    pub tm_mday: ::core::ffi::c_int,
-    pub tm_mon: ::core::ffi::c_int,
-    pub tm_year: ::core::ffi::c_int,
-    pub tm_wday: ::core::ffi::c_int,
-    pub tm_yday: ::core::ffi::c_int,
-    pub tm_isdst: ::core::ffi::c_int,
-    pub tm_gmtoff: ::core::ffi::c_long,
-    pub tm_zone: *const ::core::ffi::c_char,
-}
-pub type uid_t = __uid_t;
+pub type time_t = ::core::ffi::c_long;
+pub type uid_t = ::core::ffi::c_uint;
 pub type uint16_t = u16;
 pub type uint32_t = u32;
 pub type uint64_t = u64;
@@ -191,11 +117,3 @@ pub type uint8_t = u8;
 pub type uintmax_t = ::libc::uintmax_t;
 pub type uintptr_t = usize;
 pub type va_list = __gnuc_va_list;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct winsize {
-    pub ws_row: ::core::ffi::c_ushort,
-    pub ws_col: ::core::ffi::c_ushort,
-    pub ws_xpixel: ::core::ffi::c_ushort,
-    pub ws_ypixel: ::core::ffi::c_ushort,
-}
