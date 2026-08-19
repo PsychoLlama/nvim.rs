@@ -40,6 +40,18 @@ unmeasured, as they were when they lived at the repo root):
               or their modules are rewritten; vim_snprintf/vim_vsnprintf
               (vim's own user-visible format language) are expected to be
               the long-lived remainder.
+  extern_abi  definitions of functions carrying a C ABI — `extern "C" fn
+              name` / `extern "C-unwind" fn name`, i.e. the named form, so an
+              `extern` *type* (a function pointer) and a declaration inside an
+              `unsafe extern` block are not counted. Each one is a signature
+              the compiler cannot check across and that clippy skips wholesale,
+              and phase 18's census classed every survivor: exported to C
+              (`#[unsafe(no_mangle)]`, an abi-ledger entry), address-taken by a
+              declared C caller (lua_CFunction, libvterm, libuv, qsort), a
+              variadic (where `...` requires the ABI), or an api entry point
+              whose ABI is only apigen's recognition convention. The last class
+              retires as `api/` converts to `Result<T, Error>`; the rest retire
+              as their C callers do.
   cell_ptr    raw escape-hatch accesses to global editor state:
               GlobalCell/SharedCell `.ptr()` and `.as_raw()`. The cells
               themselves are the safe replacement for c2rust's mutable
@@ -95,7 +107,9 @@ preserved) so that only code is scanned. That is what makes the counts mean
 what they say: prose about `unsafe` costs nothing, a doc comment quoting
 `#![deny(unsafe_op_in_unsafe_fn)]` does not switch on the deny, and a string
 containing a brace cannot desynchronise the block scanner. Everything else is
-plain substring matching, which still over-counts a little (a macro naming
+plain substring matching — bar `extern_abi`, whose needle is a regex because
+masking erases the very ABI string a substring would key on — which still
+over-counts a little (a macro naming
 `static mut ` in its expansion counts), but is deterministic, cheap enough for
 a pre-commit hook, and kept canonical by rustfmt (enforced by fmt-check). The
 point is monotonic pressure, not precision.
@@ -137,6 +151,15 @@ COUNTED = {
     "no_mangle": ("#[unsafe(no_mangle)]",),
     "variadic": (": ...",),
     "cell_ptr": (".ptr()", ".as_raw()"),
+}
+# name -> regex counted in the masked source, for what a substring cannot
+# separate. Masking blanks the ABI string itself (`extern "C" fn` reads
+# `extern     fn`), which is why this is a regex and why it is ABI-blind —
+# every `extern` the tree writes names a C ABI. `fn <name>` is the definition
+# form: a function-pointer type writes `fn(` with no name, and a declaration
+# inside an `unsafe extern` block has the block's `{` between the two words.
+COUNTED_RE = {
+    "extern_abi": re.compile(r"\bextern\s+fn [A-Za-z_]"),
 }
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
@@ -315,6 +338,9 @@ def measure():
             name: sum(masked.count(needle) for needle in needles)
             for name, needles in COUNTED.items()
         }
+        counts.update(
+            (name, len(rx.findall(masked))) for name, rx in COUNTED_RE.items()
+        )
         counts["unsafe_lines"] = unsafe_lines(masked, DENY_UNSAFE_OP in masked)
         counts["lines"] = len(text.splitlines())
         stats[str(path.relative_to(ROOT))] = counts
@@ -374,7 +400,7 @@ def violations(stats, internal, without_forbid, without_deny, baseline):
             f"files without {FORBID} or {DENY_UNSAFE_OP}: {base_deny} -> {without_deny}"
         )
     base_files = baseline["files"]
-    counted = (*COUNTED, "unsafe_lines")
+    counted = (*COUNTED, *COUNTED_RE, "unsafe_lines")
     for file in sorted(stats.keys() | base_files.keys()):
         cur = stats.get(file, {**dict.fromkeys(counted, 0), "lines": 0})
         base = base_files.get(file, {})
@@ -389,7 +415,7 @@ def violations(stats, internal, without_forbid, without_deny, baseline):
 
 
 def summary(stats, internal, without_forbid, without_deny):
-    counted = (*COUNTED, "unsafe_lines")
+    counted = (*COUNTED, *COUNTED_RE, "unsafe_lines")
     totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
     parts = [f"{n} {name}" for name, n in totals.items()]
@@ -439,6 +465,21 @@ SELF_TEST = [
     ('#[unsafe(no_mangle)]\npub extern "C" fn f() {}\n', 0),
     ('unsafe extern "C" {\n    static x: u8;\n}\n', 3),
 ]
+# (source, expected extern_abi) — the needle is a regex over masked source,
+# so it needs its own cases: masking has already erased the ABI string by the
+# time it runs.
+SELF_TEST_EXTERN_ABI = [
+    ('pub unsafe extern "C" fn f() {}\n', 1),
+    ('extern "C-unwind" fn f() {}\n', 1),
+    ("extern fn f() {}\n", 1),
+    # A function-pointer type is not a definition.
+    ('type F = unsafe extern "C" fn(u8);\n', 0),
+    ('struct S(Option<extern "C-unwind" fn(u8)>);\n', 0),
+    # Neither is a declaration inside an extern block.
+    ('unsafe extern "C" {\n    fn f(x: u8);\n}\n', 0),
+    # Prose about one costs nothing.
+    ('/// An extern "C" fn f() would.\nfn f() {}\n', 0),
+]
 SELF_TEST_DENY = [
     # With the deny, a body's own blocks state its unsafe surface.
     ("unsafe fn f() {\n    g();\n}\n", 0),
@@ -453,6 +494,10 @@ def self_test():
     for source, expected in SELF_TEST_DENY:
         got = unsafe_lines(mask(source), True)
         assert got == expected, f"unsafe_lines={got}, want {expected}, for {source!r}"
+    needle = COUNTED_RE["extern_abi"]
+    for source, expected in SELF_TEST_EXTERN_ABI:
+        got = len(needle.findall(mask(source)))
+        assert got == expected, f"extern_abi={got}, want {expected}, for {source!r}"
 
 
 def main():
