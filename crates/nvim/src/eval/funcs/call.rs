@@ -23,13 +23,14 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
+use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
 use crate::main::{
     EVALARG_EVALUATE, capture_ga, e_invarg2, e_invexpr2, e_libcall, e_toomanyarg, e_trailing_arg,
     e_unknown_function_str, emsg_noredir, emsg_silent, garbage_collect_at_exit, msg_col,
-    msg_silent, need_clr_eos, redir_off, want_garbage_collect,
+    need_clr_eos, redir_off, want_garbage_collect,
 };
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
@@ -216,13 +217,13 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
     let cmd_idx = arg_off as usize;
     let silent_idx = cmd_idx + 1;
 
-    let save_msg_silent = msg_silent.get();
     let save_emsg_silent = emsg_silent.get();
     let save_emsg_noredir = emsg_noredir.get();
     let save_redir_off = redir_off.get();
     let save_capture_ga = capture_ga.get();
     let save_msg_col = msg_col.get();
     let mut echo_output = false;
+    let mut silence = true;
 
     // SAFETY: the frame is live; `capture_local` outlives every command run
     // below, and `rettv` adopts its allocation at the end.
@@ -244,16 +245,15 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
             }
             // Any prefix of "silent" silences; only the exact "silent!"
             // also silences errors.
-            if strncmp(s, c"silent".as_ptr(), 6) == 0 {
-                *msg_silent.ptr() += 1;
-            }
+            silence = strncmp(s, c"silent".as_ptr(), 6) == 0;
             if strcmp(s, c"silent!".as_ptr()) == 0 {
                 emsg_silent.set(1);
                 emsg_noredir.set(true);
             }
-        } else {
-            *msg_silent.ptr() += 1;
         }
+        // Restored either way: an explicit empty {silent} asks for output
+        // and still resets what the commands below leave behind.
+        let _silenced = Suppress::messages_saved_when(silence);
 
         let mut capture_local = garray_T {
             ga_len: 0,
@@ -289,7 +289,6 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
             tv_list_unref(list);
         }
 
-        msg_silent.set(save_msg_silent);
         emsg_silent.set(save_emsg_silent);
         emsg_noredir.set(save_emsg_noredir);
         redir_off.set(save_redir_off);

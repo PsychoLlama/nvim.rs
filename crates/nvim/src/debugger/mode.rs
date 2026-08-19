@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
+use crate::guard::{Allow, Bump, Saved, Suppress};
 use crate::types::{ExpandContext, NUL};
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
@@ -24,29 +25,37 @@ struct SavedState {
     state: c_int,
     did_emsg: c_int,
     cmd_silent: bool,
-    msg_silent: c_int,
     emsg_silent: c_int,
     redir_off: bool,
+    /// Released at the top of [`SavedState::leave`], before the redraw is
+    /// queued — and by dropping the whole state if the prompt panics out.
+    redraw_off: Bump,
+    no_prompt: Bump,
+    /// `msg_silent`, put back late with the rest of the message state.
+    loud: Saved,
 }
 
 impl SavedState {
     fn enter() -> Self {
+        // Do not redisplay the window, and do not wait for a return.
+        let redraw_off = Suppress::redraw();
+        let no_prompt = Suppress::wait_return();
+        // The prompt has to be visible whatever the debugged code asked for.
+        let loud = Allow::messages();
         let saved = Self {
             msg_scroll: msg_scroll.get(),
             state: State.get(),
             did_emsg: did_emsg.get(),
             cmd_silent: cmd_silent.get(),
-            msg_silent: msg_silent.get(),
             emsg_silent: emsg_silent.get(),
             redir_off: redir_off.get(),
+            redraw_off,
+            no_prompt,
+            loud,
         };
-        // Do not redisplay the window, and do not wait for a return.
-        RedrawingDisabled.set(RedrawingDisabled.get() + 1);
-        no_wait_return.set(no_wait_return.get() + 1);
         // An error from the debugged code is not ours.
         did_emsg.set(0);
         cmd_silent.set(false);
-        msg_silent.set(0);
         emsg_silent.set(0);
         // Debug commands are not part of the redirected output.
         redir_off.set(true);
@@ -56,8 +65,8 @@ impl SavedState {
     }
 
     fn leave(self) {
-        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
-        no_wait_return.set(no_wait_return.get() - 1);
+        drop(self.redraw_off);
+        drop(self.no_prompt);
         // SAFETY: no arguments; it only marks the grid dirty.
         unsafe { redraw_all_later(UPD_NOT_VALID) };
         need_wait_return.set(false);
@@ -67,7 +76,7 @@ impl SavedState {
         debug_mode.set(false);
         did_emsg.set(self.did_emsg);
         cmd_silent.set(self.cmd_silent);
-        msg_silent.set(self.msg_silent);
+        drop(self.loud);
         emsg_silent.set(self.emsg_silent);
         redir_off.set(self.redir_off);
         // Print the banner again only after something else has been typed.

@@ -23,10 +23,11 @@ use crate::getchar::{
     AppendCharToRedobuff, AppendToRedobuff, stuff_empty, stuffReadbuff, stuffcharReadbuff,
     stuffnumReadbuff,
 };
+use crate::guard::Suppress;
 use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, K_DEL, K_INS, K_KDEL, K_KINS};
 use crate::main::{
-    State, VIsual_active, VIsual_mode, cb_flags, curbuf, curwin, e_modifiable, got_int, msg_silent,
-    p_sel, p_sta, p_to, p_ww, restart_edit,
+    State, VIsual_active, VIsual_mode, cb_flags, curbuf, curwin, e_modifiable, got_int, p_sel,
+    p_sta, p_to, p_ww, restart_edit,
 };
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
@@ -750,13 +751,13 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
                 (*cap).cmdchar = 'd' as c_int;
                 (*cap).nchar = NUL;
                 (*(*cap).oap).regname = if keep_registers { '_' as c_int } else { NUL };
-                (*msg_silent.ptr()) += 1;
+                let silenced = Suppress::messages();
                 nv_operator(cap);
                 do_pending_operator(cap, 0, false);
                 // The delete may have left the buffer with one empty line
                 // that the put should not keep.
                 emptied = (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0;
-                (*msg_silent.ptr()) -= 1;
+                drop(silenced);
                 (*(*cap).oap).regname = regname;
             }
             if VIsual_mode.get() == 'V' as c_int {

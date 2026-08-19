@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::drawscreen::windows_in_curtab;
+use crate::guard::Allow;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
     kErrorTypeNone,
@@ -638,8 +639,7 @@ pub unsafe fn getcmdline_prompt(
         (*cc).mouse_used = mouse_used;
 
         let cmd_silent_saved = cmd_silent.get();
-        let msg_silent_saved = msg_silent.get();
-        msg_silent.set(0);
+        let loud = Allow::messages();
         cmd_silent.set(false); // want to see the prompt
 
         let ret = command_line_enter(firstc, 1, 0, false) as *mut ::core::ffi::c_char;
@@ -647,7 +647,7 @@ pub unsafe fn getcmdline_prompt(
         if did_save_ccline {
             restore_cmdline(&raw mut save_ccline);
         }
-        msg_silent.set(msg_silent_saved);
+        drop(loud);
         cmd_silent.set(cmd_silent_saved);
         if !(*cc).cmdbuff.is_null() {
             msg_col.set(msg_col_save);

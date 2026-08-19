@@ -41,10 +41,10 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
-    NameBuff, RedrawingDisabled, Rows, State, cmd_silent, cmdline_row, curbuf, curwin,
-    debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick, did_emsg,
-    emsg_silent, ex_nesting_level, ex_normal_busy, got_int, ignore_script, lines_left, msg_row,
-    msg_scroll, msg_silent, need_wait_return, no_wait_return, redir_off,
+    NameBuff, Rows, State, cmd_silent, cmdline_row, curbuf, curwin, debug_backtrace_level,
+    debug_break_level, debug_did_msg, debug_mode, debug_tick, did_emsg, emsg_silent,
+    ex_nesting_level, ex_normal_busy, got_int, ignore_script, lines_left, msg_row, msg_scroll,
+    need_wait_return, redir_off,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{msg, msg_starthere};

@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 use crate::smsg_c;
 use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
 
@@ -286,9 +287,9 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
             try_enter(&raw mut tstate);
             err_errmsg = c"E5407: Callback has thrown an exception: %s".as_ptr();
             let saved_msg_col = msg_col.get();
-            msg_silent.set(msg_silent.get() + 1);
+            let silenced = Suppress::messages();
             cbcall_ret = callback_call(&raw mut color_cb, 1, &raw mut arg, &raw mut tv);
-            msg_silent.set(msg_silent.get() - 1);
+            drop(silenced);
             msg_col.set(saved_msg_col);
             if got_int.get() {
                 getln_interrupted_highlight.set(true);

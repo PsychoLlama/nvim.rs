@@ -21,7 +21,7 @@ use crate::ex_eval::aborting;
 
 use crate::garray::{ga_clear, ga_init};
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
-use crate::main::{capture_ga, curbuf, current_sctx, msg_col, msg_silent, redir_off};
+use crate::main::{capture_ga, curbuf, current_sctx, msg_col, redir_off};
 use crate::mbyte::mb_islower;
 use crate::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xrealloc};
 use crate::os::cshim::{memmove, snprintf, strncmp};

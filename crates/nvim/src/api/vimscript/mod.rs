@@ -14,7 +14,7 @@ use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{
     EVALARG_EVALUATE, capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col,
-    msg_silent, redir_off, suppress_errthrow,
+    redir_off, suppress_errthrow,
 };
 use crate::memory::xfree;
 use crate::os::cshim::memmove;

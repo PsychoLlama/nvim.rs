@@ -27,6 +27,7 @@ use crate::fileio::{
 };
 use crate::getchar::flush_buffers;
 use crate::global_cell::GlobalCell;
+use crate::guard::Allow;
 use crate::input::prompt_for_input;
 use crate::main::{
     NameBuff, allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, firstbuf, getout,
@@ -494,12 +495,10 @@ pub unsafe fn check_need_swap(newfile: bool) {
     unsafe {
         // The swap dialog may prompt, and the user has to see it; E325 may
         // reset this again.
-        let old_msg_silent = msg_silent.get();
-        msg_silent.set(0);
+        let _loud = Allow::messages();
         if (*curbuf.get()).b_may_swap && ((*curbuf.get()).b_p_ro == 0 || !newfile) {
             ml_open_file(curbuf.get());
         }
-        msg_silent.set(old_msg_silent);
     }
 }
 

@@ -10,6 +10,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::getchar::PastePhase;
+use crate::guard::Suppress;
 use crate::types::{NUL, PUT_CURSEND};
 
 pub unsafe fn nvim_paste(
@@ -182,7 +183,7 @@ pub unsafe fn nvim_put(
         };
         try_enter(&raw mut tstate);
         let mut VIsual_was_active: bool = VIsual_active.get();
-        (*msg_silent.ptr()) += 1;
+        let silenced = Suppress::messages();
         do_put(
             0 as ::core::ffi::c_int,
             &raw mut reg as *mut yankreg_T,
@@ -198,7 +199,7 @@ pub unsafe fn nvim_put(
                 0 as ::core::ffi::c_int
             },
         );
-        (*msg_silent.ptr()) -= 1;
+        drop(silenced);
         VIsual_active.set(VIsual_was_active);
         try_leave(&raw mut tstate, err);
     }

@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 
@@ -536,7 +537,8 @@ pub(crate) unsafe fn get_next_default_completion(
         loop {
             let mut cont_s_ipos = false;
 
-            (*msg_silent.ptr()) += 1; // Don't want messages for wrapscan.
+            // Don't want messages for wrapscan.
+            let silenced = Suppress::messages();
             if in_fuzzy_collect {
                 let hit = search_for_fuzzy_match(
                     (*st).ins_buf,
@@ -578,7 +580,7 @@ pub(crate) unsafe fn get_next_default_completion(
                     ptr::null_mut(),
                 );
             }
-            (*msg_silent.ptr()) -= 1;
+            drop(silenced);
 
             let pos = *(*st).cur_match_pos;
             if !compl_started.get() || (*st).set_match_pos {

@@ -157,6 +157,24 @@ impl Suppress {
         Bump::by(&msg_silent, by)
     }
 
+    /// [`Suppress::messages`] whose release *restores* the level it found
+    /// rather than subtracting one.
+    ///
+    /// The API's two output-capturing entry points do it this way: they
+    /// put the whole message state back in one block afterwards, so a
+    /// script that leaked a `:silent` cannot escape through them.
+    pub fn messages_saved() -> Saved {
+        Saved::new(&msg_silent, msg_silent.get() + 1)
+    }
+
+    /// [`Suppress::messages_saved`] that only raises the level when `cond`,
+    /// but restores it either way — `execute()`'s `{silent}` argument, where
+    /// an explicit empty value asks for output *and* still resets whatever
+    /// the executed commands left behind.
+    pub fn messages_saved_when(cond: bool) -> Saved {
+        Saved::when(cond, &msg_silent, msg_silent.get() + 1)
+    }
+
     /// `no_wait_return` — a message shown in this scope does not stop for
     /// the hit-enter prompt.
     pub fn wait_return() -> Bump {

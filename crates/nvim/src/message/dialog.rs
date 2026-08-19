@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
@@ -52,11 +53,11 @@ pub unsafe fn do_dialog(
             return dfltbutton;
         }
 
-        let save_msg_silent = msg_silent.get();
         let old_state = State.get();
-        msg_silent.set(0); // if the dialog prompts for input, the user needs to see it
+        // If the dialog prompts for input, the user needs to see it.
+        let loud = Allow::messages();
         // We wait for a keypress, so don't make the user press RETURN as well.
-        no_wait_return.set(no_wait_return.get() + 1);
+        let no_prompt = Suppress::wait_return();
 
         let hotkeys = msg_show_console_dialog(message, buttons, dfltbutton);
         let mut retval = 0;
@@ -117,10 +118,10 @@ pub unsafe fn do_dialog(
         xfree(confirm_msg.get().cast());
         confirm_msg.set(ptr::null_mut());
 
-        msg_silent.set(save_msg_silent);
+        drop(loud);
         State.set(old_state);
         setmouse();
-        no_wait_return.set(no_wait_return.get() - 1);
+        drop(no_prompt);
         msg_end_prompt();
 
         retval

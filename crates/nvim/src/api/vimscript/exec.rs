@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, dict_put_str};
+use crate::guard::Suppress;
 use crate::types::NUL;
 use core::ffi::c_char;
 use core::ptr;
@@ -49,7 +50,6 @@ pub unsafe fn exec_impl(
         // Read once: `opts` is the dispatcher's own copy of the keyword
         // arguments, which nothing the sourced script can do reaches.
         let capture = (*opts).output;
-        let save_msg_silent = msg_silent.get();
         let save_redir_off = redir_off.get();
         let save_capture_ga = capture_ga.get();
         let save_msg_col = msg_col.get();
@@ -60,16 +60,16 @@ pub unsafe fn exec_impl(
         }
         let mut tstate: TryState = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
+        let silenced = capture.then(Suppress::messages_saved);
         if capture {
-            *msg_silent.ptr() += 1;
             redir_off.set(false);
             msg_col.set(0);
         }
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
         do_source_str(src.data(), c"nvim_exec2()".as_ptr() as *mut c_char);
+        drop(silenced);
         if capture {
             capture_ga.set(save_capture_ga);
-            msg_silent.set(save_msg_silent);
             redir_off.set(save_redir_off);
             msg_col.set(save_msg_col);
         }

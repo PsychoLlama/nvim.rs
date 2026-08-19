@@ -45,10 +45,11 @@ use crate::eval::typval::{tv_list_ref, tv_list_unref};
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
+use crate::guard::{Allow, Suppress};
 use crate::main::{
     caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_throw, e_interr,
-    e_outofmem, emsg_silent, force_abort, got_int, msg_list, msg_row, msg_scroll, msg_silent,
-    need_rethrow, no_wait_return, p_verbose, suppress_errthrow, trylevel,
+    e_outofmem, emsg_silent, force_abort, got_int, msg_list, msg_row, msg_scroll, need_rethrow,
+    p_verbose, suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
 use crate::message::{emsg, internal_error, msg_puts, verbose_enter, verbose_leave};
@@ -473,14 +474,13 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
     }
     // SAFETY: caller contract.
     unsafe {
-        let save_msg_silent = msg_silent.get();
-        if debug_break_level.get() > 0 {
-            // Display messages.
-            msg_silent.set(0);
-        } else {
+        let debugging = debug_break_level.get() > 0;
+        // While debugging the messages have to be displayed.
+        let loud = debugging.then(Allow::messages);
+        if !debugging {
             verbose_enter();
         }
-        no_wait_return.set(no_wait_return.get() + 1);
+        let no_prompt = Suppress::wait_return();
         if debug_break_level.get() > 0 || *p_vfile.get() == NUL as c_char {
             // Always scroll up, don't overwrite.
             msg_scroll.set(1);
@@ -491,10 +491,9 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
         if debug_break_level.get() > 0 || *p_vfile.get() == NUL as c_char {
             cmdline_row.set(msg_row.get());
         }
-        no_wait_return.set(no_wait_return.get() - 1);
-        if debug_break_level.get() > 0 {
-            msg_silent.set(save_msg_silent);
-        } else {
+        drop(no_prompt);
+        drop(loud);
+        if !debugging {
             verbose_leave();
         }
     }
@@ -733,22 +732,17 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
             _ => c"Interrupt".as_ptr().cast_mut(),
         };
 
-        let save_msg_silent = msg_silent.get();
-        if debug_break_level.get() > 0 {
-            // Display messages.
-            msg_silent.set(0);
-        }
-        no_wait_return.set(no_wait_return.get() + 1);
+        // While debugging the messages have to be displayed.
+        let loud = (debug_break_level.get() > 0).then(Allow::messages);
+        let no_prompt = Suppress::wait_return();
         // Always scroll up, don't overwrite.
         msg_scroll.set(1);
         smsg_c!(0, mesg, s);
         // Don't overwrite this either.
         msg_puts(c"\n".as_ptr());
         cmdline_row.set(msg_row.get());
-        no_wait_return.set(no_wait_return.get() - 1);
-        if debug_break_level.get() > 0 {
-            msg_silent.set(save_msg_silent);
-        }
+        drop(no_prompt);
+        drop(loud);
 
         if pending == CSTP_RETURN {
             xfree(s.cast());

@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::guard::Suppress;
+use crate::guard::{Allow, Suppress};
 use crate::types::{CmdModFlags, ExArgt, FAIL, OptionSetFlags, kErrorTypeNone};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
@@ -416,7 +416,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
             // still update v:errmsg; block messages, namely ones that prompt;
             // block events.
             emsg_silent.set(emsg_silent.get() + 1);
-            msg_silent.set(msg_silent.get() + 1);
+            let silenced = Suppress::messages();
             block_autocmds();
 
             cmdpreview_prepare(&raw mut cpinfo);
@@ -467,10 +467,8 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
             // A nonzero answer means the screen has to be updated now.
             if cmdpreview_type != 0 {
-                let save_rd = RedrawingDisabled.get();
-                RedrawingDisabled.set(0);
+                let _redraw = Allow::redraw();
                 update_screen();
-                RedrawingDisabled.set(save_rd);
             }
 
             // Close the preview window if it is open.
@@ -481,7 +479,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
             cmdpreview_restore_state(&raw mut cpinfo);
 
             unblock_autocmds();
-            msg_silent.set(msg_silent.get() - 1);
+            drop(silenced);
             emsg_silent.set(emsg_silent.get() - 1);
             redrawcmdline();
         }

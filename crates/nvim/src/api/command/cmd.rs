@@ -36,6 +36,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
+use crate::guard::Suppress;
 use crate::types::{ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -782,7 +783,6 @@ unsafe fn run_cmd(
         ga_growsize: 0,
         ga_data: ptr::null_mut(),
     };
-    let save_msg_silent = msg_silent.get();
     let save_redir_off = redir_off.get();
     let save_capture_ga = capture_ga.get();
     let save_msg_col = msg_col.get();
@@ -804,9 +804,9 @@ unsafe fn run_cmd(
     };
     // SAFETY: `tstate` is paired with the `try_leave` below.
     unsafe { try_enter(&raw mut tstate) };
+    // Captured output must not also reach the message grid.
+    let silenced = capture.then(Suppress::messages_saved);
     if capture {
-        // Captured output must not also reach the message grid.
-        msg_silent.set(msg_silent.get() + 1);
         redir_off.set(false);
         msg_col.set(0);
     }
@@ -817,9 +817,9 @@ unsafe fn run_cmd(
     unsafe { execute_cmd(ea, cmdinfo, false) };
     current_sctx.set(save_current_sctx);
 
+    drop(silenced);
     if capture {
         capture_ga.set(save_capture_ga);
-        msg_silent.set(save_msg_silent);
         redir_off.set(save_redir_off);
         msg_col.set(save_msg_col);
     }
