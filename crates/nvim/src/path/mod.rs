@@ -46,8 +46,8 @@ use crate::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::types::{
-    Directory, FAIL, FileComparison, FileID, FileInfo, MAXPATHL, OK, file_comparison, garray_T,
-    regmatch_T, size_t,
+    Directory, FAIL, FileComparison, FileID, FileInfo, MAXPATHL, OK, PATHSEPSTR, file_comparison,
+    garray_T, regmatch_T, size_t,
 };
 use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen};
 
@@ -121,7 +121,6 @@ pub const URL_BACKSLASH: C2Rust_Unnamed_21 = 2;
 pub const URL_SLASH: C2Rust_Unnamed_21 = 1;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const PATHSEP: c_int = '/' as c_int;
-pub const PATHSEPSTR: [c_char; 2] = [b'/' as c_char, 0];
 pub const MAXSUFLEN: c_int = 30;
 pub const ENV_SEPCHAR: c_int = ':' as c_int;
 
@@ -502,7 +501,7 @@ pub unsafe extern "C" fn append_path(
         let mut current_length = CStr::from_ptr(path).to_bytes().len();
         let to_append_length = CStr::from_ptr(to_append).to_bytes().len();
         // The separator, without its NUL.
-        let sep_len = PATHSEPSTR.len() - 1;
+        let sep_len = PATHSEPSTR.count_bytes();
 
         // Do not append an empty string, or a dot.
         if to_append_length == 0 || strcmp(to_append, c".".as_ptr()) == 0 {

@@ -177,7 +177,6 @@ pub const NULL_STRING: String_0 = String_0 {
 };
 pub const TAB: c_int = '\t' as c_int;
 pub const CTRL_F_STR: &::core::ffi::CStr = c"\x06";
-pub const PATHSEPSTR: &::core::ffi::CStr = c"/";
 pub const FORCE_BIN: c_int = 1 as c_int;
 pub const HLATTRS_INIT: HlAttrs = HlAttrs {
     rgb_ae_attr: 0 as int32_t,

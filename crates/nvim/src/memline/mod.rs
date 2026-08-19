@@ -564,7 +564,5 @@ pub unsafe fn ml_close_notmod() {
 }
 
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const ENOENT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

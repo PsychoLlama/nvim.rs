@@ -16,6 +16,7 @@
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
+use crate::mbyte::ICONV_EINVAL;
 
 /// The iconv descriptor value that means "no iconv".
 fn no_iconv() -> iconv_t {

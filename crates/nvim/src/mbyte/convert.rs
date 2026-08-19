@@ -22,6 +22,7 @@
 
 use super::*;
 use crate::types::{FAIL, OK};
+use ::libc::{EILSEQ, EINVAL};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 /// Has the host's iconv been proved to work?
@@ -41,13 +42,12 @@ const NUMBUFLEN: usize = 65;
 const ICONV_TESTLEN: usize = 400;
 
 /// iconv's own `errno` values, which a dynamically loaded library may report
-/// instead of the host's — both spellings are tested at every site.
-pub const ICONV_E2BIG: c_int = E2BIG;
-pub const ICONV_EINVAL: c_int = EINVAL;
-pub const ICONV_EILSEQ: c_int = EILSEQ;
-pub const E2BIG: c_int = 7;
-pub const EINVAL: c_int = 22;
-pub const EILSEQ: c_int = 84;
+/// instead of the host's — both spellings are tested at every site. They are
+/// spelled out rather than derived from `libc`'s: on this platform the two
+/// happen to agree, but the point of the pair is that elsewhere they need not.
+pub const ICONV_E2BIG: c_int = 7;
+pub const ICONV_EINVAL: c_int = 22;
+pub const ICONV_EILSEQ: c_int = 84;
 
 /// `(iconv_t)-1`: what `iconv_open` answers when it cannot convert a pair.
 fn iconv_failed() -> iconv_t {

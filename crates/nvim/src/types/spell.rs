@@ -4,6 +4,9 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
+/// `int_wordlist`'s compiled name, as a `vim_snprintf` template.
+pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
+
 pub type SpellAddType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 pub struct fromto_T {

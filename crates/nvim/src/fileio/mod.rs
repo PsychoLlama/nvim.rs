@@ -606,13 +606,11 @@ pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CPO_FNAMER: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
 pub const EOVERFLOW: ::core::ffi::c_int = 75 as ::core::ffi::c_int;
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 pub const NAME_MAX: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const ICONV_EINVAL: ::core::ffi::c_int = EINVAL;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
 /// Fill `eap` so that `'fileencoding'`, `'fileformat'` and `'binary'` are

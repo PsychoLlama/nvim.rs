@@ -14,6 +14,7 @@
 
 use crate::path::ExpandFlags;
 use crate::semsg_c;
+use ::libc::{EINVAL, ENOENT};
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;

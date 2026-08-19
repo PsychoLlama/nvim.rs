@@ -889,5 +889,3 @@ pub const CPO_FWRITE: ::core::ffi::c_int = 'W' as ::core::ffi::c_int;
 pub const CPO_KEEPRO: ::core::ffi::c_int = 'Z' as ::core::ffi::c_int;
 pub const CPO_PLUS: ::core::ffi::c_int = '+' as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
-pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const ICONV_EINVAL: ::core::ffi::c_int = EINVAL;

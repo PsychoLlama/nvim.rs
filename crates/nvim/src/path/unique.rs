@@ -15,7 +15,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::regexp::{RE_MAGIC, RE_STRING};
-use crate::types::{MAXPATHL, OK};
+use crate::types::{MAXPATHL, OK, PATHSEPSTR};
 
 /// Shorten the directory part of `str` in place, keeping `trim_len`
 /// characters of each component: `"~/foo/../.bar/fname"` with a `trim_len`

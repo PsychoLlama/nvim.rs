@@ -11,7 +11,8 @@ use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
 use crate::types::{
-    FAIL, MAXPATHL, NUL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    FAIL, MAXPATHL, NUL, OK, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -24,10 +25,8 @@ use core::ptr;
 /// `user_expand_func_T`.
 type UserExpandFunc = unsafe fn(*const c_char, c_int, *mut typval_T) -> *mut c_void;
 
-/// The length of `PATHSEPSTR`, which is what upstream's
-/// `STRLEN_LITERAL(PATHSEPSTR)` comes to on every platform this port builds
-/// for.
-const PATHSEP_LEN: size_t = 1;
+/// Upstream's `STRLEN_LITERAL(PATHSEPSTR)`.
+const PATHSEP_LEN: size_t = PATHSEPSTR.count_bytes() as size_t;
 
 /// Expand shell command matches in one directory of `$PATH`.
 ///

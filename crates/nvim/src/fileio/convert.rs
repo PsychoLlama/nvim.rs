@@ -23,6 +23,7 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use std::ffi::CStr;
 
 use crate::bufwrite::translate;
+use crate::mbyte::ICONV_EINVAL;
 
 use super::*;
 use crate::types::FAIL;

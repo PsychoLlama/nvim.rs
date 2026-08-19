@@ -48,20 +48,20 @@ use crate::runtime::runtimepath_default;
 use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptValData, String_0, garray_T, kFalse, kTrue, size_t,
-    tabpage_T, uint32_t, vimoption_T,
+    NUL, OptIndex, OptInt, OptVal, OptValData, PATHSEPSTR, String_0, garray_T, kFalse, kTrue,
+    size_t, tabpage_T, uint32_t, vimoption_T,
 };
 use crate::window::{last_status, win_comp_scroll};
 use ::libc::{getuid, strlen};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, OPT_GLOBAL, OPT_LOCAL, PATHSEPSTR, PROJECT_NAME, ROOT_UID, SID_NONE,
-    check_options, check_win_options, default_fileformat, didset_options, didset_options2,
-    get_option_unset_value, insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagInsecure,
-    kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean, kOptValTypeNumber,
-    kOptValTypeString, option_expand, option_has_type, option_is_global_local, option_var,
-    option_was_set, optval_copy, optval_free, set_fileformat, set_option_direct,
-    set_option_value_give_err, set_option_varp,
+    NO_LOCAL_UNDOLEVEL, OPT_GLOBAL, OPT_LOCAL, PROJECT_NAME, ROOT_UID, SID_NONE, check_options,
+    check_win_options, default_fileformat, didset_options, didset_options2, get_option_unset_value,
+    insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagInsecure, kOptFlagNoDefExp,
+    kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
+    option_expand, option_has_type, option_is_global_local, option_var, option_was_set,
+    optval_copy, optval_free, set_fileformat, set_option_direct, set_option_value_give_err,
+    set_option_varp,
 };
 
 /// Every option, in table order.

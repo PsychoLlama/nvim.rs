@@ -16,9 +16,9 @@ use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, IOSIZE, MAXPATHL, NUL, OK,
-    OptInt, OptValType, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T, file_comparison,
-    fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T, time_t, uint8_t,
-    vimconv_T,
+    OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T,
+    file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T,
+    time_t, uint8_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use ::libc::{memset, strcmp, strlen};
@@ -228,7 +228,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
 pub const SPL_FNAME_ADD: &::core::ffi::CStr = c".add.";
 pub const SPL_FNAME_ASCII: &::core::ffi::CStr = c".ascii.";
 pub const VIMSUGMAGIC: &::core::ffi::CStr = c"VIMsug";
