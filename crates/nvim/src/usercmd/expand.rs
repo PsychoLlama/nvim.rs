@@ -24,10 +24,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_VERBOSE, Scope, ucmd_list};
+use super::{Scope, ucmd_list};
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
-use crate::ex_docmd::do_cmdline;
+use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
 use crate::lua::executor::nlua_do_ucmd;
 use crate::main::{cmdmod, current_sctx, curtab};
@@ -720,7 +720,7 @@ pub unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
             buf,
             (*eap).ea_getline,
             (*eap).cookie,
-            (DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_KEYTYPED) as c_int,
+            DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED,
         );
     }
     if let Some(saved) = saved {

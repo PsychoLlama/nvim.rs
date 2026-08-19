@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::DoCmdOpts;
 use crate::types::NUL;
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
@@ -324,7 +325,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
                     cmdline,
                     Some(getexline as _),
                     NULL,
-                    (DOCMD_VERBOSE | DOCMD_EXCRESET) as c_int,
+                    DoCmdOpts::VERBOSE | DoCmdOpts::EXCRESET,
                 );
             }
             debug_break_level.set(outer_level);

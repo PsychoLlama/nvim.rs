@@ -8,7 +8,7 @@ use core::ptr;
 use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode};
-use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
+use crate::ex_docmd::{DoCmdOpts, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{compute_cmdrow, getexline};
 use crate::getchar::{
     getcmdkeycmd, map_execute_lua, paste_repeat, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff,
@@ -23,9 +23,9 @@ use crate::main::{
 use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
-    CA_COMMAND_BUSY, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NULL, checkclearop, checkclearopq,
-    clearop, clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark,
-    true_0, v_visop,
+    CA_COMMAND_BUSY, GETF_ALT, GETF_SETMARK, NULL, checkclearop, checkclearopq, clearop,
+    clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark, true_0,
+    v_visop,
 };
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
@@ -108,9 +108,9 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
                 getline,
                 NULL,
                 if (*oap).op_type != OP_NOP {
-                    DOCMD_KEEPLINE as c_int
+                    DoCmdOpts::KEEPLINE
                 } else {
-                    0
+                    DoCmdOpts::NONE
                 },
             ) != 0
         };

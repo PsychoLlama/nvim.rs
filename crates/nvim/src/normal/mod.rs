@@ -81,7 +81,6 @@ pub const SHM_FILEINFO: c_uint = 70;
 pub const HIST_SEARCH: c_int = 1;
 pub const ECMD_HIDE: c_uint = 1;
 pub const ECMD_LAST: c_int = -1;
-pub const DOCMD_KEEPLINE: c_uint = 32;
 pub const VSE_NONE: c_uint = 0;
 pub const ML_DEL_MESSAGE: c_uint = 1;
 pub const kMTLineWise: MotionType = 1;

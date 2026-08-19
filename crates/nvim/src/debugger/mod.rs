@@ -65,8 +65,6 @@ use core::ptr;
 
 pub type C2Rust_Unnamed_13 = c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_13 = 0;
-pub const DOCMD_EXCRESET: C2Rust_Unnamed_17 = 16;
-pub const DOCMD_VERBOSE: C2Rust_Unnamed_17 = 1;
 pub const ESTACK_NONE: estack_arg_T = 0;
 pub const EXPR_IS: crate::types::exprtype_T = 9;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;

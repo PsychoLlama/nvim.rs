@@ -32,7 +32,7 @@ use crate::drawscreen::{
     UPD_SOME_VALID, UPD_VALID, redraw_statuslines, setcursor, show_cursor_info_later, showmode,
     unshowmode, update_screen,
 };
-use crate::ex_docmd::do_cmdline;
+use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
 use crate::main::{
     RedrawingDisabled, State, clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw,
@@ -622,7 +622,7 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
             let (none, data) = (::core::ptr::null_mut(), ::core::ptr::null_mut::<c_void>());
             // SAFETY: runs the command the key carries, which is read back
             // by `getcmdkeycmd` rather than passed here.
-            unsafe { do_cmdline(none, Some(getcmdkeycmd), data, 0) };
+            unsafe { do_cmdline(none, Some(getcmdkeycmd), data, DoCmdOpts::NONE) };
             return 1;
         }
         K_LUA => {

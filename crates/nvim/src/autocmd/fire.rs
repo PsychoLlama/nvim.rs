@@ -20,6 +20,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::DoCmdOpts;
 use crate::types::{FAIL, MAXPATHL, OK};
 
 /// A zeroed `sctx_T`; `getnextac` fills `patcmd.script_ctx` in from the
@@ -467,9 +468,7 @@ pub unsafe fn apply_autocmds_group(
                     ::core::ptr::null_mut(),
                     Some(getnextac),
                     (&raw mut patcmd).cast::<::core::ffi::c_void>(),
-                    DOCMD_NOWAIT as ::core::ffi::c_int
-                        | DOCMD_VERBOSE as ::core::ffi::c_int
-                        | DOCMD_REPEAT as ::core::ffi::c_int,
+                    DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
                 );
 
                 *did_emsg.ptr() += save_did_emsg;

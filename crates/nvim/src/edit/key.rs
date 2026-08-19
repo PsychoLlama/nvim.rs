@@ -24,6 +24,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::ex_docmd::DoCmdOpts;
 use crate::keycodes::{K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE};
 use crate::types::{FAIL, NUL};
 
@@ -238,7 +239,7 @@ pub(crate) unsafe fn insert_handle_key(s: *mut InsertState) -> c_int {
                             ) -> *mut c_char,
                     ),
                     NULL,
-                    0,
+                    DoCmdOpts::NONE,
                 );
                 Next::CheckPum
             }

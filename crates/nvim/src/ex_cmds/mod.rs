@@ -134,7 +134,6 @@ pub const ECMD_LAST: C2Rust_Unnamed_29 = -1;
 pub const ECMD_LASTL: C2Rust_Unnamed_29 = 0;
 pub const ML_DEL_MESSAGE: C2Rust_Unnamed_39 = 1;
 pub const READ_FILTER: C2Rust_Unnamed_37 = 2;
-pub const DOCMD_VERBOSE: C2Rust_Unnamed_36 = 1;
 pub const READ_NOWINENTER: C2Rust_Unnamed_37 = 128;
 pub const READ_KEEP_UNDO: C2Rust_Unnamed_37 = 32;
 pub const BCO_ENTER: C2Rust_Unnamed_40 = 1;
@@ -142,7 +141,6 @@ pub const CCGD_EXCMD: C2Rust_Unnamed_35 = 16;
 pub const CCGD_FORCEIT: C2Rust_Unnamed_35 = 4;
 pub const CCGD_MULTWIN: C2Rust_Unnamed_35 = 2;
 pub const CCGD_AW: C2Rust_Unnamed_35 = 1;
-pub const DOCMD_NOWAIT: C2Rust_Unnamed_36 = 2;
 #[derive(Copy, Clone)]
 pub struct SubResult {
     pub start: lpos_T,

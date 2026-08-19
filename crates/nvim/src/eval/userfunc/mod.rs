@@ -146,9 +146,6 @@ pub const FCERR_TOOFEW: c_int = 2;
 pub const FCERR_TOOMANY: c_int = 1;
 pub const FCERR_UNKNOWN: c_int = 0;
 
-pub const DOCMD_REPEAT: c_int = 4;
-pub const DOCMD_VERBOSE: c_int = 1;
-pub const DOCMD_NOWAIT: c_int = 2;
 pub const KS_EXTRA: c_int = 253;
 pub const LUA_NOREF: c_int = -2;
 pub const NOTDONE: c_int = 2;

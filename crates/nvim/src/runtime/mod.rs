@@ -146,9 +146,6 @@ pub const kXDGDataHome: XDGVarType = 1;
 pub const kXDGConfigHome: XDGVarType = 0;
 pub const kXDGNone: XDGVarType = -1;
 /// `do_cmdline` flags.
-pub const DOCMD_REPEAT: ::core::ffi::c_int = 4;
-pub const DOCMD_NOWAIT: ::core::ffi::c_int = 2;
-pub const DOCMD_VERBOSE: ::core::ffi::c_int = 1;
 pub const ETYPE_AUCMD: etype_T = 3;
 pub const ETYPE_UFUNC: etype_T = 2;
 pub const ETYPE_SCRIPT: etype_T = 1;

@@ -30,8 +30,7 @@ use crate::ex_docmd::source::{
 };
 use crate::ex_docmd::{
     CSF_ACTIVE, CSF_FINALLY, CSF_FOR, CSF_TRY, CSF_WHILE, CSL_HAD_CONT, CSL_HAD_ENDLOOP,
-    CSL_HAD_FINA, CSL_HAD_LOOP, CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, DOCMD_EXCRESET,
-    DOCMD_KEEPLINE, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, PROF_YES, dbg_stuff,
+    CSL_HAD_FINA, CSL_HAD_LOOP, CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, PROF_YES, dbg_stuff,
     loop_cookie, wcmd_T,
 };
 use crate::ex_eval::{
@@ -109,20 +108,31 @@ pub unsafe fn do_cmdline_cmd(cmd: *const c_char) -> c_int {
             cmd as *mut c_char,
             None,
             ptr::null_mut(),
-            DOCMD_VERBOSE as c_int | DOCMD_NOWAIT as c_int | DOCMD_KEYTYPED as c_int,
+            DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED,
         )
     }
 }
 
+crate::flag_set! {
+    /// How [`do_cmdline`] should run the lines it is given -- upstream's
+    /// `DOCMD_*`.
+    pub struct DoCmdOpts;
+
+    /// Include the command in any error message.
+    const VERBOSE = 1;
+    /// Skip `wait_return` and friends.
+    const NOWAIT = 2;
+    /// Keep asking `fgetline` until it answers null.
+    const REPEAT = 4;
+    /// Leave `KeyTyped` alone.
+    const KEYTYPED = 8;
+    /// Save and restore the exception environment (debugging).
+    const EXCRESET = 16;
+    /// Remember the first typed line, for `.` to repeat.
+    const KEEPLINE = 32;
+}
+
 /// Run Ex commands, from `cmdline` and then from `fgetline`.
-///
-/// `flags` is a set of `DOCMD_*`:
-/// - `VERBOSE` includes the command in any error message;
-/// - `NOWAIT` skips `wait_return` and friends;
-/// - `REPEAT` keeps asking `fgetline` until it answers null;
-/// - `KEYTYPED` leaves 'KeyTyped' alone;
-/// - `EXCRESET` saves and restores the exception environment (debugging);
-/// - `KEEPLINE` remembers the first typed line, for `.` to repeat.
 ///
 /// May be called recursively. Answers `FAIL` when the line could not be
 /// run, `OK` otherwise.
@@ -130,7 +140,7 @@ pub unsafe fn do_cmdline(
     cmdline: *mut c_char,
     fgetline: LineGetter,
     cookie: *mut c_void,
-    flags: c_int,
+    flags: DoCmdOpts,
 ) -> c_int {
     unsafe {
         // How deep this call is inside other `do_cmdline` calls. Used to
@@ -200,7 +210,7 @@ pub unsafe fn do_cmdline(
             suppress_errthrow.set(false);
         }
 
-        if flags & DOCMD_EXCRESET as c_int != 0 {
+        if flags.has(DoCmdOpts::EXCRESET) {
             save_dbg_stuff(&raw mut debug_saved);
         } else {
             memset(
@@ -219,8 +229,7 @@ pub unsafe fn do_cmdline(
 
         // 'KeyTyped' is only set by `vgetc`; a sourced line never went
         // through it.
-        if flags & DOCMD_KEYTYPED as c_int == 0 && !getline_equal(fgetline, cookie, Some(getexline))
-        {
+        if !flags.has(DoCmdOpts::KEYTYPED) && !getline_equal(fgetline, cookie, Some(getexline)) {
             KeyTyped.set(false);
         }
 
@@ -326,7 +335,7 @@ pub unsafe fn do_cmdline(
                     // An aborted command line does not wait for a return.
                     // The null that ends a sourced file or a function is not
                     // an abort and does not reach here with 'KeyTyped' set.
-                    if KeyTyped.get() && flags & DOCMD_REPEAT as c_int == 0 {
+                    if KeyTyped.get() && !flags.has(DoCmdOpts::REPEAT) {
                         need_wait_return.set(false);
                     }
                     retval = FAIL;
@@ -346,7 +355,7 @@ pub unsafe fn do_cmdline(
 
                 // Keep the first typed line for `.` to repeat; forget it as
                 // soon as a second one is typed.
-                if flags & DOCMD_KEEPLINE as c_int != 0 {
+                if flags.has(DoCmdOpts::KEEPLINE) {
                     xfree(repeat_cmdline.get() as *mut c_void);
                     repeat_cmdline.set(if count == 0 {
                         xstrdup(next_cmdline)
@@ -392,7 +401,7 @@ pub unsafe fn do_cmdline(
                 // Put all the output below each other without waiting for a
                 // return. Not for commands from a script, and not for a
                 // recursive call (`:e +command file`).
-                if flags & DOCMD_NOWAIT as c_int == 0 && RECURSIVE.get() == 0 {
+                if !flags.has(DoCmdOpts::NOWAIT) && RECURSIVE.get() == 0 {
                     msg_didout_before_start = msg_didout.get();
                     msg_didany.set(false);
                     msg_start();
@@ -579,7 +588,7 @@ pub unsafe fn do_cmdline(
                 && used_getline
                 && getline_equal(fgetline, cookie, Some(getexline));
             let more_to_run =
-                !next_cmdline.is_null() || cstack.cs_idx >= 0 || flags & DOCMD_REPEAT as c_int != 0;
+                !next_cmdline.is_null() || cstack.cs_idx >= 0 || flags.has(DoCmdOpts::REPEAT);
             if aborting_now || typed_error || !more_to_run {
                 break;
             }
@@ -700,7 +709,7 @@ pub unsafe fn do_cmdline(
         }
 
         // After returning from the debugger, not before.
-        if flags & DOCMD_EXCRESET as c_int != 0 {
+        if flags.has(DoCmdOpts::EXCRESET) {
             restore_dbg_stuff(&raw mut debug_saved);
         }
 

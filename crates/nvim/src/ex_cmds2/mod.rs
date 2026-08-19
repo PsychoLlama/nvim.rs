@@ -57,7 +57,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var, set_vim_var_string};
 use crate::ex_cmds::{check_overwrite, set_swapcommand};
-use crate::ex_docmd::{cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
+use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::highlight_group::HLF_W;
@@ -89,7 +89,7 @@ use core::ptr;
 
 use flag::{
     CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
-    DOBUF_UNLOAD, DOCMD_VERBOSE, ML_EMPTY, VIM_QUESTION,
+    DOBUF_UNLOAD, ML_EMPTY, VIM_QUESTION,
 };
 
 pub use listdo::ex_listdo;
@@ -110,10 +110,6 @@ mod flag {
     pub const DOBUF_GOTO: dobuf_action_values = 0;
     pub const DOBUF_UNLOAD: dobuf_action_values = 2;
     pub const DOBUF_FIRST: dobuf_start_values = 1;
-
-    /// `do_cmdline` flags.
-    pub const DOCMD_VERBOSE: c_int = 1;
-    pub const DOCMD_NOWAIT: c_int = 2;
 
     /// `do_dialog` types; the answers live in `message.rs`.
     pub const VIM_QUESTION: c_int = 4;
@@ -867,7 +863,8 @@ pub unsafe fn ex_drop(eap: *mut exarg_T) {
             // to newly loaded buffers.
             if !(*eap).do_ecmd_cmd.is_null() {
                 let did_set_swapcommand = set_swapcommand((*eap).do_ecmd_cmd, 0 as linenr_T);
-                do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), DOCMD_VERBOSE);
+                let verbose = DoCmdOpts::VERBOSE;
+                do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), verbose);
                 if did_set_swapcommand {
                     set_vim_var_string(VV_SWAPCOMMAND, ptr::null(), -1 as ptrdiff_t);
                 }

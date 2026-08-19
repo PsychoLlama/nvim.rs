@@ -105,9 +105,6 @@ pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
 pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub const DOCMD_KEYTYPED: u32 = 8;
-pub const DOCMD_NOWAIT: u32 = 2;
-pub const DOCMD_VERBOSE: u32 = 1;
 pub const UC_BUFFER: c_int = 1;
 pub const LUA_NOREF: c_int = -2;
 

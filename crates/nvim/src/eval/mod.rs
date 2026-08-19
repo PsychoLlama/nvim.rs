@@ -101,8 +101,6 @@ pub struct forinfo_T {
 }
 pub const kMTCharWise: MotionType = 0;
 pub const kRetNilBool: LuaRetMode = 1;
-pub const DOCMD_VERBOSE: c_uint = 1;
-pub const DOCMD_NOWAIT: c_uint = 2;
 pub const INT64_MIN: c_long = -9223372036854775807 as c_long - 1 as c_long;
 pub const INT64_MAX: c_long = 9223372036854775807 as c_long;
 pub const UINT32_MAX: c_uint = 4294967295 as c_uint;

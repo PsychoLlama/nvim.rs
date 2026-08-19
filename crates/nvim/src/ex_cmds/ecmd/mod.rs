@@ -25,10 +25,10 @@ mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
 use super::{
-    BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOCMD_VERBOSE, ECMD_ADDBUF,
-    ECMD_ALTBUF, ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF,
-    ECMD_SET_HELP, FAIL, KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
-    SHM_FILEINFO, SHM_OVERALL, false_0, true_0,
+    BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, ECMD_ADDBUF, ECMD_ALTBUF,
+    ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP,
+    FAIL, KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT, SHM_FILEINFO,
+    SHM_OVERALL, false_0, true_0,
 };
 use crate::arglist::check_arg_idx;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER, apply_autocmds_retval};
@@ -44,7 +44,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_cmds2::{check_changed, check_fname};
-use crate::ex_docmd::do_cmdline;
+use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::{aborting, should_abort};
 use crate::fold::foldUpdateAll;
 use crate::help::prepare_help_buffer;
@@ -450,7 +450,7 @@ pub unsafe fn do_ecmd(
         unsafe {
             (*curbuf.get()).b_last_used = time(ptr::null_mut::<time_t>());
             if !command.is_null() {
-                do_cmdline(command, None, ptr::null_mut(), DOCMD_VERBOSE as c_int);
+                do_cmdline(command, None, ptr::null_mut(), DoCmdOpts::VERBOSE);
             }
             if (*curbuf.get()).b_kmap_state as c_int & KEYMAP_INIT != 0 {
                 keymap_init();

@@ -13,6 +13,7 @@
 
 use super::*;
 
+use crate::ex_docmd::DoCmdOpts;
 use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr, slice};
@@ -705,7 +706,7 @@ unsafe fn execute_source(
     unsafe {
         let first = getsourceline(0, ptr::from_mut(cookie).cast(), 0, true);
         let firstline = strip_bom(&raw mut cookie.conv, first);
-        let flags = DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_REPEAT;
+        let flags = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::REPEAT;
         let reader = Some(getsourceline as LineGetterFn);
         do_cmdline(firstline, reader, ptr::from_mut(cookie).cast(), flags);
         firstline

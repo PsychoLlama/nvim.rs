@@ -11,12 +11,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    DOCMD_NOWAIT, FAIL, check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind,
-};
+use super::{FAIL, check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_docmd::do_cmdline;
+use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::main::{
     curbuf, curwin, e_backslash, e_interr, e_invcmd, global_busy, got_int, msg_col, msg_didout,
     msg_scrolled, sub_nlines, sub_nsubs,
@@ -60,7 +58,7 @@ unsafe fn global_exe_one(cmd: *mut c_char, lnum: linenr_T) {
         cmd
     };
     // SAFETY: a live command string; re-enters the Ex layer.
-    unsafe { do_cmdline(cmd, None, ptr::null_mut(), DOCMD_NOWAIT as c_int) };
+    unsafe { do_cmdline(cmd, None, ptr::null_mut(), DoCmdOpts::NOWAIT) };
 }
 
 /// Does the command letter `kind` select a line that (did not) match?

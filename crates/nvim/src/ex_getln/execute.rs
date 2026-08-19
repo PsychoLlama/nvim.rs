@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
+use crate::ex_docmd::DoCmdOpts;
 use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
     Ctrl_Y, Ctrl_Z,
@@ -189,7 +190,7 @@ pub(crate) unsafe fn command_line_execute(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     Some(getcmdkeycmd),
                     ::core::ptr::null_mut(),
-                    DOCMD_NOWAIT,
+                    DoCmdOpts::NOWAIT,
                 );
             } else {
                 map_execute_lua(false, false);

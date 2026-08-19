@@ -12,11 +12,8 @@ use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::{tv_clear, tv_get_string};
 use crate::eval::userfunc::{restore_funccal, save_funccal};
 use crate::eval::vars::set_var;
-use crate::eval::{
-    DOCMD_NOWAIT, DOCMD_VERBOSE, clear_evalarg, echo_hl_id, eval1, eval1_emsg,
-    fill_evalarg_from_eap,
-};
-use crate::ex_docmd::{check_nextcmd, do_cmdline};
+use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap};
+use crate::ex_docmd::{DoCmdOpts, check_nextcmd, do_cmdline};
 use crate::ex_eval::aborting;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::highlight_group::{HLF_E, syn_name2id};
@@ -245,7 +242,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
                     ga.ga_data as *mut c_char,
                     (*eap).ea_getline,
                     (*eap).cookie,
-                    DOCMD_NOWAIT as c_int | DOCMD_VERBOSE as c_int,
+                    DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE,
                 );
             }
         }

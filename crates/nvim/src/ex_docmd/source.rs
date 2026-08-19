@@ -14,7 +14,7 @@ use crate::eval::vars::{set_vim_var_string, v_exception, v_throwpoint};
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::ex_docmd::{
-    ETYPE_EXCEPT, ML_EMPTY, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_error_buf,
+    DoCmdOpts, ETYPE_EXCEPT, ML_EMPTY, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_error_buf,
     ex_pressedreturn, loop_cookie, wcmd_T,
 };
 use crate::ex_eval::discard_current_exception;
@@ -131,7 +131,8 @@ pub unsafe fn do_exmode() {
             let prev_line = (*curwin.get()).w_cursor.lnum;
             cmdline_row.set(msg_row.get());
 
-            do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), 0);
+            let plain = DoCmdOpts::NONE;
+            do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain);
             lines_left.set(Rows.get() - 1);
 
             let moved = prev_line != (*curwin.get()).w_cursor.lnum

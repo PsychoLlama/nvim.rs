@@ -4,8 +4,7 @@
 
 use super::args::{Args, frame};
 use super::{
-    AUTOLOAD_CHAR, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, MAX_FUNC_ARGS,
-    TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
+    AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
 };
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
@@ -23,7 +22,7 @@ use crate::eval::userfunc::{
 use crate::eval::vars::var_exists;
 use crate::eval::{eval_option, eval1, partial_name, script_host_eval};
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{cmd_exists, do_cmdline, do_cmdline_cmd};
+use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
 use crate::lua::executor::{
@@ -287,10 +286,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
                 ptr::null_mut(),
                 Some(get_list_line as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
                 &raw mut cookie as *mut c_void,
-                DOCMD_NOWAIT as c_int
-                    | DOCMD_VERBOSE as c_int
-                    | DOCMD_REPEAT as c_int
-                    | DOCMD_KEYTYPED as c_int,
+                DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT | DoCmdOpts::KEYTYPED,
             );
             tv_list_unref(list);
         }

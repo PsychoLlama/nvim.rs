@@ -232,7 +232,6 @@ pub const HIST_CMD: HistoryType = 0;
 pub const HIST_INVALID: HistoryType = -1;
 pub const REMAP_NONE: RemapValues = -1;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_int;
-pub const DOCMD_NOWAIT: C2Rust_Unnamed_28 = 2;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_int;
 pub const VSE_BUFFER: C2Rust_Unnamed_29 = 2;
 pub const VSE_SHELL: C2Rust_Unnamed_29 = 1;

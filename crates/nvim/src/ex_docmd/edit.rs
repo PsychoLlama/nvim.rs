@@ -20,8 +20,8 @@ use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::modifier::expr_map_locked;
 use crate::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::ex_docmd::{
-    CPO_EXECBUF, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, ML_EMPTY,
-    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES, kMTLineWise,
+    CPO_EXECBUF, DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, ML_EMPTY, OPTION_MAGIC_OFF,
+    OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES, kMTLineWise,
 };
 use crate::ex_getln::getexline;
 use crate::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -466,7 +466,7 @@ pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
                 ptr::null_mut(),
                 Some(getexline),
                 ptr::null_mut(),
-                DOCMD_NOWAIT as c_int | DOCMD_VERBOSE as c_int,
+                DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE,
             );
         }
         exec_from_reg.set(save_efr);

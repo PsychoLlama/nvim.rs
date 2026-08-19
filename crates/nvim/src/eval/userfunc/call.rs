@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::DoCmdOpts;
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
@@ -368,7 +369,7 @@ pub unsafe fn call_user_func(
                 ptr::null_mut(),
                 Some(get_func_line as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
                 fc as *mut c_void,
-                DOCMD_NOWAIT | DOCMD_VERBOSE | DOCMD_REPEAT,
+                DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
             );
         }
 

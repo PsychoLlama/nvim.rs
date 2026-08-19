@@ -37,7 +37,7 @@ use crate::ex_docmd::scan::{
 use crate::ex_docmd::source::{ex_errmsg, getline_cookie, getline_equal};
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    ADDR_LINES, ADDR_OTHER, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, PROF_YES,
+    ADDR_LINES, ADDR_OTHER, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DoCmdOpts, PROF_YES,
     cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T,
     exmode_plus, quitmore,
 };
@@ -183,7 +183,7 @@ pub(crate) unsafe fn skip_cmd(eap: *const exarg_T) -> bool {
 /// null. Re-entrant: a command that calls `do_cmdline` lands back here.
 pub(crate) unsafe fn do_one_cmd(
     cmdlinep: *mut *mut c_char,
-    flags: c_int,
+    flags: DoCmdOpts,
     cstack: *mut cstack_T,
     fgetline: LineGetter,
     cookie: *mut c_void,
@@ -321,7 +321,7 @@ pub(crate) unsafe fn do_one_cmd(
                     } else {
                         after_modifier
                     };
-                    if flags & DOCMD_VERBOSE as c_int == 0 {
+                    if !flags.has(DoCmdOpts::VERBOSE) {
                         append_command(cmdname);
                     }
                     errormsg = IObuff.ptr() as *mut c_char;
@@ -377,7 +377,7 @@ pub(crate) unsafe fn do_one_cmd(
                 // anyway, so it is not asked.
                 if global_busy.get() == 0 && ea.line1 > ea.line2 {
                     if msg_silent.get() == 0 {
-                        if flags & DOCMD_VERBOSE as c_int != 0 || exmode_active.get() {
+                        if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
                             errormsg = gettext(c"E493: Backwards range given".as_ptr());
                             break 'doend;
                         }
@@ -575,7 +575,7 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         if !errormsg.is_null() && *errormsg as c_int != NUL && did_emsg.get() == 0 {
-            if flags & DOCMD_VERBOSE as c_int != 0 {
+            if flags.has(DoCmdOpts::VERBOSE) {
                 if errormsg != IObuff.ptr() as *const c_char {
                     xstrlcpy(IObuff.ptr() as *mut c_char, errormsg, IOSIZE as size_t);
                     errormsg = IObuff.ptr() as *mut c_char;

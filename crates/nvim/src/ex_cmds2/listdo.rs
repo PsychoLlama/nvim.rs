@@ -21,14 +21,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST, DOCMD_NOWAIT, DOCMD_VERBOSE};
+use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST};
 use super::{buffers, check_changed};
 use crate::arglist::{do_argfile, editing_arg_idx};
 use crate::autocmd::{
     EVENT_SYNTAX, apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
 };
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
-use crate::ex_docmd::do_cmdline;
+use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::main::{
     curbuf, curwin, first_tabpage, firstbuf, firstwin, got_int, listcmd_busy, msg_listdo_overwrite,
     prevwin,
@@ -315,7 +315,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                     (*eap).arg,
                     (*eap).ea_getline,
                     (*eap).cookie,
-                    DOCMD_VERBOSE + DOCMD_NOWAIT,
+                    DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT,
                 );
             }
 
