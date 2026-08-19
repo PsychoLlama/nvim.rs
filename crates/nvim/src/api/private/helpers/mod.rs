@@ -321,6 +321,29 @@ pub(crate) unsafe fn api_clear_error(value: *mut Error) {
     }
 }
 
+/// A fresh, unset error, to lend to a helper that still reports through an
+/// out-parameter. C's `ERROR_INIT`.
+pub(crate) const ERROR_INIT: Error = Error {
+    type_0: kErrorTypeNone,
+    msg: ptr::null_mut(),
+};
+
+/// What a call that reported through a lent [`ERROR_INIT`] slot answered
+/// with, unless the slot says why it could not.
+///
+/// This is deliberately more forgiving than `?`. A `find_*_by_handle` miss
+/// answers null *without* setting the error when the handle is `0` and there
+/// is no current buffer/window/tabpage, and upstream answers that with a
+/// default value rather than a failure; reading "null means `Err`" would show
+/// the client nil where it used to see `0`. Handing the value here keeps a
+/// converted function exactly as forgiving as the one it replaced.
+pub(crate) fn reported<T>(err: Error, value: T) -> Result<T, Error> {
+    match err.type_0 {
+        kErrorTypeNone => Ok(value),
+        _ => Err(err),
+    }
+}
+
 // -- Odds and ends ---------------------------------------------------------
 
 /// Set the mark `name` in `buf` to line/column, or delete it when `line` is

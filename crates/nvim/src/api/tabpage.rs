@@ -1,7 +1,7 @@
 use crate::api::private::helpers::{
-    api_clear_error, api_set_error, arena_array, array_add, dict_get_value, dict_set_var,
-    find_buffer_by_handle, find_tab_by_handle, find_window_by_handle, has_key, try_enter,
-    try_leave,
+    ERROR_INIT, api_clear_error, api_set_error, arena_array, array_add, dict_get_value,
+    dict_set_var, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle, has_key,
+    reported, try_enter, try_leave,
 };
 use crate::api::vim::nvim_get_current_win;
 
@@ -26,29 +26,10 @@ pub const KV_INITIAL_VALUE: Array = Array {
 };
 pub const KEYSET_OPTIDX_tabpage_config__after: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-/// A fresh, unset error, to lend to a helper that still reports through an
-/// out-parameter.
-const ERROR_INIT: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ::core::ptr::null_mut(),
-};
 const NIL: Object = object {
     type_0: kObjectTypeNil,
     data: C2Rust_Unnamed { boolean: false },
 };
-
-/// What a call that reports through an `*mut Error` out-parameter answered
-/// with, unless the slot it was lent says why it could not.
-///
-/// A lookup that misses without setting the error — only a missing current
-/// tabpage does that — keeps answering the value upstream answered with, so
-/// the caller stays exactly as forgiving as it was.
-fn reported<T>(err: Error, value: T) -> Result<T, Error> {
-    match err.type_0 {
-        kErrorTypeNone => Ok(value),
-        _ => Err(err),
-    }
-}
 pub unsafe extern "C" fn nvim_tabpage_list_wins(
     mut tabpage: Tabpage,
     mut arena: *mut Arena,
