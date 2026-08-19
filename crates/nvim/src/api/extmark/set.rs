@@ -117,7 +117,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     ) {
                         (*opts).strict as ::core::ffi::c_int
                     } else {
-                        true_0
+                        1
                     } != 0;
                     if has_key(
                         (*opts).is_set__set_extmark_,
@@ -501,7 +501,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     ) {
                         (*opts).right_gravity as ::core::ffi::c_int
                     } else {
-                        true_0
+                        1
                     } != 0;
                     if line2 == -1 as ::core::ffi::c_int
                         && col2 == -1 as ::core::ffi::c_int
@@ -830,7 +830,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                     ) {
                                         (*opts).undo_restore as ::core::ffi::c_int
                                     } else {
-                                        true_0
+                                        1
                                     } == 0,
                                     (*opts).invalidate,
                                     err,

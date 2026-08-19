@@ -203,8 +203,8 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const DB_COUNT: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static diff_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static diff_need_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static diff_busy: GlobalCell<bool> = GlobalCell::new(false);
+static diff_need_update: GlobalCell<bool> = GlobalCell::new(false);
 pub const DIFF_FILLER: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const DIFF_IBLANK: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const DIFF_ICASE: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
@@ -242,7 +242,5 @@ pub const LBUFLEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const MAX_XDIFF_SIZE: ::core::ffi::c_long =
     1024 as ::core::ffi::c_long * 1024 as ::core::ffi::c_long * 1023 as ::core::ffi::c_long;
 static diff_a_works: GlobalCell<TriState> = GlobalCell::new(kNone);
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

@@ -589,12 +589,10 @@ fn drop_grid(win: Win) {
     unsafe { ui_comp_remove_grid(&raw mut win.w_grid_alloc) };
 }
 
-static command_frame_height: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
+static command_frame_height: GlobalCell<bool> = GlobalCell::new(true);
 static last_win_id: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(LOWEST_WIN_ID as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-static did_initial_scroll_size_snapshot: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static did_initial_scroll_size_snapshot: GlobalCell<bool> = GlobalCell::new(false);
 pub const FRACTION_MULT: ::core::ffi::c_int = 16384 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

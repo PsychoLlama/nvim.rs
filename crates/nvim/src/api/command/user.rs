@@ -367,7 +367,7 @@ pub unsafe fn create_user_command(
                     ) {
                         (*opts).force as ::core::ffi::c_int
                     } else {
-                        true_0
+                        1
                     } != 0;
                     if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                         if (*opts).complete.type_0 as ::core::ffi::c_uint

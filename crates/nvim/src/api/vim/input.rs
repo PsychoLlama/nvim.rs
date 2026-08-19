@@ -88,7 +88,7 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
         }
         if execute {
             let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
-            msg_scroll.set(false_0);
+            msg_scroll.set(0);
             if !dangerous {
                 (*ex_normal_busy.ptr()) += 1;
             }

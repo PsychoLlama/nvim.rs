@@ -337,7 +337,7 @@ unsafe fn echo_search_cmd(
                 ptr::copy(off_buf.as_ptr(), buf.add(plen + 1), off_len);
             }
 
-            let trunc = msg_strtrunc(echo.buf.as_ptr(), true_0);
+            let trunc = msg_strtrunc(echo.buf.as_ptr(), 1);
             if !trunc.is_null() {
                 echo.buf.replace(trunc);
                 echo.len = strlen(echo.buf.as_ptr());
@@ -717,7 +717,7 @@ pub unsafe fn do_search(
                 setpcmark();
             }
             (*curwin.get()).w_cursor = pos;
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             true
         };
 

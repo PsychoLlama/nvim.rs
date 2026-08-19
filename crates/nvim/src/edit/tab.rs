@@ -55,12 +55,12 @@ pub(crate) unsafe fn ins_shift(c: c_int, lastc: c_int) {
             if lastc == '^' as c_int {
                 old_indent.set(get_indent()); // remember the indent
             }
-            change_indent(INDENT_SET, 0, true_0, true);
+            change_indent(INDENT_SET, 0, 1, true);
         } else {
             change_indent(
                 if c == Ctrl_D { INDENT_DEC } else { INDENT_INC },
                 0,
-                true_0,
+                1,
                 true,
             );
         }
@@ -212,7 +212,7 @@ unsafe fn tab_spaces_to_tabs() {
         // 'list' changes what a TAB is worth; unless 'cpoptions' has `L`, it
         // must not be allowed to.
         if vim_strchr(p_cpo.get(), CPO_LISTWM).is_null() {
-            (*curwin.get()).w_onebuf_opt.wo_list = false_0;
+            (*curwin.get()).w_onebuf_opt.wo_list = 0;
         }
 
         // Find the first white character of the run.

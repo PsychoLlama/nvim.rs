@@ -200,7 +200,7 @@ pub const TV_INITIAL_VALUE: typval_T = typval_T {
     v_lock: VAR_UNLOCKED,
     vval: typval_vval_union { v_number: 0 },
 };
-pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());
 /// `ARRAY_SIZE(sl->sl_items)`: how many `listitem_T`s a `staticList10_T`
@@ -210,7 +210,7 @@ pub const SL_SIZE: usize = 10;
 static sortinfo: GlobalCell<*mut sortinfo_T> =
     GlobalCell::new(::core::ptr::null_mut::<sortinfo_T>());
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
-pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = false_0;
+pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
 static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static num_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new([
     c"E685: using an invalid value as a Number".as_ptr(),
@@ -243,11 +243,9 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_firstline: 0 as linenr_T,
     fe_lastline: 0 as linenr_T,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false_0 != 0,
+    fe_evaluate: false,
     fe_partial: ::core::ptr::null_mut::<partial_T>(),
     fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
-    fe_found_var: false_0 != 0,
+    fe_found_var: false,
 };
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

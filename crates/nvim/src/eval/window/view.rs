@@ -22,7 +22,7 @@ pub unsafe fn f_win_move_separator(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    (*rettv).vval.v_number = false_0 as varnumber_T;
+    (*rettv).vval.v_number = 0;
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0));
     if wp.is_null() || (*wp).w_floating {
         return;
@@ -33,7 +33,7 @@ pub unsafe fn f_win_move_separator(
     }
     let mut offset: c_int = tv_get_number(argvars.offset(1)) as c_int;
     win_drag_vsep_line(wp, offset);
-    (*rettv).vval.v_number = true_0 as varnumber_T;
+    (*rettv).vval.v_number = 1;
 }
 /// "win_move_statusline()" function
 pub unsafe fn f_win_move_statusline(
@@ -43,7 +43,7 @@ pub unsafe fn f_win_move_statusline(
 ) {
     let mut wp: *mut win_T = ptr::null_mut();
     let mut offset: c_int = 0;
-    (*rettv).vval.v_number = false_0 as varnumber_T;
+    (*rettv).vval.v_number = 0;
     wp = find_win_by_nr_or_id(argvars.offset(0));
     if wp.is_null() || (*wp).w_floating {
         return;
@@ -54,7 +54,7 @@ pub unsafe fn f_win_move_statusline(
     }
     offset = tv_get_number(argvars.offset(1)) as c_int;
     win_drag_status_line(wp, offset);
-    (*rettv).vval.v_number = true_0 as varnumber_T;
+    (*rettv).vval.v_number = 1;
 }
 /// "win_screenpos()" function
 pub unsafe fn f_win_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
@@ -218,7 +218,7 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
     }
     if let Some(v) = entry(c"curswant") {
         (*win).w_curswant = v as colnr_T;
-        (*win).w_set_curswant = false_0;
+        (*win).w_set_curswant = 0;
     }
     if let Some(v) = entry(c"topline") {
         set_topline(win, v as linenr_T);

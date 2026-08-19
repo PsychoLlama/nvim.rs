@@ -51,11 +51,8 @@ pub unsafe fn mh_find_bucket_glyph(
 pub unsafe fn mh_rehash_glyph(mut set: *mut Set_glyph) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_glyph(
-            set,
-            cstr_as_string((*set).keys.offset(k as isize)),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_glyph(set, cstr_as_string((*set).keys.offset(k as isize)), true);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -77,7 +74,7 @@ pub unsafe fn mh_put_glyph(
         mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         mh_rehash_glyph(set);
     }
-    let mut idx: uint32_t = mh_find_bucket_glyph(set, key, true_0 != 0);
+    let mut idx: uint32_t = mh_find_bucket_glyph(set, key, true);
     if (*(*h).hash.offset(idx as isize)).wrapping_add(1 as uint32_t) <= 1 as uint32_t {
         (*h).size = (*h).size.wrapping_add(1);
         (*h).n_occupied = (*h).n_occupied.wrapping_add(1);
@@ -116,4 +113,3 @@ pub unsafe fn mh_put_glyph(
     };
 }
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

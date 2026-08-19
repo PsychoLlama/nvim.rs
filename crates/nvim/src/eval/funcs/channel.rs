@@ -5,8 +5,8 @@
 use super::args::{Args, frame};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE,
-    MAX_FUNC_ARGS, false_0, kChannelPartAll, kChannelPartRpc, kChannelPartStderr,
-    kChannelPartStdin, kChannelPartStdout, kRetObject,
+    MAX_FUNC_ARGS, kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin,
+    kChannelPartStdout, kRetObject,
 };
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api::private::helpers::{api_clear_error, arena_array, cstr_as_string};
@@ -423,7 +423,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         }
 
         if args.ty(0) == VAR_DICT
-            && tv_dict_get_bool(args.get(0).vval.v_dict, c"peer".as_ptr(), false_0) != 0
+            && tv_dict_get_bool(args.get(0).vval.v_dict, c"peer".as_ptr(), 0) != 0
         {
             let mut items = [NIL; 1];
             let mut lua_args = ARRAY_DICT_INIT;

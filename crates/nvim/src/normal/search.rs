@@ -20,9 +20,9 @@ use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark}
 use crate::message::emsg;
 use crate::normal::{
     KMarkNoContext, MOD_MASK_CTRL, TAB, checkclearop, checkclearopq, clearop, clearopbeep,
-    e_changelist_is_empty, false_0, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine,
-    kMarkChangedCursor, kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed,
-    kMarkMoveSuccess, kMarkSetView, kMarkSwitchedBuf, nv_operator, true_0,
+    e_changelist_is_empty, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine, kMarkChangedCursor,
+    kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView,
+    kMarkSwitchedBuf, nv_operator,
 };
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
@@ -92,7 +92,7 @@ pub(crate) unsafe fn nv_next(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let old = (*curwin.get()).w_cursor;
-        let mut wrapped: c_int = false_0;
+        let mut wrapped: c_int = 0;
         let i = normal_search(
             cap,
             0,
@@ -145,7 +145,7 @@ pub(crate) unsafe fn normal_search(
         // A search is one of the motions that fills the "1 last change"
         // register rather than the small-delete one.
         (*oap).use_reg_one = true;
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
 
         let i = do_search(
             oap,
@@ -191,7 +191,7 @@ pub(crate) unsafe fn nv_mark(cap: *mut cmdarg_T) {
         if checkclearop((*cap).oap) {
             return;
         }
-        if setmark((*cap).nchar) == false_0 {
+        if setmark((*cap).nchar) == 0 {
             clearopbeep((*cap).oap);
         }
     }
@@ -221,7 +221,7 @@ pub(crate) unsafe fn nv_mark_move_to(
             (*(*cap).oap).use_reg_one = true;
         }
         (*(*cap).oap).inclusive = false;
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         res
     }
 }

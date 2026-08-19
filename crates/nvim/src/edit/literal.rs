@@ -49,7 +49,7 @@ pub(crate) unsafe fn ins_ctrl_v() {
             edit_unputchar();
         }
         clear_showcmd();
-        insert_special(c, true_0, true_0);
+        insert_special(c, 1, 1);
         (*revins_chars.ptr()) += 1;
         (*revins_legal.ptr()) += 1;
     }
@@ -187,7 +187,7 @@ pub(crate) unsafe fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut 
     unsafe {
         if mod_mask.get() & MOD_MASK_CMD != 0 {
             // The Command key never produces a normal key.
-            allow_modmask = true_0;
+            allow_modmask = 1;
         }
         if c < 0 || (mod_mask.get() != 0 && allow_modmask != 0) {
             let p = get_special_key_name(c, mod_mask.get());
@@ -200,7 +200,7 @@ pub(crate) unsafe fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut 
                 *p.offset((len - 1) as isize) = NUL as c_char;
                 ins_str(p, (len - 1) as size_t);
                 AppendToRedobuffLit(p, -1);
-                ctrlv = false_0;
+                ctrlv = 0;
             }
         }
         if stop_arrow() == OK {
@@ -269,7 +269,7 @@ pub(crate) unsafe fn ins_digraph() -> c_int {
 
         if c < 0 || mod_mask.get() != 0 {
             clear_showcmd();
-            insert_special(c, true_0, false_0);
+            insert_special(c, 1, 0);
             return NUL;
         }
 
@@ -388,7 +388,7 @@ pub(crate) unsafe fn ins_ctrl_ey(tc: c_int) -> c_int {
         }
         let tw_save = (*curbuf.get()).b_p_tw;
         (*curbuf.get()).b_p_tw = -1;
-        insert_special(c, true_0, false_0);
+        insert_special(c, 1, 0);
         (*curbuf.get()).b_p_tw = tw_save;
         (*revins_chars.ptr()) += 1;
         (*revins_legal.ptr()) += 1;

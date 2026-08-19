@@ -362,7 +362,7 @@ pub unsafe fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// As [`f_chdir`], arity 2.
 pub unsafe fn f_filecopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = false as varnumber_T;
+    rettv.vval.v_number = 0;
     if secure() || !is_string_arg(args, 0) || !is_string_arg(args, 1) {
         return;
     }

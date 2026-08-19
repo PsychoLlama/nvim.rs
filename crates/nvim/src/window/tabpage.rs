@@ -95,7 +95,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     let (vars, scope) = (tp.tp_vars, &raw mut tp.tp_winvar);
     // SAFETY: the dictionary just allocated, and the tab page's own scope.
     unsafe { init_var_dict(vars, scope, VAR_SCOPE) };
-    tp.tp_diff_invalid = true_0;
+    tp.tp_diff_invalid = 1;
     tp.tp_ch_used = p_ch.get();
     tp
 }
@@ -349,7 +349,7 @@ pub(crate) fn valid_tab(tpc: *mut tabpage_T) -> Option<TabPage> {
 
 pub fn valid_tabpage_win(tpc: *mut tabpage_T) -> c_int {
     let Some(tp) = valid_tab(tpc) else {
-        return false_0; // shouldn't happen
+        return 0; // shouldn't happen
     };
     windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.raw())) as c_int
 }

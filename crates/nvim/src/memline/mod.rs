@@ -268,7 +268,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
         (*buf).b_ml.ml_usedchunks = 0;
 
         if cmdmod_has(CmdModFlags::NOSWAPFILE) {
-            (*buf).b_p_swf = false_0;
+            (*buf).b_p_swf = 0;
         }
         // A swap file may still be opened later, when 'updatecount' is set.
         (*buf).b_may_swap = (*buf).terminal.is_null() && p_uc.get() != 0 && (*buf).b_p_swf != 0;
@@ -556,7 +556,7 @@ pub unsafe fn ml_close_notmod() {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
             if !bufIsChanged(buf) {
-                ml_close(buf, true_0);
+                ml_close(buf, 1);
             }
             buf = (*buf).b_next;
         }
@@ -564,5 +564,3 @@ pub unsafe fn ml_close_notmod() {
 }
 
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

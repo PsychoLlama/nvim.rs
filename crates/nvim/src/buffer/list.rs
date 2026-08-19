@@ -338,9 +338,9 @@ pub unsafe extern "C" fn buflist_new(
     unsafe { fmarks_check_names(buf.raw()) };
     // Init 'buflisted'.
     buf.b_p_bl = if flags & BLN_LISTED as c_int != 0 {
-        true_0
+        1
     } else {
-        false_0
+        0
     };
     reset_update_subscribers(&mut buf);
 
@@ -377,7 +377,7 @@ fn reuse_entry(mut buf: Buf, lnum: linenr_T, flags: c_int) -> *mut buf_T {
         copy_options_into(buf, 0);
     }
     if flags & BLN_LISTED as c_int != 0 && buf.b_p_bl == 0 {
-        buf.b_p_bl = true_0;
+        buf.b_p_bl = 1;
         let bufref = BufRef::of(buf);
         if flags & BLN_DUMMY as c_int == 0 && fire_buf_event(EVENT_BUFADD, buf) && !bufref.valid() {
             return ptr::null_mut();
@@ -640,7 +640,7 @@ pub unsafe fn buflist_getfile(
         win.w_cursor.col = col;
         check_cursor_column(win);
         win.w_cursor.coladd = 0 as colnr_T;
-        win.w_set_curswant = true_0;
+        win.w_set_curswant = 1;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && restore_view {
         // SAFETY: the mark read above, which is still live.
@@ -671,8 +671,8 @@ fn goto_existing_window(mut buf: Buf) -> bool {
         }
     }
     let mut win = current_win();
-    win.w_onebuf_opt.wo_scb = false_0;
-    win.w_onebuf_opt.wo_crb = false_0;
+    win.w_onebuf_opt.wo_scb = 0;
+    win.w_onebuf_opt.wo_crb = 0;
     true
 }
 
@@ -692,7 +692,7 @@ pub(crate) unsafe fn buflist_getfpos() {
         win.w_cursor.col = col;
         check_cursor_column(win);
         win.w_cursor.coladd = 0 as colnr_T;
-        win.w_set_curswant = true_0;
+        win.w_set_curswant = 1;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 {
         // SAFETY: the mark read above, which is still live.
@@ -804,7 +804,7 @@ fn match_pattern(
     curtab_only: bool,
 ) -> Option<c_int> {
     // SAFETY: the caller's promise -- a pattern between the two pointers.
-    let pat = unsafe { file_pat_to_reg_pat(pattern, pattern_end, ptr::null_mut(), false_0) };
+    let pat = unsafe { file_pat_to_reg_pat(pattern, pattern_end, ptr::null_mut(), 0) };
     if pat.is_null() {
         return None;
     }
@@ -818,7 +818,7 @@ fn match_pattern(
     let mut matched = -1;
     // First try finding a listed buffer. When there is none and "unlisted"
     // is set, try again over the unlisted ones.
-    let mut find_listed = true_0;
+    let mut find_listed = true;
     loop {
         // Try four ways of matching a buffer:
         //   0: without '^' or '$' (at any position)
@@ -842,7 +842,7 @@ fn match_pattern(
                     free(pat);
                     return None;
                 }
-                if b.b_p_bl != find_listed
+                if (b.b_p_bl != 0) != find_listed
                     || diffmode && !is_diff_mode(b)
                     || buflist_match(&mut regmatch, b, false).is_null()
                 {
@@ -870,10 +870,10 @@ fn match_pattern(
         }
 
         // Only search the unlisted buffers when no listed one matched.
-        if !unlisted || find_listed == 0 || matched != -1 {
+        if !unlisted || !find_listed || matched != -1 {
             break;
         }
-        find_listed = false_0;
+        find_listed = false;
     }
 
     free(pat);

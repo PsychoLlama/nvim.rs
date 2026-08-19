@@ -217,8 +217,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         // The command-line buffer has bufhidden=wipe, unlike a true
         // "scratch" buffer.
         set_option_value_give_err(kOptBufhidden, static_optval(c"wipe"), OptionSetFlags::LOCAL);
-        (*curbuf.get()).b_p_ma = true_0;
-        (*curwin.get()).w_onebuf_opt.wo_fen = false_0;
+        (*curbuf.get()).b_p_ma = 1;
+        (*curwin.get()).w_onebuf_opt.wo_fen = 0;
         (*curwin.get()).w_onebuf_opt.wo_rl = cmdmsg_rl.get() as ::core::ffi::c_int;
         cmdmsg_rl.set(false);
 

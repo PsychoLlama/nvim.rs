@@ -147,7 +147,7 @@ pub unsafe fn get_global_marks(mut l: *mut list_T) {
     let mut i: c_int = 0;
     while i < NMARKS + EXTRA_MARKS {
         if (*namedfm.ptr())[i as usize].fmark.fnum != 0 {
-            name = buflist_nr2name((*namedfm.ptr())[i as usize].fmark.fnum, true_0, true_0);
+            name = buflist_nr2name((*namedfm.ptr())[i as usize].fmark.fnum, 1, 1);
         } else {
             name = (*namedfm.ptr())[i as usize].fname;
         }

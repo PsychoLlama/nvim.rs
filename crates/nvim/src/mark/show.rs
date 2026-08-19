@@ -36,7 +36,7 @@ pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
         arg,
         &raw mut (*curwin.get()).w_pcmark,
         ptr::null_mut(),
-        true_0,
+        1,
     );
     let mut i: c_int = 0;
     while i < NMARKS {
@@ -45,7 +45,7 @@ pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
             arg,
             &raw mut (*(&raw mut (*curbuf.get()).b_namedm as *mut fmark_T).offset(i as isize)).mark,
             ptr::null_mut(),
-            true_0,
+            1,
         );
         i += 1;
     }
@@ -84,35 +84,35 @@ pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
         arg,
         &raw mut (*curbuf.get()).b_last_cursor.mark,
         ptr::null_mut(),
-        true_0,
+        1,
     );
     show_one_mark(
         '[' as c_int,
         arg,
         &raw mut (*curbuf.get()).b_op_start,
         ptr::null_mut(),
-        true_0,
+        1,
     );
     show_one_mark(
         ']' as c_int,
         arg,
         &raw mut (*curbuf.get()).b_op_end,
         ptr::null_mut(),
-        true_0,
+        1,
     );
     show_one_mark(
         '^' as c_int,
         arg,
         &raw mut (*curbuf.get()).b_last_insert.mark,
         ptr::null_mut(),
-        true_0,
+        1,
     );
     show_one_mark(
         '.' as c_int,
         arg,
         &raw mut (*curbuf.get()).b_last_change.mark,
         ptr::null_mut(),
-        true_0,
+        1,
     );
     if bt_prompt(curbuf.get()) {
         show_one_mark(
@@ -120,7 +120,7 @@ pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
             arg,
             &raw mut (*curbuf.get()).b_prompt_start.mark,
             ptr::null_mut(),
-            true_0,
+            1,
         );
     }
     let mut startp: *mut pos_T = &raw mut (*curbuf.get()).b_visual.vi_start;
@@ -130,15 +130,15 @@ pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
     } else {
         posp = endp;
     }
-    show_one_mark('<' as c_int, arg, posp, ptr::null_mut(), true_0);
+    show_one_mark('<' as c_int, arg, posp, ptr::null_mut(), 1);
     show_one_mark(
         '>' as c_int,
         arg,
         if posp == startp { endp } else { startp },
         ptr::null_mut(),
-        true_0,
+        1,
     );
-    show_one_mark(-1, arg, ptr::null_mut(), ptr::null_mut(), false_0);
+    show_one_mark(-1, arg, ptr::null_mut(), ptr::null_mut(), 0);
 }
 
 /// `current` — in current file
@@ -396,5 +396,5 @@ pub unsafe fn fm_getname(mut fmark: *mut fmark_T, mut lead_len: c_int) -> *mut c
     if (*fmark).fnum == (*curbuf.get()).handle {
         return mark_line(&raw mut (*fmark).mark, lead_len);
     }
-    return buflist_nr2name((*fmark).fnum, false_0, true_0);
+    return buflist_nr2name((*fmark).fnum, 0, 1);
 }

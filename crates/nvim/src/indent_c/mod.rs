@@ -117,5 +117,3 @@ pub const LOOKFOR_CPP_BASECLASS: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 pub const LOOKFOR_ENUM_OR_INIT: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const LOOKFOR_JS_KEY: ::core::ffi::c_int = 11 as ::core::ffi::c_int;
 pub const LOOKFOR_COMMA: ::core::ffi::c_int = 12 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

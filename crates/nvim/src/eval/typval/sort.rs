@@ -334,7 +334,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
     info: *mut sortinfo_T,
 ) -> ::core::ffi::c_int {
     unsafe {
-        (*info).item_compare_ic = false_0;
+        (*info).item_compare_ic = 0;
         (*info).item_compare_lc = false;
         (*info).item_compare_numeric = false;
         (*info).item_compare_numbers = false;
@@ -359,7 +359,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
                 return FAIL; // type error; errmsg already given
             }
             if nr == 1 {
-                (*info).item_compare_ic = true_0;
+                (*info).item_compare_ic = 1;
             } else if (*argvars.add(1)).v_type != VAR_NUMBER {
                 (*info).item_compare_func = tv_get_string(argvars.add(1));
             } else if nr != 0 {
@@ -380,7 +380,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
                         b'n' => (*info).item_compare_numeric = true,
                         b'N' => (*info).item_compare_numbers = true,
                         b'f' => (*info).item_compare_float = true,
-                        b'i' => (*info).item_compare_ic = true_0,
+                        b'i' => (*info).item_compare_ic = 1,
                         b'l' => (*info).item_compare_lc = true,
                         _ => builtin = false,
                     }

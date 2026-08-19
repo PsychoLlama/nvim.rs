@@ -166,10 +166,10 @@ pub(crate) unsafe fn windows_in_curtab() -> impl Iterator<Item = *mut win_T> {
     })
 }
 
-static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
+static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false);
+static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false);
+static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false);
 /// The screen row below window `wp`'s last one -- `W_ENDROW`.
 ///
 /// That is where its horizontal separator or status line goes.
@@ -801,6 +801,5 @@ pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const STL_IN_ICON: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STL_IN_TITLE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

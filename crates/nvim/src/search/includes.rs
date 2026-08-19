@@ -755,8 +755,8 @@ unsafe fn goto_match(
                 }
                 // RESET_BINDING: a new window does not inherit
                 // 'scrollbind'/'cursorbind'.
-                (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
-                (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
+                (*curwin.get()).w_onebuf_opt.wo_scb = 0;
+                (*curwin.get()).w_onebuf_opt.wo_crb = 0;
             }
             if walk.files.depth() == -1 {
                 // The match is in the current file.
@@ -794,7 +794,7 @@ unsafe fn goto_match(
         }
         if action != ACTION_SHOW {
             (*curwin.get()).w_cursor.col = startp.offset_from(walk.line) as colnr_T;
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         }
 
         if tagpreview != 0 && curwin.get() != curwin_save && win_valid(curwin_save) {

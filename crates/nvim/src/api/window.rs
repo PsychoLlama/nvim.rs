@@ -136,7 +136,7 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
     (*w).w_cursor.col = col as colnr_T;
     (*w).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     check_cursor_col(w);
-    (*w).w_set_curswant = true_0;
+    (*w).w_set_curswant = 1;
     let mut switchwin: switchwin_T = switchwin_T {
         sw_curwin: ::core::ptr::null_mut::<win_T>(),
         sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
@@ -436,7 +436,7 @@ pub unsafe fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Erro
         return ().reported(error);
     }
     (*w).w_ns_hl = ns_id as NS as ::core::ffi::c_int;
-    (*w).w_hl_needs_update = true_0;
+    (*w).w_hl_needs_update = 1;
     redraw_later(w, UPD_NOT_VALID);
     ().reported(error)
 }
@@ -600,4 +600,3 @@ pub unsafe fn nvim_win_text_height(
     dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol));
     return rv.reported(error);
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

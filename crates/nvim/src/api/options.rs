@@ -243,8 +243,8 @@ unsafe fn do_ft_buf(
         (*(*ftbuf).b_ml.ml_mfp).mf_fd < 0 as ::core::ffi::c_int,
         "ftbuf->b_ml.ml_mfp->mf_fd < 0"
     );
-    (*ftbuf).b_p_swf = false_0;
-    (*ftbuf).b_p_ml = false_0;
+    (*ftbuf).b_p_swf = 0;
+    (*ftbuf).b_p_ml = 0;
     (*ftbuf).b_p_ft = xstrdup(filetype);
     if !has_event(EVENT_FILETYPE) {
         return ftbuf;
@@ -449,4 +449,3 @@ pub const KEYSET_OPTIDX_option__win: ::core::ffi::c_int = 2 as ::core::ffi::c_in
 pub const KEYSET_OPTIDX_option__scope: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_option__filetype: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

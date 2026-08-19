@@ -463,7 +463,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         // SAFETY: starts a message.
         unsafe { msg_start() };
         let n = msg_scroll.get();
-        msg_scroll.set(true_0);
+        msg_scroll.set(1);
         // SAFETY: a NUL-terminated message.
         unsafe { msg(out.as_ptr(), 0) };
         msg_scroll.set(n);

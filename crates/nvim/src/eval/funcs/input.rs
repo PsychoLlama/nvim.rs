@@ -4,8 +4,7 @@
 
 use super::args::frame;
 use super::{
-    SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, false_0, true_0,
-    tv_get_buf_from_arg,
+    SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, tv_get_buf_from_arg,
 };
 use crate::api::private::helpers::cstr_as_string;
 use crate::api::vim::nvim_feedkeys;
@@ -103,15 +102,9 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             buttons = gettext(c"&Ok".as_ptr());
         }
         if !error {
-            rettv.vval.v_number = do_dialog(
-                kind,
-                ptr::null(),
-                message,
-                buttons,
-                default,
-                ptr::null(),
-                false_0,
-            ) as varnumber_T;
+            rettv.vval.v_number =
+                do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0)
+                    as varnumber_T;
         }
     }
 }
@@ -197,7 +190,7 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         msg_start();
         msg_row.set(Rows.get() - 1);
         lines_left.set(Rows.get());
-        msg_scroll.set(true_0);
+        msg_scroll.set(1);
         msg_clr_eos();
 
         let list = args.get(0).vval.v_list;

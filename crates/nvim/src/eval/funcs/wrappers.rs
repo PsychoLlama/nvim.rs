@@ -11,7 +11,6 @@ use super::table::{BUILTINS, builtin_index};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, BASE_LAST, BASE_NONE, C2Rust_Unnamed_16, FCERR_NONE,
     FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
-    false_0, true_0,
 };
 use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::api::private::helpers::{api_clear_error, api_free_object};
@@ -410,7 +409,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
         // that neither setting can change what a buffer name means.
         let save_magic = p_magic.get();
         let save_cpo = p_cpo.get();
-        p_magic.set(true_0);
+        p_magic.set(1);
         p_cpo.set(empty_string_option.ptr() as *mut c_char);
         let mut buf = buflist_findnr(buflist_findpat(
             name,
@@ -442,7 +441,7 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
             return ptr::null_mut();
         }
         *emsg_off.ptr() += 1;
-        let buf = tv_get_buf(tv, false_0);
+        let buf = tv_get_buf(tv, 0);
         *emsg_off.ptr() -= 1;
         buf
     }
@@ -457,7 +456,7 @@ pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
     // which is what makes E158 the *only* message this can produce.
     unsafe {
         *emsg_off.ptr() += 1;
-        let buf = tv_get_buf(arg, false_0);
+        let buf = tv_get_buf(arg, 0);
         *emsg_off.ptr() -= 1;
         if buf.is_null() {
             semsg_c!(

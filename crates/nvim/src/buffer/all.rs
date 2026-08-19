@@ -374,7 +374,7 @@ fn open_window_for(
         // Split the window and put the buffer in it.
         let p_ea_save = p_ea.get();
         // Use space from all windows.
-        p_ea.set(true_0);
+        p_ea.set(1);
         *split_ret = split_below_room();
         *open_wins += 1;
         p_ea.set(p_ea_save);

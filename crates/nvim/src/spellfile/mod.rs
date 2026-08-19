@@ -268,9 +268,9 @@ pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
         return FAIL;
     }
-    let mut start: ::core::ffi::c_int =
-        getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) * 10 as ::core::ffi::c_int
-            / (wordtree::block_size() / 102 as ::core::ffi::c_int);
+    let mut start: ::core::ffi::c_int = getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int)
+        * 10 as ::core::ffi::c_int
+        / (wordtree::block_size() / 102 as ::core::ffi::c_int);
     if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
         return FAIL;
     }
@@ -278,9 +278,9 @@ pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
         return FAIL;
     }
-    let mut incr: ::core::ffi::c_int =
-        getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) * 102 as ::core::ffi::c_int
-            / (wordtree::block_size() / 10 as ::core::ffi::c_int);
+    let mut incr: ::core::ffi::c_int = getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int)
+        * 102 as ::core::ffi::c_int
+        / (wordtree::block_size() / 10 as ::core::ffi::c_int);
     if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
         return FAIL;
     }
@@ -289,8 +289,7 @@ pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
         return FAIL;
     }
     let mut added: ::core::ffi::c_int =
-        getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int)
-            * 1024 as ::core::ffi::c_int;
+        getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int) * 1024 as ::core::ffi::c_int;
     if *p as ::core::ffi::c_int != NUL {
         return FAIL;
     }
@@ -309,15 +308,15 @@ pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
     let mut fnames: *mut *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    let mut ascii: bool = false_0 != 0;
+    let mut ascii: bool = false;
     if strncmp(arg, c"-ascii".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int {
-        ascii = true_0 != 0;
+        ascii = true;
         arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
     }
-    if get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false_0 != 0) != OK {
+    if get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) != OK {
         return;
     }
-    mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false_0 != 0);
+    mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false);
     FreeWild(fcount, fnames);
 }
 unsafe fn mkspell(
@@ -329,7 +328,7 @@ unsafe fn mkspell(
 ) {
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut afile: [*mut afffile_T; 8] = [::core::ptr::null_mut::<afffile_T>(); 8];
-    let mut error: bool = false_0 != 0;
+    let mut error: bool = false;
     let mut spin: spellinfo_T = spellinfo_T {
         si_foldroot: ::core::ptr::null_mut::<wordnode_T>(),
         si_foldwcount: 0,
@@ -440,8 +439,8 @@ unsafe fn mkspell(
     );
     spin.si_verbose = !added_word as ::core::ffi::c_int;
     spin.si_ascii = ascii as ::core::ffi::c_int;
-    spin.si_followup = true_0;
-    spin.si_rem_accents = true_0;
+    spin.si_followup = 1;
+    spin.si_rem_accents = 1;
     ga_init(
         &raw mut spin.si_rep,
         ::core::mem::size_of::<fromto_T>() as ::core::ffi::c_int,
@@ -543,10 +542,10 @@ unsafe fn mkspell(
             );
         }
         if !strstr(path_tail(wfname), SPL_FNAME_ASCII.as_ptr()).is_null() {
-            spin.si_ascii = true_0;
+            spin.si_ascii = 1;
         }
         if !strstr(path_tail(wfname), SPL_FNAME_ADD.as_ptr()).is_null() {
-            spin.si_add = true_0;
+            spin.si_add = 1;
         }
     }
     '_theend: {
@@ -636,7 +635,7 @@ unsafe fn mkspell(
             spin.si_keeproot = wordtree_alloc(&mut spin);
             spin.si_prefroot = wordtree_alloc(&mut spin);
             if spin.si_add == 0 {
-                spin.si_clear_chartab = true_0;
+                spin.si_clear_chartab = 1;
             }
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_0 < incount && !error {
@@ -651,7 +650,7 @@ unsafe fn mkspell(
                 if os_path_exists(fname) {
                     afile[i_0 as usize] = spell_read_aff(&raw mut spin, fname);
                     if afile[i_0 as usize].is_null() {
-                        error = true_0 != 0;
+                        error = true;
                     } else {
                         vim_snprintf(
                             fname,
@@ -660,12 +659,12 @@ unsafe fn mkspell(
                             *innames.offset(i_0 as isize),
                         );
                         if spell_read_dic(&raw mut spin, fname, afile[i_0 as usize]) == FAIL {
-                            error = true_0 != 0;
+                            error = true;
                         }
                     }
                 } else if spell_read_wordfile(&raw mut spin, *innames.offset(i_0 as isize)) == FAIL
                 {
-                    error = true_0 != 0;
+                    error = true;
                 }
                 convert_setup(
                     &raw mut spin.si_conv,
@@ -786,9 +785,7 @@ unsafe fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
         }
     } else {
         spelltab.set(*new_st);
-        did_set_spelltab.set(true_0 != 0);
+        did_set_spelltab.set(true);
     }
     return OK;
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

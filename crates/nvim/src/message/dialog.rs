@@ -354,7 +354,7 @@ pub unsafe fn vim_dialog_yesno(
             gettext(c"&Yes\n&No".as_ptr()),
             dflt,
             ptr::null(),
-            false_0,
+            0,
         ) == 1
         {
             return VIM_YES as c_int;
@@ -386,7 +386,7 @@ pub unsafe fn vim_dialog_yesnocancel(
             gettext(c"&Yes\n&No\n&Cancel".as_ptr()),
             dflt,
             ptr::null(),
-            false_0,
+            0,
         ) {
             1 => VIM_YES as c_int,
             2 => VIM_NO as c_int,
@@ -419,7 +419,7 @@ pub unsafe fn vim_dialog_yesnoallcancel(
             gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel".as_ptr()),
             dflt,
             ptr::null(),
-            false_0,
+            0,
         ) {
             1 => VIM_YES as c_int,
             2 => VIM_NO as c_int,

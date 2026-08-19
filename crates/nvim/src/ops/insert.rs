@@ -153,7 +153,7 @@ unsafe fn move_cursor_for_append(oap: *mut oparg_T, bd: &mut block_def) -> bool 
     unsafe {
         if (*oap).motion_type == kMTBlockWise && (*curwin.get()).w_cursor.coladd == 0 {
             // To the character right of the block.
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             while *get_cursor_pos_ptr() as c_int != NUL
                 && (*curwin.get()).w_cursor.col < bd.textcol + bd.textlen
             {

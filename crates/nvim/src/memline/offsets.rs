@@ -478,7 +478,7 @@ pub unsafe fn goto_byte(cnt: c_int) {
             (*curwin.get()).w_cursor.lnum = lnum;
             (*curwin.get()).w_cursor.col = boff;
             (*curwin.get()).w_cursor.coladd = 0;
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         }
         check_cursor(curwin.get());
 

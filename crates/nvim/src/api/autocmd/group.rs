@@ -27,7 +27,7 @@ pub unsafe fn nvim_create_augroup(
         {
             (*opts).clear as ::core::ffi::c_int
         } else {
-            true_0
+            1
         } != 0;
         let mut augroup: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);

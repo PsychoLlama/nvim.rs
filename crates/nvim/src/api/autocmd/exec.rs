@@ -132,7 +132,7 @@ pub unsafe fn nvim_exec_autocmds(
         ) {
             (*opts).modeline as ::core::ffi::c_int
         } else {
-            true_0
+            1
         } != 0;
         let mut did_aucmd: bool = false;
         let mut event_str_index: size_t = 0 as size_t;

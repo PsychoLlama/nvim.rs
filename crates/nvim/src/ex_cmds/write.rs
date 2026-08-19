@@ -17,7 +17,7 @@
 use super::{
     CPO_ALTWRITE, CPO_OVERNEW, ECMD_FORCEIT, ECMD_HIDE, FAIL, GETFILE_ERROR, GETFILE_NOT_WRITTEN,
     GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER, SHM_FILEINFO, VIM_QUESTION, VIM_YES,
-    buf_autocmd, do_bang, do_ecmd, false_0, true_0,
+    buf_autocmd, do_bang, do_ecmd,
 };
 use crate::arglist::do_argfile;
 use crate::autocmd::{
@@ -181,7 +181,7 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
 
         // print file name if no argument or 'F' is not in 'shortmess'
         if *(*eap).arg as c_int == NUL || !shortmess(SHM_FILEINFO as c_int) {
-            fileinfo(false_0, false_0, (*eap).forceit != 0);
+            fileinfo(0, 0, (*eap).forceit != 0);
         }
     }
 }
@@ -371,7 +371,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
     // SAFETY: `eap` and `curbuf` are live.
     unsafe {
         if (*eap).cmdidx == CMD_saveas && retval == OK {
-            (*curbuf.get()).b_p_ro = false_0;
+            (*curbuf.get()).b_p_ro = 0;
             redraw_tabline.set(true);
         }
         // Change directories when the 'acd' option is set and the file name
@@ -426,7 +426,7 @@ unsafe fn confirm_partial_write(eap: *mut exarg_T) -> bool {
         {
             return false;
         }
-        (*eap).forceit = true_0;
+        (*eap).forceit = 1;
         true
     }
 }
@@ -473,7 +473,7 @@ unsafe fn saveas_exchange_names(alt_buf: *mut buf_T) -> Option<*mut c_char> {
         buf_autocmd(EVENT_BUFFILEPOST, curbuf.get());
         buf_autocmd(EVENT_BUFFILEPOST, alt_buf);
         if (*alt_buf).b_p_bl == 0 {
-            (*alt_buf).b_p_bl = true_0;
+            (*alt_buf).b_p_bl = 1;
             buf_autocmd(EVENT_BUFADD, alt_buf);
         }
     }
@@ -555,7 +555,7 @@ pub unsafe fn check_overwrite(
             return FAIL;
         }
         // SAFETY: caller's contract.
-        unsafe { (*eap).forceit = true_0 };
+        unsafe { (*eap).forceit = 1 };
     }
 
     if !other || emsg_silent.get() != 0 {
@@ -595,7 +595,7 @@ pub unsafe fn check_overwrite(
         return FAIL;
     }
     // SAFETY: caller's contract.
-    unsafe { (*eap).forceit = true_0 };
+    unsafe { (*eap).forceit = 1 };
     OK
 }
 
@@ -832,7 +832,7 @@ unsafe fn check_readonly(forceit: *mut c_int, buf: *mut buf_T) -> bool {
     }
     // Set forceit, to force the writing of a readonly file.
     // SAFETY: caller's contract.
-    unsafe { *forceit = true_0 };
+    unsafe { *forceit = 1 };
     false
 }
 

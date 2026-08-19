@@ -19,8 +19,8 @@ use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
 use crate::normal::{
-    CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop, clearopbeep, false_0,
-    find_ident_under_cursor, get_visual_text, nv_operator, nv_put, read_command_char, true_0,
+    CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop, clearopbeep,
+    find_ident_under_cursor, get_visual_text, nv_operator, nv_put, read_command_char,
 };
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
@@ -266,7 +266,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 if foldManualAllowed(true) != 0 {
                     (*cap).nchar = 'f' as c_int;
                     nv_operator(cap);
-                    (*win).w_onebuf_opt.wo_fen = true_0;
+                    (*win).w_onebuf_opt.wo_fen = 1;
                     if nchar == 'F' as c_int && (*(*cap).oap).op_type == OP_FOLD {
                         nv_operator(cap);
                         finish_op.set(true);
@@ -297,7 +297,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                     clearFolding(win);
                     changed_window_setting(win);
                 } else if foldmethodIsMarker(win) {
-                    deleteFold(win, 1, (*curbuf.get()).b_ml.ml_line_count, true_0, false);
+                    deleteFold(win, 1, (*curbuf.get()).b_ml.ml_line_count, 1, false);
                 } else {
                     emsg(gettext(
                         c"E352: Cannot erase folds with current 'foldmethod'".as_ptr(),
@@ -305,8 +305,8 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 }
             }
             // `zn`/`zN`/`zi`: 'foldenable' off, on, toggled.
-            Ok(b'n') => (*win).w_onebuf_opt.wo_fen = false_0,
-            Ok(b'N') => (*win).w_onebuf_opt.wo_fen = true_0,
+            Ok(b'n') => (*win).w_onebuf_opt.wo_fen = 0,
+            Ok(b'N') => (*win).w_onebuf_opt.wo_fen = 1,
             Ok(b'i') => (*win).w_onebuf_opt.wo_fen = ((*win).w_onebuf_opt.wo_fen == 0) as c_int,
             // `za`/`zA`: toggle this fold, recursively for `zA`.
             Ok(b'a') => {
@@ -314,7 +314,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                     openFold((*win).w_cursor, (*cap).count1);
                 } else {
                     closeFold((*win).w_cursor, (*cap).count1);
-                    (*win).w_onebuf_opt.wo_fen = true_0;
+                    (*win).w_onebuf_opt.wo_fen = 1;
                 }
             }
             Ok(b'A') => {
@@ -322,7 +322,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                     openFoldRecurse((*win).w_cursor);
                 } else {
                     closeFoldRecurse((*win).w_cursor);
-                    (*win).w_onebuf_opt.wo_fen = true_0;
+                    (*win).w_onebuf_opt.wo_fen = 1;
                 }
             }
             // `zo`/`zO`: open. With a selection they are the operator form.
@@ -348,7 +348,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 } else {
                     closeFold((*win).w_cursor, (*cap).count1);
                 }
-                (*win).w_onebuf_opt.wo_fen = true_0;
+                (*win).w_onebuf_opt.wo_fen = 1;
             }
             Ok(b'C') => {
                 if VIsual_active.get() {
@@ -356,19 +356,19 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 } else {
                     closeFoldRecurse((*win).w_cursor);
                 }
-                (*win).w_onebuf_opt.wo_fen = true_0;
+                (*win).w_onebuf_opt.wo_fen = 1;
             }
             // `zv`: open just enough to see the cursor line.
             Ok(b'v') => foldOpenCursor(),
             // `zx`/`zX`: recompute the folds. `zx` also reopens to the cursor.
             Ok(b'x') => {
-                (*win).w_onebuf_opt.wo_fen = true_0;
+                (*win).w_onebuf_opt.wo_fen = 1;
                 (*win).w_foldinvalid = true;
                 newFoldLevel();
                 foldOpenCursor();
             }
             Ok(b'X') => {
-                (*win).w_onebuf_opt.wo_fen = true_0;
+                (*win).w_onebuf_opt.wo_fen = 1;
                 (*win).w_foldinvalid = true;
                 // Force the tail's `newFoldLevel`.
                 *old_fdl = -1;
@@ -380,12 +380,12 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                     (*win).w_onebuf_opt.wo_fdl = (*win).w_onebuf_opt.wo_fdl.max(0);
                 }
                 *old_fdl = -1;
-                (*win).w_onebuf_opt.wo_fen = true_0;
+                (*win).w_onebuf_opt.wo_fen = 1;
             }
             Ok(b'M') => {
                 (*win).w_onebuf_opt.wo_fdl = 0;
                 *old_fdl = -1;
-                (*win).w_onebuf_opt.wo_fen = true_0;
+                (*win).w_onebuf_opt.wo_fen = 1;
             }
             // `zr`/`zR`: reduce the folding, or open everything.
             Ok(b'r') => {
@@ -404,7 +404,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 } else {
                     BACKWARD as c_int
                 };
-                if foldMoveTo(true, dir, (*cap).count1) == false_0 {
+                if foldMoveTo(true, dir, (*cap).count1) == 0 {
                     clearopbeep((*cap).oap);
                 }
             }
@@ -562,7 +562,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
                 beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
             match place {
-                Place::Top => scroll_cursor_top(win, 0, true_0),
+                Place::Top => scroll_cursor_top(win, 0, 1),
                 Place::Middle => scroll_cursor_halfway(win, true, false),
                 Place::Bottom => scroll_cursor_bot(win, 0, true),
             }

@@ -291,7 +291,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
                 disabled_redraw.set(true);
                 return false;
             }
-            stop_insert(&raw mut (*curwin.get()).w_cursor, true_0, nomove as c_int);
+            stop_insert(&raw mut (*curwin.get()).w_cursor, 1, nomove as c_int);
             undisplay_dollar();
         }
 
@@ -301,7 +301,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
 
         // When an auto-indent was removed, curswant stays after the indent.
         if restart_edit.get() == NUL && temp == (*curwin.get()).w_cursor.col {
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         }
 
         // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).

@@ -390,7 +390,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             xfree(buf.cast());
         }
         if serious_error && called_from_main {
-            ml_close(curbuf.get(), true_0);
+            ml_close(curbuf.get(), 1);
         } else {
             apply_autocmds(
                 EVENT_BUFREADPOST,

@@ -229,7 +229,7 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
         };
         (*qfp).qf_valid = new.valid as c_char;
         (*qfp).qf_next = ptr::null_mut();
-        (*qfp).qf_cleared = false as c_char;
+        (*qfp).qf_cleared = 0;
 
         if qf_list_empty(qfl) {
             (*qfl).qf_start = qfp;
@@ -487,7 +487,7 @@ pub unsafe fn qf_mark_adjust(
                     found_one = true;
                     if (*qfp).qf_lnum >= line1 && (*qfp).qf_lnum <= line2 {
                         if amount == MAXLNUM as linenr_T {
-                            (*qfp).qf_cleared = true as c_char;
+                            (*qfp).qf_cleared = 1;
                         } else {
                             (*qfp).qf_lnum += amount;
                         }

@@ -50,7 +50,7 @@ pub unsafe fn get_foldtext(
         got_fdt_error.set(false);
     }
     if !got_fdt_error.get() {
-        did_emsg.set(false_0);
+        did_emsg.set(0);
     }
     if *(*wp).w_onebuf_opt.wo_fdt as c_int != NUL {
         let mut dashes: [c_char; 22] = [0; 22];

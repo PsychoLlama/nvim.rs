@@ -91,7 +91,7 @@ pub unsafe fn nvim_get_mark(
         let mut filename: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if (*mark).fmark.fnum != 0 as ::core::ffi::c_int {
             bufnr = (*mark).fmark.fnum;
-            filename = buflist_nr2name(bufnr, true_0, true_0);
+            filename = buflist_nr2name(bufnr, 1, 1);
             allocated = true;
         } else {
             filename = (*mark).fname;

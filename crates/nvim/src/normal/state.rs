@@ -48,7 +48,7 @@ use crate::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
     CA_COMMAND_BUSY, MOD_MASK_SHIFT, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
     NormalState, SHM_FILEINFO, check_scrollbind, clearop, clearopbeep, current_oap,
-    end_visual_mode, false_0, find_command, normal_execute, nv_cmds, true_0, unshift_special,
+    end_visual_mode, find_command, normal_execute, nv_cmds, unshift_special,
 };
 use crate::option::shortmess;
 use crate::options::kOptFdoFlagAll;
@@ -316,7 +316,7 @@ pub(crate) fn normal_redraw_mode_message() {
         msg_delay(3003, false);
     }
     State.set(save_state);
-    msg_scroll.set(false_0);
+    msg_scroll.set(0);
     emsg_on_display.set(false);
 }
 
@@ -328,10 +328,10 @@ fn normal_check_stuff_buffer() {
         if stuff_empty() {
             did_check_timestamps.set(false);
             if need_check_timestamps.get() {
-                check_timestamps(false_0);
+                check_timestamps(0);
             }
             if need_wait_return.get() {
-                wait_return(false_0);
+                wait_return(0);
             }
         }
     }
@@ -415,7 +415,7 @@ fn normal_check_buffer_modified() {
     unsafe {
         if !finish_op.get()
             && has_event(EVENT_BUFMODIFIEDSET)
-            && (*curbuf.get()).b_changed_invalid as c_int == true_0
+            && (*curbuf.get()).b_changed_invalid as c_int == 1
         {
             apply_autocmds(
                 EVENT_BUFMODIFIEDSET,
@@ -474,11 +474,11 @@ fn normal_redraw() {
             xfree(copy.cast::<c_void>());
         }
         if need_fileinfo.get() && !shortmess(SHM_FILEINFO as c_int) {
-            fileinfo(false_0, true_0, false);
+            fileinfo(0, 1, false);
             need_fileinfo.set(false);
         }
         emsg_on_display.set(false);
-        did_emsg.set(false_0);
+        did_emsg.set(0);
         msg_didany.set(false);
         may_clear_sb_text();
         setcursor();
@@ -503,7 +503,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
             discard_current_exception();
         }
         if !exmode_active.get() {
-            msg_scroll.set(false_0);
+            msg_scroll.set(0);
         }
         quit_more.set(false);
         state_no_longer_safe(ptr::null());
@@ -522,7 +522,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
             normal_check_safe_state();
             if (*curtab.get()).tp_diff_update != 0 || (*curtab.get()).tp_diff_invalid != 0 {
                 ex_diffupdate(ptr::null_mut());
-                (*curtab.get()).tp_diff_update = false_0;
+                (*curtab.get()).tp_diff_update = 0;
             }
             if diff_need_scrollbind.get() {
                 check_scrollbind(0, 0);

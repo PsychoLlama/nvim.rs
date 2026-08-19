@@ -322,7 +322,7 @@ unsafe fn list_one_var_a(
         }
         if *first != 0 {
             msg_clr_eos();
-            *first = false_0;
+            *first = 0;
         }
     }
 }

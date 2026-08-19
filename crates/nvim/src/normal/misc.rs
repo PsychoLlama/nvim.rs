@@ -24,8 +24,7 @@ use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
     CA_COMMAND_BUSY, GETF_ALT, GETF_SETMARK, NULL, checkclearop, checkclearopq, clearop,
-    clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark, true_0,
-    v_visop,
+    clearopbeep, end_visual_mode, kMTCharWise, nv_left, nv_operator, nv_pcmark, v_visop,
 };
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
@@ -139,7 +138,7 @@ pub(crate) unsafe fn nv_ctrlg(cap: *mut cmdarg_T) {
             may_trigger_modechanged();
             showmode();
         } else if !checkclearop((*cap).oap) {
-            fileinfo((*cap).count0, false_0, true);
+            fileinfo((*cap).count0, 0, true);
         }
     }
 }
@@ -206,7 +205,7 @@ pub(crate) unsafe fn nv_hat(cap: *mut cmdarg_T) {
                 (*cap).count0,
                 0 as linenr_T,
                 GETF_SETMARK as c_int | GETF_ALT as c_int,
-                false_0,
+                0,
             );
         }
     }
@@ -306,7 +305,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
         if VIsual_active.get() {
             end_visual_mode();
             check_cursor_col(curwin.get());
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             redraw_curbuf_later(UPD_INVERTED);
         } else if no_reason {
             vim_beep(kOptBoFlagEsc as c_uint);

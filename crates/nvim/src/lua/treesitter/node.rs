@@ -83,9 +83,9 @@ pub(crate) unsafe fn node_check_opt(
         let mut ud: *mut TSNode = luaL_checkudata(L, index, TS_META_NODE.as_ptr()) as *mut TSNode;
         if !ud.is_null() {
             *res = *ud;
-            return true_0 != 0;
+            return true;
         }
-        return false_0 != 0;
+        return false;
     }
 }
 
@@ -396,7 +396,7 @@ unsafe extern "C-unwind" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi
     unsafe {
         let mut descendant: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         if lua_type(L, 2 as ::core::ffi::c_int) != LUA_TTABLE {
-            lua_pushboolean(L, false_0);
+            lua_pushboolean(L, 0);
             return 1 as ::core::ffi::c_int;
         }
         let pred_len: ::core::ffi::c_int =
@@ -419,7 +419,7 @@ unsafe extern "C-unwind" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi
                             check_len,
                         ) == 0 as ::core::ffi::c_int
                     {
-                        lua_pushboolean(L, true_0);
+                        lua_pushboolean(L, 1);
                         return 1 as ::core::ffi::c_int;
                     }
                 }
@@ -428,7 +428,7 @@ unsafe extern "C-unwind" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi
             }
             node = ts_node_child_with_descendant(node, descendant);
         }
-        lua_pushboolean(L, false_0);
+        lua_pushboolean(L, 0);
         return 1 as ::core::ffi::c_int;
     }
 }

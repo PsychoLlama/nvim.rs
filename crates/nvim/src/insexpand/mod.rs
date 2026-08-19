@@ -421,14 +421,14 @@ static compl_shown_match: GlobalCell<*mut compl_T> =
 static compl_old_match: GlobalCell<*mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<compl_T>());
 static compl_num_bests: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_enter_selects: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static compl_enter_selects: GlobalCell<bool> = GlobalCell::new(false);
 static compl_leader: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
-static compl_get_longest: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static compl_get_longest: GlobalCell<bool> = GlobalCell::new(false);
 static compl_used_match: GlobalCell<bool> = GlobalCell::new(false);
-static compl_was_interrupted: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static compl_interrupted: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static compl_restarting: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static compl_started: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static compl_was_interrupted: GlobalCell<bool> = GlobalCell::new(false);
+static compl_interrupted: GlobalCell<bool> = GlobalCell::new(false);
+static compl_restarting: GlobalCell<bool> = GlobalCell::new(false);
+static compl_started: GlobalCell<bool> = GlobalCell::new(false);
 static ctrl_x_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(CTRL_X_NORMAL);
 static compl_matches: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_pattern: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
@@ -476,12 +476,12 @@ static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
 static compl_curr_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 static compl_curr_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub const COMPL_INITIAL_TIMEOUT_MS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
-static compl_autocomplete: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static compl_autocomplete: GlobalCell<bool> = GlobalCell::new(false);
 static compl_timeout_ms: GlobalCell<uint64_t> =
     GlobalCell::new(COMPL_INITIAL_TIMEOUT_MS as uint64_t);
-static compl_time_slice_expired: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static compl_from_nonkeyword: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static compl_hi_on_autocompl_longest: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static compl_time_slice_expired: GlobalCell<bool> = GlobalCell::new(false);
+static compl_from_nonkeyword: GlobalCell<bool> = GlobalCell::new(false);
+static compl_hi_on_autocompl_longest: GlobalCell<bool> = GlobalCell::new(false);
 pub const COMPL_MIN_TIMEOUT_MS: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const COMPL_FUNC_TIMEOUT_MS: ::core::ffi::c_int = 300 as ::core::ffi::c_int;
 pub const COMPL_FUNC_TIMEOUT_NON_KW_MS: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
@@ -492,7 +492,7 @@ pub const CONT_N_ADDS: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONT_S_IPOS: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const CONT_SOL: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 pub const CONT_LOCAL: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-static compl_opt_refresh_always: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static compl_opt_refresh_always: GlobalCell<bool> = GlobalCell::new(false);
 static spell_bad_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 static compl_selected_item: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
@@ -537,4 +537,3 @@ pub const CI_WHAT_MATCHES: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const CI_WHAT_PREINSERTED_TEXT: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const CI_WHAT_ALL: ::core::ffi::c_int = 0xff as ::core::ffi::c_int;
 pub const MIN_SPACE: ::core::ffi::c_int = 75 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

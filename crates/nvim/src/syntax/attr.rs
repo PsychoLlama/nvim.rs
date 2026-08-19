@@ -326,7 +326,7 @@ unsafe fn try_keyword(cur_si: *mut stateitem_T) -> Option<*mut stateitem_T> {
         (*si).si_m_endpos.col = kw.endcol;
         (*si).si_h_endpos.lnum = current_lnum.get();
         (*si).si_h_endpos.col = kw.endcol;
-        (*si).si_ends = true_0;
+        (*si).si_ends = 1;
         (*si).si_end_idx = 0;
         (*si).si_flags = kw.flags;
         (*si).si_seqnr = next_seqnr.get();

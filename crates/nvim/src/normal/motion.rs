@@ -26,8 +26,7 @@ use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
     CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, MOD_MASK_CTRL, MOD_MASK_SHIFT, TAB, adjust_for_sel,
-    clearopbeep, false_0, kMTCharWise, kMTLineWise, may_fold_open, nv_page, true_0,
-    unadjust_for_sel,
+    clearopbeep, kMTCharWise, kMTLineWise, may_fold_open, nv_page, unadjust_for_sel,
 };
 use crate::option::{get_showbreak_value, get_ve_flags};
 use crate::options::{
@@ -305,7 +304,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
         // A modifier turns this into a word move.
         if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
             if mod_mask.get() & MOD_MASK_CTRL != 0 {
-                (*cap).arg = true_0;
+                (*cap).arg = 1;
             }
             nv_wordcmd(cap);
             return;
@@ -333,7 +332,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
             let at_end = if past_line {
                 *get_cursor_pos_ptr() as c_int == NUL
             } else {
-                oneright() == false_0
+                oneright() == 0
             };
             if at_end {
                 if wrap_flag != NUL
@@ -351,7 +350,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                         (*win).w_cursor.lnum += 1;
                         (*win).w_cursor.col = 0;
                         (*win).w_cursor.coladd = 0;
-                        (*win).w_set_curswant = true_0;
+                        (*win).w_set_curswant = 1;
                         (*(*cap).oap).inclusive = false;
                     }
                 } else {
@@ -367,7 +366,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                     break;
                 }
             } else if past_line {
-                (*win).w_set_curswant = true_0;
+                (*win).w_set_curswant = 1;
                 if virtual_active(win) {
                     oneright();
                 } else {
@@ -411,14 +410,14 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
 
         let mut n = (*cap).count1;
         while n > 0 {
-            if oneleft() == false_0 {
+            if oneleft() == 0 {
                 if wrap_flag != NUL
                     && !vim_strchr(p_ww.get(), wrap_flag).is_null()
                     && (*win).w_cursor.lnum > 1
                 {
                     (*win).w_cursor.lnum -= 1;
                     coladvance(win, MAXCOL as c_int);
-                    (*win).w_set_curswant = true_0;
+                    (*win).w_set_curswant = 1;
                     // A delete or a change that wrapped back over the line
                     // break must take the break with it, so put the cursor
                     // one past the last character and tell the caller not to
@@ -457,7 +456,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
             return;
         }
         (*(*cap).oap).motion_type = kMTLineWise;
-        if cursor_up((*cap).count1 as linenr_T, (*(*cap).oap).op_type == OP_NOP) == false_0 {
+        if cursor_up((*cap).count1 as linenr_T, (*(*cap).oap).op_type == OP_NOP) == 0 {
             clearopbeep((*cap).oap);
         } else if (*cap).arg != 0 {
             // `-` and `CTRL-P` land on the first non-blank; `k` does not.
@@ -497,7 +496,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
             }
         }
         (*(*cap).oap).motion_type = kMTLineWise;
-        if cursor_down((*cap).count1, (*(*cap).oap).op_type == OP_NOP) == false_0 {
+        if cursor_down((*cap).count1, (*(*cap).oap).op_type == OP_NOP) == 0 {
             clearopbeep((*cap).oap);
         } else if (*cap).arg != 0 {
             // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
@@ -513,7 +512,7 @@ pub(crate) unsafe fn nv_end(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*cap).arg != 0 || mod_mask.get() & MOD_MASK_CTRL != 0 {
-            (*cap).arg = true_0;
+            (*cap).arg = 1;
             nv_goto(cap);
             // The count named the line, so `$` must not use it again.
             (*cap).count1 = 1;
@@ -534,7 +533,7 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
         {
             (*curwin.get()).w_curswant = MAXCOL as colnr_T;
         }
-        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP) == false_0 {
+        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP) == 0 {
             clearopbeep((*cap).oap);
         } else {
             may_fold_open(cap, kOptFdoFlagHor as c_uint);
@@ -560,14 +559,14 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
         // `t` and `T` stop *before* the character.
         let t_cmd = (*cap).cmdchar == 't' as c_int || (*cap).cmdchar == 'T' as c_int;
         (*(*cap).oap).motion_type = kMTCharWise;
-        if (*cap).nchar < 0 || searchc(cap, t_cmd) == false_0 {
+        if (*cap).nchar < 0 || searchc(cap, t_cmd) == 0 {
             clearopbeep((*cap).oap);
             if cursor_dec {
                 adjust_for_sel(cap);
             }
             return;
         }
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         // Landing on a TAB with 'virtualedit' means the *last* cell of it,
         // so that `dt<Tab>` takes the whole tab.
         if gchar_cursor() == TAB
@@ -627,7 +626,7 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
             } else {
                 setpcmark();
                 (*win).w_cursor = *pos;
-                (*win).w_set_curswant = true_0;
+                (*win).w_set_curswant = 1;
                 (*win).w_cursor.coladd = 0;
                 adjust_for_sel(cap);
             }
@@ -645,7 +644,7 @@ pub(crate) unsafe fn nv_brace(cap: *mut cmdarg_T) {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).use_reg_one = true;
         (*(*cap).oap).inclusive = false;
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         if findsent((*cap).arg as Direction, (*cap).count1) == FAIL {
             clearopbeep((*cap).oap);
             return;
@@ -663,7 +662,7 @@ pub(crate) unsafe fn nv_findpar(cap: *mut cmdarg_T) {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = false;
         (*(*cap).oap).use_reg_one = true;
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         if !findpar(
             &raw mut (*(*cap).oap).inclusive,
             (*cap).arg,
@@ -708,7 +707,7 @@ pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
             (*curwin.get()).w_curswant = 0;
         }
         // The column was named outright, so it is not a remembered want.
-        (*curwin.get()).w_set_curswant = false_0;
+        (*curwin.get()).w_set_curswant = 0;
     }
 }
 
@@ -718,8 +717,8 @@ pub(crate) unsafe fn nv_bck_word(cap: *mut cmdarg_T) {
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = false;
-        (*curwin.get()).w_set_curswant = true_0;
-        if bck_word((*cap).count1, (*cap).arg != 0, false) == false_0 {
+        (*curwin.get()).w_set_curswant = 1;
+        if bck_word((*cap).count1, (*cap).arg != 0, false) == 0 {
             clearopbeep((*cap).oap);
         } else {
             may_fold_open(cap, kOptFdoFlagHor as c_uint);
@@ -750,7 +749,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
         }
 
         (*(*cap).oap).motion_type = kMTCharWise;
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         let moved = if word_end {
             end_word((*cap).count1, (*cap).arg != 0, cw_on_word, false)
         } else {
@@ -763,7 +762,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
         if lt(startpos, (*curwin.get()).w_cursor) {
             adjust_cursor((*cap).oap);
         }
-        if moved == false_0 && (*(*cap).oap).op_type == OP_NOP {
+        if moved == 0 && (*(*cap).oap).op_type == OP_NOP {
             clearopbeep((*cap).oap);
         } else {
             adjust_for_sel(cap);

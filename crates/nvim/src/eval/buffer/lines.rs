@@ -101,7 +101,7 @@ pub(crate) unsafe fn set_buffer_lines(
 /// Set or append lines to a buffer.
 unsafe fn buf_set_append_line(argvars: *mut typval_T, rettv: *mut typval_T, append: bool) {
     let did_emsg_before: c_int = did_emsg.get();
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), false_0);
+    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
     if buf.is_null() {
         (*rettv).vval.v_number = 1;
     } else {
@@ -220,7 +220,7 @@ pub unsafe fn f_getbufoneline(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let did_emsg_before: c_int = did_emsg.get();
     (*rettv).vval.v_number = 1;
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), false_0);
+    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
     if buf.is_null() {
         return;
     }

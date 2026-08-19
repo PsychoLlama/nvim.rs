@@ -399,6 +399,6 @@ unsafe fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: 
         };
         check_cursor_col(curwin.get());
         (*curwin.get()).w_cursor.coladd = 0;
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
     }
 }

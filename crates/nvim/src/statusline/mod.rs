@@ -168,8 +168,6 @@ pub const SID_ERROR: ::core::ffi::c_int = -5 as ::core::ffi::c_int;
 pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const RULER_BUF_LEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
 pub const TMPLEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 
 // ---------------------------------------------------------------------------
 // The format expander, wrapped

@@ -384,7 +384,5 @@ pub const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ITEM_SKIP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ITEM_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ITEM_MATCHGROUP: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

@@ -172,4 +172,3 @@ pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
         items: ::core::ptr::null_mut::<Object>(),
     },
 };
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

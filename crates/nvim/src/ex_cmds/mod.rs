@@ -244,7 +244,7 @@ pub unsafe fn check_secure() -> bool {
 pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
     unsafe {
         if (*curwin.get()).w_onebuf_opt.wo_pvw != 0 {
-            return false_0 != 0;
+            return false;
         }
         let mut wp: *mut win_T = if curtab.get() == curtab.get() {
             firstwin.get()
@@ -254,7 +254,7 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
         while !wp.is_null() {
             if (*wp).w_onebuf_opt.wo_pvw != 0 {
                 win_enter(wp, undo_sync);
-                return false_0 != 0;
+                return false;
             }
             wp = (*wp).w_next;
         }
@@ -267,13 +267,13 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
             0 as ::core::ffi::c_int,
         ) == FAIL
         {
-            return false_0 != 0;
+            return false;
         }
-        (*curwin.get()).w_onebuf_opt.wo_pvw = true_0;
-        (*curwin.get()).w_onebuf_opt.wo_wfh = true_0;
-        (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
-        (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
-        (*curwin.get()).w_onebuf_opt.wo_diff = false_0;
+        (*curwin.get()).w_onebuf_opt.wo_pvw = 1;
+        (*curwin.get()).w_onebuf_opt.wo_wfh = 1;
+        (*curwin.get()).w_onebuf_opt.wo_scb = 0;
+        (*curwin.get()).w_onebuf_opt.wo_crb = 0;
+        (*curwin.get()).w_onebuf_opt.wo_diff = 0;
         set_option_direct(
             kOptFoldcolumn,
             OptVal {
@@ -289,7 +289,7 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
             OptionSetFlags::NONE,
             SID_NONE,
         );
-        return true_0 != 0;
+        return true;
     }
 }
 pub unsafe fn skip_vimgrep_pat(
@@ -313,7 +313,7 @@ pub unsafe fn skip_vimgrep_pat(
                 *s = p.offset(1 as ::core::ffi::c_int as isize);
             }
             let mut c: ::core::ffi::c_int = *p as uint8_t as ::core::ffi::c_int;
-            p = skip_regexp(p.offset(1 as ::core::ffi::c_int as isize), c, true_0);
+            p = skip_regexp(p.offset(1 as ::core::ffi::c_int as isize), c, 1);
             if *p as ::core::ffi::c_int != c {
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
@@ -349,7 +349,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
             return;
         }
         msg_start();
-        msg_scroll.set(true_0);
+        msg_scroll.set(1);
         let l_: *mut list_T = l;
         if !l_.is_null() {
             let mut li: *mut listitem_T = (*l_).lv_first;
@@ -374,13 +374,13 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
                 li = (*li).li_next;
             }
         }
-        got_int.set(false_0 != 0);
+        got_int.set(false);
         if cmdmod_has(CmdModFlags::BROWSE) {
-            quit_more.set(false_0 != 0);
+            quit_more.set(false);
             nr = prompt_for_input(
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 0 as ::core::ffi::c_int,
-                false_0 != 0,
+                false,
                 ::core::ptr::null_mut::<bool>(),
             );
             msg_starthere();
@@ -405,7 +405,5 @@ pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const DBL_MAX: ::core::ffi::c_double = __DBL_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const __DBL_MAX__: ::core::ffi::c_double = 1.7976931348623157e+308f64;

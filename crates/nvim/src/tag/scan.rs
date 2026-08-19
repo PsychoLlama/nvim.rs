@@ -734,10 +734,10 @@ pub unsafe fn find_tags(
         };
         match tagcase {
             kOptTcFlagFollowic => {}
-            kOptTcFlagIgnore => p_ic.set(true_0),
-            kOptTcFlagMatch => p_ic.set(false_0),
+            kOptTcFlagIgnore => p_ic.set(1),
+            kOptTcFlagMatch => p_ic.set(0),
             kOptTcFlagFollowscs => p_ic.set(ignorecase(pat)),
-            kOptTcFlagSmart => p_ic.set(ignorecase_opt(pat, true_0, true_0)),
+            kOptTcFlagSmart => p_ic.set(ignorecase_opt(pat, 1, 1)),
             _ => abort(),
         }
 
@@ -771,7 +771,7 @@ pub unsafe fn find_tags(
         // A pattern that does not compile is the caller's problem, not a
         // message from here.
         let save_emsg_off = emsg_off.get();
-        emsg_off.set(true_0);
+        emsg_off.set(1);
         st.orgpat.prepare(has_re);
         emsg_off.set(save_emsg_off);
 

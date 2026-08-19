@@ -89,7 +89,7 @@ pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
                 ga_concat_len(capture_ga.get(), c" ".as_ptr(), 1);
             }
             if redir_reg.get() != 0 {
-                write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, true_0);
+                write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, 1);
             } else if redir_vname.get() {
                 var_redir_str(c" ".as_ptr(), -1);
             } else if !redir_fd.get().is_null() {
@@ -117,7 +117,7 @@ pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
             ga_concat_len(capture_ga.get(), str, len);
         }
         if redir_reg.get() != 0 {
-            write_reg_contents(redir_reg.get(), str, len as ssize_t, true_0);
+            write_reg_contents(redir_reg.get(), str, len as ssize_t, 1);
         }
         if redir_vname.get() {
             var_redir_str(str, maxlen as c_int);
@@ -218,7 +218,7 @@ pub unsafe fn verbose_enter_scroll() {
         verbose_enter();
         if !verbosefile_set() {
             // Always scroll up, don't overwrite.
-            msg_scroll.set(true_0);
+            msg_scroll.set(1);
         }
     }
 }

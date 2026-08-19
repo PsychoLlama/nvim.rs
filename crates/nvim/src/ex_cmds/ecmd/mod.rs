@@ -28,7 +28,7 @@ use super::{
     BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, ECMD_ADDBUF, ECMD_ALTBUF,
     ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP,
     FAIL, KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT, SHM_FILEINFO,
-    SHM_OVERALL, false_0, true_0,
+    SHM_OVERALL,
 };
 use crate::arglist::check_arg_idx;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER, apply_autocmds_retval};
@@ -366,7 +366,7 @@ pub unsafe fn do_ecmd(
         } else if !unsafe { (*curbuf.get()).b_help } {
             // Don't make a buffer listed if it's a help buffer.  Useful when
             // using CTRL-O to go back to a help file.
-            unsafe { set_buflisted(true_0) };
+            unsafe { set_buflisted(1) };
         }
 
         // If autocommands change buffers under our fingers, forget about
@@ -754,7 +754,7 @@ unsafe fn place_cursor(state: &Ecmd) {
                 (*curwin.get()).w_cursor.col = state.solcol;
                 check_cursor_col(curwin.get());
                 (*curwin.get()).w_cursor.coladd = 0;
-                (*curwin.get()).w_set_curswant = true_0;
+                (*curwin.get()).w_set_curswant = 1;
             } else {
                 beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
             }
@@ -780,7 +780,7 @@ unsafe fn report_file_info() {
         && !exiting.get()
         && p_verbose.get() == 0
     {
-        msg_scroll.set(false_0);
+        msg_scroll.set(0);
     }
     if msg_scroll.get() == 0 {
         // wait a bit when overwriting an error msg
@@ -794,7 +794,7 @@ unsafe fn report_file_info() {
 
     if !shortmess(SHM_FILEINFO as c_int) {
         // SAFETY: as above.
-        unsafe { fileinfo(false_0, true_0, false) };
+        unsafe { fileinfo(0, 1, false) };
     }
 
     msg_scrolled_ign.set(false);

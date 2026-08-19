@@ -261,7 +261,7 @@ pub unsafe fn do_check_cursorbind() {
             // Make sure the cursor is in a valid position. `restart_edit` is
             // set for the duration so that it may sit beyond the end of line.
             let restart_edit_save = restart_edit.get();
-            restart_edit.set(true_0);
+            restart_edit.set(1);
             // SAFETY: a live window.
             unsafe { check_cursor(win.raw()) };
             // Avoid a scroll here for the cursor position: 'scrollbind' is

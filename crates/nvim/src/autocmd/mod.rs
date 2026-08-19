@@ -389,11 +389,11 @@ static deleted_augroup: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static current_augroup: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(AUGROUP_DEFAULT as ::core::ffi::c_int);
-static au_need_clean: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static au_need_clean: GlobalCell<bool> = GlobalCell::new(false);
 static autocmd_blocked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static autocmd_nested: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static autocmd_include_groups: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static termresponse_changed: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static autocmd_nested: GlobalCell<bool> = GlobalCell::new(false);
+static autocmd_include_groups: GlobalCell<bool> = GlobalCell::new(false);
+static termresponse_changed: GlobalCell<bool> = GlobalCell::new(false);
 static map_augroup_name_to_id: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
     set: Set_String {
         h: MAPHASH_INIT,
@@ -626,5 +626,3 @@ fn au_event_vec(event: event_T) -> *mut AutoCmdVec {
         .cast::<AutoCmdVec>()
         .wrapping_add(event as usize)
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

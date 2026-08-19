@@ -53,7 +53,7 @@ pub(crate) unsafe fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
             };
             msg(state.as_ptr(), 0);
         } else if let Some(i) = word_index(arg, next, &[c"on", c"off"]) {
-            (*cur_syn_block()).b_syn_conceal = if i == 0 { true_0 } else { false_0 };
+            (*cur_syn_block()).b_syn_conceal = if i == 0 { 1 } else { 0 };
         } else {
             semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
         }
@@ -76,7 +76,7 @@ pub(crate) unsafe fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
             };
             msg(state.as_ptr(), 0);
         } else if let Some(i) = word_index(arg, next, &[c"match", c"ignore"]) {
-            (*cur_syn_block()).b_syn_ic = if i == 0 { false_0 } else { true_0 };
+            (*cur_syn_block()).b_syn_ic = if i == 0 { 0 } else { 1 };
         } else {
             semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
         }
@@ -260,10 +260,10 @@ pub unsafe fn syn_maybe_enable() {
         if !did_syntax_onoff.get() {
             let mut ea = exarg_T {
                 arg: c"".as_ptr().cast_mut(),
-                skip: false_0,
+                skip: 0,
                 ..Default::default()
             };
-            syn_cmd_on(&raw mut ea, false_0);
+            syn_cmd_on(&raw mut ea, 0);
         }
     }
 }
@@ -326,7 +326,7 @@ pub unsafe fn ex_syntax(eap: *mut exarg_T) {
         {
             Some(sub) => {
                 (*eap).arg = skipwhite(subcmd_end);
-                (sub.func)(eap, false_0);
+                (sub.func)(eap, 0);
             }
             None => {
                 semsg_c!(
@@ -353,7 +353,7 @@ pub unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
             hash_init(&raw mut (*cur_syn_block()).b_keywtab);
             hash_init(&raw mut (*cur_syn_block()).b_keywtab_ic);
             // TODO(vim): Keep the spell checking as it was.
-            (*curwin.get()).w_onebuf_opt.wo_spell = false_0; // No spell checking
+            (*curwin.get()).w_onebuf_opt.wo_spell = 0; // No spell checking
             // Make sure option values are "empty_string_option" instead of NULL.
             clear_string_option(&raw mut (*cur_syn_block()).b_p_spc);
             clear_string_option(&raw mut (*cur_syn_block()).b_p_spf);

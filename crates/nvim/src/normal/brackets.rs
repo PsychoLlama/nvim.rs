@@ -16,9 +16,9 @@ use crate::memory::{xfree, xmemdupz};
 use crate::mouse::do_mouse;
 use crate::normal::{
     _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE,
-    FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clearop, clearopbeep, false_0,
+    FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clearop, clearopbeep,
     find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
-    may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt, true_0,
+    may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt,
 };
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::os::cshim::__ctype_b_loc;
@@ -177,7 +177,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
         if !pos.is_null() {
             setpcmark();
             (*curwin.get()).w_cursor = *pos;
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             may_fold_open(cap, kOptFdoFlagBlock as c_uint);
         }
     }
@@ -236,7 +236,7 @@ unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
             false,
         );
         xfree(name as *mut c_void);
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
     }
 }
 
@@ -286,7 +286,7 @@ unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
                 clearopbeep((*cap).oap);
                 break;
             }
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         }
         may_fold_open(cap, kOptFdoFlagSearch as c_uint);
     }
@@ -321,7 +321,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
             } else {
                 '}' as c_int
             };
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             if !findpar(
                 &raw mut (*(*cap).oap).inclusive,
                 (*cap).arg,
@@ -353,11 +353,11 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
                 PUT_FIXINDENT as c_int != 0,
             );
         } else if nchar == 'z' as c_int {
-            if foldMoveTo(false, direction(cap), (*cap).count1) == false_0 {
+            if foldMoveTo(false, direction(cap), (*cap).count1) == 0 {
                 clearopbeep((*cap).oap);
             }
         } else if nchar == 'c' as c_int {
-            if diff_move_to(direction(cap), (*cap).count1) == false_0 {
+            if diff_move_to(direction(cap), (*cap).count1) == 0 {
                 clearopbeep((*cap).oap);
             }
         } else if nchar == 'r' as c_int || nchar == 's' as c_int || nchar == 'S' as c_int {

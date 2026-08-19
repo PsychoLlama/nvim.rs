@@ -130,5 +130,3 @@ unsafe fn change_other_buffer_restore(cob: *mut SavedBufferState) {
 }
 pub const SEA_NONE: c_int = 0;
 pub const SEA_READONLY: c_int = 4;
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;

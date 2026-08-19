@@ -159,7 +159,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
         ) {
             (*opts).hl_name as ::core::ffi::c_int
         } else {
-            true_0
+            1
         } != 0;
         let mut extmark: MTPair = extmark_from_id(b, ns_id as uint32_t, id as uint32_t);
         if extmark.start.pos.row < 0 as int32_t {
@@ -203,7 +203,7 @@ pub unsafe fn nvim_buf_get_extmarks(
         ) {
             (*opts).hl_name as ::core::ffi::c_int
         } else {
-            true_0
+            1
         } != 0;
         let mut type_0: ExtmarkType = kExtmarkNone;
         if has_key(

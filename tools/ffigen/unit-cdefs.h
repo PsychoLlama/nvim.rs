@@ -7886,7 +7886,6 @@ static const int _ISgraph = 32768;
 static const int _ISlower = 512;
 static const int _ISpunct = 4;
 static const int _ISupper = 256;
-static const int false_0 = 0;
 static const int kAlignCenter = 1;
 static const int kAlignLeft = 0;
 static const int kAlignRight = 2;
@@ -9306,7 +9305,6 @@ static const int map_result_fail = 0;
 static const int map_result_get = 1;
 static const int map_result_nomatch = 3;
 static const int map_result_retry = 2;
-static const int true_0 = 1;
 
 extern char NameBuff[4096];
 extern cmdmod_T cmdmod;

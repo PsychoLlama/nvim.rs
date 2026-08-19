@@ -87,7 +87,7 @@ pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         // The lookup itself must not report "no such buffer": a second
         // argument asks for the buffer to be created instead.
         (*emsg_off.ptr()) += 1;
-        let found = tv_get_buf(argvars.offset(0), false_0);
+        let found = tv_get_buf(argvars.offset(0), 0);
         (*emsg_off.ptr()) -= 1;
         found
     };

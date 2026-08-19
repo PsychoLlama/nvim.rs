@@ -360,7 +360,7 @@ pub unsafe fn autocmd_register(
                     pat,
                     pat.offset(patlen as isize),
                     &raw mut (*ap).allow_dirs,
-                    true_0,
+                    1,
                 );
                 if !reg_pat.is_null() {
                     (*ap).reg_prog = vim_regcomp(reg_pat, RE_MAGIC);

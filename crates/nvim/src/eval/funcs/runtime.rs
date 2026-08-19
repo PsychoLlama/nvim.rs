@@ -4,7 +4,7 @@
 
 use super::args::frame;
 use super::wrappers::non_zero_arg;
-use super::{MENU_ALL_MODES, kRetNilBool, true_0};
+use super::{MENU_ALL_MODES, kRetNilBool};
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::ascii_isdigit;
@@ -270,7 +270,7 @@ fn has_wsl() -> bool {
         };
         debug_assert!(err.type_0 == kErrorTypeNone);
         // SAFETY: the union member is the one the type tag names.
-        let yes = o.type_0 == kObjectTypeBoolean && unsafe { o.data.boolean } as c_int == true_0;
+        let yes = o.type_0 == kObjectTypeBoolean && unsafe { o.data.boolean } as c_int == 1;
         ANSWER.set(if yes { kTrue } else { kFalse });
     }
     ANSWER.get() == kTrue

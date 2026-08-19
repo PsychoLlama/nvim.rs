@@ -98,7 +98,7 @@ pub unsafe fn nvim_eval_statusline(
     // cursor away and back.
     let mut win = ctx.win;
     let crb_save = win.w_onebuf_opt.wo_crb;
-    win.w_onebuf_opt.wo_crb = false_0;
+    win.w_onebuf_opt.wo_crb = 0;
     let job = StlJob {
         win,
         // The API's own string: nothing can free it under the expander, so

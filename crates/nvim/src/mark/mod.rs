@@ -603,5 +603,3 @@ pub unsafe fn mark_mb_adjustpos(mut buf: *mut buf_T, mut lp: *mut pos_T) {
         }
     }
 }
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;

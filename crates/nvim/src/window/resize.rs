@@ -332,7 +332,7 @@ pub(crate) fn to_fraction(wp: Win, prev_height: c_int) {
 
     if wp.is_current() {
         // SAFETY: a live window; validates `w_wrow`.
-        unsafe { curs_columns(wp.raw(), false_0) };
+        unsafe { curs_columns(wp.raw(), 0) };
     }
     if prev_height > 0 {
         wp.w_prev_fraction_row = wp.w_wrow;
@@ -392,7 +392,7 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
             invalidate_botline(wp);
             if wp.is_current() && (keeps_cursor || wp.w_floating) {
                 // SAFETY: a live window.
-                unsafe { curs_columns(wp.raw(), true_0) };
+                unsafe { curs_columns(wp.raw(), 1) };
             }
         }
         wp.redraw_later(UPD_NOT_VALID);

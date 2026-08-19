@@ -31,7 +31,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_add_language_from_object(
     mut L: *mut lua_State,
 ) -> ::core::ffi::c_int {
     unsafe {
-        return add_language(L, false_0 != 0);
+        return add_language(L, false);
     }
 }
 
@@ -134,7 +134,7 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
             );
         }
         if set_has_cstr_t(&raw mut (*langs.ptr()).set, lang_name as cstr_t) {
-            lua_pushboolean(L, true_0);
+            lua_pushboolean(L, 1);
             return 1 as ::core::ffi::c_int;
         }
         let mut lang: *const TSLanguage = if is_wasm as ::core::ffi::c_int != 0 {
@@ -160,7 +160,7 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
             xstrdup(lang_name) as cstr_t,
             lang as *mut TSLanguage as ptr_t,
         );
-        lua_pushboolean(L, true_0);
+        lua_pushboolean(L, 1);
         return 1 as ::core::ffi::c_int;
     }
 }

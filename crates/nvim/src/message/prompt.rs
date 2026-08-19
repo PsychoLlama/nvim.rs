@@ -64,7 +64,7 @@ pub unsafe fn msg_end_prompt() {
 /// Only that the editor is in a state where it can read a key.
 pub unsafe fn wait_return(redraw: c_int) {
     unsafe {
-        if redraw == true_0 {
+        if redraw == 1 {
             redraw_all_later(UPD_NOT_VALID);
         }
 
@@ -124,7 +124,7 @@ pub unsafe fn wait_return(redraw: c_int) {
             // prompt to start an Ex command but the file-changed dialog gets
             // in the way.
             if need_check_timestamps.get() {
-                check_timestamps(false_0);
+                check_timestamps(0);
             }
 
             // With 'cmdheight' zero we need to scroll the first line of
@@ -266,9 +266,7 @@ pub unsafe fn wait_return(redraw: c_int) {
         if tmp_state == MODE_SETWSIZE {
             // got resize event while in vgetc()
             ui_refresh();
-        } else if !skip_redraw.get()
-            && (redraw == true_0 || (msg_scrolled.get() != 0 && redraw != -1))
-        {
+        } else if !skip_redraw.get() && (redraw == 1 || (msg_scrolled.get() != 0 && redraw != -1)) {
             redraw_later(curwin.get(), UPD_VALID);
         }
     }
@@ -285,12 +283,12 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
     unsafe {
         let save_p_more = p_more.get();
         if !newline_sb {
-            p_more.set(false_0);
+            p_more.set(0);
         }
         if msg_didout.get() {
             msg_putchar(b'\n' as c_int); // start on a new line
         }
-        p_more.set(false_0); // don't want to see this message when scrolling back
+        p_more.set(0); // don't want to see this message when scrolling back
         if got_int.get() {
             msg_puts(gettext(c"Interrupt: ".as_ptr()));
         }
@@ -663,7 +661,7 @@ pub unsafe fn msg_check_for_delay(check_msg_scroll: bool) {
             msg_delay(1006, true);
             emsg_on_display.set(false);
             if check_msg_scroll {
-                msg_scroll.set(false_0);
+                msg_scroll.set(0);
             }
         }
     }

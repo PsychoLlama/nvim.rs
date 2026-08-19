@@ -409,7 +409,7 @@ unsafe fn resolve_swapfile_clash(
         }
 
         match choice {
-            SEA_CHOICE_READONLY => (*buf).b_p_ro = true_0,
+            SEA_CHOICE_READONLY => (*buf).b_p_ro = 1,
             SEA_CHOICE_RECOVER => swap_exists_action.set(SEA_RECOVER),
             SEA_CHOICE_DELETE => {
                 os_remove(fname);
@@ -473,7 +473,7 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
                 if running { run_but } else { but },
                 1,
                 core::ptr::null(),
-                false_0,
+                0,
             ) as sea_choice_T;
             // Compensate for the missing "Delete it" button.
             choice = choice.wrapping_add((running && choice >= 4) as sea_choice_T);

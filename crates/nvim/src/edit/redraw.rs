@@ -247,7 +247,7 @@ pub(crate) unsafe fn display_dollar(col_arg: colnr_T) {
         // On the last byte of a multi-byte character, move to the first byte.
         let p = get_cursor_line_ptr();
         (*win).w_cursor.col -= utf_head_off(p, p.offset(col as isize));
-        curs_columns(win, false_0); // recompute w_wrow and w_wcol
+        curs_columns(win, 0); // recompute w_wrow and w_wcol
         if (*win).w_wcol < (*win).w_view_width {
             edit_putchar('$' as c_int, false);
             dollar_vcol.set((*win).w_virtcol);

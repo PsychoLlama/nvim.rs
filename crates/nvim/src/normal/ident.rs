@@ -31,7 +31,7 @@ use crate::message::{emsg, messaging};
 use crate::normal::{
     DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH,
     POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked, checkclearopq, clearop,
-    clearopbeep, false_0, get_visual_text, normal_search, true_0,
+    clearopbeep, get_visual_text, normal_search,
 };
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
@@ -359,8 +359,8 @@ pub unsafe fn find_decl(
         let save_p_ws = p_ws.get();
         let save_p_scs = p_scs.get();
         // The search must not wrap round the file or guess at case.
-        p_ws.set(false_0);
-        p_scs.set(false_0);
+        p_ws.set(0);
+        p_scs.set(0);
 
         // Where the enclosing block starts, which is as far back as a local
         // declaration may be.
@@ -465,7 +465,7 @@ pub unsafe fn find_decl(
         if !found {
             (*curwin.get()).w_cursor = old_pos;
         } else {
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             reset_search_dir();
         }
         xfree(pat as *mut c_void);
@@ -858,7 +858,7 @@ pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
                 c"".as_ptr() as *mut c_char,
                 DT_POP as c_int,
                 (*cap).count1,
-                false_0,
+                0,
                 true,
             );
         }

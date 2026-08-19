@@ -13,9 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    CPO_REMMARK, FAIL, READ_FILTER, buf_autocmd, check_secure, false_0, kExtmarkNOOP, true_0,
-};
+use super::{CPO_REMMARK, FAIL, READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
@@ -128,7 +126,7 @@ pub unsafe fn do_bang(
     if addr_count == 0 {
         // ":!" -- the shell may look at the files on disk, so 'autowriteall'
         // gets to put them there first.  Don't scroll here.
-        msg_scroll.set(false_0);
+        msg_scroll.set(0);
         // SAFETY: main thread; writing every changed buffer is re-entrant but
         // holds no state of ours.
         unsafe { autowrite_all() };
@@ -189,7 +187,7 @@ pub unsafe fn do_bang(
                 xfree(cmd.cast());
                 AppendToRedobuff(c"\n".as_ptr());
             }
-            bangredo.set(false_0 != 0);
+            bangredo.set(false);
         }
 
         // SAFETY: 'shellquote' is a live option string.
@@ -459,14 +457,14 @@ unsafe fn do_filter(
                 xfree(cmd_buf.cast());
             }
 
-            did_check_timestamps.set(false_0 != 0);
-            need_check_timestamps.set(true_0 != 0);
+            did_check_timestamps.set(false);
+            need_check_timestamps.set(true);
 
             // When interrupting the shell command, it may still have produced
             // some useful output.  Reset got_int here, so that readfile()
             // won't cancel reading.
             os_breakcheck();
-            got_int.set(false_0 != 0);
+            got_int.set(false);
 
             if !do_out {
                 break 'error;
@@ -596,7 +594,7 @@ unsafe fn do_filter(
         unsafe { (*curwin.get()).w_cursor = cursor_save };
         no_wait_return.set(no_wait_return.get() - 1);
         // SAFETY: message state.
-        unsafe { wait_return(false_0) };
+        unsafe { wait_return(0) };
     }
 
     cmdmod.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
@@ -677,10 +675,10 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     unsafe { call_shell(cmd, flags, ptr::null_mut()) };
 
     if msg_silent.get() == 0 {
-        msg_didout.set(true_0 != 0);
+        msg_didout.set(true);
     }
-    did_check_timestamps.set(false_0 != 0);
-    need_check_timestamps.set(true_0 != 0);
+    did_check_timestamps.set(false);
+    need_check_timestamps.set(true);
 
     // Put the cursor back where it was: the shell wrote over the screen.
     msg_row.set(Rows.get() - 1);
@@ -932,8 +930,8 @@ pub unsafe fn print_line(lnum: linenr_T, use_number: bool, list: bool, first: bo
         return;
     }
 
-    silent_mode.set(false_0 != 0);
-    info_message.set(true_0 != 0); // use stdout, not stderr
+    silent_mode.set(false);
+    info_message.set(true); // use stdout, not stderr
     if (global_busy.get() == 0 || global_need_msg_kind.get()) && first {
         // SAFETY: message state.
         unsafe {
@@ -954,5 +952,5 @@ pub unsafe fn print_line(lnum: linenr_T, use_number: bool, list: bool, first: bo
         unsafe { msg_putchar('\n' as c_int) };
         silent_mode.set(save_silent);
     }
-    info_message.set(false_0 != 0);
+    info_message.set(false);
 }

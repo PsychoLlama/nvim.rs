@@ -352,7 +352,7 @@ pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
-static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false);
 static pre_incsearch_pos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
@@ -367,5 +367,4 @@ static cmdline_orig: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static filetype_expand_what: GlobalCell<C2Rust_Unnamed_21> = GlobalCell::new(EXP_FILETYPECMD_ALL);
 static breakpt_expand_what: GlobalCell<C2Rust_Unnamed_20> = GlobalCell::new(EXP_BREAKPT_ADD);
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;

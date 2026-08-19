@@ -312,17 +312,17 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         }
 
         if !arrow_used.get() {
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         }
         if stuff_empty() {
             did_check_timestamps.set(false);
             if need_check_timestamps.get() {
-                check_timestamps(false_0);
+                check_timestamps(0);
             }
         }
 
         // The mode message is not scrolled away.
-        msg_scroll.set(false_0);
+        msg_scroll.set(0);
         if fdo_flags.get() & kOptFdoFlagInsert as ::core::ffi::c_uint != 0 {
             foldOpenCursor();
         }
@@ -673,7 +673,7 @@ pub(crate) unsafe fn insert_handle_key_post(s: *mut InsertState) {
             ins_compl_cancel();
         }
         if arrow_used.get() {
-            (*s).inserted_space = false_0;
+            (*s).inserted_space = 0;
         }
         // 'cindent': re-indent now that the character is in.
         if can_cindent.get() && cindent_on() && ctrl_x_mode_normal() {

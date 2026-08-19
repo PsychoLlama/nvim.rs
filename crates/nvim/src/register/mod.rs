@@ -198,7 +198,5 @@ static y_previous: GlobalCell<*mut yankreg_T> =
 static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
     [::core::ffi::c_char; 79] =
     c_bytes(b"E883: Search pattern and expression register may not contain two or more lines\0");
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

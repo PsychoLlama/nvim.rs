@@ -56,7 +56,7 @@ use crate::state::MODE_NORMAL;
 use crate::types::{
     CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, FAIL, MAXPATHL, NUL, OK,
     buf_T, colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
-    tasave_T, typval_T, uint8_t, varnumber_T,
+    tasave_T, typval_T, uint8_t,
 };
 use crate::{semsg, semsg_c, smsg, smsg_c};
 use ::libc::{atoi, strcmp, strcpy, strlen};
@@ -70,8 +70,6 @@ pub const EXPR_IS: crate::types::exprtype_T = 9;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
 pub const KS_EXTRA: c_int = 253;
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;
 
 // Debug mode itself: entered from `dbg_check_breakpoint` below.
 mod mode;
@@ -282,9 +280,9 @@ pub unsafe fn dbg_check_skipped(eap: *mut exarg_T) -> bool {
     debug_breakpoint_name.set(debug_skipped_name.get());
     // SAFETY: caller contract; `eap.skip` is true on entry, and is put back.
     unsafe {
-        (*eap).skip = false_0;
+        (*eap).skip = 0;
         dbg_check_breakpoint(eap);
-        (*eap).skip = true_0;
+        (*eap).skip = 1;
     }
     got_int.set(got_int.get() | prev_got_int);
     true
@@ -471,7 +469,7 @@ pub unsafe fn ex_breakadd(eap: *mut exarg_T) {
     // *.c` would be, not as a regexp the user wrote.
     // SAFETY: `dbg_name` is the owned NUL-terminated name the parser left.
     let compiled = unsafe {
-        let pat = file_pat_to_reg_pat((*bp).dbg_name, ptr::null(), ptr::null_mut(), false_0);
+        let pat = file_pat_to_reg_pat((*bp).dbg_name, ptr::null(), ptr::null_mut(), 0);
         if !pat.is_null() {
             (*bp).dbg_prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
             xfree(pat.cast());
@@ -808,8 +806,8 @@ unsafe fn watch_changed(bp: *mut debuggy) -> bool {
         }
 
         // `EXPR_IS` answers "is the same value"; a false answer is a change.
-        let changed = typval_compare(tv, previous, EXPR_IS, false) == OK
-            && (*tv).vval.v_number == false_0 as varnumber_T;
+        let changed =
+            typval_compare(tv, previous, EXPR_IS, false) == OK && (*tv).vval.v_number == 0;
         if changed {
             // Render the old value before re-evaluating, because evaluating
             // can reach whatever the old value refers to.

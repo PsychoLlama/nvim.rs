@@ -36,8 +36,8 @@ use crate::r#move::WinValid;
 use crate::normal::{
     CA_COMMAND_BUSY, CAR, DEL, ESC, FO_OPEN_COMS, ML_DEL_MESSAGE, ML_EMPTY, NL, OPENLINE_DO_COM,
     REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, checkclearop, checkclearopq,
-    clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo, prep_redo_cmd, true_0,
-    v_swap_corners, v_visop,
+    clearop, clearopbeep, nv_object, nv_operator, prep_redo, prep_redo_cmd, v_swap_corners,
+    v_visop,
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
@@ -136,7 +136,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
             return;
         }
         if virtual_active(curwin.get()) {
-            if u_save_cursor() == false_0 {
+            if u_save_cursor() == 0 {
                 return;
             }
             if gchar_cursor() == NUL {
@@ -170,15 +170,15 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
             stuffcharReadbuff(ESC);
             return;
         }
-        if u_save_cursor() == false_0 {
+        if u_save_cursor() == 0 {
             return;
         }
         if literal != Ctrl_V && ((*cap).nchar == '\r' as c_int || (*cap).nchar == '\n' as c_int) {
             // Replacing with a line break splits the line, which is an insert.
-            del_chars((*cap).count1, false_0);
+            del_chars((*cap).count1, 0);
             stuffcharReadbuff('\r' as c_int);
             stuffcharReadbuff(ESC);
-            invoke_edit(cap, true_0, 'r' as c_int, false_0);
+            invoke_edit(cap, 1, 'r' as c_int, 0);
             foldUpdateAfterInsert();
             return;
         }
@@ -228,7 +228,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         (*curwin.get()).w_cursor.col -= 1;
         mb_adjust_cursor();
         (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         set_last_insert((*cap).nchar);
         foldUpdateAfterInsert();
     }
@@ -259,13 +259,13 @@ pub(crate) unsafe fn nv_Replace(cap: *mut cmdarg_T) {
         }
         invoke_edit(
             cap,
-            false_0,
+            0,
             if (*cap).arg != 0 {
                 'V' as c_int
             } else {
                 'R' as c_int
             },
-            false_0,
+            0,
         );
     }
 }
@@ -300,7 +300,7 @@ pub(crate) unsafe fn nv_vreplace(cap: *mut cmdarg_T) {
         if virtual_active(curwin.get()) {
             coladvance(curwin.get(), getviscol());
         }
-        invoke_edit(cap, true_0, 'v' as c_int, false_0);
+        invoke_edit(cap, 1, 'v' as c_int, 0);
     }
 }
 
@@ -319,7 +319,7 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
             return;
         }
         prep_redo_cmd(cap);
-        if u_save_cursor() == false_0 {
+        if u_save_cursor() == 0 {
             return;
         }
         let startpos = (*curwin.get()).w_cursor;
@@ -336,7 +336,7 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
                 (*curwin.get()).w_cursor.col = 0;
                 // Each further line needs its own undo entry.
                 if n > 1 {
-                    if u_savesub((*curwin.get()).w_cursor.lnum) == false_0 {
+                    if u_savesub((*curwin.get()).w_cursor.lnum) == 0 {
                         break;
                     }
                     u_clearline(curbuf.get());
@@ -345,7 +345,7 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
             n -= 1;
         }
         check_cursor(curwin.get());
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         if did_change {
             changed_lines(
                 curbuf.get(),
@@ -484,7 +484,7 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
                 // The cursor line moved, so its highlight has to be redrawn.
                 (*win).w_valid.clear(WinValid::CROW);
             }
-            invoke_edit(cap, false_0, (*cap).cmdchar, true_0);
+            invoke_edit(cap, 0, (*cap).cmdchar, 1);
         }
     }
 }
@@ -509,7 +509,7 @@ pub(crate) unsafe fn nv_tilde(cap: *mut cmdarg_T) {
 pub unsafe fn set_cursor_for_append_to_line() {
     // SAFETY: reads and writes the current window's cursor.
     unsafe {
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
         if get_ve_flags(curwin.get()) == kOptVeFlagAll as c_uint {
             // Insert mode is what makes `coladvance` allow the position one
             // past the end.
@@ -578,7 +578,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
             coladvance(curwin.get(), getviscol());
             State.set(save_state);
         }
-        invoke_edit(cap, false_0, (*cap).cmdchar, false_0);
+        invoke_edit(cap, 0, (*cap).cmdchar, 0);
     }
 }
 
@@ -742,7 +742,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
                 savereg = copy_register(regname);
             }
             // The delete must not close or open folds under the selection.
-            (*win).w_onebuf_opt.wo_fen = false_0;
+            (*win).w_onebuf_opt.wo_fen = 0;
             // The condition is upstream's; only the `.` register on a
             // charwise selection skips the delete.
             if !VIsual_active.get() || VIsual_mode.get() == 'V' as c_int || regname != '.' as c_int
@@ -787,7 +787,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
         }
         if was_visual {
             if save_fen != 0 {
-                (*win).w_onebuf_opt.wo_fen = true_0;
+                (*win).w_onebuf_opt.wo_fen = 1;
             }
             // Leave `gv` naming what was just put.
             (*curbuf.get()).b_visual.vi_start = (*curbuf.get()).b_op_start;

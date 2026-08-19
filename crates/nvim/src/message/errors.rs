@@ -131,7 +131,7 @@ pub unsafe fn msg_source(hl_id: c_int) {
         no_wait_return.set(no_wait_return.get() + 1);
         let p = get_emsg_source();
         if !p.is_null() {
-            msg_scroll.set(true_0);
+            msg_scroll.set(1);
             msg(p, hl_id);
             xfree(p.cast());
         }
@@ -321,7 +321,7 @@ pub unsafe fn emsg_multiline(
             need_wait_return.set(true); // needed in case emsg() is called after wait_return() has cleared it
         }
         msg_ext_set_kind(kind);
-        msg_scroll.set(true_0); // don't overwrite a previous message
+        msg_scroll.set(1); // don't overwrite a previous message
 
         // Skip the flush until the whole message has been written, so that the
         // source line and the error arrive as one ext_messages event.

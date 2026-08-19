@@ -102,7 +102,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
         // Check the variable can be written, by setting it to -- or
         // appending to it -- an empty string.
         let called_emsg_before = called_emsg.get();
-        did_emsg.set(false_0);
+        did_emsg.set(0);
         let mut tv = typval_T {
             v_type: VAR_STRING,
             v_lock: VAR_UNLOCKED,

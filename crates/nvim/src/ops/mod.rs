@@ -209,6 +209,3 @@ pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-
-pub const true_0: ::core::ffi::c_int = 1;
-pub const false_0: ::core::ffi::c_int = 0;

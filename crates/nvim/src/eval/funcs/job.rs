@@ -3,7 +3,7 @@
 
 use super::args::frame;
 use super::{
-    C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, false_0,
+    C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ,
     kChannelPartRpc, kChannelStreamProc, kProcTypePty,
 };
 use crate::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
@@ -611,7 +611,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     unsafe {
         let pid = (*channel_proc(chan)).pid;
         let buf = curbuf.get();
-        (*buf).b_p_swf = false_0;
+        (*buf).b_p_swf = 0;
         if (*buf).b_ml.ml_mfp.is_null() && ml_open(buf) == FAIL {
             proc_stop(channel_proc(chan));
             channel_decref(chan);

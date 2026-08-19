@@ -35,7 +35,7 @@ pub unsafe fn diff_buf_delete(buf: *mut buf_T) {
             let i = diff_buf_idx(buf, tp);
             if i != DB_COUNT {
                 (*tp).tp_diffbuf[i as usize] = ::core::ptr::null_mut();
-                (*tp).tp_diff_invalid = true_0;
+                (*tp).tp_diff_invalid = 1;
                 if tp == curtab.get() {
                     need_diff_redraw.set(true);
                     redraw_later(curwin.get(), UPD_VALID);
@@ -66,7 +66,7 @@ pub unsafe fn diff_buf_adjust(win: *mut win_T) {
         let i = diff_buf_idx((*win).w_buffer, curtab.get());
         if i != DB_COUNT {
             (*curtab.get()).tp_diffbuf[i as usize] = ::core::ptr::null_mut();
-            (*curtab.get()).tp_diff_invalid = true_0;
+            (*curtab.get()).tp_diff_invalid = 1;
             diff_redraw(true);
         }
     }
@@ -82,7 +82,7 @@ pub unsafe fn diff_buf_add(buf: *mut buf_T) {
         for i in 0..DB_COUNT as usize {
             if (*tp).tp_diffbuf[i].is_null() {
                 (*tp).tp_diffbuf[i] = buf;
-                (*tp).tp_diff_invalid = true_0;
+                (*tp).tp_diff_invalid = 1;
                 diff_redraw(true);
                 return;
             }
@@ -101,7 +101,7 @@ pub(crate) unsafe fn diff_buf_clear() {
         for i in 0..DB_COUNT as usize {
             if !(*tp).tp_diffbuf[i].is_null() {
                 (*tp).tp_diffbuf[i] = ::core::ptr::null_mut();
-                (*tp).tp_diff_invalid = true_0;
+                (*tp).tp_diff_invalid = 1;
                 diff_redraw(true);
             }
         }
@@ -123,7 +123,7 @@ pub unsafe fn diff_invalidate(buf: *mut buf_T) {
         let mut tp = first_tabpage.get();
         while !tp.is_null() {
             if diff_buf_idx(buf, tp) != DB_COUNT {
-                (*tp).tp_diff_invalid = true_0;
+                (*tp).tp_diff_invalid = 1;
                 if tp == curtab.get() {
                     diff_redraw(true);
                 }
@@ -192,8 +192,8 @@ unsafe fn diff_mark_adjust_tp(
             // The blocks will be recomputed before the next redraw, so
             // nothing below survives; `_update` also gets the folds redone.
             // The *marks* are still adjusted here, which `:%diffput` needs.
-            (*tp).tp_diff_invalid = true_0;
-            (*tp).tp_diff_update = true_0;
+            (*tp).tp_diff_invalid = 1;
+            (*tp).tp_diff_update = 1;
         }
         let idx = idx as usize;
         let (inserted, mut deleted) = inserted_deleted(line2, amount, amount_after);

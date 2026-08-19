@@ -328,7 +328,7 @@ unsafe fn process_xdl_diff_opts(
         err,
     );
     let mut mode: NluaXdiffMode = kNluaXdiffModeUnified;
-    let mut had_result_type_indices: bool = false_0 != 0;
+    let mut had_result_type_indices: bool = false;
     '_exit_1: {
         if opts.is_set__xdl_diff_ as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_xdl_diff__result_type
@@ -336,7 +336,7 @@ unsafe fn process_xdl_diff_opts(
         {
             if !strequal(c"unified".as_ptr(), opts.result_type.data) {
                 if strequal(c"indices".as_ptr(), opts.result_type.data) {
-                    had_result_type_indices = true_0 != 0;
+                    had_result_type_indices = true;
                 } else {
                     api_set_error(
                         err,
@@ -649,6 +649,4 @@ pub const LUAL_BUFFERSIZE: ::core::ffi::c_int = if BUFSIZ > 16384 as ::core::ffi
 } else {
     BUFSIZ
 };
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

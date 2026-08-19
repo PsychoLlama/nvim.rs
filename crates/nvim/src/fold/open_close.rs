@@ -19,7 +19,7 @@ use crate::types::{kNone, kTrue};
 /// Close fold for current window at position "pos".
 /// Repeat "count" times.
 pub unsafe extern "C" fn closeFold(mut pos: pos_T, mut count: c_int) {
-    setFoldRepeat(pos, count, false_0);
+    setFoldRepeat(pos, count, 0);
 }
 
 /// Close fold for current window at position `pos` recursively.
@@ -73,7 +73,7 @@ pub unsafe fn opFoldRange(
 /// Open fold for current window at position "pos".
 /// Repeat "count" times.
 pub unsafe extern "C" fn openFold(mut pos: pos_T, mut count: c_int) {
-    setFoldRepeat(pos, count, true_0);
+    setFoldRepeat(pos, count, 1);
 }
 
 /// Open fold for current window at position `pos` recursively.
@@ -178,7 +178,7 @@ pub(super) unsafe fn checkCloseRec(
 ///          give an error message and return false if not.
 pub unsafe fn foldManualAllowed(mut create: bool) -> c_int {
     if foldmethodIsManual(curwin.get()) || foldmethodIsMarker(curwin.get()) {
-        return true_0;
+        return 1;
     }
     if create {
         emsg(gettext(
@@ -189,7 +189,7 @@ pub unsafe fn foldManualAllowed(mut create: bool) -> c_int {
             c"E351: Cannot delete fold with current 'foldmethod'".as_ptr(),
         ));
     }
-    return false_0;
+    return 0;
 }
 
 /// Create a fold from line "start" to line "end" (inclusive) in the current

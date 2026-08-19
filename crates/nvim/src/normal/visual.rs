@@ -29,8 +29,8 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get_len, ml_get_pos};
 use crate::mouse::setmouse;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, TAB, VIsual_mode_orig, clearopbeep, false_0, may_clear_cmdline, nv_down,
-    nv_g_cmd, nv_operator, nv_right, true_0,
+    CA_NO_ADJ_OP_END, TAB, VIsual_mode_orig, clearopbeep, may_clear_cmdline, nv_down, nv_g_cmd,
+    nv_operator, nv_right,
 };
 use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
@@ -85,7 +85,7 @@ pub(crate) fn reset_VIsual_and_resel() {
         // SAFETY: schedules a redraw of the current buffer.
         unsafe { redraw_curbuf_later(UPD_INVERTED) };
     }
-    VIsual_reselect.set(false_0);
+    VIsual_reselect.set(0);
 }
 
 /// As [`reset_VIsual_and_resel`], but only when there was a selection.
@@ -94,7 +94,7 @@ pub(crate) fn reset_VIsual() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
         unsafe { redraw_curbuf_later(UPD_INVERTED) };
-        VIsual_reselect.set(false_0);
+        VIsual_reselect.set(0);
     }
 }
 
@@ -177,7 +177,7 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
             let old_cursor = (*curwin.get()).w_cursor;
             (*curwin.get()).w_cursor = VIsual.get();
             VIsual.set(old_cursor);
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             return;
         }
 
@@ -271,7 +271,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
     unsafe {
         VIsual.set((*curwin.get()).w_cursor);
         VIsual_active.set(true);
-        VIsual_reselect.set(true_0);
+        VIsual_reselect.set(1);
         if (*cap).arg == 0 {
             may_start_select('c' as c_int);
         }
@@ -332,7 +332,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
             }
             coladvance(curwin.get(), (*curwin.get()).w_curswant);
         } else {
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         }
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -422,7 +422,7 @@ pub(crate) fn may_start_select(c: c_int) {
 pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
     VIsual_mode.set(c);
     VIsual_active.set(true);
-    VIsual_reselect.set(true_0);
+    VIsual_reselect.set(1);
     // SAFETY: `curwin` is the current window.
     unsafe {
         // A block selection starting inside a TAB starts at the column the
@@ -489,7 +489,7 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
         }
 
         VIsual_active.set(true);
-        VIsual_reselect.set(true_0);
+        VIsual_reselect.set(1);
         // Both ends are checked against the buffer: it may have shrunk since.
         check_cursor(curwin.get());
         VIsual.set((*curwin.get()).w_cursor);
@@ -582,7 +582,7 @@ pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
         // SAFETY: `cap` is the caller's live command argument.
         unsafe {
             (*cap).nchar = 'v' as c_int;
-            (*cap).arg = true_0;
+            (*cap).arg = 1;
             nv_g_cmd(cap);
         }
     }
@@ -625,6 +625,6 @@ pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
             clearopbeep(oap);
         }
         adjust_cursor_col();
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
     }
 }

@@ -83,7 +83,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
             ) {
                 (*opts).force_crlf as ::core::ffi::c_int
             } else {
-                true_0
+                1
             } != 0,
         };
         let mut contents: StringBuilder = StringBuilder {

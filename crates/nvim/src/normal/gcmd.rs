@@ -20,9 +20,9 @@ use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::{
     MOD_MASK_CTRL, adjust_for_sel, check_text_locked, checkclearop, checkclearopq, clearopbeep,
-    false_0, invoke_edit, kMTCharWise, kMTLineWise, nv_Replace, nv_addsub, nv_edit, nv_gd,
-    nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put,
-    nv_screengo, nv_visual, nv_vreplace, true_0,
+    invoke_edit, kMTCharWise, kMTLineWise, nv_Replace, nv_addsub, nv_edit, nv_gd, nv_gomark,
+    nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put,
+    nv_screengo, nv_visual, nv_vreplace,
 };
 use crate::ops::cursor_pos_info;
 use crate::plines::{getvvcol, linetabsize};
@@ -104,7 +104,7 @@ pub unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
             while ascii_iswhite(gchar_cursor()) && oneright() == OK {}
             (*win).w_valid.clear(WinValid::WCOL);
         }
-        (*win).w_set_curswant = true_0;
+        (*win).w_set_curswant = 1;
         // Inside a closed fold the wanted column is the one that was asked
         // for, not the one the fold's single displayed line has.
         if hasAnyFolding(win) != 0 {
@@ -125,7 +125,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = true;
         (*win).w_curswant = MAXCOL as colnr_T;
-        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP) == false_0 {
+        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP) == 0 {
             clearopbeep((*cap).oap);
             return;
         }
@@ -139,7 +139,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
         {
             (*win).w_cursor.col -= 1;
         }
-        (*win).w_set_curswant = true_0;
+        (*win).w_set_curswant = 1;
         adjust_for_sel(cap);
     }
 }
@@ -236,7 +236,7 @@ unsafe fn nv_g_select(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*cap).cmdchar = (*cap).nchar + ('v' as c_int - 'h' as c_int);
-        (*cap).arg = true_0;
+        (*cap).arg = 1;
         nv_visual(cap);
     }
 }
@@ -312,7 +312,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             // mode.
             Ok(CTRL_A | CTRL_X) => {
                 if VIsual_active.get() {
-                    (*cap).arg = true_0;
+                    (*cap).arg = 1;
                     (*cap).cmdchar = nchar;
                     (*cap).nchar = NUL;
                     nv_addsub(cap);
@@ -322,7 +322,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             }
             // `gR`: virtual replace mode.
             Ok(b'R') => {
-                (*cap).arg = true_0;
+                (*cap).arg = 1;
                 nv_Replace(cap);
             }
             // `gr`: replace one character virtually.
@@ -335,7 +335,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             // `gv`: reselect the previous selection.
             Ok(b'v') => nv_gv_cmd(cap),
             // `gV`: do not reselect it after the next Select-mode edit.
-            Ok(b'V') => VIsual_reselect.set(false_0),
+            Ok(b'V') => VIsual_reselect.set(0),
             Ok(b'h' | b'H' | CTRL_H) => nv_g_select(cap),
             // `gn`/`gN`: select the next/previous match of the last search.
             Ok(b'N' | b'n') => {
@@ -359,7 +359,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
                 } else {
                     coladvance(curwin.get(), width / 2);
                 }
-                (*curwin.get()).w_set_curswant = true_0;
+                (*curwin.get()).w_set_curswant = 1;
             }
             Ok(b'_') => nv_g_underscore_cmd(cap),
             Ok(b'$') => nv_g_dollar_cmd(cap),
@@ -369,9 +369,9 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             // `ge`/`gE`: back to the end of the previous word.
             Ok(b'e' | b'E') => {
                 (*oap).motion_type = kMTCharWise;
-                (*curwin.get()).w_set_curswant = true_0;
+                (*curwin.get()).w_set_curswant = 1;
                 (*oap).inclusive = true;
-                if bckend_word((*cap).count1, nchar == 'E' as c_int, false) == false_0 {
+                if bckend_word((*cap).count1, nchar == 'E' as c_int, false) == 0 {
                     clearopbeep(oap);
                 }
             }
@@ -382,7 +382,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             Ok(b'I') => {
                 beginline(BeginlineOpts::NONE);
                 if !checkclearopq(oap) {
-                    invoke_edit(cap, false_0, 'g' as c_int, false_0);
+                    invoke_edit(cap, 0, 'g' as c_int, 0);
                 }
             }
             // `gf`/`gF`: edit the file named under the cursor.
@@ -390,7 +390,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             // `g'` and `` g` ``: jump to a mark without touching the jump
             // list. The argument is what tells `nv_gomark` it is linewise.
             Ok(b'\'') => {
-                (*cap).arg = true_0;
+                (*cap).arg = 1;
                 nv_gomark(cap);
             }
             Ok(b'`') => nv_gomark(cap),
@@ -409,7 +409,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             Ok(b'<') => show_sb_text(),
             // `gg`: to the first line, or the count'th.
             Ok(b'g') => {
-                (*cap).arg = false_0;
+                (*cap).arg = 0;
                 nv_goto(cap);
             }
             // `gq` and `gw` both format; `gw` returns the cursor to where it

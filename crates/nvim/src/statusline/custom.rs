@@ -484,7 +484,7 @@ unsafe fn draw_custom(wp: *mut win_T, draw_winbar: bool, draw_ruler: bool, ui_ev
     // Temporarily reset 'cursorbind': a side effect from moving the cursor
     // away and back is not wanted.
     let crb_save = ewp.w_onebuf_opt.wo_crb;
-    ewp.w_onebuf_opt.wo_crb = false_0;
+    ewp.w_onebuf_opt.wo_crb = 0;
     let mut buf = [0 as c_char; MAXPATHL as usize];
     let job = StlJob {
         win: ewp,
@@ -651,9 +651,9 @@ pub unsafe fn redraw_ruler() {
     // cursor is drawn where the tab is shown rather than where it ends.
     let mut virtcol = win.w_virtcol;
     if win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as schar_T {
-        win.w_onebuf_opt.wo_list = false_0;
+        win.w_onebuf_opt.wo_list = 0;
         virtcol = win.virtual_cursor_vcol(win.cursor());
-        win.w_onebuf_opt.wo_list = true_0;
+        win.w_onebuf_opt.wo_list = 1;
     }
 
     let mut buffer = [0 as c_char; RULER_BUF_LEN as usize];

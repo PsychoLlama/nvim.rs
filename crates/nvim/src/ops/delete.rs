@@ -318,7 +318,7 @@ unsafe fn delete_whole_lines(oap: *mut oparg_T) -> Result<(), UndoFailed> {
             beginline(BeginlineOpts::NONE);
         }
         // The rest of the line, leaving the cursor past its last character.
-        truncate_line(false_0);
+        truncate_line(0);
         if (*oap).line_count > 1 {
             // `U` is not possible after `2cc`.
             u_clearline(curbuf.get());
@@ -472,7 +472,7 @@ unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> Result<(), UndoFailed>
         ) + bcount_t::from((*oap).inclusive);
 
         // From the cursor to the end of the line.
-        truncate_line(true_0);
+        truncate_line(1);
 
         let curpos = (*curwin.get()).w_cursor;
         (*curwin.get()).w_cursor.lnum += 1;

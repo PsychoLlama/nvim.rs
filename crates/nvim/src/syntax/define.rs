@@ -217,7 +217,7 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
                     (*spp).sp_syn.cont_in_list = opt.cont_in_list;
                     (*spp).sp_cchar = conceal_char;
                     if !opt.cont_in_list.is_null() {
-                        (*cur_syn_block()).b_syn_containedin = true_0;
+                        (*cur_syn_block()).b_syn_containedin = 1;
                     }
                     (*spp).sp_next_list = opt.next_list;
 
@@ -473,7 +473,7 @@ unsafe fn store_region(args: &RegionArgs, syn_id: c_int, syncing: bool) {
                     (*spp).sp_cont_list = args.opt.cont_list;
                     (*spp).sp_syn.cont_in_list = args.opt.cont_in_list;
                     if !args.opt.cont_in_list.is_null() {
-                        (*cur_syn_block()).b_syn_containedin = true_0;
+                        (*cur_syn_block()).b_syn_containedin = 1;
                     }
                     (*spp).sp_next_list = args.opt.next_list;
                 }
@@ -501,7 +501,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
             return ::core::ptr::null_mut();
         }
 
-        let mut end = skip_regexp(arg.add(1), *arg as c_int, true_0);
+        let mut end = skip_regexp(arg.add(1), *arg as c_int, 1);
         if *end as c_int != *arg as c_int {
             semsg_c!(
                 gettext(c"E401: Pattern delimiter not found: %s".as_ptr()),
@@ -579,7 +579,7 @@ unsafe fn read_pattern_offsets(ci: &mut synpat_T, mut end: *mut c_char) -> *mut 
             if idx == SPO_LC_OFF {
                 // lc=99
                 end = end.add(3);
-                let n = getdigits_int(&raw mut end, true_0 != 0, 0);
+                let n = getdigits_int(&raw mut end, true, 0);
                 ci.sp_offsets[slot] = n;
                 // An "lc=" offset automatically sets the "ms=" offset.
                 if ci.sp_off_flags as c_int & (1 << SPO_MS_OFF) == 0 {
@@ -591,10 +591,10 @@ unsafe fn read_pattern_offsets(ci: &mut synpat_T, mut end: *mut c_char) -> *mut 
                 end = end.add(4);
                 if *end as c_int == '+' as c_int {
                     end = end.add(1);
-                    ci.sp_offsets[slot] = getdigits_int(&raw mut end, true_0 != 0, 0);
+                    ci.sp_offsets[slot] = getdigits_int(&raw mut end, true, 0);
                 } else if *end as c_int == '-' as c_int {
                     end = end.add(1);
-                    ci.sp_offsets[slot] = -getdigits_int(&raw mut end, true_0 != 0, 0);
+                    ci.sp_offsets[slot] = -getdigits_int(&raw mut end, true, 0);
                 }
             }
 

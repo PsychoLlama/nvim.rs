@@ -418,11 +418,11 @@ pub unsafe extern "C" fn file_pat_to_reg_pat(
 ) -> *mut c_char {
     unsafe {
         if !allow_dirs.is_null() {
-            *allow_dirs = false as c_char;
+            *allow_dirs = 0;
         }
         let note_dir = |c: u8| {
             if c == b'/' && !allow_dirs.is_null() {
-                *allow_dirs = true as c_char;
+                *allow_dirs = 1;
             }
         };
 

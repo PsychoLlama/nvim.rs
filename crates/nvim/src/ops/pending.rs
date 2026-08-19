@@ -123,7 +123,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
                 (*oap).end.col += l - 1;
             }
         }
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
 
         // `empty` is set when start and end are the same. `inclusive` affects
         // that too, unless yanking with the end on a NUL.
@@ -197,7 +197,7 @@ unsafe fn apply_motion_force(oap: *mut oparg_T) {
             }
             VIsual_mode.set(Ctrl_V);
             VIsual_select.set(false);
-            VIsual_reselect.set(false_0);
+            VIsual_reselect.set(0);
         }
     }
 }
@@ -704,7 +704,7 @@ unsafe fn run_operator(
 
             OP_DELETE => {
                 // Do not reselect now.
-                VIsual_reselect.set(false_0);
+                VIsual_reselect.set(0);
                 if empty_region_error {
                     refuse();
                 } else {
@@ -736,7 +736,7 @@ unsafe fn run_operator(
             }
 
             OP_CHANGE => {
-                VIsual_reselect.set(false_0);
+                VIsual_reselect.set(0);
                 if empty_region_error {
                     refuse();
                 } else {
@@ -788,7 +788,7 @@ unsafe fn run_operator(
             }
 
             OP_INSERT | OP_APPEND => {
-                VIsual_reselect.set(false_0);
+                VIsual_reselect.set(0);
                 if empty_region_error {
                     refuse();
                 } else {
@@ -797,7 +797,7 @@ unsafe fn run_operator(
             }
 
             OP_REPLACE => {
-                VIsual_reselect.set(false_0);
+                VIsual_reselect.set(0);
                 if empty_region_error {
                     refuse();
                 } else {
@@ -807,11 +807,11 @@ unsafe fn run_operator(
             }
 
             OP_FOLD => {
-                VIsual_reselect.set(false_0);
+                VIsual_reselect.set(0);
                 foldCreate(curwin.get(), (*oap).start, (*oap).end);
             }
             OP_FOLDOPEN | OP_FOLDOPENREC | OP_FOLDCLOSE | OP_FOLDCLOSEREC => {
-                VIsual_reselect.set(false_0);
+                VIsual_reselect.set(0);
                 opFoldRange(
                     (*oap).start,
                     (*oap).end,
@@ -823,7 +823,7 @@ unsafe fn run_operator(
                 );
             }
             OP_FOLDDEL | OP_FOLDDELREC => {
-                VIsual_reselect.set(false_0);
+                VIsual_reselect.set(0);
                 deleteFold(
                     curwin.get(),
                     (*oap).start.lnum,

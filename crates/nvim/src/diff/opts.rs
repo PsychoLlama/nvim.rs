@@ -125,7 +125,7 @@ pub(crate) unsafe fn parse_diffanchors(
                 ADDR_LINES,
                 check_only,
                 true,
-                false_0,
+                0,
                 1,
                 &raw mut errormsg,
             );
@@ -190,7 +190,7 @@ pub unsafe fn diffanchors_changed(buflocal: bool) -> c_int {
         let mut tp = first_tabpage.get();
         while !tp.is_null() {
             if !buflocal || (*tp).tp_diffbuf.contains(&curbuf.get()) {
-                (*tp).tp_diff_invalid = true_0;
+                (*tp).tp_diff_invalid = 1;
             }
             tp = (*tp).tp_next;
         }
@@ -269,7 +269,7 @@ pub unsafe fn diffopt_changed() -> c_int {
         if diff_flags.get() != flags_new || diff_algorithm.get() != algorithm_new {
             let mut tp = first_tabpage.get();
             while !tp.is_null() {
-                (*tp).tp_diff_invalid = true_0;
+                (*tp).tp_diff_invalid = 1;
                 tp = (*tp).tp_next;
             }
         }

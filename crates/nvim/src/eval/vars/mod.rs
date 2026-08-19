@@ -428,5 +428,3 @@ const msgpack_type_names: [&CStr; 8] = [
 /// and decoder compare against by identity.
 pub static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]> =
     GlobalCell::new([::core::ptr::null(); 8]);
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;

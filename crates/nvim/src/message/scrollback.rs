@@ -73,7 +73,7 @@ pub(crate) unsafe fn store_sb_text(
             }
             last_msgchunk.set(mp);
         } else if finish != 0 && !last_msgchunk.get().is_null() {
-            (*last_msgchunk.get()).sb_eol = true_0 as c_char;
+            (*last_msgchunk.get()).sb_eol = 1;
         }
 
         *sb_str = s;
@@ -160,7 +160,7 @@ pub unsafe fn show_sb_text() {
         if ui_has(kUIMessages) {
             let mut ea = exarg_T {
                 arg: c"".as_ptr().cast_mut(),
-                skip: true_0,
+                skip: 1,
                 ..exarg_T::default()
             };
             ex_messages(&raw mut ea);
@@ -173,7 +173,7 @@ pub unsafe fn show_sb_text() {
             vim_beep(kOptBoFlagMess as c_uint);
         } else {
             do_more_prompt(b'G' as c_int);
-            wait_return(false_0);
+            wait_return(0);
         }
     }
 }
@@ -193,7 +193,7 @@ pub(crate) unsafe fn msg_sb_start(mps: *mut msgchunk_T) -> *mut msgchunk_T {
 pub unsafe fn msg_sb_eol() {
     unsafe {
         if !last_msgchunk.get().is_null() {
-            (*last_msgchunk.get()).sb_eol = true_0 as c_char;
+            (*last_msgchunk.get()).sb_eol = 1;
         }
     }
 }

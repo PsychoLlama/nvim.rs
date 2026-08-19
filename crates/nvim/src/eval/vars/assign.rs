@@ -31,7 +31,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
         let mut arg = (*eap).arg;
         let mut var_count = 0;
         let mut semicolon = 0;
-        let mut first = true_0;
+        let mut first: c_int = 1;
 
         let argend = skip_var_list(arg, &raw mut var_count, &raw mut semicolon, false);
         if argend.is_null() {
@@ -582,7 +582,7 @@ unsafe fn ex_let_register(
             }
         }
         if !p.is_null() {
-            write_reg_contents(regname, p, strlen(p) as ssize_t, false_0);
+            write_reg_contents(regname, p, strlen(p) as ssize_t, 0);
             arg_end = arg.add(1);
         }
         xfree(ptofree.cast());

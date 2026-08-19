@@ -76,7 +76,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                         tempdir = c"/tmp".as_ptr() as *mut c_char;
                     }
                     os_chdir(tempdir);
-                    shorten_fnames(true_0);
+                    shorten_fnames(1);
                 }
                 if *p_pex.get() as c_int != NUL {
                     eval_patch(
@@ -109,7 +109,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                     if os_chdir(&raw mut dirbuf as *mut c_char) != 0 {
                         emsg(gettext(&raw const e_prev_dir as *const c_char));
                     }
-                    shorten_fnames(true_0);
+                    shorten_fnames(1);
                 }
                 strcpy(buf, tmp_new);
                 strcat(buf, c".orig".as_ptr());
@@ -195,7 +195,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
             return;
         }
         (*eap).cmdidx = CMD_split;
-        (*curwin.get()).w_onebuf_opt.wo_diff = true_0;
+        (*curwin.get()).w_onebuf_opt.wo_diff = 1;
         do_exedit(eap, old_curwin);
         if curwin.get() == old_curwin {
             return;
@@ -261,16 +261,16 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
         if (*wp).w_onebuf_opt.wo_diff == 0 {
             (*wp).w_onebuf_opt.wo_scb_save = (*wp).w_onebuf_opt.wo_scb;
         }
-        (*wp).w_onebuf_opt.wo_scb = true_0;
+        (*wp).w_onebuf_opt.wo_scb = 1;
         if (*wp).w_onebuf_opt.wo_diff == 0 {
             (*wp).w_onebuf_opt.wo_crb_save = (*wp).w_onebuf_opt.wo_crb;
         }
-        (*wp).w_onebuf_opt.wo_crb = true_0;
+        (*wp).w_onebuf_opt.wo_crb = 1;
         if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
             if (*wp).w_onebuf_opt.wo_diff == 0 {
                 (*wp).w_onebuf_opt.wo_wrap_save = (*wp).w_onebuf_opt.wo_wrap;
             }
-            (*wp).w_onebuf_opt.wo_wrap = false_0;
+            (*wp).w_onebuf_opt.wo_wrap = 0;
             (*wp).w_skipcol = 0 as colnr_T;
         }
         if (*wp).w_onebuf_opt.wo_diff == 0 {
@@ -314,14 +314,14 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
             c"%d".as_ptr(),
             diff_foldcolumn.get(),
         );
-        (*wp).w_onebuf_opt.wo_fen = true_0;
+        (*wp).w_onebuf_opt.wo_fen = 1;
         (*wp).w_onebuf_opt.wo_fdl = 0 as OptInt;
         foldUpdateAll(wp);
         changed_window_setting(wp);
         if vim_strchr(p_sbo.get(), 'h' as c_int).is_null() {
             do_cmdline_cmd(c"set sbo+=hor".as_ptr());
         }
-        (*wp).w_onebuf_opt.wo_diff_saved = true_0;
+        (*wp).w_onebuf_opt.wo_diff_saved = 1;
         set_diff_option(wp, true);
         if addbuf {
             diff_buf_add((*wp).w_buffer);
@@ -361,7 +361,7 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
                     }
                     if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
                         if (*wp).w_onebuf_opt.wo_wrap == 0 && (*wp).w_onebuf_opt.wo_wrap_save != 0 {
-                            (*wp).w_onebuf_opt.wo_wrap = true_0;
+                            (*wp).w_onebuf_opt.wo_wrap = 1;
                             (*wp).w_leftcol = 0 as colnr_T;
                         }
                     }
@@ -384,7 +384,7 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
                     }
                     if (*wp).w_onebuf_opt.wo_fen != 0 {
                         (*wp).w_onebuf_opt.wo_fen = if foldmethodIsManual(wp) as c_int != 0 {
-                            false_0
+                            0
                         } else {
                             (*wp).w_onebuf_opt.wo_fen_save
                         };
@@ -403,8 +403,8 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
         }
         if !diffwin {
             diff_need_update.set(false);
-            (*curtab.get()).tp_diff_invalid = false_0;
-            (*curtab.get()).tp_diff_update = false_0;
+            (*curtab.get()).tp_diff_invalid = 0;
+            (*curtab.get()).tp_diff_update = 0;
             diff_clear(curtab.get());
         }
         if !diffwin && !vim_strchr(p_sbo.get(), 'h' as c_int).is_null() {

@@ -98,7 +98,7 @@ pub unsafe fn state_enter(mut s: *mut VimState) {
                 == -(253 as ::core::ffi::c_int
                     + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
             {
-                check_end_reg_executing(true_0 != 0);
+                check_end_reg_executing(true);
                 may_sync_undo();
             }
             let mut keyname: *mut ::core::ffi::c_char = (if key
@@ -114,7 +114,7 @@ pub unsafe fn state_enter(mut s: *mut VimState) {
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 c"state_enter".as_ptr(),
                 97 as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
                 c"input: %s".as_ptr(),
                 keyname,
             );
@@ -149,7 +149,7 @@ pub unsafe fn virtual_active(mut wp: *mut win_T) -> bool {
         return virtual_op.get() as u64 != 0;
     }
     if State.get() & MODE_TERMINAL != 0 {
-        return true_0 != 0;
+        return true;
     }
     let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(wp);
     return cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -345,7 +345,7 @@ pub unsafe fn may_trigger_modechanged() {
         EVENT_MODECHANGED,
         &raw mut pattern_buf as *mut ::core::ffi::c_char,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        false_0 != 0,
+        false,
         curbuf.get(),
     );
     strcpy(
@@ -354,7 +354,7 @@ pub unsafe fn may_trigger_modechanged() {
     );
     restore_v_event(v_event, &raw mut save_v_event);
 }
-static was_safe: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static was_safe: GlobalCell<bool> = GlobalCell::new(false);
 unsafe fn is_safe_now() -> bool {
     return stuff_empty() as ::core::ffi::c_int != 0
         && (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int
@@ -371,7 +371,7 @@ pub unsafe fn may_trigger_safestate(mut safe: bool) {
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"may_trigger_safestate".as_ptr(),
             305 as ::core::ffi::c_int,
-            true_0 != 0,
+            true,
             if is_safe as ::core::ffi::c_int != 0 {
                 c"SafeState: Start triggering".as_ptr()
             } else {
@@ -384,7 +384,7 @@ pub unsafe fn may_trigger_safestate(mut safe: bool) {
             EVENT_SAFESTATE,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
+            false,
             curbuf.get(),
         );
     }
@@ -397,15 +397,13 @@ pub unsafe fn state_no_longer_safe(mut reason: *const ::core::ffi::c_char) {
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"state_no_longer_safe".as_ptr(),
             319 as ::core::ffi::c_int,
-            true_0 != 0,
+            true,
             c"SafeState reset: %s".as_ptr(),
             reason,
         );
     }
-    was_safe.set(false_0 != 0);
+    was_safe.set(false);
 }
 pub fn get_was_safe_state() -> bool {
     return was_safe.get();
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

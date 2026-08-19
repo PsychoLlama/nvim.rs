@@ -487,7 +487,7 @@ pub unsafe fn f_setbufvar(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: 
             return;
         }
         let varname = tv_get_string_chk(argvars.add(1));
-        let buf = tv_get_buf(argvars, false_0);
+        let buf = tv_get_buf(argvars, 0);
         let varp = argvars.add(2);
         if buf.is_null() || varname.is_null() {
             return;

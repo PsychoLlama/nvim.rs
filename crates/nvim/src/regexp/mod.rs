@@ -549,8 +549,8 @@ static rex: GlobalCell<regexec_T> = GlobalCell::new(regexec_T {
     nfa_alt_listid: 0,
     nfa_has_zsubexpr: 0,
 });
-static rex_in_use: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static rex_in_use: GlobalCell<bool> = GlobalCell::new(false);
+static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);
 static rsm: GlobalCell<regsubmatch_T> = GlobalCell::new(regsubmatch_T {
     sm_match: core::ptr::null_mut::<regmatch_T>(),
     sm_mmatch: core::ptr::null_mut::<regmmatch_T>(),
@@ -650,7 +650,7 @@ static had_endbrace: GlobalCell<[uint8_t; 10]> = GlobalCell::new([0; 10]);
 static brace_min: GlobalCell<[int64_t; 10]> = GlobalCell::new([0; 10]);
 static brace_max: GlobalCell<[int64_t; 10]> = GlobalCell::new([0; 10]);
 static brace_count: GlobalCell<[c_int; 10]> = GlobalCell::new([0; 10]);
-static one_exactly: GlobalCell<c_int> = GlobalCell::new(false_0);
+static one_exactly: GlobalCell<c_int> = GlobalCell::new(0);
 pub const JUST_CALC_SIZE: *mut uint8_t = -1i64 as *mut uint8_t;
 static backpos: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 static behind_pos: GlobalCell<regsave_T> = GlobalCell::new(regsave_T {
@@ -706,7 +706,6 @@ static regexp_engine: GlobalCell<c_int> = GlobalCell::new(0);
 pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const CPO_LITERAL: c_int = 'l' as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
-pub const false_0: c_int = 0;
 pub const RE_MAGIC: ::core::ffi::c_int = 1;
 pub const RE_STRING: ::core::ffi::c_int = 2;
 pub const RE_STRICT: ::core::ffi::c_int = 4;

@@ -392,7 +392,7 @@ impl DoTag {
                 (*curwin.get()).w_cursor.lnum = mark.mark.lnum;
             }
             (*curwin.get()).w_cursor.col = mark.mark.col;
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             if jop_flags.get() & kOptJopFlagView as c_uint != 0 {
                 mark_view_restore(&raw mut self.saved_fmark);
             }
@@ -883,7 +883,7 @@ impl DoTag {
             if (found > self.prev_num_matches || self.new_tag) && found > 1 {
                 msg(buf, if ignored_case { HLF_W } else { 0 });
                 // Don't overwrite this message.
-                msg_scroll.set(true_0);
+                msg_scroll.set(1);
             } else {
                 give_warning(buf, ignored_case, true);
             }

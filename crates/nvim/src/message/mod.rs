@@ -185,7 +185,7 @@ pub const NL: ::core::ffi::c_int = 10;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = 27;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false);
 static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static msg_ext_trigger: GlobalCell<*const ::core::ffi::c_char> =
@@ -206,8 +206,8 @@ static msg_ext_last_chunk: GlobalCell<garray_T> = GlobalCell::new(garray_T {
 });
 static msg_ext_last_attr: GlobalCell<sattr_T> = GlobalCell::new(-1 as sattr_T);
 static msg_ext_last_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static msg_ext_history: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static msg_ext_history: GlobalCell<bool> = GlobalCell::new(false);
+static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false);
 static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
@@ -216,8 +216,6 @@ pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
@@ -522,7 +520,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
         }
 
         // Truncate the message if needed.
-        let buf = msg_strtrunc(s, false_0);
+        let buf = msg_strtrunc(s, 0);
         let s = if buf.is_null() { s } else { buf.cast_const() };
 
         let mut need_clear = true;

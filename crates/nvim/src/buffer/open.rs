@@ -322,7 +322,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     // user may have reset the flag by hand.
     let mut buf = cur_buf();
     if readonlymode.get() && !buf.b_ffname.is_null() && buf.b_flags.has(BufFlags::NEVERLOADED) {
-        buf.b_p_ro = true_0;
+        buf.b_p_ro = 1;
     }
 
     if open_memline(buf) == FAIL {
@@ -356,7 +356,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
             read_fifo = true;
         }
         if read_fifo {
-            buf.b_p_bin = true_0;
+            buf.b_p_bin = 1;
         }
         let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
         let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as linenr_T);
@@ -380,7 +380,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
         // First read the text in binary mode into the buffer.  Then read from
         // that same buffer and append at the end.  This makes it possible to
         // retry when 'fileformat' or 'fileencoding' was guessed wrong.
-        buf.b_p_bin = true_0;
+        buf.b_p_bin = 1;
         let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM as linenr_T);
         let read = flags | (READ_NEW as c_int + READ_STDIN as c_int);
         retval = read_file(none, none, 0, 0, last, ptr::null_mut(), read, silent);
@@ -584,8 +584,8 @@ pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> c_int {
     set_option_string(kOptBuftype, c"nofile");
     set_option_false(kOptSwapfile);
     let mut win = cur_win();
-    win.w_onebuf_opt.wo_scb = false_0; // reset 'scrollbind'
-    win.w_onebuf_opt.wo_crb = false_0; // reset 'cursorbind'
+    win.w_onebuf_opt.wo_scb = 0; // reset 'scrollbind'
+    win.w_onebuf_opt.wo_crb = 0; // reset 'cursorbind'
     OK
 }
 

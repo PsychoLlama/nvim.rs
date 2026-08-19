@@ -316,7 +316,7 @@ fn handle_swap_exists_opt(old_curbuf: Option<BufRef>) {
         let mut cs = NO_CLEANUP;
         enter_cleanup_now(&mut cs);
         // User selected Recover at ATTENTION prompt.
-        msg_scroll.set(true_0);
+        msg_scroll.set(1);
         recover_swapfile();
         put_message(c"\n"); // don't overwrite the last message
         cmdline_row.set(msg_row.get());
@@ -586,8 +586,8 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
 
     if action == DOBUF_SPLIT as c_int {
         let mut win = cur_win(); // reset 'scrollbind' and 'cursorbind'
-        win.w_onebuf_opt.wo_scb = false_0;
-        win.w_onebuf_opt.wo_crb = false_0;
+        win.w_onebuf_opt.wo_scb = 0;
+        win.w_onebuf_opt.wo_crb = 0;
     }
 
     if aborting_now() {

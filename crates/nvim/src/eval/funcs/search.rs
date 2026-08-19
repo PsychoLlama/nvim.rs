@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{false_0, true_0};
+
 use crate::api::private::helpers::cstr_as_string;
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
@@ -116,8 +116,8 @@ unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
         while *p as c_int != NUL {
             match *p as u8 {
                 b'b' => dir = BACKWARD as c_int,
-                b'w' => p_ws.set(true_0),
-                b'W' => p_ws.set(false_0),
+                b'w' => p_ws.set(1),
+                b'W' => p_ws.set(0),
                 letter => match FLAG_BITS.iter().find(|&&(l, _)| l == letter) {
                     Some(&(_, mask)) => *flags |= mask,
                     None => {
@@ -281,7 +281,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         if flags & SP_NOMOVE != 0 {
             (*curwin.get()).w_cursor = save_cursor;
         } else {
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         }
         retval
     }
@@ -396,7 +396,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
 
         // `r` implies `W`; without it the repeat would wrap forever.
         if flags & SP_REPEAT != 0 {
-            p_ws.set(false_0);
+            p_ws.set(0);
         }
 
         // The optional {skip}, {stopline} and {timeout}. As in search(),

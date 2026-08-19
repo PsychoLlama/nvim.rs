@@ -13,7 +13,6 @@
 use super::lines::set_op_range;
 use super::{
     B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, FAIL, ML_EMPTY, NL, print_line,
-    true_0,
 };
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
@@ -83,7 +82,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     }
 
     loop {
-        msg_scroll.set(true_0);
+        msg_scroll.set(1);
         need_wait_return.set(false);
         // SAFETY: `curbuf` is live; `lnum` is a line of it, or zero.
         unsafe {

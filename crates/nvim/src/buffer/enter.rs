@@ -189,7 +189,7 @@ fn chdir_to_file(fname: *mut c_char) -> c_int {
 /// Recompute every buffer's short file name against the new directory.
 fn reshorten_fnames() {
     // SAFETY: walks the buffer list only.
-    unsafe { shorten_fnames(true_0) };
+    unsafe { shorten_fnames(1) };
 }
 
 /// The wall clock, for `b_last_used`.
@@ -236,7 +236,7 @@ pub unsafe fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) 
     remember_altfpos(win); // remember curpos
 
     // Don't restart Select mode after switching to another buffer.
-    VIsual_reselect.set(false_0);
+    VIsual_reselect.set(0);
 
     // close_windows() or apply_autocmds() may change curbuf and wipe out "buf"
     let prevbuf = cur_buf();
@@ -373,8 +373,8 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
     cursor.lnum = 1 as linenr_T;
     cursor.col = 0 as colnr_T;
     cursor.coladd = 0 as colnr_T;
-    win.w_set_curswant = true_0;
-    win.w_topline_was_set = false_0 as c_char;
+    win.w_set_curswant = 1;
+    win.w_topline_was_set = 0;
 
     // mark cursor position as being invalid
     win.w_valid = WinValid::NONE;

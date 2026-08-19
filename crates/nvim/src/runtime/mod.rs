@@ -345,8 +345,8 @@ static ga_loaded: GlobalCell<garray_T> = GlobalCell::new(garray_T {
 });
 static last_current_SID_seq: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-static runtime_search_path_valid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static runtime_search_path_valid_thread: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static runtime_search_path_valid: GlobalCell<bool> = GlobalCell::new(false);
+static runtime_search_path_valid_thread: GlobalCell<bool> = GlobalCell::new(false);
 static runtime_search_path_ref: GlobalCell<*mut ::core::ffi::c_int> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
 static runtime_search_path: GlobalCell<RuntimeSearchPath> = GlobalCell::new(RuntimeSearchPath {
@@ -371,6 +371,4 @@ static runtime_search_path_thread: SharedCell<RuntimeSearchPath> =
 static runtime_search_path_mutex: SharedCell<uv_mutex_t> = SharedCell::new(UV_MUTEX_INIT);
 static runtime_expand_flags: GlobalCell<RuntimeOpts> = GlobalCell::new(RuntimeOpts::NONE);
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;

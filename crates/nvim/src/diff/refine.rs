@@ -401,7 +401,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
                 dout_ga: GA_EMPTY_INIT_VALUE,
             },
             // The inline diff only supports the internal algorithm.
-            dio_internal: true_0,
+            dio_internal: 1,
         };
         ga_init(
             &raw mut dio.dio_diff.dout_ga,

@@ -566,6 +566,4 @@ pub unsafe fn f_browsedir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
     unsafe { f_browse(argvars, rettv, fptr) };
 }
 
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

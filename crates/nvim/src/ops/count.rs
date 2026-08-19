@@ -157,7 +157,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
                 p_shm.set(c"".as_ptr() as *mut c_char);
                 if p_ch.get() < 1 {
                     msg_start();
-                    msg_scroll.set(true_0);
+                    msg_scroll.set(1);
                 }
                 msg(IObuff.ptr() as *mut c_char, 0);
                 p_shm.set(saved_shm);

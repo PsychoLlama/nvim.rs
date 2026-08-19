@@ -316,7 +316,7 @@ static e_no_line_number_to_use_for_sflnum: [c_char; 43] =
 static e_no_script_file_name_to_substitute_for_script: [c_char; 56] =
     c_bytes(b"E1274: No script file name to substitute for \"<script>\"\0");
 static quitmore: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
 static dollar_command: GlobalCell<[c_char; 2]> = GlobalCell::new(['$' as c_char, 0 as c_char]);
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_error_buf: GlobalCell<[c_char; 480]> = GlobalCell::new([0; 480]);
@@ -341,4 +341,3 @@ pub const INDOFF_FILE: [c_char; 11] = c_bytes(b"indoff.vim\0");
 pub const PROF_YES: c_int = 1 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
 pub const KS_SPECIAL: c_int = 254 as c_int;
-pub const false_0: c_int = 0 as c_int;

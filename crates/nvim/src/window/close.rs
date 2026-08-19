@@ -322,7 +322,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     // When a quickfix or location list window is closed and its buffer is shown
     // in only one window, unlist the buffer.
     if is_quickfix(Some(buf)) && buf.b_nwindows == 1 {
-        buf.b_p_bl = false_0;
+        buf.b_p_bl = 0;
     }
     // Close the link to the buffer.
     let bufref = BufRef::of(cur_buf());

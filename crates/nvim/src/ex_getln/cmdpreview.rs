@@ -57,7 +57,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
         // Temporarily switch to the preview buffer to set it up.
         aucmd_prepbuf(&raw mut aco, cmdpreview_buf);
         buf_clear();
-        (*curbuf.get()).b_p_ma = true_0;
+        (*curbuf.get()).b_p_ma = 1;
         (*curbuf.get()).b_p_ul = -1;
         // Reset 'textwidth', which a ftplugin may have set.
         (*curbuf.get()).b_p_tw = 0;
@@ -102,10 +102,10 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
             return ::core::ptr::null_mut::<win_T>();
         }
 
-        (*curwin.get()).w_onebuf_opt.wo_cul = false_0;
-        (*curwin.get()).w_onebuf_opt.wo_cuc = false_0;
-        (*curwin.get()).w_onebuf_opt.wo_spell = false_0;
-        (*curwin.get()).w_onebuf_opt.wo_fen = false_0;
+        (*curwin.get()).w_onebuf_opt.wo_cul = 0;
+        (*curwin.get()).w_onebuf_opt.wo_cuc = 0;
+        (*curwin.get()).w_onebuf_opt.wo_spell = 0;
+        (*curwin.get()).w_onebuf_opt.wo_fen = 0;
 
         win_enter(save_curwin, false);
         preview_win
@@ -243,8 +243,8 @@ pub(crate) unsafe fn cmdpreview_prepare(cpinfo: *mut CpInfo) {
                 kv_push!((*cpinfo).win_info, cp_wininfo);
 
                 // Both would otherwise mess up the preview's highlights.
-                (*win).w_onebuf_opt.wo_cul = false_0;
-                (*win).w_onebuf_opt.wo_cuc = false_0;
+                (*win).w_onebuf_opt.wo_cul = 0;
+                (*win).w_onebuf_opt.wo_cuc = 0;
             }
 
             win = (*win).w_next;
@@ -261,7 +261,7 @@ pub(crate) unsafe fn cmdpreview_prepare(cpinfo: *mut CpInfo) {
         save_search_patterns();
 
         // No search highlighting during a live substitution.
-        p_hls.set(false_0);
+        p_hls.set(0);
         // Disable the :leftabove/:botright, :tab and swap-file modifiers.
         (*cmdmod.ptr()).cmod_split = 0;
         (*cmdmod.ptr()).cmod_tab = 0;
@@ -306,7 +306,7 @@ pub(crate) unsafe fn cmdpreview_restore_state(cpinfo: *mut CpInfo) {
 
                 let mut aco = aco_save_T::default();
                 aucmd_prepbuf(&raw mut aco, buf);
-                if (*curbuf.get()).b_u_synced as ::core::ffi::c_int == false_0 {
+                if (*curbuf.get()).b_u_synced as ::core::ffi::c_int == 0 {
                     u_sync(true);
                 }
                 if !u_undo_and_forget(count, false) {

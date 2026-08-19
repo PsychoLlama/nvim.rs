@@ -57,7 +57,7 @@ pub(crate) unsafe fn beginline(flags: BeginlineOpts) {
                     ptr = ptr.offset(1);
                 }
             }
-            (*win).w_set_curswant = true_0;
+            (*win).w_set_curswant = 1;
         }
         adjust_skipcol();
     }
@@ -83,7 +83,7 @@ pub(crate) unsafe fn oneright() -> c_int {
                 1
             };
             coladvance(win, getviscol() + width);
-            (*win).w_set_curswant = true_0;
+            (*win).w_set_curswant = 1;
             // OK if the cursor moved, FAIL otherwise (at the window edge).
             return if prevpos.col != (*win).w_cursor.col || prevpos.coladd != (*win).w_cursor.coladd
             {
@@ -108,7 +108,7 @@ pub(crate) unsafe fn oneright() -> c_int {
         }
         (*win).w_cursor.col += l;
 
-        (*win).w_set_curswant = true_0;
+        (*win).w_set_curswant = 1;
         adjust_skipcol();
         OK
     }
@@ -149,7 +149,7 @@ pub(crate) unsafe fn oneleft() -> c_int {
                 }
             }
 
-            (*win).w_set_curswant = true_0;
+            (*win).w_set_curswant = 1;
             adjust_skipcol();
             return OK;
         }
@@ -158,7 +158,7 @@ pub(crate) unsafe fn oneleft() -> c_int {
             return FAIL;
         }
 
-        (*win).w_set_curswant = true_0;
+        (*win).w_set_curswant = 1;
         (*win).w_cursor.col -= 1;
         // The byte to the left may be the tail of a multi-byte character.
         mb_adjust_cursor();

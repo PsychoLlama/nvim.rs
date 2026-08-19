@@ -419,7 +419,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
         let mut arg_start = (*eap).arg;
         if ends_excmd(*arg_start as c_int) != 0 {
-            syn_cmd_list(eap, true_0);
+            syn_cmd_list(eap, 1);
             return;
         }
 
@@ -485,11 +485,11 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
                 // mode; it consumes the rest of the line either way.
                 (*eap).arg = next_arg;
                 if strcmp(key, c"MATCH".as_ptr()) == 0 {
-                    syn_cmd_match(eap, true_0);
+                    syn_cmd_match(eap, 1);
                 } else if strcmp(key, c"REGION".as_ptr()) == 0 {
-                    syn_cmd_region(eap, true_0);
+                    syn_cmd_region(eap, 1);
                 } else if strcmp(key, c"CLEAR".as_ptr()) == 0 {
-                    syn_cmd_clear(eap, true_0);
+                    syn_cmd_clear(eap, 1);
                 } else {
                     illegal = true;
                 }
@@ -546,7 +546,7 @@ unsafe fn sync_linecont(
             ));
             return Err(LineContError::Reported);
         }
-        let arg_end = skip_regexp(next_arg.add(1), *next_arg as c_int, true_0);
+        let arg_end = skip_regexp(next_arg.add(1), *next_arg as c_int, 1);
         if *arg_end as c_int != *next_arg as c_int {
             return Err(LineContError::Illegal); // end delimiter not found
         }

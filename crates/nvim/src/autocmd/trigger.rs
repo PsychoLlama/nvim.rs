@@ -364,7 +364,7 @@ pub unsafe fn do_autocmd_focusgained(gained: bool) {
             curbuf.get(),
         );
         if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
-            check_timestamps(true_0);
+            check_timestamps(1);
             last_time.set(os_now());
         }
 

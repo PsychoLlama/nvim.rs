@@ -155,5 +155,3 @@ pub const COM_RIGHT: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const COM_NOBACK: ::core::ffi::c_int = 'O' as ::core::ffi::c_int;
 pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

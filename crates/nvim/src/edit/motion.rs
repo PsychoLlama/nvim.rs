@@ -117,7 +117,7 @@ pub(crate) unsafe fn ins_left() {
             start_arrow(&raw mut tpos);
             (*curwin.get()).w_cursor.lnum -= 1;
             coladvance(curwin.get(), MAXCOL as c_int);
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         } else {
             vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
         }
@@ -180,7 +180,7 @@ pub(crate) unsafe fn ins_s_left() {
                 AppendCharToRedobuff(K_S_LEFT);
             }
             bck_word(1, false, false);
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         } else {
             vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
         }
@@ -203,7 +203,7 @@ pub(crate) unsafe fn ins_right() {
             if !end_change {
                 AppendCharToRedobuff(K_RIGHT);
             }
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             if virtual_active(curwin.get()) {
                 oneright();
             } else {
@@ -219,7 +219,7 @@ pub(crate) unsafe fn ins_right() {
         {
             // 'whichwrap' allows the motion to leave the line.
             start_arrow(&raw mut (*curwin.get()).w_cursor);
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             (*curwin.get()).w_cursor.lnum += 1;
             (*curwin.get()).w_cursor.col = 0;
         } else {
@@ -247,7 +247,7 @@ pub(crate) unsafe fn ins_s_right() {
                 AppendCharToRedobuff(K_S_RIGHT);
             }
             fwd_word(1, false, false);
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
         } else {
             vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
         }

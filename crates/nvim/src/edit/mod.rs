@@ -293,10 +293,10 @@ pub const CPO_BACKSPACE: ::core::ffi::c_int = 'v' as ::core::ffi::c_int;
 pub const CPO_REPLCNT: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
-static compl_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static compl_busy: GlobalCell<bool> = GlobalCell::new(false);
 static Insstart_textlen: GlobalCell<colnr_T> = GlobalCell::new(0);
 static Insstart_blank_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
-static update_Insstart_orig: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
+static update_Insstart_orig: GlobalCell<bool> = GlobalCell::new(true);
 static last_insert: GlobalCell<String_0> = GlobalCell::new(String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,
@@ -341,5 +341,3 @@ pub const NULL_STRING: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,
 };
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

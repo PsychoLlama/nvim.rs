@@ -787,7 +787,7 @@ pub(super) fn scroll_with_sms(
     let prev_topline = win.w_topline;
     let prev_topfill = win.w_topfill;
 
-    win.w_onebuf_opt.wo_sms = true_0;
+    win.w_onebuf_opt.wo_sms = 1;
     scroll_redraw_cur(win, dir == FORWARD, count as linenr_T);
 
     // Not actually smoothscrolling, but we ended up with a partly visible

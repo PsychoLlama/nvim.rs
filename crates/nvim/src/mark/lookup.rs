@@ -387,9 +387,8 @@ pub(super) unsafe fn switch_to_mark_buf(
         } else {
             0
         };
-        let mut res: bool =
-            buflist_getfile((*fm).fnum, (*fm).mark.lnum, getfile_flag, false_0) == OK;
-        return (if res as c_int == true_0 {
+        let mut res: bool = buflist_getfile((*fm).fnum, (*fm).mark.lnum, getfile_flag, 0) == OK;
+        return (if res as c_int == 1 {
             kMarkSwitchedBuf as c_int
         } else {
             kMarkMoveFailed as c_int

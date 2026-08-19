@@ -372,7 +372,7 @@ unsafe fn clear_autocmd(
     mut err: *mut Error,
 ) -> bool {
     unsafe {
-        if do_autocmd_event(event, pat, false, false_0, c"".as_ptr(), true, au_group) == FAIL {
+        if do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) == FAIL {
             api_set_error(
                 err,
                 kErrorTypeException,

@@ -59,7 +59,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
             let d = (*argvars.add(1)).vval.v_dict;
 
             if opts.allow_number {
-                opts.allow_number = tv_dict_get_bool(d, c"number".as_ptr(), true_0) != 0;
+                opts.allow_number = tv_dict_get_bool(d, c"number".as_ptr(), 1) != 0;
             } else if tv_dict_has_key(d, c"number".as_ptr()) {
                 // getcharstr() never answers a number, so asking is an error.
                 semsg_c!(
@@ -68,7 +68,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
                 );
             }
 
-            opts.simplify = tv_dict_get_bool(d, c"simplify".as_ptr(), true_0) != 0;
+            opts.simplify = tv_dict_get_bool(d, c"simplify".as_ptr(), 1) != 0;
 
             let cursor = tv_dict_get_string(d, c"cursor".as_ptr(), false);
             if !cursor.is_null() {

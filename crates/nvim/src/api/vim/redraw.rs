@@ -174,7 +174,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             (*opts).flush = if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__flush) {
                 (*opts).flush as ::core::ffi::c_int
             } else {
-                true_0
+                1
             } != 0;
         }
         let mut flush_ui: bool = (*opts).flush;
@@ -191,7 +191,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         let mut save_lz: bool = p_lz.get() != 0;
         let mut save_rd: ::core::ffi::c_int = RedrawingDisabled.get();
         RedrawingDisabled.set(0 as ::core::ffi::c_int);
-        p_lz.set(false_0);
+        p_lz.set(0);
         if (*opts).statuscolumn as ::core::ffi::c_int != 0
             || (*opts).statusline as ::core::ffi::c_int != 0
             || (*opts).winbar as ::core::ffi::c_int != 0

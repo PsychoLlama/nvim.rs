@@ -3,9 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{
-    AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
-};
+use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
@@ -250,7 +248,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
                 *msg_silent.ptr() += 1;
             }
             if strcmp(s, c"silent!".as_ptr()) == 0 {
-                emsg_silent.set(true_0);
+                emsg_silent.set(1);
                 emsg_noredir.set(true);
             }
         } else {

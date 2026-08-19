@@ -44,10 +44,10 @@ impl SavedState {
         RedrawingDisabled.set(RedrawingDisabled.get() + 1);
         no_wait_return.set(no_wait_return.get() + 1);
         // An error from the debugged code is not ours.
-        did_emsg.set(false_0);
+        did_emsg.set(0);
         cmd_silent.set(false);
-        msg_silent.set(false_0);
-        emsg_silent.set(false_0);
+        msg_silent.set(0);
+        emsg_silent.set(0);
         // Debug commands are not part of the redirected output.
         redir_off.set(true);
         State.set(MODE_NORMAL);
@@ -233,7 +233,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
     let mut cmdline: *mut c_char = ptr::null_mut();
 
     loop {
-        msg_scroll.set(true_0);
+        msg_scroll.set(1);
         need_wait_return.set(false);
 
         // Read from the user, not from whatever a mapping or a script had

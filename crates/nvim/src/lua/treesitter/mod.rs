@@ -437,5 +437,3 @@ pub const TS_META_QUERY: &::core::ffi::CStr = c"treesitter_query";
 pub const TS_META_QUERYCURSOR: &::core::ffi::CStr = c"treesitter_querycursor";
 pub const TS_META_QUERYMATCH: &::core::ffi::CStr = c"treesitter_querymatch";
 static langs: GlobalCell<Map_cstr_t_ptr_t> = GlobalCell::new(MAP_INIT);
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

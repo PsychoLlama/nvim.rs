@@ -21,8 +21,8 @@ use crate::main::{
 };
 use crate::message::emsg;
 use crate::normal::{
-    checkclearop, checkclearopq, clearopbeep, e_cmdline_window_already_open, false_0, kMTLineWise,
-    langmap_adjust, true_0,
+    checkclearop, checkclearopq, clearopbeep, e_cmdline_window_already_open, kMTLineWise,
+    langmap_adjust,
 };
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
@@ -52,7 +52,7 @@ unsafe fn replay(cap: *mut cmdarg_T, regname: c_int) {
     unsafe {
         while (*cap).count1 != 0 && !got_int.get() {
             (*cap).count1 -= 1;
-            if do_execreg(regname, false_0, false_0, false_0) == false_0 {
+            if do_execreg(regname, 0, 0, 0) == 0 {
                 clearopbeep((*cap).oap);
                 break;
             }
@@ -108,7 +108,7 @@ pub(crate) unsafe fn nv_kundo(cap: *mut cmdarg_T) {
             return;
         }
         u_undo((*cap).count1);
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
     }
 }
 
@@ -124,7 +124,7 @@ pub(crate) unsafe fn nv_Undo(cap: *mut cmdarg_T) {
             return;
         }
         u_undoline();
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
     }
 }
 
@@ -160,7 +160,7 @@ pub(crate) unsafe fn nv_dot(cap: *mut cmdarg_T) {
         // The insert half is only replayed when insert mode was left by a
         // command rather than by an arrow key, which ends the change.
         let repeat_insert = restart_edit.get() != 0 && !arrow_used.get();
-        if start_redo((*cap).count0, repeat_insert) == false_0 {
+        if start_redo((*cap).count0, repeat_insert) == 0 {
             clearopbeep((*cap).oap);
         }
     }
@@ -190,7 +190,7 @@ pub(crate) unsafe fn nv_redo_or_register(cap: *mut cmdarg_T) {
             return;
         }
         u_redo((*cap).count1);
-        (*curwin.get()).w_set_curswant = true_0;
+        (*curwin.get()).w_set_curswant = 1;
     }
 }
 
@@ -243,7 +243,7 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
     unsafe {
         (*(*cap).oap).motion_type = kMTLineWise;
         let oap = (*cap).oap;
-        if cursor_down((*cap).count1 - 1, (*oap).op_type == OP_NOP) == false_0 {
+        if cursor_down((*cap).count1 - 1, (*oap).op_type == OP_NOP) == 0 {
             clearopbeep(oap);
         } else if ((*oap).op_type == OP_DELETE
             && (*oap).motion_force != 'v' as c_int

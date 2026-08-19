@@ -145,7 +145,7 @@ fn update_topline_win(mut win: Win) {
                 scroll_cursor_top(
                     wp,
                     arith::scrolljump_lines(p_sj.get(), win.w_view_height),
-                    false_0,
+                    0,
                 )
             };
             check_botline = true;
@@ -345,7 +345,7 @@ pub unsafe fn update_curswant_force() {
     let mut win = unsafe { Win::current() };
     win.validate_virtcol();
     win.w_curswant = win.w_virtcol;
-    win.w_set_curswant = false_0;
+    win.w_set_curswant = 0;
 }
 
 /// [`update_curswant_force`], but only when something asked for it.
@@ -494,7 +494,7 @@ pub unsafe fn set_topline(wp: *mut win_T, lnum: linenr_T) {
         win.w_botline = last;
     }
     win.w_topline = lnum;
-    win.w_topline_was_set = true_0 as ::core::ffi::c_char;
+    win.w_topline_was_set = 1;
     if lnum != prev_topline {
         // The filler lines are kept when the top line did not change.
         win.w_topfill = 0;

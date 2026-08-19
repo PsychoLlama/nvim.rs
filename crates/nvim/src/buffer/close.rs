@@ -207,7 +207,7 @@ fn clear_syntax(syn: &mut synblock_T) {
 /// Close the memline and delete the swap file.
 fn close_memline(mut buf: Buf) {
     // SAFETY: a live buffer; `true` is upstream's `del_file`.
-    unsafe { ml_close(buf.raw(), true_0) };
+    unsafe { ml_close(buf.raw(), 1) };
 }
 
 fn mark_lines_deleted(count: linenr_T) {
@@ -547,7 +547,7 @@ fn close_buffer_inner(
             wp.w_buffer = ptr::null_mut();
         }
         if how.del {
-            buf.b_p_bl = false_0;
+            buf.b_p_bl = 0;
         }
     }
     // NOTE: at this point "curbuf" may be invalid!
@@ -649,12 +649,12 @@ pub unsafe fn buf_clear_file(buf: *mut buf_T) {
     let mut buf = unsafe { Buf::new(buf) };
     buf.b_ml.ml_line_count = 1 as linenr_T;
     unchanged_now(buf, true, true);
-    buf.b_p_eof = false_0;
-    buf.b_start_eof = false_0;
-    buf.b_p_eol = true_0;
-    buf.b_start_eol = true_0;
-    buf.b_p_bomb = false_0;
-    buf.b_start_bomb = false_0;
+    buf.b_p_eof = 0;
+    buf.b_start_eof = 0;
+    buf.b_p_eol = 1;
+    buf.b_start_eol = 1;
+    buf.b_p_bomb = 0;
+    buf.b_start_bomb = 0;
     buf.b_ml.ml_mfp = ptr::null_mut::<memfile_T>();
     buf.b_ml.ml_flags = ML_EMPTY; // empty buffer
 }

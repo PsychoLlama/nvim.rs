@@ -96,8 +96,8 @@ pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
     // SAFETY: `win_new_float` answers a live window here.
     let mut win = unsafe { Win::new(win) };
     win.buffer().b_nwindows -= 1;
-    win.w_onebuf_opt.wo_scb = false_0;
-    win.w_onebuf_opt.wo_crb = false_0;
+    win.w_onebuf_opt.wo_scb = 0;
+    win.w_onebuf_opt.wo_crb = 0;
 }
 
 pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut win_T) -> c_int {
@@ -132,8 +132,8 @@ fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
             // Make the new window a copy of the old one.
             // SAFETY: two live windows.
             unsafe { win_init(win.raw(), oldwin.raw(), 0) };
-            win.w_onebuf_opt.wo_scb = false_0;
-            win.w_onebuf_opt.wo_crb = false_0;
+            win.w_onebuf_opt.wo_scb = 0;
+            win.w_onebuf_opt.wo_crb = 0;
         }
     }
     let mut frame = attach_frame(win);

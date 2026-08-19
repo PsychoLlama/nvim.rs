@@ -87,7 +87,7 @@ pub unsafe fn f_prompt_setcallback(
     if check_secure() {
         return;
     }
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), false_0);
+    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
     if buf.is_null() {
         return;
     }
@@ -112,7 +112,7 @@ pub unsafe fn f_prompt_setinterrupt(
     if check_secure() {
         return;
     }
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), false_0);
+    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
     if buf.is_null() {
         return;
     }
@@ -131,7 +131,7 @@ pub unsafe fn f_prompt_setprompt(
     if check_secure() {
         return;
     }
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), false_0);
+    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
     if buf.is_null() {
         return;
     }

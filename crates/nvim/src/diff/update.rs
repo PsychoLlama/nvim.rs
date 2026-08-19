@@ -374,7 +374,7 @@ pub unsafe fn ex_diffupdate(eap: *mut exarg_T) {
         let tp = curtab.get();
         let had_diffs = !(*tp).tp_first_diff.is_null();
         diff_clear(tp);
-        (*tp).tp_diff_invalid = false_0;
+        (*tp).tp_diff_invalid = 0;
 
         // The first two buffers in the tabpage: everything is diffed against
         // the first, so there is nothing to do without a second.

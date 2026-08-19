@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{false_0, true_0};
+
 use crate::eval::typval::{
     tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf,
     tv_list_alloc_ret, tv_list_append_number, tv_list_append_string, tv_list_set_ret,
@@ -325,7 +325,7 @@ pub unsafe fn f_synID(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             && col >= 0
             && col < ml_get_len(lnum)
         {
-            id = syn_get_id(curwin.get(), lnum, col, trans, ptr::null_mut(), false_0);
+            id = syn_get_id(curwin.get(), lnum, col, trans, ptr::null_mut(), 0);
         }
         rettv.vval.v_number = id as varnumber_T;
     }
@@ -367,7 +367,7 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         {
             // Run the syntax engine for its side effect: `get_syntax_info`
             // reports on the position it last looked at.
-            syn_get_id(curwin.get(), lnum, col, false_0, ptr::null_mut(), false_0);
+            syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 0);
             syntax_flags = get_syntax_info(&raw mut matchid);
             if syntax_flags.has(SynFlags::CONCEAL) && (*curwin.get()).w_onebuf_opt.wo_cole < 3 {
                 let mut cchar = schar_from_char(syn_get_sub_char());
@@ -416,7 +416,7 @@ pub unsafe fn f_synstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         {
             let list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
             // Run the syntax engine, keeping the stack this time.
-            syn_get_id(curwin.get(), lnum, col, false_0, ptr::null_mut(), true_0);
+            syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 1);
             for i in 0.. {
                 let id = syn_get_stack_item(i);
                 if id < 0 {

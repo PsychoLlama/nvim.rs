@@ -217,7 +217,7 @@ pub unsafe fn reset_lbr() -> bool {
         if (*curwin.get()).w_onebuf_opt.wo_lbr == 0 {
             return false;
         }
-        (*curwin.get()).w_onebuf_opt.wo_lbr = false_0;
+        (*curwin.get()).w_onebuf_opt.wo_lbr = 0;
         // Changing 'linebreak' may require w_virtcol to be recomputed.
         (*curwin.get())
             .w_valid
@@ -235,7 +235,7 @@ pub unsafe fn restore_lbr(lbr_saved: bool) {
         if (*curwin.get()).w_onebuf_opt.wo_lbr != 0 || !lbr_saved {
             return;
         }
-        (*curwin.get()).w_onebuf_opt.wo_lbr = true_0;
+        (*curwin.get()).w_onebuf_opt.wo_lbr = 1;
         (*curwin.get())
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -265,8 +265,8 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
         (*bdp).textlen = 0;
         (*bdp).start_vcol = 0;
         (*bdp).end_vcol = 0;
-        (*bdp).is_short = false_0;
-        (*bdp).is_oneChar = false_0;
+        (*bdp).is_short = 0;
+        (*bdp).is_oneChar = 0;
         (*bdp).pre_whitesp = 0;
         (*bdp).pre_whitesp_c = 0;
         (*bdp).end_char_vcols = 0;
@@ -302,7 +302,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
         if (*bdp).start_vcol < (*oap).start_vcol {
             // The line ends before the block starts.
             (*bdp).end_vcol = (*bdp).start_vcol;
-            (*bdp).is_short = true_0;
+            (*bdp).is_short = 1;
             if !is_del || (*oap).op_type == OP_APPEND {
                 (*bdp).endspaces = (*oap).end_vcol - (*oap).start_vcol + 1;
             }
@@ -316,7 +316,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
 
             if (*bdp).end_vcol > (*oap).end_vcol {
                 // The whole block is inside one character -- a wide TAB.
-                (*bdp).is_oneChar = true_0;
+                (*bdp).is_oneChar = 1;
                 if (*oap).op_type == OP_INSERT {
                     (*bdp).endspaces = (*bdp).start_char_vcols - (*bdp).startspaces;
                 } else if (*oap).op_type == OP_APPEND {
@@ -353,7 +353,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
                     // The line ends inside the block. Filling it out to the
                     // block's width is the alternative, and it is deliberately
                     // not done: it leaves trailing white space behind.
-                    (*bdp).is_short = true_0;
+                    (*bdp).is_short = 1;
                     if (*oap).op_type == OP_APPEND || virtual_op.get() != 0 {
                         (*bdp).endspaces =
                             (*oap).end_vcol - (*bdp).end_vcol + c_int::from((*oap).inclusive);
@@ -406,7 +406,7 @@ pub unsafe fn charwise_block_prep(
 
         (*bdp).startspaces = 0;
         (*bdp).endspaces = 0;
-        (*bdp).is_oneChar = false_0;
+        (*bdp).is_oneChar = 0;
         (*bdp).start_char_vcols = 0;
 
         let mut startcol: colnr_T = 0;
@@ -450,7 +450,7 @@ pub unsafe fn charwise_block_prep(
                 {
                     if start.lnum == end.lnum && start.col == end.col {
                         // The whole region is inside one character.
-                        (*bdp).is_oneChar = true_0;
+                        (*bdp).is_oneChar = 1;
                         (*bdp).startspaces = end.coladd - start.coladd + c_int::from(inclusive);
                         endcol = startcol;
                     } else {

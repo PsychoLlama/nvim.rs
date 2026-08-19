@@ -481,7 +481,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
         if regname == '.' as c_int {
             // The last insert is re-inserted rather than stuffed, so that it
             // can be repeated.
-            return stuff_inserted(NUL, 1, true_0);
+            return stuff_inserted(NUL, 1, 1);
         }
 
         let mut arg: *mut c_char = ::core::ptr::null_mut();
@@ -514,7 +514,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
                     if u_save_cursor() == FAIL {
                         return FAIL;
                     }
-                    del_chars(mb_charlen((*(*reg).y_array).data), true_0);
+                    del_chars(mb_charlen((*(*reg).y_array).data), 1);
                     let curpos = (*curwin.get()).w_cursor;
                     if oneright() == FAIL {
                         dir = FORWARD;

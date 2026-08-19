@@ -71,7 +71,7 @@ pub(crate) unsafe fn push_next_match() -> *mut stateitem_T {
         } else {
             (*cur_si).si_m_endpos = next_match_m_endpos.get();
             (*cur_si).si_h_endpos = next_match_h_endpos.get();
-            (*cur_si).si_ends = true_0;
+            (*cur_si).si_ends = 1;
             (*cur_si).si_flags |= next_match_flags.get();
             (*cur_si).si_eoe_pos = next_match_eoe_pos.get();
             (*cur_si).si_end_idx = next_match_end_idx.get();
@@ -96,7 +96,7 @@ pub(crate) unsafe fn push_next_match() -> *mut stateitem_T {
             (*cur_si).si_m_lnum = current_lnum.get();
             (*cur_si).si_m_endpos = next_match_eos_pos.get();
             (*cur_si).si_h_endpos = next_match_eos_pos.get();
-            (*cur_si).si_ends = true_0;
+            (*cur_si).si_ends = 1;
             (*cur_si).si_end_idx = 0;
             (*cur_si).si_flags = SynFlags::MATCH | save_flags;
             (*cur_si).si_seqnr = take_seqnr();
@@ -292,7 +292,7 @@ pub(crate) unsafe fn check_keepend() {
                 limit_pos_zero(&mut (*sip).si_m_endpos, maxpos);
                 limit_pos_zero(&mut (*sip).si_h_endpos, maxpos_h);
                 limit_pos_zero(&mut (*sip).si_eoe_pos, maxpos);
-                (*sip).si_ends = true_0;
+                (*sip).si_ends = 1;
             }
             if (*sip).si_ends != 0 && (*sip).si_flags.has(SynFlags::KEEPEND) {
                 if maxpos.lnum == 0 || pos_after(maxpos, (*sip).si_m_endpos) {
@@ -345,11 +345,11 @@ pub(crate) unsafe fn update_si_end(sip: *mut stateitem_T, startcol: c_int, force
                 .has(SynFlags::ONELINE)
             {
                 // A "oneline" never continues in the next line.
-                (*sip).si_ends = true_0;
+                (*sip).si_ends = 1;
                 (*sip).si_m_endpos.lnum = current_lnum.get();
                 (*sip).si_m_endpos.col = syn_getcurline_len();
             } else {
-                (*sip).si_ends = false_0;
+                (*sip).si_ends = 0;
                 (*sip).si_m_endpos.lnum = 0;
             }
             (*sip).si_h_endpos = (*sip).si_m_endpos;
@@ -357,7 +357,7 @@ pub(crate) unsafe fn update_si_end(sip: *mut stateitem_T, startcol: c_int, force
             (*sip).si_m_endpos = end.m_endpos;
             (*sip).si_h_endpos = end.hl_endpos;
             (*sip).si_eoe_pos = end.eoe_pos;
-            (*sip).si_ends = true_0;
+            (*sip).si_ends = 1;
             (*sip).si_end_idx = end.end_idx;
         }
     }

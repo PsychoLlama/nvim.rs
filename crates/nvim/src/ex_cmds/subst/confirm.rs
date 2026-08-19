@@ -17,7 +17,7 @@ use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
 use crate::eval::typval::kCallbackNone;
-use crate::ex_cmds::{CPO_UNDO, ESC, EXPAND_NOTHING, false_0, print_line_no_prefix};
+use crate::ex_cmds::{CPO_UNDO, ESC, EXPAND_NOTHING, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
@@ -169,13 +169,13 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     // SAFETY: the current window is live.
     let save_p_fen = unsafe { (*curwin.get()).w_onebuf_opt.wo_fen };
     // SAFETY: as above.
-    unsafe { (*curwin.get()).w_onebuf_opt.wo_fen = false_0 };
+    unsafe { (*curwin.get()).w_onebuf_opt.wo_fen = 0 };
 
     // Invert the matched string; the inversion is removed afterwards.
     let temp = RedrawingDisabled.get();
     RedrawingDisabled.set(0 as c_int);
     // Avoid calling update_screen() in vgetorpeek().
-    p_lz.set(false_0);
+    p_lz.set(0);
 
     if !st.new_start.is_null() {
         // There already was a substitution and we would like to show it, but

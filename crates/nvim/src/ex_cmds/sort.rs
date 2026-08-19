@@ -20,7 +20,7 @@
 
 use super::{
     FAIL, MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, e_interr, e_invarg,
-    e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo, true_0,
+    e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo,
 };
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -217,7 +217,7 @@ unsafe fn compile_sort_pattern(
     // SAFETY: caller's contract.
     unsafe {
         let delim = arg.add(at);
-        let end = skip_regexp_err(delim.add(1), *delim as c_int, true_0);
+        let end = skip_regexp_err(delim.add(1), *delim as c_int, 1);
         if end.is_null() {
             return None;
         }

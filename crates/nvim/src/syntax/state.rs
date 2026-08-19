@@ -283,7 +283,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
                     (*cur_si).si_flags |= SynFlags::MATCHCONT;
                     (*cur_si).si_m_endpos = lpos_T { lnum: 0, col: 0 };
                     (*cur_si).si_h_endpos = (*cur_si).si_m_endpos;
-                    (*cur_si).si_ends = true_0;
+                    (*cur_si).si_ends = 1;
                 }
                 i += 1;
             }

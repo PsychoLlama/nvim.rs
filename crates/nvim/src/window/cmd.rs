@@ -550,8 +550,8 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     }
     if wp.is_none() && split(0, 0) == OK {
         let mut cur = cur_win();
-        cur.w_onebuf_opt.wo_scb = false_0;
-        cur.w_onebuf_opt.wo_crb = false_0;
+        cur.w_onebuf_opt.wo_scb = 0;
+        cur.w_onebuf_opt.wo_crb = 0;
         if edit_file(ptr) == FAIL {
             // Failed to open the file: close the window opened for it.
             close(cur_win(), false, false);
@@ -583,7 +583,7 @@ fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
     let pat = dup_bytes(found, len);
     search_path(pat, len, kind, prenum == 0, prenum1);
     free(pat);
-    cur_win().w_set_curswant = true_0;
+    cur_win().w_set_curswant = 1;
 }
 
 /// CTRL-W g -- read the second letter and dispatch on it.
@@ -708,7 +708,7 @@ fn find_buffer_by_name(name: *mut c_char) -> Option<Buf> {
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
 fn open_buffer_here(fnum: c_int) {
     // SAFETY: a buffer number the list was just searched for.
-    unsafe { buflist_getfile(fnum, 0 as linenr_T, GETF_ALT as c_int, false_0) };
+    unsafe { buflist_getfile(fnum, 0 as linenr_T, GETF_ALT as c_int, 0) };
 }
 
 /// Whether the current buffer may not be changed right now.

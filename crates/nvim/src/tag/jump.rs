@@ -284,7 +284,7 @@ pub(crate) unsafe fn find_extra(start: *mut c_char) -> Option<*mut c_char> {
             if ascii_isdigit(*p as c_int) {
                 p = skipdigits(p.add(1));
             } else if matches!(*p as u8, b'/' | b'?') {
-                p = skip_regexp(p.add(1), *p as c_int, false_0);
+                p = skip_regexp(p.add(1), *p as c_int, 0);
                 if *p != first_char {
                     // The pattern was never closed.
                     return None;
@@ -458,7 +458,7 @@ impl Jump {
                 return FAIL;
             }
 
-            (*curwin.get()).w_set_curswant = true_0;
+            (*curwin.get()).w_set_curswant = 1;
             postponed_split.set(0);
             let mut retval = self.run_command(tagp);
             // Jumping to another file counts as success: at least the file
@@ -545,8 +545,8 @@ impl Jump {
                 return false;
             }
             // A fresh window does not inherit the scroll and cursor binding.
-            (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
-            (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
+            (*curwin.get()).w_onebuf_opt.wo_scb = 0;
+            (*curwin.get()).w_onebuf_opt.wo_crb = 0;
             true
         }
     }
@@ -600,9 +600,9 @@ impl Jump {
             let save_p_scs = p_scs.get();
             // 'wrapscan' is needed for a backward search, and the pattern
             // was not typed by the user, so case must not be folded.
-            p_ws.set(true_0);
-            p_ic.set(false_0);
-            p_scs.set(false_0);
+            p_ws.set(1);
+            p_ic.set(0);
+            p_scs.set(0);
 
             let save_lnum = (*curwin.get()).w_cursor.lnum;
             // Start before the line the "line:" field named, or before the
@@ -613,7 +613,7 @@ impl Jump {
                 Found::Exactly
             } else {
                 // Try again, ignoring case this time.
-                p_ic.set(true_0);
+                p_ic.set(1);
                 if self.pattern.search(search_options) {
                     Found::IgnoringCase
                 } else {
@@ -756,7 +756,7 @@ impl Pattern {
         unsafe {
             let start = self.buf.as_ptr().cast_mut();
             let after = if matches!(*start as u8, b'/' | b'?') {
-                skip_regexp(start.add(1), *start as c_int, false_0).add(1)
+                skip_regexp(start.add(1), *start as c_int, 0).add(1)
             } else {
                 start
             };
@@ -833,7 +833,7 @@ impl Pattern {
             // When the command did something that is not allowed, make
             // sure the error message can be seen.
             if secure.get() == 2 {
-                wait_return(true_0);
+                wait_return(1);
             }
             secure.set(save_secure);
             *sandbox.ptr() -= 1;

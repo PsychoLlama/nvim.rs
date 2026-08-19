@@ -155,7 +155,7 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
         (*kp).k_char = def.conceal_char;
         (*kp).k_syn.cont_in_list = copy_id_list(def.cont_in_list);
         if !def.cont_in_list.is_null() {
-            (*cur_syn_block()).b_syn_containedin = true_0;
+            (*cur_syn_block()).b_syn_containedin = 1;
         }
         (*kp).next_list = copy_id_list(def.next_list);
 

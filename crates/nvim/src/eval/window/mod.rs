@@ -88,5 +88,3 @@ pub unsafe fn win_has_winnr(wp: *mut win_T, mut tp: *mut tabpage_T) -> bool {
         (*tp).tp_curwin
     }) || !(*wp).w_config.hide && (*wp).w_config.focusable
 }
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;

@@ -780,7 +780,7 @@ pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
 static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
 static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_block: GlobalCell<Array> = GlobalCell::new(ARRAY_DICT_INIT);
-static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);
 static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static cmdpreview_bufnr: GlobalCell<handle_T> = GlobalCell::new(0 as handle_T);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -798,6 +798,4 @@ pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)
     .wrapping_add(1 as ::core::ffi::c_uint);
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

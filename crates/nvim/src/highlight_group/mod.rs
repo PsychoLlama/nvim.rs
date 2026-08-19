@@ -242,6 +242,3 @@ pub unsafe fn highlight_changed() {
         decor_provider_invalidate_hl();
     }
 }
-
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

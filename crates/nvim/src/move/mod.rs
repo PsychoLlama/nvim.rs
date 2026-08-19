@@ -103,9 +103,6 @@ crate::flag_set! {
     const TOPLINE = 0x80;
 }
 
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;
-
 /// 'cpoptions' flag: the wrapped part of a 'number'ed line is indented too.
 const CPO_NUMCOL: c_int = 'n' as c_int;
 

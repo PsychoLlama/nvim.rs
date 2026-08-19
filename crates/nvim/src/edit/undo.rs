@@ -60,7 +60,7 @@ unsafe fn start_arrow_common(end_insert_pos: *mut pos_T, end_change: bool) {
         if !arrow_used.get() && end_change {
             // Something has been inserted: close the block.
             AppendToRedobuff(ESC_STR.as_ptr());
-            stop_insert(end_insert_pos, false_0, false_0);
+            stop_insert(end_insert_pos, 0, 0);
             arrow_used.set(true);
         }
         check_spell_redraw();

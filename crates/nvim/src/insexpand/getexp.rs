@@ -461,7 +461,7 @@ pub(crate) unsafe fn get_next_cmdline_completion() {
             &raw mut matches,
         ) == EXPAND_OK
         {
-            ins_compl_add_matches(num_matches, matches, false_0);
+            ins_compl_add_matches(num_matches, matches, 0);
         }
     }
 }

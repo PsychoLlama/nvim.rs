@@ -270,7 +270,7 @@ pub unsafe fn shift_line(left: bool, round: bool, amount: c_int, call_changed_by
 
         let indent = crate::math::trim_to_int(count);
         if State.get() & VREPLACE_FLAG != 0 {
-            change_indent(INDENT_SET as c_int, indent, false_0, call_changed_bytes);
+            change_indent(INDENT_SET as c_int, indent, 0, call_changed_bytes);
         } else {
             set_indent(
                 indent,

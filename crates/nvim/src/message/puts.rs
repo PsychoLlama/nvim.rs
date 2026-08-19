@@ -262,7 +262,7 @@ pub(crate) unsafe fn msg_puts_display(
         let mut open_row = -1;
         loop {
             if msg_col.get() >= Columns.get() {
-                store(&mut sb_str, s, &mut sb_col, true_0);
+                store(&mut sb_str, s, &mut sb_col, 1);
                 if msg_no_more.get() && lines_left.get() == 0 {
                     break;
                 }
@@ -358,7 +358,7 @@ pub(crate) unsafe fn msg_puts_display(
                     msg_didout.set(false); // remember that the line is empty
                     msg_col.set(0);
                     *msg_row.ptr() += 1;
-                    store(&mut sb_str, s, &mut sb_col, true_0);
+                    store(&mut sb_str, s, &mut sb_col, 1);
                 }
                 CAR => msg_col.set(0),
                 BS => {
@@ -386,7 +386,7 @@ pub(crate) unsafe fn msg_puts_display(
             msg_line_flush();
         }
         msg_cursor_goto(msg_row.get(), msg_col.get());
-        store(&mut sb_str, s, &mut sb_col, false_0);
+        store(&mut sb_str, s, &mut sb_col, 0);
         msg_check();
     }
 }
@@ -483,7 +483,7 @@ pub unsafe fn msg_end() -> bool {
         // means the window has to be redrawn -- but not while abandoning the
         // file or editing the command line.
         if !exiting.get() && need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
-            wait_return(false_0);
+            wait_return(0);
             return false;
         }
         // NOTE: ui_flush() used to be called here. It had to be removed, as it

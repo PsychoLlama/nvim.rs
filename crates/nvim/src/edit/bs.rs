@@ -204,7 +204,7 @@ pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_
                             || (*get_cursor_pos_ptr().offset(-1) as c_int == ' ' as c_int
                                 && (*inserted_space_p == 0 || arrow_used.get())))));
             if one_step {
-                *inserted_space_p = false_0;
+                *inserted_space_p = 0;
                 bs_one_shiftwidth(in_indent);
             } else {
                 bs_delete_chars(mode, mincol);

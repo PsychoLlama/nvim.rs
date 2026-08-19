@@ -18,11 +18,11 @@ pub unsafe fn syntax_clear(block: *mut synblock_T) {
     unsafe {
         (*block).b_syn_error = false; // clear previous error
         (*block).b_syn_slow = false; // clear previous timeout
-        (*block).b_syn_ic = false_0; // Use case, by default
+        (*block).b_syn_ic = 0; // Use case, by default
         (*block).b_syn_foldlevel = SYNFLD_START;
         (*block).b_syn_spell = SYNSPL_DEFAULT; // default spell checking
-        (*block).b_syn_containedin = false_0;
-        (*block).b_syn_conceal = false_0;
+        (*block).b_syn_containedin = 0;
+        (*block).b_syn_conceal = 0;
 
         clear_keywtab(&raw mut (*block).b_keywtab);
         clear_keywtab(&raw mut (*block).b_keywtab_ic);

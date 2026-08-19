@@ -112,7 +112,7 @@ pub(crate) unsafe fn insert_handle_key(s: *mut InsertState) -> c_int {
                 } else {
                     ins_reg();
                     auto_format(false, true);
-                    (*s).inserted_space = false_0;
+                    (*s).inserted_space = 0;
                 }
                 Next::Continue
             }
@@ -178,7 +178,7 @@ pub(crate) unsafe fn insert_handle_key(s: *mut InsertState) -> c_int {
                     (*s).did_backspace =
                         ins_bs((*s).c, Backspace::Line, &raw mut (*s).inserted_space);
                     auto_format(false, true);
-                    (*s).inserted_space = false_0;
+                    (*s).inserted_space = 0;
                     if (*s).did_backspace {
                         may_autocomplete_before_cursor(s);
                     }
@@ -431,7 +431,7 @@ unsafe fn key_stuff_last_insert(s: *mut InsertState) -> Next {
         if stuff_inserted(NUL, 1, ((*s).c == Ctrl_A) as c_int) == FAIL && (*s).c != Ctrl_A {
             return Next::Leave;
         }
-        (*s).inserted_space = false_0;
+        (*s).inserted_space = 0;
         Next::Continue
     }
 }
@@ -451,7 +451,7 @@ unsafe fn key_shift(s: *mut InsertState) -> Next {
         }
         ins_shift((*s).c, (*s).lastc);
         auto_format(false, true);
-        (*s).inserted_space = false_0;
+        (*s).inserted_space = 0;
         Next::Continue
     }
 }
@@ -470,7 +470,7 @@ unsafe fn key_tab(s: *mut InsertState) -> Next {
             insert_do_complete(s);
             return Next::Continue;
         }
-        (*s).inserted_space = false_0;
+        (*s).inserted_space = 0;
         if ins_tab() {
             return Next::Normal;
         }
@@ -514,7 +514,7 @@ unsafe fn key_eol(s: *mut InsertState) -> Next {
             return Next::Leave;
         }
         auto_format(false, false);
-        (*s).inserted_space = false_0;
+        (*s).inserted_space = 0;
         Next::Continue
     }
 }
@@ -651,7 +651,7 @@ unsafe fn insert_normal_char(s: *mut InsertState) {
         ins_try_si((*s).c);
 
         if (*s).c == ' ' as c_int {
-            (*s).inserted_space = true_0;
+            (*s).inserted_space = 1;
             if inindent(0) {
                 can_cindent.set(false);
             }
@@ -672,7 +672,7 @@ unsafe fn insert_normal_char(s: *mut InsertState) {
                 (*s).c
             }) && (*s).c != Ctrl_RSB)
         {
-            insert_special((*s).c, false_0, false_0);
+            insert_special((*s).c, 0, 0);
             (*revins_legal.ptr()) += 1;
             (*revins_chars.ptr()) += 1;
         }
