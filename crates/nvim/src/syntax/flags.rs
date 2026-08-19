@@ -17,6 +17,13 @@
 //! The values are `v0.12.4:src/nvim/syntax.h`'s anonymous enum.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 crate::flag_set! {
     /// One bitmask, shared by three carriers -- see the module docs.

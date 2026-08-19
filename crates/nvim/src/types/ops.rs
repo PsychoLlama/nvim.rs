@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 // Canonical definitions, hoisted out of the per-module copies c2rust emitted.
 // One definition per logical name; every module imports from here.

@@ -21,6 +21,13 @@
 //! of a string option, where the set is the option's value and membership is
 //! a substring search rather than a bit test.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 /// Declare a C flag family as a newtype over `c_int`.
 ///

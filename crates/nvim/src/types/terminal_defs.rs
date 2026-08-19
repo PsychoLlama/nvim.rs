@@ -190,8 +190,9 @@ impl Scrollback {
         };
         self.rows.push_front(row);
         // Capped rather than counted: the refresh can only ever owe the
-        // buffer as many rows as are actually kept.
-        if self.pending < self.capacity as ::core::ffi::c_int {
+        // buffer as many rows as are actually kept. The comparison is the row
+        // count's, so it happens in `usize`; `pending` is never negative.
+        if usize::try_from(self.pending).unwrap_or(0) < self.capacity {
             self.pending += 1;
         }
     }

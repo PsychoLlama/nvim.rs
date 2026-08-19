@@ -48,7 +48,9 @@ impl qf_info_S {
     /// How many lists the stack has room for — `'chistory'` for the
     /// quickfix stack, `'lhistory'` for a location list stack.
     pub fn max_count(&self) -> ::core::ffi::c_int {
-        self.qf_lists.len() as ::core::ffi::c_int
+        // 'chistory'/'lhistory' cap the stack three orders of magnitude below
+        // `c_int::MAX`, so the saturation is unreachable.
+        ::core::ffi::c_int::try_from(self.qf_lists.len()).unwrap_or(::core::ffi::c_int::MAX)
     }
 }
 pub type qfltype_T = ::core::ffi::c_uint;

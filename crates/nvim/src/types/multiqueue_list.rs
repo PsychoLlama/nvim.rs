@@ -12,6 +12,13 @@
 //! its element has been removed is a no-op rather than a hit on whatever
 //! took the slot over.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{Event, MultiQueue};
 
