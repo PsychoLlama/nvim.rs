@@ -24,30 +24,51 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::register::is_append_register;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::NUL;
+use crate::undo::{UndoFailed, saved};
+
+/// The region was not deleted, and the buffer is as it was.
+///
+/// Only two things stop a delete, and neither leaves half a change behind.
+/// The distinction is not one any caller acts on — `op_change` and the
+/// `:normal` path both simply give up — but it is one the `c_int` erased.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NotDeleted {
+    /// 'modifiable' is off. E21 has already been reported.
+    NotModifiable,
+    /// Undo could not record the lines, so they must not be touched.
+    NoUndo,
+}
+
+impl From<UndoFailed> for NotDeleted {
+    fn from(_: UndoFailed) -> Self {
+        NotDeleted::NoUndo
+    }
+}
 
 /// `d` (and the delete half of `c`) over the operator's region.
 ///
-/// Answers `FAIL` only when undo could not be prepared; an empty or refused
-/// region is `OK`.
+/// An empty or refused region is *success*: nothing to delete is not a
+/// failure, and neither is a read-only register (which beeps instead).
 ///
 /// # Safety
 /// `oap` must point to a live `oparg_T` describing a region of the current
 /// buffer.
-pub unsafe fn op_delete(oap: *mut oparg_T) -> c_int {
+pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
     unsafe {
         let old_lcount = (*curbuf.get()).b_ml.ml_line_count;
 
         if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
-            return OK;
+            return Ok(());
         }
         // Nothing to delete -- but still prepare undo, for `op_change`.
         if (*oap).empty {
-            return u_save_cursor();
+            saved(u_save_cursor())?;
+            return Ok(());
         }
         if (*curbuf.get()).b_p_ma == 0 {
             emsg(gettext(&raw const e_modifiable as *const c_char));
-            return FAIL;
+            return Err(NotDeleted::NotModifiable);
         }
         if VIsual_select.get() && (*oap).is_VIsual {
             // The register given with CTRL-R, zero by default.
@@ -84,18 +105,16 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> c_int {
         if !empty_region {
             // Yank whatever is about to be deleted. `"_` takes nothing.
             if (*oap).regname != '_' as c_int && !save_deleted_text(oap) {
-                return OK;
+                return Ok(());
             }
 
-            let deleted = if (*oap).motion_type == kMTBlockWise {
-                delete_block(oap)
+            // `?` converts the undo layer's refusal into this one's.
+            if (*oap).motion_type == kMTBlockWise {
+                delete_block(oap)?;
             } else if (*oap).motion_type == kMTLineWise {
-                delete_whole_lines(oap)
+                delete_whole_lines(oap)?;
             } else {
-                delete_chars(oap)
-            };
-            if deleted == FAIL {
-                return FAIL;
+                delete_chars(oap)?;
             }
 
             msgmore((*curbuf.get()).b_ml.ml_line_count as c_int - old_lcount as c_int);
@@ -105,7 +124,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> c_int {
             if !vim_strchr(p_cpo.get(), CPO_EMPTYREGION).is_null() {
                 beep_flush();
             }
-            return OK;
+            return Ok(());
         }
         // In 'virtualedit' an empty region deletes nothing, but the marks are
         // set as if it had.
@@ -120,7 +139,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> c_int {
             (*curbuf.get()).b_op_start = (*oap).start;
         }
 
-        OK
+        Ok(())
     }
 }
 
@@ -193,11 +212,9 @@ unsafe fn save_deleted_text(oap: *mut oparg_T) -> bool {
 ///
 /// # Safety
 /// `oap` must point to a live blockwise `oparg_T`.
-unsafe fn delete_block(oap: *mut oparg_T) -> c_int {
+unsafe fn delete_block(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
-        if u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1) == FAIL {
-            return FAIL;
-        }
+        saved(u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1))?;
 
         let mut bd = block_def::ZERO;
         let mut lnum = (*curwin.get()).w_cursor.lnum;
@@ -258,7 +275,7 @@ unsafe fn delete_block(oap: *mut oparg_T) -> c_int {
         );
         // No whole lines were deleted, so `msgmore` must not report any.
         (*oap).line_count = 0;
-        OK
+        Ok(())
     }
 }
 
@@ -270,14 +287,14 @@ unsafe fn delete_block(oap: *mut oparg_T) -> c_int {
 ///
 /// # Safety
 /// `oap` must point to a live linewise `oparg_T`.
-unsafe fn delete_whole_lines(oap: *mut oparg_T) -> c_int {
+unsafe fn delete_whole_lines(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
         if (*oap).op_type != OP_CHANGE {
             del_lines((*oap).line_count, true);
             beginline(BL_WHITE as c_int | BL_FIX as c_int);
             // `U` is not possible after `dd`.
             u_clearline(curbuf.get());
-            return OK;
+            return Ok(());
         }
 
         // Delete every line but the first, with the cursor moved off it: the
@@ -288,9 +305,7 @@ unsafe fn delete_whole_lines(oap: *mut oparg_T) -> c_int {
             del_lines((*oap).line_count - 1, true);
             (*curwin.get()).w_cursor.lnum = lnum;
         }
-        if u_save_cursor() == FAIL {
-            return FAIL;
-        }
+        saved(u_save_cursor())?;
         if (*curbuf.get()).b_p_ai != 0 {
             // Keep the indent, on the first non-white character; `did_ai` is
             // what deletes it again if the insert is left with ESC.
@@ -306,7 +321,7 @@ unsafe fn delete_whole_lines(oap: *mut oparg_T) -> c_int {
             // `U` is not possible after `2cc`.
             u_clearline(curbuf.get());
         }
-        OK
+        Ok(())
     }
 }
 
@@ -314,25 +329,22 @@ unsafe fn delete_whole_lines(oap: *mut oparg_T) -> c_int {
 ///
 /// # Safety
 /// `oap` must point to a live charwise `oparg_T`.
-unsafe fn delete_chars(oap: *mut oparg_T) -> c_int {
+unsafe fn delete_chars(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
-        if virtual_op.get() != 0 && break_tabs_at_edges(oap) == FAIL {
-            return FAIL;
+        if virtual_op.get() != 0 {
+            break_tabs_at_edges(oap)?;
         }
 
-        let deleted = if (*oap).line_count == 1 {
-            delete_chars_one_line(oap)
+        if (*oap).line_count == 1 {
+            delete_chars_one_line(oap)?;
         } else {
-            delete_chars_across_lines(oap)
-        };
-        if deleted == FAIL {
-            return FAIL;
+            delete_chars_across_lines(oap)?;
         }
 
         if (*oap).op_type == OP_DELETE {
             auto_format(false, true);
         }
-        OK
+        Ok(())
     }
 }
 
@@ -343,13 +355,11 @@ unsafe fn delete_chars(oap: *mut oparg_T) -> c_int {
 ///
 /// # Safety
 /// `oap` must point to a live charwise `oparg_T`.
-unsafe fn break_tabs_at_edges(oap: *mut oparg_T) -> c_int {
+unsafe fn break_tabs_at_edges(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
         if gchar_pos(&raw mut (*oap).start) == '\t' as c_int {
             // Save the first line for undo.
-            if u_save_cursor() == FAIL {
-                return FAIL;
-            }
+            saved(u_save_cursor())?;
             // Breaking the start TAB moves the end too, so remember where the
             // end was in *columns* first.
             let mut endcol = 0;
@@ -372,9 +382,7 @@ unsafe fn break_tabs_at_edges(oap: *mut oparg_T) -> c_int {
             && (*oap).inclusive
         {
             // Save the last line for undo.
-            if u_save((*oap).end.lnum - 1, (*oap).end.lnum + 1) == FAIL {
-                return FAIL;
-            }
+            saved(u_save((*oap).end.lnum - 1, (*oap).end.lnum + 1))?;
             (*curwin.get()).w_cursor = (*oap).end;
             coladvance_force(getviscol2((*oap).end.col, (*oap).end.coladd));
             (*oap).end = (*curwin.get()).w_cursor;
@@ -382,7 +390,7 @@ unsafe fn break_tabs_at_edges(oap: *mut oparg_T) -> c_int {
         }
 
         mb_adjust_opend(oap);
-        OK
+        Ok(())
     }
 }
 
@@ -390,12 +398,10 @@ unsafe fn break_tabs_at_edges(oap: *mut oparg_T) -> c_int {
 ///
 /// # Safety
 /// `oap` must point to a live charwise `oparg_T` whose region is one line.
-unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> c_int {
+unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
         // Save the line for undo.
-        if u_save_cursor() == FAIL {
-            return FAIL;
-        }
+        saved(u_save_cursor())?;
 
         // 'cpoptions' `$`: show a `$` at the end of the change rather than
         // removing the text now.
@@ -432,7 +438,7 @@ unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> c_int {
             virtual_op.get() == 0,
             (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
         );
-        OK
+        Ok(())
     }
 }
 
@@ -445,16 +451,13 @@ unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> c_int {
 ///
 /// # Safety
 /// `oap` must point to a live charwise `oparg_T` spanning at least two lines.
-unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> c_int {
+unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
         // Save the deleted and changed lines for undo.
-        if u_save(
+        saved(u_save(
             (*curwin.get()).w_cursor.lnum - 1,
             (*curwin.get()).w_cursor.lnum + (*oap).line_count,
-        ) == FAIL
-        {
-            return FAIL;
-        }
+        ))?;
 
         *curbuf_splice_pending.ptr() += 1;
         let startpos = (*curwin.get()).w_cursor;
@@ -498,7 +501,7 @@ unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> c_int {
             0,
             kExtmarkUndo,
         );
-        OK
+        Ok(())
     }
 }
 

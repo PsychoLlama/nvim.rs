@@ -668,7 +668,7 @@
     "crates/nvim/src/ops/block.rs": {"unsafe_lines": 369},
     "crates/nvim/src/ops/case.rs": {"cell_ptr": 1, "unsafe_lines": 130},
     "crates/nvim/src/ops/count.rs": {"cell_ptr": 10, "unsafe_lines": 348},
-    "crates/nvim/src/ops/delete.rs": {"cell_ptr": 3, "unsafe_lines": 323},
+    "crates/nvim/src/ops/delete.rs": {"cell_ptr": 3, "unsafe_lines": 305},
     "crates/nvim/src/ops/external.rs": {"cell_ptr": 4, "unsafe_lines": 117},
     "crates/nvim/src/ops/insert.rs": {"cell_ptr": 3, "unsafe_lines": 338},
     "crates/nvim/src/ops/join.rs": {"cell_ptr": 4, "unsafe_lines": 224},

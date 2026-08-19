@@ -244,7 +244,8 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
         match (*eap).cmdidx as c_int {
             c if c == CMD_delete as c_int => {
                 oa.op_type = OP_DELETE;
-                op_delete(&raw mut oa);
+                // `:delete` reports its own refusals; nothing more to do.
+                let _ = op_delete(&raw mut oa);
             }
             c if c == CMD_yank as c_int => {
                 oa.op_type = OP_YANK;

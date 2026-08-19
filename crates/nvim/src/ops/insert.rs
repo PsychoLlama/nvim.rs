@@ -339,7 +339,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
             if u_save_cursor() == FAIL {
                 return 0;
             }
-        } else if op_delete(oap) == FAIL {
+        } else if op_delete(oap).is_err() {
             return 0;
         }
 

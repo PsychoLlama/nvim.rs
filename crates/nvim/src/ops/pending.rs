@@ -707,7 +707,9 @@ unsafe fn run_operator(
                 if empty_region_error {
                     refuse();
                 } else {
-                    op_delete(oap);
+                    // Nothing to do about a refusal: the message is out and
+                    // the buffer is untouched.
+                    let _ = op_delete(oap);
                     // Save the cursor line for undo if that has not happened.
                     if (*oap).motion_type == kMTLineWise
                         && has_format_option(FO_AUTO)

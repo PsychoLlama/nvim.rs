@@ -126,6 +126,29 @@ static u_newcount: GlobalCell<c_int> = GlobalCell::new(0);
 static u_oldcount: GlobalCell<c_int> = GlobalCell::new(0);
 static undo_undoes: GlobalCell<bool> = GlobalCell::new(false);
 static lastmark: GlobalCell<c_int> = GlobalCell::new(0);
+/// Undo could not record the lines a change is about to touch, so the change
+/// must not be made.
+///
+/// The `u_save*` family is `pub` with 64 call sites across the tree and still
+/// answers `OK`/`FAIL`; [`saved`] is the conversion a converted caller puts
+/// at the call, and the domain error of whatever is being edited absorbs this
+/// one with a `From` impl (see `ops::delete::NotDeleted`). Converting the
+/// family itself is a later job.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct UndoFailed;
+
+/// One of the `u_save*` answers as a `Result`.
+///
+/// The conversion belongs at the call and nowhere else, exactly as
+/// `eval::typval::added` does for the `tv_dict_add_*` family.
+pub fn saved(status: c_int) -> Result<(), UndoFailed> {
+    if status == FAIL {
+        Err(UndoFailed)
+    } else {
+        Ok(())
+    }
+}
+
 pub unsafe fn u_save_cursor() -> c_int {
     let mut cur: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut top: linenr_T = if cur > 0 { cur - 1 } else { 0 };
