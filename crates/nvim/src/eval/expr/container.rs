@@ -13,11 +13,11 @@ use crate::eval::typval::{
     tv_dict_item_free, tv_dict_set_ret, tv_get_string_buf_chk, tv_list_alloc,
     tv_list_append_owned_tv, tv_list_free, tv_list_set_ret,
 };
-use crate::eval::{EVAL_EVALUATE, NOTDONE, NUL, e_list_end, eval1};
+use crate::eval::{EVAL_EVALUATE, NOTDONE, e_list_end, eval1};
 use crate::memory::xmemdupz;
 use crate::os::cshim::gettext;
 use crate::types::{
-    FAIL, OK, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T,
+    FAIL, NUL, OK, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T,
     kListLenShouldKnow, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 

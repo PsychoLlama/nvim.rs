@@ -22,7 +22,7 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// The three CTRL-G commands that are spelled with a letter.
 const CTRL_G_UP: c_int = b'k' as c_int;

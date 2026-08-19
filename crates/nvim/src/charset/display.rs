@@ -22,11 +22,11 @@ use crate::mbyte::{
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
-use crate::types::{StringBuilder, buf_T, garray_T, size_t, ssize_t, uint8_t};
+use crate::types::{NUL, StringBuilder, buf_T, garray_T, size_t, ssize_t, uint8_t};
 use ::libc::strlen;
 
 use super::{
-    CT_CELL_MASK, EOL_MAC, NL, NUL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,
+    CT_CELL_MASK, EOL_MAC, NL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,
     transchar as render, vim_isprintc,
 };
 use crate::keycodes::K_SPECIAL;

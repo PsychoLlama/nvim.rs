@@ -19,7 +19,7 @@ use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::dec;
 use crate::pos::{equalpos, lt};
 use crate::strings::vim_strchr;
-use crate::types::{colnr_T, oparg_T};
+use crate::types::{NUL, colnr_T, oparg_T};
 
 /// The column of the next `quotechar` at or after `col`, or -1 when there is
 /// none before the end of the line.

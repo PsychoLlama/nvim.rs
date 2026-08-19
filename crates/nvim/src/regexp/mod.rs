@@ -454,7 +454,6 @@ pub struct backpos_S {
 pub const BACKTRACKING_ENGINE: c_uint = 1;
 pub const NFA_ENGINE: c_uint = 2;
 pub const INT32_MAX: c_int = 2147483647;
-pub const NUL: c_int = '\0' as c_int;
 pub const TAB: c_int = '\t' as c_int;
 pub const NL: c_int = '\n' as c_int;
 pub const CAR: c_int = '\r' as c_int;

@@ -18,6 +18,7 @@
 
 use super::*;
 
+use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 

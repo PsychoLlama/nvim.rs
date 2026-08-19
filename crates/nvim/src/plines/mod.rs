@@ -33,8 +33,8 @@ use crate::option::get_showbreak_value;
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, MetaIndex, OptInt, StrCharInfo, VirtLines, buf_T, colnr_T,
-    foldinfo_T, int32_t, int64_t, linenr_T, pos_T, uint32_t, win_T,
+    CharSize, CharsizeArg, CharsizeKind, MetaIndex, NUL, OptInt, StrCharInfo, VirtLines, buf_T,
+    colnr_T, foldinfo_T, int32_t, int64_t, linenr_T, pos_T, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -50,7 +50,6 @@ const VPOS_INLINE: uint32_t = 2;
 /// `kMTMetaLines` — the marktree's per-node count of virtual-line marks.
 const MT_META_LINES: MetaIndex = 1;
 const TAB: int32_t = b'\t' as int32_t;
-const NUL: c_char = 0;
 
 /// The marktree filter that selects inline virtual text and nothing else.
 static INLINE_FILTER: MetaCount = [kMTFilterSelect, 0, 0, 0, 0];
@@ -818,7 +817,8 @@ pub unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: colnr
     let mut ci: StrCharInfo = unsafe { utf_ptr2StrCharInfo(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are
     // inside it.
-    while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { *ci.ptr } != NUL {
+    while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { *ci.ptr } != NUL as c_char
+    {
         // SAFETY: as above, plus the live window `csarg` was built from.
         vcol += unsafe { charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value) }.width
             as int64_t;

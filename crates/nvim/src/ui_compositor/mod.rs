@@ -26,7 +26,7 @@
 
 mod scratch;
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
 
@@ -41,13 +41,14 @@ use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
 use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::types::{
-    Boolean, Integer, LineFlags, RemoteUI, ScreenGrid, String_0, handle_T, sattr_T, schar_T, win_T,
+    Boolean, Integer, LineFlags, NUL, RemoteUI, ScreenGrid, String_0, handle_T, sattr_T, schar_T,
+    win_T,
 };
 use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
 };
-use scratch::{Bufs, NUL, blend, clear_invalid_attrs};
+use scratch::{Bufs, blend, clear_invalid_attrs};
 
 /// One grid in the layer stack.
 ///
@@ -626,7 +627,7 @@ fn compose_into(
             let (chars, attrs) = grid.cells_at(off, n);
             line[at..at + n].copy_from_slice(chars);
             attrbuf[at..at + n].copy_from_slice(attrs);
-            if grid.comp_col + grid.cols > until && grid.char_at(off + n) == NUL {
+            if grid.comp_col + grid.cols > until && grid.char_at(off + n) == NUL as c_uint {
                 // The run ends on the left half of a double-width character;
                 // show a space instead.
                 line[at + n - 1] = schar_from_ascii(b' ');
@@ -642,12 +643,12 @@ fn compose_into(
 
         // Tricky: an overlap that cut a double-width character in half must
         // show a space for the visible half.
-        if line[at] == NUL {
+        if line[at] == NUL as c_uint {
             line[at] = schar_from_ascii(b' ');
             if Integer::from(col) == endcol - 1 {
                 skipend = 0;
             }
-        } else if at == 0 && n > 1 && line[1] == NUL {
+        } else if at == 0 && n > 1 && line[1] == NUL as c_uint {
             skipstart = 0;
         }
 
@@ -655,7 +656,7 @@ fn compose_into(
     }
     // A zero-width range leaves both skips at 0 either way, so nothing the
     // upstream read one cell before the buffer could have changed.
-    if width > 0 && line[width - 1] == NUL {
+    if width > 0 && line[width - 1] == NUL as c_uint {
         skipend = 0;
     }
 

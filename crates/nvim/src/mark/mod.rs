@@ -59,7 +59,6 @@ pub use lookup::{
 pub use shada::{mark_buffer_iter, mark_global_iter, mark_set_global, mark_set_local};
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
-pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
 pub const MAXPATHL: c_int = 4096;
 pub const IOSIZE: c_int = 1024 + 1;

@@ -38,7 +38,8 @@ use crate::main::curwin;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::spell::spell_iswordp;
 use crate::spellsuggest::walk::{State, Walk};
-use crate::spellsuggest::{NUL, SCORE_SWAP, SCORE_SWAP3};
+use crate::spellsuggest::{SCORE_SWAP, SCORE_SWAP3};
+use crate::types::NUL;
 use core::ffi::c_int;
 use core::ptr;
 

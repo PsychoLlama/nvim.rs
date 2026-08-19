@@ -13,7 +13,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// The compound assignment operators, as they appear before the `=`.
 const OPERATORS: &CStr = c"+-*/%.";
@@ -74,7 +74,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
             if !l.is_null() {
                 tv_list_set_ret(&raw mut rettv, l);
                 if (*eap).skip == 0 {
-                    let op = [b'=' as c_char, NUL];
+                    let op = [b'=' as c_char, NUL as c_char];
                     ex_let_vars(
                         (*eap).arg,
                         &raw mut rettv,
@@ -91,7 +91,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
         }
 
         // The operator, if any, and the expression past it.
-        let mut op = [b'=' as c_char, NUL];
+        let mut op = [b'=' as c_char, NUL as c_char];
         if *expr != b'=' as c_char {
             if !vim_strchr(OPERATORS.as_ptr(), *expr as uint8_t as c_int).is_null() {
                 // "+=", "-=", "*=", "/=", "%=" or ".="
@@ -306,7 +306,7 @@ pub unsafe fn skip_var_list(
 /// `arg` is a NUL-terminated string.
 unsafe fn skip_var_one(arg: *const c_char) -> *const c_char {
     unsafe {
-        if *arg == b'@' as c_char && *arg.add(1) != NUL {
+        if *arg == b'@' as c_char && *arg.add(1) != NUL as c_char {
             return arg.add(2);
         }
         let name = if *arg == b'$' as c_char || *arg == b'&' as c_char {
@@ -361,7 +361,7 @@ unsafe fn ex_let_env(
             // Terminate the name in place: `arg` has already moved past it.
             let mut tofree: *mut c_char = ptr::null_mut();
             let c1 = *name.offset(len as isize);
-            *name.offset(len as isize) = NUL;
+            *name.offset(len as isize) = NUL as c_char;
 
             let mut p = tv_get_string_chk(tv);
             if !p.is_null() && !op.is_null() && *op == b'.' as c_char {
@@ -422,7 +422,7 @@ unsafe fn ex_let_option(
 
         // Terminate the name in place; every exit below puts it back.
         let c1 = *p;
-        *p = NUL;
+        *p = NUL as c_char;
 
         let is_tty_opt = is_tty_option(arg);
         let hidden = is_option_hidden(opt_idx);

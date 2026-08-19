@@ -24,7 +24,6 @@ pub const fn is_special(c: c_int) -> bool {
 }
 
 /// The ASCII characters the `<>` notation has names for.
-pub const NUL: c_int = 0x00;
 pub const BS: c_int = 0x08;
 pub const TAB: c_int = 0x09;
 pub const NL: c_int = 0x0a;

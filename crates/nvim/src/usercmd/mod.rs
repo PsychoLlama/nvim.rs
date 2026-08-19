@@ -110,7 +110,6 @@ pub const DOCMD_NOWAIT: u32 = 2;
 pub const DOCMD_VERBOSE: u32 = 1;
 pub const UC_BUFFER: c_int = 1;
 pub const LUA_NOREF: c_int = -2;
-pub const NUL: c_char = 0;
 pub const EX_RANGE: u32 = 0x1;
 pub const EX_BANG: u32 = 0x2;
 pub const EX_EXTRA: u32 = 0x4;

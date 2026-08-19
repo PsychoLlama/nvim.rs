@@ -16,7 +16,7 @@
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
 use crate::ex_cmds::{
-    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, HIST_SEARCH, NUL, kSubHonorOptions,
+    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, HIST_SEARCH, kSubHonorOptions,
     kSubIgnoreCase, kSubMatchCase, subflags_T,
 };
 use crate::ex_docmd::ex_may_print;
@@ -30,7 +30,7 @@ use crate::option::magic_isset;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
-use crate::types::{OK, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
+use crate::types::{NUL, OK, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
 use ::libc::{memset, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};

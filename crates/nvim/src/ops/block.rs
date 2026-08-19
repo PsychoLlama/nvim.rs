@@ -32,6 +32,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// Insert `s` into every line of the block below the first, before the block
 /// (`b_insert`, for `I`) or after it (for `A`).

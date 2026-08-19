@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`
 /// naming the argument's one-based position and answer `FAIL`.

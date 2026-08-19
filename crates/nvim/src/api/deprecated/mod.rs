@@ -79,7 +79,6 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
 };
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int =
     (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;

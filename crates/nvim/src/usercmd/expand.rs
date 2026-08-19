@@ -25,7 +25,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_VERBOSE, EX_KEEPSCRIPT, EX_NOSPC, NUL, Scope, ucmd_list,
+    DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_VERBOSE, EX_KEEPSCRIPT, EX_NOSPC, Scope, ucmd_list,
 };
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
@@ -40,7 +40,7 @@ use crate::strings::vim_strchr;
 use crate::types::{
     CMD_USER, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
     CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE,
-    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
+    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{strcat, strlen};
@@ -171,7 +171,7 @@ unsafe fn uc_split_args(
     unsafe {
         let buf = xmalloc(out.len() + 1).cast::<c_char>();
         ptr::copy_nonoverlapping(out.as_ptr(), buf.cast::<u8>(), out.len());
-        *buf.add(out.len()) = NUL;
+        *buf.add(out.len()) = NUL as c_char;
         *lenp = out.len();
         buf
     }
@@ -185,7 +185,7 @@ unsafe fn quote_line(arg: *const c_char, out: &mut Vec<u8>) {
     let mut p = arg;
     // SAFETY: caller contract; every step stays inside the string.
     unsafe {
-        while *p != NUL {
+        while *p != NUL as c_char {
             let (first, second) = (*p as u8, *p.add(1) as u8);
             if first == b'\\' && second == b'\\' {
                 out.extend_from_slice(b"\\\\");
@@ -200,7 +200,7 @@ unsafe fn quote_line(arg: *const c_char, out: &mut Vec<u8>) {
                 p = p.add(1);
             } else if ascii_iswhite(first as c_int) {
                 p = skipwhite(p);
-                if *p == NUL {
+                if *p == NUL as c_char {
                     break;
                 }
                 out.extend_from_slice(b"\", \"");
@@ -410,7 +410,7 @@ pub unsafe fn uc_mods(buf: *mut c_char, cmod: *const cmdmod_T, quote: bool) -> s
             } else {
                 buf
             };
-            *body = NUL;
+            *body = NUL as c_char;
             body
         }
     };
@@ -860,7 +860,7 @@ unsafe fn unescape_k_special(
     // SAFETY: caller contract.
     unsafe {
         let mut ksp = *p;
-        while *ksp != NUL && *ksp as u8 as c_int != K_SPECIAL {
+        while *ksp != NUL as c_char && *ksp as u8 as c_int != K_SPECIAL {
             ksp = ksp.add(1);
         }
         if *ksp as u8 as c_int != K_SPECIAL

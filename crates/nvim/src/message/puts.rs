@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::types::builders::static_cstring;
-use crate::types::{VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 

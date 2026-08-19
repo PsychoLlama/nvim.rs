@@ -18,11 +18,11 @@ use crate::regexp::{
     NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL,
     NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NOCTAL, NFA_NOPEN, NFA_NUPPER, NFA_NWHITE, NFA_NWORD,
     NFA_OCTAL, NFA_OR, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER,
-    NFA_WHITE, NFA_WORD, NUL, RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub, regflags,
+    NFA_WHITE, NFA_WORD, RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub, regflags,
     seen_endbrace, unmagic,
 };
 use crate::semsg;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `nfa_classcodes`) paired them. The `\_x` form of each is

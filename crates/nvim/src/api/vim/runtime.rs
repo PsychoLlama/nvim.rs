@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::kvec::InitVec;
+use crate::types::NUL;
 
 pub unsafe extern "C" fn nvim_exec_lua(
     mut code: String_0,

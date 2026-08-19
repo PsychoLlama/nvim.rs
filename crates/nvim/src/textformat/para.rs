@@ -16,7 +16,7 @@ use crate::charset::skipwhite;
 use crate::indent::{byte_at, get_number_indent};
 use crate::memline::{ml_get, ml_get_len};
 use crate::textobject::startPS;
-use crate::types::linenr_T;
+use crate::types::{NUL, linenr_T};
 
 /// A line's comment leader: how many bytes of it there are, and where the
 /// 'comments' item that matched begins.

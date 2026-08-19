@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
-use crate::types::{CMD_map, CMD_unmap, FAIL, OK};
+use crate::types::{CMD_map, CMD_unmap, FAIL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

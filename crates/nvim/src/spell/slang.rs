@@ -33,12 +33,12 @@ use crate::os::cshim::strncmp;
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    OK, buf_T, fromto_T, garray_T, hash_T, hashitem_T, regprog_T, salitem_T, size_t, slang_T,
+    NUL, OK, buf_T, fromto_T, garray_T, hash_T, hashitem_T, regprog_T, salitem_T, size_t, slang_T,
     uint8_t, uint16_t, wordcount_T,
 };
 use ::libc::{memcpy, strlen};
 
-use super::{FAIL, MAXWLEN, MAXWORDCOUNT, NUL, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
+use super::{FAIL, MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
 
 /// Free the contents of `gap`, which holds `T` items each needing `drop`,
 /// then the array itself.

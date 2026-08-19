@@ -15,6 +15,7 @@
 use super::*;
 use crate::keycodes::Ctrl_V;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 impl Cells {
     /// Show the `'listchars'` "precedes" character in column zero of a row

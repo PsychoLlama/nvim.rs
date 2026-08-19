@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// Resolve the first index of `l[n1:n2]`, clamping a negative one that fell
 /// off the front and raising `E684` when there is no such item.

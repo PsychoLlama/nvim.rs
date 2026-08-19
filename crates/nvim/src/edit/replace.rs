@@ -25,6 +25,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::types::NUL;
 
 /// Truncate the white space at the end of a line, keeping the replace stack
 /// in step.

@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::keycodes::Ctrl_C;
-use crate::types::{CMOD_NOSWAPFILE, FAIL, OK};
+use crate::types::{CMOD_NOSWAPFILE, FAIL, NUL, OK};
 
 /// True when the text must not be changed and we cannot switch to another
 /// window or buffer — editing the command line, and the like.

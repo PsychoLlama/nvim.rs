@@ -304,7 +304,6 @@ fn stack_top(stack: &[*mut *mut ExprASTNode], back: usize) -> *mut *mut ExprASTN
     stack[stack.len() - 1 - back]
 }
 
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = 9;
 pub const NL: ::core::ffi::c_int = 10;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -39,7 +39,7 @@ use crate::os::fs::{os_chdir, os_dirname};
 use crate::path::pathcmp;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
 use crate::types::{
-    CdScope, OK, OptInt, buf_T, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, tabpage_T,
+    CdScope, NUL, OK, OptInt, buf_T, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, tabpage_T,
 };
 use crate::undo::u_sync;
 use crate::winlayer::{frames, tabs, windows_in_tab};

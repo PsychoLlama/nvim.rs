@@ -45,12 +45,11 @@ use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsiz
 use crate::pos::MAXCOL;
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, StrCharInfo, buf_T, colnr_T, int64_t, linenr_T, pos_T,
-    win_T,
+    CharSize, CharsizeArg, CharsizeKind, NUL, StrCharInfo, buf_T, colnr_T, int64_t, linenr_T,
+    pos_T, win_T,
 };
 use crate::winlayer::{Buf, Line, Pos, Win};
 
-const NUL: c_int = 0;
 const TAB: c_int = 9;
 const VALID_VIRTCOL: c_int = 0x4;
 

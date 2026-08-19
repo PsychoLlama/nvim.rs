@@ -21,7 +21,7 @@ use crate::eval::typval::{
     tv_list_first, tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::set_vim_var_nr;
-use crate::eval::{NL, NUL, PROF_YES};
+use crate::eval::{NL, PROF_YES};
 use crate::ex_cmds::check_secure;
 use crate::main::{do_profiling, e_invarg, e_invarg2, e_invargNval, e_nobufnr, p_verbose};
 use crate::memline::ml_get_buf;
@@ -32,8 +32,9 @@ use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
-    EvalFuncData, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VV_SHELL_ERROR, buf_T,
-    kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T, varnumber_T,
+    EvalFuncData, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VV_SHELL_ERROR,
+    buf_T, kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T,
+    varnumber_T,
 };
 use ::libc::strlen;
 

@@ -24,13 +24,12 @@ use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::input_get;
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, Callback_data, MultiQueue};
+use crate::types::{Callback, Callback_data, MultiQueue, NUL};
 use crate::ui::{ui_flush, ui_has};
 use ::libc::atoi;
 use core::ffi::{c_char, c_int, c_void};
 
 const EXPAND_NOTHING: c_int = 0;
-const NUL: u8 = b'\0';
 const ESC: c_int = 0x1b;
 /// `IObuff`'s size, which the buffer itself is declared with in main.
 const IOSIZE: usize = 1024 + 1;
@@ -175,7 +174,7 @@ pub unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
                 continue; // More bytes to get.
             }
             let end = if len >= buflen { buflen - 1 } else { len };
-            buf[end as usize] = NUL;
+            buf[end as usize] = NUL as u8;
             // SAFETY: `buf` was just NUL-terminated at or before `buflen`.
             break unsafe { utf_ptr2char(buf.as_ptr() as *const c_char) };
         }

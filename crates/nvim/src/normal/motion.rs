@@ -25,8 +25,8 @@ use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
     BL_FIX, BL_SOL, BL_WHITE, CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, MOD_MASK_CTRL, MOD_MASK_SHIFT,
-    NUL, TAB, adjust_for_sel, clearopbeep, false_0, kMTCharWise, kMTLineWise, may_fold_open,
-    nv_page, true_0, unadjust_for_sel,
+    TAB, adjust_for_sel, clearopbeep, false_0, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
+    true_0, unadjust_for_sel,
 };
 use crate::option::{get_showbreak_value, get_ve_flags};
 use crate::options::{
@@ -40,7 +40,7 @@ use crate::state::virtual_active;
 use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
 use crate::types::{
-    Direction, FAIL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T, oparg_T,
+    Direction, FAIL, NUL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T, oparg_T,
 };
 use core::ffi::{c_int, c_uint};
 

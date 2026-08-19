@@ -42,7 +42,7 @@ use super::exception::{
 use super::flag::{
     CSF_ACTIVE, CSF_CAUGHT, CSF_FINALLY, CSF_FOR, CSF_SILENT, CSF_THROWN, CSF_TRUE, CSF_TRY,
     CSF_WHILE, CSL_HAD_FINA, CSTACK_LEN, CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH,
-    CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN, CSTP_THROW, ET_USER, NUL, THROW_ON_ERROR,
+    CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN, CSTP_THROW, ET_USER, THROW_ON_ERROR,
 };
 use super::{
     aborting, check_skip, cleanup_conditionals, discard_pending_return, ex_break, ex_continue,
@@ -65,7 +65,7 @@ use crate::regexp::{
 };
 use crate::runtime::do_finish;
 use crate::semsg_c;
-use crate::types::{FAIL, cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
+use crate::types::{FAIL, NUL, cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -77,7 +77,7 @@ pub unsafe fn ex_throw(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let arg = (*eap).arg;
-        let value = if *arg != NUL && *arg != b'|' as c_char && *arg != b'\n' as c_char {
+        let value = if *arg != NUL as c_char && *arg != b'|' as c_char && *arg != b'\n' as c_char {
             eval_to_string_skip(arg, eap, (*eap).skip != 0)
         } else {
             emsg(message(&e_argreq));
@@ -249,7 +249,9 @@ pub unsafe fn ex_catch(eap: *mut exarg_T) {
                 && (*cstack).cs_flags[idx as usize] & CSF_THROWN != 0
                 && (*cstack).cs_flags[idx as usize] & CSF_CAUGHT == 0
             {
-                if !end.is_null() && *end != NUL && ends_excmd(*skipwhite(end.add(1)) as c_int) == 0
+                if !end.is_null()
+                    && *end != NUL as c_char
+                    && ends_excmd(*skipwhite(end.add(1)) as c_int) == 0
                 {
                     semsg_c!(message(&e_trailing_arg), end);
                     return;
@@ -314,7 +316,7 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
         let mut save_char = 0;
         if !end.is_null() {
             save_char = *end;
-            *end = NUL;
+            *end = NUL as c_char;
         }
         let save_cpo = p_cpo.get();
         p_cpo.set(empty_string_option.ptr().cast());

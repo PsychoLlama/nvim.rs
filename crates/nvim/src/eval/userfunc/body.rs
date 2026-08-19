@@ -13,7 +13,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// How many `:function` definitions may nest inside one another.
 pub const MAX_FUNC_NESTING: c_int = 50;

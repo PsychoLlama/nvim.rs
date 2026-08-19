@@ -16,7 +16,7 @@ use crate::search::{
     SEARCH_START,
 };
 use crate::semsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

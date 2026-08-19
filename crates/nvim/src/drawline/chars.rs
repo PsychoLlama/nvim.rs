@@ -23,7 +23,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{kFalse, kTrue};
+use crate::types::{NUL, kFalse, kTrue};
 
 impl Cells {
     /// Put the next character in [`Cells::cell_char`].

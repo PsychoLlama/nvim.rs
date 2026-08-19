@@ -11,7 +11,7 @@ use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::stack::Decoder;
-use super::{BS, CAR, FF, NL, NUL, TAB};
+use super::{BS, CAR, FF, NL, TAB};
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::vim_str2nr;
 use crate::eval::decode::decode_string;
@@ -20,8 +20,8 @@ use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmalloc;
 use crate::os::cshim::gettext;
 use crate::types::{
-    VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, typval_T, typval_vval_union, uvarnumber_T,
-    varnumber_T,
+    NUL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, typval_T, typval_vval_union,
+    uvarnumber_T, varnumber_T,
 };
 use ::libc::abort;
 
@@ -235,7 +235,7 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
             t += 1;
         }
         flush(&mut w, &mut fst_in_pair);
-        *out.add(w) = NUL;
+        *out.add(w) = NUL as u8;
 
         let obj = decode_string(out as *const c_char, w, false, true);
         // A string carrying an embedded NUL came back as a blob wrapped in a

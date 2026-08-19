@@ -10,7 +10,7 @@
 
 use super::*;
 
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`

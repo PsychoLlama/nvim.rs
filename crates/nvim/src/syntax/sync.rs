@@ -14,6 +14,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
+use crate::types::NUL;
 
 /// Find a synchronisation point for line `start_lnum`, setting `current_lnum`
 /// and the current state to it.

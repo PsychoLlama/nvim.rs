@@ -56,12 +56,12 @@ use crate::spell::{
 };
 use crate::spellsuggest::collect::suggestions;
 use crate::spellsuggest::{
-    MAXWLEN, NUL, OK, SPS_BEST, SPS_DOUBLE, spell_find_cleanup, spell_find_suggest,
+    MAXWLEN, OK, SPS_BEST, SPS_DOUBLE, spell_find_cleanup, spell_find_suggest,
     spell_suggest_timeout, sps_flags, sps_limit, suggest_T, suginfo_T,
 };
 use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::ui::kUIMessages;
-use crate::types::{colnr_T, int64_t, pos_T};
+use crate::types::{NUL, colnr_T, int64_t, pos_T};
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy, strlen};

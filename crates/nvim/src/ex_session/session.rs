@@ -24,7 +24,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::flag::{FR_COL, FR_LEAF, NUL};
+use super::flag::{FR_COL, FR_LEAF};
 use super::view::put_view;
 use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_do_win, ses_escape_fname, ses_fname,
@@ -48,8 +48,8 @@ use crate::options::{
 use crate::os::env::home_replace_save;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, buf_T, dictitem_T, frame_T,
-    hashitem_T, int64_t, typval_T, win_T,
+    NUL, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, buf_T, dictitem_T,
+    frame_T, hashitem_T, int64_t, typval_T, win_T,
 };
 use crate::window::tabpage_index;
 use ::libc::fprintf;
@@ -660,7 +660,7 @@ unsafe fn put_session_global(
     unsafe {
         let escaped = vim_strsave_escaped(tv_get_string(tv), c"\\\"\n\r".as_ptr());
         let mut t = escaped;
-        while *t != NUL {
+        while *t != NUL as c_char {
             if *t == b'\n' as c_char {
                 *t = b'n' as c_char;
             } else if *t == b'\r' as c_char {

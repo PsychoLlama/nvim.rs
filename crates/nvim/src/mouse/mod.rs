@@ -43,7 +43,7 @@ use crate::state::virtual_active;
 use crate::statusline::stl_connected;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, MotionType, StlClickDefinition, cmdarg_T, colnr_T, linenr_T, pos_T, size_t,
+    EvalFuncData, MotionType, NUL, StlClickDefinition, cmdarg_T, colnr_T, linenr_T, pos_T, size_t,
     tabpage_T, typval_T, varnumber_T, win_T,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
@@ -120,7 +120,6 @@ pub const MOD_MASK_3CLICK: c_int = 0x40;
 pub const MOD_MASK_4CLICK: c_int = 0x60;
 pub const MOD_MASK_MULTI_CLICK: c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
 
-const NUL: c_int = 0;
 const VALID_WROW: c_int = 0x1;
 const VALID_CROW: c_int = 0x10;
 const VALID_BOTLINE: c_int = 0x20;

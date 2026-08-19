@@ -22,6 +22,7 @@
 
 use super::*;
 use crate::os::cshim::{towlower, towupper, wint_t};
+use crate::types::NUL;
 use core::ffi::{c_char, c_int, c_uint};
 
 /// The case-folded form of `a`, for matching.

@@ -470,7 +470,6 @@ unsafe fn set_put_ptr_t(
             != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
     }
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;

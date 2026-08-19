@@ -11,7 +11,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::semsg_multiline_c;
-use crate::types::{MB_MAXBYTES, kErrorTypeNone};
+use crate::types::{MB_MAXBYTES, NUL, kErrorTypeNone};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// Every variable of `ht`, one per line, each name prefixed with `prefix`.
 ///
@@ -293,7 +293,7 @@ unsafe fn list_one_var_a(
             msg_putchar(b'\n' as c_int);
         }
         // Not `msg()`, which would overwrite "v:statusmsg".
-        if *prefix != NUL {
+        if *prefix != NUL as c_char {
             msg_puts(prefix);
         }
         if !name.is_null() {

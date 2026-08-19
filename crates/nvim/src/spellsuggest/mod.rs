@@ -72,7 +72,7 @@ use crate::spellsuggest::soundalike::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::strings::vim_strchr;
-use crate::types::{FAIL, FILE, OK, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
+use crate::types::{FAIL, FILE, NUL, OK, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
 use ::libc::{atoi, fclose, strcasecmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
@@ -82,9 +82,6 @@ use crate::highlight_group::HLF_COUNT;
 /// buffer in this module tree.
 pub use crate::spell::MAXWLEN;
 
-/// The string terminator, as an `int` so that it can be compared against a
-/// widened byte.
-pub const NUL: c_int = 0;
 /// A tab, which sound folding treats as a space.
 pub const TAB: c_int = '\t' as c_int;
 

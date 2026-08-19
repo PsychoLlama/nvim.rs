@@ -12,6 +12,7 @@
 //! puts the tag in the high byte instead, and the transpile dropped it.
 
 use super::*;
+use crate::types::NUL;
 
 /// Largest glyph in bytes, including the terminating NUL.
 pub const MAX_SCHAR_SIZE: c_int = 32;
@@ -134,7 +135,7 @@ pub unsafe fn schar_cache_clear() {
 pub unsafe extern "C" fn schar_get(mut buf_out: *mut c_char, sc: schar_T) -> size_t {
     unsafe {
         let len = schar_get_adv(&raw mut buf_out, sc);
-        *buf_out = NUL;
+        *buf_out = NUL as c_char;
         len
     }
 }
@@ -223,7 +224,11 @@ pub unsafe fn schar_get_first_codepoint(sc: schar_T) -> c_int {
 
 /// The ASCII character `sc` is, or NUL when it is not ASCII.
 pub fn schar_get_ascii(sc: schar_T) -> c_char {
-    if sc < 0x80 { sc as c_char } else { NUL }
+    if sc < 0x80 {
+        sc as c_char
+    } else {
+        NUL as c_char
+    }
 }
 
 /// Whether `sc` starts in the Arabic block, i.e. its lead byte is 0xD8 or

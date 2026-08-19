@@ -217,7 +217,6 @@ pub const CPO_FILTER: ::core::ffi::c_int = '!' as ::core::ffi::c_int;
 /// 'comments' flag: this leader ends a three-part comment.
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;

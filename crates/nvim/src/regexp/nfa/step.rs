@@ -25,10 +25,9 @@ use crate::regexp::{
     NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
     NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_TOO_EXPENSIVE,
     NFA_VCOL, NFA_VCOL_LT, NFA_VISUAL, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1, NFA_ZREF9, NFA_ZSTART,
-    NUL, Rex, nfa_endp, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, reg_prev_class,
-    regsubs_T,
+    Rex, nfa_endp, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, reg_prev_class, regsubs_T,
 };
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// Where a thread's state leaves it.
 pub(crate) enum Step {

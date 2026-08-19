@@ -14,7 +14,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// Print `p` as one line of `:registers`, stopping at the window width.
 ///

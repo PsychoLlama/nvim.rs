@@ -13,6 +13,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 /// Number of items on the current state stack.
 #[inline(always)]

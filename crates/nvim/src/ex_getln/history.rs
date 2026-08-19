@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::keycodes::Ctrl_N;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.

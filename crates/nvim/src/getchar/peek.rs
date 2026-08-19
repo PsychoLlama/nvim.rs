@@ -25,6 +25,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_C, key_escape};
+use crate::types::NUL;
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
 

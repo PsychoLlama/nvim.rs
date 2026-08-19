@@ -36,8 +36,8 @@ use crate::os::cshim::vsnprintf;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, Object, String_0, Tabpage,
-    TryState, Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t,
+    Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, NUL, Object, String_0,
+    Tabpage, TryState, Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t,
     kErrorTypeException, kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data,
     pos_T, ptr_t, scid_T, sctx_T, size_t, tabpage_T, uint32_t, uint64_t, win_T,
 };
@@ -63,7 +63,6 @@ const DI_FLAGS_LOCK: c_int = 8;
 /// The hash slot `mh_get_int` reports for a key it did not find.
 const MH_TOMBSTONE: uint32_t = u32::MAX;
 
-const NUL: c_char = 0;
 const NL: c_char = b'\n' as c_char;
 const CAR: c_char = b'\r' as c_char;
 
@@ -256,7 +255,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
             }
         } else if did_throw.get() || need_rethrow.get() {
             let ex = current_exception.get();
-            if *(*ex).throw_name != NUL {
+            if *(*ex).throw_name != NUL as c_char {
                 if (*ex).throw_lnum != 0 {
                     let fmt = c"%s, line %d: %s".as_ptr();
                     api_set_error(

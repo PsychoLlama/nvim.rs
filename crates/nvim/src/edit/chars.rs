@@ -27,7 +27,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::MB_MAXCHAR;
+use crate::types::{MB_MAXCHAR, NUL};
 
 /// Upstream's `ISSPECIAL`: a character that needs processing other than the
 /// simple insert this file can do.

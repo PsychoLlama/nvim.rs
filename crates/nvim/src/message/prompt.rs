@@ -20,6 +20,7 @@ use crate::keycodes::{
     K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_X1MOUSE, K_X2MOUSE,
 };
 use crate::log::logmsg_c;
+use crate::types::NUL;
 use core::ffi::c_int;
 use core::ptr;
 

@@ -36,14 +36,14 @@ use crate::os::cshim::{getc, gettext};
 use crate::spell::{byte_in_str, clear_spell_chartab, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
-    FILE, fromto_T, garray_T, hash_T, hashitem_T, int16_t, regprog_T, salfirst_T, salitem_T,
+    FILE, NUL, fromto_T, garray_T, hash_T, hashitem_T, int16_t, regprog_T, salfirst_T, salitem_T,
     size_t, slang_T, spelltab_T, uint8_t,
 };
 use ::libc::{memset, strlen, ungetc};
 
 use super::read::read_nonnul_bytes;
 use super::{
-    CF_UPPER, CF_WORD, COMPOUND_MAX_LEN, EOF, MAXREGIONS, MAXWLEN, NUL, SAL_COLLAPSE, SAL_F0LLOWUP,
+    CF_UPPER, CF_WORD, COMPOUND_MAX_LEN, EOF, MAXREGIONS, MAXWLEN, SAL_COLLAPSE, SAL_F0LLOWUP,
     SAL_REM_ACCENTS, SP_FORMERROR, SP_OTHERERROR, SP_TRUNCERROR, e_duplicate_char_in_map_entry,
     set_spell_finish, vim_regcomp,
 };

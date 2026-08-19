@@ -17,6 +17,7 @@ use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// Copy one line of a block into slot `y_idx` of `reg`, padding both ends
 /// with the spaces `block_prep` measured.

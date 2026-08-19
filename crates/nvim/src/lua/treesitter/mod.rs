@@ -430,7 +430,6 @@ unsafe fn map_get_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t) 
         };
     }
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TS_META_PARSER: &::core::ffi::CStr = c"treesitter_parser";
 pub const TS_META_TREE: &::core::ffi::CStr = c"treesitter_tree";
 pub const TS_META_NODE: &::core::ffi::CStr = c"treesitter_node";

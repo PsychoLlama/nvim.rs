@@ -5059,6 +5059,7 @@ static const int EDIT_TAG = 3;
 static const int EILSEQ = 84;
 static const int EINTR = 4;
 static const int EINVAL = 22;
+static const int EMPTY_CELL = 0;
 static const int ENCODE_MAX_DEPTH = 1000;
 static const int ENC_2BYTE = 64;
 static const int ENC_2WORD = 256;

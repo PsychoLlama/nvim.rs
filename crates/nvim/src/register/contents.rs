@@ -18,6 +18,7 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// The motion type of register `regname`, and its width if blockwise.
 ///

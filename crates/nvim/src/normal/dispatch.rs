@@ -44,9 +44,9 @@ use crate::mbyte::{
 use crate::memory::xfree;
 use crate::normal::{
     B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CPO_DIGRAPH, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL,
-    NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState,
-    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
-    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
+    NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, add_to_showcmd,
+    check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
+    normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmd_idx, nv_cmds,
     nv_max_linear, set_vcount_ca, start_selection,
 };
@@ -58,7 +58,7 @@ use crate::state::{
 };
 use crate::strings::vim_strchr;
 use crate::types::{
-    GraphemeState, OP_COLON, OP_NOP, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
+    GraphemeState, NUL, OP_COLON, OP_NOP, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use ::libc::qsort;

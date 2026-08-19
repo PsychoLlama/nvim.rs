@@ -16,7 +16,7 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
 use crate::types::builders::{DictBuf, static_cstring};
-use crate::types::{Object, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL};
+use crate::types::{NUL, Object, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL};
 
 /// What the `'shada'` option allows a write to contain.
 struct Limits {

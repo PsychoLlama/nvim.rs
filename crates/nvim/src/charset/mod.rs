@@ -37,7 +37,7 @@ use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::strtoimax;
 use crate::path::path_has_wildcard;
 use crate::types::{
-    FAIL, OK, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T,
+    FAIL, NUL, OK, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T,
     varnumber_T,
 };
 use ::libc::{__errno_location, abort, strlen};
@@ -74,7 +74,6 @@ const CT_PRINT_CHAR: uint8_t = 0x10;
 const CT_ID_CHAR: uint8_t = 0x20;
 const CT_FNAME_CHAR: uint8_t = 0x40;
 
-const NUL: c_int = 0;
 const TAB: c_int = 9;
 const NL: c_int = 10;
 const EOL_MAC: c_int = 2;

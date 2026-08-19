@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{CONV_NONE, FAIL, OK};
+use crate::types::{CONV_NONE, FAIL, NUL, OK};
 
 /// Allocate a `dictitem_T` sized for a `key_len`-byte key, and copy the key in.
 ///

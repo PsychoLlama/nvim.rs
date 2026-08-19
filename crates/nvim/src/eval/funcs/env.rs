@@ -4,8 +4,8 @@
 
 use super::args::frame;
 use super::{
-    ADDR_LINES, ENV_SEPCHAR, EX_NOSPC, EXPAND_FILES, NUL, kXDGCacheHome, kXDGConfigDirs,
-    kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
+    ADDR_LINES, ENV_SEPCHAR, EX_NOSPC, EXPAND_FILES, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome,
+    kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
 use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts};
 use crate::eval::typval::{
@@ -31,7 +31,7 @@ use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
 use crate::semsg_c;
 use crate::types::{
-    CMD_USER, EvalFuncData, FAIL, OK, OptInt, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING,
+    CMD_USER, EvalFuncData, FAIL, NUL, OK, OptInt, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING,
     XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown,
     kSpecialVarNull, list_T, typval_T, varnumber_T,
 };

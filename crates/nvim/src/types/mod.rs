@@ -5,6 +5,7 @@
 // files can `use super::*`.
 pub mod api;
 pub mod arglist;
+pub mod ascii;
 pub mod autocmd;
 pub mod buffer;
 pub mod builders;
@@ -123,6 +124,7 @@ mod name_uniqueness;
 
 pub use self::api::*;
 pub use self::arglist::*;
+pub use self::ascii::*;
 pub use self::autocmd::*;
 pub use self::buffer::*;
 pub use self::builders::*;

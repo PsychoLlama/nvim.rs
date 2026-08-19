@@ -1,7 +1,7 @@
 use crate::api::private::helpers::cstr_as_string;
 use crate::map::{MapKey, mh_realloc};
 use crate::memory::xrealloc;
-use crate::types::{MHPutStatus, MapHash, Set_glyph, String_0, size_t, uint32_t};
+use crate::types::{MHPutStatus, MapHash, NUL, Set_glyph, String_0, size_t, uint32_t};
 use ::libc::{abort, memcpy, strlen};
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
@@ -116,5 +116,4 @@ pub unsafe fn mh_put_glyph(
     };
 }
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

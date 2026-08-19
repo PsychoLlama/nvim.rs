@@ -332,7 +332,6 @@ pub const FORCE_NOBIN: c_int = 2 as c_int;
 pub const EXFLAG_LIST: c_int = 0x1 as c_int;
 pub const EXFLAG_NR: c_int = 0x2 as c_int;
 pub const EXFLAG_PRINT: c_int = 0x4 as c_int;
-pub const NUL: c_int = '\0' as c_int;
 pub const CPO_ALTREAD: c_int = 'a' as c_int;
 pub const CPO_BAR: c_int = 'b' as c_int;
 pub const CPO_EXECBUF: c_int = 'e' as c_int;

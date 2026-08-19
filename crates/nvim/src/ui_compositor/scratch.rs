@@ -17,7 +17,7 @@ use crate::types::{sattr_T, schar_T};
 
 /// An empty cell: never drawn into, or the right half of a double-width
 /// character whose left half carries the whole thing.
-pub(super) const NUL: schar_T = 0;
+pub(super) const EMPTY_CELL: schar_T = 0;
 
 /// The default grid's own text and attributes for the row being composed.
 pub(super) type Backdrop<'a> = (&'a [schar_T], &'a [sattr_T]);
@@ -62,8 +62,8 @@ pub(super) fn blend(
     let mut i = cells.start;
     while i < cells.end {
         let mut width = 1;
-        let mut thru = (line[i] == blank || line[i] == braille) && bg_line[i] != NUL;
-        if i + 1 < end && bg_line[i + 1] == NUL {
+        let mut thru = (line[i] == blank || line[i] == braille) && bg_line[i] != EMPTY_CELL;
+        if i + 1 < end && bg_line[i + 1] == EMPTY_CELL {
             width = 2;
             thru &= line[i + 1] == blank || line[i + 1] == braille;
         }

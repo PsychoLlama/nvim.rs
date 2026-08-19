@@ -13,13 +13,12 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     ALPHA, ANY, DIGIT, EXACTLY, FNAME, GRAPHEME_STATE_INIT, HASWIDTH, HEAD, HEX, IDENT, KWORD,
-    LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NHEAD, NHEX, NLOWER, NOCTAL, NOT_MULTI, NUL, NUPPER,
-    NWHITE, NWORD, OCTAL, PRINT, SFNAME, SIDENT, SIMPLE, SKWORD, SPRINT, UPPER, WHITE, WORD,
-    getchr, magic, one_exactly, peekchr, re_multi_type, reg_prev_sub, regparse, skipchr, ungetchr,
-    unmagic,
+    LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NHEAD, NHEX, NLOWER, NOCTAL, NOT_MULTI, NUPPER, NWHITE,
+    NWORD, OCTAL, PRINT, SFNAME, SIDENT, SIMPLE, SKWORD, SPRINT, UPPER, WHITE, WORD, getchr, magic,
+    one_exactly, peekchr, re_multi_type, reg_prev_sub, regparse, skipchr, ungetchr, unmagic,
 };
 use crate::semsg;
-use crate::types::{GraphemeState, uint8_t};
+use crate::types::{GraphemeState, NUL, uint8_t};
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `classcodes`) paired them. The `\_x` form of each is the

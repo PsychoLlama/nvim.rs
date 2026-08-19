@@ -24,6 +24,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// Whether `c` is an ASCII letter, in either case.
 #[inline]

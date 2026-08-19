@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::os::shell::ShellOpts;
-use crate::types::{CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make};
+use crate::types::{CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

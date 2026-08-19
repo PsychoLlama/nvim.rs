@@ -11,6 +11,7 @@
 use super::*;
 use crate::global_cell::SharedCell;
 use crate::luaL_reg_table;
+use crate::types::NUL;
 
 pub(crate) static parser_meta: SharedCell<[luaL_Reg; 9]> = luaL_reg_table![
     c"__gc" => parser_gc,

@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::highlight_group::{HLF_BFOOTER, HLF_BTITLE};
+use crate::types::NUL;
 
 /// Draw one of the two border texts into the batch in progress.
 ///
@@ -61,7 +62,7 @@ unsafe fn grid_draw_bordertext(
                 }
                 // Skip partial characters within the chunk.
                 let mut p = text;
-                while *p != NUL && overflow > 0 {
+                while *p != NUL as c_char && overflow > 0 {
                     overflow -= utf_ptr2cells(p);
                     p = p.offset(utfc_ptr2len(p) as isize);
                 }

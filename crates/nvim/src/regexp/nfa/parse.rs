@@ -16,14 +16,14 @@ use crate::regexp::{
     MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NFA_CONCAT, NFA_EMPTY, NFA_MOPEN,
     NFA_NOPEN, NFA_OR, NFA_PREV_ATOM_JUST_BEFORE, NFA_PREV_ATOM_JUST_BEFORE_NEG,
     NFA_PREV_ATOM_LIKE_PATTERN, NFA_PREV_ATOM_NO_WIDTH, NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_QUEST,
-    NFA_QUEST_NONGREEDY, NFA_STAR, NFA_STAR_NONGREEDY, NFA_ZOPEN, NOT_MULTI, NSUBEXP, NUL, RE_AUTO,
+    NFA_QUEST_NONGREEDY, NFA_STAR, NFA_STAR_NONGREEDY, NFA_ZOPEN, NOT_MULTI, NSUBEXP, RE_AUTO,
     REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, curchr,
     getchr, getdecchrs, had_endbrace, magic, magic_prefix, nfa_re_flags, parse_state_T, peekchr,
     re_multi_type, read_limits, reg_magic, regflags, regnpar, regnzpar, restore_parse_state,
     save_parse_state, skipchr, skipchr_keepstart, unmagic, wants_nfa,
 };
 use crate::semsg;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');

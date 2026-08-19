@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::highlight_group::HLF_N;
+use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

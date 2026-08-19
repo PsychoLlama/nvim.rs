@@ -14,8 +14,8 @@
 use crate::global_cell::GlobalCell;
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
-    Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, SpellAddType, VimState,
-    cmdarg_T, getf_values, int16_t, oparg_T, pos_T, size_t, smt_T, uint16_t,
+    Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Object, SpellAddType,
+    VimState, cmdarg_T, getf_values, int16_t, oparg_T, pos_T, size_t, smt_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -155,7 +155,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const ML_EMPTY: c_int = 0x1 as c_int;
-pub const NUL: c_int = '\0' as c_int;
 pub const TAB: c_int = 9;
 pub const NL: c_int = '\n' as c_int;
 pub const CAR: c_int = '\r' as c_int;

@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::NUL;
 
 /// Free `watcher` and the callback and pattern it owns.
 pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {

@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::OK;
+use crate::types::{NUL, OK};
 
 /// The zeroed `switchwin_T` [`switch_win`] fills in.
 const SWITCHWIN_INITIAL_VALUE: switchwin_T = switchwin_T {
@@ -67,7 +67,7 @@ unsafe fn get_var_from(
                     if do_change_curbuf {
                         curbuf.set(buf);
                     }
-                    if *varname.add(1) == NUL {
+                    if *varname.add(1) == NUL as c_char {
                         // A bare "&": every window- or buffer-local option.
                         let opts = get_winbuf_options(c_int::from(htname == b'b' as c_int));
                         if !opts.is_null() {
@@ -78,7 +78,7 @@ unsafe fn get_var_from(
                         done = true;
                     }
                     curbuf.set(save_curbuf);
-                } else if *varname == NUL {
+                } else if *varname == NUL as c_char {
                     // An empty name: the whole scope as a dictionary.
                     let v: *const ScopeDictDictItem = match htname as u8 {
                         b'b' => &raw mut (*buf).b_bufvar,
@@ -189,7 +189,7 @@ pub(crate) unsafe fn tv_to_optval(
                 while !s.is_null() && *s.add(idx) == b'0' as c_char {
                     idx += 1;
                 }
-                if idx == 0 || *s.add(idx) != NUL {
+                if idx == 0 || *s.add(idx) != NUL as c_char {
                     err = true;
                     semsg_c!(
                         gettext(c"E521: Number required: &%s = '%s'".as_ptr()),

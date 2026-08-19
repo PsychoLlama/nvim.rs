@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
-use crate::types::MB_MAXBYTES;
+use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint};
 
 impl gotchars_state_T {

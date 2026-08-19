@@ -16,6 +16,7 @@ use core::{ptr, slice};
 
 use super::*;
 use crate::keycodes::KE_SNR;
+use crate::types::NUL;
 
 /// The name of the function `name` refers to.
 ///

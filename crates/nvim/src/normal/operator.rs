@@ -21,7 +21,7 @@ use crate::main::{
 };
 use crate::message::emsg;
 use crate::normal::{
-    BL_FIX, BL_SOL, BL_WHITE, NUL, checkclearop, checkclearopq, clearopbeep,
+    BL_FIX, BL_SOL, BL_WHITE, checkclearop, checkclearopq, clearopbeep,
     e_cmdline_window_already_open, false_0, kMTLineWise, langmap_adjust, true_0,
 };
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
@@ -29,8 +29,8 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
 use crate::types::{
-    FAIL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, VV_OP,
-    cmdarg_T,
+    FAIL, NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK,
+    VV_OP, cmdarg_T,
 };
 use crate::undo::{u_redo, u_undo, u_undoline};
 use core::ffi::{c_char, c_int};

@@ -62,7 +62,7 @@ use crate::plines::{
     win_may_fill,
 };
 use crate::strings::vim_strchr;
-use crate::types::{MotionType, colnr_T, int64_t, linenr_T, win_T, wline_T};
+use crate::types::{MotionType, NUL, colnr_T, int64_t, linenr_T, win_T, wline_T};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
@@ -101,7 +101,6 @@ pub const VALID_TOPLINE: c_int = 0x80;
 pub const true_0: c_int = 1;
 pub const false_0: c_int = 0;
 
-const NUL: c_char = 0;
 /// 'cpoptions' flag: the wrapped part of a 'number'ed line is indented too.
 const CPO_NUMCOL: c_int = 'n' as c_int;
 
@@ -154,7 +153,7 @@ impl Win {
     /// asking it where upstream would not both costs and writes.
     fn number_col(self) -> c_int {
         // SAFETY: an option string is NUL-terminated, never null.
-        let stc_empty = unsafe { *self.w_onebuf_opt.wo_stc == NUL };
+        let stc_empty = unsafe { *self.w_onebuf_opt.wo_stc == NUL as c_char };
         if self.w_onebuf_opt.wo_nu == 0 && self.w_onebuf_opt.wo_rnu == 0 && stc_empty {
             return 0;
         }
@@ -170,7 +169,7 @@ impl Win {
     /// Whether 'showbreak' is unset for this window.
     pub(super) fn showbreak_empty(self) -> bool {
         // SAFETY: a live window; the answer is a NUL-terminated string.
-        unsafe { *get_showbreak_value(self.raw()) == NUL }
+        unsafe { *get_showbreak_value(self.raw()) == NUL as c_char }
     }
 
     /// Screen lines line `lnum` takes with 'wrap' and folds accounted for but

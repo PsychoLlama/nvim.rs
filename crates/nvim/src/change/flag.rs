@@ -13,6 +13,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// The message [`change_warning`] gives, once per buffer.
 const W_READONLY: *const c_char = c"W10: Warning: Changing a readonly file".as_ptr();

@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
+use crate::types::NUL;
 use core::ops::{Deref, DerefMut};
 
 // ---------------------------------------------------------------------------

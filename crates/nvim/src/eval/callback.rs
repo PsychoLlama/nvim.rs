@@ -11,8 +11,7 @@ use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallba
 use crate::eval::userfunc::{call_func, func_ref, get_scriptlocal_funcname};
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
-    ARRAY_DICT_INIT, FUNCEXE_INIT, NUL, callback_depth, check_luafunc_name, kRetNilBool,
-    partial_name,
+    ARRAY_DICT_INIT, FUNCEXE_INIT, callback_depth, check_luafunc_name, kRetNilBool, partial_name,
 };
 use crate::lua::executor::{
     nlua_call_ref, nlua_is_table_from_lua, nlua_register_table_as_callable,
@@ -22,7 +21,7 @@ use crate::memory::xstrdup;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Arena, Callback, CallbackReader, Error, FAIL, OK, Object, OptInt, VAR_DICT, VAR_FUNC,
+    Arena, Callback, CallbackReader, Error, FAIL, NUL, OK, Object, OptInt, VAR_DICT, VAR_FUNC,
     VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, funcexe_T,
     ht_stack_T, kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };

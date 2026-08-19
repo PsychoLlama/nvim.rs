@@ -32,10 +32,10 @@ use crate::mbyte::{utf_iscomposing_legacy, utf_ptr2char, utf8len_tab, utfc_ptr2l
 use crate::spellsuggest::score::similar_chars;
 use crate::spellsuggest::walk::{DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk};
 use crate::spellsuggest::{
-    NUL, SCORE_DEL, SCORE_DELCOMP, SCORE_DELDUP, SCORE_INS, SCORE_INSCOMP, SCORE_INSDUP,
-    SCORE_SIMILAR, SCORE_SUBCOMP, SCORE_SUBST,
+    SCORE_DEL, SCORE_DELCOMP, SCORE_DELDUP, SCORE_INS, SCORE_INSCOMP, SCORE_INSDUP, SCORE_SIMILAR,
+    SCORE_SUBCOMP, SCORE_SUBST,
 };
-use crate::types::idx_T;
+use crate::types::{NUL, idx_T};
 use core::ffi::{c_char, c_int};
 
 /// The sound-fold marker for a word starting with a vowel. Adding or

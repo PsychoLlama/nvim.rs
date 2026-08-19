@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::keycodes::key_unescape;
-use crate::types::kErrorTypeNone;
+use crate::types::{NUL, kErrorTypeNone};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

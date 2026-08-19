@@ -50,7 +50,9 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
-use crate::types::{CONV_NONE, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t};
+use crate::types::{
+    CONV_NONE, NUL, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t,
+};
 use crate::ui::ui_flush;
 use ::libc::{fclose, strlen};
 
@@ -58,7 +60,7 @@ use super::flags::{flag_in_afflist, get_affitem};
 use super::wordtree::store_word;
 use super::{
     AFT_NUM, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF, FAIL, IOSIZE, MAXLINELEN, MAXWLEN,
-    NUL, OK, WF_BANNED, WF_COMPROOT, WF_FIXCAP, WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT,
+    OK, WF_BANNED, WF_COMPROOT, WF_FIXCAP, WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT,
     WF_NOCOMPBEF, WF_NOSUGGEST, WF_RARE, affentry_T, afffile_T, affheader_T, compitem_T,
     spell_message, spellinfo_T, vim_regexec_prog,
 };

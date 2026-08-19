@@ -19,7 +19,7 @@ use super::attr::named_addr_type;
 use super::complete::command_complete_name;
 use super::{
     EX_BANG, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_KEEPSCRIPT, EX_NEEDARG, EX_NOSPC, EX_RANGE,
-    EX_REGSTR, EX_TRLBAR, LUA_NOREF, NUL, Scope, ucmd_list, ucmd_name, ucmds,
+    EX_REGSTR, EX_TRLBAR, LUA_NOREF, Scope, ucmd_list, ucmd_name, ucmds,
 };
 use crate::api::private::helpers::{
     arena_dict, arena_string, cstr_as_string, dict_put, dict_put_str,
@@ -38,7 +38,7 @@ use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Dict, LuaRef, Object, buf_T, garray_T, int64_t, size_t, ucmd_T, uint32_t,
+    Arena, Dict, LuaRef, NUL, Object, buf_T, garray_T, int64_t, size_t, ucmd_T, uint32_t,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
@@ -228,7 +228,7 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
             cols.pad_to(25, over);
 
             let end = cols.len;
-            buf[end] = NUL;
+            buf[end] = NUL as c_char;
         });
         msg_outtrans(IObuff.ptr().cast::<c_char>(), 0, false);
 
@@ -237,7 +237,7 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
             msg_puts_hl(text, HLF_8, false);
             xfree(text.cast());
             // The definition goes on a line of its own.
-            if *cmd.uc_rep != NUL {
+            if *cmd.uc_rep != NUL as c_char {
                 msg_puts(c"\n                                               ".as_ptr());
             }
         }

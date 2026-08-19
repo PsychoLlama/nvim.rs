@@ -51,8 +51,9 @@ use crate::pos::MAXCOL;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, LuaRetMode, OK, Object, OptInt, OptVal, OptValData,
-    exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString, linenr_T, size_t, win_T,
+    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, LuaRetMode, NUL, OK, Object, OptInt, OptVal,
+    OptValData, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString, linenr_T, size_t,
+    win_T,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::{semsg_c, smsg_c};
@@ -64,7 +65,7 @@ pub use tags::ex_helptags;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{LuaRetMode, c_char, c_int, file_comparison};
+    use super::{LuaRetMode, c_int, file_comparison};
     use core::ffi::c_uint;
 
     /// `find_tags` flags.
@@ -97,7 +98,6 @@ mod flag {
     /// `OptVal`'s string tag.
     pub const kOptValTypeString: c_int = 2;
 
-    pub const NUL: c_char = 0;
     /// `IObuff`'s size, which every line read here must fit in.
     pub const IOSIZE: c_int = 1025;
     /// `NameBuff`'s size, and the longest path this will build.
@@ -105,7 +105,7 @@ mod flag {
 }
 
 use flag::{
-    DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, IOSIZE, NUL, OPT_LOCAL, TAG_HELP, TAG_KEEP_LANG,
+    DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, IOSIZE, OPT_LOCAL, TAG_HELP, TAG_KEEP_LANG,
     TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kOptValTypeString, kRetNilBool,
     kRetObject,
 };
@@ -163,8 +163,8 @@ pub unsafe fn ex_help(eap: *mut exarg_T) {
     let lang = unsafe { check_help_lang(arg) };
 
     // SAFETY: caller contract.
-    let helpbang = unsafe { !eap.is_null() && (*eap).forceit != 0 && *arg == NUL };
-    if unsafe { *arg == NUL } && !helpbang {
+    let helpbang = unsafe { !eap.is_null() && (*eap).forceit != 0 && *arg == NUL as c_char };
+    if unsafe { *arg == NUL as c_char } && !helpbang {
         arg = c"help.txt".as_ptr().cast_mut();
     }
 
@@ -273,14 +273,14 @@ unsafe fn split_off_next_cmd(eap: *mut exarg_T) {
     // SAFETY: caller contract.
     unsafe {
         let mut arg = (*eap).arg;
-        while *arg != NUL {
+        while *arg != NUL as c_char {
             if *arg == b'\n' as c_char
                 || *arg == b'\r' as c_char
                 || (*arg == b'|' as c_char
-                    && *arg.offset(1) != NUL
+                    && *arg.offset(1) != NUL as c_char
                     && *arg.offset(1) != b'|' as c_char)
             {
-                *arg = NUL;
+                *arg = NUL as c_char;
                 arg = arg.offset(1);
                 (*eap).nextcmd = arg;
                 return;
@@ -301,7 +301,7 @@ unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
     unsafe {
         let mut p = arg.add(strlen(arg)).offset(-1);
         while p > arg && ascii_iswhite(*p as c_int) && *p.offset(-1) != b'\\' as c_char {
-            *p = NUL;
+            *p = NUL as c_char;
             p = p.offset(-1);
         }
     }
@@ -488,7 +488,7 @@ pub unsafe fn check_help_lang(arg: *mut c_char) -> *mut c_char {
             && ascii_isalpha(*arg.offset(len - 2) as c_int)
             && ascii_isalpha(*arg.offset(len - 1) as c_int)
         {
-            *arg.offset(len - 3) = NUL;
+            *arg.offset(len - 3) = NUL as c_char;
             return arg.offset(len - 2);
         }
         ptr::null_mut()
@@ -647,13 +647,13 @@ pub unsafe fn find_help_tags(
 /// `file` holds `num_file` writable NUL-terminated strings.
 pub unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
     // The preferred language as a `@ab` suffix, or empty for English.
-    let mut suffix = [NUL; 4];
+    let mut suffix = [NUL as c_char; 4];
     // SAFETY: 'helplang' is a NUL-terminated option string; a non-empty one
     // always has at least two bytes, since it is a comma-separated list of
     // two-letter codes.
     unsafe {
         let hlg = p_hlg.get();
-        if *hlg != NUL && (*hlg != b'e' as c_char || *hlg.offset(1) != b'n' as c_char) {
+        if *hlg != NUL as c_char && (*hlg != b'e' as c_char || *hlg.offset(1) != b'n' as c_char) {
             suffix[0] = b'@' as c_char;
             suffix[1] = *hlg;
             suffix[2] = *hlg.offset(1);
@@ -684,16 +684,16 @@ pub unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
             }
             if j == num_file {
                 // The item exists only with "@en": drop the suffix.
-                *tag.offset(len as isize) = NUL;
+                *tag.offset(len as isize) = NUL as c_char;
             }
         }
 
-        if suffix[0] != NUL {
+        if suffix[0] != NUL as c_char {
             for i in 0..num_file {
                 let tag = *file.offset(i as isize);
                 let len = strlen(tag) as c_int - 3;
                 if len > 0 && strcmp(tag.offset(len as isize), suffix.as_ptr()) == 0 {
-                    *tag.offset(len as isize) = NUL;
+                    *tag.offset(len as isize) = NUL as c_char;
                 }
             }
         }

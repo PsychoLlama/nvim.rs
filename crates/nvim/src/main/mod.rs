@@ -248,7 +248,6 @@ pub static ui_ext_names: GlobalCell<[*const c_char; 10]> = GlobalCell::new([
     c"ext_termcolors".as_ptr(),
     c"_debug_float".as_ptr(),
 ]);
-pub(crate) const NUL: c_int = '\0' as c_int;
 pub(crate) const PATHSEP: c_int = '/' as c_int;
 pub static last_cursormoved_win: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());

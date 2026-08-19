@@ -121,7 +121,6 @@ pub const URL_BACKSLASH: C2Rust_Unnamed_21 = 2;
 pub const URL_SLASH: C2Rust_Unnamed_21 = 1;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const MAXPATHL: c_int = 4096;
-pub const NUL: c_int = 0;
 pub const PATHSEP: c_int = '/' as c_int;
 pub const PATHSEPSTR: [c_char; 2] = [b'/' as c_char, 0];
 pub const MAXSUFLEN: c_int = 30;

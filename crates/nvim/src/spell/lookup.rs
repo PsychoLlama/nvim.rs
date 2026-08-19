@@ -50,15 +50,15 @@ use crate::message::emsg;
 use crate::os::cshim::{gettext, strncmp};
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
-use crate::types::{garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t, uint32_t};
+use crate::types::{NUL, garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t, uint32_t};
 use ::libc::strlen;
 
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,
 };
 use super::{
-    FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, NUL,
-    SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, WF_ALLCAP, WF_BANNED, WF_COMPROOT, WF_FIXCAP,
+    FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, SP_BAD,
+    SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, WF_ALLCAP, WF_BANNED, WF_COMPROOT, WF_FIXCAP,
     WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT, WF_NOCOMPBEF, WF_ONECAP, WF_PFX_NC, WF_RARE,
     WF_RAREPFX, WF_REGION, count_syllables, e_format, matchinf_T, spell_valid_case,
 };

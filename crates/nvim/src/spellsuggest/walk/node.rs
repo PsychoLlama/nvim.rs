@@ -45,11 +45,11 @@ use crate::spellsuggest::walk::{
     FLAG_PREFIX_OK, PFD_NOTSPECIAL, PFD_PREFIXTREE, STACK_SIZE, State, Walk,
 };
 use crate::spellsuggest::{
-    MAXWLEN, NUL, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, WF_ALLCAP, WF_BANNED,
+    MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, WF_ALLCAP, WF_BANNED,
     WF_KEEPCAP, WF_MIXCAP, WF_NEEDCOMP, WF_NOSUGGEST, WF_ONECAP, WF_RARE, WF_RAREPFX, WF_REGION,
     badword_captype, suginfo_T,
 };
-use crate::types::{idx_T, size_t};
+use crate::types::{NUL, idx_T, size_t};
 use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;

@@ -7,8 +7,8 @@ use core::ptr::null_mut;
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::buflist_findnr;
+use crate::eval::kMarkAll;
 use crate::eval::typval::{tv_get_string_chk, tv_list_find, tv_list_find_nr, tv_list_len};
-use crate::eval::{NUL, kMarkAll};
 use crate::global_cell::GlobalCell;
 use crate::main::{VIsual, VIsual_active, curbuf, curwin};
 use crate::mark::mark_get;
@@ -16,8 +16,8 @@ use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::types::{
-    FAIL, OK, VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T, pos_T,
-    typval_T, uint8_t, win_T,
+    FAIL, NUL, OK, VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T,
+    pos_T, typval_T, uint8_t, win_T,
 };
 use ::libc::strcmp;
 

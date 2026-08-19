@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::swmsg_c;
+use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.

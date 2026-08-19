@@ -51,7 +51,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
     CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMOD_BROWSE, CMOD_LOCKMARKS,
-    ExtmarkOp, FAIL, OptVal, OptValData, OptValType, String_0, UndoObjectType, VV_OLDFILES,
+    ExtmarkOp, FAIL, NUL, OptVal, OptValData, OptValType, String_0, UndoObjectType, VV_OLDFILES,
     bcount_t, bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T, getf_retvalues,
     linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
@@ -216,7 +216,6 @@ pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const EXFLAG_NR: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const EXFLAG_PRINT: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;

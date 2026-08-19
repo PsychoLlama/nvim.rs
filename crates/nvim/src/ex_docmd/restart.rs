@@ -14,7 +14,7 @@ use crate::channel::{channel_close, channel_job_start, channel_proc, find_channe
 use crate::eval::typval::{kCallbackNone, tv_get_string, tv_list_len};
 use crate::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
 use crate::event::proc::{proc_stop, proc_wait};
-use crate::ex_docmd::{GA_EMPTY_INIT_VALUE, NUL, kChannelPartAll};
+use crate::ex_docmd::{GA_EMPTY_INIT_VALUE, kChannelPartAll};
 use crate::log::{LOGLVL_INF, logmsg_c};
 use crate::main::{cmdmod, current_ui, e_invchan, exiting, getout};
 use crate::memory::{arena_mem_free, strequal, xcalloc, xfree, xmemdupz, xstrdup};
@@ -25,8 +25,8 @@ use crate::os::cshim::strstr;
 use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    ArenaMem, Array, CMOD_CONFIRM, Callback, CallbackReader, Dict, Error, KeyValuePair, Object,
-    VV_ARGV, VV_EXITREASON, VV_PROGPATH, exarg_T, kErrorTypeNone, kObjectTypeBoolean,
+    ArenaMem, Array, CMOD_CONFIRM, Callback, CallbackReader, Dict, Error, KeyValuePair, NUL,
+    Object, VV_ARGV, VV_EXITREASON, VV_PROGPATH, exarg_T, kErrorTypeNone, kObjectTypeBoolean,
     kObjectTypeDict, kObjectTypeString, key_value_pair, listitem_T, object_data, ptrdiff_t, size_t,
     uint16_t, varnumber_T,
 };

@@ -135,7 +135,6 @@ pub const MAP_INIT: Map_uint64_t_ptr_t = Map_uint64_t_ptr_t {
 pub const MH_TOMBSTONE: c_uint = UINT32_MAX;
 pub const VARNUMBER_MAX: c_long = INT64_MAX;
 pub const VARNUMBER_MIN: c_long = INT64_MIN;
-pub const NUL: c_int = '\0' as c_int;
 pub const BS: c_int = '\u{8}' as c_int;
 pub const TAB: c_int = '\t' as c_int;
 pub const NL: c_int = '\n' as c_int;

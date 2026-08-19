@@ -17,11 +17,11 @@ use super::piece::reg;
 use crate::main::rc_did_emsg;
 use crate::regexp::{
     ADD_NL, BACKREF, BOL, BOW, EOL, EOW, EXACTLY, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON,
-    NEWL, NL, NUL, REG_PAREN, Rex, SIMPLE, SPSTART, WORST, getchr, had_eol, magic, magic_prefix,
+    NEWL, NL, REG_PAREN, Rex, SIMPLE, SPSTART, WORST, getchr, had_eol, magic, magic_prefix,
     one_exactly, prev_at_start, reg_magic, reg_string, unmagic,
 };
 use crate::semsg;
-use crate::types::uint8_t;
+use crate::types::{NUL, uint8_t};
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');

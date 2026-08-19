@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::array_add;
-use crate::types::PUT_CURSEND;
+use crate::types::{NUL, PUT_CURSEND};
 
 pub unsafe extern "C" fn nvim_paste(
     mut channel_id: uint64_t,

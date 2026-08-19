@@ -41,8 +41,8 @@ use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, OK, OptInt, OptVal, OptValData, String_0, StringBuilder, aco_save_T, colnr_T, exarg_T,
-    handle_T, int64_t, kFalse, linenr_T, size_t, varnumber_T, win_T,
+    FAIL, NUL, OK, OptInt, OptVal, OptValData, String_0, StringBuilder, aco_save_T, colnr_T,
+    exarg_T, handle_T, int64_t, kFalse, linenr_T, size_t, varnumber_T, win_T,
 };
 use crate::winlayer::buffers;
 use ::libc::strcmp;

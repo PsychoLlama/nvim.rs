@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::array_add;
+use crate::types::NUL;
 
 pub unsafe extern "C" fn nvim_buf_line_count(mut buf: Buffer, mut err: *mut Error) -> Integer {
     unsafe {

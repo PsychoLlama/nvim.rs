@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 /// Highlight attributes for the character at `col`.
 ///

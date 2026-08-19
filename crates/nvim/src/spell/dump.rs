@@ -45,7 +45,7 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, OK, OptVal, OptValData, exarg_T, hashitem_T, idx_T, langp_T, linenr_T, size_t,
+    Direction, NUL, OK, OptVal, OptValData, exarg_T, hashitem_T, idx_T, langp_T, linenr_T, size_t,
     slang_T, wordcount_T,
 };
 use ::libc::{strcat, strcmp, strcpy, strlen};
@@ -54,7 +54,7 @@ use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
 use super::lookup::valid_word_prefix;
 use super::{
-    IOSIZE, MAXWLEN, NUL, OPT_LOCAL, WC_KEY_OFF, WF_ALLCAP, WF_BANNED, WF_CAPMASK, WF_FIXCAP,
+    IOSIZE, MAXWLEN, OPT_LOCAL, WC_KEY_OFF, WF_ALLCAP, WF_BANNED, WF_CAPMASK, WF_FIXCAP,
     WF_KEEPCAP, WF_NEEDCOMP, WF_ONECAP, WF_RARE, WF_RAREPFX, WF_REGION, kOptValTypeBoolean,
 };
 

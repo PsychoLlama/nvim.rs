@@ -47,7 +47,7 @@ use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FILE, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T, uint8_t, uint16_t,
+    FILE, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T, uint8_t, uint16_t,
     uintmax_t,
 };
 use ::libc::{fclose, fwrite, strlen};
@@ -55,7 +55,7 @@ use ::libc::{fclose, fwrite, strlen};
 use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compress};
 use super::write::{clear_node, put_node};
 use super::{
-    EOF, FAIL, IOSIZE, MAXPATHL, MAXWLEN, NUL, OK, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION,
+    EOF, FAIL, IOSIZE, MAXPATHL, MAXWLEN, OK, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION,
     kEqualFiles, spell_load_file, spell_message, spellinfo_T,
 };
 

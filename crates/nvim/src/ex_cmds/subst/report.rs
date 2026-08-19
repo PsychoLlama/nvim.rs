@@ -15,7 +15,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, buflist_findnr};
 use crate::decoration::bufhl_add_hl_pos_offset;
-use crate::ex_cmds::{NUL, PreviewLines, SID_NONE, SubResult, do_sub, kOptValTypeString};
+use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub, kOptValTypeString};
 use crate::main::{
     KeyTyped, curbuf, curwin, e_interr, got_int, msg_buf, p_icm, p_rdt, p_report, p_shm,
     sub_nlines, sub_nsubs,
@@ -30,8 +30,8 @@ use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
 use crate::types::{
-    OptInt, OptVal, OptValData, String_0, buf_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
-    lpos_T, pos_T, size_t,
+    NUL, OptInt, OptVal, OptValData, String_0, buf_T, colnr_T, exarg_T, handle_T, int64_t,
+    linenr_T, lpos_T, pos_T, size_t,
 };
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};

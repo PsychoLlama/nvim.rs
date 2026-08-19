@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 /// Virtual column of `pos`, in up to three flavours:
 ///
@@ -45,7 +46,7 @@ pub unsafe fn getvcol(
         if cstype == CharsizeKind::Fast {
             let use_tabstop = csarg.use_tabstop;
             loop {
-                if *ci.ptr == NUL {
+                if *ci.ptr == NUL as c_char {
                     // The cursor on a NUL is treated like a one-cell char.
                     char_size = CharSize { width: 1, head: 0 };
                     break;
@@ -62,7 +63,7 @@ pub unsafe fn getvcol(
             loop {
                 char_size = charsize_regular(&mut csarg, ci.ptr, vcol, ci.chr.value);
                 // Don't go past the end of the line.
-                if *ci.ptr == NUL {
+                if *ci.ptr == NUL as c_char {
                     // A NUL at the end of the line takes one column, unless
                     // there is virtual text.
                     char_size.width = 1 + csarg.cur_text_width_left + csarg.cur_text_width_right;
@@ -78,7 +79,10 @@ pub unsafe fn getvcol(
             }
         }
 
-        if *ci.ptr == NUL && end_col < MAXCOL && end_col as isize > ci.ptr.offset_from(line) {
+        if *ci.ptr == NUL as c_char
+            && end_col < MAXCOL
+            && end_col as isize > ci.ptr.offset_from(line)
+        {
             (*pos).col = ci.ptr.offset_from(line) as colnr_T;
         }
 

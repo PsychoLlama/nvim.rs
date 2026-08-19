@@ -11,6 +11,7 @@ use super::*;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
 use crate::semsg_c;
+use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

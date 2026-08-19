@@ -3,7 +3,7 @@
 
 use super::args::frame;
 use super::{
-    C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, f_environ, false_0,
+    C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, false_0,
     kChannelPartRpc, kChannelStreamProc, kProcTypePty,
 };
 use crate::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
@@ -47,9 +47,9 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, Integer,
-    VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER, buf_T,
-    dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
-    typval_vval_union, uint16_t, uint64_t, varnumber_T,
+    NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER,
+    buf_T, dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object,
+    typval_T, typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use core::ffi::{CStr, c_char, c_int, c_void};

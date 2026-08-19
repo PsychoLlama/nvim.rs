@@ -33,8 +33,9 @@ use crate::spell::{byte_in_str, can_compound, match_compoundrule, nofold_len, sp
 use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::walk::{FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk};
 use crate::spellsuggest::{
-    MAXWLEN, NUL, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, WF_NEEDCOMP, badword_captype,
+    MAXWLEN, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, WF_NEEDCOMP, badword_captype,
 };
+use crate::types::NUL;
 use ::libc::strcat;
 use core::ffi::{c_char, c_int};
 use core::ptr;

@@ -22,6 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::NUL;
 
 /// The variables `win_line` passes to the functions that draw parts of a line.
 ///

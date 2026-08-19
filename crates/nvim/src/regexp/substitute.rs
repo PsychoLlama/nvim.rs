@@ -24,9 +24,9 @@ use core::ffi::{c_char, c_int};
 use super::api::with_rex;
 use super::submatch::{clear_submatch_list, fill_submatch_list};
 use super::{
-    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, Rex,
-    TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub,
-    reg_prev_sublen, regsubmatch_T, rsm,
+    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, Rex, TAB,
+    can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub, reg_prev_sublen,
+    regsubmatch_T, rsm,
 };
 use crate::eval::typval::{tv_clear, tv_get_string_buf_chk, tv_list_len};
 use crate::eval::userfunc::call_func;
@@ -43,7 +43,7 @@ use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, funcexe_T, linenr_T,
+    NUL, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, funcexe_T, linenr_T,
     partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
 };
 use ::libc::{strcpy, strlen};

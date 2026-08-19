@@ -15,6 +15,7 @@
 use super::*;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 use crate::log::logmsg_c;
+use crate::types::NUL;
 
 /// The line batch in progress. Only one exists at a time; `grid` being null
 /// means there is none.
@@ -217,7 +218,7 @@ pub unsafe fn grid_line_puts(
 
         while col < max_col
             && (textlen < 0 || (ptr.offset_from(text) as c_int) < textlen)
-            && *ptr != NUL
+            && *ptr != NUL as c_char
         {
             // How many bytes is this character, composing marks included?
             let mbyte_blen = if textlen >= 0 {

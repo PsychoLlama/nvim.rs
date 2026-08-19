@@ -296,7 +296,6 @@ unsafe fn map_get_String_int(
         };
     }
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
 pub const CPO_CONCAT: ::core::ffi::c_int = 'C' as ::core::ffi::c_int;

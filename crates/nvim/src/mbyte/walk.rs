@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::NUL;
 use core::ffi::{c_char, c_int, c_void};
 
 /// The most bytes a UTF-8 sequence can occupy in this port's decoders, which

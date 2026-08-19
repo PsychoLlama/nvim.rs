@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{NUL, kMTBlockWise, kMTCharWise, kMTLineWise};
+use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::api::private::helpers::cbuf_to_string;
 use crate::buffer::buflist_findnr;
 use crate::charset::getdigits_int;
@@ -30,8 +30,8 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg_c;
 use crate::state::virtual_active;
 use crate::types::{
-    EvalFuncData, FAIL, MotionType, OK, OP_NOP, String_0, TriState, VAR_DICT, block_def, buf_T,
-    colnr_T, kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
+    EvalFuncData, FAIL, MotionType, NUL, OK, OP_NOP, String_0, TriState, VAR_DICT, block_def,
+    buf_T, colnr_T, kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
 use ::libc::memset;
 use core::ffi::{CStr, c_char, c_int, c_void};

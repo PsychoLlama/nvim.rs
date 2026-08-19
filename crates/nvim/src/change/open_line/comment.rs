@@ -16,6 +16,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::change::*;
+use crate::types::NUL;
 
 /// What the new line's leader should be built from.
 pub(crate) enum Repl {

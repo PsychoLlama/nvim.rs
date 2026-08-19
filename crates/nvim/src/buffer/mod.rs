@@ -228,7 +228,6 @@ fn map_put_int_ptr_t(map: &mut Map_int_ptr_t, key: c_int, value: ptr_t) {
     // SAFETY: `map_put_ref` answers a live slot of the value array.
     unsafe { *val = value };
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 #[inline(always)]
 pub unsafe fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {

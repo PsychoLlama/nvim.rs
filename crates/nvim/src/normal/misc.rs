@@ -23,15 +23,15 @@ use crate::main::{
 use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
-    CA_COMMAND_BUSY, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NUL, NULL, checkclearop,
-    checkclearopq, clearop, clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left,
-    nv_operator, nv_pcmark, true_0, v_visop,
+    CA_COMMAND_BUSY, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NULL, checkclearop, checkclearopq,
+    clearop, clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark,
+    true_0, v_visop,
 };
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::syn_stack_free_all;
-use crate::types::{LineGetter, OP_NOP, cmdarg_T, linenr_T};
+use crate::types::{LineGetter, NUL, OP_NOP, cmdarg_T, linenr_T};
 use crate::ui::vim_beep;
 use crate::undo::anyBufIsChanged;
 use crate::window::do_window;

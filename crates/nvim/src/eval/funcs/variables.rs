@@ -2,7 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, NUL, dummy_ap};
+use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::eval::typval::{
     callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_string,
     tv_get_string_chk, tv_islocked,
@@ -15,8 +15,8 @@ use crate::memory::xmalloc;
 use crate::os::cshim::gettext;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
-    Callback, Callback_data, EvalFuncData, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, typval_T,
-    varnumber_T,
+    Callback, Callback_data, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING,
+    typval_T, varnumber_T,
 };
 use crate::{semsg, semsg_c};
 use ::libc::strlen;

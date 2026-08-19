@@ -45,10 +45,10 @@ use crate::spellsuggest::score::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::spellsuggest::{
-    MAXWLEN, NUL, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB,
-    WF_CAPMASK, WF_KEEPCAP, WF_NOSUGGEST, WF_REGION, sps_flags, suginfo_T,
+    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB, WF_CAPMASK,
+    WF_KEEPCAP, WF_NOSUGGEST, WF_REGION, sps_flags, suginfo_T,
 };
-use crate::types::{hashitem_T, idx_T, int16_t, langp_T, linenr_T, slang_T, uint8_t};
+use crate::types::{NUL, hashitem_T, idx_T, int16_t, langp_T, linenr_T, slang_T, uint8_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 

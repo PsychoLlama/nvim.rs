@@ -36,8 +36,7 @@ use self::scan::{parse_json_number, parse_json_string};
 use self::stack::{Container, Decoder};
 
 /// The ASCII bytes JSON's grammar names.  `BS`/`FF` are only reachable
-/// through an escape; the other four are the whitespace between tokens.
-pub(crate) const NUL: u8 = 0x00;
+/// through an escape; the other three are the whitespace between tokens.
 pub(crate) const BS: u8 = 0x08;
 pub(crate) const TAB: u8 = 0x09;
 pub(crate) const NL: u8 = 0x0a;

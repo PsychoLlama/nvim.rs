@@ -17,7 +17,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// `:` for a Visual region, and the `!` filter `=` and `gq` fall back to.
 ///

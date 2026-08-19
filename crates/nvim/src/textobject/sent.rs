@@ -22,7 +22,7 @@ use crate::memline::{decl, gchar_pos, inc, incl, ml_get};
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
-use crate::types::{Direction, FAIL, OK, oparg_T, pos_T};
+use crate::types::{Direction, FAIL, NUL, OK, oparg_T, pos_T};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
 type StepFn = unsafe fn(*mut pos_T) -> c_int;

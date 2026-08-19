@@ -8,12 +8,12 @@ use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::eval::{
     EXPAND_COMMANDS, EXPAND_ENV_VARS, EXPAND_EXPRESSION, EXPAND_FUNCTIONS, EXPAND_NOTHING,
-    EXPAND_SETTINGS, EXPAND_USER_VARS, NUL,
+    EXPAND_SETTINGS, EXPAND_USER_VARS,
 };
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
 use crate::strings::vim_strchr;
-use crate::types::{CMD_call, CMD_const, CMD_let, cmdidx_T, expand_T};
+use crate::types::{CMD_call, CMD_const, CMD_let, NUL, cmdidx_T, expand_T};
 use ::libc::{strlen, strpbrk};
 
 /// The characters that end the plain-name part of an expression: whatever

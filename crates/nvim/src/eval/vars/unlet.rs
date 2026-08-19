@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// `:unlet`.
 ///
@@ -148,7 +148,7 @@ unsafe fn do_unlet_var(
             // expanded one.  Terminate the name in place, so that the error
             // does not quote the rest of the command.
             let cc = *name_end;
-            *name_end = NUL;
+            *name_end = NUL as c_char;
             let ret = if *(*lp).ll_name == b'$' as c_char {
                 vim_unsetenv_ext((*lp).ll_name.add(1));
                 OK
@@ -250,7 +250,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
         let mut dict: *mut dict_T = ptr::null_mut();
         let mut ht = find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict);
 
-        if !ht.is_null() && *varname != NUL {
+        if !ht.is_null() && *varname != NUL as c_char {
             // The dictionary whose lock decides whether the item may go.
             let mut d = get_current_funccal_dict(ht);
             if d.is_null() {

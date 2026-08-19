@@ -21,11 +21,11 @@ use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
 use crate::os::cshim::gettext;
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
-use crate::types::{fromto_T, garray_T};
+use crate::types::{NUL, fromto_T, garray_T};
 use ::libc::{strcat, strcmp, strcpy, strlen};
 
 use super::aff::{AffState, is_digit_byte};
-use super::{MAXWLEN, NUL, e_afftrailing, spellinfo_T};
+use super::{MAXWLEN, e_afftrailing, spellinfo_T};
 
 /// Append `KEYWORD value` to the text `:spellinfo` shows.
 ///

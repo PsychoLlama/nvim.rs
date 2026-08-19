@@ -20,14 +20,14 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    BACKPOS_INITIAL, NSUBEXP, NUL, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, backpos,
-    backpos_T, bt_regprog_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec,
+    BACKPOS_INITIAL, NSUBEXP, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, backpos, backpos_T,
+    bt_regprog_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec,
     init_regexec_multi, make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos, reg_getline,
     reg_startzp, reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, unref_extmatch,
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
-    buf_T, colnr_T, linenr_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
+    NUL, buf_T, colnr_T, linenr_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
     uint32_t, win_T,
 };
 

@@ -159,7 +159,6 @@ pub const SEARCH_STAT_BUF_LEN: ::core::ffi::c_int = 16;
 pub const LSIZE: C2Rust_Unnamed_29 = 512;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const CPO_SEARCH: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
 pub const CPO_SHOWMATCH: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;

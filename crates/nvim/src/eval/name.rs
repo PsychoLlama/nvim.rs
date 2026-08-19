@@ -15,8 +15,8 @@ use crate::charset::{skipwhite, vim_isIDc};
 use crate::eval::userfunc::eval_fname_script;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
-    AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, KS_EXTRA, NUL, OPT_GLOBAL, OPT_LOCAL,
-    eval_to_string, namespace_char,
+    AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, KS_EXTRA, OPT_GLOBAL, OPT_LOCAL, eval_to_string,
+    namespace_char,
 };
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::e_invexpr2;
@@ -25,7 +25,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::option::find_option_end;
 use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{OptIndex, VAR_PARTIAL, VV_LUA, partial_T, size_t, typval_T, uint8_t};
+use crate::types::{NUL, OptIndex, VAR_PARTIAL, VV_LUA, partial_T, size_t, typval_T, uint8_t};
 use ::libc::strlen;
 
 /// The length of the environment-variable name at the cursor, which is

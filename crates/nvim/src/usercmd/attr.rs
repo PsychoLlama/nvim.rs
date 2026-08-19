@@ -23,7 +23,7 @@ use super::{
     ADDR_QUICKFIX, ADDR_TABS, ADDR_WINDOWS, EX_BANG, EX_BUFNAME, EX_COUNT, EX_DFLALL, EX_EXTRA,
     EX_KEEPSCRIPT, EX_NEEDARG, EX_NOSPC, EX_RANGE, EX_REGSTR, EX_TRLBAR, EX_XFILE, EX_ZEROR,
     EXPAND_BUFFERS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_SHELLCMDLINE, EXPAND_USER_DEFINED,
-    EXPAND_USER_LIST, FAIL, NUL, OK, UC_BUFFER,
+    EXPAND_USER_LIST, FAIL, OK, UC_BUFFER,
 };
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int;
@@ -31,7 +31,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
-use crate::types::{cmd_addr_T, size_t, uint32_t};
+use crate::types::{NUL, cmd_addr_T, size_t, uint32_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::slice;
 
@@ -104,10 +104,10 @@ pub unsafe fn parse_addr_type_arg(
     // SAFETY: caller contract; the walk stops at the NUL.
     unsafe {
         let mut i = 0;
-        while *value.add(i) != NUL && !ascii_iswhite(*value.add(i) as c_int) {
+        while *value.add(i) != NUL as c_char && !ascii_iswhite(*value.add(i) as c_int) {
             i += 1;
         }
-        *value.add(i) = NUL;
+        *value.add(i) = NUL as c_char;
     }
     // SAFETY: caller contract; `value` is now NUL-terminated at the word.
     unsafe {
@@ -296,7 +296,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
         // as soon as the message has been formatted.
         unsafe {
             let ch = *attr.add(len);
-            *attr.add(len) = NUL;
+            *attr.add(len) = NUL as c_char;
             semsg_c!(gettext(c"E181: Invalid attribute: %s".as_ptr()), attr,);
             *attr.add(len) = ch;
         }

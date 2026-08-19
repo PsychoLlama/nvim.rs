@@ -65,7 +65,6 @@ use core::ptr;
 mod header {
     use super::{ExtmarkOp, UndoObjectType, c_int, c_ulong};
 
-    pub const NUL: c_int = 0;
     pub const EOF: c_int = -1;
     pub const SIZE_MAX: c_ulong = 18446744073709551615;
     pub const MAXPATHL: c_int = 4096;

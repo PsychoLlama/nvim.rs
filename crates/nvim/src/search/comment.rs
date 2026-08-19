@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 use core::ffi::{c_char, c_int, c_void};
 
 /// Whether a raw string starting at `linep[startpos.col - 1]` ends

@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_LUA};
+use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

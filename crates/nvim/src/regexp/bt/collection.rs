@@ -23,12 +23,12 @@ use crate::regexp::{
     CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE, CLASS_FNAME,
     CLASS_GRAPH, CLASS_IDENT, CLASS_KEYWORD, CLASS_LOWER, CLASS_NONE, CLASS_PRINT, CLASS_PUNCT,
     CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, ESC, HASNL, HASWIDTH, INT_MAX,
-    JUST_CALC_SIZE, MAGIC_OFF, NUL, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE, backslash_abbr,
-    pat_byte, pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit, reg_iswordc, reg_magic,
-    reg_strict, regparse, skip_anyof, skipchr, take_bracketed, take_char_class,
+    JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE, backslash_abbr, pat_byte,
+    pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit, reg_iswordc, reg_magic, reg_strict,
+    regparse, skip_anyof, skipchr, take_bracketed, take_char_class,
 };
 use crate::semsg;
-use crate::types::uint8_t;
+use crate::types::{NUL, uint8_t};
 
 /// What a `[` at the cursor turned out to be.
 pub(crate) enum Collection {

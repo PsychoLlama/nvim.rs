@@ -11,6 +11,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 /// Does this window's block define any syntax at all?
 pub unsafe fn syntax_present(win: *mut win_T) -> bool {

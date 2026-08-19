@@ -26,7 +26,7 @@ use crate::memory::{xcalloc, xmalloc};
 use crate::message::msg_ui_flush;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Integer, OptInt, frame_T, handle_T, linenr_T, tabpage_T, win_T};
+use crate::types::{Integer, NUL, OptInt, frame_T, handle_T, linenr_T, tabpage_T, win_T};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, tabs, windows_in_tab};
 

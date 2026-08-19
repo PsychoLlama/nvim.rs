@@ -20,7 +20,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// Where the text of a line starts once its comment leader is skipped, and
 /// whether the line ends *inside* an unclosed comment.

@@ -4,7 +4,7 @@
 
 use super::args::frame;
 use super::wrappers::non_zero_arg;
-use super::{MENU_ALL_MODES, NUL, kRetNilBool, true_0};
+use super::{MENU_ALL_MODES, kRetNilBool, true_0};
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::ascii_isdigit;
@@ -38,7 +38,7 @@ use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, Object, String_0, TriState, VAR_STRING, VV_SHELL_ERROR,
+    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, TriState, VAR_STRING, VV_SHELL_ERROR,
     colnr_T, garray_T, kErrorTypeNone, kFalse, kListLenMayKnow, kNone, kObjectTypeBoolean, kTrue,
     tabpage_T, typval_T, uint8_t, varnumber_T, win_T,
 };

@@ -11,6 +11,7 @@ use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// Is the word between `arg` and `next` exactly `name`, ignoring case?
 ///

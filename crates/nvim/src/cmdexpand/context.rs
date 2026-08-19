@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::types::{
-    CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal,
+    CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal, NUL,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;

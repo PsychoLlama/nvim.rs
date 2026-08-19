@@ -17,6 +17,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// Prompt for the `"=` expression on the command line.
 ///

@@ -36,12 +36,12 @@ use crate::path::{ExpandFlags, FreeWild, add_pathsep, gen_expand_wildcards, path
 use crate::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::semsg_c;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
-use crate::types::{FAIL, FILE, exarg_T, expand_T, size_t, uint8_t};
+use crate::types::{FAIL, FILE, NUL, exarg_T, expand_T, size_t, uint8_t};
 use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::flag::{EXPAND_DIRECTORIES, IOSIZE, MAXPATHL, NUL, kEqualFiles};
+use super::flag::{EXPAND_DIRECTORIES, IOSIZE, MAXPATHL, kEqualFiles};
 
 /// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
 /// out at each site: written that way, the five calls below each wrap onto
@@ -433,9 +433,9 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
                             || *p1.offset(-1) == b'\t' as c_char)
                         && (!vim_strchr(c" \t\n\r".as_ptr(), *s.offset(1) as uint8_t as c_int)
                             .is_null()
-                            || *s.offset(1) == NUL)
+                            || *s.offset(1) == NUL as c_char)
                     {
-                        *p2 = NUL;
+                        *p2 = NUL as c_char;
                         p1 = p1.offset(1);
                         let len = p2.offset_from(p1) as size_t + strlen(fname) + 2;
                         let entry = xmalloc(len).cast::<c_char>();
@@ -494,7 +494,7 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
                     p2 = p2.offset(1);
                     continue;
                 }
-                *p2 = NUL;
+                *p2 = NUL as c_char;
                 vim_snprintf(
                     namebuff,
                     MAXPATHL as size_t,

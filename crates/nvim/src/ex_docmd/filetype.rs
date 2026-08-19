@@ -11,8 +11,8 @@ use crate::autocmd::{check_nomodeline, do_augroup, do_autocmd, do_doautocmd};
 use crate::buffer::do_modelines;
 use crate::charset::skipwhite;
 use crate::ex_docmd::{
-    FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE, NUL,
-    OPT_LOCAL, filetype_detect, filetype_indent, filetype_plugin, kOptValTypeString, kRetNilBool,
+    FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE, OPT_LOCAL,
+    filetype_detect, filetype_indent, filetype_plugin, kOptValTypeString, kRetNilBool,
 };
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
@@ -23,7 +23,7 @@ use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::env::os_getenv_noalloc;
 use crate::runtime::{DIP_ALL, source_runtime};
 use crate::types::{
-    Array, CMD_autocmd, Error, Object, OptVal, OptValData, String_0, exarg_T, kErrorTypeNone,
+    Array, CMD_autocmd, Error, NUL, Object, OptVal, OptValData, String_0, exarg_T, kErrorTypeNone,
     kFalse, kNone, kObjectTypeString, kTrue, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;

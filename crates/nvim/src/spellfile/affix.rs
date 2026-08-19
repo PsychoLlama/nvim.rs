@@ -30,15 +30,15 @@ use crate::memory::xstrlcpy;
 use crate::os::cshim::{gettext, snprintf};
 use crate::spell::{onecap_copy, spelltab};
 use crate::strings::{has_non_ascii, vim_strchr};
-use crate::types::{hashitem_T, hashtab_T, size_t};
+use crate::types::{NUL, hashitem_T, hashtab_T, size_t};
 use ::libc::{atoi, strcmp, strcpy, strlen};
 
 use super::aff::{AffState, str_equal};
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};
 use super::wordtree::tree_add_word;
 use super::{
-    AH_KEY_LEN, MAXLINELEN, NUL, PFX_FLAGS, WFP_COMPFORBID, WFP_COMPPERMIT, WFP_NC, WFP_UP,
-    affentry_T, afffile_T, affheader_T, e_afftrailing, spellinfo_T, vim_regcomp, vim_regfree,
+    AH_KEY_LEN, MAXLINELEN, PFX_FLAGS, WFP_COMPFORBID, WFP_COMPPERMIT, WFP_NC, WFP_UP, affentry_T,
+    afffile_T, affheader_T, e_afftrailing, spellinfo_T, vim_regcomp, vim_regfree,
 };
 use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 

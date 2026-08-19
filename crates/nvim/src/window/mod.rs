@@ -246,7 +246,6 @@ fn map_put_int_ptr_t(map: &mut Map_int_ptr_t, key: ::core::ffi::c_int, value: pt
     // SAFETY: `map_put_ref` answers a live slot of the value array.
     unsafe { *slot = value };
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = 9;
 pub const CAR: ::core::ffi::c_int = 13;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;

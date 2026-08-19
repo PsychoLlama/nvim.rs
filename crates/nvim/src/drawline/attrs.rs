@@ -18,6 +18,7 @@
 use super::*;
 use crate::decoration::kHlModeReplace;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 impl Cells {
     /// Work out what this cell takes from everything that is not the character

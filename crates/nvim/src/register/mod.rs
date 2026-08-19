@@ -99,11 +99,11 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::terminal::terminal_paste;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, CMOD_LOCKMARKS, CharsizeArg, ExtmarkOp, GRegFlags, MotionType, PUT_BLOCK_INNER,
-    PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT,
-    RemapValues, String_0, UndoObjectType, VAR_FIXED, bcount_t, block_def, cmd_addr_T, colnr_T,
-    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T,
-    oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, yankreg_T,
+    AdditionalData, CMOD_LOCKMARKS, CharsizeArg, ExtmarkOp, GRegFlags, MotionType, NUL,
+    PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
+    PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VAR_FIXED, bcount_t, block_def,
+    cmd_addr_T, colnr_T, exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse,
+    kBoolVarTrue, linenr_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, yankreg_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
@@ -186,7 +186,6 @@ pub const FIND_IDENT: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CPO_REGAPPEND: ::core::ffi::c_int = '>' as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;

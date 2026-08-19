@@ -15,6 +15,7 @@ use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
 use super::*;
+use crate::types::NUL;
 
 /// Compare two file names, by identity where the file system can say and by
 /// name where it cannot.

@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::array_add;
+use crate::types::NUL;
 
 pub unsafe fn parse_border_style(
     mut style: Object,

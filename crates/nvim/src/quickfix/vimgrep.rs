@@ -19,7 +19,7 @@ use crate::file_search::Name;
 use crate::regexp::RE_MAGIC;
 use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
-    CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE, FAIL, OK,
+    CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE, FAIL, NUL, OK,
 };
 use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint};

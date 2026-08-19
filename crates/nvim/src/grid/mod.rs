@@ -70,7 +70,6 @@ pub use schar::{
     schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_high, schar_len,
 };
 
-const NUL: c_char = 0;
 const kMHExisting: MHPutStatus = 0;
 const kBorderTextTitle: BorderTextType = 0;
 const kBorderTextFooter: BorderTextType = 1;

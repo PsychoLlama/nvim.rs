@@ -54,7 +54,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
-use crate::types::{OP_NOP, PUT_CURSEND, PUT_FIXINDENT, oparg_T, yankreg_T};
+use crate::types::{NUL, OP_NOP, PUT_CURSEND, PUT_FIXINDENT, oparg_T, yankreg_T};
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
 

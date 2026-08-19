@@ -26,7 +26,7 @@ use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
 use crate::message::msg_grid_validate;
 use crate::normal::{
-    ARRAY_DICT_INIT, NUL, SHOWCMD_BUFLEN, SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear,
+    ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear,
     showcmd_visual,
 };
 use crate::os::cshim::{memmove, snprintf};
@@ -34,7 +34,7 @@ use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
 use crate::types::{
-    Array, Integer, Object, OptInt, colnr_T, int64_t, kObjectTypeArray, kObjectTypeInteger,
+    Array, Integer, NUL, Object, OptInt, colnr_T, int64_t, kObjectTypeArray, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, linenr_T, object, size_t,
 };
 use crate::ui::{ui_call_msg_showcmd, ui_has};

@@ -15,8 +15,7 @@ use crate::ex_docmd::scan::{check_nextcmd, ends_excmd};
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, DT_FIRST, DT_JUMP, DT_LAST, DT_LTAG,
-    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, NUL, cmdnames,
-    kDirectionNotSet,
+    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, cmdnames, kDirectionNotSet,
 };
 use crate::main::{
     cmdmod, e_trailing_arg, g_do_tagpreview, p_pvh, postponed_split, postponed_split_flags,
@@ -26,7 +25,7 @@ use crate::option::magic_isset;
 use crate::regexp::skip_regexp;
 use crate::search::find_pattern_in_path;
 use crate::tag::do_tag;
-use crate::types::exarg_T;
+use crate::types::{NUL, exarg_T};
 use ::libc::strlen;
 
 /// `:isearch`, `:ilist`, `:ijump`, `:isplit` and their `:d…` twins.

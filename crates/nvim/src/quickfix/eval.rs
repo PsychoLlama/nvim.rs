@@ -10,7 +10,7 @@
 use super::*;
 use crate::semsg_c;
 use crate::types::{
-    OK, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    NUL, OK, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;

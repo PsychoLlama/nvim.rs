@@ -30,7 +30,7 @@ use crate::main::exit::os_exit;
 use crate::main::usage::{mainerr, usage, version};
 use crate::main::{
     EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, IOSIZE, IObuff, MAX_ARG_CMDS,
-    MAXPATHL, NUL, SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx,
+    MAXPATHL, SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx,
     embedded_mode, err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown,
     err_too_many_args, exmode_active, global_alist, headless_mode, kOptArabic, kOptKeymap,
     kOptRightleft, kOptShadafile, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
@@ -50,7 +50,7 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    FAIL, OK, OptInt, OptVal, OptValData, VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T,
+    FAIL, NUL, OK, OptInt, OptVal, OptValData, VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T,
     kFalse, kTrue, linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
 };
 use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};

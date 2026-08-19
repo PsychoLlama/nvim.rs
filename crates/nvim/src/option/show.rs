@@ -39,19 +39,20 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, FILE, OK, OptIndex, OptInt, OptVal, buf_T, kNone, kTrue, size_t, uint32_t, vimoption_T,
+    FAIL, FILE, NUL, OK, OptIndex, OptInt, OptVal, buf_T, kNone, kTrue, size_t, uint32_t,
+    vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbufIsChanged;
 use ::libc::{fprintf, fputs, strlen};
 
 use super::{
-    MAXPATHL, NUL, OPT_GLOBAL, OPT_LOCAL, OPT_ONECOLUMN, OPT_SKIPRTP, copy_option_part,
-    get_opt_idx, get_option, get_option_unset_value, get_varp, get_varp_scope, kOptFlagComma,
-    kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption,
-    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_type,
-    option_is_global_local, option_is_global_only, option_is_window_local, option_var,
-    optval_as_object, optval_equal, optval_from_varp, optval_is_default,
+    MAXPATHL, OPT_GLOBAL, OPT_LOCAL, OPT_ONECOLUMN, OPT_SKIPRTP, copy_option_part, get_opt_idx,
+    get_option, get_option_unset_value, get_varp, get_varp_scope, kOptFlagComma, kOptFlagExpand,
+    kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption, kOptValTypeBoolean,
+    kOptValTypeNumber, kOptValTypeString, option_has_type, option_is_global_local,
+    option_is_global_only, option_is_window_local, option_var, optval_as_object, optval_equal,
+    optval_from_varp, optval_is_default,
 };
 
 /// The column width one option gets in the multi-column listing, and the

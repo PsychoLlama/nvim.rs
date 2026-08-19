@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::keycodes::Ctrl_C;
-use crate::types::MB_MAXBYTES;
+use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

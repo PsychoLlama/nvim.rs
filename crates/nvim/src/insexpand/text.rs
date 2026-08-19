@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::NUL;
 
 /// The completed text with the case of the originally typed text inferred.
 ///

@@ -95,7 +95,6 @@ pub const BL_WHITE: c_int = 1;
 /// `:sign place` / `sign_place()` call names one.
 pub const SIGN_DEF_PRIO: c_int = 10;
 
-pub const NUL: c_int = '\0' as c_int;
 pub const MSG_BUF_LEN: c_int = 480;
 
 /// Room for [`describe_sign_text`]'s answer: SIGN_WIDTH cells of up to

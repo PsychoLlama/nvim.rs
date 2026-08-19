@@ -24,7 +24,7 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// Called when an arrow key is used in Insert mode: for undo and redo it
 /// resembles hitting `<Esc>`.

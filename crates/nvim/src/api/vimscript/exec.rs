@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::dict_put_str;
+use crate::types::NUL;
 use core::ffi::c_char;
 use core::ptr;
 

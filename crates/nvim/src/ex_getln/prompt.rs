@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{FAIL, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.

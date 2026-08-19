@@ -13,7 +13,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// Read one argument name at `arg` and append a copy of it to `newargs`.
 ///

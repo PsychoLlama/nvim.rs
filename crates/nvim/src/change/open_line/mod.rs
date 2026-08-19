@@ -34,7 +34,7 @@ use core::ffi::{c_char, c_int, c_void};
 use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_leader};
 use self::smart::smart_indent;
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 mod comment;
 mod smart;

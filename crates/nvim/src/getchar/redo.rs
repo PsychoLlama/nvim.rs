@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
-use crate::types::{FAIL, MB_MAXBYTES, OK};
+use crate::types::{FAIL, MB_MAXBYTES, NUL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

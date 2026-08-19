@@ -45,8 +45,8 @@ use crate::spell::{
     slang_clear_sug, slang_free,
 };
 use crate::types::{
-    FILE, OptInt, colnr_T, garray_T, idx_T, int16_t, langp_T, linenr_T, size_t, slang_T, time_t,
-    uint8_t,
+    FILE, NUL, OptInt, colnr_T, garray_T, idx_T, int16_t, langp_T, linenr_T, size_t, slang_T,
+    time_t, uint8_t,
 };
 use ::libc::{fclose, feof, ferror, fread, memcmp, strcpy, strerror, strrchr};
 
@@ -55,7 +55,7 @@ use super::sections::{
     read_rep_section, read_sal_section, read_sofo_section, read_words_section, set_map_str,
 };
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, ETYPE_SPELL, FAIL, MAXWLEN, NUL, OK,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, BY_SPECIAL, ETYPE_SPELL, FAIL, MAXWLEN, OK,
     SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS,
     SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE,
     SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SP_FORMERROR, SP_OTHERERROR, SP_TRUNCERROR, SPL_FNAME_ADD,

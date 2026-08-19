@@ -19,7 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
 

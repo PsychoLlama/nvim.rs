@@ -21,8 +21,7 @@ use crate::ex_docmd::modifier::expr_map_locked;
 use crate::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::ex_docmd::{
     BL_FIX, BL_SOL, BL_WHITE, CPO_EXECBUF, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR,
-    KS_SPECIAL, ML_EMPTY, NUL, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES,
-    kMTLineWise,
+    KS_SPECIAL, ML_EMPTY, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES, kMTLineWise,
 };
 use crate::ex_getln::getexline;
 use crate::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -61,7 +60,7 @@ use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen, CMD_list, CMD_move, CMD_number,
-    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, FAIL,
+    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, FAIL, NUL,
     OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T,
     exarg_T, handle_T, int64_t, kFalse, kNone, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T,
     size_t, ssize_t, uint8_t,

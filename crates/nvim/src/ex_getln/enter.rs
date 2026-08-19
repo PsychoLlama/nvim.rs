@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::drawscreen::windows_in_curtab;
-use crate::types::{kBoolVarFalse, kBoolVarTrue, kErrorTypeNone};
+use crate::types::{NUL, kBoolVarFalse, kBoolVarTrue, kErrorTypeNone};
 
 /// An all-zero [`CommandLineState`]: the fields C's designated initialiser
 /// leaves out, which the C zeroes for it.

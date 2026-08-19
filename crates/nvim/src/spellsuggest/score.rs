@@ -43,11 +43,11 @@ use crate::mbyte::{mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_p
 use crate::memory::xmemcpyz;
 use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab};
 use crate::spellsuggest::{
-    MAXWLEN, NUL, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
+    MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suggest_T,
     suginfo_T,
 };
-use crate::types::{MB_MAXCHAR, hashitem_T, size_t, slang_T, wordcount_T};
+use crate::types::{MB_MAXCHAR, NUL, hashitem_T, size_t, slang_T, wordcount_T};
 use ::libc::{strcpy, strlen};
 use core::ffi::{c_char, c_int};
 

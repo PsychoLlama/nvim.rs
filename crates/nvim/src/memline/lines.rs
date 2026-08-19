@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// A read-only pointer to line `lnum` of the current buffer. Never NULL.
 ///

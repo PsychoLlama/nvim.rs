@@ -22,6 +22,7 @@ use crate::decoration::kMTMetaInline;
 use crate::keycodes::Ctrl_V;
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
+use crate::types::NUL;
 
 /// Work out everything about `wlv.lnum` that does not depend on which cell is
 /// being drawn, and leave `wlv` ready for the character loop.

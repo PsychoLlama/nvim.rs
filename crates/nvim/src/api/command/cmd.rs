@@ -36,7 +36,7 @@
 
 use super::*;
 use crate::api::private::helpers::{array_add, has_key};
-use crate::types::FieldHashfn;
+use crate::types::{FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 

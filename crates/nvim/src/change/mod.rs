@@ -137,7 +137,6 @@ pub const SIN_INSERT: ::core::ffi::c_int = 2;
 /// `ml_delete_flags()`: report "N fewer lines".
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const BF_NEVERLOADED: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;

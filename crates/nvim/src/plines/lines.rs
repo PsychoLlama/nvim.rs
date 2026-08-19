@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 /// Whether there may be filler lines anywhere in `wp`.
 ///
@@ -90,7 +91,7 @@ pub unsafe fn plines_win_nofold(wp: *mut win_T, lnum: linenr_T) -> c_int {
         let s = ml_get_buf((*wp).w_buffer, lnum);
         let mut csarg = CharsizeArg::default();
         let cstype = init_charsize_arg(&mut csarg, wp, lnum, s);
-        if *s == NUL && csarg.virt_row < 0 {
+        if *s == NUL as c_char && csarg.virt_row < 0 {
             // Be quick for an empty line.
             return 1;
         }
@@ -146,7 +147,7 @@ pub unsafe fn plines_win_col(wp: *mut win_T, lnum: linenr_T, mut column: c_long)
         let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
         if cstype == CharsizeKind::Fast {
             let use_tabstop = csarg.use_tabstop;
-            while *ci.ptr != NUL && {
+            while *ci.ptr != NUL as c_char && {
                 column -= 1;
                 column >= 0
             } {
@@ -154,7 +155,7 @@ pub unsafe fn plines_win_col(wp: *mut win_T, lnum: linenr_T, mut column: c_long)
                 ci = utfc_next(ci);
             }
         } else {
-            while *ci.ptr != NUL && {
+            while *ci.ptr != NUL as c_char && {
                 column -= 1;
                 column >= 0
             } {

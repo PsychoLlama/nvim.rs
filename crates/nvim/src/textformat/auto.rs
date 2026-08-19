@@ -22,7 +22,7 @@ use crate::memline::ml_replace;
 use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
 use crate::strings::xstrnsave;
-use crate::types::{FAIL, size_t};
+use crate::types::{FAIL, NUL, size_t};
 use crate::undo::u_save_cursor;
 
 /// `auto_format` added an extra space under the cursor, and it has to come

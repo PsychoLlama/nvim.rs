@@ -17,6 +17,7 @@
 use core::ffi::{c_char, c_int};
 
 use crate::change::*;
+use crate::types::NUL;
 
 /// Where the C comment that ends on this line began, as an indent.
 ///

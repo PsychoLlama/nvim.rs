@@ -13,6 +13,7 @@
 use super::*;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP};
+use crate::types::NUL;
 
 impl Cells {
     /// Draw everything left of the text on this screen row: the fold, sign and

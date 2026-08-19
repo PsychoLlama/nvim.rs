@@ -27,15 +27,15 @@ use crate::regexp::{
     BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, END, EOW,
     EXACTLY, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
     MAGIC_ON, MATCH, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, NOT_MULTI, NOTHING, NSUBEXP,
-    NUL, PLUS, RE_BOF, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL,
-    RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, Rex, SIMPLE, SPSTART, STAR, SUBPAT, WORST,
-    ZCLOSE, ZOPEN, bt_regengine, bt_regprog_T, curchr, getchr, getdecchrs, gethexchrs, getoctchrs,
-    had_endbrace, had_eol, magic, magic_prefix, num_complex_braces, peekchr, re_has_z,
-    re_multi_type, read_limits, reg_magic, reg_toolong, regcode, regflags, regnpar, regnzpar,
-    regparse, regsize, skipchr, skipchr_keepstart, unmagic,
+    PLUS, RE_BOF, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL, RF_ICASE,
+    RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, Rex, SIMPLE, SPSTART, STAR, SUBPAT, WORST, ZCLOSE, ZOPEN,
+    bt_regengine, bt_regprog_T, curchr, getchr, getdecchrs, gethexchrs, getoctchrs, had_endbrace,
+    had_eol, magic, magic_prefix, num_complex_braces, peekchr, re_has_z, re_multi_type,
+    read_limits, reg_magic, reg_toolong, regcode, regflags, regnpar, regnzpar, regparse, regsize,
+    skipchr, skipchr_keepstart, unmagic,
 };
 use crate::semsg;
-use crate::types::{int64_t, regprog_T, size_t, uint8_t, uint32_t};
+use crate::types::{NUL, int64_t, regprog_T, size_t, uint8_t, uint32_t};
 use ::libc::strlen;
 
 const M_AMP: c_int = magic(b'&');

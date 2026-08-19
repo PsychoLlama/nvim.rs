@@ -14,7 +14,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::Put;
 use crate::register::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// Where in one buffer line the block goes, measured by [`Put::blockwise`].
 struct Landing {

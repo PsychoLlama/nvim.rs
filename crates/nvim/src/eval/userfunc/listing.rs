@@ -14,7 +14,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// Print the head of every function, or of the ones `regmatch` matches.
 ///

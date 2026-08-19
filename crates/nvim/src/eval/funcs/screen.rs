@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{NUL, false_0, true_0};
+use super::{false_0, true_0};
 use crate::eval::typval::{
     tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf,
     tv_list_alloc_ret, tv_list_append_number, tv_list_append_string, tv_list_set_ret,
@@ -29,7 +29,8 @@ use crate::syntax::{
     HL_CONCEAL, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char,
 };
 use crate::types::{
-    EvalFuncData, ScreenGrid, VAR_STRING, colnr_T, kListLenMayKnow, schar_T, typval_T, varnumber_T,
+    EvalFuncData, NUL, ScreenGrid, VAR_STRING, colnr_T, kListLenMayKnow, schar_T, typval_T,
+    varnumber_T,
 };
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;

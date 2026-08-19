@@ -36,12 +36,12 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::cshim::{memmove, strncmp};
 use crate::strings::vim_strchr;
-use crate::types::{OptIndex, size_t, uint32_t};
+use crate::types::{NUL, OptIndex, size_t, uint32_t};
 use ::libc::{strcpy, strlen};
 
 use super::{
-    NUL, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, find_dup_item, kOptFlagColon,
-    kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptFlagOneComma, option_expand, set_op_T,
+    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, find_dup_item, kOptFlagColon, kOptFlagComma,
+    kOptFlagFlagList, kOptFlagNoDup, kOptFlagOneComma, option_expand, set_op_T,
 };
 
 /// How much room the assembled value needs: the argument, plus the current

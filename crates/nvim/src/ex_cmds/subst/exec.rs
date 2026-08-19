@@ -27,7 +27,7 @@ use crate::change::changed_lines;
 use crate::cursor::coladvance;
 use crate::edit::beginline;
 use crate::ex_cmds::{
-    BL_FIX, BL_WHITE, LineData, NUL, PreviewLines, SID_NONE, SubResult, print_line, re_multiline,
+    BL_FIX, BL_WHITE, LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline,
 };
 use crate::ex_eval::aborting;
 use crate::fold::hasAnyFolding;
@@ -55,7 +55,7 @@ use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, OptInt, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
+    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, NUL, OptInt, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
     lpos_T, pos_T, proftime_T, regmmatch_T, size_t,
 };
 use crate::ui::ui_has;

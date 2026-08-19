@@ -19,15 +19,15 @@ use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf, ml_delete_buf};
 use crate::types::{
-    OptInt, VTermColor, VTermPos, VTermScreenCell, VTermScreenCellAttrs, buf_T, colnr_T, linenr_T,
-    schar_T,
+    NUL, OptInt, VTermColor, VTermPos, VTermScreenCell, VTermScreenCellAttrs, buf_T, colnr_T,
+    linenr_T, schar_T,
 };
 use crate::vterm::screen::vterm_screen_get_cell;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::refresh::invalidate_terminal;
-use super::{NUL, SB_MAX, Term, kExtmarkUndo, kMarkAdjustTerm};
+use super::{SB_MAX, Term, kExtmarkUndo, kMarkAdjustTerm};
 use crate::pos::MAXLNUM;
 
 /// A cell holding nothing. vterm reports an empty cell as a zero `schar`;

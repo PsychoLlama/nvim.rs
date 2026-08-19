@@ -28,8 +28,8 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{call_func, func_init, restore_funccal, save_funccal};
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
 use crate::eval::{
-    EVAL_EVALUATE, FUNCEXE_INIT, NL, NOTDONE, NUL, OPT_LOCAL, check_luafunc_name, clear_evalarg,
-    eval0, eval0_simple_funccal, eval1, kWinOptFoldexpr, may_call_simple_func, partial_name,
+    EVAL_EVALUATE, FUNCEXE_INIT, NL, NOTDONE, OPT_LOCAL, check_luafunc_name, clear_evalarg, eval0,
+    eval0_simple_funccal, eval1, kWinOptFoldexpr, may_call_simple_func, partial_name,
 };
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
@@ -44,7 +44,7 @@ use crate::options::{kOptFoldexpr, kOptFoldtext};
 use crate::os::cshim::gettext;
 use crate::runtime::sourcing_a_script;
 use crate::types::{
-    Arena, FAIL, OK, Object, String_0, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    Arena, FAIL, NUL, OK, Object, String_0, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_ARGV, VV_EVENT, VV_LUA, dict_T,
     evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T, kObjectTypeString, list_T,
     object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T,

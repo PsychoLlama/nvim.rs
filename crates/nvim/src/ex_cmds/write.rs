@@ -17,7 +17,7 @@
 use super::{
     BF_NEW, BF_NOTEDITED, BF_READERR, BL_FIX, BL_SOL, CPO_ALTWRITE, CPO_OVERNEW, ECMD_FORCEIT,
     ECMD_HIDE, FAIL, GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE,
-    MAXPATHL, NODE_OTHER, NUL, SHM_FILEINFO, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
+    MAXPATHL, NODE_OTHER, SHM_FILEINFO, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
     false_0, true_0,
 };
 use crate::arglist::do_argfile;
@@ -53,7 +53,7 @@ use crate::path::fix_fname;
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_saveas, CMD_wqall, CMD_xall, CMOD_CONFIRM, CMOD_KEEPALT, OK, buf_T, bufref_T, exarg_T,
+    CMD_saveas, CMD_wqall, CMD_xall, CMOD_CONFIRM, CMOD_KEEPALT, NUL, OK, buf_T, bufref_T, exarg_T,
     int32_t, int64_t, linenr_T,
 };
 use crate::undo::{bufIsChanged, curbufIsChanged};

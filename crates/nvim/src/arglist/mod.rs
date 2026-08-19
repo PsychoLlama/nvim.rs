@@ -97,7 +97,6 @@ mod flag {
 }
 use flag::*;
 
-pub const NUL: c_int = 0;
 pub const ML_EMPTY: c_int = 0x1;
 
 /// `flag` when `cond`, and no bits otherwise — the `cond ? FLAG : 0` the

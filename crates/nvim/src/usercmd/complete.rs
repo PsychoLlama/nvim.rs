@@ -25,8 +25,8 @@ use super::attr::ADDR_TYPES;
 use super::{
     EX_XFILE, EXPAND_COMMANDS, EXPAND_MAPPINGS, EXPAND_MENUS, EXPAND_NOTHING,
     EXPAND_USER_ADDR_TYPE, EXPAND_USER_CMD_FLAGS, EXPAND_USER_COMMANDS, EXPAND_USER_COMPLETE,
-    EXPAND_USER_DEFINED, EXPAND_USER_LIST, EXPAND_USER_LUA, EXPAND_USER_NARGS, NUL, Scope,
-    ucmd_list, ucmd_name,
+    EXPAND_USER_DEFINED, EXPAND_USER_LIST, EXPAND_USER_LUA, EXPAND_USER_NARGS, Scope, ucmd_list,
+    ucmd_name,
 };
 use crate::charset::{skiptowhite, skipwhite};
 use crate::mapping::set_context_in_map_cmd;
@@ -34,7 +34,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
 use crate::os::cshim::snprintf;
-use crate::types::{CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, expand_T, uint32_t};
+use crate::types::{CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, NUL, expand_T, uint32_t};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -101,7 +101,7 @@ pub unsafe fn set_context_in_user_cmd(xp: *mut expand_T, arg_in: *const c_char) 
         while *arg == b'-' as c_char {
             arg = arg.offset(1);
             let p = skiptowhite(arg);
-            if *p != NUL {
+            if *p != NUL as c_char {
                 arg = skipwhite(p);
                 continue;
             }
@@ -131,7 +131,7 @@ pub unsafe fn set_context_in_user_cmd(xp: *mut expand_T, arg_in: *const c_char) 
 
         // Then the name of the command being defined.
         let p = skiptowhite(arg);
-        if *p == NUL {
+        if *p == NUL as c_char {
             set_context(xp, EXPAND_USER_COMMANDS, arg);
             return ptr::null();
         }
@@ -193,10 +193,10 @@ pub unsafe fn set_context_in_user_cmdarg(
         // and multibyte characters.
         let mut last = arg;
         let mut p = arg;
-        while *p != NUL {
+        while *p != NUL as c_char {
             if *p == b' ' as c_char {
                 last = p.offset(1);
-            } else if *p == b'\\' as c_char && *p.offset(1) != NUL {
+            } else if *p == b'\\' as c_char && *p.offset(1) != NUL as c_char {
                 p = p.offset(1);
             }
             p = p.add(utfc_ptr2len(p) as usize);

@@ -32,7 +32,7 @@ use crate::pos::MAXCOL;
 use crate::search::{FORWARD, check_linecomment};
 use crate::state::VREPLACE_FLAG;
 use crate::strings::xstrnsave;
-use crate::types::{INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, colnr_T, size_t};
+use crate::types::{INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, NUL, colnr_T, size_t};
 
 /// What one step of the backwards search for a break column decided.
 ///

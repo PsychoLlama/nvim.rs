@@ -18,7 +18,7 @@ use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{
     ADDR_LINES, CPO_BAR, EX_BUFNAME, EX_COUNT, EX_CTRLV, EX_NOTRLCOM, EX_REGSTR, EX_XFILE,
-    EX_ZEROR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, NUL, e_zerocount,
+    EX_ZEROR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount,
 };
 use crate::keycodes::Ctrl_V;
 use crate::main::{curbuf, p_cpo};
@@ -32,8 +32,8 @@ use crate::types::ex_cmds::exarg_T;
 use crate::types::pos::linenr_T;
 use crate::types::{
     CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep, CMD_lvimgrepadd, CMD_put,
-    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, FAIL, OK,
-    size_t, uint32_t,
+    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, FAIL, NUL,
+    OK, size_t, uint32_t,
 };
 use ::libc::strlen;
 

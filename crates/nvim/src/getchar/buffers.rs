@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_O, Ctrl_V, key_escape};
-use crate::types::MB_MAXBYTES;
+use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint};
 use core::mem::offset_of;
 use core::ptr;

@@ -104,8 +104,6 @@ pub use refresh::{
     on_scrollback_option_changed, terminal_check_refresh, terminal_init, terminal_teardown,
 };
 
-/// "To the end of the buffer", for the mark adjustments.
-const NUL: c_int = 0;
 /// `ml_flags` bit meaning the buffer holds one empty line and nothing else.
 const ML_EMPTY: c_int = 0x1;
 /// The largest `'scrollback'` that means anything; the option's negative

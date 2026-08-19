@@ -16,7 +16,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::OK;
+use crate::types::{NUL, OK};
 
 /// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the
 /// `v:` dictionary if it is one of the two that are not normally there.
@@ -192,7 +192,7 @@ pub unsafe fn set_vim_var_char(c: c_int) {
     unsafe {
         let mut buf = [0 as c_char; 7];
         let buflen = utf_char2bytes(c, buf.as_mut_ptr());
-        buf[buflen as usize] = NUL;
+        buf[buflen as usize] = NUL as c_char;
         set_vim_var_string(VV_CHAR, buf.as_ptr(), buflen as ptrdiff_t);
     }
 }
@@ -281,7 +281,7 @@ pub unsafe fn set_reg_var(c: c_int) {
         // `set_reg_var(0)` always rewrites -- upstream's.
         let tv = get_vim_var_tv(VV_REG);
         if (*tv).vval.v_string.is_null() || *(*tv).vval.v_string != c as c_char {
-            let buf = [regname, NUL];
+            let buf = [regname, NUL as c_char];
             set_vim_var_string(VV_REG, buf.as_ptr(), 1);
         }
     }
@@ -388,7 +388,7 @@ pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char 
             } else if (*eap).force_bin == FORCE_NOBIN {
                 put!(c" ++nobin".as_ptr());
             } else {
-                *newval = NUL;
+                *newval = NUL as c_char;
             }
             if (*eap).read_edit != 0 {
                 put!(c" ++edit".as_ptr());

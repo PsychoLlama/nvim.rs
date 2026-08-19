@@ -20,12 +20,12 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, DIGIT, EXACTLY, FIRST_NL, FNAME, HEAD, HEX, IDENT, KWORD,
-    LAST_NL, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOCTAL, NUL, NUPPER,
+    LAST_NL, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOCTAL, NUPPER,
     NWHITE, NWORD, OCTAL, PRINT, RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL,
     RI_UPPER, RI_WHITE, RI_WORD, Rex, SFNAME, SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, cstrchr,
     reg_nextline,
 };
-use crate::types::{int64_t, uint8_t};
+use crate::types::{NUL, int64_t, uint8_t};
 
 /// What stepping onto the next line produced.
 enum Line {

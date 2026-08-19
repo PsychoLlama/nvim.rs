@@ -12,8 +12,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BL_FIX, BL_WHITE, DOCMD_NOWAIT, FAIL, NUL, check_regexp_delim, do_sub_msg,
-    global_need_beginline, global_need_msg_kind,
+    BL_FIX, BL_WHITE, DOCMD_NOWAIT, FAIL, check_regexp_delim, do_sub_msg, global_need_beginline,
+    global_need_msg_kind,
 };
 use crate::cursor::check_cursor;
 use crate::edit::beginline;
@@ -34,7 +34,7 @@ use crate::regexp::{
 };
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg_c;
-use crate::types::{colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
+use crate::types::{NUL, colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

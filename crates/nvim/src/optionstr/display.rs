@@ -34,7 +34,7 @@ use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Error, FAIL, FloatAnchor, OK, OptInt, VirtText, WinConfig, buf_T, colnr_T, kErrorTypeNone,
+    Error, FAIL, FloatAnchor, NUL, OK, OptInt, VirtText, WinConfig, buf_T, colnr_T, kErrorTypeNone,
     kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::window::check_colorcolumn;
@@ -42,7 +42,7 @@ use ::libc::strcmp;
 
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{
-    COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, NUL, OPT_LOCAL,
+    COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, OPT_LOCAL,
     WW_ALL, check_chars_options, check_signcolumn, check_str_opt, check_string_option,
     did_set_option_listflag, did_set_statustabline_rulerformat, did_set_str_generic,
     e_showbreak_contains_unprintable_or_wide_character, free_string_option, kAlignLeft,

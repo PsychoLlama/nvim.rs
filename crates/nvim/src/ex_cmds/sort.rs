@@ -19,8 +19,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BL_FIX, BL_WHITE, FAIL, MAXLNUM, NUL, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX,
-    STR2NR_OCT, e_interr, e_invarg, e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo, true_0,
+    BL_FIX, BL_WHITE, FAIL, MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT,
+    e_interr, e_invarg, e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo, true_0,
 };
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -40,7 +40,7 @@ use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
 use crate::semsg_c;
 use crate::types::{
-    ExtmarkOp, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
+    ExtmarkOp, NUL, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
 };
 use crate::undo::u_save;
 use ::libc::{memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strtod};

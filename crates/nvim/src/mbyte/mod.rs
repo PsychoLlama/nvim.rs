@@ -59,10 +59,10 @@ use crate::pos::MAXCOL;
 use crate::strings::vim_strchr;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
-    CONV_TO_UTF8, CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, MB_MAXCHAR, StrCharInfo,
-    VAR_LIST, VAR_NUMBER, VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t, list_T,
-    ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint64_t, uintptr_t, utf8proc_int32_t,
-    varnumber_T, vimconv_T, win_T,
+    CONV_TO_UTF8, CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, MB_MAXCHAR, NUL,
+    StrCharInfo, VAR_LIST, VAR_NUMBER, VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t,
+    list_T, ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint64_t, uintptr_t,
+    utf8proc_int32_t, varnumber_T, vimconv_T, win_T,
 };
 use crate::utf8proc::{
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,
@@ -97,7 +97,6 @@ pub use self::walk::*;
 
 /// The C-level vocabulary every transpiled module carries a copy of;
 /// consolidating them tree-wide is a family of its own, not this slice's.
-pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
 pub const NL: c_int = '\n' as c_int;
 /// `IObuff`'s size: what `show_utf8` formats into.

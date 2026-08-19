@@ -11,7 +11,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// The comment character a marker line may carry after it.
 const COMMENT_CHAR: c_char = b'"' as c_char;
@@ -33,7 +33,7 @@ pub unsafe fn eval_one_expr_in_str(
     unsafe {
         let block_start = skipwhite(p.add(1));
         let mut block_end = block_start;
-        if *block_start == NUL {
+        if *block_start == NUL as c_char {
             semsg_c!(
                 gettext(&raw const e_missing_close_curly_str as *const c_char),
                 p,
@@ -53,7 +53,7 @@ pub unsafe fn eval_one_expr_in_str(
         }
         if evaluate {
             // Terminate the expression in place for `eval_to_string`.
-            *block_end = NUL;
+            *block_end = NUL as c_char;
             let expr_val = eval_to_string(block_start, false, false);
             *block_end = b'}' as c_char;
             if expr_val.is_null() {
@@ -83,16 +83,16 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
         ga_init(&raw mut ga, 1, 80);
         let mut p = str;
 
-        while *p != NUL {
+        while *p != NUL as c_char {
             let mut escaped_brace = false;
 
             // Everything up to the next brace is literal.
             let lit_start = p;
-            while *p != b'{' as c_char && *p != b'}' as c_char && *p != NUL {
+            while *p != b'{' as c_char && *p != b'}' as c_char && *p != NUL as c_char {
                 p = p.add(1);
             }
 
-            if *p != NUL && *p == *p.add(1) {
+            if *p != NUL as c_char && *p == *p.add(1) {
                 // A doubled brace: keep one of the pair in the literal part
                 // and skip the other below.
                 p = p.add(1);
@@ -107,7 +107,7 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             }
 
             ga_concat_len(&raw mut ga, lit_start, p.offset_from(lit_start) as size_t);
-            if *p == NUL {
+            if *p == NUL as c_char {
                 break;
             }
             if escaped_brace {
@@ -155,7 +155,7 @@ pub unsafe fn heredoc_get(
         let mut marker_indent_len = 0;
         let mut text_indent_len = 0;
         let mut text_indent: *mut c_char = ptr::null_mut();
-        let dot = [b'.' as c_char, NUL];
+        let dot = [b'.' as c_char, NUL as c_char];
 
         // A here-document inside a string argument is the whole body,
         // newline-separated, rather than lines read from the source.
@@ -164,7 +164,7 @@ pub unsafe fn heredoc_get(
         let heredoc_in_string = !nl_ptr.is_null();
         if heredoc_in_string {
             line_arg = nl_ptr.add(1);
-            *nl_ptr = NUL;
+            *nl_ptr = NUL as c_char;
         } else if (*eap).ea_getline.is_none() {
             emsg(gettext(e_cannot_use_heredoc_here.as_ptr()));
             return ptr::null_mut();
@@ -176,7 +176,7 @@ pub unsafe fn heredoc_get(
         let is_word = |at: *const c_char, word: &CStr| -> bool {
             debug_assert!(word.to_bytes().len() == 4);
             strncmp(at, word.as_ptr(), 4) == 0
-                && (*at.add(4) == NUL || ascii_iswhite(*at.add(4) as c_int))
+                && (*at.add(4) == NUL as c_char || ascii_iswhite(*at.add(4) as c_int))
         };
 
         // The optional `trim` and `eval` words before the marker, in either
@@ -205,14 +205,14 @@ pub unsafe fn heredoc_get(
 
         // The marker is the next word.
         let marker;
-        if *cmd != NUL && *cmd != COMMENT_CHAR {
+        if *cmd != NUL as c_char && *cmd != COMMENT_CHAR {
             marker = skipwhite(cmd);
             let p = skiptowhite(marker);
-            if *skipwhite(p) != NUL && *skipwhite(p) != COMMENT_CHAR {
+            if *skipwhite(p) != NUL as c_char && *skipwhite(p) != COMMENT_CHAR {
                 semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p);
                 return ptr::null_mut();
             }
-            *p = NUL;
+            *p = NUL as c_char;
             // `islower` here is the locale's, not ASCII's: `_ISlower` is the
             // bit `__ctype_b_loc()`'s table sets, which in a non-C locale
             // covers more than a-z.
@@ -238,7 +238,7 @@ pub unsafe fn heredoc_get(
         let l = tv_list_alloc(0);
         loop {
             if heredoc_in_string {
-                if *line_arg == NUL {
+                if *line_arg == NUL as c_char {
                     if !script_get {
                         semsg_c!(gettext(e_missing_end_marker_str.as_ptr()), marker);
                     }
@@ -249,7 +249,7 @@ pub unsafe fn heredoc_get(
                 if next_line.is_null() {
                     line_arg = line_arg.add(strlen(line_arg));
                 } else {
-                    *next_line = NUL;
+                    *next_line = NUL as c_char;
                     line_arg = next_line.add(1);
                 }
             } else {
@@ -286,7 +286,7 @@ pub unsafe fn heredoc_get(
                 continue;
             }
 
-            if text_indent_len == -1 && *theline != NUL {
+            if text_indent_len == -1 && *theline != NUL as c_char {
                 // The body's indent is the first non-empty line's.
                 let mut p = theline;
                 text_indent_len = 0;

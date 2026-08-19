@@ -42,12 +42,12 @@ use crate::message::emsg;
 use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
 use crate::spell::spelltab;
-use crate::types::{FILE, fromto_T, garray_T, size_t, time_t, uintmax_t};
+use crate::types::{FILE, NUL, fromto_T, garray_T, size_t, time_t, uintmax_t};
 use ::libc::{fclose, fputc, fwrite, qsort, strcmp, strlen, time};
 
 use super::wordtree::wordnode_T;
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, CF_UPPER, CF_WORD, EOF, FAIL, NUL, OK, PFX_FLAGS,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, CF_UPPER, CF_WORD, EOF, FAIL, OK, PFX_FLAGS,
     SAL_COLLAPSE, SAL_F0LLOWUP, SAL_REM_ACCENTS, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO,
     SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION,
     SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED,

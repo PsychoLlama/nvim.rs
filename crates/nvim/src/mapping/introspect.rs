@@ -10,7 +10,7 @@
 use super::*;
 use crate::kvec::InitVec;
 use crate::types::builders::static_cstring;
-use crate::types::{VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown};
+use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

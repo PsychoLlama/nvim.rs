@@ -18,7 +18,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// Store `tv` in the variable `name`.
 ///
@@ -51,7 +51,7 @@ pub unsafe fn set_var_const(
         let ht = find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict);
         let watched = tv_dict_is_watched(dict);
 
-        if ht.is_null() || *varname == NUL {
+        if ht.is_null() || *varname == NUL as c_char {
             semsg_c!(gettext(&raw const e_illvar as *const c_char), name);
             return;
         }
@@ -248,7 +248,7 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
 /// `name` is a NUL-terminated string.
 pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
     unsafe {
-        let has_scope = *name != NUL && *name.add(1) == b':' as c_char;
+        let has_scope = *name != NUL as c_char && *name.add(1) == b':' as c_char;
         // The character the capital is wanted at: past a scope prefix, if
         // there is one.
         let first = if has_scope { *name.add(2) } else { *name };
@@ -286,7 +286,7 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
 pub unsafe fn valid_varname(varname: *const c_char) -> bool {
     unsafe {
         let mut p = varname;
-        while *p != NUL {
+        while *p != NUL as c_char {
             if !eval_isnamec1(*p as uint8_t as c_int)
                 && (p == varname || !ascii_isdigit(*p as c_int))
                 && *p != AUTOLOAD_CHAR as c_char

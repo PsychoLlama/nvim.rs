@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{NUL, false_0, true_0};
+use super::{false_0, true_0};
 use crate::api::private::helpers::cstr_as_string;
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
@@ -32,7 +32,7 @@ use crate::search::{
 };
 use crate::semsg_c;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, OptVal, OptValData, VAR_UNKNOWN, int64_t, linenr_T, pos_T,
+    Direction, EvalFuncData, FAIL, NUL, OptVal, OptValData, VAR_UNKNOWN, int64_t, linenr_T, pos_T,
     searchit_arg_T, typval_T, varnumber_T,
 };
 use ::libc::strlen;

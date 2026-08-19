@@ -16,7 +16,7 @@ use crate::drawscreen::{
 use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
-use crate::ex_docmd::{NUL, ex_pressedreturn};
+use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
     RedrawingDisabled, State, VIsual_active, cmdpreview, curwin, e_invarg2, emsg_off, msg_col,
@@ -31,7 +31,7 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{FAIL, FILE, OK, VV_HLSEARCH, exarg_T, ssize_t, uint8_t, varnumber_T};
+use crate::types::{FAIL, FILE, NUL, OK, VV_HLSEARCH, exarg_T, ssize_t, uint8_t, varnumber_T};
 use crate::ui::ui_flush;
 use ::libc::{fclose, strcasecmp};
 

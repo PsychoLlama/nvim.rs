@@ -16,11 +16,11 @@ use crate::regexp::{
     INT32_MAX, NFA_ANY_COMPOSING, NFA_BOF, NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_CURSOR, NFA_EOF,
     NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NOPEN,
     NFA_OPT_CHARS, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZEND, NFA_ZREF1, NFA_ZSTART,
-    NUL, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs, gethexchrs,
+    REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs, gethexchrs,
     getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,
 };
 use crate::semsg;
-use crate::types::{FAIL, MB_MAXBYTES, OK, colnr_T};
+use crate::types::{FAIL, MB_MAXBYTES, NUL, OK, colnr_T};
 
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
 pub(crate) fn z_atom(rex: Rex) -> c_int {

@@ -70,10 +70,10 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{kv_do_printf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMOD_NOSWAPFILE, FAIL, FileInfo, OK, OptVal, OptValData, OptValType, String_0, StringBuilder,
-    Timestamp, bhdr_T, blocknr_T, buf_T, chunksize_T, colnr_T, dict_T, file_comparison,
-    flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T,
-    size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
+    CMOD_NOSWAPFILE, FAIL, FileInfo, NUL, OK, OptVal, OptValData, OptValType, String_0,
+    StringBuilder, Timestamp, bhdr_T, blocknr_T, buf_T, chunksize_T, colnr_T, dict_T,
+    file_comparison, flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T,
+    off_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::bufIsChanged;
@@ -216,7 +216,6 @@ pub const KV_INITIAL_VALUE: StringBuilder = StringBuilder {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const BF_RECOVERED: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const ML_CHNK_ADDLINE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

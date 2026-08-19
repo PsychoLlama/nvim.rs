@@ -20,6 +20,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::types::NUL;
 
 /// Bytes, words and characters in one line, up to `limit` bytes.
 ///

@@ -94,7 +94,6 @@ pub struct cpp_baseclass_cache_T {
 }
 pub const FM_BLOCKSTOP: ::core::ffi::c_int = 4;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;

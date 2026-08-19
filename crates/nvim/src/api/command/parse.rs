@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{array_add, dict_put};
+use crate::types::NUL;
 use crate::types::builders::static_cstring;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

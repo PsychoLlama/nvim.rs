@@ -55,7 +55,7 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    OptIndex, OptInt, OptVal, OptValData, String_0, TriState, VV_WARNINGMSG, buf_T, colnr_T,
+    NUL, OptIndex, OptInt, OptVal, OptValData, String_0, TriState, VV_WARNINGMSG, buf_T, colnr_T,
     event_T, kFalse, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::undo::{bufIsChanged, u_compute_hash, u_read_undo, u_sync};
@@ -67,9 +67,9 @@ use crate::winfloat::win_float_update_statusline;
 use ::libc::strcmp;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, NO_SCREEN, NUL, OPT_GLOBAL, OPT_LOCAL,
-    STATUS_HEIGHT, check_blending, did_set_title, kOptValTypeNumber, kOptValTypeString,
-    option_was_set, redraw_titles, set_option_value, set_option_varp, set_options_bin,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, NO_SCREEN, OPT_GLOBAL, OPT_LOCAL, STATUS_HEIGHT,
+    check_blending, did_set_title, kOptValTypeNumber, kOptValTypeString, option_was_set,
+    redraw_titles, set_option_value, set_option_varp, set_options_bin,
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};

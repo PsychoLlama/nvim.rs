@@ -17,7 +17,7 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{CMOD_NOSWAPFILE, FAIL, OK, VV_SWAPCHOICE, VV_SWAPNAME};
+use crate::types::{CMOD_NOSWAPFILE, FAIL, NUL, OK, VV_SWAPCHOICE, VV_SWAPNAME};
 
 /// Rename the swap file after the buffer's file name changed.
 ///

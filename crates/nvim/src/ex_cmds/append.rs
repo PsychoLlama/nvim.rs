@@ -13,7 +13,7 @@
 use super::lines::set_op_range;
 use super::{
     B_IMODE_LMAP, BL_FIX, BL_SOL, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, FAIL, ML_EMPTY,
-    NL, NUL, print_line, true_0,
+    NL, print_line, true_0,
 };
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
@@ -30,7 +30,7 @@ use crate::message::{emsg, msg_putchar};
 use crate::os::cshim::gettext;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::strings::vim_strchr;
-use crate::types::{OptInt, exarg_T, int64_t, linenr_T, size_t};
+use crate::types::{NUL, OptInt, exarg_T, int64_t, linenr_T, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
 use ::libc::{atol, strlen};

@@ -54,7 +54,7 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regf
 use crate::runtime::{estack_sfile, sourcing_lnum};
 use crate::state::MODE_NORMAL;
 use crate::types::{
-    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, FAIL, OK, buf_T, colnr_T,
+    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, FAIL, NUL, OK, buf_T, colnr_T,
     estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t, tasave_T,
     typval_T, uint8_t, varnumber_T,
 };
@@ -73,7 +73,6 @@ pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
 pub const DEFAULT_MAXPATHL: c_int = 4096;
 pub const MAXPATHL: c_int = DEFAULT_MAXPATHL;
-pub const NUL: c_int = '\0' as c_int;
 pub const KS_EXTRA: c_int = 253;
 pub const true_0: c_int = 1;
 pub const false_0: c_int = 0;

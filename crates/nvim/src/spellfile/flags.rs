@@ -40,11 +40,11 @@ use crate::mbyte::mb_ptr2char_adv;
 use crate::memory::{xfree, xmemcpyz};
 use crate::os::cshim::{gettext, memmove};
 use crate::strings::vim_strchr;
-use crate::types::{hashitem_T, size_t, uint8_t};
+use crate::types::{NUL, hashitem_T, size_t, uint8_t};
 use ::libc::{strcat, strcpy, strlen};
 
 use super::{
-    AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, NUL, ZERO_FLAG, affentry_T, afffile_T, affheader_T,
+    AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, ZERO_FLAG, affentry_T, afffile_T, affheader_T,
     compitem_T, e_affname, spellinfo_T, vim_regfree,
 };
 

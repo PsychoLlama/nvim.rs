@@ -50,13 +50,13 @@ use crate::main::exit::{getout, os_exit};
 use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, IObuff, NO_BUFFERS, NUL,
-    RedrawingDisabled, Rows, WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin,
-    debug_break_level, embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen,
-    global_alist, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T,
-    msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut,
-    recoverymode, resize_events, restart_edit, scriptout, silent_mode, starting, stderr_isatty,
-    stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, IObuff, NO_BUFFERS, RedrawingDisabled,
+    Rows, WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin, debug_break_level,
+    embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen, global_alist,
+    headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout,
+    msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode,
+    resize_events, restart_edit, scriptout, silent_mode, starting, stderr_isatty, stdin_isatty,
+    stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
@@ -82,7 +82,7 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    Callback, Callback_data, CallbackReader, OptInt, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME,
+    Callback, Callback_data, CallbackReader, NUL, OptInt, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME,
     VV_SWAPCOMMAND, VV_VIM_DID_ENTER, VV_VIM_DID_INIT, dict_T, int64_t, linenr_T, list_T,
     qf_info_T, varnumber_T, win_T,
 };

@@ -20,7 +20,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::MB_MAXCHAR;
+use crate::types::{MB_MAXCHAR, NUL};
 
 /// Redraw for Insert mode.
 ///

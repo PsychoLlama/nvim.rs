@@ -18,7 +18,7 @@ use super::{
 };
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{getdigits_int, skipwhite};
-use crate::ex_cmds::{FAIL, INT_MAX, NUL, kSubIgnoreCase, kSubMatchCase, true_0};
+use crate::ex_cmds::{FAIL, INT_MAX, kSubIgnoreCase, kSubMatchCase, true_0};
 use crate::ex_docmd::check_nextcmd;
 use crate::main::{
     curbuf, curwin, e_backslash, e_invcmd, e_modifiable, e_nopresub, e_trailing_arg,
@@ -35,7 +35,7 @@ use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, CMD_tilde, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
+    AdditionalData, CMD_tilde, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
 };
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};

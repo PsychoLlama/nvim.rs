@@ -13,7 +13,7 @@ use crate::eval::typval::{tv_clear, tv_get_string};
 use crate::eval::userfunc::{restore_funccal, save_funccal};
 use crate::eval::vars::set_var;
 use crate::eval::{
-    DOCMD_NOWAIT, DOCMD_VERBOSE, NUL, clear_evalarg, echo_hl_id, eval1, eval1_emsg,
+    DOCMD_NOWAIT, DOCMD_VERBOSE, clear_evalarg, echo_hl_id, eval1, eval1_emsg,
     fill_evalarg_from_eap,
 };
 use crate::ex_docmd::{check_nextcmd, do_cmdline};
@@ -34,7 +34,7 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, FAIL, OK, VAR_FLAVOUR_DEFAULT,
+    CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, FAIL, NUL, OK, VAR_FLAVOUR_DEFAULT,
     VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, evalarg_T,
     exarg_T, funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T,
     typval_vval_union, var_flavour_T,

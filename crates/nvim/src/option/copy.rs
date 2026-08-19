@@ -55,12 +55,13 @@ use crate::spell::compile_cap_prog;
 use crate::strings::vim_strchr;
 use crate::tag::set_buflocal_tfu_callback;
 use crate::types::{
-    CMOD_NOSWAPFILE, OptInt, OptVal, OptValData, buf_T, colnr_T, int16_t, kFalse, win_T, winopt_T,
+    CMOD_NOSWAPFILE, NUL, OptInt, OptVal, OptValData, buf_T, colnr_T, int16_t, kFalse, win_T,
+    winopt_T,
 };
 use crate::window::{check_colorcolumn, set_winbar_win};
 
 use super::{
-    BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, NUL, change_option_default,
+    BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, change_option_default,
     check_blending, fill_culopt_flags, kFillchars, kListchars, kOptValTypeBoolean, parse_winhl_opt,
     set_chars_option,
 };

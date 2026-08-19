@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// Append the message in `gap` to `v:errors`, which the `assert_*` builtins
 /// report through.
@@ -86,9 +86,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
             FNE_CHECK_START,
         ));
         let endp = redir_endp.get();
-        if endp.is_null() || (*redir_lval.get()).ll_name.is_null() || *endp != NUL {
+        if endp.is_null() || (*redir_lval.get()).ll_name.is_null() || *endp != NUL as c_char {
             clear_lval(redir_lval.get());
-            if !endp.is_null() && *endp != NUL {
+            if !endp.is_null() && *endp != NUL as c_char {
                 semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), endp);
             } else {
                 semsg_c!(gettext(&raw const e_invarg2 as *const c_char), name);

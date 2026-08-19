@@ -45,7 +45,7 @@ use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    CMOD_KEEPALT, ChangedtickDictItem, OK, OptInt, Terminal, VAR_FIXED, VAR_NUMBER, colnr_T,
+    CMOD_KEEPALT, ChangedtickDictItem, NUL, OK, OptInt, Terminal, VAR_FIXED, VAR_NUMBER, colnr_T,
     dictitem_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::undo::u_sync;

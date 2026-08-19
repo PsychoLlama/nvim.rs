@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, OK, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{FAIL, NUL, OK, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// Step over the `,` and ` ` that separate two `'complete'` entries.
 unsafe fn skip_cpt_delims(mut p: *mut c_char) -> *mut c_char {

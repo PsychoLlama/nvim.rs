@@ -20,6 +20,7 @@ use crate::decoration::{
     kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
     kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
 };
+use crate::types::NUL;
 
 /// Put one character of `*pp` into `dest`, and advance `*pp` past it.
 ///

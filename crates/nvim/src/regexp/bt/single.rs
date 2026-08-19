@@ -20,14 +20,14 @@ use crate::pos::MAXCOL;
 use crate::regexp::{
     ALPHA, ANY, ANYBUT, ANYOF, BACKREF, BHPOS, BOL, BOW, CURSOR, DIGIT, END, EOL, EOW, EXACTLY,
     FNAME, HEAD, HEX, IDENT, KWORD, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX,
-    NLOWER, NOCTAL, NOTHING, NUL, NUPPER, NWHITE, NWORD, OCTAL, PRINT, RA_CONT, RA_MATCH,
-    RA_NOMATCH, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL,
-    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex,
-    SFNAME, SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, ZREF, behind_pos, cleanup_subexpr,
-    cleanup_zsubexpr, cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline,
-    reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class, reg_save_equal,
+    NLOWER, NOCTAL, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PRINT, RA_CONT, RA_MATCH, RA_NOMATCH,
+    RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, RI_ALPHA, RI_DIGIT,
+    RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex, SFNAME, SIDENT, SKWORD,
+    SPRINT, UPPER, WHITE, WORD, ZREF, behind_pos, cleanup_subexpr, cleanup_zsubexpr, cstrchr,
+    cstrncmp, kMarkBufLocal, match_with_backref, reg_getline, reg_getline_len, reg_match_visual,
+    reg_nextline, reg_prev_class, reg_save_equal,
 };
-use crate::types::{GraphemeState, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
+use crate::types::{GraphemeState, NUL, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
 use ::libc::strlen;
 
 const BACKREF_1: c_int = BACKREF + 1;

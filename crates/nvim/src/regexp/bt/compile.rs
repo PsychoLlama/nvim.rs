@@ -21,12 +21,12 @@ use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing_legacy};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    BACK, BRACE_COMPLEX, BRANCH, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, NUL, RE_MAGIC,
+    BACK, BRACE_COMPLEX, BRANCH, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC,
     RE_STRICT, RE_STRING, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,
     re_multi_type, refresh_cpo_flags, reg_magic, reg_strict, reg_string, reg_toolong, regcode,
     regflags, regnpar, regnzpar, regparse, regsize,
 };
-use crate::types::{int64_t, uint8_t, uint32_t};
+use crate::types::{NUL, int64_t, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
 const NODE_HDR: usize = 3;

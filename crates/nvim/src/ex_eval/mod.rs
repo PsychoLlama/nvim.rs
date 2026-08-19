@@ -144,9 +144,6 @@ pub(crate) mod flag {
 
     pub const ESTACK_NONE: estack_arg_T = 0;
     pub const IOSIZE: usize = 1024 + 1;
-    pub const NUL: c_char = 0;
-
-    use core::ffi::c_char;
 }
 
 const E_MULTIPLE_ELSE: &CStr = c"E583: Multiple :else";

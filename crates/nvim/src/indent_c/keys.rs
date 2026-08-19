@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
 
 /// Whether C indenting is on: `'cindent'` or a non-empty `'indentexpr'`, and

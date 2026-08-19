@@ -46,7 +46,7 @@ use crate::main::{
 use crate::memory::{xfree, xstrdup};
 use crate::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
-    CA_COMMAND_BUSY, MOD_MASK_SHIFT, NUL, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
+    CA_COMMAND_BUSY, MOD_MASK_SHIFT, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
     NormalState, SHM_FILEINFO, check_scrollbind, clearop, clearopbeep, current_oap,
     end_visual_mode, false_0, find_command, normal_execute, nv_cmds, true_0, unshift_special,
 };
@@ -59,7 +59,7 @@ use crate::state::{
     state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{OP_NOP, VimState, cmdarg_T, int64_t, oparg_T};
+use crate::types::{NUL, OP_NOP, VimState, cmdarg_T, int64_t, oparg_T};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use ::libc::time;

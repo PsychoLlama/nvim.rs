@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::array_add;
+use crate::types::NUL;
 
 pub unsafe extern "C" fn nvim_buf_set_text(
     mut channel_id: uint64_t,

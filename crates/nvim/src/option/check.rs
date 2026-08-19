@@ -40,12 +40,12 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, OptIndex, OptInt, buf_T, int32_t, optset_T, size_t, uint8_t,
+    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, buf_T, int32_t, optset_T, size_t, uint8_t,
     uint32_t, vimoption_T, win_T,
 };
 
 use super::{
-    HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, didset_options_sctx,
+    HLATTRS_INIT, NO_SCREEN, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, didset_options_sctx,
     didset_window_options, get_option, get_varp, kFillchars, kListchars, kOptFlagHLOnly,
     kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
     kOptFlagRedrWin, kOptValTypeString, option_has_type,

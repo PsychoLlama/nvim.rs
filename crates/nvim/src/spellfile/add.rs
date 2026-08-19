@@ -47,14 +47,14 @@ use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispaths
 use crate::spell::{int_wordlist, spell_enc};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    FILE, OptVal, OptValData, SpellAddType, buf_T, int32_t, langp_T, size_t, uint8_t,
+    FILE, NUL, OptVal, OptValData, SpellAddType, buf_T, int32_t, langp_T, size_t, uint8_t,
 };
 use crate::undo::bufIsChanged;
 use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror, strlen};
 
 use super::wordtree::valid_spell_word;
 use super::{
-    MAXPATHL, MAXWLEN, NUL, OPT_LOCAL, SEEK_SET, SPELL_ADD_BAD, SPELL_ADD_RARE,
+    MAXPATHL, MAXWLEN, OPT_LOCAL, SEEK_SET, SPELL_ADD_BAD, SPELL_ADD_RARE,
     e_illegal_character_in_word, kOptValTypeString, kXDGDataHome, mkspell,
 };
 

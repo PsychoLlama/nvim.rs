@@ -19,13 +19,13 @@ use crate::os::cshim::{gettext, strncmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::strings::{has_non_ascii, vim_snprintf, vim_strchr};
-use crate::types::{CONV_NONE, linenr_T, size_t, uint8_t};
+use crate::types::{CONV_NONE, NUL, linenr_T, size_t, uint8_t};
 use ::libc::{fclose, strcpy, strlen};
 
 use super::wordtree::store_word;
 use super::{
-    FAIL, IOSIZE, MAXLINELEN, MAXREGIONS, NUL, OK, WF_BANNED, WF_FIXCAP, WF_KEEPCAP, WF_RARE,
-    WF_REGION, spell_message, spellinfo_T,
+    FAIL, IOSIZE, MAXLINELEN, MAXREGIONS, OK, WF_BANNED, WF_FIXCAP, WF_KEEPCAP, WF_RARE, WF_REGION,
+    spell_message, spellinfo_T,
 };
 
 /// Read a plain word list: one word per line, with optional `/` flags, and

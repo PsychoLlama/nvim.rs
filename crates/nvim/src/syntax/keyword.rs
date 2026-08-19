@@ -11,6 +11,7 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::NUL;
 
 /// Where a `keyentry_T`'s trailing `keyword` array starts.
 ///

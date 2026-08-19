@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 use core::ffi::{c_char, c_int};
 
 /// `do` and `dp`: get or put the diff block under the cursor.

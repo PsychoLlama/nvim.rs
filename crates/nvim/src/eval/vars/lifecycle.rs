@@ -10,7 +10,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::FAIL;
+use crate::types::{FAIL, NUL};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
 /// startup.
@@ -259,7 +259,7 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
         (*dict_var).di_tv.v_type = VAR_DICT;
         (*dict_var).di_tv.v_lock = VAR_FIXED;
         (*dict_var).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
-        (*dict_var).di_key[0] = NUL;
+        (*dict_var).di_key[0] = NUL as c_char;
         QUEUE_INIT(&raw mut (*dict).watchers);
     }
 }

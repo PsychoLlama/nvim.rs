@@ -176,10 +176,6 @@ pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;
 
-/// The string terminator, as a byte: every comparison here is against a
-/// `char *` dereference.
-pub const NUL: c_char = 0;
-
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
 pub const BAD_KEEP: c_int = -1;

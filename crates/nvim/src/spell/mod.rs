@@ -169,7 +169,6 @@ pub const CHAR_UPPER: CharType = 1;
 pub const CHAR_DIGIT: CharType = 2;
 
 pub const MAXPATHL: c_int = 4096;
-pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
 pub const IOSIZE: c_int = 1025;
 

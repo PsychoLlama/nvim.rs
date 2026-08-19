@@ -178,7 +178,6 @@ pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
     },
     _cmdline_offset: 0,
 };
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

@@ -27,7 +27,7 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg_c};
 use crate::main::entry::event_teardown;
 use crate::main::{
-    NUL, curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstbuf,
+    curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstbuf,
     firstwin, garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold, stderr_isatty,
     stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
 };
@@ -39,7 +39,7 @@ use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::types::{VAR_NUMBER, VV_EXITING, VV_EXITREASON, bufref_T, tabpage_T, varnumber_T};
+use crate::types::{NUL, VAR_NUMBER, VV_EXITING, VV_EXITREASON, bufref_T, tabpage_T, varnumber_T};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, strlen, tcdrain};

@@ -13,7 +13,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// The buffer [`cat_prefix_varname`] hands its answer back in, and its size.
 ///
@@ -421,7 +421,7 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
                 }
             }
         }
-        if *var != NUL {
+        if *var != NUL as c_char {
             n = false;
         }
         xfree(tofree.cast());

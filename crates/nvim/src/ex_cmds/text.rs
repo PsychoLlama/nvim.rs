@@ -11,7 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{BL_FIX, BL_WHITE, CAR, CMD_center, CMD_left, CMD_right, EOL_MAC, FAIL, NL, NUL, TAB};
+use super::{BL_FIX, BL_WHITE, CAR, CMD_center, CMD_left, CMD_right, EOL_MAC, FAIL, NL, TAB};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -29,7 +29,7 @@ use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
 use crate::strings::vim_snprintf;
-use crate::types::{cmdidx_T, exarg_T};
+use crate::types::{NUL, cmdidx_T, exarg_T};
 use crate::undo::u_save;
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};

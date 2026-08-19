@@ -7,15 +7,15 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CAR, NL, NUL, STRING_INIT, api_set_error, arena_string, arena_take_arraybuilder};
+use super::{CAR, NL, STRING_INIT, api_set_error, arena_string, arena_take_arraybuilder};
 use crate::api::private::validate::api_err_invalid;
 use crate::kvec::InitVec;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    Arena, Array, ArrayBuilder, Error, String_0, buf_T, garray_T, int64_t, kErrorTypeValidation,
-    kObjectTypeString, linenr_T, object, object_data, size_t,
+    Arena, Array, ArrayBuilder, Error, NUL, String_0, buf_T, garray_T, int64_t,
+    kErrorTypeValidation, kObjectTypeString, linenr_T, object, object_data, size_t,
 };
 use ::libc::{strlen, strnlen};
 use core::ffi::c_char;
@@ -136,7 +136,7 @@ pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Ar
                     size: line_len,
                 },
             );
-            memchrsub(s.data.cast(), NUL, NL, line_len);
+            memchrsub(s.data.cast(), NUL as c_char, NL, line_len);
             items.push(object {
                 type_0: kObjectTypeString,
                 data: object_data { string: s },

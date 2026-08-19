@@ -12,6 +12,7 @@
 use core::ffi::c_int;
 
 use super::*;
+use crate::types::NUL;
 
 /// Start syntax recognition for a line.
 ///

@@ -29,14 +29,14 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{FullName_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BS_NOSTOP, BS_START, Callback, Callback_data, FAIL, OK, OptIndex, OptVal, OptValData,
+    BS_NOSTOP, BS_START, Callback, Callback_data, FAIL, NUL, OK, OptIndex, OptVal, OptValData,
     VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t, vimoption_T,
     win_T,
 };
 use ::libc::{strcmp, strlen};
 
 use super::{
-    EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, NUL, SHM_LINES, SHM_MOD, SHM_RO, SHM_WRI, get_varp,
+    EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, SHM_LINES, SHM_MOD, SHM_RO, SHM_WRI, get_varp,
     kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeString, option_has_scope,
     optval_from_varp, set_option_direct,
 };

@@ -17,7 +17,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::utf_head_off;
 use crate::memline::{ml_get, ml_get_len};
 use crate::search::{BACKWARD, FORWARD, linewhite};
-use crate::types::{FAIL, OK, linenr_T, oparg_T};
+use crate::types::{FAIL, NUL, OK, linenr_T, oparg_T};
 
 /// `{` / `}` / `[[` / `]]`: move to the `count`th paragraph or section
 /// boundary in `dir`, answering whether one was found.

@@ -70,8 +70,8 @@ use crate::path::{add_pathsep, vim_FullName, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg_c;
 use crate::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, OK, VV_THIS_SESSION, aentry_T,
-    buf_T, exarg_T, garray_T, size_t, win_T,
+    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, NUL, OK, VV_THIS_SESSION,
+    aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -96,7 +96,6 @@ mod flag {
     /// `makeset`: skip 'runtimepath' and 'packpath'.
     pub const OPT_SKIPRTP: c_uint = 128;
 
-    pub const NUL: c_char = 0;
     pub const MAXPATHL: c_int = 4096;
 
     /// Frame layouts.
@@ -104,7 +103,7 @@ mod flag {
     pub const FR_COL: c_char = 2;
 }
 
-use flag::{DOSO_NONE, MAXPATHL, NUL, OPT_GLOBAL, OPT_SKIPRTP, VSE_NONE};
+use flag::{DOSO_NONE, MAXPATHL, OPT_GLOBAL, OPT_SKIPRTP, VSE_NONE};
 
 /// The default file name of each command that has one.
 const SESSION_FILE: &CStr = c"Session.vim";
@@ -289,7 +288,7 @@ unsafe fn ses_escape_fname(name: *mut c_char) -> *mut c_char {
     unsafe {
         let sname = home_replace_save(ptr::null_mut::<buf_T>(), name);
         let mut p = sname;
-        while *p != NUL {
+        while *p != NUL as c_char {
             if *p == b'\\' as c_char {
                 *p = b'/' as c_char;
             }
@@ -426,7 +425,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
         // One extra byte for each character that doubles.
         let mut extra = 0usize;
         let mut p = sname;
-        while *p != NUL {
+        while *p != NUL as c_char {
             if *p == b'=' as c_char || vim_ispathsep(*p as c_int) {
                 extra += 1;
             }
@@ -438,7 +437,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
         add_pathsep(retval);
         let mut s = retval.add(strlen(retval));
         p = sname;
-        while *p != NUL {
+        while *p != NUL as c_char {
             if *p == b'=' as c_char {
                 *s = b'=' as c_char;
                 *s.offset(1) = b'=' as c_char;
@@ -489,7 +488,8 @@ pub unsafe fn ex_mkrc(eap: *mut exarg_T) {
     let fname = unsafe {
         let arg = (*eap).arg;
         if cmdidx == CMD_mkview
-            && (*arg == NUL || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL))
+            && (*arg == NUL as c_char
+                || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL as c_char))
         {
             (*eap).forceit = 1;
             view_file = get_view_file(*arg);
@@ -501,7 +501,7 @@ pub unsafe fn ex_mkrc(eap: *mut exarg_T) {
                 vim_mkdir_emsg(p_vdir.get(), 0o755);
             }
             view_file
-        } else if *arg != NUL {
+        } else if *arg != NUL as c_char {
             arg
         } else if cmdidx == CMD_mkvimrc {
             VIMRC_FILE.as_ptr().cast_mut()
@@ -634,9 +634,9 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
     unsafe {
         let dirnow = xmalloc(MAXPATHL as size_t).cast::<c_char>();
         if os_dirname(dirnow, MAXPATHL as size_t) == FAIL || os_chdir(dirnow) != 0 {
-            *dirnow = NUL;
+            *dirnow = NUL as c_char;
         }
-        let known = *dirnow != NUL;
+        let known = *dirnow != NUL as c_char;
         let to_sesdir = known && ssop_flags.get() & kOptSsopFlagSesdir != 0;
         let to_globaldir =
             known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && !globaldir.get().is_null();

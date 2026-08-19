@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::keycodes::{K_C_END, K_C_HOME, K_COMMAND, K_IGNORE, K_LUA, K_MOUSEMOVE, key_unescape};
-use crate::types::MB_MAXBYTES;
+use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::c_int;
 use core::ptr;
 

@@ -16,6 +16,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
+use crate::types::NUL;
 
 /// Build the function table, once, at startup.
 pub unsafe fn func_init() {

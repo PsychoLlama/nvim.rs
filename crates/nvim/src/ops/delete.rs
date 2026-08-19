@@ -24,7 +24,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::register::is_append_register;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// `d` (and the delete half of `c`) over the operator's region.
 ///

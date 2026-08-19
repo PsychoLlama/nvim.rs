@@ -6,7 +6,7 @@ use core::ptr;
 
 use crate::api::private::helpers::{api_clear_error, cstr_as_string};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
-use crate::ex_docmd::{NUL, kRetNilBool};
+use crate::ex_docmd::kRetNilBool;
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, e_shellempty, p_sh};
@@ -16,7 +16,7 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::shell::{shell_build_argv, shell_free_argv};
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    Array, Error, Object, String_0, exarg_T, kErrorTypeNone, kObjectTypeString, size_t,
+    Array, Error, NUL, Object, String_0, exarg_T, kErrorTypeNone, kObjectTypeString, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 

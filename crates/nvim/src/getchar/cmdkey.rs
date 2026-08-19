@@ -9,7 +9,7 @@
 use super::*;
 use crate::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
 use crate::semsg_multiline_c;
-use crate::types::kErrorTypeNone;
+use crate::types::{NUL, kErrorTypeNone};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::NUL;
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
 /// puts back on the way out. The prompt has to be *visible*, so silence and

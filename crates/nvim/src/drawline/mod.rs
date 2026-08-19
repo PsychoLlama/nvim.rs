@@ -70,7 +70,7 @@ use crate::syntax::{
 };
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::{
-    CharSize, CharsizeArg, DecorRange, DecorVirtText, GridView, HlMode, NS, RgbValue,
+    CharSize, CharsizeArg, DecorRange, DecorVirtText, GridView, HlMode, NS, NUL, RgbValue,
     SignTextAttrs, VirtLines, VirtText, WinExtmark, buf_T, colnr_T, diffline_T, foldinfo_T, hlf_T,
     linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t, statuscol_T,
     uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
@@ -106,7 +106,6 @@ pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 /// The most negative `int`, which `draw_virt_text` uses as "this virtual
 /// text has no column yet".
 pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;

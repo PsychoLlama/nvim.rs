@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::NUL;
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 

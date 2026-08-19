@@ -10,7 +10,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{copy_nonoverlapping, null_mut};
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::eval::{NUL, REGSUB_COPY, REGSUB_MAGIC, kOptValTypeString};
+use crate::eval::{REGSUB_COPY, REGSUB_MAGIC, kOptValTypeString};
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::main::{empty_string_option, p_cpo, p_ic};
 use crate::mbyte::utfc_ptr2len;
@@ -20,7 +20,7 @@ use crate::optionstr::free_string_option;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
 use crate::types::{
-    OptVal, OptValData, colnr_T, garray_T, regmatch_T, regprog_T, size_t, typval_T,
+    NUL, OptVal, OptValData, colnr_T, garray_T, regmatch_T, regprog_T, size_t, typval_T,
 };
 use ::libc::strcpy;
 

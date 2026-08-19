@@ -19,6 +19,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::types::NUL;
 
 /// The effective prompt for `buf`: 'b:prompt_text', or `"% "`.
 ///

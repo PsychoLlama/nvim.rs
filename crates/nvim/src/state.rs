@@ -21,8 +21,8 @@ use crate::options::{kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, Event, ProcType, VimState, dict_T, hashitem_T, hashtab_T, kNone, save_v_event_T,
-    size_t, uint8_t, win_T,
+    Direction, Event, NUL, ProcType, VimState, dict_T, hashitem_T, hashtab_T, kNone,
+    save_v_event_T, size_t, uint8_t, win_T,
 };
 use crate::ui::ui_flush;
 use ::libc::{strcmp, strcpy};
@@ -51,7 +51,6 @@ pub const MODE_OP_PENDING: ModeFlags = 4;
 pub const MODE_VISUAL: ModeFlags = 2;
 pub const MODE_NORMAL: ModeFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub unsafe fn state_enter(mut s: *mut VimState) {
     's_132: loop {
         let mut check_result: ::core::ffi::c_int = if (*s).check.is_some() {

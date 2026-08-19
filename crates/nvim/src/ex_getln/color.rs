@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::smsg_c;
-use crate::types::{VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
+use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
 
 /// C's `kv_push` onto a `CmdlineColors`, doubling the heap array from 8.
 unsafe fn push_chunk(colors: *mut CmdlineColors, chunk: CmdlineColorChunk) {

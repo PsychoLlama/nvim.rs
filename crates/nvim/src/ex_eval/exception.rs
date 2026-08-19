@@ -37,7 +37,7 @@
 
 use super::flag::{
     CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,
-    CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER, IOSIZE, NUL,
+    CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER, IOSIZE,
 };
 use super::{cause_abort, iobuff, message};
 use crate::ascii::ascii_isdigit;
@@ -58,7 +58,7 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::smsg_c;
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::types::{
-    FAIL, OK, VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T, except_type_T,
+    FAIL, NUL, OK, VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T, except_type_T,
     exception_state_T, int64_t, list_T, msglist_T, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy, strlen};
@@ -322,7 +322,7 @@ pub unsafe fn get_exception_string(
         let mesg = (*value.cast::<msglist_T>()).throw_msg;
         let ret;
         let val;
-        if !cmdname.is_null() && *cmdname != NUL {
+        if !cmdname.is_null() && *cmdname != NUL as c_char {
             let cmdlen = strlen(cmdname);
             ret = xstrnsave(c"Vim(".as_ptr(), 4 + cmdlen + 2 + strlen(mesg));
             strcpy(ret.add(4), cmdname);
@@ -338,8 +338,8 @@ pub unsafe fn get_exception_string(
         // at the end instead.
         let mut p = mesg;
         loop {
-            if *p == NUL || error_number_at(p) {
-                if *p == NUL || p == mesg {
+            if *p == NUL as c_char || error_number_at(p) {
+                if *p == NUL as c_char || p == mesg {
                     // "E123" missing, or at the very beginning.
                     strcat(val, mesg);
                     break;
@@ -355,7 +355,7 @@ pub unsafe fn get_exception_string(
                 }
                 // '"filename" E123: message text'
                 strcat(val, p);
-                *p.sub(2) = NUL;
+                *p.sub(2) = NUL as c_char;
                 snprintf(
                     val.add(strlen(p)),
                     c" (%s)".count_bytes(),
@@ -411,7 +411,9 @@ pub(super) unsafe fn throw_exception(
         if type_0 == ET_USER {
             let v = value.cast::<c_char>();
             if strncmp(v, c"Vim".as_ptr(), 3) == 0
-                && (*v.add(3) == NUL || *v.add(3) == b':' as c_char || *v.add(3) == b'(' as c_char)
+                && (*v.add(3) == NUL as c_char
+                    || *v.add(3) == b':' as c_char
+                    || *v.add(3) == b'(' as c_char)
             {
                 emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix".as_ptr());
                 current_exception.set(ptr::null_mut());
@@ -479,14 +481,14 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
             verbose_enter();
         }
         no_wait_return.set(no_wait_return.get() + 1);
-        if debug_break_level.get() > 0 || *p_vfile.get() == NUL {
+        if debug_break_level.get() > 0 || *p_vfile.get() == NUL as c_char {
             // Always scroll up, don't overwrite.
             msg_scroll.set(1);
         }
         smsg_c!(0, mesg.as_ptr(), value);
         // Don't overwrite this either.
         msg_puts(c"\n".as_ptr());
-        if debug_break_level.get() > 0 || *p_vfile.get() == NUL {
+        if debug_break_level.get() > 0 || *p_vfile.get() == NUL as c_char {
             cmdline_row.set(msg_row.get());
         }
         no_wait_return.set(no_wait_return.get() - 1);
@@ -575,7 +577,7 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
         }
         set_vim_var_string(VV_EXCEPTION, (*excp).value, -1);
         set_vim_var_list(VV_STACKTRACE, (*excp).stacktrace);
-        if *(*excp).throw_name == NUL {
+        if *(*excp).throw_name == NUL as c_char {
             // `throw_name` is unset for an exception from a typed command.
             set_vim_var_string(VV_THROWPOINT, ptr::null(), -1);
             return;

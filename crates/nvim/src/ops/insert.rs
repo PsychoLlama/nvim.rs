@@ -29,7 +29,7 @@
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, NUL, OK};
 
 /// The first line, measured just before Insert mode runs.
 ///

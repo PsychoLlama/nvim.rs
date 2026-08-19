@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::has_key;
+use crate::types::NUL;
 
 unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut flush: *mut bool) {
     unsafe {

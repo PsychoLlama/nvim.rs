@@ -15,14 +15,14 @@ use crate::eval::typval::{
 };
 use crate::eval::{
     EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH, EXPR_NEQUAL,
-    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, NUL, e_invalblob, partial_name, pattern_match,
+    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, e_invalblob, partial_name, pattern_match,
 };
 use crate::mbyte::mb_strcmp_ic;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    FAIL, OK, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, dict_T,
-    exprtype_T, float_T, typval_T, varnumber_T,
+    FAIL, NUL, OK, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    dict_T, exprtype_T, float_T, typval_T, varnumber_T,
 };
 use ::libc::strcmp;
 

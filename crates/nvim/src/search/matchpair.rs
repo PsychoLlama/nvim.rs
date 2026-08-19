@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{kFalse, kNone, kTrue};
+use crate::types::{NUL, kFalse, kNone, kTrue};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

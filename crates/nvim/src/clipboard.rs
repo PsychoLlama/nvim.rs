@@ -25,13 +25,11 @@ use crate::register::{
     kMTCharWise, kMTLineWise, kMTUnknown, update_yankreg_width,
 };
 use crate::types::{
-    AdditionalData, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, ptrdiff_t, size_t, ssize_t,
+    AdditionalData, NUL, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, ptrdiff_t, size_t, ssize_t,
     yankreg_T,
 };
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
-
-pub const NUL: c_int = 0;
 
 /// The message shown once when a clipboard register is used and no provider
 /// answers.

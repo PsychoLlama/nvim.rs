@@ -37,6 +37,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::NUL;
 
 /// The filler that stands in for the half of a double-width character that
 /// did not fit, at either edge of the text.

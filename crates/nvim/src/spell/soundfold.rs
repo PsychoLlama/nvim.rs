@@ -29,11 +29,11 @@ use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
 use crate::memory::xstrdup;
 use crate::os::cshim::strstr;
 use crate::strings::vim_strchr;
-use crate::types::{MB_MAXBYTES, langp_T, salitem_T, slang_T};
+use crate::types::{MB_MAXBYTES, NUL, langp_T, salitem_T, slang_T};
 use ::libc::strlen;
 
+use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
-use super::{MAXWLEN, NUL};
 
 /// `soundfold()`: the sound-fold of `word` in the first of the window's
 /// languages that has a sound-folding table, or a copy of `word` itself

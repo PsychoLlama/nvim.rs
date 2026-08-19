@@ -15,13 +15,13 @@ use crate::main::{curwin, rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
 use crate::regexp::{
     BRANCH, CURSOR, EXACTLY, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MCLOSE, MOPEN,
-    MULTIBYTECODE, NOTHING, NUL, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL,
+    MULTIBYTECODE, NOTHING, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL,
     RE_VISUAL, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, SIMPLE, SPSTART, ZREF, at_start,
     getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix, one_exactly, pat_byte, re_has_z,
     re_mult_next, reg_toolong, ungetchr, unmagic,
 };
 use crate::semsg;
-use crate::types::{colnr_T, int64_t, uint8_t, uint32_t};
+use crate::types::{NUL, colnr_T, int64_t, uint8_t, uint32_t};
 
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
 pub(crate) fn z_atom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {

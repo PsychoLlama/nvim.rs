@@ -145,7 +145,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
 };
 pub const KEYSET_OPTIDX_keymap__desc: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_keymap__callback: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CPO_BSLASH: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.

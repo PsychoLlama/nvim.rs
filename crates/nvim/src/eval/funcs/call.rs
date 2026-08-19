@@ -4,7 +4,7 @@
 
 use super::args::{Args, frame};
 use super::{
-    AUTOLOAD_CHAR, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, MAX_FUNC_ARGS, NUL,
+    AUTOLOAD_CHAR, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, MAX_FUNC_ARGS,
     TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
 };
 use crate::api::private::helpers::cstr_as_string;
@@ -42,7 +42,7 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, FAIL, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
+    EvalFuncData, FAIL, NUL, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
     VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
 };
 use ::libc::strcmp;

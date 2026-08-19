@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::NUL;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.

@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::kvec::Kvec;
+use crate::types::NUL;
 
 unsafe fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) -> bool {
     unsafe {

@@ -16,7 +16,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::types::{
-    FAIL, OK, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    FAIL, NUL, OK, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
 
 /// Fire `CompleteDone` with `v:event` describing how the completion ended.
