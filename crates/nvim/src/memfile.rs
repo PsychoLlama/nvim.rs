@@ -64,8 +64,19 @@ use crate::os::fs::{
 };
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::FullName_save;
-use crate::types::{FAIL, FileInfo, OK, blocknr_T, buf_T, off_T};
+use crate::types::{FileInfo, blocknr_T, buf_T, off_T};
 use ::libc::{__errno_location, close, lseek, strerror};
+
+/// A swap-file operation that did not complete.
+///
+/// It carries nothing because there is nothing left to say: every reason
+/// worth a message has already produced one (E294 seek-on-read, E295 read,
+/// E296 seek-on-write, E297 write, and `mf_close`'s E314 for the descriptor).
+/// The two silent reasons are the same answer for the same purpose — there
+/// is no swap file, so the block cannot go anywhere and the caller must keep
+/// it in memory.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SwapFailed;
 
 /// Whether a memfile has blocks that are not on disk, and whether they may
 /// be written yet.
@@ -342,13 +353,13 @@ pub unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
 
 /// Give an existing memory file a swap file, as `'updatecount'` going from
 /// zero to non-zero does. `fname` is consumed as in [`mf_open`].
-pub unsafe fn mf_open_file(mfp: *mut memfile_T, fname: *mut c_char) -> c_int {
+pub unsafe fn mf_open_file(mfp: *mut memfile_T, fname: *mut c_char) -> Result<(), SwapFailed> {
     unsafe {
         if mf_do_open(mfp, fname, O_RDWR | O_CREAT | O_EXCL) {
             (*mfp).mf_dirty = MfDirty::Yes;
-            OK
+            Ok(())
         } else {
-            FAIL
+            Err(SwapFailed)
         }
     }
 }
@@ -470,7 +481,7 @@ pub unsafe fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: c_uint) -> 
                 }
                 let mut block = bhdr_T::new((*mfp).mf_page_size, page_count);
                 block.bh_bnum = nr;
-                if mf_read(mfp, &mut block) == FAIL {
+                if mf_read(mfp, &mut block).is_err() {
                     return core::ptr::null_mut();
                 }
                 block
@@ -539,16 +550,16 @@ pub unsafe fn mf_free(mfp: *mut memfile_T, hp: *mut bhdr_T) {
 /// Write out every dirty block, newest first.
 ///
 /// `flags` is a set of [`MFS_ALL`], [`MFS_STOP`], [`MFS_FLUSH`] and
-/// [`MFS_ZERO`]. Answers `FAIL` when there is no file or a write failed —
-/// which on a full disk is the common case, so after the first failure only
-/// blocks that already have a place in the file are attempted.
-pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> c_int {
+/// [`MFS_ZERO`]. Fails when there is no file or a write failed — which on a
+/// full disk is the common case, so after the first failure only blocks that
+/// already have a place in the file are attempted.
+pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> Result<(), SwapFailed> {
     unsafe {
         let got_int_save = got_int.get();
 
         if (*mfp).mf_fd < 0 {
             (*mfp).mf_dirty = MfDirty::No;
-            return FAIL;
+            return Err(SwapFailed);
         }
 
         // Only a CTRL-C typed *while* writing interrupts this, not one
@@ -557,7 +568,7 @@ pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> c_int {
 
         // Last to first, which makes a half-written file likelier to be
         // consistent. The last block is typically early in the table.
-        let mut status = OK;
+        let mut status = Ok(());
         let mut visited = false;
         let mut i = 0;
         while i < (*mfp).used.len() {
@@ -565,13 +576,14 @@ pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> c_int {
             visited = true;
             let syncable = (flags & MFS_ALL != 0 || (*hp).bh_bnum >= 0)
                 && (*hp).bh_flags & BH_DIRTY != 0
-                && (status == OK || ((*hp).bh_bnum >= 0 && (*hp).bh_bnum < (*mfp).mf_infile_count));
+                && (status.is_ok()
+                    || ((*hp).bh_bnum >= 0 && (*hp).bh_bnum < (*mfp).mf_infile_count));
             if syncable && !(flags & MFS_ZERO != 0 && (*hp).bh_bnum != 0) {
-                if mf_write(mfp, hp) == FAIL {
-                    if status == FAIL {
+                if mf_write(mfp, hp).is_err() {
+                    if status.is_err() {
                         break; // a second failure: give up
                     }
-                    status = FAIL;
+                    status = Err(SwapFailed);
                 }
                 if flags & MFS_STOP != 0 {
                     if os_char_avail() {
@@ -591,12 +603,12 @@ pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> c_int {
 
         // Everything written means nothing is dirty. So does a failure: the
         // flag is cleared to stop us retrying on every keystroke.
-        if !visited || status == FAIL {
+        if !visited || status.is_err() {
             (*mfp).mf_dirty = MfDirty::No;
         }
 
         if flags & MFS_FLUSH != 0 && os_fsync((*mfp).mf_fd) != 0 {
-            status = FAIL;
+            status = Err(SwapFailed);
         }
 
         got_int.set(got_int.get() || got_int_save);
@@ -637,7 +649,7 @@ pub unsafe fn mf_release_all() -> bool {
                     while i < (*mfp).used.len() {
                         let hp = (*mfp).used.at(i);
                         if (*hp).bh_flags & BH_LOCKED == 0
-                            && ((*hp).bh_flags & BH_DIRTY == 0 || mf_write(mfp, hp) != FAIL)
+                            && ((*hp).bh_flags & BH_DIRTY == 0 || mf_write(mfp, hp).is_ok())
                         {
                             // Dropping it releases the block's pages.
                             drop((*mfp).used.remove((*hp).bh_bnum));
@@ -657,17 +669,17 @@ pub unsafe fn mf_release_all() -> bool {
 }
 
 /// Read a block's pages from the file.
-unsafe fn mf_read(mfp: *mut memfile_T, hp: &mut bhdr_T) -> c_int {
+unsafe fn mf_read(mfp: *mut memfile_T, hp: &mut bhdr_T) -> Result<(), SwapFailed> {
     unsafe {
         if (*mfp).mf_fd < 0 {
-            return FAIL; // there is no file to read
+            return Err(SwapFailed); // there is no file to read
         }
 
         let page_size = (*mfp).mf_page_size;
         let offset = (page_size as blocknr_T * hp.bh_bnum) as off_T;
         if lseek((*mfp).mf_fd, offset, SEEK_SET) != offset {
             perror_msg(c"E294: Seek error in swap file read");
-            return FAIL;
+            return Err(SwapFailed);
         }
         assert!(
             hp.bh_page_count <= c_uint::MAX / page_size,
@@ -676,10 +688,10 @@ unsafe fn mf_read(mfp: *mut memfile_T, hp: &mut bhdr_T) -> c_int {
         let size = page_size * hp.bh_page_count;
         if read_eintr((*mfp).mf_fd, hp.bh_data, size as usize) as c_uint != size {
             perror_msg(c"E295: Read error in swap file");
-            return FAIL;
+            return Err(SwapFailed);
         }
 
-        OK
+        Ok(())
     }
 }
 
@@ -689,15 +701,15 @@ unsafe fn mf_read(mfp: *mut memfile_T, hp: &mut bhdr_T) -> c_int {
 /// the space in front of it — with the blocks that belong there, or, where
 /// one of those has been freed, with a copy of this block's bytes as
 /// filler.
-unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
+unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> Result<(), SwapFailed> {
     unsafe {
         if (*mfp).mf_fd < 0 && !(*mfp).mf_reopen {
-            return FAIL; // there is no file and there never was
+            return Err(SwapFailed); // there is no file and there never was
         }
 
         // A memory-only block must be given its place in the file first.
-        if (*hp).bh_bnum < 0 && mf_trans_add(mfp, hp) == FAIL {
-            return FAIL;
+        if (*hp).bh_bnum < 0 {
+            mf_trans_add(mfp, hp);
         }
 
         let page_size = (*mfp).mf_page_size;
@@ -725,7 +737,7 @@ unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
                 if (*mfp).mf_fd >= 0 {
                     if lseek((*mfp).mf_fd, offset, SEEK_SET) != offset {
                         perror_msg(c"E296: Seek error in swap file write");
-                        return FAIL;
+                        return Err(SwapFailed);
                     }
                     let data = if hp2.is_null() {
                         (*hp).bh_data
@@ -754,7 +766,7 @@ unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
                         emsg(gettext(c"E297: Write error in swap file".as_ptr()));
                     }
                     did_swapwrite_msg.set(true);
-                    return FAIL;
+                    return Err(SwapFailed);
                 }
             }
 
@@ -770,16 +782,20 @@ unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
             }
         }
 
-        OK
+        Ok(())
     }
 }
 
 /// Give a memory-only block a place in the file, and remember the
 /// renumbering for [`mf_trans_del`].
-unsafe fn mf_trans_add(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
+///
+/// Cannot fail: a number is always available, and the page run it comes from
+/// is either recycled off the free list or taken past the end of the file.
+/// Upstream returned `OK`/`FAIL` here and never answered `FAIL`.
+unsafe fn mf_trans_add(mfp: *mut memfile_T, hp: *mut bhdr_T) {
     unsafe {
         if (*hp).bh_bnum >= 0 {
-            return OK; // already has one
+            return; // already has one
         }
 
         // Reuse a free run if one is long enough, as `mf_new` does.
@@ -809,8 +825,6 @@ unsafe fn mf_trans_add(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
         block.bh_bnum = new_bnum;
         (*mfp).used.insert(block);
         (*mfp).trans.insert(old_bnum, new_bnum);
-
-        OK
     }
 }
 

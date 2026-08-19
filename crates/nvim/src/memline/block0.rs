@@ -584,6 +584,8 @@ pub unsafe fn ml_setflags(buf: *mut buf_T) {
         (*b0p).set_flags((*b0p).flags() & !B0_FF_MASK | fileformat);
         add_b0_fenc(b0p, buf);
         (*hp).bh_flags |= BH_DIRTY;
-        mf_sync(mfp, MFS_ZERO as c_int);
+        // Best effort: a swap file that cannot take block zero is reported
+        // where it is created, and there is nothing to do about it here.
+        let _ = mf_sync(mfp, MFS_ZERO as c_int);
     }
 }

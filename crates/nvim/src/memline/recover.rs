@@ -821,7 +821,9 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                 }
 
                 if (*(*buf).b_ml.ml_mfp).mf_dirty == MfDirty::Yes {
-                    mf_sync(
+                    // Best effort: `ml_sync_all` writes what it can and
+                    // leaves the rest dirty.
+                    let _ = mf_sync(
                         (*buf).b_ml.ml_mfp,
                         (if check_char != 0 {
                             MFS_STOP as c_int
@@ -866,10 +868,10 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
 
         ml_flush_line(buf, false); // flush the buffered line
         ml_find_line(buf, 0, ML_FLUSH as c_int); // flush the locked block
-        let mut status = mf_sync(
-            mfp,
-            MFS_ALL as c_int | if do_fsync { MFS_FLUSH as c_int } else { 0 },
-        );
+        let sync_flags = MFS_ALL as c_int | if do_fsync { MFS_FLUSH as c_int } else { 0 };
+        // `ml_preserve` still answers OK/FAIL to its own callers, so the
+        // memfile's result is converted here and again below.
+        let mut status = mf_sync(mfp, sync_flags).map_or(FAIL, |()| OK);
         (*buf).b_ml.ml_stack_top = 0; // the stack is invalid after MFS_ALL
 
         // Some data blocks may have gone from a negative to a positive block
@@ -891,11 +893,7 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
                 }
                 ml_find_line(buf, 0, ML_FLUSH as c_int); // flush the locked block
                 // Sync the pointer blocks that were just updated.
-                if mf_sync(
-                    mfp,
-                    MFS_ALL as c_int | if do_fsync { MFS_FLUSH as c_int } else { 0 },
-                ) == FAIL
-                {
+                if mf_sync(mfp, sync_flags).is_err() {
                     status = FAIL;
                 }
                 (*buf).b_ml.ml_stack_top = 0; // the stack is invalid now

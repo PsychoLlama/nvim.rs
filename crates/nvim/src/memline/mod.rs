@@ -349,7 +349,8 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
         // one is created.
         mf_put(mfp, *hp, true, false);
         if !(*buf).b_help && !(*buf).b_spell {
-            mf_sync(mfp, 0);
+            // Best effort; there may not be a swap file yet.
+            let _ = mf_sync(mfp, 0);
         }
 
         // Block one: the root pointer block, pointing at the one data block.
@@ -424,7 +425,8 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
         if (*buf).b_spell {
             let fname = vim_tempname();
             if !fname.is_null() {
-                mf_open_file(mfp, fname); // consumes fname!
+                // A spell buffer keeps working without a swap file.
+                let _ = mf_open_file(mfp, fname); // consumes fname!
             }
             (*buf).b_may_swap = false;
             return;
@@ -449,7 +451,7 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
             if fname.is_null() {
                 continue;
             }
-            if mf_open_file(mfp, fname) != OK {
+            if mf_open_file(mfp, fname).is_err() {
                 // consumes fname!
                 continue;
             }
@@ -457,7 +459,7 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
             ml_upd_block0(buf, UB_SAME_DIR);
 
             // Flush block zero, so others can read it.
-            if mf_sync(mfp, MFS_ZERO as ::core::ffi::c_int) == OK {
+            if mf_sync(mfp, MFS_ZERO as ::core::ffi::c_int).is_ok() {
                 // Mark every block that belongs in the swap file dirty, for
                 // when 'swapfile' was reset (deleting the file) and set again.
                 mf_set_dirty(mfp);

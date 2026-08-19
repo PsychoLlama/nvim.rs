@@ -600,7 +600,7 @@
     "crates/nvim/src/memline/lines.rs": {"unsafe_lines": 262},
     "crates/nvim/src/memline/mod.rs": {"cell_ptr": 4, "unsafe_lines": 213},
     "crates/nvim/src/memline/offsets.rs": {"unsafe_lines": 311},
-    "crates/nvim/src/memline/recover.rs": {"cell_ptr": 9, "unsafe_lines": 707},
+    "crates/nvim/src/memline/recover.rs": {"cell_ptr": 9, "unsafe_lines": 701},
     "crates/nvim/src/memline/swapname.rs": {"cell_ptr": 5, "unsafe_lines": 589},
     "crates/nvim/src/memline/tree.rs": {"cell_ptr": 3, "unsafe_lines": 341},
     "crates/nvim/src/memory.rs": {"cell_ptr": 12, "no_mangle": 10, "unsafe_lines": 435},
