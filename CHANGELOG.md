@@ -43,6 +43,12 @@ and this project adheres to [CalVer](https://calver.org/).
   editor was tracking as "yes, no, or not decided yet". Several of those
   turned out to be two unrelated families sharing a prefix, and are now
   separate types. Nothing observable changed.
+- Gave the editor one way to talk about text: one home for the helpers that
+  read a C string, a real type for the byte strings the API passes around
+  instead of a bare pointer-and-length pair, letters of `'cpoptions'`,
+  `'shortmess'`, `'formatoptions'` and `'backspace'` that can no longer be
+  confused with one another, and option names passed as strings rather than
+  as pointers. Nothing observable changed.
 
 ## [2026.08.18-0975a8efd3]
 
