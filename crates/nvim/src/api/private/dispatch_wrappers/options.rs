@@ -23,7 +23,7 @@ pub unsafe fn handle_nvim_get_all_options_info(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }
@@ -110,11 +110,10 @@ pub unsafe fn handle_nvim_get_option_value(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_get_option_value(arg_1, &raw mut arg_2) } {
+    match unsafe { nvim_get_option_value(arg_1, &raw mut arg_2) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_set_option_value(

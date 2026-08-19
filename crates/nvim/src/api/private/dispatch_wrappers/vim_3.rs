@@ -7,55 +7,6 @@
 
 use super::*;
 
-pub unsafe fn handle_nvim_put(
-    channel_id: uint64_t,
-    args: Array,
-    arena: *mut Arena,
-    error: *mut Error,
-) -> Object {
-    // SAFETY: the dispatcher hands over an argument array of `size` initialized
-    // objects and an `Error` slot that is live and ours alone until we return;
-    // both outlive the call.
-    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
-    log_invoke(
-        c"handle_nvim_put",
-        c"nvim_put",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 4 {
-        wrong_arity(error, 4, args.len());
-        return NIL;
-    }
-    let Some(arg_1) = as_array(args[0]) else {
-        wrong_type(error, 1, c"nvim_put", c"ArrayOf(String)");
-        return NIL;
-    };
-    let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_put", c"String");
-        return NIL;
-    };
-    let Some(arg_3) = as_boolean(args[2]) else {
-        wrong_type(error, 3, c"nvim_put", c"Boolean");
-        return NIL;
-    };
-    let Some(arg_4) = as_boolean(args[3]) else {
-        wrong_type(error, 4, c"nvim_put", c"Boolean");
-        return NIL;
-    };
-    // SAFETY: a wrapper runs on the main loop.
-    if textlock.get() != 0 || unsafe { expr_map_locked() } {
-        expr_map_locked_error(error);
-        return NIL;
-    }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_put(arg_1, arg_2, arg_3, arg_4, arena) } {
-        return failure(error, e);
-    }
-    NIL
-}
-
 pub unsafe fn handle_nvim_replace_termcodes(
     channel_id: uint64_t,
     args: Array,

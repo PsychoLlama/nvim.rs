@@ -160,11 +160,10 @@ pub unsafe fn handle_nvim_win_get_option(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_win_get_option(arg_1, arg_2) } {
+    match unsafe { nvim_win_get_option(arg_1, arg_2) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_win_set_option(
@@ -234,11 +233,10 @@ pub unsafe fn handle_tabpage_del_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { tabpage_del_var(arg_1, arg_2, arena) } {
+    match unsafe { tabpage_del_var(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_tabpage_set_var(
@@ -272,11 +270,10 @@ pub unsafe fn handle_tabpage_set_var(
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { tabpage_set_var(arg_1, arg_2, arg_3, arena) } {
+    match unsafe { tabpage_set_var(arg_1, arg_2, arg_3, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_vim_del_var(
@@ -305,11 +302,10 @@ pub unsafe fn handle_vim_del_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { vim_del_var(arg_1, arena) } {
+    match unsafe { vim_del_var(arg_1, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_vim_set_var(
@@ -339,11 +335,10 @@ pub unsafe fn handle_vim_set_var(
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { vim_set_var(arg_1, arg_2, arena) } {
+    match unsafe { vim_set_var(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_window_del_var(
@@ -376,11 +371,10 @@ pub unsafe fn handle_window_del_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { window_del_var(arg_1, arg_2, arena) } {
+    match unsafe { window_del_var(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_window_set_var(
@@ -414,9 +408,8 @@ pub unsafe fn handle_window_set_var(
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { window_set_var(arg_1, arg_2, arg_3, arena) } {
+    match unsafe { window_set_var(arg_1, arg_2, arg_3, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }

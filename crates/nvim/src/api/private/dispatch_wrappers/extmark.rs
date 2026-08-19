@@ -422,7 +422,7 @@ pub unsafe fn handle_nvim_get_namespaces(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }

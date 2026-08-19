@@ -962,7 +962,13 @@ fn emit_fn(
         "    log_invoke(c\"{handler}\", c\"{name}\", line!() as c_int, channel_id);"
     )
     .unwrap();
-    writeln!(out, "    if args.len() != {arity} {{").unwrap();
+    // `len() != 0` is `clippy::len_zero`, and a nullary API function is common
+    // enough that the tier would never reach zero with it spelled that way.
+    let arity_test = match arity {
+        0 => "!args.is_empty()".to_string(),
+        _ => format!("args.len() != {arity}"),
+    };
+    writeln!(out, "    if {arity_test} {{").unwrap();
     writeln!(out, "        wrong_arity(error, {arity}, args.len());").unwrap();
     writeln!(out, "        return NIL;").unwrap();
     writeln!(out, "    }}").unwrap();
@@ -1070,6 +1076,18 @@ fn emit_fn(
     // is the wrapper's tail expression rather than a binding.
     if f.ret == RetType::Object && !can_fail {
         writeln!(out, "    {call}").unwrap();
+        writeln!(out, "}}").unwrap();
+        return Ok(());
+    }
+    // Same for a fallible one: the `match` that unwraps the `Result` is itself
+    // the tail, so binding it to `rv` only to name `rv` on the next line is
+    // `clippy::let_and_return`. `failure` returns the `Object` the dispatcher
+    // hands back, so the error arm needs no `return` in tail position either.
+    if f.ret == RetType::Object && f.fallible {
+        writeln!(out, "    match {call} {{").unwrap();
+        writeln!(out, "        Ok(rv) => rv,").unwrap();
+        writeln!(out, "        Err(e) => failure(error, e),").unwrap();
+        writeln!(out, "    }}").unwrap();
         writeln!(out, "}}").unwrap();
         return Ok(());
     }
@@ -1259,6 +1277,13 @@ fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
 /// The argument readers, emitted only when a wrapper uses one. Each turns an
 /// `Object` off the wire into a parameter, or `None` if the tag does not
 /// match anything the parameter accepts.
+///
+/// Every one of them is a `match` on the tag, including the single-arm ones
+/// that read as a `(tag == T).then(...)`: the union read has to stay *inside*
+/// the arm the tag selected. `then_some(unsafe { o.data.boolean })` — which is
+/// what `clippy::unnecessary_lazy_evaluations` asks for when the read is in a
+/// closure — would perform it eagerly on every object, and a `bool` arm read
+/// out of an integer-tagged `Object` is an invalid value, not a wrong answer.
 const READERS: &[(&str, &str)] = &[
     (
         "as_boolean",
@@ -1282,8 +1307,11 @@ fn as_boolean(o: Object) -> Option<Boolean> {
         "as_integer",
         r#"
 fn as_integer(o: Object) -> Option<Integer> {
-    // SAFETY: the tag says which union arm is live.
-    (o.type_0 == kObjectTypeInteger).then(|| unsafe { o.data.integer })
+    match o.type_0 {
+        // SAFETY: the tag says which union arm is live.
+        kObjectTypeInteger => Some(unsafe { o.data.integer }),
+        _ => None,
+    }
 }
 "#,
     ),
@@ -1305,8 +1333,11 @@ fn as_float(o: Object) -> Option<Float> {
         "as_string",
         r#"
 fn as_string(o: Object) -> Option<String_0> {
-    // SAFETY: the tag says which union arm is live.
-    (o.type_0 == kObjectTypeString).then(|| unsafe { o.data.string })
+    match o.type_0 {
+        // SAFETY: the tag says which union arm is live.
+        kObjectTypeString => Some(unsafe { o.data.string }),
+        _ => None,
+    }
 }
 "#,
     ),
@@ -1314,8 +1345,11 @@ fn as_string(o: Object) -> Option<String_0> {
         "as_array",
         r#"
 fn as_array(o: Object) -> Option<Array> {
-    // SAFETY: the tag says which union arm is live.
-    (o.type_0 == kObjectTypeArray).then(|| unsafe { o.data.array })
+    match o.type_0 {
+        // SAFETY: the tag says which union arm is live.
+        kObjectTypeArray => Some(unsafe { o.data.array }),
+        _ => None,
+    }
 }
 "#,
     ),
@@ -1342,8 +1376,11 @@ fn as_dict(o: Object) -> Option<Dict> {
         "as_luaref",
         r#"
 fn as_luaref(o: Object) -> Option<LuaRef> {
-    // SAFETY: the tag says which union arm is live.
-    (o.type_0 == kObjectTypeLuaRef).then(|| unsafe { o.data.luaref })
+    match o.type_0 {
+        // SAFETY: the tag says which union arm is live.
+        kObjectTypeLuaRef => Some(unsafe { o.data.luaref }),
+        _ => None,
+    }
 }
 "#,
     ),

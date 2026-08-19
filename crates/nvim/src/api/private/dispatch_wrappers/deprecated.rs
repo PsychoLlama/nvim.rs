@@ -73,11 +73,10 @@ pub unsafe fn handle_buffer_del_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { buffer_del_var(arg_1, arg_2, arena) } {
+    match unsafe { buffer_del_var(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_buffer_get_line(
@@ -331,11 +330,10 @@ pub unsafe fn handle_buffer_set_var(
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { buffer_set_var(arg_1, arg_2, arg_3, arena) } {
+    match unsafe { buffer_set_var(arg_1, arg_2, arg_3, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_buf_add_highlight(
@@ -498,11 +496,10 @@ pub unsafe fn handle_nvim_buf_get_option(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_get_option(arg_1, arg_2) } {
+    match unsafe { nvim_buf_get_option(arg_1, arg_2) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_buf_set_option(
@@ -790,11 +787,10 @@ pub unsafe fn handle_nvim_execute_lua(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_execute_lua(arg_1, arg_2, arena) } {
+    match unsafe { nvim_execute_lua(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_get_hl_by_id(
@@ -897,11 +893,10 @@ pub unsafe fn handle_nvim_get_option(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_get_option(arg_1) } {
+    match unsafe { nvim_get_option(arg_1) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_get_option_info(
@@ -971,9 +966,8 @@ pub unsafe fn handle_nvim_notify(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_notify(arg_1, arg_2, arg_3, arena) } {
+    match unsafe { nvim_notify(arg_1, arg_2, arg_3, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }

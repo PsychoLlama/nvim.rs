@@ -268,8 +268,11 @@ fn as_boolean(o: Object) -> Option<Boolean> {
 }
 
 fn as_integer(o: Object) -> Option<Integer> {
-    // SAFETY: the tag says which union arm is live.
-    (o.type_0 == kObjectTypeInteger).then(|| unsafe { o.data.integer })
+    match o.type_0 {
+        // SAFETY: the tag says which union arm is live.
+        kObjectTypeInteger => Some(unsafe { o.data.integer }),
+        _ => None,
+    }
 }
 
 /// Integers widen to floats, as they do in Lua.
@@ -283,13 +286,19 @@ fn as_float(o: Object) -> Option<Float> {
 }
 
 fn as_string(o: Object) -> Option<String_0> {
-    // SAFETY: the tag says which union arm is live.
-    (o.type_0 == kObjectTypeString).then(|| unsafe { o.data.string })
+    match o.type_0 {
+        // SAFETY: the tag says which union arm is live.
+        kObjectTypeString => Some(unsafe { o.data.string }),
+        _ => None,
+    }
 }
 
 fn as_array(o: Object) -> Option<Array> {
-    // SAFETY: the tag says which union arm is live.
-    (o.type_0 == kObjectTypeArray).then(|| unsafe { o.data.array })
+    match o.type_0 {
+        // SAFETY: the tag says which union arm is live.
+        kObjectTypeArray => Some(unsafe { o.data.array }),
+        _ => None,
+    }
 }
 
 /// An empty Lua table is indistinguishable from an empty list on the wire, so

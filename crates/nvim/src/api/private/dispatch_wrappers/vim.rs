@@ -111,11 +111,10 @@ pub unsafe fn handle_nvim__exec_lua_fast(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim__exec_lua_fast(arg_1, arg_2, arena) } {
+    match unsafe { nvim__exec_lua_fast(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim__get_lib_dir(
@@ -134,7 +133,7 @@ pub unsafe fn handle_nvim__get_lib_dir(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }
@@ -363,7 +362,7 @@ pub unsafe fn handle_nvim__invalidate_glyph_cache(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }
@@ -426,7 +425,7 @@ pub unsafe fn handle_nvim__runtime_inspect(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }
@@ -482,7 +481,7 @@ pub unsafe fn handle_nvim__stats(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }
@@ -518,11 +517,10 @@ pub unsafe fn handle_nvim__unpack(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim__unpack(arg_1, arena) } {
+    match unsafe { nvim__unpack(arg_1, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_chan_send(
@@ -619,7 +617,7 @@ pub unsafe fn handle_nvim_del_current_line(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }
@@ -781,11 +779,10 @@ pub unsafe fn handle_nvim_echo(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_echo(arg_1, arg_2, &raw mut arg_3) } {
+    match unsafe { nvim_echo(arg_1, arg_2, &raw mut arg_3) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_eval_statusline(
@@ -865,11 +862,10 @@ pub unsafe fn handle_nvim_exec_lua(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_exec_lua(arg_1, arg_2, arena) } {
+    match unsafe { nvim_exec_lua(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_feedkeys(
@@ -926,7 +922,7 @@ pub unsafe fn handle_nvim_get_api_info(
         line!() as c_int,
         channel_id,
     );
-    if args.len() != 0 {
+    if !args.is_empty() {
         wrong_arity(error, 0, args.len());
         return NIL;
     }
@@ -964,4 +960,34 @@ pub unsafe fn handle_nvim_get_chan_info(
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim_get_chan_info(channel_id, arg_1, arena) };
     obj(kObjectTypeDict, object_data { dict: rv })
+}
+
+pub unsafe fn handle_nvim_get_color_by_name(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: *mut Arena,
+    error: *mut Error,
+) -> Object {
+    // SAFETY: the dispatcher hands over an argument array of `size` initialized
+    // objects and an `Error` slot that is live and ours alone until we return;
+    // both outlive the call.
+    let (args, error) = unsafe { (args_slice(&args), &mut *error) };
+    log_invoke(
+        c"handle_nvim_get_color_by_name",
+        c"nvim_get_color_by_name",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        wrong_arity(error, 1, args.len());
+        return NIL;
+    }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_get_color_by_name", c"String");
+        return NIL;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    let rv = unsafe { nvim_get_color_by_name(arg_1) };
+    obj(kObjectTypeInteger, object_data { integer: rv })
 }

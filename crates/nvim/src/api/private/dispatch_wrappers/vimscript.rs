@@ -38,11 +38,10 @@ pub unsafe fn handle_nvim_call_dict_function(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_call_dict_function(arg_1, arg_2, arg_3, arena) } {
+    match unsafe { nvim_call_dict_function(arg_1, arg_2, arg_3, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_call_function(
@@ -75,11 +74,10 @@ pub unsafe fn handle_nvim_call_function(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_call_function(arg_1, arg_2, arena) } {
+    match unsafe { nvim_call_function(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_command(
@@ -140,11 +138,10 @@ pub unsafe fn handle_nvim_eval(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_eval(arg_1, arena) } {
+    match unsafe { nvim_eval(arg_1, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_exec2(

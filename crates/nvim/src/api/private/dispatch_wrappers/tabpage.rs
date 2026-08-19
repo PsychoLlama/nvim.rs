@@ -160,11 +160,10 @@ pub unsafe fn handle_nvim_tabpage_get_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena) } {
+    match unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena) } {
         Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    rv
+        Err(e) => failure(error, e),
+    }
 }
 
 pub unsafe fn handle_nvim_tabpage_get_win(
