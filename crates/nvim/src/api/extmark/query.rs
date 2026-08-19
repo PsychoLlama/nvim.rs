@@ -58,7 +58,7 @@ pub unsafe fn virt_text_to_array(
             array_add(&mut chunks, Object::array(chunk));
             i = i.wrapping_add(1);
         }
-        return chunks;
+        chunks
     }
 }
 
@@ -123,7 +123,7 @@ unsafe fn extmark_to_array(
             decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name, arena);
             array_add(&mut rv, Object::dict(dict));
         }
-        return rv;
+        rv
     }
 }
 
@@ -165,7 +165,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
         if extmark.start.pos.row < 0 as int32_t {
             return rv.reported(error);
         }
-        return extmark_to_array(extmark, false, details, hl_name, arena).reported(error);
+        extmark_to_array(extmark, false, details, hl_name, arena).reported(error)
     }
 }
 
@@ -313,7 +313,7 @@ pub unsafe fn nvim_buf_get_extmarks(
         marks.capacity = 0 as size_t;
         marks.size = marks.capacity;
         marks.items = ::core::ptr::null_mut::<MTPair>();
-        return rv.reported(error);
+        rv.reported(error)
     }
 }
 
@@ -338,17 +338,15 @@ unsafe fn extmark_get_index_from_obj(
                 *row = MAXLNUM as ::core::ffi::c_int;
                 *col = MAXCOL as ::core::ffi::c_int as colnr_T;
                 return true;
-            } else if id < 0 as Integer {
-                if true {
-                    api_err_invalid(
-                        err,
-                        c"mark id".as_ptr(),
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                        id as int64_t,
-                        false,
-                    );
-                    return false;
-                }
+            } else if id < 0 as Integer && true {
+                api_err_invalid(
+                    err,
+                    c"mark id".as_ptr(),
+                    ::core::ptr::null::<::core::ffi::c_char>(),
+                    id as int64_t,
+                    false,
+                );
+                return false;
             }
             let mut extmark: MTPair = extmark_from_id(buf, ns_id as uint32_t, id as uint32_t);
             if !(extmark.start.pos.row >= 0 as int32_t) {
@@ -426,6 +424,6 @@ pub unsafe fn nvim__buf_debug_extmarks(
         if b.is_null() {
             return String_0::NULL.reported(error);
         }
-        return mt_inspect(&mut (*b).b_marktree[0], keys, dot).reported(error);
+        mt_inspect(&mut (*b).b_marktree[0], keys, dot).reported(error)
     }
 }

@@ -40,8 +40,8 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
         let mut fullname: *mut c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut tmp_orig: *mut c_char = vim_tempname();
         let mut tmp_new: *mut c_char = vim_tempname();
-        if !(tmp_orig.is_null() || tmp_new.is_null()) {
-            if buf_write(
+        if !(tmp_orig.is_null() || tmp_new.is_null())
+            && buf_write(
                 curbuf.get(),
                 tmp_orig,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -50,109 +50,108 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 ::core::ptr::null_mut(),
                 WriteRequest::filter(),
             ) != FAIL
+        {
+            fullname = FullName_save((*eap).arg, false);
+            esc_name = vim_strsave_shellescape(
+                if !fullname.is_null() {
+                    fullname
+                } else {
+                    (*eap).arg
+                },
+                true,
+                true,
+            );
+            buflen = strlen(tmp_orig)
+                .wrapping_add(strlen(esc_name))
+                .wrapping_add(strlen(tmp_new))
+                .wrapping_add(16 as size_t);
+            buf = xmalloc(buflen) as *mut c_char;
+            dirbuf = [0; 4096];
+            if os_dirname(&raw mut dirbuf as *mut c_char, MAXPATHL as size_t) != OK
+                || os_chdir(&raw mut dirbuf as *mut c_char) != 0
             {
-                fullname = FullName_save((*eap).arg, false);
-                esc_name = vim_strsave_shellescape(
+                dirbuf[0] = NUL as c_char;
+            } else {
+                let mut tempdir: *mut c_char = vim_gettempdir();
+                if tempdir.is_null() {
+                    tempdir = c"/tmp".as_ptr() as *mut c_char;
+                }
+                os_chdir(tempdir);
+                shorten_fnames(1);
+            }
+            if *p_pex.get() as c_int != NUL {
+                eval_patch(
+                    tmp_orig,
                     if !fullname.is_null() {
                         fullname
                     } else {
                         (*eap).arg
                     },
-                    true,
-                    true,
+                    tmp_new,
                 );
-                buflen = strlen(tmp_orig)
-                    .wrapping_add(strlen(esc_name))
-                    .wrapping_add(strlen(tmp_new))
-                    .wrapping_add(16 as size_t);
-                buf = xmalloc(buflen) as *mut c_char;
-                dirbuf = [0; 4096];
-                if os_dirname(&raw mut dirbuf as *mut c_char, MAXPATHL as size_t) != OK
-                    || os_chdir(&raw mut dirbuf as *mut c_char) != 0
+            } else {
+                vim_snprintf(
+                    buf,
+                    buflen,
+                    c"patch -o %s %s < %s".as_ptr(),
+                    tmp_new,
+                    tmp_orig,
+                    esc_name,
+                );
+                block_autocmds();
+                call_shell(
+                    buf,
+                    ShellOpts::FILTER,
+                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                );
+                unblock_autocmds();
+            }
+            if dirbuf[0] as c_int != NUL {
+                if os_chdir(&raw mut dirbuf as *mut c_char) != 0 {
+                    emsg(gettext(&raw const e_prev_dir as *const c_char));
+                }
+                shorten_fnames(1);
+            }
+            strcpy(buf, tmp_new);
+            strcat(buf, c".orig".as_ptr());
+            os_remove(buf);
+            strcpy(buf, tmp_new);
+            strcat(buf, c".rej".as_ptr());
+            os_remove(buf);
+            file_info = FileInfo::default();
+            info_ok = os_fileinfo(tmp_new, &raw mut file_info);
+            filesize = os_fileinfo_size(&raw mut file_info);
+            if !info_ok || filesize == 0 as uint64_t {
+                emsg(gettext(c"E816: Cannot read patch output".as_ptr()));
+            } else {
+                if !(*curbuf.get()).b_fname.is_null() {
+                    newname = xstrnsave(
+                        (*curbuf.get()).b_fname,
+                        strlen((*curbuf.get()).b_fname).wrapping_add(4 as size_t),
+                    );
+                    strcat(newname, c".new".as_ptr());
+                }
+                (*cmdmod.ptr()).cmod_tab = 0;
+                if win_split(
+                    0,
+                    if diff_flags.get() & DIFF_VERTICAL != 0 {
+                        WSP_VERT as c_int
+                    } else {
+                        0
+                    },
+                ) != FAIL
                 {
-                    dirbuf[0] = NUL as c_char;
-                } else {
-                    let mut tempdir: *mut c_char = vim_gettempdir();
-                    if tempdir.is_null() {
-                        tempdir = c"/tmp".as_ptr() as *mut c_char;
-                    }
-                    os_chdir(tempdir);
-                    shorten_fnames(1);
-                }
-                if *p_pex.get() as c_int != NUL {
-                    eval_patch(
-                        tmp_orig,
-                        if !fullname.is_null() {
-                            fullname
-                        } else {
-                            (*eap).arg
-                        },
-                        tmp_new,
-                    );
-                } else {
-                    vim_snprintf(
-                        buf,
-                        buflen,
-                        c"patch -o %s %s < %s".as_ptr(),
-                        tmp_new,
-                        tmp_orig,
-                        esc_name,
-                    );
-                    block_autocmds();
-                    call_shell(
-                        buf,
-                        ShellOpts::FILTER,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    );
-                    unblock_autocmds();
-                }
-                if dirbuf[0] as c_int != NUL {
-                    if os_chdir(&raw mut dirbuf as *mut c_char) != 0 {
-                        emsg(gettext(&raw const e_prev_dir as *const c_char));
-                    }
-                    shorten_fnames(1);
-                }
-                strcpy(buf, tmp_new);
-                strcat(buf, c".orig".as_ptr());
-                os_remove(buf);
-                strcpy(buf, tmp_new);
-                strcat(buf, c".rej".as_ptr());
-                os_remove(buf);
-                file_info = FileInfo::default();
-                info_ok = os_fileinfo(tmp_new, &raw mut file_info);
-                filesize = os_fileinfo_size(&raw mut file_info);
-                if !info_ok || filesize == 0 as uint64_t {
-                    emsg(gettext(c"E816: Cannot read patch output".as_ptr()));
-                } else {
-                    if !(*curbuf.get()).b_fname.is_null() {
-                        newname = xstrnsave(
-                            (*curbuf.get()).b_fname,
-                            strlen((*curbuf.get()).b_fname).wrapping_add(4 as size_t),
-                        );
-                        strcat(newname, c".new".as_ptr());
-                    }
-                    (*cmdmod.ptr()).cmod_tab = 0;
-                    if win_split(
-                        0,
-                        if diff_flags.get() & DIFF_VERTICAL != 0 {
-                            WSP_VERT as c_int
-                        } else {
-                            0
-                        },
-                    ) != FAIL
-                    {
-                        (*eap).cmdidx = CMD_split;
-                        (*eap).arg = tmp_new;
-                        do_exedit(eap, old_curwin);
-                        if curwin.get() != old_curwin && win_valid(old_curwin) {
-                            diff_win_options(curwin.get(), true);
-                            diff_win_options(old_curwin, true);
-                            if !newname.is_null() {
-                                (*eap).arg = newname;
-                                ex_file(eap);
-                                if augroup_exists(c"filetypedetect".as_ptr()) {
-                                    do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr());
-                                }
+                    (*eap).cmdidx = CMD_split;
+                    (*eap).arg = tmp_new;
+                    do_exedit(eap, old_curwin);
+                    if curwin.get() != old_curwin && win_valid(old_curwin) {
+                        diff_win_options(curwin.get(), true);
+                        diff_win_options(old_curwin, true);
+                        if !newname.is_null() {
+                            (*eap).arg = newname;
+                            ex_file(eap);
+                            if augroup_exists(c"filetypedetect".as_ptr()) {
+                                do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr());
                             }
                         }
                     }
@@ -351,11 +350,12 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
                     if (*wp).w_onebuf_opt.wo_crb != 0 {
                         (*wp).w_onebuf_opt.wo_crb = (*wp).w_onebuf_opt.wo_crb_save;
                     }
-                    if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
-                        if (*wp).w_onebuf_opt.wo_wrap == 0 && (*wp).w_onebuf_opt.wo_wrap_save != 0 {
-                            (*wp).w_onebuf_opt.wo_wrap = 1;
-                            (*wp).w_leftcol = 0 as colnr_T;
-                        }
+                    if diff_flags.get() & DIFF_FOLLOWWRAP == 0
+                        && (*wp).w_onebuf_opt.wo_wrap == 0
+                        && (*wp).w_onebuf_opt.wo_wrap_save != 0
+                    {
+                        (*wp).w_onebuf_opt.wo_wrap = 1;
+                        (*wp).w_leftcol = 0 as colnr_T;
                     }
                     free_string_option((*wp).w_onebuf_opt.wo_fdm);
                     (*wp).w_onebuf_opt.wo_fdm =

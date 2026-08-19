@@ -93,17 +93,16 @@ pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     }
     let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
-        if !(!argbuf.is_null() && argbuf != buf) {
-            if !(filtered
+        if !(!argbuf.is_null() && argbuf != buf)
+            && !(filtered
                 && (sel_bufloaded && (*buf).b_ml.ml_mfp.is_null()
                     || sel_buflisted && (*buf).b_p_bl == 0
                     || sel_bufmodified && (*buf).b_changed == 0))
-            {
-                let d: *mut dict_T = get_buffer_info(buf);
-                tv_list_append_dict((*rettv).vval.v_list, d);
-                if !argbuf.is_null() {
-                    return;
-                }
+        {
+            let d: *mut dict_T = get_buffer_info(buf);
+            tv_list_append_dict((*rettv).vval.v_list, d);
+            if !argbuf.is_null() {
+                return;
             }
         }
         buf = (*buf).b_next;

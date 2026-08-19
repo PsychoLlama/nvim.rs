@@ -111,7 +111,7 @@ pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> 
         undo_file_name = ptr::null_mut();
     }
     xfree(munged_name as *mut c_void);
-    return undo_file_name;
+    undo_file_name
 }
 pub(crate) unsafe fn corruption_error(mesg: *const c_char, file_name: *const c_char) {
     semsg_c!(
@@ -174,7 +174,7 @@ pub(crate) unsafe fn serialize_header(mut bi: *mut bufinfo_T, mut hash: *mut uin
     undo_write_bytes(bi, UF_LAST_SAVE_NR as uintmax_t, 1);
     undo_write_bytes(bi, (*buf).b_u_save_nr_last as uintmax_t, 4);
     undo_write_bytes(bi, 0, 1);
-    return true;
+    true
 }
 pub(crate) unsafe fn serialize_uhp(mut bi: *mut bufinfo_T, mut uhp: *mut u_header_T) -> bool {
     if !undo_write_bytes(bi, UF_HEADER_MAGIC as uintmax_t, 2) {
@@ -222,7 +222,7 @@ pub(crate) unsafe fn serialize_uhp(mut bi: *mut bufinfo_T, mut uhp: *mut u_heade
         i_0 = i_0.wrapping_add(1);
     }
     undo_write_bytes(bi, UF_ENTRY_END_MAGIC as uintmax_t, 2);
-    return true;
+    true
 }
 pub(crate) unsafe fn unserialize_uhp(
     mut bi: *mut bufinfo_T,
@@ -334,7 +334,6 @@ pub(crate) unsafe fn unserialize_uhp(
                 (*uhp).uh_extmark.items as *mut c_void,
                 size_of::<ExtmarkUndoObject>().wrapping_mul((*uhp).uh_extmark.capacity),
             ) as *mut ExtmarkUndoObject;
-        } else {
         };
         let c2rust_fresh3 = (*uhp).uh_extmark.size;
         (*uhp).uh_extmark.size = (*uhp).uh_extmark.size.wrapping_add(1);
@@ -346,7 +345,7 @@ pub(crate) unsafe fn unserialize_uhp(
         u_free_uhp(uhp);
         return ptr::null_mut();
     }
-    return uhp;
+    uhp
 }
 pub(crate) unsafe fn serialize_extmark(
     mut bi: *mut bufinfo_T,
@@ -373,7 +372,7 @@ pub(crate) unsafe fn serialize_extmark(
             return false;
         }
     }
-    return true;
+    true
 }
 pub(crate) unsafe fn unserialize_extmark(
     mut bi: *mut bufinfo_T,
@@ -413,7 +412,7 @@ pub(crate) unsafe fn unserialize_extmark(
         xfree(buf as *mut c_void);
     }
     *error = true;
-    return ptr::null_mut();
+    ptr::null_mut()
 }
 pub(crate) unsafe fn serialize_uep(mut bi: *mut bufinfo_T, mut uep: *mut u_entry_T) -> bool {
     undo_write_bytes(bi, (*uep).ue_top as uintmax_t, 4);
@@ -431,7 +430,7 @@ pub(crate) unsafe fn serialize_uep(mut bi: *mut bufinfo_T, mut uep: *mut u_entry
         }
         i = i.wrapping_add(1);
     }
-    return true;
+    true
 }
 pub(crate) unsafe fn unserialize_uep(
     mut bi: *mut bufinfo_T,
@@ -445,16 +444,16 @@ pub(crate) unsafe fn unserialize_uep(
     (*uep).ue_lcount = undo_read_4c(bi) as linenr_T;
     (*uep).ue_size = undo_read_4c(bi) as linenr_T;
     let mut array: *mut *mut c_char = ptr::null_mut();
-    if (*uep).ue_size > 0 {
-        if ((*uep).ue_size as size_t) < (SIZE_MAX as usize).wrapping_div(size_of::<*mut c_char>()) {
-            array = xmalloc(size_of::<*mut c_char>().wrapping_mul((*uep).ue_size as size_t))
-                as *mut *mut c_char;
-            memset(
-                array as *mut c_void,
-                0,
-                size_of::<*mut c_char>().wrapping_mul((*uep).ue_size as size_t),
-            );
-        }
+    if (*uep).ue_size > 0
+        && ((*uep).ue_size as size_t) < (SIZE_MAX as usize).wrapping_div(size_of::<*mut c_char>())
+    {
+        array = xmalloc(size_of::<*mut c_char>().wrapping_mul((*uep).ue_size as size_t))
+            as *mut *mut c_char;
+        memset(
+            array as *mut c_void,
+            0,
+            size_of::<*mut c_char>().wrapping_mul((*uep).ue_size as size_t),
+        );
     }
     (*uep).ue_array = array;
     let mut i: size_t = 0;
@@ -474,7 +473,7 @@ pub(crate) unsafe fn unserialize_uep(
         *array.add(i) = line;
         i = i.wrapping_add(1);
     }
-    return uep;
+    uep
 }
 pub(crate) unsafe fn serialize_pos(mut bi: *mut bufinfo_T, mut pos: pos_T) {
     undo_write_bytes(bi, pos.lnum as uintmax_t, 4);
@@ -514,7 +513,7 @@ pub(crate) unsafe fn undo_write(
     mut ptr: *mut uint8_t,
     mut len: size_t,
 ) -> bool {
-    return fwrite(ptr as *const c_void, len, 1, (*bi).bi_fp) == 1;
+    fwrite(ptr as *const c_void, len, 1, (*bi).bi_fp) == 1
 }
 /// Writes `nr` as a `len`-byte big-endian field. See [`encode_be`].
 pub(crate) unsafe fn undo_write_bytes(bi: *mut bufinfo_T, nr: uintmax_t, len: size_t) -> bool {
@@ -533,16 +532,16 @@ pub(crate) unsafe fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: *mut u_head
     );
 }
 pub(crate) unsafe fn undo_read_4c(mut bi: *mut bufinfo_T) -> c_int {
-    return get4c((*bi).bi_fp);
+    get4c((*bi).bi_fp)
 }
 pub(crate) unsafe fn undo_read_2c(mut bi: *mut bufinfo_T) -> c_int {
-    return get2c((*bi).bi_fp);
+    get2c((*bi).bi_fp)
 }
 pub(crate) unsafe fn undo_read_byte(mut bi: *mut bufinfo_T) -> c_int {
-    return getc((*bi).bi_fp);
+    getc((*bi).bi_fp)
 }
 pub(crate) unsafe fn undo_read_time(mut bi: *mut bufinfo_T) -> time_t {
-    return get8ctime((*bi).bi_fp);
+    get8ctime((*bi).bi_fp)
 }
 pub(crate) unsafe fn undo_read(
     mut bi: *mut bufinfo_T,
@@ -553,7 +552,7 @@ pub(crate) unsafe fn undo_read(
     if !retval {
         memset(buffer as *mut c_void, 0, size);
     }
-    return retval;
+    retval
 }
 pub(crate) unsafe fn undo_read_string(mut bi: *mut bufinfo_T, mut len: size_t) -> *mut c_char {
     let mut ptr: *mut c_char = xmallocz(len) as *mut c_char;
@@ -561,5 +560,5 @@ pub(crate) unsafe fn undo_read_string(mut bi: *mut bufinfo_T, mut len: size_t) -
         xfree(ptr as *mut c_void);
         return ptr::null_mut();
     }
-    return ptr;
+    ptr
 }

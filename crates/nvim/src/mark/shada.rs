@@ -73,7 +73,7 @@ pub unsafe fn mark_global_iter(
             return iter_mark as *const c_void;
         }
     }
-    return ptr::null();
+    ptr::null()
 }
 
 #[inline]
@@ -81,27 +81,27 @@ pub(super) unsafe fn next_buffer_mark(buf: *const buf_T, mark_name: *mut c_char)
     match *mark_name as c_int {
         NUL => {
             *mark_name = '"' as c_char;
-            return &raw const (*buf).b_last_cursor;
+            &raw const (*buf).b_last_cursor
         }
         34 => {
             *mark_name = '^' as c_char;
-            return &raw const (*buf).b_last_insert;
+            &raw const (*buf).b_last_insert
         }
         94 => {
             *mark_name = '.' as c_char;
-            return &raw const (*buf).b_last_change;
+            &raw const (*buf).b_last_change
         }
         46 => {
             *mark_name = 'a' as c_char;
-            return (&raw const (*buf).b_namedm as *const fmark_T).offset(0);
+            (&raw const (*buf).b_namedm as *const fmark_T).offset(0)
         }
-        122 => return ptr::null(),
+        122 => ptr::null(),
         _ => {
             *mark_name += 1;
-            return (&raw const (*buf).b_namedm as *const fmark_T)
-                .offset((*mark_name as c_int - 'a' as c_int) as isize);
+            (&raw const (*buf).b_namedm as *const fmark_T)
+                .offset((*mark_name as c_int - 'a' as c_int) as isize)
         }
-    };
+    }
 }
 
 /// Iterate over buffer marks
@@ -151,7 +151,7 @@ pub unsafe fn mark_buffer_iter(
         *name = ('a' as c_int + iter_off as c_char as c_int) as c_char;
     }
     *fm = *iter_mark;
-    return iter_mark as *const c_void;
+    iter_mark as *const c_void
 }
 
 /// Set global mark
@@ -175,7 +175,7 @@ pub unsafe fn mark_set_global(name: c_char, fm: xfmark_T, update: bool) -> bool 
         free_xfmark(*fm_tgt);
     }
     *fm_tgt = fm;
-    return true;
+    true
 }
 
 /// Set local mark
@@ -210,5 +210,5 @@ pub unsafe fn mark_set_local(name: c_char, buf: *mut buf_T, fm: fmark_T, update:
         free_fmark(*fm_tgt);
     }
     *fm_tgt = fm;
-    return true;
+    true
 }

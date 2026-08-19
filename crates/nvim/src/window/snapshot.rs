@@ -175,15 +175,15 @@ fn clear_snapshot_rec(fr: Frame) {
 /// The window a saved tree remembers as the current one: the last leaf that
 /// named one, searching `fr_next` before `fr_child`.
 fn snapshot_curwin_rec(ft: Frame) -> Option<Win> {
-    if let Some(next) = ft.next() {
-        if let Some(wp) = snapshot_curwin_rec(next) {
-            return Some(wp);
-        }
+    if let Some(next) = ft.next()
+        && let Some(wp) = snapshot_curwin_rec(next)
+    {
+        return Some(wp);
     }
-    if let Some(child) = ft.child() {
-        if let Some(wp) = snapshot_curwin_rec(child) {
-            return Some(wp);
-        }
+    if let Some(child) = ft.child()
+        && let Some(wp) = snapshot_curwin_rec(child)
+    {
+        return Some(wp);
     }
     // SAFETY: a saved leaf's `fr_win` is the still-live `curwin` of the moment
     // the snapshot was taken, or null.
@@ -204,16 +204,17 @@ pub fn restore_snapshot(idx: c_int, close_curwin: c_int) {
 pub(crate) fn restore_layout(idx: c_int, close_curwin: bool) {
     let tp = cur_tab();
     let top = current_topframe();
-    if let Some(sn) = snapshot_of(tp, idx) {
-        if sn.fr_width == top.fr_width && sn.fr_height == top.fr_height && snapshot_matches(sn, top)
-        {
-            let wp = restore_snapshot_rec(sn, top);
-            comp_positions();
-            if let Some(wp) = wp.filter(|_| close_curwin) {
-                goto_win(wp);
-            }
-            redraw_all(UPD_NOT_VALID);
+    if let Some(sn) = snapshot_of(tp, idx)
+        && sn.fr_width == top.fr_width
+        && sn.fr_height == top.fr_height
+        && snapshot_matches(sn, top)
+    {
+        let wp = restore_snapshot_rec(sn, top);
+        comp_positions();
+        if let Some(wp) = wp.filter(|_| close_curwin) {
+            goto_win(wp);
         }
+        redraw_all(UPD_NOT_VALID);
     }
     drop_snapshot(tp, idx);
 }
@@ -227,15 +228,15 @@ fn snapshot_matches(sn: Frame, fr: Frame) -> bool {
     {
         return false;
     }
-    if let (Some(sn_next), Some(fr_next)) = (sn.next(), fr.next()) {
-        if !snapshot_matches(sn_next, fr_next) {
-            return false;
-        }
+    if let (Some(sn_next), Some(fr_next)) = (sn.next(), fr.next())
+        && !snapshot_matches(sn_next, fr_next)
+    {
+        return false;
     }
-    if let (Some(sn_child), Some(fr_child)) = (sn.child(), fr.child()) {
-        if !snapshot_matches(sn_child, fr_child) {
-            return false;
-        }
+    if let (Some(sn_child), Some(fr_child)) = (sn.child(), fr.child())
+        && !snapshot_matches(sn_child, fr_child)
+    {
+        return false;
     }
     // SAFETY: `win_valid` only compares the saved pointer against the list.
     !(!sn.fr_win.is_null() && !unsafe { win_valid(sn.fr_win) })

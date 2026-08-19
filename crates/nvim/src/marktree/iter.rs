@@ -140,10 +140,10 @@ pub unsafe fn marktree_itr_get_ext(
         if x.is_leaf() {
             break;
         }
-        if let Some(filter) = filter {
-            if !meta_has(&x.child_meta(itr.i as usize), filter) {
-                break;
-            }
+        if let Some(filter) = filter
+            && !meta_has(&x.child_meta(itr.i as usize), filter)
+        {
+            break;
         }
         itr.s[itr.lvl as usize].i = itr.i;
         itr.s[itr.lvl as usize].oldcol = itr.pos.col;
@@ -230,10 +230,11 @@ pub unsafe fn marktree_itr_next_skip(
         return false;
     };
     itr.i += 1;
-    if let Some(filter) = filter {
-        if !x.is_leaf() && !meta_has(&x.child_meta(itr.i as usize), filter) {
-            skip = true;
-        }
+    if let Some(filter) = filter
+        && !x.is_leaf()
+        && !meta_has(&x.child_meta(itr.i as usize), filter)
+    {
+        skip = true;
     }
     if x.is_leaf() || skip {
         if preload && x.is_leaf() && skip {
@@ -266,10 +267,10 @@ pub unsafe fn marktree_itr_next_skip(
                 let sep = x.key(itr.i as usize - 1).pos;
                 compose(&mut itr.pos, sep);
             }
-            if itr.i == 0 {
-                if let Some(oldbase) = oldbase.as_deref_mut() {
-                    oldbase[itr.lvl as usize + 1] = oldbase[itr.lvl as usize];
-                }
+            if itr.i == 0
+                && let Some(oldbase) = oldbase.as_deref_mut()
+            {
+                oldbase[itr.lvl as usize + 1] = oldbase[itr.lvl as usize];
             }
             itr.s[itr.lvl as usize].i = itr.i;
             let child = x.child(itr.i as usize);
@@ -285,10 +286,11 @@ pub unsafe fn marktree_itr_next_skip(
                 break;
             }
             itr.i = 0;
-            if let Some(filter) = filter {
-                if !x.is_leaf() && !meta_has(&x.child_meta(0), filter) {
-                    break;
-                }
+            if let Some(filter) = filter
+                && !x.is_leaf()
+                && !meta_has(&x.child_meta(0), filter)
+            {
+                break;
             }
         }
     }

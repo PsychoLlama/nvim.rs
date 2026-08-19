@@ -100,9 +100,8 @@ pub unsafe fn remote_ui_event(ui: *mut RemoteUI, name: &'static CStr, args: Arra
     // Only the translations allocate, and all of them are done by the time
     // this returns, so one arena covers the whole call.
     let mut arena: Arena = ARENA_EMPTY;
-    let translated = unsafe { translate(ui, name, args, &raw mut arena) };
+    unsafe { translate(ui, name, args, &raw mut arena) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    translated
 }
 
 /// [`remote_ui_event`]'s body, with the arena freed by its caller whichever

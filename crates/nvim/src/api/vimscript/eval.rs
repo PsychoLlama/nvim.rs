@@ -217,7 +217,7 @@ unsafe fn call_in_dict(
         }
         // A Dict argument was converted whole, so its function member is
         // already `fn_0`; a String argument named a dictionary to look in.
-        if !fn_0.data().is_null() && fn_0.len() > 0 && dict.type_0 != kObjectTypeDict {
+        if !fn_0.data().is_null() && !fn_0.is_empty() && dict.type_0 != kObjectTypeDict {
             let di: *mut dictitem_T = tv_dict_find(self_dict, fn_0.data(), fn_0.len() as ptrdiff_t);
             if di.is_null() {
                 api_set_error(
@@ -250,7 +250,7 @@ unsafe fn call_in_dict(
                 strlen((*di).di_tv.vval.v_string),
             );
         }
-        if fn_0.data().is_null() || fn_0.len() < 1 {
+        if fn_0.data().is_null() || fn_0.is_empty() {
             api_set_error(
                 err,
                 kErrorTypeValidation,

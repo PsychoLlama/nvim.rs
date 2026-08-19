@@ -532,7 +532,7 @@ pub unsafe fn read_compound(fd: *mut FILE, slang: *mut slang_T, len: c_int) -> c
         (*slang).sl_comprules = crp;
 
         let mut pp = pat;
-        for ch in [b'^', b'\\', b'('] {
+        for ch in *b"^\\(" {
             *pp = ch as c_char;
             pp = pp.add(1);
         }
@@ -601,7 +601,7 @@ pub unsafe fn read_compound(fd: *mut FILE, slang: *mut slang_T, len: c_int) -> c
             }
         }
 
-        for ch in [b'\\', b')', b'$'] {
+        for ch in *b"\\)$" {
             *pp = ch as c_char;
             pp = pp.add(1);
         }

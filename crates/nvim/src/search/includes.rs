@@ -416,21 +416,21 @@ unsafe fn handle_include(
         let mut new_fname = if raw.is_null() { None } else { Some(Name(raw)) };
 
         let mut already_searched = false;
-        if let Some(name) = &new_fname {
-            if let Some(matched) = walk.files.already_searched(name.as_ptr()) {
-                if kind != CHECK_PATH && action == ACTION_SHOW_ALL && matched {
-                    msg_putchar('\n' as c_int); // cursor below the last one
-                    if !got_int.get() {
-                        // Don't display if 'q' was typed at the
-                        // "--more--" message.
-                        msg_home_replace(name.as_ptr());
-                        msg_puts(gettext(c" (includes previously listed match)".as_ptr()));
-                        walk.prev_fname = ptr::null_mut();
-                    }
+        if let Some(name) = &new_fname
+            && let Some(matched) = walk.files.already_searched(name.as_ptr())
+        {
+            if kind != CHECK_PATH && action == ACTION_SHOW_ALL && matched {
+                msg_putchar('\n' as c_int); // cursor below the last one
+                if !got_int.get() {
+                    // Don't display if 'q' was typed at the
+                    // "--more--" message.
+                    msg_home_replace(name.as_ptr());
+                    msg_puts(gettext(c" (includes previously listed match)".as_ptr()));
+                    walk.prev_fname = ptr::null_mut();
                 }
-                new_fname = None;
-                already_searched = true;
             }
+            new_fname = None;
+            already_searched = true;
         }
 
         if kind == CHECK_PATH

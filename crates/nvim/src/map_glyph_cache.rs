@@ -46,7 +46,7 @@ pub unsafe fn mh_find_bucket_glyph(
     if site == last {
         site = i;
     }
-    return site;
+    site
 }
 pub unsafe fn mh_rehash_glyph(mut set: *mut Set_glyph) {
     let mut k: uint32_t = 0 as uint32_t;
@@ -104,12 +104,12 @@ pub unsafe fn mh_put_glyph(
         );
         *(*set).keys.add((pos as size_t).wrapping_add(key.len())) = NUL as ::core::ffi::c_char;
         *(*h).hash.offset(idx as isize) = pos.wrapping_add(1 as uint32_t);
-        return pos;
+        pos
     } else {
         *new = kMHExisting;
         let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         debug_assert!(cstr_as_string((*set).keys.offset(pos_0 as isize)).map_eq(&key));
-        return pos_0;
-    };
+        pos_0
+    }
 }
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;

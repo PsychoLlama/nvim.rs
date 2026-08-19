@@ -104,10 +104,11 @@ fn remove(
     let mut col = topleft.w_wincol;
 
     // If `win` is the last window in a row, its separator column goes with it.
-    if win.w_vsep_width == 0 && parent.fr_layout as c_int == FR_ROW {
-        if let Some(prev) = frp_close.prev() {
-            set_vsep(prev, false);
-        }
+    if win.w_vsep_width == 0
+        && parent.fr_layout as c_int == FR_ROW
+        && let Some(prev) = frp_close.prev()
+    {
+        set_vsep(prev, false);
     }
     frame_remove(frp_close);
     let mut altfr = alt.frame;
@@ -303,18 +304,19 @@ fn restore(wp: Win, dir: c_int, unflat_altfr: Frame) {
     }
     let parent = frp.parent().expect("a restored frame has a parent");
     // Restore the separator or status line the window gave up on the way out.
-    if wp.w_vsep_width == 0 && parent.fr_layout as c_int == FR_ROW {
-        if let Some(prev) = frp.prev() {
-            set_vsep(prev, true);
-        }
+    if wp.w_vsep_width == 0
+        && parent.fr_layout as c_int == FR_ROW
+        && let Some(prev) = frp.prev()
+    {
+        set_vsep(prev, true);
     }
-    if parent.fr_layout as c_int == FR_COL {
-        if let Some(prev) = frp.prev() {
-            if global_stl_rows() == 0 && wp.w_status_height == 0 {
-                add_statusline(prev);
-            } else if global_stl_rows() > 0 && wp.w_hsep_height == 0 {
-                add_hsep(prev);
-            }
+    if parent.fr_layout as c_int == FR_COL
+        && let Some(prev) = frp.prev()
+    {
+        if global_stl_rows() == 0 && wp.w_status_height == 0 {
+            add_statusline(prev);
+        } else if global_stl_rows() > 0 && wp.w_hsep_height == 0 {
+            add_hsep(prev);
         }
     }
     if dir == 'v' as c_int {
@@ -375,11 +377,9 @@ pub(crate) fn alt_frame(win: Win, tp: Option<TabPage>) -> Frame {
 /// `'tabclose'` says so, otherwise the next, or the previous when the current
 /// is last (or `'tabclose'` says "left" and it is not first).
 pub(crate) fn alt_tab_page() -> TabPage {
-    if tcl_flags.get() & kOptTclFlagUselast != 0 {
-        if valid_tabpage(lastused_tabpage.get()) {
-            // SAFETY: just proved live.
-            return unsafe { TabPage::new(lastused_tabpage.get()) };
-        }
+    if tcl_flags.get() & kOptTclFlagUselast != 0 && valid_tabpage(lastused_tabpage.get()) {
+        // SAFETY: just proved live.
+        return unsafe { TabPage::new(lastused_tabpage.get()) };
     }
     let cur = cur_tab();
     let forward = cur.next().is_some()

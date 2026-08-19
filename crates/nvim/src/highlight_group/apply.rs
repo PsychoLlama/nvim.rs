@@ -104,7 +104,7 @@ pub unsafe fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
             *slot = if name.type_0 != kObjectTypeNil {
                 if value < 0 {
                     kColorIdxNone
-                } else if name.type_0 == kObjectTypeString && name.data.string.len() != 0 {
+                } else if name.type_0 == kObjectTypeString && !name.data.string.is_empty() {
                     // SAFETY: an API string is NUL-terminated.
                     name_to_color(::core::ffi::CStr::from_ptr(name.data.string.data())).1
                 } else {

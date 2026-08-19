@@ -347,16 +347,15 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                 return false;
             }
 
-            if (*tab_topframe).fr_layout != FR_LEAF {
-                if !out.line(c"let s:save_splitbelow = &splitbelow")
+            if (*tab_topframe).fr_layout != FR_LEAF
+                && (!out.line(c"let s:save_splitbelow = &splitbelow")
                     || !out.line(c"let s:save_splitright = &splitright")
                     || !out.line(c"set splitbelow splitright")
                     || !ses_win_rec(out, tab_topframe)
                     || !out.line(c"let &splitbelow = s:save_splitbelow")
-                    || !out.line(c"let &splitright = s:save_splitright")
-                {
-                    return false;
-                }
+                    || !out.line(c"let &splitright = s:save_splitright"))
+            {
+                return false;
             }
 
             // Can the window sizes be restored -- that is, was no window

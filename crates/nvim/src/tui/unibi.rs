@@ -400,10 +400,10 @@ pub fn from_term(term: &CStr) -> Option<Term> {
 
     // $TERMINFO is a single directory. Uniquely, any failure — even one that
     // would abort the search below — falls through to the next stage.
-    if let Some(dir) = std::env::var_os("TERMINFO") {
-        if let Lookup::Found(t) = from_dir(&dir, None, term) {
-            return Some(*t);
-        }
+    if let Some(dir) = std::env::var_os("TERMINFO")
+        && let Lookup::Found(t) = from_dir(&dir, None, term)
+    {
+        return Some(*t);
     }
 
     if let Some(home) = std::env::var_os("HOME") {

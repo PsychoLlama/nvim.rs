@@ -306,16 +306,15 @@ pub(crate) unsafe fn command_line_execute(
         if (cmdline_pum_active() || wild_menu_showing.get() != 0 || (*s).did_wild_list)
             && !key_is_wc
             && (*s).xpc.xp_numfiles > 0
+            && let Some(mode) = wildmenu_gesture((*s).c)
         {
-            if let Some(mode) = wildmenu_gesture((*s).c) {
-                wild_type = Some(mode);
-                nextwild(
-                    &raw mut (*s).xpc,
-                    mode,
-                    WildOpts::NO_BEEP,
-                    (*s).firstc != '@' as ::core::ffi::c_int,
-                );
-            }
+            wild_type = Some(mode);
+            nextwild(
+                &raw mut (*s).xpc,
+                mode,
+                WildOpts::NO_BEEP,
+                (*s).firstc != '@' as ::core::ffi::c_int,
+            );
         }
 
         // Trigger the CmdlineLeavePre autocommand.

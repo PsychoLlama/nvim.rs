@@ -743,7 +743,7 @@ pub unsafe fn find_tags(
         }
 
         let help_save = (*curbuf.get()).b_help;
-        let saved_pat: Option<Name>;
+
         let mut st = FindTags::new(pat, flags, mincount);
         if st.help_only {
             (*curbuf.get()).b_help = true;
@@ -751,7 +751,7 @@ pub unsafe fn find_tags(
 
         // In a help buffer a trailing "@xx" names the language wanted.
         let bytes = CStr::from_ptr(pat).to_bytes();
-        saved_pat = if (*curbuf.get()).b_help
+        let saved_pat: Option<Name> = if (*curbuf.get()).b_help
             && let [.., b'@', a, b] = bytes
             && a.is_ascii_alphabetic()
             && b.is_ascii_alphabetic()

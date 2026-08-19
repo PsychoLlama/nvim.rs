@@ -15,7 +15,7 @@ pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: Stri
         true,
         c"async error on channel %ld: %s".as_ptr(),
         channel_id,
-        if msg.len() != 0 {
+        if !msg.is_empty() {
             msg.data() as *const ::core::ffi::c_char
         } else {
             c"".as_ptr()

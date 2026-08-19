@@ -324,16 +324,14 @@ pub unsafe fn nvim_get_autocmds(
                             );
                             bufnr_index = bufnr_index.wrapping_add(1);
                         }
-                    } else if has_buf {
-                        if true {
-                            api_err_exp(
-                                err,
-                                c"buffer".as_ptr(),
-                                c"Integer or Array".as_ptr(),
-                                api_typename(buf.type_0),
-                            );
-                            break '_cleanup;
-                        }
+                    } else if has_buf && true {
+                        api_err_exp(
+                            err,
+                            c"buffer".as_ptr(),
+                            c"Integer or Array".as_ptr(),
+                            api_typename(buf.type_0),
+                        );
+                        break '_cleanup;
                     }
                 }
                 let mut bufnr_index_0: size_t = 0 as size_t;
@@ -352,180 +350,166 @@ pub unsafe fn nvim_get_autocmds(
                             let ac: *mut AutoCmd = (*acs).items.add(i);
                             let ap: *mut AutoPat = (*ac).pat;
                             's_712: {
-                                if !ap.is_null() {
-                                    if !(id != -1 as ::core::ffi::c_int
+                                if !ap.is_null()
+                                    && !(id != -1 as ::core::ffi::c_int
                                         && (*ac).id != id as int64_t)
-                                    {
-                                        if !(group != 0 as ::core::ffi::c_int
-                                            && (*ap).group != group)
-                                        {
-                                            if pattern_filter_count > 0 as ::core::ffi::c_int {
-                                                let mut passed: bool = false;
-                                                let mut j: ::core::ffi::c_int =
-                                                    0 as ::core::ffi::c_int;
-                                                while j < pattern_filter_count {
-                                                    debug_assert!(
-                                                        j < 256 as ::core::ffi::c_int,
-                                                        "j < AUCMD_MAX_PATTERNS"
-                                                    );
-                                                    debug_assert!(
-                                                        !pattern_filters[j as usize].is_null(),
-                                                        "pattern_filters[j]"
-                                                    );
-                                                    let mut pat_0: *mut ::core::ffi::c_char =
-                                                        pattern_filters[j as usize];
-                                                    let mut patlen: ::core::ffi::c_int =
-                                                        strlen(pat_0) as ::core::ffi::c_int;
-                                                    let mut pattern_buflocal: [::core::ffi::c_char;
-                                                        25] = [0; 25];
-                                                    if aupat_is_buflocal(pat_0, patlen) {
-                                                        aupat_normalize_buflocal_pat(
-                                                            &raw mut pattern_buflocal
-                                                                as *mut ::core::ffi::c_char,
-                                                            pat_0,
-                                                            patlen,
-                                                            aupat_get_buflocal_nr(pat_0, patlen),
-                                                        );
-                                                        pat_0 = &raw mut pattern_buflocal
-                                                            as *mut ::core::ffi::c_char;
-                                                    }
-                                                    if strequal((*ap).pat, pat_0) {
-                                                        passed = true;
-                                                        break;
-                                                    } else {
-                                                        j += 1;
-                                                    }
-                                                }
-                                                if !passed {
-                                                    break 's_712;
-                                                }
+                                    && !(group != 0 as ::core::ffi::c_int && (*ap).group != group)
+                                {
+                                    if pattern_filter_count > 0 as ::core::ffi::c_int {
+                                        let mut passed: bool = false;
+                                        let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                                        while j < pattern_filter_count {
+                                            debug_assert!(
+                                                j < 256 as ::core::ffi::c_int,
+                                                "j < AUCMD_MAX_PATTERNS"
+                                            );
+                                            debug_assert!(
+                                                !pattern_filters[j as usize].is_null(),
+                                                "pattern_filters[j]"
+                                            );
+                                            let mut pat_0: *mut ::core::ffi::c_char =
+                                                pattern_filters[j as usize];
+                                            let mut patlen: ::core::ffi::c_int =
+                                                strlen(pat_0) as ::core::ffi::c_int;
+                                            let mut pattern_buflocal: [::core::ffi::c_char; 25] =
+                                                [0; 25];
+                                            if aupat_is_buflocal(pat_0, patlen) {
+                                                aupat_normalize_buflocal_pat(
+                                                    &raw mut pattern_buflocal
+                                                        as *mut ::core::ffi::c_char,
+                                                    pat_0,
+                                                    patlen,
+                                                    aupat_get_buflocal_nr(pat_0, patlen),
+                                                );
+                                                pat_0 = &raw mut pattern_buflocal
+                                                    as *mut ::core::ffi::c_char;
                                             }
-                                            let mut autocmd_info: Dict =
-                                                arena_dict(arena, 12 as size_t);
-                                            if (*ap).group != AUGROUP_DEFAULT as ::core::ffi::c_int
-                                            {
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"group",
-                                                    Object::integer((*ap).group as Integer),
-                                                );
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"group_name",
-                                                    Object::string(cstr_as_string(augroup_name(
-                                                        (*ap).group,
-                                                    ))),
-                                                );
-                                            }
-                                            if (*ac).id > 0 as int64_t {
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"id",
-                                                    Object::integer((*ac).id),
-                                                );
-                                            }
-                                            if !(*ac).desc.is_null() {
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"desc",
-                                                    Object::string(cstr_as_string((*ac).desc)),
-                                                );
-                                            }
-                                            if !(*ac).handler_cmd.is_null() {
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"command",
-                                                    Object::string(cstr_as_string(
-                                                        (*ac).handler_cmd,
-                                                    )),
-                                                );
+                                            if strequal((*ap).pat, pat_0) {
+                                                passed = true;
+                                                break;
                                             } else {
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"command",
-                                                    Object::string(String_0::NULL),
-                                                );
-                                                let mut cb: *mut Callback =
-                                                    &raw mut (*ac).handler_fn;
-                                                match (*cb).type_0 as ::core::ffi::c_uint {
-                                                    kCallbackLua => {
-                                                        if nlua_ref_is_function((*cb).data.luaref) {
-                                                            dict_put_str(
-                                                                &mut autocmd_info,
-                                                                cstr_as_string(
-                                                                    c"callback".as_ptr(),
-                                                                ),
-                                                                Object::luaref(api_new_luaref(
-                                                                    (*cb).data.luaref,
-                                                                )),
-                                                            );
-                                                        }
-                                                    }
-                                                    kCallbackFuncref | kCallbackPartial => {
-                                                        dict_put_str(
-                                                            &mut autocmd_info,
-                                                            cstr_as_string(c"callback".as_ptr()),
-                                                            Object::string(cstr_as_string(
-                                                                callback_to_string(cb, arena),
-                                                            )),
-                                                        );
-                                                    }
-                                                    kCallbackNone => {
-                                                        abort();
-                                                    }
-                                                    _ => {}
-                                                }
+                                                j += 1;
                                             }
-                                            dict_put(
-                                                &mut autocmd_info,
-                                                c"pattern",
-                                                Object::string(cstr_as_string((*ap).pat)),
-                                            );
-                                            dict_put(
-                                                &mut autocmd_info,
-                                                c"event",
-                                                Object::string(cstr_as_string(event_nr2name(
-                                                    event,
-                                                ))),
-                                            );
-                                            dict_put(
-                                                &mut autocmd_info,
-                                                c"once",
-                                                Object::boolean((*ac).once),
-                                            );
-                                            if (*ap).buflocal_nr != 0 {
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"buflocal",
-                                                    Object::boolean(true),
-                                                );
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"buf",
-                                                    Object::integer((*ap).buflocal_nr as Integer),
-                                                );
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"buffer",
-                                                    Object::integer((*ap).buflocal_nr as Integer),
-                                                );
-                                            } else {
-                                                dict_put(
-                                                    &mut autocmd_info,
-                                                    c"buflocal",
-                                                    Object::boolean(false),
-                                                );
-                                            }
-                                            // `kv_push`, whose growth step c2rust expanded inline.
-                                            InitVec::new(
-                                                &mut autocmd_list.size,
-                                                &mut autocmd_list.capacity,
-                                                &mut autocmd_list.items,
-                                                &mut autocmd_list.init_array,
-                                            )
-                                            .push(Object::dict(autocmd_info));
+                                        }
+                                        if !passed {
+                                            break 's_712;
                                         }
                                     }
+                                    let mut autocmd_info: Dict = arena_dict(arena, 12 as size_t);
+                                    if (*ap).group != AUGROUP_DEFAULT as ::core::ffi::c_int {
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"group",
+                                            Object::integer((*ap).group as Integer),
+                                        );
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"group_name",
+                                            Object::string(cstr_as_string(augroup_name(
+                                                (*ap).group,
+                                            ))),
+                                        );
+                                    }
+                                    if (*ac).id > 0 as int64_t {
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"id",
+                                            Object::integer((*ac).id),
+                                        );
+                                    }
+                                    if !(*ac).desc.is_null() {
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"desc",
+                                            Object::string(cstr_as_string((*ac).desc)),
+                                        );
+                                    }
+                                    if !(*ac).handler_cmd.is_null() {
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"command",
+                                            Object::string(cstr_as_string((*ac).handler_cmd)),
+                                        );
+                                    } else {
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"command",
+                                            Object::string(String_0::NULL),
+                                        );
+                                        let mut cb: *mut Callback = &raw mut (*ac).handler_fn;
+                                        match (*cb).type_0 as ::core::ffi::c_uint {
+                                            kCallbackLua => {
+                                                if nlua_ref_is_function((*cb).data.luaref) {
+                                                    dict_put_str(
+                                                        &mut autocmd_info,
+                                                        cstr_as_string(c"callback".as_ptr()),
+                                                        Object::luaref(api_new_luaref(
+                                                            (*cb).data.luaref,
+                                                        )),
+                                                    );
+                                                }
+                                            }
+                                            kCallbackFuncref | kCallbackPartial => {
+                                                dict_put_str(
+                                                    &mut autocmd_info,
+                                                    cstr_as_string(c"callback".as_ptr()),
+                                                    Object::string(cstr_as_string(
+                                                        callback_to_string(cb, arena),
+                                                    )),
+                                                );
+                                            }
+                                            kCallbackNone => {
+                                                abort();
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    dict_put(
+                                        &mut autocmd_info,
+                                        c"pattern",
+                                        Object::string(cstr_as_string((*ap).pat)),
+                                    );
+                                    dict_put(
+                                        &mut autocmd_info,
+                                        c"event",
+                                        Object::string(cstr_as_string(event_nr2name(event))),
+                                    );
+                                    dict_put(
+                                        &mut autocmd_info,
+                                        c"once",
+                                        Object::boolean((*ac).once),
+                                    );
+                                    if (*ap).buflocal_nr != 0 {
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"buflocal",
+                                            Object::boolean(true),
+                                        );
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"buf",
+                                            Object::integer((*ap).buflocal_nr as Integer),
+                                        );
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"buffer",
+                                            Object::integer((*ap).buflocal_nr as Integer),
+                                        );
+                                    } else {
+                                        dict_put(
+                                            &mut autocmd_info,
+                                            c"buflocal",
+                                            Object::boolean(false),
+                                        );
+                                    }
+                                    // `kv_push`, whose growth step c2rust expanded inline.
+                                    InitVec::new(
+                                        &mut autocmd_list.size,
+                                        &mut autocmd_list.capacity,
+                                        &mut autocmd_list.items,
+                                        &mut autocmd_list.init_array,
+                                    )
+                                    .push(Object::dict(autocmd_info));
                                 }
                             }
                             i = i.wrapping_add(1);
@@ -535,6 +519,6 @@ pub unsafe fn nvim_get_autocmds(
                 }
             }
         }
-        return arena_take_arraybuilder(arena, &raw mut autocmd_list).reported(error);
+        arena_take_arraybuilder(arena, &raw mut autocmd_list).reported(error)
     }
 }

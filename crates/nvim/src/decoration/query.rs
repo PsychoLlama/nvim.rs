@@ -116,10 +116,11 @@ pub unsafe fn decor_find_virttext(
         if mark.pos.row < 0 || mark.pos.row > row {
             return ptr::null_mut();
         }
-        if !mt_invalid(mark) && (ns_id == 0 || ns_id == uint64_t::from(mark.ns)) {
-            if let Some(vt) = mark_virt_chain(mark).find(|vt| !vt.is_lines()) {
-                return vt.raw();
-            }
+        if !mt_invalid(mark)
+            && (ns_id == 0 || ns_id == uint64_t::from(mark.ns))
+            && let Some(vt) = mark_virt_chain(mark).find(|vt| !vt.is_lines())
+        {
+            return vt.raw();
         }
         walk.next();
     }

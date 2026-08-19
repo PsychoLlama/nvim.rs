@@ -104,7 +104,7 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
 pub unsafe fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
     unsafe {
         may_trigger_vim_suspend_resume(false);
-        return input_enqueue(channel_id, keys) as Integer;
+        input_enqueue(channel_id, keys) as Integer
     }
 }
 
@@ -154,17 +154,17 @@ pub unsafe fn nvim_input_mouse(
                             break '_error;
                         }
                     }
-                } else if code != KE_MOUSEMOVE as ::core::ffi::c_int {
-                    if !strequal(action.data(), c"press".as_ptr()) {
-                        if strequal(action.data(), c"drag".as_ptr()) {
-                            code += KE_LEFTDRAG as ::core::ffi::c_int
-                                - KE_LEFTMOUSE as ::core::ffi::c_int;
-                        } else if strequal(action.data(), c"release".as_ptr()) {
-                            code += KE_LEFTRELEASE as ::core::ffi::c_int
-                                - KE_LEFTMOUSE as ::core::ffi::c_int;
-                        } else {
-                            break '_error;
-                        }
+                } else if code != KE_MOUSEMOVE as ::core::ffi::c_int
+                    && !strequal(action.data(), c"press".as_ptr())
+                {
+                    if strequal(action.data(), c"drag".as_ptr()) {
+                        code +=
+                            KE_LEFTDRAG as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
+                    } else if strequal(action.data(), c"release".as_ptr()) {
+                        code += KE_LEFTRELEASE as ::core::ffi::c_int
+                            - KE_LEFTMOUSE as ::core::ffi::c_int;
+                    } else {
+                        break '_error;
                     }
                 }
                 modmask = 0 as ::core::ffi::c_int;
@@ -239,14 +239,12 @@ pub unsafe fn nvim_replace_termcodes(
             ::core::ptr::null_mut::<bool>(),
             p_cpo.get(),
         );
-        return cstr_as_string(ptr);
+        cstr_as_string(ptr)
     }
 }
 
 pub unsafe fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array {
-    unsafe {
-        return keymap_array(mode, ::core::ptr::null_mut::<buf_T>(), arena);
-    }
+    unsafe { keymap_array(mode, ::core::ptr::null_mut::<buf_T>(), arena) }
 }
 
 pub unsafe fn nvim_set_keymap(

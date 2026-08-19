@@ -148,10 +148,10 @@ pub unsafe fn u_save_cursor() -> c_int {
     let mut cur: linenr_T = (*curwin.get()).w_cursor.lnum;
     let mut top: linenr_T = if cur > 0 { cur - 1 } else { 0 };
     let mut bot: linenr_T = cur + 1;
-    return u_save(top, bot);
+    u_save(top, bot)
 }
 pub unsafe fn u_save(mut top: linenr_T, mut bot: linenr_T) -> c_int {
-    return u_save_buf(curbuf.get(), top, bot);
+    u_save_buf(curbuf.get(), top, bot)
 }
 pub unsafe fn u_save_buf(mut buf: *mut buf_T, mut top: linenr_T, mut bot: linenr_T) -> c_int {
     if top >= bot || bot > (*buf).b_ml.ml_line_count + 1 {
@@ -160,16 +160,16 @@ pub unsafe fn u_save_buf(mut buf: *mut buf_T, mut top: linenr_T, mut bot: linenr
     if top + 2 == bot {
         u_saveline(buf, top + 1);
     }
-    return u_savecommon(buf, top, bot, 0, false);
+    u_savecommon(buf, top, bot, 0, false)
 }
 pub unsafe fn u_savesub(mut lnum: linenr_T) -> c_int {
-    return u_savecommon(curbuf.get(), lnum - 1, lnum + 1, lnum + 1, false);
+    u_savecommon(curbuf.get(), lnum - 1, lnum + 1, lnum + 1, false)
 }
 pub unsafe fn u_inssub(mut lnum: linenr_T) -> c_int {
-    return u_savecommon(curbuf.get(), lnum - 1, lnum, lnum + 1, false);
+    u_savecommon(curbuf.get(), lnum - 1, lnum, lnum + 1, false)
 }
 pub unsafe fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> c_int {
-    return u_savecommon(
+    u_savecommon(
         curbuf.get(),
         lnum - 1,
         lnum + nlines,
@@ -179,7 +179,7 @@ pub unsafe fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> c_int {
             lnum
         },
         false,
-    );
+    )
 }
 pub unsafe fn undo_allowed(mut buf: *mut buf_T) -> bool {
     if (*buf).b_p_ma == 0 {
@@ -194,13 +194,13 @@ pub unsafe fn undo_allowed(mut buf: *mut buf_T) -> bool {
         emsg(gettext(&raw const e_textlock as *const c_char));
         return false;
     }
-    return true;
+    true
 }
 unsafe fn get_undolevel(mut buf: *mut buf_T) -> OptInt {
     if (*buf).b_p_ul == NO_LOCAL_UNDOLEVEL as OptInt {
         return p_ul.get();
     }
-    return (*buf).b_p_ul;
+    (*buf).b_p_ul
 }
 #[inline]
 unsafe fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
@@ -403,7 +403,7 @@ pub unsafe fn u_savecommon(
                 return FAIL;
             }
             let c2rust_fresh0 = lnum;
-            lnum = lnum + 1;
+            lnum += 1;
             *(*uep).ue_array.offset(i_0 as isize) = u_save_line_buf(buf, c2rust_fresh0);
             i_0 += 1;
         }
@@ -417,7 +417,7 @@ pub unsafe fn u_savecommon(
     }
     (*buf).b_u_synced = false;
     undo_undoes.set(false);
-    return OK;
+    OK
 }
 pub unsafe fn undo_fmt_time(mut buf: *mut c_char, mut buflen: size_t, mut tt: time_t) {
     if time(ptr::null_mut()) - tt >= 100 {
@@ -521,11 +521,11 @@ pub unsafe fn u_update_save_nr(mut buf: *mut buf_T) {
     }
 }
 pub unsafe fn bufIsChanged(mut buf: *mut buf_T) -> bool {
-    return if bt_prompt(buf) {
+    (if bt_prompt(buf) {
         (*buf).b_modified_was_set as c_int
     } else {
         (!bt_dontwrite(buf) && ((*buf).b_changed != 0 || file_ff_differs(buf, true))) as c_int
-    } != 0;
+    } != 0)
 }
 pub unsafe fn anyBufIsChanged() -> bool {
     let mut buf: *mut buf_T = firstbuf.get();
@@ -535,8 +535,8 @@ pub unsafe fn anyBufIsChanged() -> bool {
         }
         buf = (*buf).b_next;
     }
-    return false;
+    false
 }
 pub unsafe fn curbufIsChanged() -> bool {
-    return bufIsChanged(curbuf.get());
+    bufIsChanged(curbuf.get())
 }

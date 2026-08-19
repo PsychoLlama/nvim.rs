@@ -261,7 +261,7 @@ pub unsafe fn call_user_func(
                 hash_add(&raw mut (*fc).fc_l_avars.dv_hashtab, tv_dict_item_key(v));
             }
 
-            if ai >= 0 && ai < MAX_FUNC_ARGS {
+            if (0..MAX_FUNC_ARGS).contains(&ai) {
                 // Add the extra argument to a:000, through the funccall's own
                 // listitem storage.
                 let li = (&raw mut (*fc).fc_l_listitems as *mut listitem_T).offset(ai as isize);

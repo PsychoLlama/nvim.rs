@@ -445,9 +445,7 @@ pub const SET_INIT: Set_ptr_t = Set_ptr_t {
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
-    unsafe {
-        return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
-    }
+    unsafe { mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t }
 }
 #[inline]
 unsafe fn set_put_ptr_t(
@@ -461,8 +459,7 @@ unsafe fn set_put_ptr_t(
         if !key_alloc.is_null() {
             *key_alloc = (*set).keys.offset(k as isize);
         }
-        return status as ::core::ffi::c_uint
-            != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
+        status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
     }
 }
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;

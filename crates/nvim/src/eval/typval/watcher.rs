@@ -75,13 +75,12 @@ pub unsafe extern "C" fn callback_free(callback: *mut Callback) {
                 xfree((*callback).data.funcref.cast());
             }
             kCallbackPartial => partial_unref((*callback).data.partial),
-            kCallbackLua => {
+            kCallbackLua
                 // NLUA_CLEAR_REF
-                if (*callback).data.luaref != LUA_NOREF {
+                if (*callback).data.luaref != LUA_NOREF => {
                     api_free_luaref((*callback).data.luaref);
                     (*callback).data.luaref = LUA_NOREF as LuaRef;
                 }
-            }
             _ => {}
         }
         (*callback).type_0 = kCallbackNone;

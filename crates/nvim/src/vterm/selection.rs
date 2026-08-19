@@ -53,10 +53,8 @@ pub(super) fn osc(state: &mut VTermState, command: c_int, frag: VTermStringFragm
         2 => {
             state.set_termprop_string(VTERM_PROP_TITLE, frag);
         }
-        52 => {
-            if state.selection_enabled() {
-                clipboard(state, frag);
-            }
+        52 if state.selection_enabled() => {
+            clipboard(state, frag);
         }
         _ => {}
     }

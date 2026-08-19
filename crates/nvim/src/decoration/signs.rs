@@ -244,21 +244,22 @@ pub unsafe fn decor_redraw_signs(
     for item in &signs {
         // SAFETY: as above.
         let sh = unsafe { Sh::new(item.sh) };
-        if let Some(texts) = texts.as_deref_mut() {
-            if idx < len && sh.has_text() {
-                texts[idx]
-                    .text
-                    .copy_from_slice(&sh.text[..SIGN_WIDTH as usize]);
-                texts[idx].hl_id = sh.hl_id;
-                idx += 1;
-            }
+        if let Some(texts) = texts.as_deref_mut()
+            && idx < len
+            && sh.has_text()
+        {
+            texts[idx]
+                .text
+                .copy_from_slice(&sh.text[..SIGN_WIDTH as usize]);
+            texts[idx].hl_id = sh.hl_id;
+            idx += 1;
         }
         let wanted = [sh.number_hl_id, sh.line_hl_id, sh.cursorline_hl_id];
         for (out, hl_id) in ids.iter_mut().zip(wanted) {
-            if let Some(out) = out.as_deref_mut() {
-                if *out <= 0 {
-                    *out = hl_id;
-                }
+            if let Some(out) = out.as_deref_mut()
+                && *out <= 0
+            {
+                *out = hl_id;
             }
         }
     }

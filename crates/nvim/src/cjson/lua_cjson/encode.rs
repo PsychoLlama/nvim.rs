@@ -60,7 +60,7 @@ static HEX_ESCAPES: [[u8; 6]; 256] = hex_escapes();
 
 const fn hex_escapes() -> [[u8; 6]; 256] {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let mut table = [[b'\\', b'u', b'0', b'0', b'0', b'0']; 256];
+    let mut table = [*b"\\u0000"; 256];
     let mut byte = 0;
     while byte < 256 {
         table[byte][4] = DIGITS[(byte >> 4) & 0xf];

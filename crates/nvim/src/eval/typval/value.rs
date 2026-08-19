@@ -167,7 +167,7 @@ pub unsafe extern "C" fn tv_item_lock(
                 let l = (*tv).vval.v_list;
                 if !l.is_null() && !(check_refcount && (*l).lv_refcount > 1) {
                     (*l).lv_lock = change_lock(lock, (*l).lv_lock);
-                    if deep < 0 || deep > 1 {
+                    if !(0..=1).contains(&deep) {
                         // Recursive: lock/unlock the items the List contains.
                         for li in tv_list_iter(l.as_ref()) {
                             tv_item_lock(&raw mut (*li).li_tv, deep - 1, lock, check_refcount);
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn tv_item_lock(
                 let d = (*tv).vval.v_dict;
                 if !d.is_null() && !(check_refcount && (*d).dv_refcount > 1) {
                     (*d).dv_lock = change_lock(lock, (*d).dv_lock);
-                    if deep < 0 || deep > 1 {
+                    if !(0..=1).contains(&deep) {
                         // recursive: lock/unlock the items the Dict contains
                         for hi in tv_dict_iter(&*d) {
                             let di = tv_dict_hi2di(hi);

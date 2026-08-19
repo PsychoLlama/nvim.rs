@@ -31,30 +31,30 @@ pub(crate) unsafe fn push_ranges(
             let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             lua_pushnumber(L, (*ranges.add(i)).start_point.row as lua_Number);
             let c2rust_fresh2 = j;
-            j = j + 1;
+            j += 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh2);
             lua_pushnumber(L, (*ranges.add(i)).start_point.column as lua_Number);
             let c2rust_fresh3 = j;
-            j = j + 1;
+            j += 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh3);
             if include_bytes {
                 lua_pushnumber(L, (*ranges.add(i)).start_byte as lua_Number);
                 let c2rust_fresh4 = j;
-                j = j + 1;
+                j += 1;
                 lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh4);
             }
             lua_pushnumber(L, (*ranges.add(i)).end_point.row as lua_Number);
             let c2rust_fresh5 = j;
-            j = j + 1;
+            j += 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh5);
             lua_pushnumber(L, (*ranges.add(i)).end_point.column as lua_Number);
             let c2rust_fresh6 = j;
-            j = j + 1;
+            j += 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh6);
             if include_bytes {
                 lua_pushnumber(L, (*ranges.add(i)).end_byte as lua_Number);
                 let c2rust_fresh7 = j;
-                j = j + 1;
+                j += 1;
                 lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh7);
             }
             lua_rawseti(
@@ -86,7 +86,7 @@ unsafe fn lua_checkuint32(mut L: *mut lua_State, mut index: ::core::ffi::c_int) 
         {
             luaL_error(L, c"Range value out of bounds".as_ptr());
         }
-        return converted;
+        converted
     }
 }
 
@@ -128,8 +128,8 @@ unsafe fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
                     row: end_row,
                     column: end_col,
                 },
-                start_byte: start_byte,
-                end_byte: end_byte,
+                start_byte,
+                end_byte,
             };
         } else if node_check_opt(L, -1 as ::core::ffi::c_int, &raw mut node) {
             *range = TSRange {
@@ -177,7 +177,7 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(
         }
         ts_parser_set_included_ranges(p, ranges, tbl_len as uint32_t);
         xfree(ranges as *mut ::core::ffi::c_void);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
@@ -191,6 +191,6 @@ pub(crate) unsafe extern "C-unwind" fn parser_get_ranges(
         let mut len: uint32_t = 0;
         let mut ranges: *const TSRange = ts_parser_included_ranges(p, &raw mut len);
         push_ranges(L, ranges, len as size_t, include_bytes);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }

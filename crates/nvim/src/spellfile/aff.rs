@@ -479,10 +479,10 @@ unsafe fn handle_line(
                 break;
             }
             *slot = affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
-            if let Some(warning) = field.warn_after_pfx() {
-                if (*aff).af_pref.ht_used > 0 {
-                    smsg_c!(0, gettext(warning.as_ptr()), fname, lnum);
-                }
+            if let Some(warning) = field.warn_after_pfx()
+                && (*aff).af_pref.ht_used > 0
+            {
+                smsg_c!(0, gettext(warning.as_ptr()), fname, lnum);
             }
             return true;
         }

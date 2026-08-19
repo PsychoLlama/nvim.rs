@@ -22,7 +22,7 @@ pub unsafe fn buffer_set_var(
         if buf.is_null() {
             return NIL.reported(error);
         }
-        return dict_set_var((*buf).b_vars, name, value, false, true, arena, err).reported(error);
+        dict_set_var((*buf).b_vars, name, value, false, true, arena, err).reported(error)
     }
 }
 
@@ -38,7 +38,7 @@ pub unsafe fn buffer_del_var(
         if buf.is_null() {
             return NIL.reported(error);
         }
-        return dict_set_var((*buf).b_vars, name, NIL, true, true, arena, err).reported(error);
+        dict_set_var((*buf).b_vars, name, NIL, true, true, arena, err).reported(error)
     }
 }
 
@@ -55,7 +55,7 @@ pub unsafe fn window_set_var(
         if win.is_null() {
             return NIL.reported(error);
         }
-        return dict_set_var((*win).w_vars, name, value, false, true, arena, err).reported(error);
+        dict_set_var((*win).w_vars, name, value, false, true, arena, err).reported(error)
     }
 }
 
@@ -71,7 +71,7 @@ pub unsafe fn window_del_var(
         if win.is_null() {
             return NIL.reported(error);
         }
-        return dict_set_var((*win).w_vars, name, NIL, true, true, arena, err).reported(error);
+        dict_set_var((*win).w_vars, name, NIL, true, true, arena, err).reported(error)
     }
 }
 
@@ -88,7 +88,7 @@ pub unsafe fn tabpage_set_var(
         if tab.is_null() {
             return NIL.reported(error);
         }
-        return dict_set_var((*tab).tp_vars, name, value, false, true, arena, err).reported(error);
+        dict_set_var((*tab).tp_vars, name, value, false, true, arena, err).reported(error)
     }
 }
 
@@ -104,7 +104,7 @@ pub unsafe fn tabpage_del_var(
         if tab.is_null() {
             return NIL.reported(error);
         }
-        return dict_set_var((*tab).tp_vars, name, NIL, true, true, arena, err).reported(error);
+        dict_set_var((*tab).tp_vars, name, NIL, true, true, arena, err).reported(error)
     }
 }
 
@@ -116,15 +116,12 @@ pub unsafe fn vim_set_var(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        return dict_set_var(get_globvar_dict(), name, value, false, true, arena, err)
-            .reported(error);
+        dict_set_var(get_globvar_dict(), name, value, false, true, arena, err).reported(error)
     }
 }
 
 pub unsafe fn vim_del_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        return dict_set_var(get_globvar_dict(), name, NIL, true, true, arena, err).reported(error);
-    }
+    unsafe { dict_set_var(get_globvar_dict(), name, NIL, true, true, arena, err).reported(error) }
 }

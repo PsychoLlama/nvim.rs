@@ -83,13 +83,13 @@ pub(crate) unsafe fn tv_blob_slice(
         // The resulting variable is a sub-blob.  If the indexes
         // are out of range the result is empty.
         if n1 < 0 {
-            n1 = varnumber_T::from(len) + n1;
+            n1 += varnumber_T::from(len);
             if n1 < 0 {
                 n1 = 0;
             }
         }
         if n2 < 0 {
-            n2 = varnumber_T::from(len) + n2;
+            n2 += varnumber_T::from(len);
         } else if n2 >= varnumber_T::from(len) {
             n2 = varnumber_T::from(len - if exclusive { 0 } else { 1 });
         }
@@ -134,7 +134,7 @@ pub(crate) unsafe fn tv_blob_index(
         // The resulting variable is a byte value.
         // If the index is too big or negative that is an error.
         if idx < 0 {
-            idx = varnumber_T::from(len) + idx;
+            idx += varnumber_T::from(len);
         }
         if idx >= varnumber_T::from(len) || idx < 0 {
             semsg_c!(

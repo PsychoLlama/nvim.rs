@@ -82,7 +82,7 @@ pub(crate) unsafe fn qf_get_list(qi: *mut qf_info_T, idx: c_int) -> *mut qf_list
     // SAFETY: the caller's stack and a slot it has room for. The pointer
     // is into the `Vec`'s heap buffer, which outlives every borrow of the
     // stack itself and is only invalidated by `qf_resize_stack_base`.
-    unsafe { (&mut (*qi).qf_lists).as_mut_ptr().add(idx as usize) }
+    unsafe { (*qi).qf_lists.as_mut_ptr().add(idx as usize) }
 }
 
 /// The list `:cc` and friends work on.
@@ -341,7 +341,7 @@ unsafe fn qf_resize_stack_base(qi: *mut qf_info_T, n: c_int) {
                 qf_pop_stack(qi, true);
             }
         }
-        (&mut (*qi).qf_lists).resize(n.max(0) as usize, empty_list());
+        (*qi).qf_lists.resize(n.max(0) as usize, empty_list());
         qf_update_buffer(qi, ptr::null_mut());
     }
 }

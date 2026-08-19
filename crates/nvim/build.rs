@@ -187,7 +187,7 @@ fn compile_lua_modules(manifest: &Path, repo_root: &Path, deps_prefix: &Path) {
     let core_dir = repo_root.join("runtime/lua/vim/_core");
     for entry in std::fs::read_dir(&core_dir).unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().map_or(true, |ext| ext != "lua") {
+        if path.extension().is_none_or(|ext| ext != "lua") {
             continue;
         }
         let stem = path.file_stem().unwrap().to_str().unwrap().to_owned();

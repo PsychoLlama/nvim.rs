@@ -120,7 +120,7 @@ pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
             size_of::<[c_char; 5]>().wrapping_sub(1),
             (*uhp).uh_time as varnumber_T,
         );
-        if uhp == (*buf).b_u_newhead as *const u_header_T {
+        if core::ptr::eq(uhp, (*buf).b_u_newhead) {
             tv_dict_add_nr(
                 dict,
                 c"newhead".as_ptr(),
@@ -128,7 +128,7 @@ pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
                 1 as varnumber_T,
             );
         }
-        if uhp == (*buf).b_u_curhead as *const u_header_T {
+        if core::ptr::eq(uhp, (*buf).b_u_curhead) {
             tv_dict_add_nr(
                 dict,
                 c"curhead".as_ptr(),
@@ -155,7 +155,7 @@ pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
         tv_list_append_dict(list, dict);
         uhp = (*uhp).uh_prev.ptr;
     }
-    return list;
+    list
 }
 pub unsafe fn f_undofile(
     mut argvars: *mut typval_T,
@@ -250,5 +250,5 @@ pub unsafe fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_header_T {
             }
         }
     }
-    return uhp;
+    uhp
 }

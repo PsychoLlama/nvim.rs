@@ -59,8 +59,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
                 let hash = hash_hash(name.add(pathlen));
                 let hi = hash_lookup(ht, name.add(pathlen), namelen - pathlen, hash);
                 // HASHITEM_EMPTY().
-                if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut c_char
-                {
+                if (*hi).hi_key.is_null() || core::ptr::eq((*hi).hi_key, &raw const hash_removed) {
                     // Remove the path that was prepended (+1 for the NUL).
                     memmove(
                         name as *mut c_void,

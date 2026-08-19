@@ -343,7 +343,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
             nv_put_opt(cap, true);
         } else if nchar == '\'' as c_int || nchar == '`' as c_int {
             nv_bracket_mark(cap);
-        } else if nchar >= K_RIGHTRELEASE && nchar <= K_LEFTMOUSE {
+        } else if (K_RIGHTRELEASE..=K_LEFTMOUSE).contains(&nchar) {
             // A mouse click after `[` or `]` pastes at the click, reindenting.
             do_mouse(
                 (*cap).oap,

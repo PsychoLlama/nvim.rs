@@ -141,7 +141,7 @@ pub unsafe fn suggest_try_soundalike_finish() {
             let mut hi: *mut hashitem_T = (*done).ht_array;
             while todo > 0 {
                 let key = (*hi).hi_key;
-                if !(key.is_null() || key == &raw const hash_removed as *mut c_char) {
+                if !(key.is_null() || core::ptr::eq(key, &raw const hash_removed)) {
                     xfree(key.sub(SFT_WORD_OFF) as *mut c_void);
                     todo -= 1;
                 }
@@ -214,7 +214,7 @@ pub unsafe fn add_sound_suggest(
         let goodword_len = libc::strlen(goodword) as usize;
         let hi = hash_lookup(&raw mut (*slang).sl_sounddone, goodword, goodword_len, hash);
         let key = (*hi).hi_key;
-        if key.is_null() || key == &raw const hash_removed as *mut c_char {
+        if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
             let sft = xmalloc(SFT_WORD_OFF + goodword_len + 1) as *mut sftword_T;
             (*sft).sft_score = score as int16_t;
             let word = (sft as *mut u8).add(SFT_WORD_OFF);

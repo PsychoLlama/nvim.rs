@@ -466,7 +466,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
                     if put.dir == FORWARD && gchar_cursor() != NUL {
                         let bytelen = utfc_ptr2len(get_cursor_pos_ptr());
                         col += bytelen;
-                        if (*put.y_array).len() != 0 {
+                        if !(*put.y_array).is_empty() {
                             (*curwin.get()).w_cursor.col += bytelen;
                             (*curbuf.get()).b_op_end.col += bytelen;
                         }

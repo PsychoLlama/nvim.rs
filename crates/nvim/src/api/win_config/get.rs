@@ -238,6 +238,6 @@ pub unsafe fn nvim_win_get_config(
             );
             rv._cmdline_offset = (*config)._cmdline_offset as Integer;
         }
-        return rv.reported(error);
+        rv.reported(error)
     }
 }

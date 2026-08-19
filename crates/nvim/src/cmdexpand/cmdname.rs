@@ -498,16 +498,15 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
                     if *p.add(1) as c_int != NUL {
                         p = p.add(1);
                     }
-                } else if (*p as c_int == '"' as c_int && !ea.argt.has(ExArgt::NOTRLCOM))
+                } else if ((*p as c_int == '"' as c_int && !ea.argt.has(ExArgt::NOTRLCOM))
                     || *p as c_int == '|' as c_int
-                    || *p as c_int == '\n' as c_int
+                    || *p as c_int == '\n' as c_int)
+                    && *p.sub(1) as c_int != '\\' as c_int
                 {
-                    if *p.sub(1) as c_int != '\\' as c_int {
-                        if *p as c_int == '|' as c_int || *p as c_int == '\n' as c_int {
-                            return p.add(1);
-                        }
-                        return ptr::null(); // It's a comment
+                    if *p as c_int == '|' as c_int || *p as c_int == '\n' as c_int {
+                        return p.add(1);
                     }
+                    return ptr::null(); // It's a comment
                 }
                 p = p.add(utfc_ptr2len(p) as usize);
             }

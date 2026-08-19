@@ -262,7 +262,7 @@ pub(crate) unsafe fn var_shada_iter(
         let count = (*globvarht).ht_mask + 1;
         let wanted = |hi: *const hashitem_T| {
             !(*hi).hi_key.is_null()
-                && (*hi).hi_key != &raw const hash_removed as *mut c_char
+                && !core::ptr::eq((*hi).hi_key, &raw const hash_removed)
                 && var_flavour((*hi).hi_key) & flavour != 0
         };
 

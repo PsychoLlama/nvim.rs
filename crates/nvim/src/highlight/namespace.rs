@@ -395,16 +395,16 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
     let mut available = false;
     // SAFETY: the editor's own tables.
     unsafe {
-        if final_id > 0 {
-            if let Some(found) = hl_ns_get_attrs(ns_id, final_id, Some(&mut optional)) {
-                attrs = found;
-                available = true;
-            }
+        if final_id > 0
+            && let Some(found) = hl_ns_get_attrs(ns_id, final_id, Some(&mut optional))
+        {
+            attrs = found;
+            available = true;
         }
 
         // The popup menu's own groups pick up 'pumblend' unless the group
         // set a blend itself.
-        if HLF_PNI <= idx && idx <= HLF_PST {
+        if (HLF_PNI..=HLF_PST).contains(&idx) {
             if attrs.hl_blend == -1 && p_pb.get() > 0 {
                 attrs.hl_blend = p_pb.get() as c_int;
             }

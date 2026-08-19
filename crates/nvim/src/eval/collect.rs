@@ -425,7 +425,7 @@ pub unsafe fn set_ref_in_ht(
                 let mut hi: *mut hashitem_T = (*cur_ht).ht_array;
                 while todo != 0 {
                     if !(*hi).hi_key.is_null()
-                        && (*hi).hi_key != &raw const hash_removed as *mut c_char
+                        && !core::ptr::eq((*hi).hi_key, &raw const hash_removed)
                     {
                         todo -= 1;
                         abort = abort

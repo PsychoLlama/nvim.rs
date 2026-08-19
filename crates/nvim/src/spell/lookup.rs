@@ -225,15 +225,15 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             // A word character right after the match means this is not the
             // end of a word — unless the language compounds or does not
             // break, in which case what follows may continue it.
-            let word_ends;
-            if spell_iswordp(ptr.offset(wlen as isize), (*mip).mi_win) {
+
+            let word_ends = if spell_iswordp(ptr.offset(wlen as isize), (*mip).mi_win) {
                 if (*slang).sl_compprog.is_null() && !(*slang).sl_nobreak {
                     continue;
                 }
-                word_ends = false;
+                false
             } else {
-                word_ends = true;
-            }
+                true
+            };
 
             // The prefix flag comes before the compound flags; once a valid
             // prefix has been found the rest are tried as compound flags.

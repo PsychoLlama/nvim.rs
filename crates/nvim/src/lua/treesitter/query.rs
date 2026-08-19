@@ -63,19 +63,19 @@ pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(
         *ud = query;
         lua_getfield(L, LUA_REGISTRYINDEX, TS_META_QUERY.as_ptr());
         lua_setmetatable(L, -2 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
 fn query_err_to_string(mut error_type: TSQueryError) -> *const ::core::ffi::c_char {
     match error_type as ::core::ffi::c_uint {
-        1 => return c"Invalid syntax:\n".as_ptr(),
-        2 => return c"Invalid node type ".as_ptr(),
-        3 => return c"Invalid field name ".as_ptr(),
-        4 => return c"Invalid capture name ".as_ptr(),
-        5 => return c"Impossible pattern:\n".as_ptr(),
-        _ => return c"error".as_ptr(),
-    };
+        1 => c"Invalid syntax:\n".as_ptr(),
+        2 => c"Invalid node type ".as_ptr(),
+        3 => c"Invalid field name ".as_ptr(),
+        4 => c"Invalid capture name ".as_ptr(),
+        5 => c"Impossible pattern:\n".as_ptr(),
+        _ => c"error".as_ptr(),
+    }
 }
 
 unsafe fn query_err_string(
@@ -194,7 +194,7 @@ pub(crate) unsafe fn query_check(
         let mut ud: *mut *mut TSQuery =
             luaL_checkudata(L, index, TS_META_QUERY.as_ptr()) as *mut *mut TSQuery;
         luaL_argcheck(L, !(*ud).is_null(), index, c"TSQuery expected".as_ptr());
-        return *ud;
+        *ud
     }
 }
 
@@ -202,14 +202,14 @@ unsafe extern "C-unwind" fn query_gc(mut L: *mut lua_State) -> ::core::ffi::c_in
     unsafe {
         let mut query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
         ts_query_delete(query);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
 unsafe extern "C-unwind" fn query_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushstring(L, c"<query>".as_ptr());
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -239,7 +239,7 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
                         == TSQueryPredicateStepTypeDone as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         let c2rust_fresh0 = nextpred;
-                        nextpred = nextpred + 1;
+                        nextpred += 1;
                         lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh0);
                         lua_createtable(L, 3 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
                         nextitem = 1 as ::core::ffi::c_int;
@@ -267,7 +267,7 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
                             abort();
                         }
                         let c2rust_fresh1 = nextitem;
-                        nextitem = nextitem + 1;
+                        nextitem += 1;
                         lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh1);
                     }
                     k = k.wrapping_add(1);
@@ -298,7 +298,7 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
             i_0 = i_0.wrapping_add(1);
         }
         lua_setfield(L, -2 as ::core::ffi::c_int, c"captures".as_ptr());
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -309,7 +309,7 @@ unsafe extern "C-unwind" fn query_disable_capture(mut L: *mut lua_State) -> ::co
         let mut name: *const ::core::ffi::c_char =
             luaL_checklstring(L, 2 as ::core::ffi::c_int, &raw mut name_len);
         ts_query_disable_capture(query, name, name_len as uint32_t);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
@@ -318,6 +318,6 @@ unsafe extern "C-unwind" fn query_disable_pattern(mut L: *mut lua_State) -> ::co
         let mut query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
         let pattern_index: uint32_t = luaL_checkinteger(L, 2 as ::core::ffi::c_int) as uint32_t;
         ts_query_disable_pattern(query, pattern_index.wrapping_sub(1 as uint32_t));
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }

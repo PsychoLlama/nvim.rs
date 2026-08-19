@@ -133,11 +133,11 @@ pub(crate) unsafe fn ins_compl_new_leader() {
         // Don't let Enter select the original text when there is no popup menu.
         if (*compl_match_array.ptr()).is_null() {
             compl_enter_selects.set(false);
-        } else if ins_compl_has_preinsert() && (*compl_leader.ptr()).len() > 0 {
+        } else if ins_compl_has_preinsert() && !(*compl_leader.ptr()).is_empty() {
             ins_compl_insert(true, false);
         } else if compl_started.get()
             && ins_compl_preinsert_longest()
-            && (*compl_leader.ptr()).len() > 0
+            && !(*compl_leader.ptr()).is_empty()
             && !ins_compl_preinsert_effect()
         {
             ins_compl_insert(true, true);

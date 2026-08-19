@@ -82,7 +82,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
         lua_setmetatable(L, -2 as ::core::ffi::c_int);
         lua_getfenv(L, 1 as ::core::ffi::c_int);
         lua_setfenv(L, -2 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -91,7 +91,7 @@ unsafe extern "C-unwind" fn querycursor_remove_match(mut L: *mut lua_State) -> :
         let mut cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
         let mut match_id: uint32_t = luaL_checkinteger(L, 2 as ::core::ffi::c_int) as uint32_t;
         ts_query_cursor_remove_match(cursor, match_id);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
@@ -112,7 +112,7 @@ unsafe extern "C-unwind" fn querycursor_next_capture(mut L: *mut lua_State) -> :
         lua_pushinteger(L, capture.index.wrapping_add(1 as uint32_t) as lua_Integer);
         push_node(L, capture.node, 1 as ::core::ffi::c_int);
         push_querymatch(L, &raw mut match_0, 1 as ::core::ffi::c_int);
-        return 3 as ::core::ffi::c_int;
+        3 as ::core::ffi::c_int
     }
 }
 
@@ -129,7 +129,7 @@ unsafe extern "C-unwind" fn querycursor_next_match(mut L: *mut lua_State) -> ::c
             return 0 as ::core::ffi::c_int;
         }
         push_querymatch(L, &raw mut match_0, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -146,7 +146,7 @@ unsafe fn querycursor_check(
             index,
             c"TSQueryCursor expected".as_ptr(),
         );
-        return *ud;
+        *ud
     }
 }
 
@@ -154,7 +154,7 @@ unsafe extern "C-unwind" fn querycursor_gc(mut L: *mut lua_State) -> ::core::ffi
     unsafe {
         let mut cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
         ts_query_cursor_delete(cursor);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
@@ -190,7 +190,7 @@ unsafe extern "C-unwind" fn querymatch_info(mut L: *mut lua_State) -> ::core::ff
             ((*match_0).pattern_index as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
                 as lua_Integer,
         );
-        return 2 as ::core::ffi::c_int;
+        2 as ::core::ffi::c_int
     }
 }
 
@@ -220,6 +220,6 @@ unsafe extern "C-unwind" fn querymatch_captures(mut L: *mut lua_State) -> ::core
             lua_rawseti(L, -2 as ::core::ffi::c_int, index);
             i = i.wrapping_add(1);
         }
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }

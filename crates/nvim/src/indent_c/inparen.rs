@@ -186,10 +186,8 @@ unsafe fn align_with_unclosed_paren(
                     for col in 0..our_paren_pos.col {
                         match *l.offset(col as isize) as u8 {
                             b'(' | b'{' => n += 1,
-                            b')' | b'}' => {
-                                if n > 1 {
-                                    n -= 1;
-                                }
+                            b')' | b'}' if n > 1 => {
+                                n -= 1;
                             }
                             _ => {}
                         }

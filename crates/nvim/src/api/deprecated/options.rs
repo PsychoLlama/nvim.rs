@@ -17,7 +17,7 @@ pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        return get_vimoption(
+        get_vimoption(
             name,
             OptionSetFlags::GLOBAL,
             curbuf.get(),
@@ -25,7 +25,7 @@ pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<
             arena,
             err,
         )
-        .reported(error);
+        .reported(error)
     }
 }
 
@@ -45,9 +45,7 @@ pub unsafe fn nvim_set_option(
 pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        return get_option_from(NULL, kOptScopeGlobal, name, err).reported(error);
-    }
+    unsafe { get_option_from(NULL, kOptScopeGlobal, name, err).reported(error) }
 }
 
 pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Object, Error> {
@@ -58,8 +56,7 @@ pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Obje
         if buf.is_null() {
             return NIL.reported(error);
         }
-        return get_option_from(buf as *mut ::core::ffi::c_void, kOptScopeBuf, name, err)
-            .reported(error);
+        get_option_from(buf as *mut ::core::ffi::c_void, kOptScopeBuf, name, err).reported(error)
     }
 }
 
@@ -96,8 +93,7 @@ pub unsafe fn nvim_win_get_option(window: Window, name: String_0) -> Result<Obje
         if win.is_null() {
             return NIL.reported(error);
         }
-        return get_option_from(win as *mut ::core::ffi::c_void, kOptScopeWin, name, err)
-            .reported(error);
+        get_option_from(win as *mut ::core::ffi::c_void, kOptScopeWin, name, err).reported(error)
     }
 }
 
@@ -172,7 +168,7 @@ unsafe fn get_option_from(
             api_err_invalid(err, c"option name".as_ptr(), opt_name, 0 as int64_t, true);
             return NIL;
         }
-        return optval_as_object(value);
+        optval_as_object(value)
     }
 }
 

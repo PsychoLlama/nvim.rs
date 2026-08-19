@@ -195,12 +195,14 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
         } else {
             fix_fname(new.fname)
         };
-        if !buf.is_null() && !(*buf).b_ffname.is_null() && !fullname.is_null() {
-            if path_fnamecmp(fullname, (*buf).b_ffname) != 0 {
-                let short = path_try_shorten_fname(fullname);
-                if !short.is_null() {
-                    (*qfp).qf_fname = xstrdup(short);
-                }
+        if !buf.is_null()
+            && !(*buf).b_ffname.is_null()
+            && !fullname.is_null()
+            && path_fnamecmp(fullname, (*buf).b_ffname) != 0
+        {
+            let short = path_try_shorten_fname(fullname);
+            if !short.is_null() {
+                (*qfp).qf_fname = xstrdup(short);
             }
         }
         xfree(fullname.cast());

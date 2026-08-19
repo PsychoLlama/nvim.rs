@@ -580,7 +580,7 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
                 b'b' | b'B' => {
                     // Binary has no libc conversion: skip the leading
                     // zeros, then emit one character per remaining bit.
-                    let mut bits = size_of::<uintmax_t>() * 8;
+                    let mut bits = uintmax_t::BITS as usize;
                     while bits > 0 && uarg >> (bits - 1) & 1 == 0 {
                         bits -= 1;
                     }

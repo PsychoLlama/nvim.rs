@@ -260,10 +260,8 @@ fn scan_windows(what: &mut Scan) {
                 || wp.w_last_topfill != wp.w_topfill
                 || wp.w_last_leftcol != wp.w_leftcol
                 || wp.w_last_skipcol != wp.w_skipcol);
-        if scroll_changed {
-            if let Scan::Counts { first_scroll, .. } = what {
-                first_scroll.get_or_insert(wp);
-            }
+        if scroll_changed && let Scan::Counts { first_scroll, .. } = what {
+            first_scroll.get_or_insert(wp);
         }
         let Scan::Deltas(v_event) = what else {
             continue;

@@ -291,7 +291,7 @@ pub unsafe fn parse_border_style(
                     );
                     return;
                 }
-                if string.len() != 0
+                if !string.is_empty()
                     && mb_string2cells_len(string.data(), string.len()) > 1 as size_t
                 {
                     api_err_exp(
@@ -380,7 +380,6 @@ pub unsafe fn parse_border_style(
                     c"corner char between edge chars".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                 );
-                return;
             }
         } else if style.type_0 as ::core::ffi::c_uint
             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -432,7 +431,6 @@ pub unsafe fn parse_border_style(
             }
             if true {
                 api_err_invalid(err, c"border".as_ptr(), str.data(), 0 as int64_t, true);
-                return;
             }
         }
     }
@@ -500,7 +498,6 @@ pub unsafe fn parse_winborder(
                         border_chars.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<Object>().wrapping_mul(border_chars.capacity),
                     ) as *mut Object;
-                } else {
                 };
                 array_add(&mut border_chars, Object::string(str));
                 count += 1;
@@ -525,6 +522,6 @@ pub unsafe fn parse_winborder(
         }
         parse_border_style(style, fconfig, err);
         api_free_object(style);
-        return !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int);
+        !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
     }
 }

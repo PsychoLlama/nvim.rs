@@ -61,7 +61,7 @@ pub unsafe fn u_undo_and_forget(mut count: c_int, mut do_buf_event: bool) -> boo
         (*curbuf.get()).b_u_seq_last -= 1;
     }
     u_freebranch(curbuf.get(), to_forget, ptr::null_mut());
-    return true;
+    true
 }
 pub(crate) unsafe fn u_doit(mut startcount: c_int, mut quiet: bool, mut do_buf_event: bool) {
     if !undo_allowed(curbuf.get()) {
@@ -76,7 +76,7 @@ pub(crate) unsafe fn u_doit(mut startcount: c_int, mut quiet: bool, mut do_buf_e
     let mut count: c_int = startcount;
     loop {
         let c2rust_fresh4 = count;
-        count = count - 1;
+        count -= 1;
         if c2rust_fresh4 == 0 {
             break;
         }
@@ -216,38 +216,38 @@ pub unsafe fn undo_time(mut step: c_int, mut sec: bool, mut file: bool, mut abso
                 } else {
                     (*uhp).uh_seq
                 };
-                if round == 1 && !(dofile && val == 0) {
-                    if (if step < 0 {
+                if round == 1
+                    && !(dofile && val == 0)
+                    && (if step < 0 {
                         ((*uhp).uh_seq <= (*curbuf.get()).b_u_seq_cur) as c_int
                     } else {
                         ((*uhp).uh_seq > (*curbuf.get()).b_u_seq_cur) as c_int
                     }) != 0
-                        && (if dosec && val == closest {
-                            if step < 0 {
-                                ((*uhp).uh_seq < closest_seq) as c_int
-                            } else {
-                                ((*uhp).uh_seq > closest_seq) as c_int
-                            }
+                    && (if dosec && val == closest {
+                        if step < 0 {
+                            ((*uhp).uh_seq < closest_seq) as c_int
                         } else {
-                            (closest == closest_start
-                                || (if val > target {
-                                    if closest > target {
-                                        (val - target <= closest - target) as c_int
-                                    } else {
-                                        (val - target <= target - closest) as c_int
-                                    }
+                            ((*uhp).uh_seq > closest_seq) as c_int
+                        }
+                    } else {
+                        (closest == closest_start
+                            || (if val > target {
+                                if closest > target {
+                                    (val - target <= closest - target) as c_int
                                 } else {
-                                    if closest > target {
-                                        (target - val <= closest - target) as c_int
-                                    } else {
-                                        (target - val <= target - closest) as c_int
-                                    }
-                                }) != 0) as c_int
-                        }) != 0
-                    {
-                        closest = val;
-                        closest_seq = (*uhp).uh_seq;
-                    }
+                                    (val - target <= target - closest) as c_int
+                                }
+                            } else {
+                                if closest > target {
+                                    (target - val <= closest - target) as c_int
+                                } else {
+                                    (target - val <= target - closest) as c_int
+                                }
+                            }) != 0) as c_int
+                    }) != 0
+                {
+                    closest = val;
+                    closest_seq = (*uhp).uh_seq;
                 }
                 if target == val && !dosec {
                     target = (*uhp).uh_seq;

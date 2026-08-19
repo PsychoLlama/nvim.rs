@@ -91,7 +91,7 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
         // nothing follows it (no ESC is coming) or when the text is repeated
         // and starts with CTRL-D.  -- Acevedo
         let mut last = NUL as c_char;
-        if insert.len() > 0 {
+        if !insert.is_empty() {
             let p = insert.data().add(insert.len() - 1);
             if (*p as c_int == '0' as c_int || *p as c_int == '^' as c_int)
                 && (no_esc != 0 || (*insert.data() as c_int == Ctrl_D && count > 1))
@@ -157,7 +157,7 @@ pub(crate) unsafe fn get_last_insert_save() -> *mut c_char {
         }
 
         let s = xmemdupz(insert.data() as *const ::core::ffi::c_void, insert.len()) as *mut c_char;
-        if insert.len() > 0 && *s.add(insert.len() - 1) as c_int == ESC {
+        if !insert.is_empty() && *s.add(insert.len() - 1) as c_int == ESC {
             insert.set_len(insert.len() - 1);
             *s.add(insert.len()) = NUL as c_char;
         }

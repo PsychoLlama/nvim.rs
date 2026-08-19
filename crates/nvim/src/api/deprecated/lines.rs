@@ -139,9 +139,9 @@ pub unsafe fn buffer_set_line_slice(
 }
 
 fn convert_index(mut index: int64_t) -> int64_t {
-    return if index < 0 as int64_t {
+    if index < 0 as int64_t {
         index - 1 as int64_t
     } else {
         index
-    };
+    }
 }

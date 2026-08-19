@@ -383,7 +383,7 @@ pub unsafe fn f_mapcheck(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// `mode` must be a live API string.
 pub(crate) unsafe fn parse_shortname_mode(mode: String_0) -> (c_int, bool, *mut c_char) {
     unsafe {
-        let mut p = if mode.len() > 0 {
+        let mut p = if !mode.is_empty() {
             mode.data()
         } else {
             c"m".as_ptr().cast_mut()

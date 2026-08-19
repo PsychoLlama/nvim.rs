@@ -203,10 +203,10 @@ pub unsafe fn f_float2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// the return value left as it was, which is 0.
 pub unsafe fn f_isinf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    if let Some(f) = as_float(args, 0) {
-        if f.is_infinite() {
-            rettv.vval.v_number = if f > 0.0 { 1 } else { -1 };
-        }
+    if let Some(f) = as_float(args, 0)
+        && f.is_infinite()
+    {
+        rettv.vval.v_number = if f > 0.0 { 1 } else { -1 };
     }
 }
 

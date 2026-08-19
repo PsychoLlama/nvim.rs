@@ -31,7 +31,7 @@ unsafe fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) ->
         } else {
             return false;
         }
-        return true;
+        true
     }
 }
 
@@ -53,7 +53,7 @@ unsafe fn parse_float_relative(mut relative: String_0, mut out: *mut FloatRelati
         } else {
             return false;
         }
-        return true;
+        true
     }
 }
 
@@ -71,7 +71,7 @@ unsafe fn parse_config_split(mut split: String_0, mut out: *mut WinSplit) -> boo
         } else {
             return false;
         }
-        return true;
+        true
     }
 }
 
@@ -93,7 +93,7 @@ unsafe fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T) -> bool {
         (*out).col = (*bufpos.items.offset(1 as ::core::ffi::c_int as isize))
             .data
             .integer as colnr_T;
-        return true;
+        true
     }
 }
 
@@ -222,7 +222,7 @@ unsafe fn parse_bordertext_pos(
             );
             return false;
         }
-        return true;
+        true
     }
 }
 
@@ -275,14 +275,12 @@ pub(crate) unsafe fn parse_win_config(
                 ) {
                     is_split = true;
                     (*fconfig).external = false;
-                } else if wp.is_null() {
-                    if true {
-                        api_err_required(
-                            err,
-                            c"'relative' or 'external' when creating a float".as_ptr(),
-                        );
-                        break '_fail;
-                    }
+                } else if wp.is_null() && true {
+                    api_err_required(
+                        err,
+                        c"'relative' or 'external' when creating a float".as_ptr(),
+                    );
+                    break '_fail;
                 }
             }
             if has_key((*config).is_set__win_config_, 19 as ::core::ffi::c_int) && !is_split {
@@ -311,17 +309,16 @@ pub(crate) unsafe fn parse_win_config(
                 if has_key(
                     (*config).is_set__win_config_,
                     KEYSET_OPTIDX_win_config__anchor,
-                ) {
-                    if !parse_float_anchor((*config).anchor, &raw mut (*fconfig).anchor) {
-                        api_err_invalid(
-                            err,
-                            c"anchor".as_ptr(),
-                            (*config).anchor.data(),
-                            0 as int64_t,
-                            true,
-                        );
-                        break '_fail;
-                    }
+                ) && !parse_float_anchor((*config).anchor, &raw mut (*fconfig).anchor)
+                {
+                    api_err_invalid(
+                        err,
+                        c"anchor".as_ptr(),
+                        (*config).anchor.data(),
+                        0 as int64_t,
+                        true,
+                    );
+                    break '_fail;
                 }
                 if has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__row) {
                     if !has_relative || is_split as ::core::ffi::c_int != 0 {
@@ -381,11 +378,9 @@ pub(crate) unsafe fn parse_win_config(
                         break '_fail;
                     }
                     (*fconfig).width = (*config).width as ::core::ffi::c_int;
-                } else if !reconf && !is_split {
-                    if true {
-                        api_err_required(err, c"width".as_ptr());
-                        break '_fail;
-                    }
+                } else if !reconf && !is_split && true {
+                    api_err_required(err, c"width".as_ptr());
+                    break '_fail;
                 }
                 if has_key(
                     (*config).is_set__win_config_,
@@ -401,11 +396,9 @@ pub(crate) unsafe fn parse_win_config(
                         break '_fail;
                     }
                     (*fconfig).height = (*config).height as ::core::ffi::c_int;
-                } else if !reconf && !is_split {
-                    if true {
-                        api_err_required(err, c"height".as_ptr());
-                        break '_fail;
-                    }
+                } else if !reconf && !is_split && true {
+                    api_err_required(err, c"height".as_ptr());
+                    break '_fail;
                 }
                 if has_key(
                     (*config).is_set__win_config_,
@@ -693,6 +686,6 @@ pub(crate) unsafe fn parse_win_config(
                 }
             },
         );
-        return false;
+        false
     }
 }

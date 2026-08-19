@@ -386,7 +386,7 @@ pub(super) unsafe fn mark_line(mut mp: *mut pos_T, mut lead_len: c_int) -> *mut 
         p = p.offset(utfc_ptr2len(p) as isize);
     }
     *p = NUL as c_char;
-    return s;
+    s
 }
 
 /// Get name of file from a filemark.
@@ -396,5 +396,5 @@ pub unsafe fn fm_getname(mut fmark: *mut fmark_T, mut lead_len: c_int) -> *mut c
     if (*fmark).fnum == (*curbuf.get()).handle {
         return mark_line(&raw mut (*fmark).mark, lead_len);
     }
-    return buflist_nr2name((*fmark).fnum, 0, 1);
+    buflist_nr2name((*fmark).fnum, 0, 1)
 }

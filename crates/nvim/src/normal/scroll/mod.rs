@@ -208,23 +208,19 @@ pub(crate) unsafe fn nv_Zet(cap: *mut cmdarg_T) {
         if checkclearopq((*cap).oap) {
             return;
         }
-        match u8::try_from((*cap).nchar) {
+        let cmd = match u8::try_from((*cap).nchar) {
             // Write this file if it changed, then quit.
-            Ok(b'Z') => do_cmdline_cmd(c"x".as_ptr()),
+            Ok(b'Z') => c"x",
             // Quit without writing.
-            Ok(b'Q') => do_cmdline_cmd(c"q!".as_ptr()),
+            Ok(b'Q') => c"q!",
             // Restart. A count means "and abandon every other window too".
-            Ok(b'R') => {
-                if (*cap).count0 >= 1 {
-                    do_cmdline_cmd(c"restart +qall!".as_ptr())
-                } else {
-                    do_cmdline_cmd(c"restart".as_ptr())
-                }
-            }
+            Ok(b'R') if (*cap).count0 >= 1 => c"restart +qall!",
+            Ok(b'R') => c"restart",
             _ => {
                 clearopbeep((*cap).oap);
                 return;
             }
         };
+        do_cmdline_cmd(cmd.as_ptr());
     }
 }

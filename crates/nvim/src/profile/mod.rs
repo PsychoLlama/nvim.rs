@@ -771,7 +771,7 @@ unsafe fn profiled_functions() -> Vec<*mut ufunc_T> {
         let mut todo = (*functbl).ht_used;
         let mut hi = (*functbl).ht_array;
         while todo > 0 {
-            if !(*hi).hi_key.is_null() && (*hi).hi_key != &raw const hash_removed as *mut c_char {
+            if !(*hi).hi_key.is_null() && !core::ptr::eq((*hi).hi_key, &raw const hash_removed) {
                 todo -= 1;
                 let fp = (*hi).hi_key.offset(-UF_NAME_OFFSET) as *mut ufunc_T;
                 if (*fp).uf_prof_initialized != 0 {

@@ -231,7 +231,7 @@ pub unsafe fn nvim_create_autocmd(
         } else {
             callback_free(&raw mut handler_fn);
         }
-        return (autocmd_id as Integer).reported(error);
+        (autocmd_id as Integer).reported(error)
     }
 }
 
@@ -380,6 +380,6 @@ unsafe fn clear_autocmd(
             );
             return false;
         }
-        return true;
+        true
     }
 }

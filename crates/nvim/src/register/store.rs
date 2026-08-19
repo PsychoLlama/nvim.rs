@@ -125,7 +125,7 @@ pub unsafe fn op_reg_iter(
 
         *name = get_register_name(iter_reg.offset_from(regs) as c_int) as c_char;
         *reg = *iter_reg;
-        *is_unnamed = iter_reg == y_previous.get() as *const yankreg_T;
+        *is_unnamed = core::ptr::eq(iter_reg, y_previous.get());
 
         // Look ahead for the next non-empty one, which is what the caller
         // passes back in.
@@ -433,6 +433,6 @@ unsafe fn reg_empty(reg: *const yankreg_T) -> bool {
     unsafe {
         (*reg).y_array.is_null()
             || (*reg).y_size == 0
-            || (*reg).y_size == 1 && (*reg).y_type == kMTCharWise && (*(*reg).y_array).len() == 0
+            || (*reg).y_size == 1 && (*reg).y_type == kMTCharWise && (*(*reg).y_array).is_empty()
     }
 }

@@ -252,7 +252,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                     break 'fail_2;
                 }
                 if result.type_0 as c_int != kObjectTypeString as c_int
-                    || result.data.string.len() == 0
+                    || result.data.string.is_empty()
                 {
                     emsg(c"restart failed: could not get listen address from new server".as_ptr());
                     break 'fail_2;

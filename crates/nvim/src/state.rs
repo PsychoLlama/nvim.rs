@@ -153,12 +153,12 @@ pub unsafe fn virtual_active(mut wp: *mut win_T) -> bool {
         return true;
     }
     let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(wp);
-    return cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
+    cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
         || cur_ve_flags & kOptVeFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint != 0
             && VIsual_active.get() as ::core::ffi::c_int != 0
             && VIsual_mode.get() == Ctrl_V
         || cur_ve_flags & kOptVeFlagInsert as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            && State.get() & MODE_INSERT != 0;
+            && State.get() & MODE_INSERT != 0
 }
 pub fn get_real_state() -> ::core::ffi::c_int {
     if State.get() & MODE_NORMAL != 0 {
@@ -171,7 +171,7 @@ pub fn get_real_state() -> ::core::ffi::c_int {
             return MODE_OP_PENDING;
         }
     }
-    return State.get();
+    State.get()
 }
 pub unsafe fn get_mode(mut buf: *mut ::core::ffi::c_char) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -182,100 +182,100 @@ pub unsafe fn get_mode(mut buf: *mut ::core::ffi::c_char) {
             && (*get_cmdline_info()).one_key as ::core::ffi::c_int != 0
     {
         let c2rust_fresh0 = i;
-        i = i + 1;
+        i += 1;
         *buf.offset(c2rust_fresh0 as isize) = 'r' as ::core::ffi::c_char;
         if State.get() == MODE_ASKMORE {
             let c2rust_fresh1 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh1 as isize) = 'm' as ::core::ffi::c_char;
         } else if State.get() & MODE_CMDLINE != 0 {
             let c2rust_fresh2 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh2 as isize) = '?' as ::core::ffi::c_char;
         }
     } else if State.get() == MODE_EXTERNCMD {
         let c2rust_fresh3 = i;
-        i = i + 1;
+        i += 1;
         *buf.offset(c2rust_fresh3 as isize) = '!' as ::core::ffi::c_char;
     } else if State.get() & MODE_INSERT != 0 {
         if State.get() & VREPLACE_FLAG != 0 {
             let c2rust_fresh4 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh4 as isize) = 'R' as ::core::ffi::c_char;
             let c2rust_fresh5 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh5 as isize) = 'v' as ::core::ffi::c_char;
         } else if State.get() & REPLACE_FLAG != 0 {
             let c2rust_fresh6 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh6 as isize) = 'R' as ::core::ffi::c_char;
         } else {
             let c2rust_fresh7 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh7 as isize) = 'i' as ::core::ffi::c_char;
         }
         if ins_compl_active() {
             let c2rust_fresh8 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh8 as isize) = 'c' as ::core::ffi::c_char;
         } else if ctrl_x_mode_not_defined_yet() {
             let c2rust_fresh9 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh9 as isize) = 'x' as ::core::ffi::c_char;
         }
     } else if State.get() & MODE_CMDLINE != 0 || exmode_active.get() as ::core::ffi::c_int != 0 {
         let c2rust_fresh10 = i;
-        i = i + 1;
+        i += 1;
         *buf.offset(c2rust_fresh10 as isize) = 'c' as ::core::ffi::c_char;
         if exmode_active.get() {
             let c2rust_fresh11 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh11 as isize) = 'v' as ::core::ffi::c_char;
         }
         if State.get() & MODE_CMDLINE != 0 && cmdline_overstrike() as ::core::ffi::c_int != 0 {
             let c2rust_fresh12 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh12 as isize) = 'r' as ::core::ffi::c_char;
         }
     } else if State.get() & MODE_TERMINAL != 0 {
         let c2rust_fresh13 = i;
-        i = i + 1;
+        i += 1;
         *buf.offset(c2rust_fresh13 as isize) = 't' as ::core::ffi::c_char;
     } else if VIsual_active.get() {
         if VIsual_select.get() {
             let c2rust_fresh14 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh14 as isize) = (VIsual_mode.get() + 's' as ::core::ffi::c_int
                 - 'v' as ::core::ffi::c_int)
                 as ::core::ffi::c_char;
         } else {
             let c2rust_fresh15 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh15 as isize) = VIsual_mode.get() as ::core::ffi::c_char;
             if restart_VIsual_select.get() != 0 {
                 let c2rust_fresh16 = i;
-                i = i + 1;
+                i += 1;
                 *buf.offset(c2rust_fresh16 as isize) = 's' as ::core::ffi::c_char;
             }
         }
     } else {
         let c2rust_fresh17 = i;
-        i = i + 1;
+        i += 1;
         *buf.offset(c2rust_fresh17 as isize) = 'n' as ::core::ffi::c_char;
         if finish_op.get() {
             let c2rust_fresh18 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh18 as isize) = 'o' as ::core::ffi::c_char;
             let c2rust_fresh19 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh19 as isize) = motion_force.get() as ::core::ffi::c_char;
         } else if !(*curbuf.get()).terminal.is_null() {
             let c2rust_fresh20 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh20 as isize) = 't' as ::core::ffi::c_char;
             if restart_edit.get() == 'I' as ::core::ffi::c_int {
                 let c2rust_fresh21 = i;
-                i = i + 1;
+                i += 1;
                 *buf.offset(c2rust_fresh21 as isize) = 'T' as ::core::ffi::c_char;
             }
         } else if restart_edit.get() == 'I' as ::core::ffi::c_int
@@ -283,10 +283,10 @@ pub unsafe fn get_mode(mut buf: *mut ::core::ffi::c_char) {
             || restart_edit.get() == 'V' as ::core::ffi::c_int
         {
             let c2rust_fresh22 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh22 as isize) = 'i' as ::core::ffi::c_char;
             let c2rust_fresh23 = i;
-            i = i + 1;
+            i += 1;
             *buf.offset(c2rust_fresh23 as isize) = restart_edit.get() as ::core::ffi::c_char;
         }
     }
@@ -357,11 +357,11 @@ pub unsafe fn may_trigger_modechanged() {
 }
 static was_safe: GlobalCell<bool> = GlobalCell::new(false);
 unsafe fn is_safe_now() -> bool {
-    return stuff_empty() as ::core::ffi::c_int != 0
+    stuff_empty() as ::core::ffi::c_int != 0
         && (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int
         && using_script() == 0
         && global_busy.get() == 0
-        && !debug_mode.get();
+        && !debug_mode.get()
 }
 pub unsafe fn may_trigger_safestate(mut safe: bool) {
     let mut is_safe: bool =
@@ -406,5 +406,5 @@ pub unsafe fn state_no_longer_safe(mut reason: *const ::core::ffi::c_char) {
     was_safe.set(false);
 }
 pub fn get_was_safe_state() -> bool {
-    return was_safe.get();
+    was_safe.get()
 }

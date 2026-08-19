@@ -110,7 +110,7 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_logger(
             ),
         };
         ts_parser_set_logger(p, logger);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
@@ -126,6 +126,6 @@ pub(crate) unsafe extern "C-unwind" fn parser_get_logger(
         } else {
             lua_pushnil(L);
         }
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }

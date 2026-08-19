@@ -107,7 +107,7 @@ pub(crate) unsafe fn dict_put_str(dict: &mut Dict, key: String_0, value: Object)
 pub(crate) unsafe fn arena_string(arena: *mut Arena, str: String_0) -> String_0 {
     // SAFETY: `str` has `size` readable bytes.
     unsafe {
-        if str.len() != 0 {
+        if !str.is_empty() {
             return String_0::from_raw_parts(
                 arena_memdupz(arena, str.data(), str.len()),
                 str.len(),
@@ -396,7 +396,7 @@ pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: *mut
         match obj.type_0 {
             kObjectTypeString => {
                 let str = obj.data.string;
-                if str.len() != 0 {
+                if !str.is_empty() {
                     syn_check_group(str.data(), str.len())
                 } else {
                     0

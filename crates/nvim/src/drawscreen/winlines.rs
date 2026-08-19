@@ -88,7 +88,8 @@ pub(crate) unsafe fn draw_window_lines(
         // from the top. Upstream spells that as a `goto` into the loop, from
         // two places -- the bottom of the loop and the filler-line draw in the
         // tail below.
-        let old_botline = 'restart: loop {
+
+        'restart: loop {
             w.idx = 0;
             w.row = 0;
             w.lnum = (*wp).w_topline;
@@ -185,9 +186,7 @@ pub(crate) unsafe fn draw_window_lines(
             }
 
             break old_botline;
-        };
-
-        old_botline
+        }
     }
 }
 
@@ -813,7 +812,7 @@ pub unsafe fn win_draw_end(
     endrow: c_int,
     hl: hlf_T,
 ) {
-    debug_assert!(hl >= 0 && hl < HLF_COUNT, "hl >= 0 && hl < HLF_COUNT");
+    debug_assert!((0..HLF_COUNT).contains(&hl), "hl >= 0 && hl < HLF_COUNT");
     // SAFETY: a live window; each grid batch is opened and flushed per row.
     unsafe {
         let view_width = (*wp).w_view_width;

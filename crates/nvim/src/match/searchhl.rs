@@ -245,10 +245,9 @@ unsafe fn next_search_hl(
                 break;
             }
 
-            let matchcol: colnr_T;
-            if (*shl).lnum == 0 {
+            let matchcol: colnr_T = if (*shl).lnum == 0 {
                 // No useful previous match: search from the line's start.
-                matchcol = 0;
+                0
             } else if !cpo_has(CpoFlag::SEARCH)
                 || ((*shl).rm.endpos[0].lnum == 0
                     && (*shl).rm.endpos[0].col <= (*shl).rm.startpos[0].col)
@@ -261,11 +260,11 @@ unsafe fn next_search_hl(
                     (*shl).lnum = 0;
                     break;
                 }
-                matchcol = at + utfc_ptr2len(ml);
+                at + utfc_ptr2len(ml)
             } else {
                 // Vi-compatible: continue at the end of the previous match.
-                matchcol = (*shl).rm.endpos[0].col;
-            }
+                (*shl).rm.endpos[0].col
+            };
 
             (*shl).lnum = lnum;
             let mut nmatched = 0;

@@ -119,7 +119,7 @@ unsafe fn buf_win_common(argvars: *mut typval_T, rettv: *mut typval_T, get_nr: b
     let mut wp: *mut win_T = firstwin.get();
     while !wp.is_null() {
         winnr += win_has_winnr(wp, curtab.get()) as c_int;
-        if (*wp).w_buffer == buf as *mut buf_T && (!get_nr || win_has_winnr(wp, curtab.get())) {
+        if core::ptr::eq((*wp).w_buffer, buf) && (!get_nr || win_has_winnr(wp, curtab.get())) {
             found_buf = true;
             winid = (*wp).handle as c_int;
             break;

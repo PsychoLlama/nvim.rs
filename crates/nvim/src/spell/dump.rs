@@ -242,17 +242,13 @@ pub unsafe fn spell_dump_compl(
 
             // Round 1 is the case-folded tree, round 2 the keep-case one.
             for round in 1..=2 {
-                let byts;
-                let idxs;
-                if round == 1 {
+                let (byts, idxs) = if round == 1 {
                     dumpflags &= !DUMPFLAG_KEEPCASE;
-                    byts = (*slang).sl_fbyts;
-                    idxs = (*slang).sl_fidxs;
+                    ((*slang).sl_fbyts, (*slang).sl_fidxs)
                 } else {
                     dumpflags |= DUMPFLAG_KEEPCASE;
-                    byts = (*slang).sl_kbyts;
-                    idxs = (*slang).sl_kidxs;
-                }
+                    ((*slang).sl_kbyts, (*slang).sl_kidxs)
+                };
                 if byts.is_null() {
                     continue; // this tree is empty
                 }
@@ -416,8 +412,7 @@ unsafe fn dump_word(
             if dumpflags & DUMPFLAG_COUNT != 0 {
                 // ":spelldump!" wants the word's COMMON count.
                 let hi: *mut hashitem_T = hash_find(&raw mut (*slang).sl_wordcount, tw);
-                if !((*hi).hi_key.is_null()
-                    || (*hi).hi_key == &raw const hash_removed as *mut c_char)
+                if !((*hi).hi_key.is_null() || core::ptr::eq((*hi).hi_key, &raw const hash_removed))
                 {
                     let wc = (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) as *mut wordcount_T;
                     vim_snprintf(

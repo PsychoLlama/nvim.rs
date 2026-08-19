@@ -17,9 +17,7 @@ use crate::api::private::helpers::{
 
 #[inline]
 unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
-    unsafe {
-        return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
-    }
+    unsafe { mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t }
 }
 
 #[inline]
@@ -34,8 +32,7 @@ unsafe fn set_put_ptr_t(
         if !key_alloc.is_null() {
             *key_alloc = (*set).keys.offset(k as isize);
         }
-        return status as ::core::ffi::c_uint
-            != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
+        status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
     }
 }
 
@@ -43,7 +40,7 @@ unsafe fn set_put_ptr_t(
 unsafe fn set_del_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> uint32_t {
     unsafe {
         mh_delete_uint32_t(set, &raw mut key);
-        return key;
+        key
     }
 }
 
@@ -59,8 +56,7 @@ unsafe fn set_put_uint32_t(
         if !key_alloc.is_null() {
             *key_alloc = (*set).keys.offset(k as isize);
         }
-        return status as ::core::ffi::c_uint
-            != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
+        status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
     }
 }
 
@@ -88,11 +84,11 @@ unsafe fn map_get_String_int(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
-        return if k == MH_TOMBSTONE as uint32_t {
+        if k == MH_TOMBSTONE as uint32_t {
             value_init_int.get()
         } else {
             *(*map).values.offset(k as isize)
-        };
+        }
     }
 }
 
@@ -108,7 +104,7 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
             let mut name_alloc: String_0 = copy_string(name, ::core::ptr::null_mut::<Arena>());
             map_put_String_int(namespace_ids.ptr(), name_alloc, id as ::core::ffi::c_int);
         }
-        return id as Integer;
+        id as Integer
     }
 }
 
@@ -129,7 +125,7 @@ pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> Dict {
             );
             __i = __i.wrapping_add(1);
         }
-        return retval;
+        retval
     }
 }
 
@@ -145,12 +141,12 @@ pub unsafe fn describe_ns(
         while __i < (*namespace_ids.ptr()).set.h.n_keys {
             name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
             id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
-            if id == ns_id && name.len() != 0 {
+            if id == ns_id && !name.is_empty() {
                 return name.data();
             }
             __i = __i.wrapping_add(1);
         }
-        return unknown;
+        unknown
     }
 }
 
@@ -158,7 +154,7 @@ pub fn ns_initialized(mut ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false;
     }
-    return ns < next_namespace_id.get() as uint32_t;
+    ns < next_namespace_id.get() as uint32_t
 }
 
 pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result<(), Error> {
@@ -364,7 +360,6 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
                             windows.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity),
                         ) as *mut Object;
-                    } else {
                     };
                     array_add(&mut windows, Object::integer((*wp_0).handle as Integer));
                 }
@@ -374,6 +369,6 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
         }
         opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
         opts.wins = windows;
-        return opts.reported(error);
+        opts.reported(error)
     }
 }

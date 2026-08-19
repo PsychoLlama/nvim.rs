@@ -266,7 +266,7 @@ pub unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
         let word_len = strlen(word) as usize;
         let hi = hash_lookup(&raw mut (*su).su_banned, word, word_len, hash);
         let key = (*hi).hi_key;
-        if !(key.is_null() || key == &raw const hash_removed as *mut c_char) {
+        if !(key.is_null() || core::ptr::eq(key, &raw const hash_removed)) {
             return; // already present
         }
         let owned = xmemdupz(word as *const c_void, word_len) as *mut c_char;

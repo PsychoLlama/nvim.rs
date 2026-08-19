@@ -292,10 +292,10 @@ pub(crate) fn close_last_tabpage_window(
 
     // Safety check: autocommands may have switched back to the old tab page or
     // closed the window while jumping to the other one.
-    if let Some(prev) = valid_tab(prev_curtab).filter(|_| curtab.get() != prev_curtab) {
-        if prev.tp_firstwin == win.raw() {
-            close_othertab(win, free_buf, prev, false);
-        }
+    if let Some(prev) = valid_tab(prev_curtab).filter(|_| curtab.get() != prev_curtab)
+        && prev.tp_firstwin == win.raw()
+    {
+        close_othertab(win, free_buf, prev, false);
     }
     enter_window(cur_win());
 

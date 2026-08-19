@@ -333,11 +333,11 @@ unsafe fn map_get_String_int(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
-        return if k == MH_TOMBSTONE as uint32_t {
+        if k == MH_TOMBSTONE as uint32_t {
             value_init_int.get()
         } else {
             *(*map).values.offset(k as isize)
-        };
+        }
     }
 }
 #[inline]
@@ -363,11 +363,11 @@ unsafe fn map_get_int_String(
 ) -> String_0 {
     unsafe {
         let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-        return if k == MH_TOMBSTONE as uint32_t {
+        if k == MH_TOMBSTONE as uint32_t {
             value_init_String.get()
         } else {
             *(*map).values.offset(k as isize)
-        };
+        }
     }
 }
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted

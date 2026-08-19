@@ -194,7 +194,7 @@ pub(crate) unsafe fn shada_pack_entry(
             },
         );
         mpack_uint64(&mut (*packer).ptr, entry.timestamp);
-        if packed.len() > 0 {
+        if !packed.is_empty() {
             mpack_uint64(&mut (*packer).ptr, packed.len() as uint64_t);
             mpack_raw(packed.data(), packed.len(), &mut *packer);
         }

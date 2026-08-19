@@ -51,7 +51,7 @@ pub unsafe fn nvim_win_get_buf(win: Window) -> Result<Buffer, Error> {
     if w.is_null() {
         return (0 as Buffer).reported(error);
     }
-    return ((*(*w).w_buffer).handle as Buffer).reported(error);
+    ((*(*w).w_buffer).handle as Buffer).reported(error)
 }
 pub unsafe fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
@@ -83,7 +83,7 @@ pub unsafe fn nvim_win_get_cursor(win: Window, arena: *mut Arena) -> Result<Arra
         array_add(&mut rv, Object::integer((*w).w_cursor.lnum as Integer));
         array_add(&mut rv, Object::integer((*w).w_cursor.col as Integer));
     }
-    return rv.reported(error);
+    rv.reported(error)
 }
 pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> {
     let mut error = ERROR_INIT;
@@ -163,7 +163,7 @@ pub unsafe fn nvim_win_get_height(win: Window) -> Result<Integer, Error> {
     if w.is_null() {
         return (0 as Integer).reported(error);
     }
-    return ((*w).w_height as Integer).reported(error);
+    ((*w).w_height as Integer).reported(error)
 }
 pub unsafe fn nvim_win_set_height(win: Window, height: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
@@ -193,7 +193,7 @@ pub unsafe fn nvim_win_get_width(win: Window) -> Result<Integer, Error> {
     if w.is_null() {
         return (0 as Integer).reported(error);
     }
-    return ((*w).w_width as Integer).reported(error);
+    ((*w).w_width as Integer).reported(error)
 }
 pub unsafe fn nvim_win_set_width(win: Window, width: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
@@ -227,7 +227,7 @@ pub unsafe fn nvim_win_get_var(
     if w.is_null() {
         return NIL.reported(error);
     }
-    return dict_get_value((*w).w_vars, name, arena, err).reported(error);
+    dict_get_value((*w).w_vars, name, arena, err).reported(error)
 }
 pub unsafe fn nvim_win_set_var(win: Window, name: String_0, value: Object) -> Result<(), Error> {
     let mut error = ERROR_INIT;
@@ -275,7 +275,7 @@ pub unsafe fn nvim_win_get_position(win: Window, arena: *mut Arena) -> Result<Ar
         array_add(&mut rv, Object::integer((*w).w_winrow as Integer));
         array_add(&mut rv, Object::integer((*w).w_wincol as Integer));
     }
-    return rv.reported(error);
+    rv.reported(error)
 }
 pub unsafe fn nvim_win_get_tabpage(win: Window) -> Result<Tabpage, Error> {
     let mut error = ERROR_INIT;
@@ -285,7 +285,7 @@ pub unsafe fn nvim_win_get_tabpage(win: Window) -> Result<Tabpage, Error> {
     if !w.is_null() {
         rv = (*win_find_tabpage(w)).handle as Tabpage;
     }
-    return rv.reported(error);
+    rv.reported(error)
 }
 pub unsafe fn nvim_win_get_number(win: Window) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
@@ -297,7 +297,7 @@ pub unsafe fn nvim_win_get_number(win: Window) -> Result<Integer, Error> {
     }
     let mut tabnr: ::core::ffi::c_int = 0;
     win_get_tabwin((*w).handle, &raw mut tabnr, &raw mut rv);
-    return (rv as Integer).reported(error);
+    (rv as Integer).reported(error)
 }
 pub unsafe fn nvim_win_is_valid(win: Window) -> Boolean {
     let mut stub: Error = Error {
@@ -306,7 +306,7 @@ pub unsafe fn nvim_win_is_valid(win: Window) -> Boolean {
     };
     let mut ret: Boolean = !find_window_by_handle(win, &raw mut stub).is_null();
     api_clear_error(&raw mut stub);
-    return ret;
+    ret
 }
 pub unsafe fn nvim_win_hide(win: Window) -> Result<(), Error> {
     let mut error = ERROR_INIT;
@@ -422,7 +422,7 @@ pub unsafe fn nvim_win_call(win: Window, fun: LuaRef) -> Result<Object, Error> {
     }
     win_execute_after(&raw mut win_execute_args);
     try_leave(&raw mut tstate, err);
-    return res.reported(error);
+    res.reported(error)
 }
 pub unsafe fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
@@ -561,16 +561,18 @@ pub unsafe fn nvim_win_text_height(
         }
         max = (*opts).max_height as int64_t;
     }
-    if start_lnum == end_lnum && start_vcol >= 0 as int64_t && end_vcol >= 0 as int64_t {
-        if !(start_vcol <= end_vcol) {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"'start_vcol' is higher than 'end_vcol'".as_ptr(),
-            );
-            return rv.reported(error);
-        }
+    if start_lnum == end_lnum
+        && start_vcol >= 0 as int64_t
+        && end_vcol >= 0 as int64_t
+        && !(start_vcol <= end_vcol)
+    {
+        api_set_error(
+            err,
+            kErrorTypeValidation,
+            c"%s".as_ptr(),
+            c"'start_vcol' is higher than 'end_vcol'".as_ptr(),
+        );
+        return rv.reported(error);
     }
     let mut fill: int64_t = 0 as int64_t;
     let mut all: int64_t = win_text_height(
@@ -598,5 +600,5 @@ pub unsafe fn nvim_win_text_height(
         Object::integer((end_lnum - 1 as linenr_T) as Integer),
     );
     dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol));
-    return rv.reported(error);
+    rv.reported(error)
 }

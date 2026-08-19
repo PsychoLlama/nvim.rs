@@ -631,10 +631,10 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
             return 1;
         }
         K_IGNORE | K_NOP => return 1,
-        Ctrl_N | Ctrl_O => {
+        Ctrl_N | Ctrl_O
             // CTRL-\ CTRL-N leaves for normal mode; CTRL-\ CTRL-O leaves
             // for one command and comes back.
-            if s.got_bsl {
+            if s.got_bsl => {
                 if mod_key == Ctrl_N {
                     return 0;
                 }
@@ -642,7 +642,6 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
                 restart_edit.set(b'I' as c_int);
                 return 0;
             }
-        }
         _ => {}
     }
 

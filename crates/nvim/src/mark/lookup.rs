@@ -45,7 +45,7 @@ pub unsafe fn mark_get(
         *fmp = *fm;
         return fmp;
     }
-    return fm;
+    fm
 }
 
 /// Get a global mark {A-Z0-9}.
@@ -73,7 +73,7 @@ pub unsafe fn mark_get_global(mut resolve: bool, mut name: c_int) -> *mut xfmark
     if resolve && (*mark).fmark.fnum == 0 {
         fname2fnum(mark);
     }
-    return mark;
+    mark
 }
 
 /// Get a local mark (lowercase and symbols).
@@ -119,7 +119,7 @@ pub unsafe fn mark_get_local(
     if !mark.is_null() {
         (*mark).fnum = (*buf).handle as c_int;
     }
-    return mark;
+    mark
 }
 
 /// Get marks that are actually motions but return them as marks
@@ -185,8 +185,8 @@ pub unsafe fn mark_get_motion(
         ) {
             mark = pos_to_mark(buf, ptr::null_mut(), (*win).w_cursor);
         }
-    } else if name == '(' as c_int || name == ')' as c_int {
-        if findsent(
+    } else if (name == '(' as c_int || name == ')' as c_int)
+        && findsent(
             (if name == ')' as c_int {
                 FORWARD as c_int
             } else {
@@ -194,13 +194,12 @@ pub unsafe fn mark_get_motion(
             }) as Direction,
             1,
         ) != 0
-        {
-            mark = pos_to_mark(buf, ptr::null_mut(), (*win).w_cursor);
-        }
+    {
+        mark = pos_to_mark(buf, ptr::null_mut(), (*win).w_cursor);
     }
     (*curwin.get()).w_cursor = pos;
     listcmd_busy.set(slcb);
-    return mark;
+    mark
 }
 
 /// Get visual marks '<', '>'
@@ -235,7 +234,7 @@ pub unsafe fn mark_get_visual(mut buf: *mut buf_T, mut name: c_int) -> *mut fmar
             (*mark).mark.coladd = 0;
         }
     }
-    return mark;
+    mark
 }
 
 /// Search for the next named mark in the current file from a start position.
@@ -275,7 +274,7 @@ pub unsafe fn getnextmark(
         }
         i += 1;
     }
-    return result;
+    result
 }
 
 /// Move to the given file mark, changing the buffer and cursor position.
@@ -369,7 +368,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove) -> MarkMov
             }
         }
     }
-    return res;
+    res
 }
 
 /// Attempt to switch to the buffer of the given global mark
@@ -394,16 +393,16 @@ pub(super) unsafe fn switch_to_mark_buf(
             kMarkMoveFailed as c_int
         }) as MarkMoveRes;
     }
-    return 0 as MarkMoveRes;
+    0 as MarkMoveRes
 }
 
 #[inline]
 pub(super) fn mark_global_index(name: c_char) -> c_int {
-    return if name as c_uint >= 'A' as c_uint && name as c_uint <= 'Z' as c_uint {
+    if name as c_uint >= 'A' as c_uint && name as c_uint <= 'Z' as c_uint {
         name as c_int - 'A' as c_int
     } else if ascii_isdigit(name as c_int) {
         NMARKS + (name as c_int - '0' as c_int)
     } else {
         -1
-    };
+    }
 }

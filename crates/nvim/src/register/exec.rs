@@ -421,10 +421,10 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         let mut i = (*reg).y_size;
         while i > 0 {
             i -= 1;
-            if (*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) || addcr != 0 {
-                if ins_typebuf(c"\n".as_ptr().cast_mut(), remap, 0, true, silent != 0) == FAIL {
-                    return FAIL;
-                }
+            if ((*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) || addcr != 0)
+                && ins_typebuf(c"\n".as_ptr().cast_mut(), remap, 0, true, silent != 0) == FAIL
+            {
+                return FAIL;
             }
 
             let mut str = (*(*reg).y_array.add(i)).data();

@@ -47,7 +47,7 @@ pub unsafe fn opFoldRange(
     let mut lnum: linenr_T = first;
     while lnum <= last {
         let mut temp: pos_T = pos_T {
-            lnum: lnum,
+            lnum,
             col: 0,
             coladd: 0,
         };
@@ -170,7 +170,7 @@ pub(super) unsafe fn checkCloseRec(
         }
         i += 1;
     }
-    return retval;
+    retval
 }
 
 /// Returns true if it's allowed to manually create or delete a fold or,
@@ -188,7 +188,7 @@ pub unsafe fn foldManualAllowed(mut create: bool) -> c_int {
             c"E351: Cannot delete fold with current 'foldmethod'".as_ptr(),
         ));
     }
-    return 0;
+    0
 }
 
 /// Create a fold from line "start" to line "end" (inclusive) in the current
@@ -439,7 +439,7 @@ pub(super) unsafe fn setManualFold(
             wp = (*wp).w_next;
         }
     }
-    return setManualFoldWin(curwin.get(), pos.lnum, opening, recurse, donep);
+    setManualFoldWin(curwin.get(), pos.lnum, opening, recurse, donep)
 }
 
 /// Open or close the fold in window "wp" which contains "lnum".
@@ -534,7 +534,7 @@ pub(super) unsafe fn setManualFoldWin(
     if !donep.is_null() {
         *donep |= done;
     }
-    return next;
+    next
 }
 
 /// Open all nested folds in fold "fpr" recursively.
@@ -585,5 +585,5 @@ pub(super) unsafe fn check_closed(
             closed = false;
         }
     }
-    return closed;
+    closed
 }

@@ -214,11 +214,10 @@ pub unsafe fn create_user_command(
                 } else if has_key(
                     (*opts).is_set__user_command_,
                     KEYSET_OPTIDX_user_command__nargs,
-                ) {
-                    if true {
-                        api_err_invalid(err, c"nargs".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
-                        break '_err;
-                    }
+                ) && true
+                {
+                    api_err_invalid(err, c"nargs".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
+                    break '_err;
                 }
                 if !(!(has_key((*opts).is_set__user_command_, 10 as ::core::ffi::c_int))
                     || argt != ExArgt::NONE)
@@ -271,17 +270,10 @@ pub unsafe fn create_user_command(
                     } else if has_key(
                         (*opts).is_set__user_command_,
                         KEYSET_OPTIDX_user_command__range,
-                    ) {
-                        if true {
-                            api_err_invalid(
-                                err,
-                                c"range".as_ptr(),
-                                c"".as_ptr(),
-                                0 as int64_t,
-                                true,
-                            );
-                            break '_err;
-                        }
+                    ) && true
+                    {
+                        api_err_invalid(err, c"range".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
+                        break '_err;
                     }
                     if (*opts).count.type_0 as ::core::ffi::c_uint
                         == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -300,17 +292,10 @@ pub unsafe fn create_user_command(
                     } else if has_key(
                         (*opts).is_set__user_command_,
                         KEYSET_OPTIDX_user_command__count,
-                    ) {
-                        if true {
-                            api_err_invalid(
-                                err,
-                                c"count".as_ptr(),
-                                c"".as_ptr(),
-                                0 as int64_t,
-                                true,
-                            );
-                            break '_err;
-                        }
+                    ) && true
+                    {
+                        api_err_invalid(err, c"count".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
+                        break '_err;
                     }
                     if has_key(
                         (*opts).is_set__user_command_,
@@ -401,16 +386,15 @@ pub unsafe fn create_user_command(
                         } else if has_key(
                             (*opts).is_set__user_command_,
                             KEYSET_OPTIDX_user_command__complete,
-                        ) {
-                            if true {
-                                api_err_exp(
-                                    err,
-                                    c"complete".as_ptr(),
-                                    c"Function or String".as_ptr(),
-                                    ::core::ptr::null::<::core::ffi::c_char>(),
-                                );
-                                break '_err;
-                            }
+                        ) && true
+                        {
+                            api_err_exp(
+                                err,
+                                c"complete".as_ptr(),
+                                c"Function or String".as_ptr(),
+                                ::core::ptr::null::<::core::ffi::c_char>(),
+                            );
+                            break '_err;
                         }
                         if has_key(
                             (*opts).is_set__user_command_,
@@ -553,6 +537,6 @@ pub unsafe fn nvim_buf_get_commands(
             }
             .reported(error);
         }
-        return commands_array(b, arena).reported(error);
+        commands_array(b, arena).reported(error)
     }
 }

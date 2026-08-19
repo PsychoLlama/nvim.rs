@@ -661,6 +661,6 @@ unsafe fn was_banned(su: *mut suginfo_T, word: *const c_char) -> bool {
     // rather than null.
     unsafe {
         let key = (*hash_find(&raw const (*su).su_banned, word)).hi_key;
-        !(key.is_null() || key == &raw const hash_removed as *mut c_char)
+        !(key.is_null() || core::ptr::eq(key, &raw const hash_removed))
     }
 }

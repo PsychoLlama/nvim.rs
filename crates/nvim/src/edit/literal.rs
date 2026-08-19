@@ -97,7 +97,7 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
                 break;
             }
             // MB_BYTE2LEN_CHECK
-            let byte_len = if nc < 0 || nc > 255 {
+            let byte_len = if !(0..=255).contains(&nc) {
                 1
             } else {
                 utf8len_tab[nc as usize] as c_int

@@ -145,12 +145,11 @@ pub(crate) unsafe fn find_tagfunc_tags(
         }
 
         let info = tv_dict_alloc_lock(VAR_FIXED);
-        if flags & TAG_INS_COMP as c_int == 0 {
-            if let Some(from) = from
-                && !from.user_data.is_null()
-            {
-                add_str(info, c"user_data", from.user_data);
-            }
+        if flags & TAG_INS_COMP as c_int == 0
+            && let Some(from) = from
+            && !from.user_data.is_null()
+        {
+            add_str(info, c"user_data", from.user_data);
         }
         if !buf_ffname.is_null() {
             add_str(info, c"buf_ffname", buf_ffname);

@@ -180,7 +180,7 @@ impl Ring {
             match self.entries[i as usize].as_ref() {
                 None => return false,
                 Some(e) => {
-                    if e.text.as_bytes() == text && sep.map_or(true, |s| s == e.sep) {
+                    if e.text.as_bytes() == text && sep.is_none_or(|s| s == e.sep) {
                         break i;
                     }
                 }

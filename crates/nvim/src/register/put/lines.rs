@@ -287,7 +287,7 @@ impl Put {
             let col = (last.len() as colnr_T - lendiff).max(0);
             if col > 1 {
                 (*curbuf.get()).b_op_end.col = col - 1;
-                if last.len() > 0 {
+                if !last.is_empty() {
                     (*curbuf.get()).b_op_end.col -=
                         utf_head_off(last.data(), last.data().add(last.len() - 1));
                 }

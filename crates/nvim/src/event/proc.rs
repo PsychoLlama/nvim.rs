@@ -503,10 +503,10 @@ unsafe fn flush_stream(proc: *mut Proc, stream: *mut RStream) {
         }
         // Nothing arrived, so the stream is empty. A child that keeps it open
         // would otherwise deny the reader its end-of-file.
-        if let Some(read) = (*stream).read_cb {
-            if !(*stream).did_eof {
-                read(stream, (*stream).buffer, 0, (*stream).s.cb_data, true);
-            }
+        if let Some(read) = (*stream).read_cb
+            && !(*stream).did_eof
+        {
+            read(stream, (*stream).buffer, 0, (*stream).s.cb_data, true);
         }
         break;
     }

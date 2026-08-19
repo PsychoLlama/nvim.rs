@@ -925,10 +925,11 @@ pub unsafe fn invalid_range(eap: *mut exarg_T) -> *mut c_char {
                     return invrange();
                 }
             }
-            CmdAddr::QuickfixValid => {
-                if (ea.line2 != 1 && ea.line2 as size_t > qf_get_valid_size(eap)) || ea.line2 < 0 {
-                    return invrange();
-                }
+            CmdAddr::QuickfixValid
+                if ((ea.line2 != 1 && ea.line2 as size_t > qf_get_valid_size(eap))
+                    || ea.line2 < 0) =>
+            {
+                return invrange();
             }
             _ => {}
         }

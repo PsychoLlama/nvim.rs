@@ -856,7 +856,7 @@ pub unsafe fn unpack_keydict(
             *error = fail(c"has key value which is not a string", key);
             return false;
         }
-        if key.len() == 0 {
+        if key.is_empty() {
             *error = fail(c"has empty key", key);
             return false;
         }

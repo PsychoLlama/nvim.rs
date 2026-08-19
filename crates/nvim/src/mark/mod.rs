@@ -111,12 +111,12 @@ use crate::quickfix::qf_mark_adjust;
 /// Returns OK on success, FAIL if bad name given.
 pub unsafe fn setmark(mut c: c_int) -> c_int {
     let mut view: fmarkv_T = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
-    return setmark_pos(
+    setmark_pos(
         c,
         &raw mut (*curwin.get()).w_cursor,
         (*curbuf.get()).handle as c_int,
         &raw mut view,
-    );
+    )
 }
 /// Free fmark_T item
 pub unsafe fn free_fmark(mut fm: fmark_T) {
@@ -326,7 +326,7 @@ pub unsafe fn setmark_pos(
         do_markset_autocmd(c as c_char, pos, buf);
         return OK;
     }
-    return FAIL;
+    FAIL
 }
 /// Delete every entry referring to file "fnum" from both the jumplist and the
 /// tag stack.
@@ -381,7 +381,7 @@ pub unsafe fn pos_to_mark(
     let mut fm: *mut fmark_T = if fmp.is_null() { fms.ptr() } else { fmp };
     (*fm).fnum = (*buf).handle as c_int;
     (*fm).mark = pos;
-    return fm;
+    fm
 }
 /// Restore the mark view.
 /// By remembering the offset between topline and mark lnum at the time of
@@ -405,10 +405,10 @@ pub unsafe fn mark_view_restore(mut fm: *mut fmark_T) {
     }
 }
 pub unsafe fn mark_view_make(mut wp: *const win_T, mut pos: pos_T) -> fmarkv_T {
-    return fmarkv_T {
+    fmarkv_T {
         topline_offset: pos.lnum - (*wp).w_topline,
         skipcol: (*wp).w_skipcol,
-    };
+    }
 }
 /// For an xtended filemark: set the fnum from the fname.
 /// This is used for marks obtained from the .shada file.  It's postponed
@@ -510,7 +510,7 @@ pub unsafe fn mark_check(mut fm: *mut fmark_T, mut errormsg: *mut *const c_char)
     if (*fm).fnum == (*curbuf.get()).handle && !mark_check_line_bounds(curbuf.get(), fm, errormsg) {
         return false;
     }
-    return true;
+    true
 }
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.
 ///
@@ -528,7 +528,7 @@ pub unsafe fn mark_check_line_bounds(
         *errormsg = gettext(&raw const e_markinval as *const c_char);
         return false;
     }
-    return true;
+    true
 }
 /// Clear all marks and change list in the given buffer
 ///

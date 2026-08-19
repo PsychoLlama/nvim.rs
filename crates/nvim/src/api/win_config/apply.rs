@@ -325,7 +325,7 @@ unsafe fn win_config_split(
             clear_float_config(fconfig, false);
         }
         merge_win_config(&raw mut (*win).w_config, *fconfig);
-        return true;
+        true
     }
 }
 
@@ -418,7 +418,7 @@ unsafe fn win_config_float_tp(
         {
             win_goto(win);
         }
-        return false;
+        false
     }
 }
 

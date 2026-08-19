@@ -127,13 +127,13 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
             win.sidescrolloff(),
             p_ss.get(),
         );
-        if let Some(new_leftcol) = scrolled {
-            if new_leftcol != win.w_leftcol {
-                win.w_leftcol = new_leftcol;
-                win.check_anchored_floats();
-                // The screen has to be redrawn with the new `w_leftcol`.
-                win.redraw_later(UPD_NOT_VALID);
-            }
+        if let Some(new_leftcol) = scrolled
+            && new_leftcol != win.w_leftcol
+        {
+            win.w_leftcol = new_leftcol;
+            win.check_anchored_floats();
+            // The screen has to be redrawn with the new `w_leftcol`.
+            win.redraw_later(UPD_NOT_VALID);
         }
         let leftcol = win.w_leftcol;
         win.w_wcol -= leftcol;

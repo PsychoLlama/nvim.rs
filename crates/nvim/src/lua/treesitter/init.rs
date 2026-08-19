@@ -64,7 +64,7 @@ unsafe extern "C-unwind" fn tslua_get_language_version(
 ) -> ::core::ffi::c_int {
     unsafe {
         lua_pushnumber(L, TREE_SITTER_LANGUAGE_VERSION as lua_Number);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -73,7 +73,7 @@ unsafe extern "C-unwind" fn tslua_get_minimum_language_version(
 ) -> ::core::ffi::c_int {
     unsafe {
         lua_pushnumber(L, TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION as lua_Number);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 

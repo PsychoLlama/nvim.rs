@@ -20,7 +20,7 @@ pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Arra
         );
         array_add(&mut rv, Object::integer(channel_id as int64_t));
         array_add(&mut rv, api_metadata());
-        return rv;
+        rv
     }
 }
 
@@ -121,18 +121,14 @@ pub unsafe fn nvim_get_chan_info(
             );
             chan = channel_id as Integer;
         }
-        return channel_info(chan as uint64_t, arena);
+        channel_info(chan as uint64_t, arena)
     }
 }
 
 pub unsafe fn nvim_list_chans(arena: *mut Arena) -> Array {
-    unsafe {
-        return channel_all_info(arena);
-    }
+    unsafe { channel_all_info(arena) }
 }
 
 pub unsafe fn nvim_list_uis(arena: *mut Arena) -> Array {
-    unsafe {
-        return ui_array(arena);
-    }
+    unsafe { ui_array(arena) }
 }

@@ -492,25 +492,23 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
         startlnum2 - (*fp).fd_top,
         (*flp).lnum - 1 - (*fp).fd_top,
     );
-    if lvl < level {
-        if (*fp).fd_len != (*flp).lnum - (*fp).fd_top {
-            if (*fp).fd_top + (*fp).fd_len - 1 > bot {
-                if getlevel_is(getlevel, foldlevelMarker)
-                    || getlevel_is(getlevel, foldlevelExpr)
-                    || getlevel_is(getlevel, foldlevelSyntax)
-                {
-                    bot = (*fp).fd_top + (*fp).fd_len - 1;
-                    (*fp).fd_len = (*flp).lnum - (*fp).fd_top;
-                } else {
-                    let mut i_4: c_int = fold_index(&*gap, fp);
-                    foldSplit((*(*flp).wp).w_buffer, gap, i_4, (*flp).lnum, bot);
-                    fp = fold_at(&*gap, i_4);
-                }
-            } else {
+    if lvl < level && (*fp).fd_len != (*flp).lnum - (*fp).fd_top {
+        if (*fp).fd_top + (*fp).fd_len - 1 > bot {
+            if getlevel_is(getlevel, foldlevelMarker)
+                || getlevel_is(getlevel, foldlevelExpr)
+                || getlevel_is(getlevel, foldlevelSyntax)
+            {
+                bot = (*fp).fd_top + (*fp).fd_len - 1;
                 (*fp).fd_len = (*flp).lnum - (*fp).fd_top;
+            } else {
+                let mut i_4: c_int = fold_index(&*gap, fp);
+                foldSplit((*(*flp).wp).w_buffer, gap, i_4, (*flp).lnum, bot);
+                fp = fold_at(&*gap, i_4);
             }
-            fold_changed.set(true);
+        } else {
+            (*fp).fd_len = (*flp).lnum - (*fp).fd_top;
         }
+        fold_changed.set(true);
     }
     loop {
         fp2 = fp.offset(1);
@@ -544,7 +542,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
     } else {
         (*flp).lnum - 1
     };
-    return bot;
+    bot
 }
 
 /// Low level function to get the foldlevel for the "indent" method.

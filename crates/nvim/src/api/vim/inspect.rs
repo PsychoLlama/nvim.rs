@@ -13,25 +13,19 @@ use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_pu
 use crate::log::logmsg_c;
 
 pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
-    unsafe {
-        return copy_object(obj, arena);
-    }
+    unsafe { copy_object(obj, arena) }
 }
 
 pub unsafe fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array {
-    unsafe {
-        return copy_array(arr, arena);
-    }
+    unsafe { copy_array(arr, arena) }
 }
 
 pub unsafe fn nvim__id_dict(dct: Dict, arena: *mut Arena) -> Dict {
-    unsafe {
-        return copy_dict(dct, arena);
-    }
+    unsafe { copy_dict(dct, arena) }
 }
 
 pub unsafe fn nvim__id_float(flt: Float) -> Float {
-    return flt;
+    flt
 }
 
 pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
@@ -59,7 +53,7 @@ pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
             c"ts_query_parse_count",
             Object::integer(tslua_query_parse_count.get() as Integer),
         );
-        return rv;
+        rv
     }
 }
 
@@ -140,7 +134,7 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
                 }
             }
         }
-        return rvobj.reported(error);
+        rvobj.reported(error)
     }
 }
 
@@ -177,7 +171,6 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
                 a.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Object>().wrapping_mul(a.capacity),
             ) as *mut Object;
-        } else {
         };
         array_add(&mut a, Object::integer(pid));
         let mut o: Object = nlua_exec(
@@ -208,7 +201,7 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
                 pid,
             );
         }
-        return rvobj.reported(error);
+        rvobj.reported(error)
     }
 }
 
@@ -264,7 +257,7 @@ pub unsafe fn nvim__inspect_cell(
         if !highlight_use_hlstate() {
             array_add(&mut ret, Object::array(hl_inspect(attr, arena)));
         }
-        return ret.reported(error);
+        ret.reported(error)
     }
 }
 
@@ -282,7 +275,5 @@ pub unsafe fn nvim__invalidate_glyph_cache() {
 pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        return unpack(str.data(), str.len(), arena, err).reported(error);
-    }
+    unsafe { unpack(str.data(), str.len(), arena, err).reported(error) }
 }

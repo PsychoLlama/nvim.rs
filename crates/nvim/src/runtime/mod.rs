@@ -253,9 +253,7 @@ pub const MAP_INIT: Map_String_int = Map_String_int {
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe fn set_has_String(mut set: *mut Set_String, mut key: String_0) -> bool {
-    unsafe {
-        return mh_get_String(set, key) != MH_TOMBSTONE as uint32_t;
-    }
+    unsafe { mh_get_String(set, key) != MH_TOMBSTONE as uint32_t }
 }
 #[inline]
 unsafe fn set_put_String(
@@ -269,8 +267,7 @@ unsafe fn set_put_String(
         if !key_alloc.is_null() {
             *key_alloc = (*set).keys.offset(k as isize);
         }
-        return status as ::core::ffi::c_uint
-            != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
+        status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
     }
 }
 #[inline]
@@ -298,11 +295,11 @@ unsafe fn map_get_String_int(
         // The absent value is `value_init_int`, a `static int` upstream never
         // writes: zero.
         let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
-        return if k == MH_TOMBSTONE as uint32_t {
+        if k == MH_TOMBSTONE as uint32_t {
             0
         } else {
             *(*map).values.offset(k as isize)
-        };
+        }
     }
 }
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;

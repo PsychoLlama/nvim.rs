@@ -301,7 +301,7 @@ pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
         return FAIL;
     }
     set_compression_limits(start, incr, added);
-    return OK;
+    OK
 }
 pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
     let mut fcount: ::core::ffi::c_int = 0;
@@ -787,5 +787,5 @@ unsafe fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
         spelltab.set(*new_st);
         did_set_spelltab.set(true);
     }
-    return OK;
+    OK
 }

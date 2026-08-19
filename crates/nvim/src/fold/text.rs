@@ -150,7 +150,7 @@ pub unsafe fn get_foldtext(
         );
         text = buf;
     }
-    return text;
+    text
 }
 
 /// Remove 'foldmarker' and 'commentstring' from "str" (in-place).

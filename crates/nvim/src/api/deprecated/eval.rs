@@ -20,8 +20,8 @@ pub unsafe fn nvim_exec(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: output };
-        return exec_impl(channel_id, src, &raw mut opts, err).reported(error);
+        let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output };
+        exec_impl(channel_id, src, &raw mut opts, err).reported(error)
     }
 }
 
@@ -33,7 +33,7 @@ pub unsafe fn nvim_command_output(
     let err = &raw mut error;
     unsafe {
         let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: true };
-        return exec_impl(channel_id, command, &raw mut opts, err).reported(error);
+        exec_impl(channel_id, command, &raw mut opts, err).reported(error)
     }
 }
 
@@ -152,6 +152,6 @@ pub unsafe fn nvim_call_atomic(
             }
         }
         api_clear_error(&raw mut nested_error);
-        return rv.reported(error);
+        rv.reported(error)
     }
 }

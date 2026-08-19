@@ -282,7 +282,7 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
             OptionSetFlags::NONE,
             SID_NONE,
         );
-        return true;
+        true
     }
 }
 pub unsafe fn skip_vimgrep_pat(
@@ -330,7 +330,7 @@ pub unsafe fn skip_vimgrep_pat(
                 p = p.offset(1);
             }
         }
-        return p;
+        p
     }
 }
 pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {

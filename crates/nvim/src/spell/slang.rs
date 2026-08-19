@@ -209,7 +209,7 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
         let hash: hash_T = hash_hash(p);
         let p_len = strlen(p);
         let hi: *mut hashitem_T = hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash);
-        if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut c_char {
+        if (*hi).hi_key.is_null() || core::ptr::eq((*hi).hi_key, &raw const hash_removed) {
             let wc = xmalloc(WC_KEY_OFF as size_t + p_len + 1) as *mut wordcount_T;
             let key = &raw mut (*wc).wc_word as *mut c_char;
             memcpy(key as *mut c_void, p as *const c_void, p_len + 1);

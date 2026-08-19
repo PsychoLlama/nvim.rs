@@ -88,7 +88,7 @@ pub(crate) unsafe fn dict_check_writable(
             }
         } else if (*dict).dv_lock as u64 != 0 {
             api_set_error(err, kErrorTypeException, c"Dict is locked".as_ptr());
-        } else if key.len() == 0 {
+        } else if key.is_empty() {
             api_set_error(err, kErrorTypeValidation, c"Key name is empty".as_ptr());
         } else if key.len() > c_int::MAX as size_t {
             api_set_error(err, kErrorTypeValidation, c"Key name is too long".as_ptr());

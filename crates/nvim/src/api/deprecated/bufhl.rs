@@ -19,7 +19,7 @@ pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
         if buf.is_null() {
             return (0 as Integer).reported(error);
         }
-        return ((*buf).handle as Integer).reported(error);
+        ((*buf).handle as Integer).reported(error)
     }
 }
 
@@ -35,7 +35,7 @@ unsafe fn src2ns(mut src_id: *mut Integer) -> uint32_t {
             return ((1 as ::core::ffi::c_int as uint32_t) << 31 as ::core::ffi::c_int)
                 .wrapping_sub(1 as uint32_t);
         }
-        return *src_id as uint32_t;
+        *src_id as uint32_t
     }
 }
 
@@ -119,7 +119,7 @@ pub unsafe fn nvim_buf_add_highlight(
             false,
             ::core::ptr::null_mut::<Error>(),
         );
-        return ns_id.reported(error);
+        ns_id.reported(error)
     }
 }
 
@@ -185,7 +185,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
             data: DecorInlineData {
                 ext: DecorExt {
                     sh_idx: DECOR_ID_INVALID as uint32_t,
-                    vt: vt,
+                    vt,
                 },
             },
         };
@@ -205,6 +205,6 @@ pub unsafe fn nvim_buf_set_virtual_text(
             false,
             ::core::ptr::null_mut::<Error>(),
         );
-        return src_id.reported(error);
+        src_id.reported(error)
     }
 }

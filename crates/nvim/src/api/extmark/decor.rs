@@ -35,7 +35,7 @@ pub unsafe fn nvim_buf_del_extmark(
             );
             return false.reported(error);
         }
-        return extmark_del_id(b, ns_id as uint32_t, id as uint32_t).reported(error);
+        extmark_del_id(b, ns_id as uint32_t, id as uint32_t).reported(error)
     }
 }
 
@@ -236,7 +236,7 @@ pub unsafe fn parse_virt_text(
                                     )
                                     .push(VirtTextChunk {
                                         text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                        hl_id: hl_id,
+                                        hl_id,
                                     });
                                 }
                                 j = j.wrapping_add(1);
@@ -266,10 +266,7 @@ pub unsafe fn parse_virt_text(
                     &mut virt_text.capacity,
                     &mut virt_text.items,
                 )
-                .push(VirtTextChunk {
-                    text: text,
-                    hl_id: hl_id,
-                });
+                .push(VirtTextChunk { text, hl_id });
                 i = i.wrapping_add(1);
             }
             if !width.is_null() {
@@ -278,6 +275,6 @@ pub unsafe fn parse_virt_text(
             return virt_text;
         }
         clear_virttext(&raw mut virt_text);
-        return virt_text;
+        virt_text
     }
 }

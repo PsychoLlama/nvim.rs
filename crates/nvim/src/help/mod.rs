@@ -190,10 +190,11 @@ pub unsafe fn ex_help(eap: *mut exarg_T) {
             unsafe {
                 let m = *matches.offset(i as isize);
                 let len = strlen(m) as c_int;
-                if len > 3 && *m.offset((len - 3) as isize) == b'@' as c_char {
-                    if strcasecmp(m.offset((len - 2) as isize), lang) == 0 {
-                        break;
-                    }
+                if len > 3
+                    && *m.offset((len - 3) as isize) == b'@' as c_char
+                    && strcasecmp(m.offset((len - 2) as isize), lang) == 0
+                {
+                    break;
                 }
             }
             i += 1;
@@ -320,7 +321,7 @@ unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     unsafe {
         let tag = if err.type_0 == kErrorTypeNone
             && res.type_0 == kObjectTypeString
-            && res.data.string.len() > 0
+            && !res.data.string.is_empty()
         {
             xstrdup(res.data.string.data())
         } else {

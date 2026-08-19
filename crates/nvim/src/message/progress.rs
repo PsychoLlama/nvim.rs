@@ -54,7 +54,7 @@ pub(crate) unsafe fn format_progress_message(
     unsafe {
         let mut updated = EMPTY_HL_MESSAGE;
 
-        if (*msg_data).title.len() != 0 {
+        if !(*msg_data).title.is_empty() {
             hl_msg_push(
                 &mut updated,
                 HlMessageChunk {
@@ -197,7 +197,7 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
 
         // The autocommand pattern is the message's source, so an autocommand
         // can match one producer's progress.
-        let pattern = if !msg_data.is_null() && (*msg_data).source.len() > 0 {
+        let pattern = if !msg_data.is_null() && !(*msg_data).source.is_empty() {
             (*msg_data).source.data()
         } else {
             c"".as_ptr().cast_mut()

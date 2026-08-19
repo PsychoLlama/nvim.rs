@@ -192,7 +192,7 @@ fn is_white(byte: uint8_t) -> bool {
 
 #[inline(always)]
 fn is_digit(byte: uint8_t) -> bool {
-    byte >= b'0' && byte <= b'9'
+    byte.is_ascii_digit()
 }
 
 #[inline(always)]
@@ -202,7 +202,7 @@ fn is_bdigit(byte: uint8_t) -> bool {
 
 #[inline(always)]
 fn is_odigit(byte: uint8_t) -> bool {
-    byte >= b'0' && byte <= b'7'
+    (b'0'..=b'7').contains(&byte)
 }
 
 #[inline(always)]

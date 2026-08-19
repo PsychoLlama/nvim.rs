@@ -23,16 +23,14 @@ pub(crate) unsafe extern "C-unwind" fn tslua_has_language(
             L,
             set_has_cstr_t(&raw mut (*langs.ptr()).set, lang_name as cstr_t) as ::core::ffi::c_int,
         );
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
 pub(crate) unsafe extern "C-unwind" fn tslua_add_language_from_object(
     mut L: *mut lua_State,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        return add_language(L, false);
-    }
+    unsafe { add_language(L, false) }
 }
 
 unsafe fn load_language_from_object(
@@ -95,7 +93,7 @@ unsafe fn load_language_from_object(
                 path,
             );
         }
-        return lang;
+        lang
     }
 }
 
@@ -106,7 +104,7 @@ unsafe fn load_language_from_wasm(
 ) -> *const TSLanguage {
     unsafe {
         luaL_error(L, c"Not supported".as_ptr());
-        return ::core::ptr::null::<TSLanguage>();
+        ::core::ptr::null::<TSLanguage>()
     }
 }
 
@@ -161,7 +159,7 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
             lang as *mut TSLanguage as ptr_t,
         );
         lua_pushboolean(L, 1);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -181,7 +179,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(
             xfree(key as *mut ::core::ffi::c_void);
         }
         lua_pushboolean(L, present as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -197,7 +195,7 @@ pub(crate) unsafe fn lang_check(
         if lang.is_null() {
             luaL_error(L, c"no such language: %s".as_ptr(), lang_name);
         }
-        return lang;
+        lang
     }
 }
 
@@ -299,6 +297,6 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
             i_1 = i_1.wrapping_add(1);
         }
         lua_setfield(L, -2 as ::core::ffi::c_int, c"supertypes".as_ptr());
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }

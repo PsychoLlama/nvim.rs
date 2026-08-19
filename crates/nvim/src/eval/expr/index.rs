@@ -271,7 +271,7 @@ pub(crate) unsafe fn eval_index_inner(
                         n1 = (len + n1).max(0);
                     }
                     if n2 < 0 {
-                        n2 = len + n2;
+                        n2 += len;
                     } else if n2 >= len {
                         n2 = len;
                     }

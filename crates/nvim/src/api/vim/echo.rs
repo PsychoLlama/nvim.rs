@@ -152,6 +152,6 @@ pub unsafe fn nvim_echo(
             }
         }
         hl_msg_free(hl_msg);
-        return id.reported(error);
+        id.reported(error)
     }
 }

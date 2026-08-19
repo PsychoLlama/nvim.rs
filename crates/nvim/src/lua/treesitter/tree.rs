@@ -40,7 +40,7 @@ unsafe extern "C-unwind" fn tree_copy(mut L: *mut lua_State) -> ::core::ffi::c_i
             luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
         let mut copy: *mut TSTree = ts_tree_copy((*ud).tree);
         push_tree(L, copy);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -72,17 +72,17 @@ unsafe extern "C-unwind" fn tree_edit(mut L: *mut lua_State) -> ::core::ffi::c_i
                 as uint32_t,
         };
         let mut edit: TSInputEdit = TSInputEdit {
-            start_byte: start_byte,
-            old_end_byte: old_end_byte,
-            new_end_byte: new_end_byte,
-            start_point: start_point,
-            old_end_point: old_end_point,
-            new_end_point: new_end_point,
+            start_byte,
+            old_end_byte,
+            new_end_byte,
+            start_point,
+            old_end_point,
+            new_end_point,
         };
         let mut new_tree: *mut TSTree = ts_tree_copy((*ud).tree);
         ts_tree_edit(new_tree, &raw mut edit);
         push_tree(L, new_tree);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -96,7 +96,7 @@ unsafe extern "C-unwind" fn tree_get_ranges(mut L: *mut lua_State) -> ::core::ff
         let mut ranges: *mut TSRange = ts_tree_included_ranges((*ud).tree, &raw mut len);
         push_ranges(L, ranges, len as size_t, include_bytes);
         xfree(ranges as *mut ::core::ffi::c_void);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -106,14 +106,14 @@ unsafe extern "C-unwind" fn tree_gc(mut L: *mut lua_State) -> ::core::ffi::c_int
             luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
         let mut tree: *mut TSTree = (*ud).tree as *mut TSTree;
         ts_tree_delete(tree);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
 unsafe extern "C-unwind" fn tree_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushstring(L, c"<tree>".as_ptr());
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -131,6 +131,6 @@ unsafe extern "C-unwind" fn tree_root(mut L: *mut lua_State) -> ::core::ffi::c_i
         lua_pushvalue(L, 1 as ::core::ffi::c_int);
         lua_rawseti(L, -2 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
         lua_setfenv(L, -2 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }

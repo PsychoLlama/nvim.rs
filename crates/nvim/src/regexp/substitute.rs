@@ -628,7 +628,7 @@ unsafe fn expand_replacement(
                 if *src == b'&' as c_char && !magic {
                     src = src.offset(1);
                     no = 0;
-                } else if (b'0'..=b'9').contains(&(*src as u8)) {
+                } else if (*src as u8).is_ascii_digit() {
                     no = *src as c_int - '0' as c_int;
                     src = src.offset(1);
                 } else if !vim_strchr(c"uUlLeE".as_ptr(), *src as u8 as c_int).is_null() {

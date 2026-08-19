@@ -53,7 +53,7 @@ pub unsafe fn event_name2nr(
 pub unsafe fn event_name2nr_str(str: String_0) -> event_T {
     // An empty API string has a null `data`, which is not a valid pointer
     // even for a zero-length slice.
-    let wanted: &[u8] = if str.len() == 0 {
+    let wanted: &[u8] = if str.is_empty() {
         &[]
     } else {
         unsafe { str.as_bytes() }

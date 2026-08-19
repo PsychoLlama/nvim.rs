@@ -220,7 +220,7 @@ pub(crate) unsafe fn list_arg_vars(
                     // looked up; with one, the command line's own text is
                     // what should be shown.
                     let used_name = if arg == arg_subsc { name } else { name_start };
-                    let name_size = if used_name == tofree as *const c_char {
+                    let name_size = if core::ptr::eq(used_name, tofree) {
                         strlen(used_name) as ptrdiff_t
                     } else {
                         arg.offset_from(used_name)

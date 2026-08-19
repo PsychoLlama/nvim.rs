@@ -130,49 +130,48 @@ unsafe fn validate_option_value_args(
             c"Unknown option '%s'".as_ptr(),
             name,
         );
-    } else if *scope as ::core::ffi::c_uint
+    } else if (*scope as ::core::ffi::c_uint
         == kOptScopeBuf as ::core::ffi::c_int as ::core::ffi::c_uint
         || *scope as ::core::ffi::c_uint
-            == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
+            == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint)
+        && !option_has_scope(*opt_idxp, *scope)
     {
-        if !option_has_scope(*opt_idxp, *scope) {
-            let mut tgt: *mut ::core::ffi::c_char = (if *scope as ::core::ffi::c_uint
-                == kOptScopeBuf as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                c"buf".as_ptr()
+        let mut tgt: *mut ::core::ffi::c_char = (if *scope as ::core::ffi::c_uint
+            == kOptScopeBuf as ::core::ffi::c_int as ::core::ffi::c_uint
+        {
+            c"buf".as_ptr()
+        } else {
+            c"win".as_ptr()
+        }) as *mut ::core::ffi::c_char;
+        let mut global: *mut ::core::ffi::c_char =
+            (if option_has_scope(*opt_idxp, kOptScopeGlobal) as ::core::ffi::c_int != 0 {
+                c"global ".as_ptr()
             } else {
-                c"win".as_ptr()
+                c"".as_ptr()
             }) as *mut ::core::ffi::c_char;
-            let mut global: *mut ::core::ffi::c_char =
-                (if option_has_scope(*opt_idxp, kOptScopeGlobal) as ::core::ffi::c_int != 0 {
-                    c"global ".as_ptr()
-                } else {
-                    c"".as_ptr()
-                }) as *mut ::core::ffi::c_char;
-            let mut req: *mut ::core::ffi::c_char =
-                (if option_has_scope(*opt_idxp, kOptScopeBuf) as ::core::ffi::c_int != 0 {
-                    c"buffer-local ".as_ptr()
-                } else if option_has_scope(*opt_idxp, kOptScopeWin) as ::core::ffi::c_int != 0 {
-                    c"window-local ".as_ptr()
-                } else {
-                    c"".as_ptr()
-                }) as *mut ::core::ffi::c_char;
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"'%s' cannot be passed for %s%soption '%s'".as_ptr(),
-                tgt,
-                global,
-                req,
-                name,
-            );
-        }
+        let mut req: *mut ::core::ffi::c_char =
+            (if option_has_scope(*opt_idxp, kOptScopeBuf) as ::core::ffi::c_int != 0 {
+                c"buffer-local ".as_ptr()
+            } else if option_has_scope(*opt_idxp, kOptScopeWin) as ::core::ffi::c_int != 0 {
+                c"window-local ".as_ptr()
+            } else {
+                c"".as_ptr()
+            }) as *mut ::core::ffi::c_char;
+        api_set_error(
+            err,
+            kErrorTypeValidation,
+            c"'%s' cannot be passed for %s%soption '%s'".as_ptr(),
+            tgt,
+            global,
+            req,
+            name,
+        );
     }
-    return if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         FAIL
     } else {
         OK
-    };
+    }
 }
 unsafe fn do_ft_buf(
     mut filetype: *const ::core::ffi::c_char,
@@ -279,7 +278,7 @@ unsafe fn do_ft_buf(
             c"Could not execute FileType autocommands".as_ptr(),
         );
     }
-    return ftbuf;
+    ftbuf
 }
 unsafe fn wipe_ft_buf(mut buf: *mut buf_T) {
     block_autocmds();
@@ -352,7 +351,7 @@ pub unsafe fn nvim_get_option_value(
         }
     }
     optval_free(value);
-    return NIL.reported(error);
+    NIL.reported(error)
 }
 pub unsafe fn nvim_set_option_value(
     channel_id: uint64_t,
@@ -381,10 +380,9 @@ pub unsafe fn nvim_set_option_value(
     }
     if scope as ::core::ffi::c_uint == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
         && opt_flags.is_empty()
+        && option_has_scope(opt_idx, kOptScopeGlobal)
     {
-        if option_has_scope(opt_idx, kOptScopeGlobal) {
-            opt_flags = OptionSetFlags::LOCAL;
-        }
+        opt_flags = OptionSetFlags::LOCAL;
     }
     let Some(optval) = object_as_optval(value) else {
         api_err_exp(
@@ -401,7 +399,7 @@ pub unsafe fn nvim_set_option_value(
     ().reported(error)
 }
 pub unsafe fn nvim_get_all_options_info(arena: *mut Arena) -> Dict {
-    return get_all_vimoptions(arena);
+    get_all_vimoptions(arena)
 }
 pub unsafe fn nvim_get_option_info2(
     name: String_0,
@@ -441,7 +439,7 @@ pub unsafe fn nvim_get_option_info2(
     } else {
         curwin.get()
     };
-    return get_vimoption(name, opt_flags, buf, win, arena, err).reported(error);
+    get_vimoption(name, opt_flags, buf, win, arena, err).reported(error)
 }
 pub const KEYSET_OPTIDX_option__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_option__win: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

@@ -25,14 +25,12 @@ pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
             array_add(&mut rv, Object::buffer((*b_0).handle));
             b_0 = (*b_0).b_next;
         }
-        return rv;
+        rv
     }
 }
 
 pub unsafe fn nvim_get_current_buf() -> Buffer {
-    unsafe {
-        return (*curbuf.get()).handle as Buffer;
-    }
+    unsafe { (*curbuf.get()).handle as Buffer }
 }
 
 pub unsafe fn nvim_set_current_buf(buf: Buffer) -> Result<(), Error> {
@@ -95,14 +93,12 @@ pub unsafe fn nvim_list_wins(arena: *mut Arena) -> Array {
             }
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
-        return rv;
+        rv
     }
 }
 
 pub unsafe fn nvim_get_current_win() -> Window {
-    unsafe {
-        return (*curwin.get()).handle as Window;
-    }
+    unsafe { (*curwin.get()).handle as Window }
 }
 
 pub unsafe fn nvim_set_current_win(win: Window) -> Result<(), Error> {
@@ -226,8 +222,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
             ) as ::core::ffi::c_int
                 != 0
                 && !bufref_valid(&raw mut bufref))
-            {
-                if !(listed as ::core::ffi::c_int != 0
+                && !(listed as ::core::ffi::c_int != 0
                     && apply_autocmds(
                         EVENT_BUFADD,
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -237,9 +232,8 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                     ) as ::core::ffi::c_int
                         != 0
                     && !bufref_valid(&raw mut bufref))
-                {
-                    ret = (*buf).handle as Buffer;
-                }
+            {
+                ret = (*buf).handle as Buffer;
             }
         }
         try_leave(&raw mut tstate, err);
@@ -252,7 +246,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                 c"Failed to create buffer".as_ptr(),
             );
         }
-        return ret.reported(error);
+        ret.reported(error)
     }
 }
 
@@ -270,14 +264,12 @@ pub unsafe fn nvim_list_tabpages(arena: *mut Arena) -> Array {
             array_add(&mut rv, Object::tabpage((*tp_0).handle));
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
-        return rv;
+        rv
     }
 }
 
 pub unsafe fn nvim_get_current_tabpage() -> Tabpage {
-    unsafe {
-        return (*curtab.get()).handle as Tabpage;
-    }
+    unsafe { (*curtab.get()).handle as Tabpage }
 }
 
 pub unsafe fn nvim_set_current_tabpage(tabpage: Tabpage) -> Result<(), Error> {

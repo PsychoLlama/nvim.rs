@@ -339,7 +339,7 @@ unsafe fn collect_args(
                     let mut endptr: *mut c_char = ptr::null_mut();
                     let val = strtol(str.data(), &raw mut endptr, 10);
                     // The whole string has to be the number.
-                    (*endptr as c_int == NUL && str.len() > 0).then_some(val as int64_t)
+                    (*endptr as c_int == NUL && !str.is_empty()).then_some(val as int64_t)
                 }
                 _ => None,
             }

@@ -599,7 +599,7 @@ pub unsafe fn prepare_yankreg_from_object(
 pub unsafe fn finish_yankreg_from_object(reg: *mut yankreg_T, clipboard_adjust: bool) {
     unsafe {
         let ends_empty =
-            (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size.wrapping_sub(1))).len() == 0;
+            (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size.wrapping_sub(1))).is_empty();
         if ends_empty {
             if (*reg).y_type != kMTCharWise {
                 if (*reg).y_type == kMTUnknown || clipboard_adjust {

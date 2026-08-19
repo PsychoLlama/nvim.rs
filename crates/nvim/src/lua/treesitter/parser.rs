@@ -43,7 +43,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_parser(
         }
         lua_getfield(L, LUA_REGISTRYINDEX, TS_META_PARSER.as_ptr());
         lua_setmetatable(L, -2 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -60,7 +60,7 @@ pub(crate) unsafe fn parser_check(
             index,
             c"Parser has been deleted".as_ptr(),
         );
-        return *ud;
+        *ud
     }
 }
 
@@ -74,14 +74,14 @@ unsafe extern "C-unwind" fn parser_gc(mut L: *mut lua_State) -> ::core::ffi::c_i
             ts_parser_delete(*ud);
             *ud = ::core::ptr::null_mut::<TSParser>();
         }
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }
 
 unsafe extern "C-unwind" fn parser_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushstring(L, c"<parser>".as_ptr());
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -122,16 +122,15 @@ unsafe extern "C" fn input_cb(
             tocopy,
         );
         *bytes_read = tocopy as uint32_t;
-        if tocopy < BUFSIZE as size_t {
-            if lnum != (*bp).b_ml.ml_line_count
+        if tocopy < BUFSIZE as size_t
+            && (lnum != (*bp).b_ml.ml_line_count
                 || (*bp).b_p_bin == 0 && (*bp).b_p_fixeol != 0
-                || lnum != (*bp).b_no_eol_lnum && (*bp).b_p_eol != 0
-            {
-                (*buf.ptr())[tocopy as usize] = '\n' as ::core::ffi::c_char;
-                *bytes_read = (*bytes_read).wrapping_add(1);
-            }
+                || lnum != (*bp).b_no_eol_lnum && (*bp).b_p_eol != 0)
+        {
+            (*buf.ptr())[tocopy as usize] = '\n' as ::core::ffi::c_char;
+            *bytes_read = (*bytes_read).wrapping_add(1);
         }
-        return buf.ptr() as *mut ::core::ffi::c_char;
+        buf.ptr() as *mut ::core::ffi::c_char
     }
 }
 
@@ -142,7 +141,7 @@ unsafe extern "C" fn on_parser_progress(mut state: *mut TSParseState) -> bool {
         let mut payload: *mut TSLuaParserCallbackPayload =
             (*state).payload as *mut TSLuaParserCallbackPayload;
         let mut parse_time: uint64_t = os_hrtime().wrapping_sub((*payload).parse_start_time);
-        return parse_time >= (*payload).timeout_threshold_ns;
+        parse_time >= (*payload).timeout_threshold_ns
     }
 }
 
@@ -255,7 +254,7 @@ unsafe extern "C-unwind" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::
         push_tree(L, new_tree);
         push_ranges(L, changed, n_ranges as size_t, include_bytes);
         xfree(changed as *mut ::core::ffi::c_void);
-        return 2 as ::core::ffi::c_int;
+        2 as ::core::ffi::c_int
     }
 }
 
@@ -265,6 +264,6 @@ unsafe extern "C-unwind" fn parser_reset(mut L: *mut lua_State) -> ::core::ffi::
     unsafe {
         let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
         ts_parser_reset(p);
-        return 0 as ::core::ffi::c_int;
+        0 as ::core::ffi::c_int
     }
 }

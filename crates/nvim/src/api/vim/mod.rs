@@ -190,7 +190,7 @@ pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = 1 << (::core::mem::size_of::<uint64_t>() * 8 - 1);
 #[inline(always)]
 fn is_internal_call(channel_id: uint64_t) -> bool {
-    return channel_id & INTERNAL_CALL_MASK != 0;
+    channel_id & INTERNAL_CALL_MASK != 0
 }
 pub const KEYSET_OPTIDX_context__types: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_eval_statusline__fillchar: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

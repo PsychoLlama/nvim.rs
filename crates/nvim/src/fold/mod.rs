@@ -170,9 +170,9 @@ pub unsafe fn copyFoldingState(mut wp_from: *mut win_T, mut wp_to: *mut win_T) {
 }
 /// Returns true if there may be folded lines in window "win".
 pub unsafe fn hasAnyFolding(mut win: *mut win_T) -> c_int {
-    return ((*(*win).w_buffer).terminal.is_null()
+    ((*(*win).w_buffer).terminal.is_null()
         && (*win).w_onebuf_opt.wo_fen != 0
-        && (!foldmethodIsManual(win) || !((*win).w_folds.ga_len <= 0))) as c_int;
+        && (!foldmethodIsManual(win) || !((*win).w_folds.ga_len <= 0))) as c_int
 }
 /// When returning true, *firstp and *lastp are set to the first and last
 /// lnum of the sequence of folded lines (skipped when NULL).
@@ -184,7 +184,7 @@ pub unsafe fn hasFolding(
     mut firstp: *mut linenr_T,
     mut lastp: *mut linenr_T,
 ) -> bool {
-    return hasFoldingWin(win, lnum, firstp, lastp, true, ptr::null_mut());
+    hasFoldingWin(win, lnum, firstp, lastp, true, ptr::null_mut())
 }
 /// Search folds starting at lnum
 /// `lnum` — first line to search
@@ -276,7 +276,7 @@ pub unsafe fn hasFoldingWin(
         (*infop).fi_lnum = first;
         (*infop).fi_low_level = if low_level == 0 { level + 1 } else { low_level };
     }
-    return true;
+    true
 }
 /// Returns fold level at line number "lnum" in the current window.
 unsafe fn foldLevel(mut lnum: linenr_T) -> c_int {
@@ -290,14 +290,14 @@ unsafe fn foldLevel(mut lnum: linenr_T) -> c_int {
     if hasAnyFolding(curwin.get()) == 0 {
         return 0;
     }
-    return foldLevelWin(curwin.get(), lnum);
+    foldLevelWin(curwin.get(), lnum)
 }
 /// Low level function to check if a line is folded.  Doesn't use any caching.
 ///
 /// Returns true if line is folded or,
 ///          false if line is not folded.
 pub unsafe fn lineFolded(win: *mut win_T, lnum: linenr_T) -> bool {
-    return fold_info(win, lnum).fi_lines != 0;
+    fold_info(win, lnum).fi_lines != 0
 }
 ///
 /// Count the number of lines that are folded at line number "lnum".
@@ -328,34 +328,34 @@ pub unsafe fn fold_info(mut win: *mut win_T, mut lnum: linenr_T) -> foldinfo_T {
     } else {
         info.fi_lines = 0;
     }
-    return info;
+    info
 }
 /// Returns true if 'foldmethod' is "manual"
 pub unsafe fn foldmethodIsManual(mut wp: *mut win_T) -> bool {
-    return *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
-        && *(*wp).w_onebuf_opt.wo_fdm.offset(3) as c_int == 'u' as c_int;
+    *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
+        && *(*wp).w_onebuf_opt.wo_fdm.offset(3) as c_int == 'u' as c_int
 }
 /// Returns true if 'foldmethod' is "indent"
 pub unsafe fn foldmethodIsIndent(mut wp: *mut win_T) -> bool {
-    return *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 'i' as c_int;
+    *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 'i' as c_int
 }
 /// Returns true if 'foldmethod' is "expr"
 pub unsafe fn foldmethodIsExpr(mut wp: *mut win_T) -> bool {
-    return *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
-        && *(*wp).w_onebuf_opt.wo_fdm.offset(1) as c_int == 'x' as c_int;
+    *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
+        && *(*wp).w_onebuf_opt.wo_fdm.offset(1) as c_int == 'x' as c_int
 }
 /// Returns true if 'foldmethod' is "marker"
 pub unsafe fn foldmethodIsMarker(mut wp: *mut win_T) -> bool {
-    return *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
-        && *(*wp).w_onebuf_opt.wo_fdm.offset(2) as c_int == 'r' as c_int;
+    *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
+        && *(*wp).w_onebuf_opt.wo_fdm.offset(2) as c_int == 'r' as c_int
 }
 /// Returns true if 'foldmethod' is "syntax"
 pub unsafe fn foldmethodIsSyntax(mut wp: *mut win_T) -> bool {
-    return *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 's' as c_int;
+    *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 's' as c_int
 }
 /// Returns true if 'foldmethod' is "diff"
 pub unsafe fn foldmethodIsDiff(mut wp: *mut win_T) -> bool {
-    return *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 'd' as c_int;
+    *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 'd' as c_int
 }
 /// Remove all folding for window "win".
 pub unsafe fn clearFolding(mut win: *mut win_T) {
@@ -440,7 +440,7 @@ pub unsafe fn find_wl_entry(mut win: *mut win_T, mut lnum: linenr_T) -> c_int {
         }
         i += 1;
     }
-    return -1;
+    -1
 }
 /// Will "clone" (i.e deep copy) a garray_T of folds.
 pub unsafe fn cloneFoldGrowArray(mut from: *mut garray_T, mut to: *mut garray_T) {
@@ -493,7 +493,7 @@ unsafe fn foldFind(
         }
     }
     *fpp = fp.offset(low as isize);
-    return false;
+    false
 }
 /// Returns fold level at line number "lnum" in window "wp".
 unsafe fn foldLevelWin(mut wp: *mut win_T, mut lnum: linenr_T) -> c_int {
@@ -506,7 +506,7 @@ unsafe fn foldLevelWin(mut wp: *mut win_T, mut lnum: linenr_T) -> c_int {
         lnum_rel -= (*fp).fd_top;
         level += 1;
     }
-    return level;
+    level
 }
 /// Check if the folds in window "wp" are invalid and update them if needed.
 unsafe fn checkupdate(mut wp: *mut win_T) {
@@ -577,7 +577,7 @@ pub unsafe fn deleteFoldRecurse(gap: *mut garray_T) {
 /// window `wp`.
 pub unsafe fn getDeepestNesting(mut wp: *mut win_T) -> c_int {
     checkupdate(wp);
-    return getDeepestNestingRecurse(&raw mut (*wp).w_folds);
+    getDeepestNestingRecurse(&raw mut (*wp).w_folds)
 }
 unsafe fn getDeepestNestingRecurse(mut gap: *mut garray_T) -> c_int {
     let mut maxlevel: c_int = 0;
@@ -589,7 +589,7 @@ unsafe fn getDeepestNestingRecurse(mut gap: *mut garray_T) -> c_int {
         maxlevel = if maxlevel > level { maxlevel } else { level };
         i += 1;
     }
-    return maxlevel;
+    maxlevel
 }
 /// Update fd_small field of fold "fp".
 ///

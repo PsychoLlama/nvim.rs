@@ -376,14 +376,13 @@ impl ExprParser {
 
     /// `ADD_OP_NODE`: hand an operator node to the shunting yard.
     pub(super) fn add_op_node(&mut self, node: *mut ExprASTNode) {
-        self.is_invalid = self.is_invalid
-            | !viml_pexpr_handle_bop(
-                self.pstate,
-                &mut self.ast_stack,
-                node,
-                &mut self.want_node,
-                self.ast,
-            );
+        self.is_invalid |= !viml_pexpr_handle_bop(
+            self.pstate,
+            &mut self.ast_stack,
+            node,
+            &mut self.want_node,
+            self.ast,
+        );
     }
 
     /// `ADD_VALUE_IF_MISSING`: stand a Missing node in for the value an

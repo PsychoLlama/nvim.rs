@@ -59,7 +59,7 @@ pub(super) unsafe fn add_mark(
     {
         return FAIL;
     }
-    return OK;
+    OK
 }
 
 /// Get information about marks local to a buffer.

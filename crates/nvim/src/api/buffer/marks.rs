@@ -42,7 +42,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
         if (*fm).mark.lnum != 0 as linenr_T && (*fm).fnum == (*b).handle {
             res = set_mark(b, name, 0 as Integer, 0 as Integer, err);
         }
-        return (res as Boolean).reported(error);
+        (res as Boolean).reported(error)
     }
 }
 
@@ -72,7 +72,7 @@ pub unsafe fn nvim_buf_set_mark(
             return (res as Boolean).reported(error);
         }
         res = set_mark(b, name, line, col, err);
-        return (res as Boolean).reported(error);
+        (res as Boolean).reported(error)
     }
 }
 
@@ -130,6 +130,6 @@ pub unsafe fn nvim_buf_get_mark(
         rv = arena_array(arena, 2 as size_t);
         array_add(&mut rv, Object::integer(pos.lnum as Integer));
         array_add(&mut rv, Object::integer(pos.col as Integer));
-        return rv.reported(error);
+        rv.reported(error)
     }
 }

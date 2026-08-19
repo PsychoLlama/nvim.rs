@@ -676,10 +676,13 @@ pub(crate) unsafe fn insert_handle_key_post(s: *mut InsertState) {
             (*s).inserted_space = 0;
         }
         // 'cindent': re-indent now that the character is in.
-        if can_cindent.get() && cindent_on() && ctrl_x_mode_normal() {
-            if in_cinkeys((*s).c, ' ' as c_int, (*s).line_is_white) && stop_arrow() == OK {
-                do_c_expr_indent();
-            }
+        if can_cindent.get()
+            && cindent_on()
+            && ctrl_x_mode_normal()
+            && in_cinkeys((*s).c, ' ' as c_int, (*s).line_is_white)
+            && stop_arrow() == OK
+        {
+            do_c_expr_indent();
         }
     }
 }

@@ -256,11 +256,12 @@ pub unsafe extern "C" fn buflist_new(
     let file_id_valid = !sfname.is_null() && unsafe { os_fileid(sfname, &raw mut file_id) };
 
     // If the file name is already in the list, update that entry.
-    if !ffname.is_null() && flags & (BLN_DUMMY as c_int | BLN_NEW as c_int) == 0 {
-        if let Some(buf) = buflist_findname_file_id(ffname, &file_id, file_id_valid) {
-            free(ffname);
-            return reuse_entry(buf, lnum, flags);
-        }
+    if !ffname.is_null()
+        && flags & (BLN_DUMMY as c_int | BLN_NEW as c_int) == 0
+        && let Some(buf) = buflist_findname_file_id(ffname, &file_id, file_id_valid)
+    {
+        free(ffname);
+        return reuse_entry(buf, lnum, flags);
     }
 
     // The current buffer, when it has no name and no contents, otherwise a

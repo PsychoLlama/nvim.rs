@@ -688,10 +688,10 @@ pub unsafe fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T) {
 /// Enter window `wp` in tab page `tp`, updating the GUI tab as well.
 pub(crate) fn goto_tab_win(tp: TabPage, wp: Win) {
     goto_tab(tp, true, true);
-    if tp.is_current() {
-        if let Some(wp) = valid_win(wp.raw()) {
-            enter(wp, true);
-        }
+    if tp.is_current()
+        && let Some(wp) = valid_win(wp.raw())
+    {
+        enter(wp, true);
     }
 }
 

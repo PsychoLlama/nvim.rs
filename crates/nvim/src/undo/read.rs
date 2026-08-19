@@ -238,17 +238,16 @@ pub unsafe fn u_read_undo(
                                                 },
                                             }
                                         }
-                                        if num_head > 0 {
-                                            if (num_head as size_t)
+                                        if num_head > 0
+                                            && (num_head as size_t)
                                                 < (SIZE_MAX as usize)
                                                     .wrapping_div(size_of::<*mut u_header_T>())
-                                            {
-                                                uhp_table = xmalloc(
-                                                    (num_head as size_t)
-                                                        .wrapping_mul(size_of::<*mut u_header_T>()),
-                                                )
-                                                    as *mut *mut u_header_T;
-                                            }
+                                        {
+                                            uhp_table = xmalloc(
+                                                (num_head as size_t)
+                                                    .wrapping_mul(size_of::<*mut u_header_T>()),
+                                            )
+                                                as *mut *mut u_header_T;
                                         }
                                         num_read_uhps = 0;
                                         c = 0;
@@ -270,7 +269,7 @@ pub unsafe fn u_read_undo(
                                                     break '_error;
                                                 }
                                                 let c2rust_fresh2 = num_read_uhps;
-                                                num_read_uhps = num_read_uhps + 1;
+                                                num_read_uhps += 1;
                                                 let c2rust_lvalue_ptr = &raw mut *uhp_table
                                                     .offset(c2rust_fresh2 as isize);
                                                 *c2rust_lvalue_ptr = uhp;

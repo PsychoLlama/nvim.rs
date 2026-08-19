@@ -564,8 +564,8 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
     let left = offset < 0;
     let mut offset = offset;
     let mut room = 0;
-    let grow;
-    if left {
+
+    let grow = if left {
         offset = -offset;
         // Sum up the room of the current frame and the ones left of it.
         fr = fr.child().expect("a row has a child");
@@ -576,14 +576,14 @@ fn drag_vsep_line(dragwin: Win, offset: c_int) {
             }
             fr = fr.next().expect("curfr is among these children");
         }
-        grow = curfr.next();
+        curfr.next()
     } else {
         // Sum up the room of the frames right of the current one.
         for frp in frames(curfr.next()) {
             room += frp.fr_width - minwidth(frp, NextCurwin::Unset);
         }
-        grow = Some(curfr);
-    }
+        Some(curfr)
+    };
 
     // Without enough room, move as far as we can.
     offset = offset.min(room);

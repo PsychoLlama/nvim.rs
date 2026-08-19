@@ -109,7 +109,7 @@ pub unsafe fn u_write_undo(
             perm = 0o600;
         }
     }
-    perm = perm & 0o666;
+    perm &= 0o666;
     '_theend: {
         if os_path_exists(file_name) {
             if name.is_null() || !forceit {
@@ -337,7 +337,7 @@ pub unsafe fn u_write_undo(
             }
         }
     }
-    if file_name != name as *mut c_char {
+    if !core::ptr::eq(file_name, name) {
         xfree(file_name as *mut c_void);
     }
 }

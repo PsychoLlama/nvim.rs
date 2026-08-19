@@ -112,7 +112,7 @@ pub unsafe fn nvim_paste(
         if phase == -1 as Integer || phase == 3 as Integer {
             cancelled.set(false);
         }
-        return (retval as Boolean).reported(error);
+        (retval as Boolean).reported(error)
     }
 }
 

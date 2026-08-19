@@ -124,7 +124,7 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             }
             li = (*li).li_next;
         }
-        let data = packer_take_string(&mut packer);
+        let data = packer_take_string(&packer);
         if args.has(1) && strequal(tv_get_string(args.ptr(1)), c"B".as_ptr()) {
             // The Blob adopts the packer's allocation as-is, capacity and
             // all; nothing copies.

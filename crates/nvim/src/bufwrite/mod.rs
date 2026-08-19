@@ -634,18 +634,20 @@ pub unsafe fn buf_write(
                         let mut bom_chars = 0;
                         // Skip the BOM when appending to a file that already
                         // existed: it only means anything at the start.
-                        if (*buf).b_p_bomb != 0 && !write_bin && (!req.append || target.perm < 0) {
-                            if writer.stage_bom(fenc) > 0 {
-                                writer.flags = FIO_NOCONVERT | wb_flags; // don't convert
-                                if !writer.flush() {
-                                    end = 0;
-                                } else {
-                                    // Upstream reads the staged length back
-                                    // *after* the flush, where it is zero:
-                                    // the BOM does not count towards the
-                                    // character total.
-                                    bom_chars += writer.staged() as ::core::ffi::c_int;
-                                }
+                        if (*buf).b_p_bomb != 0
+                            && !write_bin
+                            && (!req.append || target.perm < 0)
+                            && writer.stage_bom(fenc) > 0
+                        {
+                            writer.flags = FIO_NOCONVERT | wb_flags; // don't convert
+                            if !writer.flush() {
+                                end = 0;
+                            } else {
+                                // Upstream reads the staged length back
+                                // *after* the flush, where it is zero:
+                                // the BOM does not count towards the
+                                // character total.
+                                bom_chars += writer.staged() as ::core::ffi::c_int;
                             }
                         }
 

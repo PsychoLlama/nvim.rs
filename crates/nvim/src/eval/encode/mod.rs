@@ -766,8 +766,10 @@ pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
     // SAFETY: a non-NULL find answers a live item of `spdict`.
     let type_tv = unsafe { &(*type_di).di_tv };
     if type_tv.v_type != VAR_LIST
-        || unsafe { type_tv.vval.v_list }
-            != eval_msgpack_type_lists.get()[kMPString as usize] as *mut list_T
+        || !core::ptr::eq(
+            unsafe { type_tv.vval.v_list },
+            eval_msgpack_type_lists.get()[kMPString as usize],
+        )
         || val_di.is_null()
     {
         return false;

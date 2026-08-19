@@ -70,10 +70,11 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         err(&raw const e_autocmd_close as *const c_char);
         return FAIL;
     }
-    if last_win().w_floating && only_window(win, None) {
-        if let Some(rc) = close_the_floats(win, force) {
-            return rc;
-        }
+    if last_win().w_floating
+        && only_window(win, None)
+        && let Some(rc) = close_the_floats(win, force)
+    {
+        return rc;
     }
 
     // When closing the last window in a tab page first go to another tab page

@@ -184,7 +184,7 @@ pub unsafe fn nvim_notify(
         array_add(&mut args, Object::string(msg_0));
         array_add(&mut args, Object::integer(log_level));
         array_add(&mut args, Object::dict(opts));
-        return nlua_exec(
+        nlua_exec(
             String_0::from_raw_parts(
                 c"return vim.notify(...)".as_ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
@@ -195,6 +195,6 @@ pub unsafe fn nvim_notify(
             arena,
             err,
         )
-        .reported(error);
+        .reported(error)
     }
 }

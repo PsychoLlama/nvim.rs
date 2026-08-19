@@ -239,7 +239,7 @@ pub(crate) unsafe fn readfile_linenr(
             }
             s = s.offset(1);
         }
-        return lnum;
+        lnum
     }
 }
 /// Set the name of the current buffer, for a `:r` or `:w` command with a file

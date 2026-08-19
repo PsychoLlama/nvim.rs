@@ -354,13 +354,13 @@ unsafe fn put_id_list(name: &CStr, list: *const int16_t, hl_id: c_int) {
         while *p != 0 {
             let item = *p as c_int;
             let more = *p.add(1) != 0;
-            if item >= SYNID_ALLBUT && item < SYNID_TOP {
+            if (SYNID_ALLBUT..SYNID_TOP).contains(&item) {
                 // ALLBUT is the same marker as ALL, told apart by whether the
                 // list goes on to name exceptions.
                 msg_puts(if more { c"ALLBUT" } else { c"ALL" }.as_ptr());
-            } else if item >= SYNID_TOP && item < SYNID_CONTAINED {
+            } else if (SYNID_TOP..SYNID_CONTAINED).contains(&item) {
                 msg_puts(c"TOP".as_ptr());
-            } else if item >= SYNID_CONTAINED && item < SYNID_CLUSTER {
+            } else if (SYNID_CONTAINED..SYNID_CLUSTER).contains(&item) {
                 msg_puts(c"CONTAINED".as_ptr());
             } else if item >= SYNID_CLUSTER {
                 msg_putchar('@' as c_int);

@@ -85,14 +85,14 @@ pub(crate) unsafe fn node_check_opt(
             *res = *ud;
             return true;
         }
-        return false;
+        false
     }
 }
 
 pub(crate) unsafe fn node_check(mut L: *mut lua_State, mut index: ::core::ffi::c_int) -> TSNode {
     unsafe {
         let mut ud: *mut TSNode = luaL_checkudata(L, index, TS_META_NODE.as_ptr()) as *mut TSNode;
-        return *ud;
+        *ud
     }
 }
 
@@ -103,7 +103,7 @@ unsafe extern "C-unwind" fn node_tostring(mut L: *mut lua_State) -> ::core::ffi:
         lua_pushstring(L, ts_node_type(node));
         lua_pushstring(L, c">".as_ptr());
         lua_concat(L, 3 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -112,7 +112,7 @@ unsafe extern "C-unwind" fn node_eq(mut L: *mut lua_State) -> ::core::ffi::c_int
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut node2: TSNode = node_check(L, 2 as ::core::ffi::c_int);
         lua_pushboolean(L, ts_node_eq(node, node2) as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -124,7 +124,7 @@ unsafe extern "C-unwind" fn node_id(mut L: *mut lua_State) -> ::core::ffi::c_int
             &raw mut node.id as *const ::core::ffi::c_char,
             ::core::mem::size_of::<*const ::core::ffi::c_void>(),
         );
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -148,7 +148,7 @@ unsafe extern "C-unwind" fn node_range(mut L: *mut lua_State) -> ::core::ffi::c_
         lua_pushinteger(L, start.column as lua_Integer);
         lua_pushinteger(L, end.row as lua_Integer);
         lua_pushinteger(L, end.column as lua_Integer);
-        return 4 as ::core::ffi::c_int;
+        4 as ::core::ffi::c_int
     }
 }
 
@@ -160,7 +160,7 @@ unsafe extern "C-unwind" fn node_start(mut L: *mut lua_State) -> ::core::ffi::c_
         lua_pushinteger(L, start.row as lua_Integer);
         lua_pushinteger(L, start.column as lua_Integer);
         lua_pushinteger(L, start_byte as lua_Integer);
-        return 3 as ::core::ffi::c_int;
+        3 as ::core::ffi::c_int
     }
 }
 
@@ -172,7 +172,7 @@ unsafe extern "C-unwind" fn node_end(mut L: *mut lua_State) -> ::core::ffi::c_in
         lua_pushinteger(L, end.row as lua_Integer);
         lua_pushinteger(L, end.column as lua_Integer);
         lua_pushinteger(L, end_byte as lua_Integer);
-        return 3 as ::core::ffi::c_int;
+        3 as ::core::ffi::c_int
     }
 }
 
@@ -181,7 +181,7 @@ unsafe extern "C-unwind" fn node_child_count(mut L: *mut lua_State) -> ::core::f
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut count: uint32_t = ts_node_child_count(node);
         lua_pushinteger(L, count as lua_Integer);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -190,7 +190,7 @@ unsafe extern "C-unwind" fn node_named_child_count(mut L: *mut lua_State) -> ::c
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut count: uint32_t = ts_node_named_child_count(node);
         lua_pushinteger(L, count as lua_Integer);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -198,7 +198,7 @@ unsafe extern "C-unwind" fn node_type(mut L: *mut lua_State) -> ::core::ffi::c_i
     unsafe {
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         lua_pushstring(L, ts_node_type(node));
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -207,7 +207,7 @@ unsafe extern "C-unwind" fn node_symbol(mut L: *mut lua_State) -> ::core::ffi::c
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut symbol: TSSymbol = ts_node_symbol(node);
         lua_pushinteger(L, symbol as lua_Integer);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -232,7 +232,7 @@ unsafe extern "C-unwind" fn node_field(mut L: *mut lua_State) -> ::core::ffi::c_
             }
             i = i.wrapping_add(1);
         }
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -240,7 +240,7 @@ unsafe extern "C-unwind" fn node_named(mut L: *mut lua_State) -> ::core::ffi::c_
     unsafe {
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         lua_pushboolean(L, ts_node_is_named(node) as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -250,7 +250,7 @@ unsafe extern "C-unwind" fn node_sexpr(mut L: *mut lua_State) -> ::core::ffi::c_
         let mut allocated: *mut ::core::ffi::c_char = ts_node_string(node);
         lua_pushstring(L, allocated);
         xfree(allocated as *mut ::core::ffi::c_void);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -258,7 +258,7 @@ unsafe extern "C-unwind" fn node_missing(mut L: *mut lua_State) -> ::core::ffi::
     unsafe {
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         lua_pushboolean(L, ts_node_is_missing(node) as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -266,7 +266,7 @@ unsafe extern "C-unwind" fn node_extra(mut L: *mut lua_State) -> ::core::ffi::c_
     unsafe {
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         lua_pushboolean(L, ts_node_is_extra(node) as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -274,7 +274,7 @@ unsafe extern "C-unwind" fn node_has_changes(mut L: *mut lua_State) -> ::core::f
     unsafe {
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         lua_pushboolean(L, ts_node_has_changes(node) as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -282,7 +282,7 @@ unsafe extern "C-unwind" fn node_has_error(mut L: *mut lua_State) -> ::core::ffi
     unsafe {
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         lua_pushboolean(L, ts_node_has_error(node) as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -292,7 +292,7 @@ unsafe extern "C-unwind" fn node_child(mut L: *mut lua_State) -> ::core::ffi::c_
         let mut num: uint32_t = lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t;
         let mut child: TSNode = ts_node_child(node, num);
         push_node(L, child, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -302,7 +302,7 @@ unsafe extern "C-unwind" fn node_named_child(mut L: *mut lua_State) -> ::core::f
         let mut num: uint32_t = lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t;
         let mut child: TSNode = ts_node_named_child(node, num);
         push_node(L, child, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -319,7 +319,7 @@ unsafe extern "C-unwind" fn node_descendant_for_range(mut L: *mut lua_State) -> 
         };
         let mut child: TSNode = ts_node_descendant_for_point_range(node, start, end);
         push_node(L, child, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -338,7 +338,7 @@ unsafe extern "C-unwind" fn node_named_descendant_for_range(
         };
         let mut child: TSNode = ts_node_named_descendant_for_point_range(node, start, end);
         push_node(L, child, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -360,7 +360,7 @@ unsafe extern "C-unwind" fn node_next_child(mut L: *mut lua_State) -> ::core::ff
             lua_pushnil(L);
         }
         *child_index = (*child_index).wrapping_add(1);
-        return 2 as ::core::ffi::c_int;
+        2 as ::core::ffi::c_int
     }
 }
 
@@ -379,7 +379,7 @@ unsafe extern "C-unwind" fn node_iter_children(mut L: *mut lua_State) -> ::core:
             ),
             2 as ::core::ffi::c_int,
         );
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -388,7 +388,7 @@ unsafe extern "C-unwind" fn node_parent(mut L: *mut lua_State) -> ::core::ffi::c
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut parent: TSNode = ts_node_parent(node);
         push_node(L, parent, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -429,7 +429,7 @@ unsafe extern "C-unwind" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi
             node = ts_node_child_with_descendant(node, descendant);
         }
         lua_pushboolean(L, 0);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -441,7 +441,7 @@ unsafe extern "C-unwind" fn node_child_with_descendant(
         let mut descendant: TSNode = node_check(L, 2 as ::core::ffi::c_int);
         let mut child: TSNode = ts_node_child_with_descendant(node, descendant);
         push_node(L, child, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -450,7 +450,7 @@ unsafe extern "C-unwind" fn node_next_sibling(mut L: *mut lua_State) -> ::core::
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut sibling: TSNode = ts_node_next_sibling(node);
         push_node(L, sibling, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -459,7 +459,7 @@ unsafe extern "C-unwind" fn node_prev_sibling(mut L: *mut lua_State) -> ::core::
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut sibling: TSNode = ts_node_prev_sibling(node);
         push_node(L, sibling, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -468,7 +468,7 @@ unsafe extern "C-unwind" fn node_next_named_sibling(mut L: *mut lua_State) -> ::
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut sibling: TSNode = ts_node_next_named_sibling(node);
         push_node(L, sibling, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -477,7 +477,7 @@ unsafe extern "C-unwind" fn node_prev_named_sibling(mut L: *mut lua_State) -> ::
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut sibling: TSNode = ts_node_prev_named_sibling(node);
         push_node(L, sibling, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -497,7 +497,7 @@ unsafe extern "C-unwind" fn node_named_children(mut L: *mut lua_State) -> ::core
             }
             i = i.wrapping_add(1);
         }
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -506,7 +506,7 @@ unsafe extern "C-unwind" fn node_root(mut L: *mut lua_State) -> ::core::ffi::c_i
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut root: TSNode = ts_tree_root_node(node.tree);
         push_node(L, root, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -515,7 +515,7 @@ unsafe extern "C-unwind" fn node_tree(mut L: *mut lua_State) -> ::core::ffi::c_i
         node_check(L, 1 as ::core::ffi::c_int);
         lua_getfenv(L, 1 as ::core::ffi::c_int);
         lua_rawgeti(L, 2 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -525,7 +525,7 @@ unsafe extern "C-unwind" fn node_byte_length(mut L: *mut lua_State) -> ::core::f
         let mut start_byte: uint32_t = ts_node_start_byte(node);
         let mut end_byte: uint32_t = ts_node_end_byte(node);
         lua_pushinteger(L, end_byte.wrapping_sub(start_byte) as lua_Integer);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }
 
@@ -534,6 +534,6 @@ unsafe extern "C-unwind" fn node_equal(mut L: *mut lua_State) -> ::core::ffi::c_
         let mut node1: TSNode = node_check(L, 1 as ::core::ffi::c_int);
         let mut node2: TSNode = node_check(L, 2 as ::core::ffi::c_int);
         lua_pushboolean(L, ts_node_eq(node1, node2) as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        1 as ::core::ffi::c_int
     }
 }

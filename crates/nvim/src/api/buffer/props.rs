@@ -24,7 +24,7 @@ pub unsafe fn nvim_buf_get_var(
         if b.is_null() {
             return NIL.reported(error);
         }
-        return dict_get_value((*b).b_vars, name, arena, err).reported(error);
+        dict_get_value((*b).b_vars, name, arena, err).reported(error)
     }
 }
 
@@ -36,7 +36,7 @@ pub unsafe fn nvim_buf_get_changedtick(buf: Buffer) -> Result<Integer, Error> {
         if b.is_null() {
             return (-1 as Integer).reported(error);
         }
-        return buf_get_changedtick(b).reported(error);
+        buf_get_changedtick(b).reported(error)
     }
 }
 
@@ -57,7 +57,7 @@ pub unsafe fn nvim_buf_get_keymap(
             }
             .reported(error);
         }
-        return keymap_array(mode, b, arena).reported(error);
+        keymap_array(mode, b, arena).reported(error)
     }
 }
 
@@ -154,7 +154,7 @@ pub unsafe fn nvim_buf_get_name(buf: Buffer) -> Result<String_0, Error> {
         if b.is_null() || (*b).b_ffname.is_null() {
             return rv.reported(error);
         }
-        return cstr_as_string((*b).b_ffname).reported(error);
+        cstr_as_string((*b).b_ffname).reported(error)
     }
 }
 
@@ -214,7 +214,7 @@ pub unsafe fn nvim_buf_is_loaded(buf: Buffer) -> Boolean {
         };
         let mut b: *mut buf_T = find_buffer_by_handle(buf, &raw mut stub);
         api_clear_error(&raw mut stub);
-        return !b.is_null() && !(*b).b_ml.ml_mfp.is_null();
+        !b.is_null() && !(*b).b_ml.ml_mfp.is_null()
     }
 }
 
@@ -259,6 +259,6 @@ pub unsafe fn nvim_buf_is_valid(buf: Buffer) -> Boolean {
         };
         let mut ret: Boolean = !find_buffer_by_handle(buf, &raw mut stub).is_null();
         api_clear_error(&raw mut stub);
-        return ret;
+        ret
     }
 }

@@ -49,11 +49,11 @@ pub(crate) unsafe fn unpack_string_or_array(
                 items: ::core::ptr::null_mut::<Object>(),
             };
         }
-        return Array {
+        Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
-        };
+        }
     }
 }
 
@@ -185,6 +185,6 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             )
             .push(Object::string(cstr_as_string(fallback)));
         }
-        return arena_take_arraybuilder(arena, &raw mut patterns);
+        arena_take_arraybuilder(arena, &raw mut patterns)
     }
 }

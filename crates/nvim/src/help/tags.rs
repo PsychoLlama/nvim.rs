@@ -156,10 +156,10 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
     // SAFETY: `files` holds NUL-terminated names.
     unsafe {
         for i in 0..files.count {
-            if let Some(lang) = help_file_lang(*files.names.offset(i as isize)) {
-                if !langs.contains(&lang) {
-                    langs.push(lang);
-                }
+            if let Some(lang) = help_file_lang(*files.names.offset(i as isize))
+                && !langs.contains(&lang)
+            {
+                langs.push(lang);
             }
         }
     }

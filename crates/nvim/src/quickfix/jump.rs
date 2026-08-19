@@ -118,12 +118,13 @@ unsafe fn qf_jump_edit_buffer(
         };
 
         // For a location list, the window it belongs to may be gone.
-        if qfl_type == QFLT_LOCATION {
-            if win_id2wp(prev_winid).is_null() && (*curwin.get()).w_llist != qi {
-                emsg(gettext(c"E924: Current window was closed".as_ptr()));
-                *opened_window = false;
-                return Jumped::Aborted;
-            }
+        if qfl_type == QFLT_LOCATION
+            && win_id2wp(prev_winid).is_null()
+            && (*curwin.get()).w_llist != qi
+        {
+            emsg(gettext(c"E924: Current window was closed".as_ptr()));
+            *opened_window = false;
+            return Jumped::Aborted;
         }
         if qfl_type == QFLT_QUICKFIX && !qflist_valid(ptr::null_mut(), save_qfid) {
             emsg(gettext(E_QUICKFIX_LIST_CHANGED.as_ptr()));

@@ -273,15 +273,15 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
     // When out-of-memory, keep the unexpanded file name, because we MUST be
     // able to write the file in this situation.
     let mut free_fname = Owned(ptr::null_mut());
-    let other;
+
     // SAFETY: `ffname` is the command's NUL-terminated argument.
-    if unsafe { *ffname } as c_int == NUL {
+    let other = if unsafe { *ffname } as c_int == NUL {
         if unsafe { (*eap).cmdidx } == CMD_saveas {
             // SAFETY: a live message string.
             unsafe { emsg(gettext(&raw const e_argreq as *const c_char)) };
             return FAIL;
         }
-        other = false;
+        false
     } else {
         fname = ffname;
         // SAFETY: as above.
@@ -290,8 +290,8 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
             ffname = free_fname.0;
         }
         // SAFETY: as above.
-        other = unsafe { otherfile(ffname) };
-    }
+        unsafe { otherfile(ffname) }
+    };
 
     // If we have a new file, put its name in the list of alternate file names.
     let mut alt_buf = ptr::null_mut();

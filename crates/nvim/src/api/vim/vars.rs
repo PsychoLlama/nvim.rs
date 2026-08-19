@@ -71,7 +71,7 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
             );
             return NIL.reported(error);
         }
-        return vim_to_object(&raw mut (*di).di_tv, arena, true).reported(error);
+        vim_to_object(&raw mut (*di).di_tv, arena, true).reported(error)
     }
 }
 
@@ -112,9 +112,7 @@ pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
 pub unsafe fn nvim_get_vvar(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        return dict_get_value(get_vimvar_dict(), name, arena, err).reported(error);
-    }
+    unsafe { dict_get_value(get_vimvar_dict(), name, arena, err).reported(error) }
 }
 
 pub unsafe fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> {

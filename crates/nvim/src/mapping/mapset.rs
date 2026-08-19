@@ -270,7 +270,7 @@ pub unsafe fn modify_keymap(
             if is_abbrev {
                 p = p.add(1);
             }
-            if mode.len() > 0 && p.offset_from(mode.data()) as size_t != mode.len() {
+            if !mode.is_empty() && p.offset_from(mode.data()) as size_t != mode.len() {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
@@ -292,7 +292,7 @@ pub unsafe fn modify_keymap(
                 && parsed_args.rhs_len == 0
                 && !parsed_args.rhs_is_noop
             {
-                if rhs.len() == 0 {
+                if rhs.is_empty() {
                     // Assume the caller wants the RHS to be a <Nop>.
                     parsed_args.rhs_is_noop = true;
                 } else {

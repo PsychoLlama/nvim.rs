@@ -24,7 +24,7 @@ pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
         if (*b).b_ml.ml_mfp.is_null() {
             return (0 as Integer).reported(error);
         }
-        return ((*b).b_ml.ml_line_count as Integer).reported(error);
+        ((*b).b_ml.ml_line_count as Integer).reported(error)
     }
 }
 
@@ -79,7 +79,7 @@ pub unsafe fn nvim_buf_get_lines(
             lstate,
             arena,
         );
-        return rv.reported(error);
+        rv.reported(error)
     }
 }
 
@@ -437,7 +437,7 @@ pub unsafe fn nvim_buf_get_text(
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return Err(error);
         }
-        return rv.reported(error);
+        rv.reported(error)
     }
 }
 
@@ -461,13 +461,13 @@ pub unsafe fn nvim_buf_get_offset(buf: Buffer, index: Integer) -> Result<Integer
             );
             return (0 as Integer).reported(error);
         }
-        return (ml_find_line_or_offset(
+        (ml_find_line_or_offset(
             b,
             index as linenr_T + 1 as linenr_T,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
             true,
         ) as Integer)
-            .reported(error);
+            .reported(error)
     }
 }
 

@@ -191,10 +191,10 @@ pub unsafe fn do_mouse(
     }
 
     let regname = oap.map_or(0, |o| o.regname);
-    if which_button == MOUSE_MIDDLE {
-        if let Some(answer) = middle_button_insert(oap, regname, fixindent) {
-            return answer;
-        }
+    if which_button == MOUSE_MIDDLE
+        && let Some(answer) = middle_button_insert(oap, regname, fixindent)
+    {
+        return answer;
     }
 
     // Flags for jump_to_mouse(); when dragging or button-up stay in the same
@@ -210,10 +210,10 @@ pub unsafe fn do_mouse(
     // Only when initialized.
     // SAFETY: the tabline's definitions cover the screen's columns, which is
     // all the arms below index with.
-    if let Some(defs) = unsafe { ClickDefs::tabline() } {
-        if let Some(answer) = tab_line_click(defs, is_click, is_drag, which_button, old_curwin) {
-            return answer;
-        }
+    if let Some(defs) = unsafe { ClickDefs::tabline() }
+        && let Some(answer) = tab_line_click(defs, is_click, is_drag, which_button, old_curwin)
+    {
+        return answer;
     }
 
     let mut m_pos = pos_T {

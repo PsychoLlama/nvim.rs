@@ -113,7 +113,7 @@ pub unsafe fn foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c_int {
         retval = OK;
         n += 1;
     }
-    return retval;
+    retval
 }
 
 /// Adjust the Visual area to include any fold at the start or end completely.

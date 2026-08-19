@@ -27,7 +27,7 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
     let (named, addr_count, forceit) = unsafe {
         (
             *fname as c_int != NUL,
-            (!eap.is_null()).then(|| (*eap).addr_count).unwrap_or(0),
+            if !eap.is_null() { (*eap).addr_count } else { 0 },
             !eap.is_null() && (*eap).forceit != 0,
         )
     };
@@ -935,12 +935,12 @@ unsafe fn do_source_ext(req: &SourceRequest) -> c_int {
         Err(retval) => return retval,
     };
     // SAFETY: the cookie is loaded and `fname_exp` is owned by this frame.
-    let retval = unsafe {
+
+    unsafe {
         let retval = source_bracket(req, &mut cookie, &mut fname_exp, save_debug_break_level);
         xfree(fname_exp.cast());
         retval
-    };
-    retval
+    }
 }
 
 /// [`do_source_ext`] for a file: the spelling every caller outside this module

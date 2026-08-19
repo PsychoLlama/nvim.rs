@@ -185,5 +185,5 @@ pub unsafe fn check_string_array(
         }
         i = i.wrapping_add(1);
     }
-    return true;
+    true
 }

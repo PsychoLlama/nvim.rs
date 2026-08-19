@@ -8,18 +8,17 @@ use super::*;
 ///
 /// Returns fAIL if writing fails.
 pub unsafe fn put_folds(mut fd: *mut FILE, mut wp: *mut win_T) -> c_int {
-    if foldmethodIsManual(wp) {
-        if put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) == FAIL
+    if foldmethodIsManual(wp)
+        && (put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) == FAIL
             || put_folds_recurse(fd, &raw mut (*wp).w_folds, 0) == FAIL
-            || put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) == FAIL
-        {
-            return FAIL;
-        }
+            || put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) == FAIL)
+    {
+        return FAIL;
     }
     if (*wp).w_fold_manual {
         return put_foldopen_recurse(fd, wp, &raw mut (*wp).w_folds, 0);
     }
-    return OK;
+    OK
 }
 
 /// Write commands to "fd" to recreate manually created folds.
@@ -49,7 +48,7 @@ pub(super) unsafe fn put_folds_recurse(
         fp = fp.offset(1);
         i += 1;
     }
-    return OK;
+    OK
 }
 
 /// Write commands to "fd" to open and close manually opened/closed folds.
@@ -81,28 +80,27 @@ pub(super) unsafe fn put_foldopen_recurse(
                 {
                     return FAIL;
                 }
-                if (*fp).fd_flags as c_int == FD_CLOSED as c_int {
-                    if put_fold_open_close(fd, fp, off) == FAIL {
-                        return FAIL;
-                    }
+                if (*fp).fd_flags as c_int == FD_CLOSED as c_int
+                    && put_fold_open_close(fd, fp, off) == FAIL
+                {
+                    return FAIL;
                 }
             } else {
                 let mut level: c_int = foldLevelWin(wp, off + (*fp).fd_top);
-                if (*fp).fd_flags as c_int == FD_CLOSED as c_int
+                if ((*fp).fd_flags as c_int == FD_CLOSED as c_int
                     && (*wp).w_onebuf_opt.wo_fdl >= level as OptInt
                     || (*fp).fd_flags as c_int != FD_CLOSED as c_int
-                        && (*wp).w_onebuf_opt.wo_fdl < level as OptInt
+                        && (*wp).w_onebuf_opt.wo_fdl < level as OptInt)
+                    && put_fold_open_close(fd, fp, off) == FAIL
                 {
-                    if put_fold_open_close(fd, fp, off) == FAIL {
-                        return FAIL;
-                    }
+                    return FAIL;
                 }
             }
         }
         fp = fp.offset(1);
         i += 1;
     }
-    return OK;
+    OK
 }
 
 /// Write the open or close command to "fd".
@@ -128,5 +126,5 @@ pub(super) unsafe fn put_fold_open_close(
     {
         return FAIL;
     }
-    return OK;
+    OK
 }

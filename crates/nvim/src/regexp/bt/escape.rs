@@ -239,10 +239,10 @@ fn character_escape(flagp: &mut c_int, c: c_int) -> *mut uint8_t {
 /// The position assertions: `\%23l`, `\%<23c`, `\%>23v`, `\%.l` (the cursor's
 /// own line/column) and `\%'m` (a mark).
 fn position_atom(first: c_int, save_prev_at_start: c_int) -> *mut uint8_t {
-    if ascii_isdigit(first) || matches!(first as u8, b'<' | b'>' | b'\'' | b'.') {
-        if let Some(node) = compare_atom(first, save_prev_at_start) {
-            return node;
-        }
+    if (ascii_isdigit(first) || matches!(first as u8, b'<' | b'>' | b'\'' | b'.'))
+        && let Some(node) = compare_atom(first, save_prev_at_start)
+    {
+        return node;
     }
     let prefix = magic_prefix();
     semsg!("E71: Invalid character after {prefix}%");

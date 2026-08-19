@@ -310,17 +310,16 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_only: c_in
                     // undo the rest of the session, so they are only set
                     // when they are not already right.
                     let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
-                    if guarded {
-                        if fprintf(
+                    if guarded
+                        && (fprintf(
                             fd,
                             c"if &%s != '%s'".as_ptr(),
                             (*opt).fullname,
                             *varp.cast::<*mut c_char>(),
                         ) < 0
-                            || put_eol(fd) < 0
-                        {
-                            return FAIL;
-                        }
+                            || put_eol(fd) < 0)
+                    {
+                        return FAIL;
                     }
                     if put_set(fd, cmd, opt_idx, varp) == FAIL {
                         return FAIL;

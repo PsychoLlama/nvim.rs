@@ -261,18 +261,17 @@ pub unsafe fn nvim_buf_set_extmark(
                             | kSHConcealLines as ::core::ffi::c_int)
                             as uint16_t;
                         has_hl = true;
-                        if (*opts).conceal_lines.len() > 0 as size_t {
-                            if !(*(*opts).conceal_lines.data() as ::core::ffi::c_int
+                        if (*opts).conceal_lines.len() > 0 as size_t
+                            && !(*(*opts).conceal_lines.data() as ::core::ffi::c_int
                                 == '\0' as ::core::ffi::c_int)
-                            {
-                                api_set_error(
-                                    err,
-                                    kErrorTypeValidation,
-                                    c"%s".as_ptr(),
-                                    c"conceal_lines has to be an empty string".as_ptr(),
-                                );
-                                break '_error;
-                            }
+                        {
+                            api_set_error(
+                                err,
+                                kErrorTypeValidation,
+                                c"%s".as_ptr(),
+                                c"conceal_lines has to be an empty string".as_ptr(),
+                            );
+                            break '_error;
                         }
                     }
                     if has_key(
@@ -348,17 +347,15 @@ pub unsafe fn nvim_buf_set_extmark(
                         } else if strequal(c"blend".as_ptr(), str_0.data()) {
                             if virt_text.pos as ::core::ffi::c_uint
                                 == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
+                                && true
                             {
-                                if true {
-                                    api_set_error(
-                                        err,
-                                        kErrorTypeValidation,
-                                        c"%s".as_ptr(),
-                                        c"cannot use 'blend' hl_mode with inline virtual text"
-                                            .as_ptr(),
-                                    );
-                                    break '_error;
-                                }
+                                api_set_error(
+                                    err,
+                                    kErrorTypeValidation,
+                                    c"%s".as_ptr(),
+                                    c"cannot use 'blend' hl_mode with inline virtual text".as_ptr(),
+                                );
+                                break '_error;
                             }
                             virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
                         } else if true {
@@ -384,17 +381,15 @@ pub unsafe fn nvim_buf_set_extmark(
                         let mut str_1: String_0 = (*opts).virt_lines_overflow;
                         if strequal(c"scroll".as_ptr(), str_1.data()) {
                             virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
-                        } else if !strequal(c"trunc".as_ptr(), str_1.data()) {
-                            if true {
-                                api_err_invalid(
-                                    err,
-                                    c"virt_lines_overflow".as_ptr(),
-                                    str_1.data(),
-                                    0 as int64_t,
-                                    true,
-                                );
-                                break '_error;
-                            }
+                        } else if !strequal(c"trunc".as_ptr(), str_1.data()) && true {
+                            api_err_invalid(
+                                err,
+                                c"virt_lines_overflow".as_ptr(),
+                                str_1.data(),
+                                0 as int64_t,
+                                true,
+                            );
+                            break '_error;
                         }
                     }
                     's_785: {
@@ -586,17 +581,15 @@ pub unsafe fn nvim_buf_set_extmark(
                                     break '_error;
                                 }
                                 col = len as Integer;
-                            } else if col < -1 as Integer {
-                                if true {
-                                    api_err_invalid(
-                                        err,
-                                        c"col".as_ptr(),
-                                        c"out of range".as_ptr(),
-                                        0 as int64_t,
-                                        false,
-                                    );
-                                    break '_error;
-                                }
+                            } else if col < -1 as Integer && true {
+                                api_err_invalid(
+                                    err,
+                                    c"col".as_ptr(),
+                                    c"out of range".as_ptr(),
+                                    0 as int64_t,
+                                    false,
+                                );
+                                break '_error;
                             }
                             if col2 >= 0 as ::core::ffi::c_int {
                                 if line2 >= 0 as ::core::ffi::c_int
@@ -853,6 +846,6 @@ pub unsafe fn nvim_buf_set_extmark(
         if !url.is_null() {
             xfree(url as *mut ::core::ffi::c_void);
         }
-        return (0 as Integer).reported(error);
+        (0 as Integer).reported(error)
     }
 }

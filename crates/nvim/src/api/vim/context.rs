@@ -67,7 +67,7 @@ pub unsafe fn nvim_get_context(
         ctx_save(&raw mut ctx, int_types);
         let mut dict: Dict = ctx_to_dict(&raw mut ctx, arena);
         ctx_free(&raw mut ctx);
-        return dict.reported(error);
+        dict.reported(error)
     }
 }
 
@@ -84,7 +84,7 @@ pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
         }
         ctx_free(&raw mut ctx);
         did_emsg.set(save_did_emsg);
-        return NIL.reported(error);
+        NIL.reported(error)
     }
 }
 
@@ -97,6 +97,6 @@ pub unsafe fn nvim_get_mode(arena: *mut Arena) -> Dict {
         let mut blocked: bool = input_blocking();
         dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr)));
         dict_put(&mut rv, c"blocking", Object::boolean(blocked));
-        return rv;
+        rv
     }
 }

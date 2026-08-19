@@ -32,7 +32,7 @@ pub unsafe fn nvim_get_hl_by_id(
             return dic.reported(error);
         }
         let mut attrcode: ::core::ffi::c_int = syn_id2attr(hl_id as ::core::ffi::c_int);
-        return hl_get_attr_by_id(attrcode as Integer, rgb, arena, err).reported(error);
+        hl_get_attr_by_id(attrcode as Integer, rgb, arena, err).reported(error)
     }
 }
 

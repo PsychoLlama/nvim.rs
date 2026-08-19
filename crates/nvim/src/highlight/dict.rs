@@ -625,7 +625,7 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -
             return 0;
         }
         let str = val.data.string;
-        if str.len() == 0 || strcasecmp(str.data(), c"NONE".as_ptr()) == 0 {
+        if str.is_empty() || strcasecmp(str.data(), c"NONE".as_ptr()) == 0 {
             return -1;
         }
         let name = CStr::from_ptr(str.data());

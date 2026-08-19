@@ -255,7 +255,7 @@ unsafe fn func_names() -> Vec<*const c_char> {
         let mut todo = (*functbl).ht_used;
         let mut hi: *mut hashitem_T = (*functbl).ht_array;
         while todo != 0 {
-            if !(*hi).hi_key.is_null() && (*hi).hi_key != &raw const hash_removed as *mut c_char {
+            if !(*hi).hi_key.is_null() && !core::ptr::eq((*hi).hi_key, &raw const hash_removed) {
                 todo -= 1;
                 names.push((*hi).hi_key as *const c_char);
             }

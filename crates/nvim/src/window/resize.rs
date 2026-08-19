@@ -506,10 +506,11 @@ pub unsafe fn command_height() {
         old_p_ch += h;
         frp = fr.prev();
     }
-    if p_ch.get() < old_p_ch as OptInt && command_frame_height.get() {
-        if let Some(fr) = frp {
-            add_height(fr, (old_p_ch as OptInt - p_ch.get()) as c_int);
-        }
+    if p_ch.get() < old_p_ch as OptInt
+        && command_frame_height.get()
+        && let Some(fr) = frp
+    {
+        add_height(fr, (old_p_ch as OptInt - p_ch.get()) as c_int);
     }
 
     comp_positions();

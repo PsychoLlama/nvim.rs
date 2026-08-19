@@ -69,7 +69,7 @@ pub unsafe fn nlua_push_String(lstate: *mut lua_State, s: String_0, _flags: c_in
     unsafe {
         // A zero-length api string may carry a null pointer, which
         // lua_pushlstring will not take even for zero bytes.
-        let data = if s.len() != 0 {
+        let data = if !s.is_empty() {
             s.data().cast_const()
         } else {
             c"".as_ptr()

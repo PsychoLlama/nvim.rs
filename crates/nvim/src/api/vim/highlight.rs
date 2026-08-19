@@ -13,9 +13,7 @@ use crate::api::private::helpers::{ERROR_INIT, Reported, dict_put_str, has_key};
 use crate::highlight::HlAttrFlags;
 
 pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
-    unsafe {
-        return syn_check_group(name.data(), name.len()) as Integer;
-    }
+    unsafe { syn_check_group(name.data(), name.len()) as Integer }
 }
 
 pub unsafe fn nvim_get_hl(
@@ -25,9 +23,7 @@ pub unsafe fn nvim_get_hl(
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        return ns_get_hl_defs(ns_id as NS, opts, arena, err).reported(error);
-    }
+    unsafe { ns_get_hl_defs(ns_id as NS, opts, arena, err).reported(error) }
 }
 
 pub unsafe fn nvim_set_hl(
@@ -69,11 +65,11 @@ pub unsafe fn nvim_set_hl(
             hl_blend: 0,
             url: 0,
         };
-        if update as ::core::ffi::c_int != 0 {
-            if let Some(attrs) = hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) {
-                base_attrs = attrs;
-                base = Some(&base_attrs);
-            }
+        if update as ::core::ffi::c_int != 0
+            && let Some(attrs) = hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None)
+        {
+            base_attrs = attrs;
+            base = Some(&base_attrs);
         }
         let mut attrs: HlAttrs = dict2hlattrs(&*val, true, Some(&mut link_id), base, err);
         if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
@@ -94,10 +90,10 @@ pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error
             if win.is_null() {
                 return (0 as Integer).reported(error);
             }
-            return ((*win).w_ns_hl as Integer).reported(error);
+            ((*win).w_ns_hl as Integer).reported(error)
         } else {
-            return (ns_hl_global.get() as Integer).reported(error);
-        };
+            (ns_hl_global.get() as Integer).reported(error)
+        }
     }
 }
 
@@ -132,7 +128,7 @@ pub unsafe fn nvim_set_hl_ns_fast(ns_id: Integer) {
 pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
     unsafe {
         // An API string is NUL-terminated.
-        return name_to_color(::core::ffi::CStr::from_ptr(name.data())).0 as Integer;
+        name_to_color(::core::ffi::CStr::from_ptr(name.data())).0 as Integer
     }
 }
 
@@ -146,6 +142,6 @@ pub unsafe fn nvim_get_color_map(arena: *mut Arena) -> Dict {
                 Object::integer(entry.color as Integer),
             );
         }
-        return colors;
+        colors
     }
 }

@@ -302,17 +302,16 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                     if putc(c_int::from(b'\\'), fd) < 0 {
                         return FAIL;
                     }
-                } else if !(c_int::from(b' ')..=c_int::from(b'~')).contains(&c)
+                } else if (!(c_int::from(b' ')..=c_int::from(b'~')).contains(&c)
                     || c == c_int::from(b'|')
                     || (what == EscTarget::MapLhs && c == c_int::from(b' '))
                     || (what == EscTarget::MapRhs
                         && str == strstart.cast::<u8>().cast_mut()
                         && c == c_int::from(b' '))
-                    || (what != EscTarget::SetValue && c == c_int::from(b'<'))
+                    || (what != EscTarget::SetValue && c == c_int::from(b'<')))
+                    && putc(Ctrl_V, fd) < 0
                 {
-                    if putc(Ctrl_V, fd) < 0 {
-                        return FAIL;
-                    }
+                    return FAIL;
                 }
                 if putc(c, fd) < 0 {
                     return FAIL;

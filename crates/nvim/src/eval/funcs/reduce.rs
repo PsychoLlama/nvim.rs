@@ -101,7 +101,7 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
                 let mut hi = (*ht).ht_array;
                 while todo != 0 {
                     let key = (*hi).hi_key;
-                    if !key.is_null() && key != &raw const hash_removed as *mut c_char {
+                    if !key.is_null() && !core::ptr::eq(key, &raw const hash_removed) {
                         todo -= 1;
                         let di = key.offset(-DI_KEY_OFFSET) as *mut dictitem_T;
                         let i = tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error);

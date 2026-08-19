@@ -115,7 +115,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
                 api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error);
             }
         }
-        return ((*chan).id as Integer).reported(slot);
+        ((*chan).id as Integer).reported(slot)
     }
 }
 
@@ -180,7 +180,7 @@ pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error>
     let err = &raw mut slot;
     unsafe {
         let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        if data.len() == 0 {
+        if data.is_empty() {
             return ().reported(slot);
         }
         channel_send(

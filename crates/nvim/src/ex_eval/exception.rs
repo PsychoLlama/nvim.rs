@@ -322,17 +322,17 @@ pub unsafe fn get_exception_string(
 
         let mesg = (*value.cast::<msglist_T>()).throw_msg;
         let ret;
-        let val;
-        if !cmdname.is_null() && *cmdname != NUL as c_char {
+
+        let val = if !cmdname.is_null() && *cmdname != NUL as c_char {
             let cmdlen = strlen(cmdname);
             ret = xstrnsave(c"Vim(".as_ptr(), 4 + cmdlen + 2 + strlen(mesg));
             strcpy(ret.add(4), cmdname);
             strcpy(ret.add(4 + cmdlen), c"):".as_ptr());
-            val = ret.add(4 + cmdlen + 2);
+            ret.add(4 + cmdlen + 2)
         } else {
             ret = xstrnsave(c"Vim:".as_ptr(), 4 + strlen(mesg));
-            val = ret.add(4);
-        }
+            ret.add(4)
+        };
 
         // `msg_add_fname` may have prefixed the message with a file name in
         // quotes. In the exception value the file name goes in parentheses

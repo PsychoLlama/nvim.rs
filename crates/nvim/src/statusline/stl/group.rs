@@ -36,11 +36,12 @@ pub(super) fn close(
     let mut pos = pos;
     let mut group_len = i64::from(strsize_at(out, start));
 
-    if s.curitem > gi + 1 && s.items[gi].minwid == 0 {
-        if let Some(erased) = erase_if_empty(s, gi, start) {
-            pos = start;
-            group_len = erased;
-        }
+    if s.curitem > gi + 1
+        && s.items[gi].minwid == 0
+        && let Some(erased) = erase_if_empty(s, gi, start)
+    {
+        pos = start;
+        group_len = erased;
     }
 
     let mut minwid = s.items[gi].minwid;

@@ -512,14 +512,14 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> va
         if r == NOTDONE {
             r = eval1(&raw mut p, &raw mut rettv, EVALARG_EVALUATE.ptr());
         }
-        let retval = if r == FAIL {
+
+        if r == FAIL {
             -1
         } else {
             let n = tv_get_number_chk(&raw mut rettv, null_mut());
             tv_clear(&raw mut rettv);
             n
-        };
-        retval
+        }
     }
 }
 

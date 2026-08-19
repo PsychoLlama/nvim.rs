@@ -237,10 +237,10 @@ fn check_no_exclusive_borrow(addr: usize) {
         return;
     }
     borrows::TABLE.with(|table| {
-        if let Some(&state) = table.borrow().get(&addr) {
-            if state < 0 {
-                panic!("GlobalCell::get during an active with_mut borrow (cell @ {addr:#x})");
-            }
+        if let Some(&state) = table.borrow().get(&addr)
+            && state < 0
+        {
+            panic!("GlobalCell::get during an active with_mut borrow (cell @ {addr:#x})");
         }
     });
 }

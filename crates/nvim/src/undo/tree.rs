@@ -18,7 +18,7 @@ pub(crate) unsafe fn u_get_headentry(mut buf: *mut buf_T) -> *mut u_entry_T {
         iemsg(gettext(c"E439: Undo list corrupt".as_ptr()));
         return ptr::null_mut();
     }
-    return (*(*buf).b_u_newhead).uh_entry;
+    (*(*buf).b_u_newhead).uh_entry
 }
 pub(crate) unsafe fn u_getbot(mut buf: *mut buf_T) {
     let mut uep: *mut u_entry_T = u_get_headentry(buf);
@@ -215,8 +215,8 @@ pub unsafe fn u_undoline() {
     check_cursor_col(curwin.get());
 }
 pub(crate) unsafe fn u_save_line(mut lnum: linenr_T) -> *mut c_char {
-    return u_save_line_buf(curbuf.get(), lnum);
+    u_save_line_buf(curbuf.get(), lnum)
 }
 pub(crate) unsafe fn u_save_line_buf(mut buf: *mut buf_T, mut lnum: linenr_T) -> *mut c_char {
-    return xstrdup(ml_get_buf(buf, lnum));
+    xstrdup(ml_get_buf(buf, lnum))
 }

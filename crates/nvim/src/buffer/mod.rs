@@ -246,9 +246,7 @@ fn map_put_int_ptr_t(map: &mut Map_int_ptr_t, key: c_int, value: ptr_t) {
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 #[inline(always)]
 pub unsafe fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    unsafe {
-        return (*buf).changedtick_di.di_tv.vval.v_number;
-    }
+    unsafe { (*buf).changedtick_di.di_tv.vval.v_number }
 }
 static e_attempt_to_delete_buffer_that_is_in_use_str: [::core::ffi::c_char; 52] =
     c_bytes(b"E937: Attempt to delete a buffer that is in use: %s\0");

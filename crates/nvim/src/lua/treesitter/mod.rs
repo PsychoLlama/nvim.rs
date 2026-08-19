@@ -392,19 +392,17 @@ pub const MAP_INIT: Map_cstr_t_ptr_t = Map_cstr_t_ptr_t {
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
-    unsafe {
-        return mh_get_cstr_t(set, key) != MH_TOMBSTONE as uint32_t;
-    }
+    unsafe { mh_get_cstr_t(set, key) != MH_TOMBSTONE as uint32_t }
 }
 #[inline]
 unsafe fn map_get_int_ptr_t(mut map: *mut Map_int_ptr_t, mut key: ::core::ffi::c_int) -> ptr_t {
     unsafe {
         let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-        return if k == MH_TOMBSTONE as uint32_t {
+        if k == MH_TOMBSTONE as uint32_t {
             value_init_ptr_t.get()
         } else {
             *(*map).values.offset(k as isize)
-        };
+        }
     }
 }
 #[inline]
@@ -423,11 +421,11 @@ unsafe fn map_put_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t, 
 unsafe fn map_get_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t) -> ptr_t {
     unsafe {
         let mut k: uint32_t = mh_get_cstr_t(&raw mut (*map).set, key);
-        return if k == MH_TOMBSTONE as uint32_t {
+        if k == MH_TOMBSTONE as uint32_t {
             value_init_ptr_t.get()
         } else {
             *(*map).values.offset(k as isize)
-        };
+        }
     }
 }
 pub const TS_META_PARSER: &::core::ffi::CStr = c"treesitter_parser";

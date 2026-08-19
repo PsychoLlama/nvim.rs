@@ -74,10 +74,11 @@ pub(crate) fn goto_win(wp: Win) {
     enter(wp, true);
 
     // Conceal cursor line in previous window, unconceal in current window.
-    if let Some(owp) = valid_win(owp.raw()) {
-        if owp.w_onebuf_opt.wo_cole > 0 as OptInt && msg_scrolled.get() == 0 {
-            redraw_winline(owp);
-        }
+    if let Some(owp) = valid_win(owp.raw())
+        && owp.w_onebuf_opt.wo_cole > 0 as OptInt
+        && msg_scrolled.get() == 0
+    {
+        redraw_winline(owp);
     }
     if cur_win().w_onebuf_opt.wo_cole > 0 as OptInt && msg_scrolled.get() == 0 {
         redraw_winline(cur_win());
@@ -353,10 +354,10 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
     if cur_win().w_hl_attr_normal != cur_win().w_hl_attr_normalnc {
         cur_win().redraw_later(UPD_NOT_VALID);
     }
-    if let Some(prev) = current_prevwin() {
-        if prev.w_hl_attr_normal != prev.w_hl_attr_normalnc {
-            prev.redraw_later(UPD_NOT_VALID);
-        }
+    if let Some(prev) = current_prevwin()
+        && prev.w_hl_attr_normal != prev.w_hl_attr_normalnc
+    {
+        prev.redraw_later(UPD_NOT_VALID);
     }
 
     // set window height to desired minimal value

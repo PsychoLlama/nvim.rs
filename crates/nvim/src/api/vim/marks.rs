@@ -44,7 +44,7 @@ pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
             0 as Integer,
             err,
         );
-        return (res as Boolean).reported(error);
+        (res as Boolean).reported(error)
     }
 }
 
@@ -124,6 +124,6 @@ pub unsafe fn nvim_get_mark(
         if allocated {
             xfree(filename as *mut ::core::ffi::c_void);
         }
-        return rv.reported(error);
+        rv.reported(error)
     }
 }

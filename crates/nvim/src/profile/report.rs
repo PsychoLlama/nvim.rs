@@ -64,7 +64,7 @@ unsafe fn write_func_name(fd: &mut dyn Write, fp: *mut ufunc_T) -> io::Result<()
     } else {
         fd.write_all(name)?;
     }
-    write!(fd, "()\n")
+    writeln!(fd, "()")
 }
 
 /// One count/total/self report line. With `prefer_self` (function lines),
@@ -104,8 +104,8 @@ unsafe fn prof_sort_list(
     title: &str,
     prefer_self: bool,
 ) -> io::Result<()> {
-    write!(fd, "FUNCTIONS SORTED ON {title} TIME\n")?;
-    write!(fd, "count  total (s)   self (s)  function\n")?;
+    writeln!(fd, "FUNCTIONS SORTED ON {title} TIME")?;
+    writeln!(fd, "count  total (s)   self (s)  function")?;
     for &fp in sorttab.iter().take(20) {
         // SAFETY: the caller's entries.
         let f = unsafe { &*fp };
@@ -114,7 +114,7 @@ unsafe fn prof_sort_list(
         // SAFETY: as above.
         unsafe { write_func_name(fd, fp) }?;
     }
-    write!(fd, "\n")
+    writeln!(fd)
 }
 
 /// Where a function was defined, as the report's `Defined:` line.
@@ -129,7 +129,7 @@ unsafe fn write_func_origin(fd: &mut dyn Write, fp: &ufunc_T) -> io::Result<()> 
         let p = get_scriptname(fp.uf_script_ctx, &raw mut should_free);
         write!(fd, "    Defined: ")?;
         fd.write_all(CStr::from_ptr(p).to_bytes())?;
-        write!(fd, ":{}\n", fp.uf_script_ctx.sc_lnum)?;
+        writeln!(fd, ":{}", fp.uf_script_ctx.sc_lnum)?;
         if should_free {
             xfree(p as *mut c_void);
         }
@@ -155,12 +155,12 @@ unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
             unsafe { write_func_origin(fd, f) }?;
         }
         if f.uf_tm_count == 1 {
-            write!(fd, "Called 1 time\n")?;
+            writeln!(fd, "Called 1 time")?;
         } else {
-            write!(fd, "Called {} times\n", f.uf_tm_count)?;
+            writeln!(fd, "Called {} times", f.uf_tm_count)?;
         }
-        write!(fd, "Total time: {}\n", profile_msg_str(f.uf_tm_total))?;
-        write!(fd, " Self time: {}\n", profile_msg_str(f.uf_tm_self))?;
+        writeln!(fd, "Total time: {}", profile_msg_str(f.uf_tm_total))?;
+        writeln!(fd, " Self time: {}", profile_msg_str(f.uf_tm_self))?;
         write!(fd, "\ncount  total (s)   self (s)\n")?;
         for i in 0..f.uf_lines.ga_len as isize {
             // SAFETY: `i` is below `uf_lines.ga_len`.
@@ -179,9 +179,9 @@ unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
             prof_func_line(fd, count, total, self_, true)?;
             // SAFETY: a NUL-terminated source line owned by the function.
             fd.write_all(unsafe { CStr::from_ptr(line) }.to_bytes())?;
-            write!(fd, "\n")?;
+            writeln!(fd)?;
         }
-        write!(fd, "\n")?;
+        writeln!(fd)?;
     }
     if !sorttab.is_empty() {
         // SAFETY: the entries this walk collected.
@@ -204,7 +204,7 @@ unsafe fn script_dump_source(fd: &mut dyn Write, si: &scriptitem_T) -> io::Resul
     // SAFETY: `sn_name` is the NUL-terminated source path.
     let sfd = unsafe { os_fopen(si.sn_name, c"r".as_ptr()) };
     if sfd.is_null() {
-        return write!(fd, "Cannot open file!\n");
+        return writeln!(fd, "Cannot open file!");
     }
     let mut buf = [0 as c_char; IOSIZE as usize];
     let mut i = 0;
@@ -265,18 +265,18 @@ unsafe fn script_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
         write!(fd, "SCRIPT  ")?;
         // SAFETY: `sn_name` is the NUL-terminated source path.
         fd.write_all(unsafe { CStr::from_ptr(si.sn_name) }.to_bytes())?;
-        write!(fd, "\n")?;
+        writeln!(fd)?;
         if si.sn_pr_count == 1 {
-            write!(fd, "Sourced 1 time\n")?;
+            writeln!(fd, "Sourced 1 time")?;
         } else {
-            write!(fd, "Sourced {} times\n", si.sn_pr_count)?;
+            writeln!(fd, "Sourced {} times", si.sn_pr_count)?;
         }
-        write!(fd, "Total time: {}\n", profile_msg_str(si.sn_pr_total))?;
-        write!(fd, " Self time: {}\n", profile_msg_str(si.sn_pr_self))?;
+        writeln!(fd, "Total time: {}", profile_msg_str(si.sn_pr_total))?;
+        writeln!(fd, " Self time: {}", profile_msg_str(si.sn_pr_self))?;
         write!(fd, "\ncount  total (s)   self (s)\n")?;
         // SAFETY: as above.
         unsafe { script_dump_source(fd, si) }?;
-        write!(fd, "\n")?;
+        writeln!(fd)?;
     }
     Ok(())
 }

@@ -290,10 +290,11 @@ pub(crate) unsafe fn expand_set_opt_listflag(
         // the same letter twice.
         // SAFETY: `original` being set means `option_val` is non-empty, so
         // it has a second byte (its terminator at worst).
-        if original.is_some() && unsafe { c_int::from(*option_val.add(1)) } == NUL {
-            if unsafe { *option_val } as u8 == flag {
-                continue;
-            }
+        if original.is_some()
+            && unsafe { c_int::from(*option_val.add(1)) } == NUL
+            && unsafe { *option_val } as u8 == flag
+        {
+            continue;
         }
         // SAFETY: one byte of `flags`, copied with a terminator.
         let one = unsafe { xmemdupz(flags.as_ptr().add(at).cast::<c_void>(), 1) };

@@ -452,15 +452,15 @@ pub fn utf8proc_decompose_char(
     if options & UTF8PROC_STRIPNA != 0 && category == 0 {
         return 0;
     }
-    if options & UTF8PROC_LUMP != 0 {
-        if let Some(replacement) = lump_replacement(uc, category, options) {
-            return utf8proc_decompose_char(
-                replacement,
-                dst,
-                options & !UTF8PROC_LUMP,
-                last_boundclass,
-            );
-        }
+    if options & UTF8PROC_LUMP != 0
+        && let Some(replacement) = lump_replacement(uc, category, options)
+    {
+        return utf8proc_decompose_char(
+            replacement,
+            dst,
+            options & !UTF8PROC_LUMP,
+            last_boundclass,
+        );
     }
     if options & UTF8PROC_STRIPMARK != 0
         && (category == UTF8PROC_CATEGORY_MN

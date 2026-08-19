@@ -414,7 +414,7 @@ pub(crate) unsafe fn set_fuzzy_score() {
 
         // Determine the pattern to match against.
         let leader = compl_leader.get();
-        let use_leader = !leader.data().is_null() && leader.len() > 0;
+        let use_leader = !leader.data().is_null() && !leader.is_empty();
         let mut pattern: *mut c_char = ptr::null_mut();
         if use_leader {
             // Clear the leader cache once before the loop; the pattern is
@@ -422,7 +422,7 @@ pub(crate) unsafe fn set_fuzzy_score() {
             get_leader_for_startcol(ptr::null_mut(), true);
         } else {
             let orig = compl_orig_text.get();
-            if orig.data().is_null() || orig.len() == 0 {
+            if orig.data().is_null() || orig.is_empty() {
                 return;
             }
             pattern = orig.data();

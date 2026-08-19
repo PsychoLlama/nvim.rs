@@ -167,11 +167,9 @@ pub(crate) unsafe fn syn_current_attr(
             {
                 // 2. A keyword, if we are on a keyword character after a
                 //    non-keyword one. Never while syncing.
-                if do_keywords {
-                    if let Some(si) = try_keyword(cur_si) {
-                        cur_si = si;
-                        found_keyword = true;
-                    }
+                if do_keywords && let Some(si) = try_keyword(cur_si) {
+                    cur_si = si;
+                    found_keyword = true;
                 }
 
                 // 3. A pattern, only if no keyword was found.

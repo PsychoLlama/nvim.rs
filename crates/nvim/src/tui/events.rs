@@ -236,7 +236,7 @@ pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
             )
         };
     }
-    if title.len() > 0 && !too_long {
+    if !title.is_empty() && !too_long {
         if !tui.title_enabled {
             out(tui, b"\x1b[22;0t");
             tui.title_enabled = true;

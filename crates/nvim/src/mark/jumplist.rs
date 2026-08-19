@@ -29,10 +29,10 @@ pub unsafe fn setpcmark() {
     if (*curwin.get()).w_pcmark.lnum == 0 {
         (*curwin.get()).w_pcmark.lnum = 1;
     }
-    if jop_flags.get() & kOptJopFlagStack as c_int as c_uint != 0 {
-        if (*curwin.get()).w_jumplistidx < (*curwin.get()).w_jumplistlen - 1 {
-            (*curwin.get()).w_jumplistlen = (*curwin.get()).w_jumplistidx + 1;
-        }
+    if jop_flags.get() & kOptJopFlagStack as c_int as c_uint != 0
+        && (*curwin.get()).w_jumplistidx < (*curwin.get()).w_jumplistlen - 1
+    {
+        (*curwin.get()).w_jumplistlen = (*curwin.get()).w_jumplistidx + 1;
     }
     (*curwin.get()).w_jumplistlen += 1;
     if (*curwin.get()).w_jumplistlen > JUMPLISTSIZE {
@@ -113,7 +113,7 @@ pub unsafe fn get_jumplist(mut win: *mut win_T, mut count: c_int) -> *mut fmark_
         }
         count += if count < 0 { -1 } else { 1 };
     }
-    return &raw mut (*jmp).fmark;
+    &raw mut (*jmp).fmark
 }
 
 /// Get mark in "count" position in the |changelist| relative to the current index.
@@ -150,7 +150,7 @@ pub unsafe fn get_changelist(
     (*win).w_changelistidx = n;
     fm = (&raw mut (*buf).b_changelist as *mut fmark_T).offset(n as isize);
     (*fm).fnum = (*curbuf.get()).handle as c_int;
-    return (&raw mut (*buf).b_changelist as *mut fmark_T).offset(n as isize);
+    (&raw mut (*buf).b_changelist as *mut fmark_T).offset(n as isize)
 }
 
 /// Remove every jump list entry referring to a given buffer.
@@ -434,5 +434,5 @@ pub unsafe fn mark_jumplist_iter(
     {
         return ptr::null();
     }
-    return iter_mark.offset(1) as *const c_void;
+    iter_mark.offset(1) as *const c_void
 }

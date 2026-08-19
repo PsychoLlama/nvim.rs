@@ -304,29 +304,25 @@ pub unsafe fn nvim_open_win(
         if fconfig.noautocmd {
             unblock_autocmds();
         }
-        return rv.reported(error);
+        rv.reported(error)
     }
 }
 
-pub(crate) unsafe fn win_split_dir(mut win: *mut win_T) -> WinSplit {
+pub(crate) unsafe fn win_split_dir(win: *mut win_T) -> WinSplit {
     unsafe {
         if (*win).w_frame.is_null() || (*(*win).w_frame).fr_parent.is_null() {
             return kWinSplitLeft;
         }
-        let mut layout: ::core::ffi::c_char = (*(*(*win).w_frame).fr_parent).fr_layout;
-        if layout as ::core::ffi::c_int == FR_COL {
-            return (if !(*(*win).w_frame).fr_next.is_null() {
-                kWinSplitAbove as ::core::ffi::c_int
-            } else {
-                kWinSplitBelow as ::core::ffi::c_int
-            }) as WinSplit;
-        } else {
-            return (if !(*(*win).w_frame).fr_next.is_null() {
-                kWinSplitLeft as ::core::ffi::c_int
-            } else {
-                kWinSplitRight as ::core::ffi::c_int
-            }) as WinSplit;
-        };
+        // A window in a column was split off the one below it when it still
+        // has a sibling ahead of it, and off the one above it otherwise; in a
+        // row the same test reads left/right.
+        let column = (*(*(*win).w_frame).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL;
+        match ((*(*win).w_frame).fr_next.is_null(), column) {
+            (false, true) => kWinSplitAbove,
+            (true, true) => kWinSplitBelow,
+            (false, false) => kWinSplitLeft,
+            (true, false) => kWinSplitRight,
+        }
     }
 }
 
@@ -356,7 +352,7 @@ pub(crate) fn win_split_flags(mut split: WinSplit, mut toplevel: bool) -> ::core
             WSP_BELOW as ::core::ffi::c_int
         };
     }
-    return flags;
+    flags
 }
 
 pub(crate) unsafe fn win_can_move_tp(
@@ -417,24 +413,24 @@ pub(crate) unsafe fn win_can_move_tp(
             );
             return false;
         }
-        return true;
+        true
     }
 }
 
 pub(crate) unsafe fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T) -> *mut win_T {
     unsafe {
         if (*win).w_floating {
-            return win_float_find_altwin(
+            win_float_find_altwin(
                 win,
                 if tp == curtab.get() {
                     ::core::ptr::null_mut::<tabpage_T>()
                 } else {
                     tp
                 },
-            );
+            )
         } else {
             let mut dir: ::core::ffi::c_int = 0;
-            return winframe_find_altwin(
+            winframe_find_altwin(
                 win,
                 &raw mut dir,
                 if tp == curtab.get() {
@@ -443,7 +439,7 @@ pub(crate) unsafe fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T
                     tp
                 },
                 ::core::ptr::null_mut::<*mut frame_T>(),
-            );
-        };
+            )
+        }
     }
 }

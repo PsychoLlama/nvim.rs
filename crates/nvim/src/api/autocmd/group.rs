@@ -44,7 +44,7 @@ pub unsafe fn nvim_create_augroup(
             }
         }
         current_sctx.set(save_current_sctx);
-        return (augroup as Integer).reported(error);
+        (augroup as Integer).reported(error)
     }
 }
 

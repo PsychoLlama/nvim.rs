@@ -134,7 +134,7 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
         buf[len as usize] = 0;
         let hi: *mut hashitem_T = hash_find(&raw const slang.sl_map_hash, buf.as_ptr());
         let key = (*hi).hi_key;
-        if key.is_null() || key == &raw const hash_removed as *mut c_char {
+        if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
             0
         } else {
             utf_ptr2char(key.add(strlen(key) as usize + 1))
@@ -162,7 +162,7 @@ pub unsafe fn score_wordcount_adj(
     let count = unsafe {
         let hi = hash_find(&raw const slang.sl_wordcount, word);
         let key = (*hi).hi_key;
-        if key.is_null() || key == &raw const hash_removed as *mut c_char {
+        if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
             return score;
         }
         let wc = key.sub(WC_KEY_OFF) as *mut wordcount_T;
@@ -579,7 +579,7 @@ pub unsafe fn spell_edit_score_limit(
             if bc == NUL {
                 // Both words end here: this alternative is complete.
                 minscore = minscore.min(score);
-                if !pop(&mut stack, &mut stackidx, &mut bi, &mut gi, &mut score) {
+                if !pop(&stack, &mut stackidx, &mut bi, &mut gi, &mut score) {
                     break 'alternatives;
                 }
                 continue 'alternatives;
@@ -665,7 +665,7 @@ pub unsafe fn spell_edit_score_limit(
             }
         }
 
-        if !pop(&mut stack, &mut stackidx, &mut bi, &mut gi, &mut score) {
+        if !pop(&stack, &mut stackidx, &mut bi, &mut gi, &mut score) {
             break;
         }
     }

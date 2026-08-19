@@ -234,7 +234,7 @@ pub unsafe fn get_clipboard(mut name: c_int, target: &mut *mut yankreg_T, quiet:
                 }
             }
 
-            if (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size - 1)).len() == 0 {
+            if (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size - 1)).is_empty() {
                 // A known-to-be charwise yank might have a final linebreak, but
                 // otherwise there is no line after the final newline.
                 if (*reg).y_type != kMTCharWise {

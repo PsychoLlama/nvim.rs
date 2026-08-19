@@ -368,10 +368,9 @@ unsafe fn read_from_typeahead(
                     );
                     c == 0
                 }
+                && esc_leaves_insert(&mut at)
             {
-                if esc_leaves_insert(&mut at) {
-                    *mode_deleted = true;
-                }
+                *mode_deleted = true;
             }
             if c < 0 {
                 continue; // end of the input script reached

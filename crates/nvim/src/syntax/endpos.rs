@@ -590,7 +590,7 @@ unsafe fn match_keyword(
 ) -> *mut keyentry_T {
     unsafe {
         let hi = hash_find(ht, keyword);
-        if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut c_char {
+        if (*hi).hi_key.is_null() || core::ptr::eq((*hi).hi_key, &raw const hash_removed) {
             return ::core::ptr::null_mut();
         }
         // The hash key IS the entry's trailing `keyword[]` array, so the entry

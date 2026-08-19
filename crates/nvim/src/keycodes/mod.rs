@@ -140,11 +140,11 @@ pub fn get_special_key_name(key: c_int, modifiers: c_int) -> *mut c_char {
             key = c_int::from(termcap_name(key)[1]);
         }
         // A shifted or ctrl'ed special key becomes the plain key and a bit.
-        if key < 0 {
-            if let Some((plain, bit)) = unshift(key) {
-                modifiers |= bit;
-                key = plain;
-            }
+        if key < 0
+            && let Some((plain, bit)) = unshift(key)
+        {
+            modifiers |= bit;
+            key = plain;
         }
 
         let mut name = name_of_code(key);

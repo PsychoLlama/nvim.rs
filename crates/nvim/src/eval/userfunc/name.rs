@@ -93,7 +93,7 @@ pub unsafe fn emsg_funcname(errmsg: *const c_char, name: *const c_char) {
             p = concat_str(c"<SNR>".as_ptr(), name.add(3));
         }
         semsg_c!(gettext(errmsg), p);
-        if p != name as *mut c_char {
+        if !core::ptr::eq(p, name) {
             xfree(p as *mut c_void);
         }
     }
@@ -288,7 +288,7 @@ unsafe fn mangle_function_name(
         if !lv.ll_exp_name.is_null() {
             len = strlen(lv.ll_exp_name) as c_int;
             if lead <= 2
-                && lv.ll_name == lv.ll_exp_name as *const c_char
+                && core::ptr::eq(lv.ll_name, lv.ll_exp_name)
                 && lv.ll_name_len >= 2
                 && memcmp(
                     lv.ll_name as *const c_void,

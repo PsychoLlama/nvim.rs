@@ -602,7 +602,7 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
 /// keeps its registers, jumps, buffer list and variables in this format.
 pub unsafe fn shada_read_string(string: String_0, flags: c_int) {
     unsafe {
-        if string.len() == 0 {
+        if string.is_empty() {
             return;
         }
         let mut sd_reader: FileDescriptor = core::mem::zeroed();

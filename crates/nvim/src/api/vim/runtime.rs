@@ -20,7 +20,7 @@ pub unsafe fn nvim_exec_lua(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        return nlua_exec(
+        nlua_exec(
             code,
             ::core::ptr::null::<::core::ffi::c_char>(),
             args,
@@ -28,7 +28,7 @@ pub unsafe fn nvim_exec_lua(
             arena,
             err,
         )
-        .reported(error);
+        .reported(error)
     }
 }
 
@@ -54,7 +54,7 @@ pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
             );
             return (0 as Integer).reported(error);
         }
-        return (mb_string2cells(text.data()) as Integer).reported(error);
+        (mb_string2cells(text.data()) as Integer).reported(error)
     }
 }
 
@@ -63,9 +63,7 @@ pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error>
 }
 
 pub unsafe fn nvim__runtime_inspect(arena: *mut Arena) -> Array {
-    unsafe {
-        return runtime_inspect(arena);
-    }
+    unsafe { runtime_inspect(arena) }
 }
 
 pub unsafe fn nvim_get_runtime_file(
@@ -83,7 +81,7 @@ pub unsafe fn nvim_get_runtime_file(
                 items: ::core::ptr::null_mut::<Object>(),
                 init_array: [NIL; 16],
             },
-            arena: arena,
+            arena,
         };
         cookie.rv.capacity = ::core::mem::size_of::<[Object; 16]>()
             .wrapping_div(::core::mem::size_of::<Object>())
@@ -106,7 +104,7 @@ pub unsafe fn nvim_get_runtime_file(
         };
         try_enter(&raw mut tstate);
         do_in_runtimepath(
-            (if name.len() != 0 {
+            (if !name.is_empty() {
                 name.data() as *const ::core::ffi::c_char
             } else {
                 c"".as_ptr()
@@ -124,7 +122,7 @@ pub unsafe fn nvim_get_runtime_file(
             &raw mut cookie as *mut ::core::ffi::c_void,
         );
         try_leave(&raw mut tstate, err);
-        return arena_take_arraybuilder(arena, &raw mut cookie.rv).reported(error);
+        arena_take_arraybuilder(arena, &raw mut cookie.rv).reported(error)
     }
 }
 
@@ -154,14 +152,12 @@ unsafe fn find_runtime_cb(
             }
             i += 1;
         }
-        return num_fnames > 0 as ::core::ffi::c_int;
+        num_fnames > 0 as ::core::ffi::c_int
     }
 }
 
 pub unsafe fn nvim__get_lib_dir() -> String_0 {
-    unsafe {
-        return cstr_as_string(get_lib_dir());
-    }
+    unsafe { cstr_as_string(get_lib_dir()) }
 }
 
 pub unsafe fn nvim__get_runtime(
@@ -203,7 +199,7 @@ pub unsafe fn nvim__get_runtime(
                 i = i.wrapping_add(1);
             }
         }
-        return res.reported(error);
+        res.reported(error)
     }
 }
 

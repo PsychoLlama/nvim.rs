@@ -21,7 +21,7 @@ pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mu
             api_set_error(err, kErrorTypeException, c"Failed to load buffer".as_ptr());
             return ::core::ptr::null_mut::<buf_T>();
         }
-        return b;
+        b
     }
 }
 
@@ -78,7 +78,7 @@ pub unsafe fn nvim_buf_attach(
             cb.utf_sizes = (*opts).utf_sizes;
             cb.preview = (*opts).preview;
         }
-        return buf_updates_register(b, channel_id, cb, send_buffer).reported(error);
+        buf_updates_register(b, channel_id, cb, send_buffer).reported(error)
     }
 }
 
@@ -91,7 +91,7 @@ pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: Buffer) -> Result<Boole
             return false.reported(error);
         }
         buf_updates_unregister(b, channel_id);
-        return true.reported(error);
+        true.reported(error)
     }
 }
 
@@ -131,7 +131,7 @@ pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
         );
         aucmd_restbuf(&raw mut aco);
         try_leave(&raw mut tstate, err);
-        return res.reported(error);
+        res.reported(error)
     }
 }
 
@@ -192,6 +192,6 @@ pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<Dict, Er
                 Object::integer((*uhp).uh_extmark.size as Integer),
             );
         }
-        return rv.reported(error);
+        rv.reported(error)
     }
 }
