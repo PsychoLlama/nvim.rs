@@ -56,9 +56,9 @@ use crate::main::{NameBuff, hl_attr_active};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
-    AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptValType, ScreenGrid,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord, StlFlag,
-    VV_LNUM, VV_RELNUM, WinSplit, WinStyle, hlf_T, linenr_T, schar_T, size_t, statuscol_T,
+    AlignTextPos, Array, Dict, GridView, MAXPATHL, OPT_LOCAL, Object, OptIndex, OptValType,
+    ScreenGrid, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord,
+    StlFlag, VV_LNUM, VV_RELNUM, WinSplit, WinStyle, hlf_T, linenr_T, schar_T, size_t, statuscol_T,
     stl_hlrec_t, varnumber_T, win_T,
 };
 use crate::window::global_stl_height;
@@ -148,8 +148,6 @@ pub const Empty: C2Rust_Unnamed_15 = 1;
 pub const Normal: C2Rust_Unnamed_15 = 0;
 pub type stl_item_t = stl_item;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const OPT_LOCAL: C2Rust_Unnamed_17 = 2;
-pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;

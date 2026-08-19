@@ -11,7 +11,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, MAXPATHL, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{
+    FAIL, MAXPATHL, OPT_LOCAL, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
+};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

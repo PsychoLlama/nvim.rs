@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::array_add;
+use crate::types::OPT_LOCAL;
 
 pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
     unsafe {

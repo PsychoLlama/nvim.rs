@@ -67,11 +67,11 @@ use crate::options::kOptBuftype;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, Object, OptVal,
-    OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, colnr_T,
-    dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil, kObjectTypeString,
-    linenr_T, pos_T, ptr_t, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
+    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, OPT_LOCAL,
+    Object, OptVal, OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermColor,
+    VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T,
+    buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil,
+    kObjectTypeString, linenr_T, pos_T, ptr_t, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -114,7 +114,6 @@ const kMarkAdjustTerm: MarkAdjustMode = 2;
 const kExtmarkUndo: ExtmarkOp = 1;
 /// `set_option_value` spellings.
 const kOptValTypeString: OptValType = 2;
-const OPT_LOCAL: c_int = 2;
 /// The most columns [`terminal_get_line_attributes`] will resolve;
 /// `drawline` sizes its array to match.
 const TERM_ATTRS_MAX: c_int = 1024;
@@ -388,7 +387,7 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
                 string: static_cstring(c"terminal"),
             },
         },
-        OPT_LOCAL,
+        OPT_LOCAL as c_int,
     );
     buf.b_locked -= 1;
 

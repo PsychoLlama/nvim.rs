@@ -79,8 +79,6 @@ pub const FNAME_INCL: c_int = 8;
 pub const FNAME_REL: c_int = 16;
 pub const FNAME_UNESC: c_int = 32;
 
-pub const OPT_LOCAL: c_int = 2;
-
 /// The directories `ff_get_next` walks into. `NOTWILD` is there — a bit of a
 /// hack, upstream says — because the already-expanded path may hold wildcard
 /// characters that are to be taken literally from here on.

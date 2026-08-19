@@ -101,7 +101,6 @@ pub const ECMD_ONE: c_int = 1;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;
-pub const OPT_LOCAL: c_uint = 2;
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0,
     capacity: 0,

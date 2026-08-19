@@ -81,10 +81,10 @@ use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValData, OptValType,
-    aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t,
-    linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t,
-    uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OPT_LOCAL, OptInt, OptVal, OptValData,
+    OptValType, aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t,
+    int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t,
+    time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -153,7 +153,6 @@ pub const ICONV_MULT: C2Rust_Unnamed_30 = 8;
 pub const SHM_OVERALL: C2Rust_Unnamed_35 = 79;
 pub const SHM_LINES: C2Rust_Unnamed_35 = 108;
 pub const SHM_RO: C2Rust_Unnamed_35 = 114;
-pub const OPT_LOCAL: C2Rust_Unnamed_34 = 2;
 pub const SHM_OVER: C2Rust_Unnamed_35 = 111;
 pub const SHM_FILEINFO: C2Rust_Unnamed_35 = 70;
 pub const VIM_WARNING: C2Rust_Unnamed_33 = 2;

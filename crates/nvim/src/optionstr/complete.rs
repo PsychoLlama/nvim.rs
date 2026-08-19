@@ -21,12 +21,12 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, OK, buf_T, optset_T};
+use crate::types::{NUL, OK, OPT_GLOBAL, OPT_LOCAL, buf_T, optset_T};
 
 use super::frame::{errbuf, invalid, varp, win};
 use super::{
-    CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, OPT_GLOBAL, OPT_LOCAL, free_string_option, illegal_char,
-    illegal_char_after_chr, opt_strings_flags,
+    CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, free_string_option, illegal_char, illegal_char_after_chr,
+    opt_strings_flags,
 };
 
 /// The sources 'complete' accepts, one letter each.

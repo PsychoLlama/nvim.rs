@@ -23,9 +23,9 @@ use crate::options::{
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
 use crate::optionstr::free_string_option;
-use crate::types::{OptIndex, OptInt, colnr_T, optset_T};
+use crate::types::{OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, colnr_T, optset_T};
 
-use super::{OPT_GLOBAL, OPT_LOCAL, buffers, didset_options_sctx};
+use super::{buffers, didset_options_sctx};
 
 /// What 'paste' overrode, so that switching it off again restores the
 /// values the user set. The per-buffer copies live in `buf_T`; these are
@@ -161,7 +161,7 @@ pub unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
         }
     }
     old_p_paste.set(p_paste.get());
-    didset_options_sctx(OPT_LOCAL | OPT_GLOBAL, &PASTE_DEP_OPTS);
+    didset_options_sctx((OPT_LOCAL | OPT_GLOBAL) as c_int, &PASTE_DEP_OPTS);
     ptr::null()
 }
 

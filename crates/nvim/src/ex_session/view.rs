@@ -19,7 +19,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::flag::OPT_LOCAL;
 use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_escape_fname, ses_fname, ses_get_fname,
     ses_put_fname,
@@ -35,7 +34,7 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, NUL, OK, int64_t, tabpage_T, win_T};
+use crate::types::{FAIL, NUL, OK, OPT_LOCAL, int64_t, tabpage_T, win_T};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 

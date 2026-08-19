@@ -496,6 +496,7 @@ typedef int64_t OptInt;
 typedef unsigned int OptScope;
 typedef uint8_t OptScopeFlags;
 typedef int OptValType;
+typedef unsigned int OptionSetFlags;
 typedef uint64_t OptionalKeys;
 typedef packer_buffer_t PackerBuffer;
 typedef void (*PackerBufferFlush)(PackerBuffer *);

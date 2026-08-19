@@ -164,7 +164,6 @@ pub const DOBUF_GOTO: dobuf_action_values = 0;
 pub const BLN_LISTED: bln_values = 2;
 pub const BLN_NEW: bln_values = 8;
 pub const BLN_NOOPT: bln_values = 16;
-pub const OPT_LOCAL: C2Rust_Unnamed_38 = 2;
 pub const BCO_NOHELP: C2Rust_Unnamed_37 = 4;
 pub const BCO_ENTER: C2Rust_Unnamed_37 = 1;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;

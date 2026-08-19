@@ -39,20 +39,19 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, FILE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, buf_T, kNone, kTrue, size_t, uint32_t,
-    vimoption_T,
+    FAIL, FILE, MAXPATHL, NUL, OK, OPT_GLOBAL, OPT_LOCAL, OPT_ONECOLUMN, OPT_SKIPRTP, OptIndex,
+    OptInt, OptVal, buf_T, kNone, kTrue, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbufIsChanged;
 use ::libc::{fprintf, fputs, strlen};
 
 use super::{
-    OPT_GLOBAL, OPT_LOCAL, OPT_ONECOLUMN, OPT_SKIPRTP, copy_option_part, get_opt_idx, get_option,
-    get_option_unset_value, get_varp, get_varp_scope, kOptFlagComma, kOptFlagExpand,
-    kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption, kOptValTypeBoolean,
-    kOptValTypeNumber, kOptValTypeString, option_has_type, option_is_global_local,
-    option_is_global_only, option_is_window_local, option_var, optval_as_object, optval_equal,
-    optval_from_varp, optval_is_default,
+    copy_option_part, get_opt_idx, get_option, get_option_unset_value, get_varp, get_varp_scope,
+    kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
+    kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_type,
+    option_is_global_local, option_is_global_only, option_is_window_local, option_var,
+    optval_as_object, optval_equal, optval_from_varp, optval_is_default,
 };
 
 /// The column width one option gets in the multi-column listing, and the
@@ -81,9 +80,9 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: c_int) {
         let mut items: Vec<*mut vimoption_T> = Vec::with_capacity(kOptCount as usize);
 
         msg_ext_set_kind(c"list_cmd".as_ptr());
-        msg_puts_title(gettext(if opt_flags & OPT_GLOBAL != 0 {
+        msg_puts_title(gettext(if opt_flags & OPT_GLOBAL as c_int != 0 {
             c"\n--- Global option values ---".as_ptr()
-        } else if opt_flags & OPT_LOCAL != 0 {
+        } else if opt_flags & OPT_LOCAL as c_int != 0 {
             c"\n--- Local option values ---".as_ptr()
         } else {
             c"\n--- Options ---".as_ptr()
@@ -101,7 +100,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: c_int) {
                 }
                 // An explicit `:setlocal`/`:setglobal` listing skips the
                 // options that only exist globally.
-                let varp = if opt_flags & (OPT_LOCAL | OPT_GLOBAL) != 0 {
+                let varp = if opt_flags & (OPT_LOCAL | OPT_GLOBAL) as c_int != 0 {
                     if option_is_global_only(opt_idx) {
                         ptr::null_mut()
                     } else {
@@ -114,7 +113,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: c_int) {
                     continue;
                 }
                 // `:set!` gives every option a line of its own.
-                let len = if opt_flags & OPT_ONECOLUMN != 0 {
+                let len = if opt_flags & OPT_ONECOLUMN as c_int != 0 {
                     Columns.get()
                 } else if option_has_type(opt_idx, kOptValTypeBoolean) {
                     1
@@ -258,10 +257,10 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: c_int, local_only: c_int) -> c_i
                 }
                 // A global-only option is written only by `:mkvimrc`, which
                 // asks for the global scope.
-                if option_is_global_only(opt_idx) && opt_flags & OPT_GLOBAL == 0 {
+                if option_is_global_only(opt_idx) && opt_flags & OPT_GLOBAL as c_int == 0 {
                     continue;
                 }
-                if opt_flags & OPT_GLOBAL != 0 && flags & kOptFlagNoGlob as uint32_t != 0 {
+                if opt_flags & OPT_GLOBAL as c_int != 0 && flags & kOptFlagNoGlob as uint32_t != 0 {
                     continue;
                 }
                 let mut varp = get_varp_scope(opt, opt_flags);
@@ -269,12 +268,12 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: c_int, local_only: c_int) -> c_i
                     continue;
                 }
                 // A global value still at its default needs no command.
-                if opt_flags & OPT_GLOBAL != 0 && optval_is_default(opt_idx, varp) {
+                if opt_flags & OPT_GLOBAL as c_int != 0 && optval_is_default(opt_idx, varp) {
                     continue;
                 }
                 // `:mksession` skips the runtime paths, which belong to the
                 // installation rather than the session.
-                if opt_flags & OPT_SKIPRTP != 0
+                if opt_flags & OPT_SKIPRTP as c_int != 0
                     && (option_var(opt) == p_rtp.ptr().cast::<c_void>()
                         || option_var(opt) == p_pp.ptr().cast::<c_void>())
                 {
@@ -287,11 +286,11 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: c_int, local_only: c_int) -> c_i
                 let mut varp_local: *mut c_void = ptr::null_mut();
                 let mut round = 2;
                 if option_is_window_local(opt_idx) {
-                    if opt_flags & OPT_LOCAL == 0 {
+                    if opt_flags & OPT_LOCAL as c_int == 0 {
                         continue;
                     }
-                    if opt_flags & OPT_GLOBAL == 0 && local_only == 0 {
-                        let varp_global = get_varp_scope(opt, OPT_GLOBAL);
+                    if opt_flags & OPT_GLOBAL as c_int == 0 && local_only == 0 {
+                        let varp_global = get_varp_scope(opt, OPT_GLOBAL as c_int);
                         if !optval_is_default(opt_idx, varp_global) {
                             round = 1;
                             varp_local = varp;
@@ -301,7 +300,7 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: c_int, local_only: c_int) -> c_i
                 }
 
                 while round <= 2 {
-                    let cmd = if round == 1 || opt_flags & OPT_GLOBAL != 0 {
+                    let cmd = if round == 1 || opt_flags & OPT_GLOBAL as c_int != 0 {
                         c"set".as_ptr() as *mut c_char
                     } else {
                         c"setlocal".as_ptr() as *mut c_char

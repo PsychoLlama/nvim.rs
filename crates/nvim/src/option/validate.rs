@@ -25,13 +25,15 @@ use crate::memory::xfree;
 use crate::options::*;
 use crate::os::cshim::{gettext, snprintf};
 use crate::strings::vim_snprintf;
-use crate::types::{IOSIZE, MAX_MCO, OptIndex, OptInt, OptVal, size_t, vimoption_T};
+use crate::types::{
+    IOSIZE, MAX_MCO, OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, OptVal, size_t, vimoption_T,
+};
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
-    INT_MAX, INT_MIN, MAX_NUMBERWIDTH, MIN_COLUMNS, OPT_GLOBAL, OPT_LOCAL, SB_MAX, TABSTOP_MAX,
-    get_option_unset_value, kOptValTypeNil, kOptValTypeNumber, option_has_type,
-    option_is_global_local, optval_copy, optval_equal, optval_to_cstr, optval_type_name,
+    INT_MAX, INT_MIN, MAX_NUMBERWIDTH, MIN_COLUMNS, SB_MAX, TABSTOP_MAX, get_option_unset_value,
+    kOptValTypeNil, kOptValTypeNumber, option_has_type, option_is_global_local, optval_copy,
+    optval_equal, optval_to_cstr, optval_type_name,
 };
 
 /// The two messages the quickfix-stack bounds report.
@@ -248,7 +250,7 @@ pub(crate) unsafe fn validate_option_value(
         // `:setlocal` writing a global-local option's sentinel is how it is
         // unset; nothing else needs to look at the value.
         if option_is_global_local(opt_idx)
-            && opt_flags & OPT_LOCAL != 0
+            && opt_flags & OPT_LOCAL as c_int != 0
             && optval_equal(*newval, get_option_unset_value(opt_idx))
         {
             return ptr::null();
@@ -256,7 +258,7 @@ pub(crate) unsafe fn validate_option_value(
         let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
         if newval.type_0 == kOptValTypeNil {
             // A global value has no "unset" state to fall back to.
-            if opt_flags == OPT_GLOBAL {
+            if opt_flags == OPT_GLOBAL as c_int {
                 return gettext(c"Cannot unset global option value".as_ptr());
             }
             *newval = optval_copy(get_option_unset_value(opt_idx));

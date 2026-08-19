@@ -7,6 +7,25 @@ use super::*;
 use crate::global_cell::GlobalCell;
 use crate::option::{kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
 
+/// `option.h`'s `OptionSetFlags`: which scope an option-setting call means,
+/// plus the handful of behaviour switches that ride along with it. One copy
+/// for the tree.
+pub type OptionSetFlags = ::core::ffi::c_uint;
+/// Use the global value.
+pub const OPT_GLOBAL: OptionSetFlags = 0x01;
+/// Use the local value.
+pub const OPT_LOCAL: OptionSetFlags = 0x02;
+/// The option came from a modeline.
+pub const OPT_MODELINE: OptionSetFlags = 0x04;
+/// Only set window-local options.
+pub const OPT_WINONLY: OptionSetFlags = 0x08;
+/// Do not set window-local options.
+pub const OPT_NOWIN: OptionSetFlags = 0x10;
+/// List options one per line.
+pub const OPT_ONECOLUMN: OptionSetFlags = 0x20;
+/// `"skiprtp"` in `'sessionoptions'`.
+pub const OPT_SKIPRTP: OptionSetFlags = 0x80;
+
 pub type OptScope = ::core::ffi::c_uint;
 pub type OptScopeFlags = uint8_t;
 #[derive(Copy, Clone)]

@@ -70,11 +70,11 @@ use crate::path::{add_pathsep, vim_FullName, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg_c;
 use crate::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK,
-    VV_THIS_SESSION, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
+    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK, OPT_GLOBAL,
+    OPT_SKIPRTP, VV_THIS_SESSION, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};
 
 use session::makeopens;
@@ -82,7 +82,7 @@ use view::put_view;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{CdCause, c_char, c_int, c_uint};
+    use super::{CdCause, c_char, c_int};
 
     /// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
     pub const kCdCauseOther: CdCause = -1;
@@ -90,18 +90,13 @@ mod flag {
     pub const VSE_NONE: c_int = 0;
     /// `do_source`: this is not a vimrc.
     pub const DOSO_NONE: c_int = 0;
-    /// `makeset` scopes.
-    pub const OPT_GLOBAL: c_uint = 1;
-    pub const OPT_LOCAL: c_uint = 2;
-    /// `makeset`: skip 'runtimepath' and 'packpath'.
-    pub const OPT_SKIPRTP: c_uint = 128;
 
     /// Frame layouts.
     pub const FR_LEAF: c_char = 0;
     pub const FR_COL: c_char = 2;
 }
 
-use flag::{DOSO_NONE, OPT_GLOBAL, OPT_SKIPRTP, VSE_NONE};
+use flag::{DOSO_NONE, VSE_NONE};
 
 /// The default file name of each command that has one.
 const SESSION_FILE: &CStr = c"Session.vim";

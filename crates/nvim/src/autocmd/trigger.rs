@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::smsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, OK, OPT_NOWIN};
 
 /// A `multiqueue` event's argument vector with nothing in it.
 const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];

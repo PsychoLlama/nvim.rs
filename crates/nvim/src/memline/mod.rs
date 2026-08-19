@@ -197,7 +197,6 @@ pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
 /// `flags` for `ml_delete_int`: say "--No lines in buffer--" if the buffer
 /// ends up empty.
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
-pub const OPT_LOCAL: C2Rust_Unnamed_24 = 2;
 pub const kEqualFiles: file_comparison = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;

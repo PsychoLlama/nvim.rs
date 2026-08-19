@@ -16,7 +16,7 @@
 use super::*;
 use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
-use crate::types::{FAIL, kFalse};
+use crate::types::{FAIL, OPT_LOCAL, kFalse};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,

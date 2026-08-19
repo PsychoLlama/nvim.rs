@@ -46,23 +46,23 @@ use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, snprintf};
 use crate::runtime::exestack;
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptVal, OptValData, String_0, VV_OPTION_COMMAND, VV_OPTION_NEW,
-    VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, estack_T, kFalse,
-    kNone, optset_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, vimoption_T,
+    IOSIZE, NUL, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, OptIndex, OptVal, OptValData, String_0,
+    VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL,
+    VV_OPTION_TYPE, estack_T, kFalse, kNone, optset_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t,
+    vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 use ::libc::strlen;
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, SID_NONE, check_redraw,
-    do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp, get_varp_scope,
-    insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure,
-    kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, option_has_scope,
-    option_has_type, option_is_global_local, option_is_global_only, option_scope_idx, option_var,
-    optval_copy, optval_equal, optval_free, optval_from_varp, set_option_varp,
-    validate_option_value,
+    NO_LOCAL_UNDOLEVEL, NUMBUFLEN, SID_NONE, check_redraw, do_spelllang_source, do_syntax_autocmd,
+    find_tty_option_end, get_varp, get_varp_scope, insecure_flag, is_option_hidden,
+    kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure,
+    kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean,
+    kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, option_has_scope, option_has_type,
+    option_is_global_local, option_is_global_only, option_scope_idx, option_var, optval_copy,
+    optval_equal, optval_free, optval_from_varp, set_option_varp, validate_option_value,
 };
 use crate::pos::MAXCOL;
 
@@ -80,10 +80,10 @@ pub fn get_option_sctx(opt_idx: OptIndex) -> *mut sctx_T {
 
 /// Record where the option was just set, in every scope the flags name.
 pub fn set_option_sctx(opt_idx: OptIndex, opt_flags: c_int, mut script_ctx: sctx_T) {
-    let both = opt_flags & (OPT_LOCAL | OPT_GLOBAL) == 0;
+    let both = opt_flags & (OPT_LOCAL | OPT_GLOBAL) as c_int == 0;
 
     // A modeline already carries the line it was found on.
-    if opt_flags & OPT_MODELINE == 0 {
+    if opt_flags & OPT_MODELINE as c_int == 0 {
         // SAFETY: the execution stack always has the frame being sourced on
         // top while anything can set an option.
         script_ctx.sc_lnum += unsafe {
@@ -98,11 +98,11 @@ pub fn set_option_sctx(opt_idx: OptIndex, opt_flags: c_int, mut script_ctx: sctx
     // SAFETY: `nlua_set_sctx` only reads and rewrites the context in place.
     unsafe { nlua_set_sctx(&raw mut script_ctx) };
 
-    if both || opt_flags & OPT_GLOBAL != 0 || option_is_global_only(opt_idx) {
+    if both || opt_flags & OPT_GLOBAL as c_int != 0 || option_is_global_only(opt_idx) {
         // SAFETY: the option table is a plain array.
         unsafe { (*options.ptr())[opt_idx as usize].script_ctx = script_ctx };
     }
-    if !both && opt_flags & OPT_LOCAL == 0 {
+    if !both && opt_flags & OPT_LOCAL as c_int == 0 {
         return;
     }
     // SAFETY: `curbuf`/`curwin` are live for as long as the editor is, and
@@ -148,7 +148,7 @@ fn apply_optionset_autocmd(
         set_vim_var_tv(VV_OPTION_OLD, &raw mut oldval_tv);
         set_vim_var_tv(VV_OPTION_NEW, &raw mut newval_tv);
 
-        let type_str: &CStr = if opt_flags & OPT_LOCAL != 0 {
+        let type_str: &CStr = if opt_flags & OPT_LOCAL as c_int != 0 {
             c"local"
         } else {
             c"global"
@@ -169,20 +169,20 @@ fn apply_optionset_autocmd(
                 name.count_bytes() as ptrdiff_t,
             );
         };
-        if opt_flags & OPT_LOCAL != 0 {
+        if opt_flags & OPT_LOCAL as c_int != 0 {
             command(c"setlocal");
             set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_tv);
         }
-        if opt_flags & OPT_GLOBAL != 0 {
+        if opt_flags & OPT_GLOBAL as c_int != 0 {
             command(c"setglobal");
             set_vim_var_tv(VV_OPTION_OLDGLOBAL, &raw mut oldval_tv);
         }
-        if opt_flags & (OPT_LOCAL | OPT_GLOBAL) == 0 {
+        if opt_flags & (OPT_LOCAL | OPT_GLOBAL) as c_int == 0 {
             command(c"set");
             set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_l_tv);
             set_vim_var_tv(VV_OPTION_OLDGLOBAL, &raw mut oldval_g_tv);
         }
-        if opt_flags & OPT_MODELINE != 0 {
+        if opt_flags & OPT_MODELINE as c_int != 0 {
             command(c"modeline");
             set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_tv);
         }
@@ -362,7 +362,10 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     if !option_is_global_local(opt_idx) {
         // SAFETY: `get_varp_scope` wants a row of the option table.
         return unsafe {
-            optval_from_varp(opt_idx, get_varp_scope(get_option(opt_idx), OPT_GLOBAL))
+            optval_from_varp(
+                opt_idx,
+                get_varp_scope(get_option(opt_idx), OPT_GLOBAL as c_int),
+            )
         };
     }
     // A string global-local option is unset when it is empty.
@@ -401,7 +404,7 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
     }
     // SAFETY: `get_varp_scope` wants a row of the option table.
     let local = unsafe {
-        let varp_local = get_varp_scope(get_option(opt_idx), OPT_LOCAL);
+        let varp_local = get_varp_scope(get_option(opt_idx), OPT_LOCAL as c_int);
         optval_from_varp(opt_idx, varp_local)
     };
     optval_equal(local, get_option_unset_value(opt_idx))
@@ -509,16 +512,16 @@ pub(crate) unsafe fn did_set_option(
 
         optval_free(old_value);
 
-        let scope_both = opt_flags & (OPT_LOCAL | OPT_GLOBAL) == 0;
+        let scope_both = opt_flags & (OPT_LOCAL | OPT_GLOBAL) as c_int == 0;
         if scope_both {
             if option_is_global_local(opt_idx) {
                 // A bare `:set` on a global-local option drops the local
                 // value rather than assigning it too.
-                let varp_local = get_varp_scope(opt, OPT_LOCAL);
+                let varp_local = get_varp_scope(opt, OPT_LOCAL as c_int);
                 let unset = optval_copy(get_option_unset_value(opt_idx));
                 set_option_varp(opt_idx, varp_local, unset, true);
             } else {
-                let varp_global = get_varp_scope(opt, OPT_GLOBAL);
+                let varp_global = get_varp_scope(opt, OPT_GLOBAL as c_int);
                 set_option_varp(opt_idx, varp_global, optval_copy(new_value), true);
             }
         }
@@ -533,7 +536,7 @@ pub(crate) unsafe fn did_set_option(
         } else if varp == (&raw mut (*curbuf.get()).b_p_ft).cast::<c_void>() {
             // A modeline only forces the FileType autocommand when the
             // filetype really changed.
-            if opt_flags & OPT_MODELINE == 0 || value_changed {
+            if opt_flags & OPT_MODELINE as c_int == 0 || value_changed {
                 do_filetype_autocmd(curbuf.get(), value_changed);
             }
         } else if varp == (&raw mut (*(*curwin.get()).w_s).b_p_spl).cast::<c_void>() {
@@ -572,9 +575,10 @@ pub(crate) unsafe fn did_set_option(
         // is insecure unless the callback vetted it; replacing a value
         // outright clears the mark again.
         let flagsp = insecure_flag(curwin.get(), opt_idx, opt_flags);
-        let flagsp_local = scope_both.then(|| insecure_flag(curwin.get(), opt_idx, OPT_LOCAL));
+        let flagsp_local =
+            scope_both.then(|| insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as c_int));
         if !value_checked
-            && (secure.get() != 0 || sandbox.get() != 0 || opt_flags & OPT_MODELINE != 0)
+            && (secure.get() != 0 || sandbox.get() != 0 || opt_flags & OPT_MODELINE as c_int != 0)
         {
             *flagsp |= kOptFlagInsecure as uint32_t;
             if let Some(local) = flagsp_local {
@@ -625,8 +629,8 @@ pub(crate) unsafe fn set_option(
     }
 
     let opt = get_option(opt_idx);
-    let scope_local = opt_flags & OPT_LOCAL != 0;
-    let scope_global = opt_flags & OPT_GLOBAL != 0;
+    let scope_local = opt_flags & OPT_LOCAL as c_int != 0;
+    let scope_global = opt_flags & OPT_GLOBAL as c_int != 0;
     let scope_both = !scope_local && !scope_global;
     // True only for a global-local option, by construction.
     let is_opt_local_unset = is_option_local_value_unset(opt_idx);
@@ -641,8 +645,8 @@ pub(crate) unsafe fn set_option(
         } else {
             get_varp_scope(opt, opt_flags)
         };
-        let varp_local = get_varp_scope(opt, OPT_LOCAL);
-        let varp_global = get_varp_scope(opt, OPT_GLOBAL);
+        let varp_local = get_varp_scope(opt, OPT_LOCAL as c_int);
+        let varp_global = get_varp_scope(opt, OPT_GLOBAL as c_int);
 
         let old_value = optval_from_varp(opt_idx, varp);
         let old_global_value = optval_from_varp(opt_idx, varp_global);
@@ -672,7 +676,7 @@ pub(crate) unsafe fn set_option(
         let secure_saved = secure.get();
         // Deal with the side effects of a modeline, of the sandbox, or of a
         // value amended rather than replaced, in secure mode.
-        if opt_flags & OPT_MODELINE != 0
+        if opt_flags & OPT_MODELINE as c_int != 0
             || sandbox.get() != 0
             || (!value_replaced && insecure & kOptFlagInsecure as uint32_t != 0)
         {
@@ -776,7 +780,7 @@ pub fn set_option_value(opt_idx: OptIndex, value: OptVal, opt_flags: c_int) -> *
 /// global one again.
 pub(crate) fn unset_option_local_value(opt_idx: OptIndex) -> *const c_char {
     debug_assert!(option_is_global_local(opt_idx));
-    set_option_value(opt_idx, get_option_unset_value(opt_idx), OPT_LOCAL)
+    set_option_value(opt_idx, get_option_unset_value(opt_idx), OPT_LOCAL as c_int)
 }
 
 /// [`set_option_value`] for a name that may be one of the terminal options,

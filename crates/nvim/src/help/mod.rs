@@ -51,9 +51,9 @@ use crate::pos::MAXCOL;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt,
-    OptVal, OptValData, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString, linenr_T,
-    size_t, win_T,
+    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, OPT_LOCAL, Object,
+    OptInt, OptVal, OptValData, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString,
+    linenr_T, size_t, win_T,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::{semsg_c, smsg_c};
@@ -88,8 +88,6 @@ mod flag {
     /// `ExpandOne` context and flags.
     pub const EXPAND_DIRECTORIES: c_int = 3;
 
-    /// `set_option_direct` scope.
-    pub const OPT_LOCAL: c_uint = 2;
     /// `path_full_compare`'s "same file" answer.
     pub const kEqualFiles: file_comparison = 1;
     /// `nlua_exec` return modes.
@@ -100,8 +98,8 @@ mod flag {
 }
 
 use flag::{
-    DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, OPT_LOCAL, TAG_HELP, TAG_KEEP_LANG, TAG_MANY,
-    TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kOptValTypeString, kRetNilBool, kRetObject,
+    DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES,
+    TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kOptValTypeString, kRetNilBool, kRetObject,
 };
 
 /// An error slot with nothing in it: C's `ERROR_INIT`.

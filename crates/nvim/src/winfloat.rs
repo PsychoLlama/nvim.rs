@@ -43,8 +43,8 @@ use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OptInt, OptScope, OptVal, OptValData,
-    OptValType, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T,
+    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OPT_LOCAL, OptInt, OptScope, OptVal,
+    OptValData, OptValType, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T,
     kErrorTypeException, kErrorTypeNone, kFloatRelativeCursor, kFloatRelativeEditor,
     kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T,
     schar_T, tabpage_T, win_T,
@@ -67,7 +67,6 @@ const kWinStyleUnused: WinStyle = 0;
 const kWinStyleMinimal: WinStyle = 1;
 const kOptValTypeString: OptValType = 2;
 const kOptScopeBuf: OptScope = 2;
-const OPT_LOCAL: c_int = 2;
 const STATUS_HEIGHT: c_int = 1;
 
 /// An unset title/footer, and an error slot holding no error.
@@ -383,7 +382,7 @@ fn set_bufhidden_wipe(buf: Buf) {
     };
     let (opt, from) = (kOptBufhidden, buf.raw().cast::<c_void>());
     // SAFETY: `buf` is the live buffer `kOptScopeBuf` names.
-    unsafe { set_option_direct_for(opt, wipe, OPT_LOCAL, 0, kOptScopeBuf, from) };
+    unsafe { set_option_direct_for(opt, wipe, OPT_LOCAL as c_int, 0, kOptScopeBuf, from) };
 }
 
 // ---------------------------------------------------------------------------

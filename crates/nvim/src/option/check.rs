@@ -40,15 +40,15 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, buf_T, int32_t, optset_T, size_t, uint8_t,
-    uint32_t, vimoption_T, win_T,
+    DecorProvider, HlAttrs, NS, NUL, OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, buf_T, int32_t,
+    optset_T, size_t, uint8_t, uint32_t, vimoption_T, win_T,
 };
 
 use super::{
-    HLATTRS_INIT, NO_SCREEN, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, didset_options_sctx,
-    didset_window_options, get_option, get_varp, kFillchars, kListchars, kOptFlagHLOnly,
-    kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
-    kOptFlagRedrWin, kOptValTypeString, option_has_type,
+    HLATTRS_INIT, NO_SCREEN, NULL_STRING, didset_options_sctx, didset_window_options, get_option,
+    get_varp, kFillchars, kListchars, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll,
+    kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin, kOptValTypeString,
+    option_has_type,
 };
 
 /// What 'binary' overrode, so that switching it off again restores the
@@ -75,8 +75,8 @@ pub fn did_set_title() {
 /// overrides. Their pre-'binary' values are stashed so that turning it off
 /// again restores them rather than the defaults.
 pub fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int) {
-    let local = opt_flags & OPT_GLOBAL == 0;
-    let global = opt_flags & OPT_LOCAL == 0;
+    let local = opt_flags & OPT_GLOBAL as c_int == 0;
+    let global = opt_flags & OPT_LOCAL as c_int == 0;
     // SAFETY: `curbuf` is live.
     unsafe {
         let buf = curbuf.get();
@@ -218,7 +218,7 @@ pub unsafe fn was_set_insecurely(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c
 pub unsafe fn insecure_flag(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c_int) -> *mut uint32_t {
     // SAFETY: the caller's window is live where the arms below need it.
     unsafe {
-        if opt_flags & OPT_LOCAL != 0 {
+        if opt_flags & OPT_LOCAL as c_int != 0 {
             debug_assert!(!wp.is_null());
             match opt_idx {
                 kOptWrap => return &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,

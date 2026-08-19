@@ -14,15 +14,15 @@ use crate::api::private::validate::api_err_invalid;
 use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
-    Arena, Dict, Error, Integer, KeyValuePair, Object, OptIndex, String_0, buf_T, int64_t,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair,
-    object, object_data, scid_T, sctx_T, size_t, vimoption_T, win_T,
+    Arena, Dict, Error, Integer, KeyValuePair, OPT_GLOBAL, OPT_LOCAL, Object, OptIndex, String_0,
+    buf_T, int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    key_value_pair, object, object_data, scid_T, sctx_T, size_t, vimoption_T, win_T,
 };
 
 use super::{
-    OPT_GLOBAL, OPT_LOCAL, find_option_len, get_opt_idx, kOptFlagComma, kOptFlagFlagList,
-    kOptFlagNoDup, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, option_get_type, option_has_scope,
-    option_is_global_local, optval_as_object, optval_type_name,
+    find_option_len, get_opt_idx, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptFlagWasSet,
+    kOptScopeBuf, kOptScopeWin, option_get_type, option_has_scope, option_is_global_local,
+    optval_as_object, optval_type_name,
 };
 
 /// Append `key: value` to an arena-backed dictionary.
@@ -113,7 +113,8 @@ pub unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
         let mut retval = arena_dict(arena, kOptCount as size_t);
         for opt_idx in kOptAleph..kOptCount {
             let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-            let opt_dict = vimoption2dict(opt, OPT_GLOBAL, curbuf.get(), curwin.get(), arena);
+            let opt_dict =
+                vimoption2dict(opt, OPT_GLOBAL as c_int, curbuf.get(), curwin.get(), arena);
             *retval.items.add(retval.size) = key_value_pair {
                 key: cstr_as_string((*opt).fullname),
                 value: object {
@@ -145,7 +146,7 @@ unsafe fn last_set(
 ) -> sctx_T {
     // SAFETY: the caller's pointers are live for the scopes reached below.
     unsafe {
-        if opt_flags == OPT_GLOBAL {
+        if opt_flags == OPT_GLOBAL as c_int {
             return (*opt).script_ctx;
         }
         let mut script_ctx = sctx_T {
@@ -161,7 +162,7 @@ unsafe fn last_set(
             script_ctx =
                 (*win).w_onebuf_opt.wo_script_ctx[(*opt).scope_idx[kOptScopeWin as usize] as usize];
         }
-        if opt_flags != OPT_LOCAL && script_ctx.sc_sid == 0 {
+        if opt_flags != OPT_LOCAL as c_int && script_ctx.sc_sid == 0 {
             script_ctx = (*opt).script_ctx;
         }
         script_ctx

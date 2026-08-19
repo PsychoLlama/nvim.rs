@@ -53,7 +53,6 @@ pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const kOptValTypeString: OptValType = 2;
 pub const ETYPE_SPELL: etype_T = 9;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const OPT_LOCAL: C2Rust_Unnamed_18 = 2;
 pub const kXDGDataHome: XDGVarType = 1;
 pub const kEqualFiles: file_comparison = 1;
 pub use crate::spell::MAXWLEN;

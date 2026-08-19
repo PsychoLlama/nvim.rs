@@ -18,10 +18,11 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    Arena, Dict, Error, FAIL, KeyDict_option, KeyValuePair, OK, Object, OptIndex, OptScope, OptVal,
-    OptValData, OptValType, String_0, TryState, aco_save_T, bln_values, buf_T, bufref_T, except_T,
-    int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeNil, linenr_T,
-    msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
+    Arena, Dict, Error, FAIL, KeyDict_option, KeyValuePair, OK, OPT_GLOBAL, OPT_LOCAL, Object,
+    OptIndex, OptScope, OptVal, OptValData, OptValType, String_0, TryState, aco_save_T, bln_values,
+    buf_T, bufref_T, except_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeNil, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t,
+    uint64_t, win_T,
 };
 use crate::window::close_windows;
 use ::libc::strcmp;
@@ -32,8 +33,6 @@ pub const kOptScopeBuf: OptScope = 2;
 pub const kOptScopeWin: OptScope = 1;
 pub const kOptScopeGlobal: OptScope = 0;
 pub const BLN_DUMMY: bln_values = 4;
-pub const OPT_LOCAL: C2Rust_Unnamed_13 = 2;
-pub const OPT_GLOBAL: C2Rust_Unnamed_13 = 1;
 pub const BLN_LISTED: bln_values = 2;
 pub const BLN_CURBUF: bln_values = 1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;

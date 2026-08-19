@@ -22,13 +22,13 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{FAIL, NUL, linenr_T, optset_T};
+use crate::types::{FAIL, NUL, OPT_GLOBAL, OPT_LOCAL, linenr_T, optset_T};
 use crate::winfloat::win_config_float;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
-    OPT_GLOBAL, OPT_LOCAL, SHM_ALL, STL_IN_ICON, STL_IN_TITLE, check_stl_option,
-    did_set_option_listflag, did_set_str_generic, illegal_char, opt_strings_flags,
+    SHM_ALL, STL_IN_ICON, STL_IN_TITLE, check_stl_option, did_set_option_listflag,
+    did_set_str_generic, illegal_char, opt_strings_flags,
 };
 
 /// # Safety

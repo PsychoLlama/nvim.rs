@@ -36,8 +36,8 @@ use crate::shada::{
     shada_read_string,
 };
 use crate::types::{
-    Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptValData, OptValType, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED, hashitem_T,
+    Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, OPT_GLOBAL, Object,
+    OptVal, OptValData, OptValType, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED, hashitem_T,
     kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, key_value_pair,
     object, object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union, uint8_t,
 };
@@ -58,13 +58,6 @@ pub const kCtxJumps: C2Rust_Unnamed_1 = 2;
 pub const kCtxRegs: C2Rust_Unnamed_1 = 1;
 
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
-pub const OPT_GLOBAL: C2Rust_Unnamed_2 = 1;
-pub const OPT_SKIPRTP: C2Rust_Unnamed_2 = 128;
-pub const OPT_ONECOLUMN: C2Rust_Unnamed_2 = 32;
-pub const OPT_NOWIN: C2Rust_Unnamed_2 = 16;
-pub const OPT_WINONLY: C2Rust_Unnamed_2 = 8;
-pub const OPT_MODELINE: C2Rust_Unnamed_2 = 4;
-pub const OPT_LOCAL: C2Rust_Unnamed_2 = 2;
 
 pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
 pub const kShaDaForceit: C2Rust_Unnamed_3 = 4;

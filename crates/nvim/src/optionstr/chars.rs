@@ -42,14 +42,14 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, NUL, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T, schar_T, size_t,
-    tabpage_T, win_T,
+    CharsOption, NUL, OPT_GLOBAL, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T, schar_T,
+    size_t, tabpage_T, win_T,
 };
 
 use super::{
-    OPT_GLOBAL, clear_string_option, e_conflicts_with_value_of_fillchars,
-    e_conflicts_with_value_of_listchars, e_wrong_character_width_for_field_str,
-    e_wrong_number_of_characters_for_field_str, fcs_chars, kFillchars, kListchars, lcs_chars,
+    clear_string_option, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
+    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, fcs_chars,
+    kFillchars, kListchars, lcs_chars,
 };
 
 /// What a field does with the characters it is given, beyond the one

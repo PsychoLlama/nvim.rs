@@ -423,7 +423,6 @@ pub(crate) enum KeyOutcome {
     /// Leave the command line for Normal mode.
     GotoNormalMode,
 }
-pub const OPT_LOCAL: C2Rust_Unnamed_53 = 2;
 pub type C2Rust_Unnamed_53 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;

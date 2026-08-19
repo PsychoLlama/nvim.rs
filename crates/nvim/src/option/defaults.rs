@@ -48,20 +48,19 @@ use crate::runtime::runtimepath_default;
 use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptValData, PATHSEPSTR, String_0, garray_T, kFalse, kTrue,
-    size_t, tabpage_T, uint32_t, vimoption_T,
+    NUL, OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, OptVal, OptValData, PATHSEPSTR, String_0,
+    garray_T, kFalse, kTrue, size_t, tabpage_T, uint32_t, vimoption_T,
 };
 use crate::window::{last_status, win_comp_scroll};
 use ::libc::{getuid, strlen};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, OPT_GLOBAL, OPT_LOCAL, PROJECT_NAME, ROOT_UID, SID_NONE, check_options,
-    check_win_options, default_fileformat, didset_options, didset_options2, get_option_unset_value,
-    insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagInsecure, kOptFlagNoDefExp,
-    kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
-    option_expand, option_has_type, option_is_global_local, option_var, option_was_set,
-    optval_copy, optval_free, set_fileformat, set_option_direct, set_option_value_give_err,
-    set_option_varp,
+    NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, check_options, check_win_options,
+    default_fileformat, didset_options, didset_options2, get_option_unset_value, insecure_flag,
+    kOptFlagComma, kOptFlagGettext, kOptFlagInsecure, kOptFlagNoDefExp, kOptFlagNoDefault,
+    kOptFlagWasSet, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_expand,
+    option_has_type, option_is_global_local, option_var, option_was_set, optval_copy, optval_free,
+    set_fileformat, set_option_direct, set_option_value_give_err, set_option_varp,
 };
 
 /// Every option, in table order.
@@ -392,7 +391,7 @@ pub fn get_option_default(opt_idx: OptIndex, opt_flags: c_int) -> OptVal {
     if opt_idx == kOptModeline && unsafe { getuid() } == ROOT_UID as _ {
         return boolean(false);
     }
-    if opt_flags & OPT_LOCAL != 0 && option_is_global_local(opt_idx) {
+    if opt_flags & OPT_LOCAL as c_int != 0 && option_is_global_local(opt_idx) {
         return get_option_unset_value(opt_idx);
     }
     // SAFETY: the option table is a plain array, and the string arm is only
@@ -438,7 +437,7 @@ pub(crate) fn change_option_default(opt_idx: OptIndex, value: OptVal) {
 /// Put an option back to its default, and clear the insecure mark with it —
 /// a default cannot have come from a modeline.
 fn set_option_default(opt_idx: OptIndex, opt_flags: c_int) {
-    let both = opt_flags & (OPT_LOCAL | OPT_GLOBAL) == 0;
+    let both = opt_flags & (OPT_LOCAL | OPT_GLOBAL) as c_int == 0;
     let def_val = get_option_default(opt_idx, opt_flags);
     // SAFETY: `current_sctx`, `curwin` and the option table are the
     // editor's own.
@@ -451,7 +450,8 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: c_int) {
         }
         *insecure_flag(curwin.get(), opt_idx, opt_flags) &= !(kOptFlagInsecure as uint32_t);
         if both {
-            *insecure_flag(curwin.get(), opt_idx, OPT_LOCAL) &= !(kOptFlagInsecure as uint32_t);
+            *insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as c_int) &=
+                !(kOptFlagInsecure as uint32_t);
         }
     }
 }
@@ -566,7 +566,7 @@ pub fn set_init_2(_headless: bool) {
         // 'scroll' is half the window height, so it could not be defaulted
         // before there was a window.
         if !was_set(kOptScroll) {
-            set_option_default(kOptScroll, OPT_LOCAL);
+            set_option_default(kOptScroll, OPT_LOCAL as c_int);
         }
         comp_col();
     }
@@ -635,7 +635,7 @@ pub fn set_init_3() {
         // from, so it takes the first of 'fileformats' — but only if the
         // user gave that option a value; otherwise its own default stands.
         if buf_is_empty(curbuf.get()) && was_set(kOptFileformats) {
-            set_fileformat(default_fileformat(), OPT_LOCAL);
+            set_fileformat(default_fileformat(), OPT_LOCAL as c_int);
         }
     }
     set_title_defaults();

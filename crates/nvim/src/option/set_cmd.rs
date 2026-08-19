@@ -35,21 +35,21 @@ use crate::options::{kOptAleph, kOptFoldmethod, kOptInvalid, kOptWrap, options};
 use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OptIndex, OptInt, OptVal,
-    OptValData, TriState, exarg_T, kFalse, kNone, kTrue, scid_T, size_t, uint8_t, uint32_t,
-    uvarnumber_T, vimoption_T, win_T,
+    CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OPT_GLOBAL, OPT_LOCAL,
+    OPT_MODELINE, OPT_NOWIN, OPT_ONECOLUMN, OPT_WINONLY, OptIndex, OptInt, OptVal, OptValData,
+    TriState, exarg_T, kFalse, kNone, kTrue, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T,
+    vimoption_T, win_T,
 };
 use ::libc::strlen;
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
-    OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, OPT_NOWIN, OPT_ONECOLUMN, OPT_WINONLY, STR2NR_ALL,
-    didset_options, didset_options2, get_option, get_option_default, get_option_value, get_varp,
-    get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, option_has_scope,
-    option_has_type, option_is_global_local, option_is_window_local, option_scope_idx, option_var,
-    optval_copy, optval_from_varp, set_option, set_options_default, showoneopt, showoptions,
-    stropt_get_newval, unset_option_local_value,
+    STR2NR_ALL, didset_options, didset_options2, get_option, get_option_default, get_option_value,
+    get_varp, get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf,
+    kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString,
+    option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
+    option_scope_idx, option_var, optval_copy, optval_from_varp, set_option, set_options_default,
+    showoneopt, showoptions, stropt_get_newval, unset_option_local_value,
 };
 
 /// The messages the parse reports. They go back to [`do_set`] rather than
@@ -85,7 +85,7 @@ pub unsafe fn ex_set(eap: *mut exarg_T) {
         if (*eap).forceit != 0 {
             flags |= OPT_ONECOLUMN;
         }
-        do_set((*eap).arg, flags);
+        do_set((*eap).arg, flags as c_int);
     }
 }
 
@@ -149,13 +149,13 @@ unsafe fn validate_opt_idx(
         return FAIL;
     }
     // A `:set` sweeping over windows or buffers only wants its own kind.
-    if opt_flags & OPT_WINONLY != 0 && !option_is_window_local(opt_idx) {
+    if opt_flags & OPT_WINONLY as c_int != 0 && !option_is_window_local(opt_idx) {
         return FAIL;
     }
-    if opt_flags & OPT_NOWIN != 0 && option_is_window_local(opt_idx) {
+    if opt_flags & OPT_NOWIN as c_int != 0 && option_is_window_local(opt_idx) {
         return FAIL;
     }
-    if opt_flags & OPT_MODELINE != 0 {
+    if opt_flags & OPT_MODELINE as c_int != 0 {
         if flags & kOptFlagSecure as uint32_t != 0 {
             *errmsg = E_NOT_ALLOWED_IN_MODELINE.as_ptr();
             return FAIL;
@@ -285,7 +285,8 @@ unsafe fn get_option_newval(
         let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
         // Setting the local value of a global-local option amends whatever
         // it is currently reading through, which may be the global value.
-        let oldval_is_global = option_is_global_local(opt_idx) && opt_flags & OPT_LOCAL != 0;
+        let oldval_is_global =
+            option_is_global_local(opt_idx) && opt_flags & OPT_LOCAL as c_int != 0;
         let oldval = optval_from_varp(
             opt_idx,
             if oldval_is_global {
@@ -299,15 +300,15 @@ unsafe fn get_option_newval(
         // that a `:setlocal opt&` on a global-local option gets the real
         // default rather than the unset marker.
         if nextchar == '&' as c_int {
-            return optval_copy(get_option_default(opt_idx, OPT_GLOBAL));
+            return optval_copy(get_option_default(opt_idx, OPT_GLOBAL as c_int));
         }
         // `:set opt<` resets to the global value; `:setlocal opt<` copies it
         // into the local one.
         if nextchar == '<' as c_int {
-            if option_is_global_local(opt_idx) && opt_flags & OPT_LOCAL == 0 {
+            if option_is_global_local(opt_idx) && opt_flags & OPT_LOCAL as c_int == 0 {
                 unset_option_local_value(opt_idx);
             }
-            return get_option_value(opt_idx, OPT_GLOBAL);
+            return get_option_value(opt_idx, OPT_GLOBAL as c_int);
         }
 
         match oldval.type_0 {
@@ -624,7 +625,7 @@ pub unsafe fn do_set(arg: *mut c_char, opt_flags: c_int) -> c_int {
             // in a modeline.
             let is_all = strncmp(arg, c"all".as_ptr(), 3) == 0
                 && !(*arg.add(3) as u8).is_ascii_alphabetic()
-                && opt_flags & OPT_MODELINE == 0;
+                && opt_flags & OPT_MODELINE as c_int == 0;
             if is_all {
                 arg = arg.add(3);
                 if *arg as c_int == '&' as c_int {

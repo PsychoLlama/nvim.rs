@@ -27,14 +27,11 @@ use crate::os::cshim::gettext;
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
 use crate::options::*;
 use crate::types::{
-    OptIndex, OptInt, OptScope, OptVal, OptValType, OptVar, buf_T, ssize_t, vimoption_T, win_T,
-    winopt_T,
+    OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, OptScope, OptVal, OptValType, OptVar, buf_T, ssize_t,
+    vimoption_T, win_T, winopt_T,
 };
 
-use super::{
-    NO_LOCAL_UNDOLEVEL, OPT_GLOBAL, OPT_LOCAL, get_option, kOptScopeBuf, kOptScopeGlobal,
-    kOptScopeWin,
-};
+use super::{NO_LOCAL_UNDOLEVEL, get_option, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin};
 
 /// `w_allbuf_opt` follows `w_onebuf_opt` in `win_T`, so the window's global
 /// copy of a window-local option is the same field exactly one `winopt_T`
@@ -179,7 +176,7 @@ pub unsafe fn get_varp_scope_from(
     // SAFETY: the caller's pointers are live, and `p` is a table row.
     unsafe {
         let opt_idx = get_opt_idx(p);
-        if opt_flags & OPT_GLOBAL != 0 && !option_is_global_only(opt_idx) {
+        if opt_flags & OPT_GLOBAL as c_int != 0 && !option_is_global_only(opt_idx) {
             // A window-local option's global copy is its own field in the
             // window's second `winopt_T`, not the table's `var`.
             if option_is_window_local(opt_idx) {
@@ -190,7 +187,7 @@ pub unsafe fn get_varp_scope_from(
             }
             return option_var(p);
         }
-        if opt_flags & OPT_LOCAL != 0 && option_is_global_local(opt_idx) {
+        if opt_flags & OPT_LOCAL as c_int != 0 && option_is_global_local(opt_idx) {
             // The local variable itself, sentinel and all.
             return match opt_idx {
                 kOptFormatprg => (&raw mut (*buf).b_p_fp).cast(),

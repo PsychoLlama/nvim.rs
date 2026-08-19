@@ -83,7 +83,6 @@ pub use soundfold::{eval_soundfold, spell_soundfold};
 
 pub const kOptValTypeBoolean: crate::types::OptValType = 0;
 pub const SHM_SEARCH: c_uint = 115;
-pub const OPT_LOCAL: c_uint = 2;
 pub const kEqualFiles: file_comparison = 1;
 
 /// The longest word, in bytes, that any of this can handle. Every word

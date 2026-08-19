@@ -44,18 +44,18 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, FAIL, NUL, OK, OptInt, OptVal, OptValData, String_0, buf_T, colnr_T, fmark_T,
-    fmarkv_T, linenr_T, optset_T, pos_T, win_T,
+    AdditionalData, FAIL, NUL, OK, OPT_GLOBAL, OPT_LOCAL, OptInt, OptVal, OptValData, String_0,
+    buf_T, colnr_T, fmark_T, fmarkv_T, linenr_T, optset_T, pos_T, win_T,
 };
 use crate::window::global_stl_height;
 use ::libc::strcmp;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
-    B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FO_ALL, OPT_GLOBAL,
-    OPT_LOCAL, SID_NONE, did_set_opt_flags, did_set_optexpr, did_set_option_listflag,
-    did_set_str_generic, e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char,
-    kOptValTypeString, opt_strings_flags, valid_filetype,
+    B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FO_ALL, SID_NONE,
+    did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic,
+    e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char, kOptValTypeString,
+    opt_strings_flags, valid_filetype,
 };
 use crate::pos::MAXLNUM;
 

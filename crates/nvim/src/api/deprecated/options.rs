@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::{OPT_GLOBAL, OPT_LOCAL};
 
 pub unsafe extern "C" fn nvim_get_option_info(
     mut name: String_0,

@@ -147,21 +147,6 @@ pub const FSK_KEYCODE: c_uint = 1;
 pub const BCO_NOHELP: c_uint = 4;
 pub const BCO_ALWAYS: c_uint = 2;
 pub const BCO_ENTER: c_uint = 1;
-/// The scope and behaviour bits every `opt_flags` argument carries.
-///
-/// `OPT_LOCAL` and `OPT_GLOBAL` name a scope; neither means "both", which
-/// is what a bare `:set` does. `OPT_MODELINE` says the value came from a
-/// modeline and so must be treated as insecure; `OPT_WINONLY`/`OPT_NOWIN`
-/// restrict a sweep to one kind of option; `OPT_ONECOLUMN` is `:set!`'s
-/// one-per-line listing; `OPT_SKIPRTP` is `:mksession` leaving the runtime
-/// paths alone.
-pub const OPT_SKIPRTP: c_int = 128;
-pub const OPT_ONECOLUMN: c_int = 32;
-pub const OPT_NOWIN: c_int = 16;
-pub const OPT_WINONLY: c_int = 8;
-pub const OPT_MODELINE: c_int = 4;
-pub const OPT_LOCAL: c_int = 2;
-pub const OPT_GLOBAL: c_int = 1;
 pub const STATUS_HEIGHT: c_uint = 1;
 pub const MIN_COLUMNS: c_uint = 12;
 pub const kListchars: CharsOption = 1;

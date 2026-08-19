@@ -43,7 +43,8 @@ use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CMOD_LOCKMARKS, FAIL, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
-    VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t, varnumber_T,
+    OPT_LOCAL, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t,
+    varnumber_T,
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};

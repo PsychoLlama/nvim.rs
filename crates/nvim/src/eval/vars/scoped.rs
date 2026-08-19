@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{NUL, OK};
+use crate::types::{NUL, OK, OPT_LOCAL};
 
 /// The zeroed `switchwin_T` [`switch_win`] fills in.
 const SWITCHWIN_INITIAL_VALUE: switchwin_T = switchwin_T {
@@ -300,7 +300,7 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
         let mut error = false;
         let value = tv_to_optval(varp, opt_idx, varname, &raw mut error);
         if !error {
-            let errmsg = set_option_value_handle_tty(varname, opt_idx, value, OPT_LOCAL);
+            let errmsg = set_option_value_handle_tty(varname, opt_idx, value, OPT_LOCAL as c_int);
             if !errmsg.is_null() {
                 emsg(errmsg);
             }

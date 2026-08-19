@@ -170,7 +170,6 @@ pub const kGRegExprSrc: GRegFlags = 2;
 /// the arguments is what makes `:unlet` and `:lockvar` agree.
 pub type ex_unletlock_callback = unsafe fn(*mut lval_T, *mut c_char, *mut exarg_T, c_int) -> c_int;
 
-pub const OPT_LOCAL: c_int = 2;
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
