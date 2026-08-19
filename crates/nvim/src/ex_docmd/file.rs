@@ -2,6 +2,7 @@
 //! recovering, and the buffer list.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Allow;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -28,9 +29,9 @@ use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::fileio::readfile;
 use crate::getchar::stuffReadbuff;
 use crate::main::{
-    RedrawingDisabled, curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active,
-    global_busy, msg_scroll, need_wait_return, no_wait_return, p_awa, p_shada,
-    pending_exmode_active, readonlymode, recoverymode,
+    curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active, global_busy,
+    msg_scroll, need_wait_return, p_awa, p_shada, pending_exmode_active, readonlymode,
+    recoverymode,
 };
 use crate::mark::setpcmark;
 use crate::memfile::mf_fname;
@@ -336,10 +337,8 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                         stuffReadbuff(ea.nextcmd);
                         ea.nextcmd = ptr::null_mut();
                     }
-                    let save_rd = RedrawingDisabled.get();
-                    RedrawingDisabled.set(0);
-                    let save_nwr = no_wait_return.get();
-                    no_wait_return.set(0);
+                    let _redraw = Allow::redraw();
+                    let _prompt = Allow::wait_return();
                     need_wait_return.set(false);
                     let save_ms = msg_scroll.get();
                     msg_scroll.set(0);
@@ -347,8 +346,6 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                     pending_exmode_active.set(true);
                     normal_enter(false, true);
                     pending_exmode_active.set(false);
-                    RedrawingDisabled.set(save_rd);
-                    no_wait_return.set(save_nwr);
                     msg_scroll.set(save_ms);
                 }
                 return;

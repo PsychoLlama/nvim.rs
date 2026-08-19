@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
+use crate::guard::Suppress;
 use crate::kvec::Kvec;
 use crate::types::NUL;
 
@@ -34,7 +35,7 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
         } else {
             out_line_buf.ptr()
         };
-        (*no_wait_return.ptr()) += 1;
+        let no_prompt = Suppress::wait_return();
         let mut i: uint32_t = 0 as uint32_t;
         while (i as size_t) < message.len() {
             if got_int.get() {
@@ -140,7 +141,7 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
                 .push('\n' as ::core::ffi::c_char);
             }
         }
-        (*no_wait_return.ptr()) -= 1;
+        drop(no_prompt);
         msg_end();
     }
 }

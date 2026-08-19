@@ -17,6 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 use crate::log::logmsg_c;
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::ptr;
@@ -128,7 +129,7 @@ pub unsafe fn msg_source(hl_id: c_int) {
         }
         recursive.set(true);
 
-        no_wait_return.set(no_wait_return.get() + 1);
+        let no_prompt = Suppress::wait_return();
         let p = get_emsg_source();
         if !p.is_null() {
             msg_scroll.set(1);
@@ -154,7 +155,7 @@ pub unsafe fn msg_source(hl_id: c_int) {
                 }
             }
         }
-        no_wait_return.set(no_wait_return.get() - 1);
+        drop(no_prompt);
         recursive.set(false);
     }
 }
@@ -503,7 +504,7 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
         let save_msg_hist_off = msg_hist_off.get();
         msg_hist_off.set(!hist);
 
-        no_wait_return.set(no_wait_return.get() + 1);
+        let no_prompt = Suppress::wait_return();
         set_vim_var_string(Vv::Warningmsg, message, -1);
         xfree(keep_msg.get().cast());
         keep_msg.set(ptr::null_mut());
@@ -519,7 +520,7 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
         msg_nowait.set(true); // don't wait for this message
         msg_col.set(0);
 
-        no_wait_return.set(no_wait_return.get() - 1);
+        drop(no_prompt);
         msg_hist_off.set(save_msg_hist_off);
     }
 }

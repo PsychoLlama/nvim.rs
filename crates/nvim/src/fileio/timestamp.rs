@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::buffer::BufFlags;
+use crate::guard::Suppress;
 use crate::semsg_c;
 use crate::undo::UNDO_HASH_SIZE;
 use core::ffi::{c_char, c_int};
@@ -138,7 +139,7 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
         }
 
         let mut didit = 0;
-        (*no_wait_return.ptr()) += 1;
+        let no_prompt = Suppress::wait_return();
         did_check_timestamps.set(true);
         ALREADY_WARNED.set(false);
 
@@ -160,7 +161,7 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
             buf = (*buf).b_next;
         }
 
-        (*no_wait_return.ptr()) -= 1;
+        drop(no_prompt);
         need_check_timestamps.set(false);
         if need_wait_return.get() && didit == 2 {
             // Make sure the message isn't overwritten.

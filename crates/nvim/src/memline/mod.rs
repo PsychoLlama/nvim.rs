@@ -27,12 +27,12 @@ use crate::fileio::{
 };
 use crate::getchar::flush_buffers;
 use crate::global_cell::GlobalCell;
-use crate::guard::Allow;
+use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
     NameBuff, allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, firstbuf, getout,
     got_int, inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps,
-    need_wait_return, no_lines_msg, no_wait_return, p_dir, p_shm, p_uc, p_verbose, recoverymode,
+    need_wait_return, no_lines_msg, p_dir, p_shm, p_uc, p_verbose, recoverymode,
     swap_exists_action,
 };
 use crate::mark::setpcmark;
@@ -470,7 +470,7 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
 
         if *p_dir.get() != NUL as ::core::ffi::c_char && mf_fname(mfp).is_null() {
             need_wait_return.set(true); // call wait_return() later
-            (*no_wait_return.ptr()) += 1;
+            let _no_prompt = Suppress::wait_return();
             semsg_c!(
                 gettext(c"E303: Unable to open swap file for \"%s\", recovery impossible".as_ptr()),
                 if !buf_spname(buf).is_null() {
@@ -479,7 +479,6 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
                     (*buf).b_fname
                 },
             );
-            (*no_wait_return.ptr()) -= 1;
         }
 
         (*buf).b_may_swap = false; // don't try to open a swap file again

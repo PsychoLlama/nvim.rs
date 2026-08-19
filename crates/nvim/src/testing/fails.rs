@@ -19,10 +19,11 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_docmd::do_cmdline_cmd;
+use crate::guard::{Bump, Suppress};
 use crate::main::{
     Rows, called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_on_display, got_int, in_assert_fails, lines_left, msg_col,
-    need_wait_return, no_wait_return, suppress_errthrow, trylevel,
+    need_wait_return, suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_reset_scroll};
@@ -265,14 +266,14 @@ unsafe fn report_fails_mismatch(
 ///
 /// # Safety
 /// Called once, at the end of `assert_fails()`.
-unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char) {
+unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prompt: Bump) {
     trylevel.set(save_trylevel);
     suppress_errthrow.set(false);
     in_assert_fails.set(false);
     did_emsg.set(0);
     got_int.set(false);
     msg_col.set(0);
-    no_wait_return.set(no_wait_return.get() - 1);
+    drop(no_prompt);
     need_wait_return.set(false);
     emsg_on_display.set(false);
     // SAFETY: the two allocations belong to this call.
@@ -305,7 +306,10 @@ pub unsafe fn f_assert_fails(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         trylevel.set(0);
         suppress_errthrow.set(true);
         in_assert_fails.set(true);
-        no_wait_return.set(no_wait_return.get() + 1);
+        // Threaded into `finish_assert_fails`, which is where the C released
+        // it — before the wrong-argument message below, which *does* want the
+        // hit-enter prompt.
+        let no_prompt = Suppress::wait_return();
 
         let cmd = tv_get_string_chk(arg(argvars, 0));
         do_cmdline_cmd(cmd);
@@ -335,7 +339,7 @@ pub unsafe fn f_assert_fails(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
             }
         }
 
-        finish_assert_fails(save_trylevel, tofree);
+        finish_assert_fails(save_trylevel, tofree, no_prompt);
         if let Some(msg) = wrong_arg_msg {
             emsg(gettext(msg.as_ptr()));
         }

@@ -17,7 +17,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::hl_get_attr_by_id;
 use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn_name2id};
 use crate::lua::executor::nlua_exec;
-use crate::main::{curbuf, current_sctx, curwin, got_int, msg_didout, msg_silent, no_wait_return};
+use crate::main::{curbuf, current_sctx, curwin, got_int, msg_didout, msg_silent};
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::{emsg, msg, msg_end};
 use crate::option::{

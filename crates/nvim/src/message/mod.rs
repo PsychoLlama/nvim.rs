@@ -32,6 +32,7 @@ use crate::grid::{
     grid_free, grid_ins_lines, grid_line_cursor_goto, grid_line_flush,
     grid_line_flush_if_valid_row, grid_line_mirror, grid_line_puts, grid_line_start, schar_get,
 };
+use crate::guard::Suppress;
 use crate::highlight::hl_combine_attr;
 use crate::highlight_group::{
     HLF_0, HLF_8, HLF_AT, HLF_E, HLF_M, HLF_MSG, HLF_N, HLF_R, HLF_T, HLF_W, highlight_changed,
@@ -413,7 +414,7 @@ pub unsafe fn msg_multihl(
             return id;
         }
 
-        no_wait_return.set(no_wait_return.get() + 1);
+        let no_prompt = Suppress::wait_return();
         msg_start();
         msg_clr_eos();
         let mut need_clear = false;
@@ -452,7 +453,7 @@ pub unsafe fn msg_multihl(
 
         msg_ext_skip_flush.set(false);
         is_multihl.set(0);
-        no_wait_return.set(no_wait_return.get() - 1);
+        drop(no_prompt);
         msg_end();
 
         // The reformatted message is ours to free unless the history took it.

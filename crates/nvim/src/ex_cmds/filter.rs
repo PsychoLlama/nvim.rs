@@ -28,12 +28,13 @@ use crate::fileio::{readfile, vim_tempname, write_lnum_adjust};
 use crate::fold::foldUpdate;
 use crate::getchar::{AppendToRedobuff, AppendToRedobuffLit};
 use crate::global_cell::GlobalCell;
+use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
     Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps,
     e_cant_read_file_str, e_noprev, e_notmp, firstbuf, global_busy, got_int, info_message, msg_buf,
-    msg_col, msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, no_wait_return,
-    p_report, p_sh, p_shq, p_srr, p_stmp, p_warn, silent_mode,
+    msg_col, msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, p_report, p_sh,
+    p_shq, p_srr, p_stmp, p_warn, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
@@ -315,6 +316,9 @@ unsafe fn do_filter(
 
     // Temporarily disable lockmarks since that's needed to propagate changed
     // regions of the buffer for foldUpdate(), linecount, etc.
+    // Released at four different exits, one of them past the end of the
+    // block below, so the guard is held in an `Option` rather than by scope.
+    let mut no_prompt = None;
     let save_cmod_flags = cmdmod.with(|mods| mods.cmod_flags);
     cmdmod.with_mut(|mods| mods.cmod_flags.clear(CmdModFlags::LOCKMARKS));
 
@@ -383,7 +387,7 @@ unsafe fn do_filter(
 
         // The writing and reading of temp files will not be shown.
         // Vi also doesn't do this and the messages are not very informative.
-        no_wait_return.set(no_wait_return.get() + 1); // don't wait_return() while busy
+        no_prompt = Some(Suppress::wait_return()); // don't wait_return() while busy
         if itmp.is_some()
             // SAFETY: `eap` is live and the range is the current buffer's.
             && unsafe {
@@ -402,7 +406,7 @@ unsafe fn do_filter(
                 // SAFETY: message state. Keep message from buf_write().
                 unsafe { msg_putchar('\n' as c_int) };
             }
-            no_wait_return.set(no_wait_return.get() - 1);
+            drop(no_prompt.take());
             if !aborting() {
                 // SAFETY: one `%s` for one string. Will call wait_return().
                 unsafe {
@@ -569,7 +573,7 @@ unsafe fn do_filter(
 
             // SAFETY: cursor on first non-blank.
             unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
-            no_wait_return.set(no_wait_return.get() - 1);
+            drop(no_prompt.take());
 
             if linecount as OptInt > p_report.get() {
                 if do_in {
@@ -585,14 +589,17 @@ unsafe fn do_filter(
         // put cursor back in same position for ":w !cmd"
         // SAFETY: `curwin` is live and `cursor_save` came from it.
         unsafe { (*curwin.get()).w_cursor = cursor_save };
-        no_wait_return.set(no_wait_return.get() - 1);
+        drop(no_prompt.take());
         // SAFETY: message state.
         unsafe { wait_return(0) };
     }
 
     cmdmod.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
     if curbuf.get() != old_curbuf {
-        no_wait_return.set(no_wait_return.get() - 1);
+        // The C decrements here even on the ":w !cmd" path that already
+        // did, which would take the counter below where it started; the
+        // guard releases once.
+        drop(no_prompt.take());
         // SAFETY: a literal.
         unsafe {
             emsg(gettext(

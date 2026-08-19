@@ -39,12 +39,13 @@ use crate::ex_eval::{
 };
 use crate::ex_getln::{getexline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::garray::{ga_clear, ga_init};
+use crate::guard::{Bump, Suppress};
 use crate::main::{
-    KeyTyped, RedrawingDisabled, check_cstack, current_exception, debug_break_level, debug_tick,
-    did_emsg, did_emsg_syntax, did_endif, did_throw, do_profiling, e_command_too_recursive,
-    e_endfor, e_endif, e_endtry, e_endwhile, ex_nesting_level, force_abort, got_int, last_cmdline,
+    KeyTyped, check_cstack, current_exception, debug_break_level, debug_tick, did_emsg,
+    did_emsg_syntax, did_endif, did_throw, do_profiling, e_command_too_recursive, e_endfor,
+    e_endif, e_endtry, e_endwhile, ex_nesting_level, force_abort, got_int, last_cmdline,
     msg_didany, msg_didout, msg_list, msg_scroll, need_rethrow, need_wait_return, new_last_cmdline,
-    no_wait_return, p_verbose, repeat_cmdline, suppress_errthrow, trylevel,
+    p_verbose, repeat_cmdline, suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_start, wait_return};
@@ -154,7 +155,9 @@ pub unsafe fn do_cmdline(
         let mut used_getline = false;
         let mut msg_didout_before_start = false;
         let mut count: c_int = 0;
-        let mut did_inc = false;
+        // Held from the first command's `msg_start` to the end of the run,
+        // which is past the loop the C bumps them in.
+        let mut quiet_output: Option<(Bump, Bump)> = None;
         let mut did_block = false;
         let mut retval = OK;
         let mut cstack = empty_cstack();
@@ -406,9 +409,7 @@ pub unsafe fn do_cmdline(
                     msg_didany.set(false);
                     msg_start();
                     msg_scroll.set(1);
-                    *no_wait_return.ptr() += 1;
-                    *RedrawingDisabled.ptr() += 1;
-                    did_inc = true;
+                    quiet_output = Some((Suppress::wait_return(), Suppress::redraw()));
                 }
             }
             count += 1;
@@ -725,9 +726,7 @@ pub unsafe fn do_cmdline(
         // Too much output to fit on the command line: ask for a return
         // before the screen is redrawn. With `:global` this happens once,
         // after the whole command.
-        if did_inc {
-            *RedrawingDisabled.ptr() -= 1;
-            *no_wait_return.ptr() -= 1;
+        if quiet_output.take().is_some() {
             msg_scroll.set(0);
 
             if retval == FAIL || did_endif.get() && KeyTyped.get() && did_emsg.get() == 0 {

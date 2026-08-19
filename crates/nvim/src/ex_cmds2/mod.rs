@@ -60,12 +60,11 @@ use crate::ex_cmds::{check_overwrite, set_swapcommand};
 use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
-use crate::guard::Suppress;
+use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::main::{
     cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, firstbuf, msg_col, msg_didany,
-    msg_didout, msg_row, no_check_timestamps, no_wait_return, p_aw, p_awa, p_confirm, p_write,
-    vgetc_busy,
+    msg_didout, msg_row, no_check_timestamps, p_aw, p_awa, p_confirm, p_write, vgetc_busy,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
@@ -645,10 +644,8 @@ unsafe fn report_unwritten(buf: *mut buf_T) {
         // Only makes sense if the error is shown, which `cause_errthrow` may
         // prevent.
         if shown && msg_didany.get() {
-            let save = no_wait_return.get();
-            no_wait_return.set(0);
+            let _prompt = Allow::wait_return();
             wait_return(0);
-            no_wait_return.set(save);
         }
     }
 }

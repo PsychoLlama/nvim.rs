@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::buffer::BufFlags;
+use crate::guard::Suppress;
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
@@ -738,14 +739,14 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
             return;
         }
         if error != 0 {
-            *no_wait_return.ptr() += 1;
+            let no_prompt = Suppress::wait_return();
             msg_ext_set_kind(c"emsg".as_ptr());
             msg(c">>>>>>>>>>>>>\n".as_ptr(), 0);
             emsg(gettext(
                 c"E312: Errors detected while recovering; look for lines starting with ???"
                     .as_ptr(),
             ));
-            *no_wait_return.ptr() -= 1;
+            drop(no_prompt);
             msg_putchar('\n' as c_int);
             msg(
                 gettext(c"See \":help E312\" for more information.".as_ptr()),

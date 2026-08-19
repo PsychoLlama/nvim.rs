@@ -3,6 +3,7 @@
 //! line store `:while` and `:for` replay from, and Ex mode.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -22,11 +23,11 @@ use crate::ex_getln::{getcmdline, getexline};
 use crate::garray::ga_append_via_ptr;
 use crate::highlight_group::HLF_E;
 use crate::main::{
-    IObuff, KeyTyped, RedrawingDisabled, Rows, State, caught_stack, check_cstack, cmdline_row,
-    curbuf, current_exception, curwin, did_emsg, did_throw, e_empty_buffer, emsg_silent,
-    ex_no_reprint, ex_normal_busy, exiting, exmode_active, force_abort, global_busy, got_int,
-    lines_left, msg_col, msg_row, msg_scroll, msg_silent, need_rethrow, need_wait_return,
-    no_wait_return, p_mfd, suppress_errthrow, trylevel, typebuf,
+    IObuff, KeyTyped, Rows, State, caught_stack, check_cstack, cmdline_row, curbuf,
+    current_exception, curwin, did_emsg, did_throw, e_empty_buffer, emsg_silent, ex_no_reprint,
+    ex_normal_busy, exiting, exmode_active, force_abort, global_busy, got_int, lines_left, msg_col,
+    msg_row, msg_scroll, msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow,
+    trylevel, typebuf,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
@@ -106,8 +107,8 @@ pub unsafe fn do_exmode() {
         }
 
         let save_msg_scroll = msg_scroll.get();
-        *RedrawingDisabled.ptr() += 1;
-        *no_wait_return.ptr() += 1;
+        let redraw_off = Suppress::redraw();
+        let no_prompt = Suppress::wait_return();
         msg(
             gettext(c"Entering Ex mode.  Type \"visual\" to go to Normal mode.".as_ptr()),
             0,
@@ -163,8 +164,8 @@ pub unsafe fn do_exmode() {
             }
         }
 
-        *RedrawingDisabled.ptr() -= 1;
-        *no_wait_return.ptr() -= 1;
+        drop(redraw_off);
+        drop(no_prompt);
         redraw_all_later(UPD_NOT_VALID);
         update_screen();
         need_wait_return.set(false);
@@ -176,7 +177,7 @@ pub unsafe fn do_exmode() {
 /// which script it is.
 pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
     unsafe {
-        *no_wait_return.ptr() += 1;
+        let _no_prompt = Suppress::wait_return();
         verbose_enter_scroll();
         if lnum == 0 {
             smsg_c!(0, gettext(c"Executing: %s".as_ptr()), cmd);
@@ -187,7 +188,6 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
             msg_puts(c"\n".as_ptr());
         }
         verbose_leave_scroll();
-        *no_wait_return.ptr() -= 1;
     }
 }
 

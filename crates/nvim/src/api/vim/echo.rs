@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::guard::Suppress;
 
 pub unsafe fn nvim_echo(
     chunks: Array,
@@ -116,8 +117,8 @@ pub unsafe fn nvim_echo(
                 save_nwr = need_wait_return.get();
                 save_lines_left = lines_left.get();
                 save_msg_didany = msg_didany.get();
+                let no_prompt = (*opts)._truncate.then(Suppress::wait_return);
                 if (*opts)._truncate {
-                    (*no_wait_return.ptr()) += 1;
                     lines_left.set(0 as ::core::ffi::c_int);
                     msg_didany.set(true);
                     msg_no_more.set(true);
@@ -135,7 +136,7 @@ pub unsafe fn nvim_echo(
                     msg_no_more.set(false);
                     msg_didany.set(save_msg_didany);
                     lines_left.set(save_lines_left);
-                    (*no_wait_return.ptr()) -= 1;
+                    drop(no_prompt);
                     need_wait_return.set(save_nwr);
                 }
                 if (*opts).verbose {

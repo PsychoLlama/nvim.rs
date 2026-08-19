@@ -11,12 +11,12 @@
 use crate::eval::typval::kCallbackNone;
 use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::{fix_input_buffer, merge_modifiers};
-use crate::guard::Keys;
+use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::{Ctrl_C, K_IGNORE, K_LEFTMOUSE, K_SPECIAL, KS_MODIFIER, key_unescape};
 use crate::main::{
     IObuff, State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row,
-    msg_scrolled, need_wait_return, no_wait_return,
+    msg_scrolled, need_wait_return,
 };
 use crate::mbyte::{utf_ptr2char, utf8len_tab};
 use crate::memory::{xfree, xstrdup};
@@ -47,7 +47,7 @@ const CALLBACK_NONE: Callback = Callback {
 /// Main-thread editor call; `str` is NUL-terminated.
 pub unsafe fn ask_yesno(str: *const c_char) -> c_int {
     let save_state = State.get();
-    no_wait_return.set(no_wait_return.get() + 1);
+    let no_prompt = Suppress::wait_return();
 
     // SAFETY: `IObuff` is the shared scratch buffer, `IOSIZE` chars long,
     // and the question is the one `%s` the format takes. The copy is made
@@ -77,7 +77,7 @@ pub unsafe fn ask_yesno(str: *const c_char) -> c_int {
     }
 
     need_wait_return.set(msg_scrolled.get() != 0);
-    no_wait_return.set(no_wait_return.get() - 1);
+    drop(no_prompt);
     State.set(save_state);
     // SAFETY: main-thread editor call; `prompt` is the string `xstrdup`
     // handed over, and nothing else holds it.

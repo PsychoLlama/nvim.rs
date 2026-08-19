@@ -25,10 +25,11 @@ use crate::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
+use crate::guard::Suppress;
 use crate::keycodes::{K_ZERO, find_special_key};
 use crate::main::{
-    IObuff, curbuf, curwin, e_invarg, e_sandbox, e_trailing, info_message, no_wait_return, p_mle,
-    p_verbose, p_wc, p_wcm, sandbox, silent_mode,
+    IObuff, curbuf, curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, p_wc,
+    p_wcm, sandbox, silent_mode,
 };
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
@@ -713,9 +714,8 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
         trans_characters(buf, IOSIZE);
         // The message is the whole report; do not make the user acknowledge
         // the half of it that has already scrolled past.
-        no_wait_return.set(no_wait_return.get() + 1);
+        let _no_prompt = Suppress::wait_return();
         emsg(buf);
-        no_wait_return.set(no_wait_return.get() - 1);
     }
 }
 

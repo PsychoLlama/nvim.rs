@@ -23,7 +23,8 @@ use crate::event::stream::stream_may_close;
 use crate::event::wstream::{
     wstream_init, wstream_new_buffer, wstream_set_write_cb, wstream_write,
 };
-use crate::main::{got_int, lines_left, msg_no_more, no_wait_return};
+use crate::guard::Suppress;
+use crate::main::{got_int, lines_left, msg_no_more};
 use crate::memory::{xfree, xrealloc, xstrlcpy};
 use crate::message::{msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_start};
 use crate::msg_schedule_semsg_c;
@@ -167,9 +168,9 @@ pub(crate) unsafe fn do_os_system(
         }
         if forward_output {
             // The caller decides whether `wait_return()` is invoked.
-            no_wait_return.set(no_wait_return.get() + 1);
+            let no_prompt = Suppress::wait_return();
             msg_end();
-            no_wait_return.set(no_wait_return.get() - 1);
+            drop(no_prompt);
             msg_no_more.set(false);
         }
         ui_busy_stop();

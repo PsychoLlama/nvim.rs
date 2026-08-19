@@ -36,9 +36,10 @@ use crate::ex_cmds2::{autowrite, buf_write_all, check_fname, dialog_changed};
 use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
+use crate::guard::Suppress;
 use crate::main::{
     curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_isadir2, e_readonly, emsg_silent,
-    exiting, firstbuf, getout, no_wait_return, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
+    exiting, firstbuf, getout, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
 };
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
@@ -876,10 +877,8 @@ pub unsafe fn getfile(
         other = fnum != unsafe { (*curbuf.get()).handle };
     }
 
-    if other {
-        // don't wait for autowrite message
-        no_wait_return.set(no_wait_return.get() + 1);
-    }
+    // Don't wait for the autowrite message. Released at two exits.
+    let mut no_prompt = other.then(Suppress::wait_return);
     // SAFETY: `curbuf` is the live current buffer.
     if other
         && !forceit
@@ -894,15 +893,13 @@ pub unsafe fn getfile(
         }
         // SAFETY: as above.
         if unsafe { curbufIsChanged() } {
-            no_wait_return.set(no_wait_return.get() - 1);
+            drop(no_prompt.take());
             // File has been changed.
             no_write_message();
             return GETFILE_NOT_WRITTEN;
         }
     }
-    if other {
-        no_wait_return.set(no_wait_return.get() - 1);
-    }
+    drop(no_prompt.take());
     if setpm {
         // SAFETY: main thread.
         unsafe { setpcmark() };

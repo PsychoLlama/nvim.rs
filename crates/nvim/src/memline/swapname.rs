@@ -14,6 +14,7 @@
 
 use crate::buffer::BufFlags;
 use crate::ex_docmd::cmdmod_has;
+use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::semsg_c;
 use ::libc::{EINVAL, ENOENT};
@@ -439,7 +440,7 @@ unsafe fn resolve_swapfile_clash(
 unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
     unsafe {
         let mut choice = SEA_CHOICE_NONE;
-        *no_wait_return.ptr() += 1;
+        let no_prompt = Suppress::wait_return();
 
         // kv_resize(msg, IOSIZE): a screenful before the first realloc.
         let mut msg: StringBuilder = KV_INITIAL_VALUE;
@@ -491,7 +492,7 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
             );
         }
 
-        *no_wait_return.ptr() -= 1;
+        drop(no_prompt);
         xfree(msg.items.cast()); // kv_destroy(msg)
         xfree(fhname.cast());
         choice
