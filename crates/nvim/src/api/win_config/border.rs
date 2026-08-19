@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::NIL;
 use crate::api::private::helpers::array_add;
 use crate::types::NUL;
 
@@ -466,10 +467,7 @@ pub unsafe fn parse_winborder(
         if fconfig.is_null() {
             return false;
         }
-        let mut style: Object = object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        let mut style: Object = NIL;
         if !strchr(border_opt, ',' as ::core::ffi::c_int).is_null() {
             let mut border_chars: Array = ARRAY_DICT_INIT;
             let mut p: *mut ::core::ffi::c_char = border_opt;

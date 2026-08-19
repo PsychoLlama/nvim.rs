@@ -38,9 +38,8 @@ pub unsafe fn handle_nvim_buf_set_var(
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_set_var(arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_buf_set_var(arg_1, arg_2, arg_3) } {
+        return failure(error, e);
     }
     NIL
 }

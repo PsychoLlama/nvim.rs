@@ -8,32 +8,29 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, dict_put, dict_put_str, has_key};
+use crate::api::private::helpers::{
+    ERROR_INIT, NIL, Reported, array_add, dict_put, dict_put_str, has_key,
+};
 use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
 use crate::kvec::InitVec;
 
-pub unsafe extern "C" fn nvim_get_autocmds(
-    mut opts: *mut KeyDict_get_autocmds,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_get_autocmds(
+    opts: *mut KeyDict_get_autocmds,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut id: ::core::ffi::c_int = 0;
         let mut has_buf: bool = false;
-        let mut buf: Object = Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        let mut buf: Object = NIL;
         let mut pattern_filter_count: ::core::ffi::c_int = 0;
         let mut autocmd_list: ArrayBuilder = ArrayBuilder {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
-            init_array: [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 16],
+            init_array: [NIL; 16],
         };
         autocmd_list.capacity = ::core::mem::size_of::<[Object; 16]>()
             .wrapping_div(::core::mem::size_of::<Object>())
@@ -544,6 +541,6 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                 }
             }
         }
-        return arena_take_arraybuilder(arena, &raw mut autocmd_list);
+        return arena_take_arraybuilder(arena, &raw mut autocmd_list).reported(error);
     }
 }

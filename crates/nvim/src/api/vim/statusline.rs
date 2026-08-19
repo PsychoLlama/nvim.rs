@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::has_key;
+use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
     win_opt,
@@ -43,12 +43,13 @@ struct Context {
     scl_hl_id: c_int,
 }
 
-pub unsafe extern "C" fn nvim_eval_statusline(
+pub unsafe fn nvim_eval_statusline(
     str: String_0,
     opts: *mut KeyDict_eval_statusline,
     arena: *mut Arena,
-    err: *mut Error,
-) -> Dict {
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let empty = Dict {
         size: 0,
         capacity: 0,
@@ -68,7 +69,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
         if !errmsg.is_null() {
             // SAFETY: the caller's error slot.
             unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), errmsg) };
-            return empty;
+            return empty.reported(error);
         }
     }
 
@@ -79,7 +80,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
     }; SIGN_SHOW_MAX as usize];
     // SAFETY: the caller's error slot and the editor's own window list.
     let Some(ctx) = (unsafe { Context::of(opts, err, &mut statuscol, &mut sattrs) }) else {
-        return empty;
+        return empty.reported(error);
     };
 
     // SAFETY: an arena the caller owns, whose allocations outlive the reply.
@@ -135,7 +136,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
         c"str",
         Object::string(unsafe { cstr_as_string(buf) }),
     );
-    result
+    result.reported(error)
 }
 
 impl Context {
@@ -426,12 +427,13 @@ fn highlight_dicts(
     values
 }
 
-pub unsafe extern "C" fn nvim__complete_set(
+pub unsafe fn nvim__complete_set(
     index: Integer,
     opts: *mut KeyDict_complete_set,
     arena: *mut Arena,
-    err: *mut Error,
-) -> Dict {
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut rv = arena_dict(arena, 2);
     // SAFETY: the API dispatcher's own frame.
     let opts = unsafe { &*opts };
@@ -445,7 +447,7 @@ pub unsafe extern "C" fn nvim__complete_set(
                 c"completeopt option does not include popup".as_ptr(),
             );
         }
-        return rv;
+        return rv.reported(error);
     }
     if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {
         // SAFETY: a checked API string; the answer is null or a live window.
@@ -455,5 +457,5 @@ pub unsafe extern "C" fn nvim__complete_set(
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));
         }
     }
-    rv
+    rv.reported(error)
 }

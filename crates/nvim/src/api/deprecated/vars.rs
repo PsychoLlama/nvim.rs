@@ -7,179 +7,124 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 
-pub unsafe extern "C" fn buffer_set_var(
-    mut buffer: Buffer,
-    mut name: String_0,
-    mut value: Object,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn buffer_set_var(
+    buffer: Buffer,
+    name: String_0,
+    value: Object,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
         if buf.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return dict_set_var((*buf).b_vars, name, value, false, true, arena, err);
+        return dict_set_var((*buf).b_vars, name, value, false, true, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn buffer_del_var(
-    mut buffer: Buffer,
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn buffer_del_var(
+    buffer: Buffer,
+    name: String_0,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
         if buf.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return dict_set_var(
-            (*buf).b_vars,
-            name,
-            object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
-            true,
-            true,
-            arena,
-            err,
-        );
+        return dict_set_var((*buf).b_vars, name, NIL, true, true, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn window_set_var(
-    mut window: Window,
-    mut name: String_0,
-    mut value: Object,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn window_set_var(
+    window: Window,
+    name: String_0,
+    value: Object,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut win: *mut win_T = find_window_by_handle(window, err);
         if win.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return dict_set_var((*win).w_vars, name, value, false, true, arena, err);
+        return dict_set_var((*win).w_vars, name, value, false, true, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn window_del_var(
-    mut window: Window,
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn window_del_var(
+    window: Window,
+    name: String_0,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut win: *mut win_T = find_window_by_handle(window, err);
         if win.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return dict_set_var(
-            (*win).w_vars,
-            name,
-            object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
-            true,
-            true,
-            arena,
-            err,
-        );
+        return dict_set_var((*win).w_vars, name, NIL, true, true, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn tabpage_set_var(
-    mut tabpage: Tabpage,
-    mut name: String_0,
-    mut value: Object,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn tabpage_set_var(
+    tabpage: Tabpage,
+    name: String_0,
+    value: Object,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
         if tab.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return dict_set_var((*tab).tp_vars, name, value, false, true, arena, err);
+        return dict_set_var((*tab).tp_vars, name, value, false, true, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn tabpage_del_var(
-    mut tabpage: Tabpage,
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn tabpage_del_var(
+    tabpage: Tabpage,
+    name: String_0,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
         if tab.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return dict_set_var(
-            (*tab).tp_vars,
-            name,
-            object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
-            true,
-            true,
-            arena,
-            err,
-        );
+        return dict_set_var((*tab).tp_vars, name, NIL, true, true, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn vim_set_var(
-    mut name: String_0,
-    mut value: Object,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn vim_set_var(
+    name: String_0,
+    value: Object,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
-        return dict_set_var(get_globvar_dict(), name, value, false, true, arena, err);
+        return dict_set_var(get_globvar_dict(), name, value, false, true, arena, err)
+            .reported(error);
     }
 }
 
-pub unsafe extern "C" fn vim_del_var(
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn vim_del_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
-        return dict_set_var(
-            get_globvar_dict(),
-            name,
-            object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
-            true,
-            true,
-            arena,
-            err,
-        );
+        return dict_set_var(get_globvar_dict(), name, NIL, true, true, arena, err).reported(error);
     }
 }

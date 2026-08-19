@@ -9,16 +9,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::has_key;
+use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::types::{FAIL, kObjectTypeLuaRef, kObjectTypeString};
 
-pub unsafe extern "C" fn nvim_create_autocmd(
-    mut channel_id: uint64_t,
-    mut event: Object,
-    mut opts: *mut KeyDict_create_autocmd,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe fn nvim_create_autocmd(
+    channel_id: uint64_t,
+    event: Object,
+    opts: *mut KeyDict_create_autocmd,
+    arena: *mut Arena,
+) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut au_group: ::core::ffi::c_int = 0;
         let mut has_buf: bool = false;
@@ -230,11 +231,13 @@ pub unsafe extern "C" fn nvim_create_autocmd(
         } else {
             callback_free(&raw mut handler_fn);
         }
-        return autocmd_id as Integer;
+        return (autocmd_id as Integer).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_del_autocmd(mut id: Integer, mut err: *mut Error) {
+pub unsafe fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         if !(id > 0 as Integer) {
             api_err_invalid(
@@ -244,7 +247,7 @@ pub unsafe extern "C" fn nvim_del_autocmd(mut id: Integer, mut err: *mut Error) 
                 id as int64_t,
                 false,
             );
-            return;
+            return ().reported(error);
         }
         if !autocmd_delete_id(id as int64_t) {
             api_set_error(
@@ -254,13 +257,15 @@ pub unsafe extern "C" fn nvim_del_autocmd(mut id: Integer, mut err: *mut Error) 
             );
         }
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_clear_autocmds(
-    mut opts: *mut KeyDict_clear_autocmds,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_clear_autocmds(
+    opts: *mut KeyDict_clear_autocmds,
+    arena: *mut Arena,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut event_array: Array = unpack_string_or_array(
             (*opts).event,
@@ -270,7 +275,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
             err,
         );
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         let mut has_buf: bool = has_key(
             (*opts).is_set__clear_autocmds_,
@@ -292,15 +297,15 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
             || !(has_key((*opts).is_set__clear_autocmds_, 4 as ::core::ffi::c_int)))
         {
             api_err_conflict(err, c"buf".as_ptr(), c"buffer".as_ptr());
-            return;
+            return ().reported(error);
         }
         if !(!(has_key((*opts).is_set__clear_autocmds_, 5 as ::core::ffi::c_int)) || !has_buf) {
             api_err_conflict(err, c"pattern".as_ptr(), c"buf".as_ptr());
-            return;
+            return ().reported(error);
         }
         let mut au_group: ::core::ffi::c_int = get_augroup_from_object((*opts).group, err);
         if au_group == AUGROUP_ERROR as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         let mut patterns: Array = get_patterns_from_pattern_or_buf(
             (*opts).pattern,
@@ -311,7 +316,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
             err,
         );
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         if event_array.size == 0 as size_t {
             let mut event: event_T = EVENT_BUFADD;
@@ -321,7 +326,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
                     let mut pat_object: Object = *patterns.items.add(pat_object_index);
                     let mut pat: *mut ::core::ffi::c_char = pat_object.data.string.data;
                     if !clear_autocmd(event, pat, au_group, err) {
-                        return;
+                        return ().reported(error);
                     }
                     pat_object_index = pat_object_index.wrapping_add(1);
                 }
@@ -342,14 +347,14 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
                         0 as int64_t,
                         true,
                     );
-                    return;
+                    return ().reported(error);
                 }
                 let mut pat_object_index_0: size_t = 0 as size_t;
                 while pat_object_index_0 < patterns.size {
                     let mut pat_object_0: Object = *patterns.items.add(pat_object_index_0);
                     let mut pat_0: *mut ::core::ffi::c_char = pat_object_0.data.string.data;
                     if !clear_autocmd(event_nr, pat_0, au_group, err) {
-                        return;
+                        return ().reported(error);
                     }
                     pat_object_index_0 = pat_object_index_0.wrapping_add(1);
                 }
@@ -357,6 +362,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
             }
         };
     }
+    ().reported(error)
 }
 
 unsafe fn clear_autocmd(

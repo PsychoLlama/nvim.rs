@@ -149,14 +149,10 @@ pub unsafe fn paste_repeat(count: c_int) {
         };
         let mut i = 0;
         while !aborted && i < count {
-            nvim_paste(
-                LUA_INTERNAL_CALL,
-                str,
-                false,
-                -1 as Integer,
-                &raw mut arena,
-                &raw mut err,
-            );
+            if let Err(e) = nvim_paste(LUA_INTERNAL_CALL, str, false, -1 as Integer, &raw mut arena)
+            {
+                err = e;
+            }
             aborted = err.type_0 != kErrorTypeNone;
             i += 1;
         }

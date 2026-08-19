@@ -38,9 +38,8 @@ pub unsafe fn handle_nvim_clear_autocmds(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_clear_autocmds(&raw mut arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_clear_autocmds(&raw mut arg_1, arena) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -80,10 +79,10 @@ pub unsafe fn handle_nvim_create_augroup(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_create_augroup(channel_id, arg_1, &raw mut arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_create_augroup(channel_id, arg_1, &raw mut arg_2) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
@@ -119,10 +118,10 @@ pub unsafe fn handle_nvim_create_autocmd(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_create_autocmd(channel_id, arg_1, &raw mut arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_create_autocmd(channel_id, arg_1, &raw mut arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
@@ -152,9 +151,8 @@ pub unsafe fn handle_nvim_del_augroup_by_id(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_del_augroup_by_id(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_del_augroup_by_id(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -185,9 +183,8 @@ pub unsafe fn handle_nvim_del_augroup_by_name(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_del_augroup_by_name(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_del_augroup_by_name(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -218,9 +215,8 @@ pub unsafe fn handle_nvim_del_autocmd(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_del_autocmd(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_del_autocmd(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -257,9 +253,8 @@ pub unsafe fn handle_nvim_exec_autocmds(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_exec_autocmds(arg_1, &raw mut arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_exec_autocmds(arg_1, &raw mut arg_2, arena) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -295,9 +290,9 @@ pub unsafe fn handle_nvim_get_autocmds(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_autocmds(&raw mut arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_get_autocmds(&raw mut arg_1, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeArray, object_data { array: rv })
 }

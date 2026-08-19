@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, set_key};
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, set_key};
 
 unsafe fn config_put_bordertext(
     mut config: *mut KeyDict_win_config,
@@ -84,11 +84,12 @@ unsafe fn config_put_bordertext(
     }
 }
 
-pub unsafe extern "C" fn nvim_win_get_config(
-    mut win: Window,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> KeyDict_win_config {
+pub unsafe fn nvim_win_get_config(
+    win: Window,
+    arena: *mut Arena,
+) -> Result<KeyDict_win_config, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         static float_relative_str: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
             c"editor".as_ptr(),
@@ -109,7 +110,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
         let mut rv: KeyDict_win_config = KEYDICT_INIT;
         let mut wp: *mut win_T = find_window_by_handle(win, err);
         if wp.is_null() {
-            return rv;
+            return rv.reported(error);
         }
         let mut config: *mut WinConfig = &raw mut (*wp).w_config;
         rv.is_set__win_config_ =
@@ -237,6 +238,6 @@ pub unsafe extern "C" fn nvim_win_get_config(
             );
             rv._cmdline_offset = (*config)._cmdline_offset as Integer;
         }
-        return rv;
+        return rv.reported(error);
     }
 }

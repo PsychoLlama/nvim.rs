@@ -82,7 +82,8 @@ const STRING_INIT: String_0 = String_0 {
     size: 0,
 };
 
-const NIL: Object = object {
+/// The `Object` that says "no value": upstream's `NIL`.
+pub(crate) const NIL: Object = object {
     type_0: kObjectTypeNil,
     data: object_data { boolean: false },
 };
@@ -328,19 +329,36 @@ pub(crate) const ERROR_INIT: Error = Error {
     msg: ptr::null_mut(),
 };
 
-/// What a call that reported through a lent [`ERROR_INIT`] slot answered
-/// with, unless the slot says why it could not.
-///
-/// This is deliberately more forgiving than `?`. A `find_*_by_handle` miss
-/// answers null *without* setting the error when the handle is `0` and there
-/// is no current buffer/window/tabpage, and upstream answers that with a
-/// default value rather than a failure; reading "null means `Err`" would show
-/// the client nil where it used to see `0`. Handing the value here keeps a
-/// converted function exactly as forgiving as the one it replaced.
-pub(crate) fn reported<T>(err: Error, value: T) -> Result<T, Error> {
-    match err.type_0 {
-        kErrorTypeNone => Ok(value),
-        _ => Err(err),
+/// Answering with what a helper that still reports through an `*mut Error`
+/// out-parameter produced.
+pub(crate) trait Reported: Sized {
+    /// `self`, unless the lent [`ERROR_INIT`] slot `err` says why the call
+    /// that produced it could not answer.
+    ///
+    /// This is deliberately more forgiving than `?`. A `find_*_by_handle`
+    /// miss answers null *without* setting the error when the handle is `0`
+    /// and there is no current buffer/window/tabpage, and upstream answers
+    /// that with a default value rather than a failure; reading "null means
+    /// `Err`" would show the client nil where it used to see `0`. Handing
+    /// the value on keeps a converted function exactly as forgiving as the
+    /// one it replaced.
+    ///
+    /// It is postfix, not `reported(value, err)`, for two reasons. Order:
+    /// the receiver is evaluated before the argument, so
+    /// `f(err).reported(error)` reads the slot *after* the call that
+    /// fills it — the prefix spelling reads it before, and silently throws
+    /// the failure away. Shape: the value is usually the transpiled body's
+    /// existing multi-line call, and a suffix leaves its formatting alone
+    /// where a wrapper would re-indent and re-wrap the whole thing.
+    fn reported(self, err: Error) -> Result<Self, Error>;
+}
+
+impl<T> Reported for T {
+    fn reported(self, err: Error) -> Result<Self, Error> {
+        match err.type_0 {
+            kErrorTypeNone => Ok(self),
+            _ => Err(err),
+        }
     }
 }
 

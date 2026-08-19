@@ -29,8 +29,7 @@ use crate::types::{
     KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds, KeyDict_get_autocmds,
     LuaRef, Object, String_0, TryState, auto_event, buf_T, event_T, exarg_T, except_T, int64_t,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBuffer,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, msglist_T,
-    object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, msglist_T, sctx_T, size_t, uint64_t,
 };
 use ::libc::{abort, strlen};
 

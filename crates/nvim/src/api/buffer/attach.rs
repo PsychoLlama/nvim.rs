@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{dict_put, has_key};
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
 
 pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
     unsafe {
@@ -25,17 +25,18 @@ pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mu
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_attach(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
-    mut send_buffer: Boolean,
-    mut opts: *mut KeyDict_buf_attach,
-    mut err: *mut Error,
-) -> Boolean {
+pub unsafe fn nvim_buf_attach(
+    channel_id: uint64_t,
+    buf: Buffer,
+    send_buffer: Boolean,
+    opts: *mut KeyDict_buf_attach,
+) -> Result<Boolean, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return false;
+            return false.reported(error);
         }
         let mut cb: BufUpdateCallbacks = BUF_UPDATE_CALLBACKS_INIT;
         if channel_id == LUA_INTERNAL_CALL {
@@ -77,42 +78,32 @@ pub unsafe extern "C" fn nvim_buf_attach(
             cb.utf_sizes = (*opts).utf_sizes;
             cb.preview = (*opts).preview;
         }
-        return buf_updates_register(b, channel_id, cb, send_buffer);
+        return buf_updates_register(b, channel_id, cb, send_buffer).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_detach(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
-    mut err: *mut Error,
-) -> Boolean {
+pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: Buffer) -> Result<Boolean, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return false;
+            return false.reported(error);
         }
         buf_updates_unregister(b, channel_id);
-        return true;
+        return true.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_call(
-    mut buf: Buffer,
-    mut fun: LuaRef,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        let mut res: Object = object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        let mut res: Object = NIL;
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
             private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -140,15 +131,13 @@ pub unsafe extern "C" fn nvim_buf_call(
         );
         aucmd_restbuf(&raw mut aco);
         try_leave(&raw mut tstate, err);
-        return res;
+        return res.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim__buf_stats(
-    mut buf: Buffer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
@@ -156,7 +145,8 @@ pub unsafe extern "C" fn nvim__buf_stats(
                 size: 0 as size_t,
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<KeyValuePair>(),
-            };
+            }
+            .reported(error);
         }
         let mut rv: Dict = arena_dict(arena, 7 as size_t);
         dict_put(
@@ -202,6 +192,6 @@ pub unsafe extern "C" fn nvim__buf_stats(
                 Object::integer((*uhp).uh_extmark.size as Integer),
             );
         }
-        return rv;
+        return rv.reported(error);
     }
 }

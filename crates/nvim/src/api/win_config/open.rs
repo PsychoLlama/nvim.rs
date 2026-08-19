@@ -10,18 +10,20 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 
-pub unsafe extern "C" fn nvim_open_win(
-    mut buf: Buffer,
-    mut enter: Boolean,
-    mut config: *mut KeyDict_win_config,
-    mut err: *mut Error,
-) -> Window {
+pub unsafe fn nvim_open_win(
+    buf: Buffer,
+    enter: Boolean,
+    config: *mut KeyDict_win_config,
+) -> Result<Window, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut bufref: bufref_T = bufref_T::default();
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return 0 as Window;
+            return (0 as Window).reported(error);
         }
         if cmdwin_type.get() != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0
             || b == cmdwin_buf.get()
@@ -32,7 +34,7 @@ pub unsafe extern "C" fn nvim_open_win(
                 c"%s".as_ptr(),
                 &raw const e_cmdwin as *const ::core::ffi::c_char,
             );
-            return 0 as Window;
+            return (0 as Window).reported(error);
         }
         let mut fconfig: WinConfig = WinConfig {
             window: 0,
@@ -85,7 +87,7 @@ pub unsafe extern "C" fn nvim_open_win(
             false,
             err,
         ) {
-            return 0 as Window;
+            return (0 as Window).reported(error);
         }
         let mut is_split: bool = has_key(
             (*config).is_set__win_config_,
@@ -302,7 +304,7 @@ pub unsafe extern "C" fn nvim_open_win(
         if fconfig.noautocmd {
             unblock_autocmds();
         }
-        return rv;
+        return rv.reported(error);
     }
 }
 

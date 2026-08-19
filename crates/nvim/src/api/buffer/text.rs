@@ -8,30 +8,28 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::types::NUL;
 
-pub unsafe extern "C" fn nvim_buf_set_text(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
+pub unsafe fn nvim_buf_set_text(
+    channel_id: uint64_t,
+    buf: Buffer,
     mut start_row: Integer,
     mut start_col: Integer,
     mut end_row: Integer,
     mut end_col: Integer,
     mut replacement: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+    arena: *mut Arena,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut scratch: Array = Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        let mut scratch__items: [Object; 1] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 1];
+        let mut scratch__items: [Object; 1] = [NIL; 1];
         scratch.capacity = 1 as size_t;
         scratch.items = &raw mut scratch__items as *mut Object;
         if replacement.size == 0 as size_t {
@@ -47,7 +45,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         }
         let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
         if b.is_null() {
-            return;
+            return ().reported(error);
         }
         let mut oob: bool = false;
         start_row = normalize_index(b, start_row as int64_t, false, &raw mut oob) as Integer;
@@ -59,7 +57,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 0 as int64_t,
                 false,
             );
-            return;
+            return ().reported(error);
         }
         end_row = normalize_index(b, end_row as int64_t, false, &raw mut oob) as Integer;
         if oob {
@@ -70,7 +68,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 0 as int64_t,
                 false,
             );
-            return;
+            return ().reported(error);
         }
         let mut str_at_start: *mut ::core::ffi::c_char = ml_get_buf(b, start_row as linenr_T);
         let mut len_at_start: colnr_T = ml_get_buf_len(b, start_row as linenr_T);
@@ -88,7 +86,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 0 as int64_t,
                 false,
             );
-            return;
+            return ().reported(error);
         }
         let mut str_at_end: *mut ::core::ffi::c_char = ml_get_buf(b, end_row as linenr_T);
         let mut len_at_end: colnr_T = ml_get_buf_len(b, end_row as linenr_T);
@@ -106,7 +104,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 0 as int64_t,
                 false,
             );
-            return;
+            return ().reported(error);
         }
         if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
             api_set_error(
@@ -115,7 +113,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 c"%s".as_ptr(),
                 c"'start' is higher than 'end'".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
         if !check_string_array(
@@ -124,7 +122,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             disallow_nl,
             err,
         ) {
-            return;
+            return ().reported(error);
         }
         let mut new_len: size_t = replacement.size;
         let mut new_byte: bcount_t = 0 as bcount_t;
@@ -416,6 +414,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         }
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }
 
 pub(crate) unsafe fn fix_cursor(

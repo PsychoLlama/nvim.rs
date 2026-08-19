@@ -41,10 +41,10 @@ pub unsafe fn handle_nvim__buf_debug_extmarks(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim__buf_debug_extmarks(arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim__buf_debug_extmarks(arg_1, arg_2, arg_3) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeString, object_data { string: rv })
 }
 
@@ -74,10 +74,10 @@ pub unsafe fn handle_nvim__ns_get(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let mut rv = unsafe { nvim__ns_get(arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let mut rv = match unsafe { nvim__ns_get(arg_1, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     // SAFETY: `rv` is a `KeyDict_ns_opts`, whose field table is
     // `ns_opts_table` and whose length is 2.
     let dict = unsafe {
@@ -126,9 +126,8 @@ pub unsafe fn handle_nvim__ns_set(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim__ns_set(arg_1, &raw mut arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim__ns_set(arg_1, &raw mut arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -171,9 +170,8 @@ pub unsafe fn handle_nvim_buf_clear_namespace(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -212,10 +210,10 @@ pub unsafe fn handle_nvim_buf_del_extmark(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_del_extmark(arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_del_extmark(arg_1, arg_2, arg_3) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
@@ -267,11 +265,11 @@ pub unsafe fn handle_nvim_buf_get_extmark_by_id(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv =
-        unsafe { nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &raw mut arg_4, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &raw mut arg_4, arena) }
+    {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
@@ -317,10 +315,10 @@ pub unsafe fn handle_nvim_buf_get_extmarks(
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv =
-        unsafe { nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+        match unsafe { nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5, arena) } {
+            Ok(rv) => rv,
+            Err(e) => return failure(error, e),
+        };
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
@@ -371,10 +369,10 @@ pub unsafe fn handle_nvim_buf_set_extmark(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_set_extmark(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_set_extmark(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 

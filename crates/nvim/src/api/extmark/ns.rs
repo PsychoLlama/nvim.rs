@@ -11,7 +11,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, dict_put_str, has_key, set_key};
+use crate::api::private::helpers::{
+    ERROR_INIT, Reported, array_add, dict_put_str, has_key, set_key,
+};
 
 #[inline]
 unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
@@ -94,7 +96,7 @@ unsafe fn map_get_String_int(
     }
 }
 
-pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
+pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
     unsafe {
         let mut id: handle_T = map_get_String_int(namespace_ids.ptr(), name);
         if id > 0 as ::core::ffi::c_int {
@@ -110,7 +112,7 @@ pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
     }
 }
 
-pub unsafe extern "C" fn nvim_get_namespaces(mut arena: *mut Arena) -> Dict {
+pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> Dict {
     unsafe {
         let mut retval: Dict = arena_dict(arena, (*namespace_ids.ptr()).set.h.size as size_t);
         let mut name: String_0 = String_0 {
@@ -165,11 +167,9 @@ pub fn ns_initialized(mut ns: uint32_t) -> bool {
     return ns < next_namespace_id.get() as uint32_t;
 }
 
-pub unsafe extern "C" fn nvim__ns_set(
-    mut ns_id: Integer,
-    mut opts: *mut KeyDict_ns_opts,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         if !ns_initialized(ns_id as uint32_t) {
             api_err_invalid(
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn nvim__ns_set(
                 ns_id as int64_t,
                 false,
             );
-            return;
+            return ().reported(error);
         }
         let mut set_scoped: bool = true;
         if has_key((*opts).is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins) {
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn nvim__ns_set(
                 let mut win: Integer = (*(*opts).wins.items.add(i)).data.integer;
                 let mut wp: *mut win_T = find_window_by_handle(win as Window, err);
                 if wp.is_null() {
-                    return;
+                    return ().reported(error);
                 }
                 set_put_ptr_t(
                     &raw mut windows,
@@ -310,13 +310,12 @@ pub unsafe extern "C" fn nvim__ns_set(
             }
         }
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim__ns_get(
-    mut ns_id: Integer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> KeyDict_ns_opts {
+pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_ns_opts, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut opts: KeyDict_ns_opts = KEYDICT_INIT;
         let mut windows: Array = ARRAY_DICT_INIT;
@@ -330,10 +329,10 @@ pub unsafe extern "C" fn nvim__ns_get(
                 ns_id as int64_t,
                 false,
             );
-            return opts;
+            return opts.reported(error);
         }
         if !set_has_uint32_t(namespace_localscope.ptr(), ns_id as uint32_t) {
-            return opts;
+            return opts.reported(error);
         }
         let mut count: size_t = 0 as size_t;
         let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
@@ -381,6 +380,6 @@ pub unsafe extern "C" fn nvim__ns_get(
         }
         opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
         opts.wins = windows;
-        return opts;
+        return opts.reported(error);
     }
 }

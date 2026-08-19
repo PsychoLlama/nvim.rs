@@ -29,10 +29,7 @@ pub unsafe fn handle_nvim_get_all_options_info(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_all_options_info(arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = unsafe { nvim_get_all_options_info(arena) };
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
@@ -71,10 +68,10 @@ pub unsafe fn handle_nvim_get_option_info2(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_option_info2(arg_1, &raw mut arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_get_option_info2(arg_1, &raw mut arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
@@ -113,10 +110,10 @@ pub unsafe fn handle_nvim_get_option_value(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_option_value(arg_1, &raw mut arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_get_option_value(arg_1, &raw mut arg_2) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     rv
 }
 
@@ -156,9 +153,8 @@ pub unsafe fn handle_nvim_set_option_value(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_option_value(channel_id, arg_1, arg_2, &raw mut arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_option_value(channel_id, arg_1, arg_2, &raw mut arg_3) } {
+        return failure(error, e);
     }
     NIL
 }

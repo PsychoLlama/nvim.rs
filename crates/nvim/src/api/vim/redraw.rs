@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::has_key;
+use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::types::NUL;
 
 unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut flush: *mut bool) {
@@ -46,14 +46,16 @@ unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut f
     }
 }
 
-pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *mut Error) {
+pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
         let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
         if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__win) {
             win = find_window_by_handle((*opts).win, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                return;
+                return ().reported(error);
             }
         }
         if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__buf) {
@@ -64,11 +66,11 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                     c"%s".as_ptr(),
                     c"cannot use both 'buf' and 'win'".as_ptr(),
                 );
-                return;
+                return ().reported(error);
             }
             buf = find_buffer_by_handle((*opts).buf, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                return;
+                return ().reported(error);
             }
         }
         let mut count: ::core::ffi::c_uint = (!win.is_null() as ::core::ffi::c_int
@@ -81,7 +83,7 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                 c"%s".as_ptr(),
                 c"at least one action required".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__valid) {
             let mut type_0: ::core::ffi::c_int = if (*opts).valid as ::core::ffi::c_int != 0 {
@@ -120,7 +122,7 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                     c"%s".as_ptr(),
                     c"Invalid 'range': Expected 2-tuple of Integers".as_ptr(),
                 );
-                return;
+                return ().reported(error);
             }
             let mut begin_raw: int64_t =
                 (*(*opts).range.items.offset(0 as ::core::ffi::c_int as isize))
@@ -232,4 +234,5 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
         RedrawingDisabled.set(save_rd);
         p_lz.set(save_lz as ::core::ffi::c_int);
     }
+    ().reported(error)
 }

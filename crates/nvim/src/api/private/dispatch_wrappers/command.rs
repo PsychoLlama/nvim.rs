@@ -52,9 +52,10 @@ pub unsafe fn handle_nvim_buf_create_user_command(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_create_user_command(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) =
+        unsafe { nvim_buf_create_user_command(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4) }
+    {
+        return failure(error, e);
     }
     NIL
 }
@@ -89,9 +90,8 @@ pub unsafe fn handle_nvim_buf_del_user_command(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_del_user_command(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_buf_del_user_command(arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -131,10 +131,10 @@ pub unsafe fn handle_nvim_buf_get_commands(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_commands(arg_1, &raw mut arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_commands(arg_1, &raw mut arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
@@ -177,10 +177,10 @@ pub unsafe fn handle_nvim_cmd(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_cmd(channel_id, &raw mut arg_1, &raw mut arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_cmd(channel_id, &raw mut arg_1, &raw mut arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeString, object_data { string: rv })
 }
 
@@ -225,9 +225,8 @@ pub unsafe fn handle_nvim_create_user_command(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_create_user_command(channel_id, arg_1, arg_2, &raw mut arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_create_user_command(channel_id, arg_1, arg_2, &raw mut arg_3) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -258,9 +257,8 @@ pub unsafe fn handle_nvim_del_user_command(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_del_user_command(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_del_user_command(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -296,10 +294,10 @@ pub unsafe fn handle_nvim_get_commands(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_commands(&raw mut arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_get_commands(&raw mut arg_1, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
@@ -338,10 +336,10 @@ pub unsafe fn handle_nvim_parse_cmd(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let mut rv = unsafe { nvim_parse_cmd(arg_1, &raw mut arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let mut rv = match unsafe { nvim_parse_cmd(arg_1, &raw mut arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     // SAFETY: `rv` is a `KeyDict_cmd`, whose field table is
     // `cmd_table` and whose length is 12.
     let dict = unsafe {

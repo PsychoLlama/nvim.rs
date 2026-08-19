@@ -19,11 +19,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_all_options_info(
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) {
-        let Call { arena, err, .. } = call;
+        let Call { arena, .. } = call;
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_all_options_info(arena, err) };
+        let ret = unsafe { nvim_get_all_options_info(arena) };
         // SAFETY: as above.
         unsafe { nlua_push_Dict(lstate, ret, PUSH_SPECIAL) };
         active_lstate.set(saved_lstate);
@@ -62,7 +62,14 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_option_info2(lstate: *mut lua_
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_option_info2(arg_1, &raw mut arg_2.dict, arena, err) };
+        let ret = match unsafe { nvim_get_option_info2(arg_1, &raw mut arg_2.dict, arena) } {
+            Ok(ret) => ret,
+            Err(e) => {
+                active_lstate.set(saved_lstate);
+                *err = e;
+                return;
+            }
+        };
         // SAFETY: as above.
         unsafe { nlua_push_Dict(lstate, ret, PUSH) };
         active_lstate.set(saved_lstate);
@@ -101,7 +108,14 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_option_value(lstate: *mut lua_
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_get_option_value(arg_1, &raw mut arg_2.dict, err) };
+        let mut ret = match unsafe { nvim_get_option_value(arg_1, &raw mut arg_2.dict) } {
+            Ok(ret) => ret,
+            Err(e) => {
+                active_lstate.set(saved_lstate);
+                *err = e;
+                return;
+            }
+        };
         // SAFETY: as above.
         unsafe { nlua_push_Object(lstate, &raw mut ret, PUSH_SPECIAL) };
         active_lstate.set(saved_lstate);
@@ -151,15 +165,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_option_value(lstate: *mut lua_
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        unsafe {
-            nvim_set_option_value(
-                LUA_INTERNAL_CALL,
-                arg_1,
-                arg_2.value,
-                &raw mut arg_3.dict,
-                err,
-            )
-        };
+        if let Err(e) = unsafe {
+            nvim_set_option_value(LUA_INTERNAL_CALL, arg_1, arg_2.value, &raw mut arg_3.dict)
+        } {
+            active_lstate.set(saved_lstate);
+            *err = e;
+            return;
+        }
         active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.

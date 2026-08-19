@@ -10,18 +10,20 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::kvec::Kvec;
 
-pub unsafe extern "C" fn nvim_buf_del_extmark(
-    mut buf: Buffer,
-    mut ns_id: Integer,
-    mut id: Integer,
-    mut err: *mut Error,
-) -> Boolean {
+pub unsafe fn nvim_buf_del_extmark(
+    buf: Buffer,
+    ns_id: Integer,
+    id: Integer,
+) -> Result<Boolean, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return false;
+            return false.reported(error);
         }
         if !ns_initialized(ns_id as uint32_t) {
             api_err_invalid(
@@ -31,23 +33,24 @@ pub unsafe extern "C" fn nvim_buf_del_extmark(
                 ns_id as int64_t,
                 false,
             );
-            return false;
+            return false.reported(error);
         }
-        return extmark_del_id(b, ns_id as uint32_t, id as uint32_t);
+        return extmark_del_id(b, ns_id as uint32_t, id as uint32_t).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_clear_namespace(
-    mut buf: Buffer,
-    mut ns_id: Integer,
-    mut line_start: Integer,
+pub unsafe fn nvim_buf_clear_namespace(
+    buf: Buffer,
+    ns_id: Integer,
+    line_start: Integer,
     mut line_end: Integer,
-    mut err: *mut Error,
-) {
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return;
+            return ().reported(error);
         }
         if !(line_start >= 0 as Integer && line_start < MAXLNUM as ::core::ffi::c_int as Integer) {
             api_err_invalid(
@@ -57,7 +60,7 @@ pub unsafe extern "C" fn nvim_buf_clear_namespace(
                 0 as int64_t,
                 false,
             );
-            return;
+            return ().reported(error);
         }
         if line_end < 0 as Integer || line_end > MAXLNUM as ::core::ffi::c_int as Integer {
             line_end = MAXLNUM as ::core::ffi::c_int as Integer;
@@ -75,12 +78,12 @@ pub unsafe extern "C" fn nvim_buf_clear_namespace(
             MAXCOL as ::core::ffi::c_int,
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_set_decoration_provider(
-    mut ns_id: Integer,
-    mut opts: *mut KeyDict_set_decoration_provider,
-    mut _err: *mut Error,
+pub unsafe fn nvim_set_decoration_provider(
+    ns_id: Integer,
+    opts: *mut KeyDict_set_decoration_provider,
 ) {
     unsafe {
         let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true);

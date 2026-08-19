@@ -9,32 +9,32 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, dict_put};
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
 use crate::log::logmsg_c;
 
-pub unsafe extern "C" fn nvim__id(mut obj: Object, mut arena: *mut Arena) -> Object {
+pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
     unsafe {
         return copy_object(obj, arena);
     }
 }
 
-pub unsafe extern "C" fn nvim__id_array(mut arr: Array, mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array {
     unsafe {
         return copy_array(arr, arena);
     }
 }
 
-pub unsafe extern "C" fn nvim__id_dict(mut dct: Dict, mut arena: *mut Arena) -> Dict {
+pub unsafe fn nvim__id_dict(dct: Dict, arena: *mut Arena) -> Dict {
     unsafe {
         return copy_dict(dct, arena);
     }
 }
 
-pub unsafe extern "C" fn nvim__id_float(mut flt: Float) -> Float {
+pub unsafe fn nvim__id_float(flt: Float) -> Float {
     return flt;
 }
 
-pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
+pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
     unsafe {
         let mut rv: Dict = arena_dict(arena, 6 as size_t);
         dict_put(&mut rv, c"fsync", Object::integer((*g_stats.ptr()).fsync));
@@ -63,11 +63,9 @@ pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
     }
 }
 
-pub unsafe extern "C" fn nvim_get_proc_children(
-    mut pid: Integer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rv: ::core::ffi::c_int = 0;
         let mut rvobj: Array = Array {
@@ -104,10 +102,7 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                     capacity: 0 as size_t,
                     items: ::core::ptr::null_mut::<Object>(),
                 };
-                let mut a__items: [Object; 1] = [Object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed { boolean: false },
-                }; 1];
+                let mut a__items: [Object; 1] = [NIL; 1];
                 a.capacity = 1 as size_t;
                 a.items = &raw mut a__items as *mut Object;
                 array_add(&mut a, Object::integer(pid));
@@ -146,20 +141,15 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                 }
             }
         }
-        return rvobj;
+        return rvobj.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_get_proc(
-    mut pid: Integer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
-        let mut rvobj: Object = object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        let mut rvobj: Object = NIL;
         if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
             api_err_invalid(
                 err,
@@ -168,20 +158,14 @@ pub unsafe extern "C" fn nvim_get_proc(
                 pid as int64_t,
                 false,
             );
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
         let mut a: Array = Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        let mut a__items: [Object; 1] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 1];
+        let mut a__items: [Object; 1] = [NIL; 1];
         a.capacity = 1 as size_t;
         a.items = &raw mut a__items as *mut Object;
         if a.size == a.capacity {
@@ -212,10 +196,7 @@ pub unsafe extern "C" fn nvim_get_proc(
             == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
             && o.data.array.size == 0 as size_t
         {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         } else if o.type_0 as ::core::ffi::c_uint
             == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -228,17 +209,18 @@ pub unsafe extern "C" fn nvim_get_proc(
                 pid,
             );
         }
-        return rvobj;
+        return rvobj.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim__inspect_cell(
-    mut grid: Integer,
-    mut row: Integer,
-    mut col: Integer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim__inspect_cell(
+    grid: Integer,
+    row: Integer,
+    col: Integer,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut ret: Array = Array {
             size: 0 as size_t,
@@ -258,7 +240,7 @@ pub unsafe extern "C" fn nvim__inspect_cell(
                     grid as int64_t,
                     false,
                 );
-                return ret;
+                return ret.reported(error);
             }
             g = &raw mut (*wp).w_grid_alloc;
         }
@@ -267,7 +249,7 @@ pub unsafe extern "C" fn nvim__inspect_cell(
             || col < 0 as Integer
             || col >= (*g).cols as Integer
         {
-            return ret;
+            return ret.reported(error);
         }
         ret = arena_array(arena, 3 as size_t);
         let mut off: size_t = (*(*g).line_offset.add(row as size_t)) + col as size_t;
@@ -283,27 +265,25 @@ pub unsafe extern "C" fn nvim__inspect_cell(
         if !highlight_use_hlstate() {
             array_add(&mut ret, Object::array(hl_inspect(attr, arena)));
         }
-        return ret;
+        return ret.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim__screenshot(mut path: String_0) {
+pub unsafe fn nvim__screenshot(path: String_0) {
     ui_call_screenshot(path);
 }
 
-pub unsafe extern "C" fn nvim__invalidate_glyph_cache() {
+pub unsafe fn nvim__invalidate_glyph_cache() {
     unsafe {
         schar_cache_clear();
         must_redraw.set(UPD_CLEAR);
     }
 }
 
-pub unsafe extern "C" fn nvim__unpack(
-    mut str: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
-        return unpack(str.data, str.size, arena, err);
+        return unpack(str.data, str.size, arena, err).reported(error);
     }
 }

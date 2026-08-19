@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, dict_put};
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
 use crate::kvec::InitVec;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -26,16 +26,17 @@ struct ConvFrame {
     ret_node_p: *mut Object,
 }
 
-pub unsafe extern "C" fn nvim_parse_expression(
+pub unsafe fn nvim_parse_expression(
     expr: String_0,
     flags: String_0,
     hl: Boolean,
     arena: *mut Arena,
-    err: *mut Error,
-) -> Dict {
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let Some(pflags) = parse_flags(flags, err) else {
-            return Dict::EMPTY;
+            return Dict::EMPTY.reported(error);
         };
 
         let mut parser_lines: [ParserLine; 2] = [
@@ -136,7 +137,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
 
         viml_pexpr_free_ast(east);
         viml_parser_destroy(&mut pstate);
-        ret
+        ret.reported(error)
     }
 }
 

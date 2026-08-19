@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::NIL;
 use crate::api::private::helpers::array_add;
 use crate::kvec::InitVec;
 
@@ -69,10 +70,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
-            init_array: [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 16],
+            init_array: [NIL; 16],
         };
         patterns.capacity = ::core::mem::size_of::<[Object; 16]>()
             .wrapping_div(::core::mem::size_of::<Object>())

@@ -33,11 +33,9 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
 
         // If the preview buffer doesn't exist, open one.
         if cmdpreview_buf.is_null() {
-            let mut err: Error = ERROR_INIT;
-            let bufnr = nvim_create_buf(false, true, &raw mut err);
-            if err.type_0 != kErrorTypeNone {
+            let Ok(bufnr) = nvim_create_buf(false, true) else {
                 return ::core::ptr::null_mut::<buf_T>();
-            }
+            };
             cmdpreview_buf = buflist_findnr(bufnr);
         }
 

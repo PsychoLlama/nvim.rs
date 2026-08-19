@@ -8,15 +8,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::kvec::InitVec;
 use crate::types::NUL;
 
-pub unsafe extern "C" fn nvim_exec_lua(
-    mut code: String_0,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_exec_lua(
+    code: String_0,
+    args: Array,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         return nlua_exec(
             code,
@@ -25,22 +27,22 @@ pub unsafe extern "C" fn nvim_exec_lua(
             kRetObject,
             arena,
             err,
-        );
+        )
+        .reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim__exec_lua_fast(
-    mut code: String_0,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
-    unsafe {
-        return nvim_exec_lua(code, args, arena, err);
-    }
+pub unsafe fn nvim__exec_lua_fast(
+    code: String_0,
+    args: Array,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    unsafe { nvim_exec_lua(code, args, arena) }
 }
 
-pub unsafe extern "C" fn nvim_strwidth(mut text: String_0, mut err: *mut Error) -> Integer {
+pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         if !(text.size <= 2147483647 as ::core::ffi::c_int as size_t) {
             api_err_invalid(
@@ -50,43 +52,36 @@ pub unsafe extern "C" fn nvim_strwidth(mut text: String_0, mut err: *mut Error) 
                 0 as int64_t,
                 true,
             );
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
-        return mb_string2cells(text.data) as Integer;
+        return (mb_string2cells(text.data) as Integer).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_list_runtime_paths(
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
-    unsafe {
-        return nvim_get_runtime_file(NULL_STRING, true, arena, err);
-    }
+pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error> {
+    unsafe { nvim_get_runtime_file(NULL_STRING, true, arena) }
 }
 
-pub unsafe extern "C" fn nvim__runtime_inspect(mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim__runtime_inspect(arena: *mut Arena) -> Array {
     unsafe {
         return runtime_inspect(arena);
     }
 }
 
-pub unsafe extern "C" fn nvim_get_runtime_file(
-    mut name: String_0,
-    mut all: Boolean,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_get_runtime_file(
+    name: String_0,
+    all: Boolean,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut cookie: RuntimeCookie = RuntimeCookie {
             rv: ArrayBuilder {
                 size: 0 as size_t,
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<Object>(),
-                init_array: [Object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed { boolean: false },
-                }; 16],
+                init_array: [NIL; 16],
             },
             arena: arena,
         };
@@ -134,7 +129,7 @@ pub unsafe extern "C" fn nvim_get_runtime_file(
             &raw mut cookie as *mut ::core::ffi::c_void,
         );
         try_leave(&raw mut tstate, err);
-        return arena_take_arraybuilder(arena, &raw mut cookie.rv);
+        return arena_take_arraybuilder(arena, &raw mut cookie.rv).reported(error);
     }
 }
 
@@ -168,19 +163,20 @@ unsafe fn find_runtime_cb(
     }
 }
 
-pub unsafe extern "C" fn nvim__get_lib_dir() -> String_0 {
+pub unsafe fn nvim__get_lib_dir() -> String_0 {
     unsafe {
         return cstr_as_string(get_lib_dir());
     }
 }
 
-pub unsafe extern "C" fn nvim__get_runtime(
-    mut pat: Array,
-    mut all: Boolean,
-    mut opts: *mut KeyDict_runtime,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim__get_runtime(
+    pat: Array,
+    all: Boolean,
+    opts: *mut KeyDict_runtime,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         if !(!(*opts).do_source || nlua_is_deferred_safe() as ::core::ffi::c_int != 0) {
             api_set_error(
@@ -195,7 +191,8 @@ pub unsafe extern "C" fn nvim__get_runtime(
                 size: 0 as size_t,
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<Object>(),
-            };
+            }
+            .reported(error);
         }
         let mut res: Array = runtime_get_named((*opts).is_lua, pat, all, arena);
         if (*opts).do_source {
@@ -211,11 +208,13 @@ pub unsafe extern "C" fn nvim__get_runtime(
                 i = i.wrapping_add(1);
             }
         }
-        return res;
+        return res.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_set_current_dir(mut dir: String_0, mut err: *mut Error) {
+pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         if !(dir.size < 4096 as size_t) {
             api_err_invalid(
@@ -225,7 +224,7 @@ pub unsafe extern "C" fn nvim_set_current_dir(mut dir: String_0, mut err: *mut E
                 0 as int64_t,
                 true,
             );
-            return;
+            return ().reported(error);
         }
         let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
         memcpy(
@@ -247,4 +246,5 @@ pub unsafe extern "C" fn nvim_set_current_dir(mut dir: String_0, mut err: *mut E
         changedir_func(&raw mut string as *mut ::core::ffi::c_char, kCdScopeGlobal);
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }

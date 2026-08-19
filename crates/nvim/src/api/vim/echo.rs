@@ -8,13 +8,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 
-pub unsafe extern "C" fn nvim_echo(
-    mut chunks: Array,
-    mut history: Boolean,
-    mut opts: *mut KeyDict_echo_opts,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_echo(
+    chunks: Array,
+    history: Boolean,
+    opts: *mut KeyDict_echo_opts,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut kind: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut is_progress: bool = false;
@@ -153,11 +155,11 @@ pub unsafe extern "C" fn nvim_echo(
                     do_autocmd_progress(id, hl_msg, &raw mut msg_data);
                 }
                 if !needs_clear {
-                    return id;
+                    return id.reported(error);
                 }
             }
         }
         hl_msg_free(hl_msg);
-        return id;
+        return id.reported(error);
     }
 }

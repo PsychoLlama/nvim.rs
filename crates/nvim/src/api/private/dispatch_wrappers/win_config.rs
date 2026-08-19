@@ -51,10 +51,10 @@ pub unsafe fn handle_nvim_open_win(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_open_win(arg_1, arg_2, &raw mut arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_open_win(arg_1, arg_2, &raw mut arg_3) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(
         kObjectTypeWindow,
         object_data {
@@ -89,10 +89,10 @@ pub unsafe fn handle_nvim_win_get_config(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let mut rv = unsafe { nvim_win_get_config(arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let mut rv = match unsafe { nvim_win_get_config(arg_1, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     // SAFETY: `rv` is a `KeyDict_win_config`, whose field table is
     // `win_config_table` and whose length is 25.
     let dict = unsafe {
@@ -141,9 +141,8 @@ pub unsafe fn handle_nvim_win_set_config(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_win_set_config(arg_1, &raw mut arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_win_set_config(arg_1, &raw mut arg_2) } {
+        return failure(error, e);
     }
     NIL
 }

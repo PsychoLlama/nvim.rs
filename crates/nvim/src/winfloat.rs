@@ -368,8 +368,14 @@ fn screen_pos_of(win: Win, pos: &mut pos_T) -> (c_int, c_int) {
     (row, scol)
 }
 fn create_scratch_buffer(err: &mut Error) -> Buffer {
-    // SAFETY: the caller's error slot.
-    unsafe { nvim_create_buf(false, true, err) }
+    // SAFETY: nothing here outlives the call.
+    match unsafe { nvim_create_buf(false, true) } {
+        Ok(buf) => buf,
+        Err(e) => {
+            *err = e;
+            0
+        }
+    }
 }
 fn set_bufhidden_wipe(buf: Buf) {
     let s = String_0 {

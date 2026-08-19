@@ -48,7 +48,14 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_open_win(lstate: *mut lua_State) -
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_open_win(arg_1, arg_2, &raw mut arg_3.dict, err) };
+        let ret = match unsafe { nvim_open_win(arg_1, arg_2, &raw mut arg_3.dict) } {
+            Ok(ret) => ret,
+            Err(e) => {
+                active_lstate.set(saved_lstate);
+                *err = e;
+                return;
+            }
+        };
         // SAFETY: as above.
         unsafe { nlua_push_handle(lstate, ret, PUSH_SPECIAL) };
         active_lstate.set(saved_lstate);
@@ -81,7 +88,14 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_config(lstate: *mut lua_St
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_win_get_config(arg_1, arena, err) };
+        let mut ret = match unsafe { nvim_win_get_config(arg_1, arena) } {
+            Ok(ret) => ret,
+            Err(e) => {
+                active_lstate.set(saved_lstate);
+                *err = e;
+                return;
+            }
+        };
         // SAFETY: as above.
         unsafe { push_keydict(lstate, &raw mut ret) };
         active_lstate.set(saved_lstate);
@@ -120,7 +134,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_config(lstate: *mut lua_St
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_win_set_config(arg_1, &raw mut arg_2.dict, err) };
+        if let Err(e) = unsafe { nvim_win_set_config(arg_1, &raw mut arg_2.dict) } {
+            active_lstate.set(saved_lstate);
+            *err = e;
+            return;
+        }
         active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.

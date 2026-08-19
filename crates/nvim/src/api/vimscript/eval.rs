@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::types::{FAIL, OK};
 use core::ffi::{c_char, c_int};
@@ -39,7 +40,9 @@ impl Drop for RecursionGuard {
     }
 }
 
-pub unsafe extern "C" fn nvim_eval(expr: String_0, arena: *mut Arena, err: *mut Error) -> Object {
+pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         static recursive: GlobalCell<c_int> = GlobalCell::new(0);
         let mut rv = Object::NIL;
@@ -71,7 +74,7 @@ pub unsafe extern "C" fn nvim_eval(expr: String_0, arena: *mut Arena, err: *mut 
             }
         }
         tv_clear(&raw mut rettv);
-        rv
+        rv.reported(error)
     }
 }
 
@@ -132,22 +135,25 @@ unsafe fn call_function_with(
     }
 }
 
-pub unsafe extern "C" fn nvim_call_function(
+pub unsafe fn nvim_call_function(
     fn_0: String_0,
     args: Array,
     arena: *mut Arena,
-    err: *mut Error,
-) -> Object {
-    unsafe { call_function_with(fn_0, args, ptr::null_mut::<dict_T>(), arena, err) }
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
+    let rv = unsafe { call_function_with(fn_0, args, ptr::null_mut::<dict_T>(), arena, err) };
+    rv.reported(error)
 }
 
-pub unsafe extern "C" fn nvim_call_dict_function(
+pub unsafe fn nvim_call_dict_function(
     dict: Object,
     mut fn_0: String_0,
     args: Array,
     arena: *mut Arena,
-    err: *mut Error,
-) -> Object {
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rettv: typval_T = TV_INITIAL_VALUE;
         // Only the evaluated form owns what it produced.
@@ -165,7 +171,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
                 clear_evalarg(EVALARG_EVALUATE.ptr(), ptr::null_mut::<exarg_T>());
                 try_leave(&raw mut tstate, err);
                 if (*err).type_0 != kErrorTypeNone {
-                    return Object::NIL;
+                    return Object::NIL.reported(error);
                 }
                 if eval_ret != OK {
                     abort();
@@ -180,7 +186,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
                     c"String or Dict".as_ptr(),
                     ptr::null::<c_char>(),
                 );
-                return Object::NIL;
+                return Object::NIL.reported(error);
             }
         }
         let self_dict: *mut dict_T = rettv.vval.v_dict;
@@ -188,7 +194,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
         if mustfree {
             tv_clear(&raw mut rettv);
         }
-        rv
+        rv.reported(error)
     }
 }
 

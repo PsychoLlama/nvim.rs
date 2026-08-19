@@ -7,9 +7,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 
-pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) -> Boolean {
+pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut res: bool = false;
         if !(name.size == 1 as size_t) {
@@ -20,7 +22,7 @@ pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) 
                 0 as int64_t,
                 true,
             );
-            return res as Boolean;
+            return (res as Boolean).reported(error);
         }
         if !(*name.data as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && *name.data as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -33,7 +35,7 @@ pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) 
                 0 as int64_t,
                 true,
             );
-            return res as Boolean;
+            return (res as Boolean).reported(error);
         }
         res = set_mark(
             ::core::ptr::null_mut::<buf_T>(),
@@ -42,16 +44,17 @@ pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) 
             0 as Integer,
             err,
         );
-        return res as Boolean;
+        return (res as Boolean).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_get_mark(
-    mut name: String_0,
-    mut _opts: *mut KeyDict_empty,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_get_mark(
+    name: String_0,
+    _opts: *mut KeyDict_empty,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rv: Array = Array {
             size: 0 as size_t,
@@ -66,7 +69,7 @@ pub unsafe extern "C" fn nvim_get_mark(
                 0 as int64_t,
                 true,
             );
-            return rv;
+            return rv.reported(error);
         }
         if !(*name.data as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && *name.data as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -79,7 +82,7 @@ pub unsafe extern "C" fn nvim_get_mark(
                 0 as int64_t,
                 true,
             );
-            return rv;
+            return rv.reported(error);
         }
         let mut mark: *mut xfmark_T = mark_get_global(false, *name.data as ::core::ffi::c_int);
         let mut pos: pos_T = (*mark).fmark.mark;
@@ -121,6 +124,6 @@ pub unsafe extern "C" fn nvim_get_mark(
         if allocated {
             xfree(filename as *mut ::core::ffi::c_void);
         }
-        return rv;
+        return rv.reported(error);
     }
 }

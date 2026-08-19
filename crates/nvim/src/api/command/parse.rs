@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, dict_put};
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
 use crate::types::NUL;
 use crate::types::builders::static_cstring;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -194,21 +194,21 @@ unsafe fn parse_mods(cmdmod: &cmdmod_T, arena: *mut Arena) -> Dict {
     )
 }
 
-pub unsafe extern "C" fn nvim_parse_cmd(
+pub unsafe fn nvim_parse_cmd(
     str: String_0,
     _opts: *mut KeyDict_empty,
     arena: *mut Arena,
-    err: *mut Error,
-) -> KeyDict_cmd {
+) -> Result<KeyDict_cmd, Error> {
+    let mut error = ERROR_INIT;
+    let err = &mut error;
     // SAFETY: all three are plain C aggregates whose all-zero state is the
     // valid "nothing parsed yet" one, as the C original's CLEAR_FIELD relies
-    // on; `err` is the dispatcher's own slot.
-    let (mut result, mut ea, mut cmdinfo, err) = unsafe {
+    // on.
+    let (mut result, mut ea, mut cmdinfo) = unsafe {
         (
             ::core::mem::zeroed::<KeyDict_cmd>(),
             ::core::mem::zeroed::<exarg_T>(),
             ::core::mem::zeroed::<CmdParseInfo>(),
-            &mut *err,
         )
     };
 
@@ -240,7 +240,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
                 );
             }
         }
-        return result;
+        return Err(error);
     }
 
     // SAFETY: `useridx` indexes the garray the matching `cmdidx` names, and
@@ -342,5 +342,5 @@ pub unsafe extern "C" fn nvim_parse_cmd(
     // The `:filter` pattern `parse_mods` copied out is freed here, not before.
     // SAFETY: paired with the `parse_cmdline` above.
     unsafe { undo_cmdmod(&raw mut cmdinfo.cmdmod) };
-    result
+    result.reported(error)
 }

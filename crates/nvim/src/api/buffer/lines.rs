@@ -10,32 +10,35 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 use crate::types::NUL;
 
-pub unsafe extern "C" fn nvim_buf_line_count(mut buf: Buffer, mut err: *mut Error) -> Integer {
+pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         if (*b).b_ml.ml_mfp.is_null() {
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
-        return (*b).b_ml.ml_line_count as Integer;
+        return ((*b).b_ml.ml_line_count as Integer).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_get_lines(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
+pub unsafe fn nvim_buf_get_lines(
+    channel_id: uint64_t,
+    buf: Buffer,
     mut start: Integer,
     mut end: Integer,
-    mut strict_indexing: Boolean,
-    mut arena: *mut Arena,
-    mut lstate: *mut lua_State,
-    mut err: *mut Error,
-) -> Array {
+    strict_indexing: Boolean,
+    arena: *mut Arena,
+    lstate: *mut lua_State,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rv: Array = Array {
             size: 0 as size_t,
@@ -44,10 +47,10 @@ pub unsafe extern "C" fn nvim_buf_get_lines(
         };
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return rv;
+            return rv.reported(error);
         }
         if (*b).b_ml.ml_mfp.is_null() {
-            return rv;
+            return rv.reported(error);
         }
         let mut oob: bool = false;
         start = normalize_index(b, start as int64_t, true, &raw mut oob) as Integer;
@@ -59,10 +62,10 @@ pub unsafe extern "C" fn nvim_buf_get_lines(
                 c"%s".as_ptr(),
                 c"Index out of bounds".as_ptr(),
             );
-            return rv;
+            return rv.reported(error);
         }
         if start >= end {
-            return rv;
+            return rv.reported(error);
         }
         let mut size: size_t = (end - start) as size_t;
         init_line_array(lstate, &raw mut rv, size, arena);
@@ -76,24 +79,25 @@ pub unsafe extern "C" fn nvim_buf_get_lines(
             lstate,
             arena,
         );
-        return rv;
+        return rv.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_set_lines(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
+pub unsafe fn nvim_buf_set_lines(
+    channel_id: uint64_t,
+    buf: Buffer,
     mut start: Integer,
     mut end: Integer,
-    mut strict_indexing: Boolean,
-    mut replacement: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+    strict_indexing: Boolean,
+    replacement: Array,
+    arena: *mut Arena,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
         if b.is_null() {
-            return;
+            return ().reported(error);
         }
         let mut oob: bool = false;
         start = normalize_index(b, start as int64_t, true, &raw mut oob) as Integer;
@@ -105,7 +109,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                 c"%s".as_ptr(),
                 c"Index out of bounds".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         if !(start <= end) {
             api_set_error(
@@ -114,7 +118,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                 c"%s".as_ptr(),
                 c"'start' is higher than 'end'".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
         if !check_string_array(
@@ -123,7 +127,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
             disallow_nl,
             err,
         ) {
-            return;
+            return ().reported(error);
         }
         let mut new_len: size_t = replacement.size;
         let mut old_len: size_t = (end - start) as size_t;
@@ -312,20 +316,22 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
         }
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_get_text(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
+pub unsafe fn nvim_buf_get_text(
+    channel_id: uint64_t,
+    buf: Buffer,
     mut start_row: Integer,
-    mut start_col: Integer,
+    start_col: Integer,
     mut end_row: Integer,
-    mut end_col: Integer,
-    mut _opts: *mut KeyDict_empty,
-    mut arena: *mut Arena,
-    mut lstate: *mut lua_State,
-    mut err: *mut Error,
-) -> Array {
+    end_col: Integer,
+    _opts: *mut KeyDict_empty,
+    arena: *mut Arena,
+    lstate: *mut lua_State,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut str: String_0 = String_0 {
             data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -338,10 +344,10 @@ pub unsafe extern "C" fn nvim_buf_get_text(
         };
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return rv;
+            return rv.reported(error);
         }
         if (*b).b_ml.ml_mfp.is_null() {
-            return rv;
+            return rv.reported(error);
         }
         let mut oob: bool = false;
         start_row = normalize_index(b, start_row as int64_t, false, &raw mut oob) as Integer;
@@ -353,7 +359,7 @@ pub unsafe extern "C" fn nvim_buf_get_text(
                 c"%s".as_ptr(),
                 c"Index out of bounds".as_ptr(),
             );
-            return rv;
+            return rv.reported(error);
         }
         if !(start_row <= end_row) {
             api_set_error(
@@ -362,7 +368,7 @@ pub unsafe extern "C" fn nvim_buf_get_text(
                 c"%s".as_ptr(),
                 c"'start' is higher than 'end'".as_ptr(),
             );
-            return rv;
+            return rv.reported(error);
         }
         let mut replace_nl: bool = channel_id != VIML_INTERNAL_CALL;
         let mut size: size_t = ((end_row - start_row) as size_t).wrapping_add(1 as size_t);
@@ -385,7 +391,7 @@ pub unsafe extern "C" fn nvim_buf_get_text(
                     replace_nl,
                     arena,
                 );
-                return rv;
+                return rv.reported(error);
             }
         } else {
             str = buf_get_text(
@@ -432,28 +438,22 @@ pub unsafe extern "C" fn nvim_buf_get_text(
             }
         }
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return Array {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-            };
+            return Err(error);
         }
-        return rv;
+        return rv.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_get_offset(
-    mut buf: Buffer,
-    mut index: Integer,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe fn nvim_buf_get_offset(buf: Buffer, index: Integer) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         if (*b).b_ml.ml_mfp.is_null() {
-            return -1 as Integer;
+            return (-1 as Integer).reported(error);
         }
         if !(index >= 0 as Integer && index <= (*b).b_ml.ml_line_count as Integer) {
             api_set_error(
@@ -462,14 +462,15 @@ pub unsafe extern "C" fn nvim_buf_get_offset(
                 c"%s".as_ptr(),
                 c"Index out of bounds".as_ptr(),
             );
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
-        return ml_find_line_or_offset(
+        return (ml_find_line_or_offset(
             b,
             index as linenr_T + 1 as linenr_T,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
             true,
-        ) as Integer;
+        ) as Integer)
+            .reported(error);
     }
 }
 

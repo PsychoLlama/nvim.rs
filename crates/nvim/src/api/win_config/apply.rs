@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 
 unsafe fn win_config_split(
     mut win: *mut win_T,
@@ -421,15 +422,16 @@ unsafe fn win_config_float_tp(
     }
 }
 
-pub unsafe extern "C" fn nvim_win_set_config(
-    mut win: Window,
-    mut config: *mut KeyDict_win_config,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_win_set_config(
+    win: Window,
+    config: *mut KeyDict_win_config,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut w: *mut win_T = find_window_by_handle(win, err);
         if w.is_null() {
-            return;
+            return ().reported(error);
         }
         let mut was_split: bool = !(*w).w_floating;
         let mut has_split: bool = has_key(
@@ -457,14 +459,14 @@ pub unsafe extern "C" fn nvim_win_set_config(
             !was_split || to_split as ::core::ffi::c_int != 0,
             err,
         ) {
-            return;
+            return ().reported(error);
         }
         if to_split {
             if !win_config_split(w, config, &raw mut fconfig, err) {
-                return;
+                return ().reported(error);
             }
         } else if !win_config_float_tp(w, config, &raw mut fconfig, err) {
-            return;
+            return ().reported(error);
         }
         if fconfig.style as ::core::ffi::c_uint
             == kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -480,4 +482,5 @@ pub unsafe extern "C" fn nvim_win_set_config(
             cmdline_win.set(::core::ptr::null_mut::<win_T>());
         }
     }
+    ().reported(error)
 }

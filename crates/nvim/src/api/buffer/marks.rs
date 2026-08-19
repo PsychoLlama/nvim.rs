@@ -7,18 +7,16 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 
-pub unsafe extern "C" fn nvim_buf_del_mark(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut err: *mut Error,
-) -> Boolean {
+pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut res: bool = false;
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return res as Boolean;
+            return (res as Boolean).reported(error);
         }
         if !(name.size == 1 as size_t) {
             api_err_invalid(
@@ -28,7 +26,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
                 0 as int64_t,
                 true,
             );
-            return res as Boolean;
+            return (res as Boolean).reported(error);
         }
         let mut fm: *mut fmark_T = mark_get(
             b,
@@ -39,28 +37,29 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
         );
         if fm.is_null() {
             api_err_invalid(err, c"mark name".as_ptr(), name.data, 0 as int64_t, true);
-            return res as Boolean;
+            return (res as Boolean).reported(error);
         }
         if (*fm).mark.lnum != 0 as linenr_T && (*fm).fnum == (*b).handle {
             res = set_mark(b, name, 0 as Integer, 0 as Integer, err);
         }
-        return res as Boolean;
+        return (res as Boolean).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_set_mark(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut line: Integer,
-    mut col: Integer,
-    mut _opts: *mut KeyDict_empty,
-    mut err: *mut Error,
-) -> Boolean {
+pub unsafe fn nvim_buf_set_mark(
+    buf: Buffer,
+    name: String_0,
+    line: Integer,
+    col: Integer,
+    _opts: *mut KeyDict_empty,
+) -> Result<Boolean, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut res: bool = false;
         let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
         if b.is_null() {
-            return res as Boolean;
+            return (res as Boolean).reported(error);
         }
         if !(name.size == 1 as size_t) {
             api_err_invalid(
@@ -70,19 +69,20 @@ pub unsafe extern "C" fn nvim_buf_set_mark(
                 0 as int64_t,
                 true,
             );
-            return res as Boolean;
+            return (res as Boolean).reported(error);
         }
         res = set_mark(b, name, line, col, err);
-        return res as Boolean;
+        return (res as Boolean).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_get_mark(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_buf_get_mark(
+    buf: Buffer,
+    name: String_0,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rv: Array = Array {
             size: 0 as size_t,
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
         };
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return rv;
+            return rv.reported(error);
         }
         if !(name.size == 1 as size_t) {
             api_err_invalid(
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
                 0 as int64_t,
                 true,
             );
-            return rv;
+            return rv.reported(error);
         }
         let mut fm: *mut fmark_T = ::core::ptr::null_mut::<fmark_T>();
         let mut pos: pos_T = pos_T {
@@ -119,7 +119,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
         );
         if fm.is_null() {
             api_err_invalid(err, c"mark name".as_ptr(), name.data, 0 as int64_t, true);
-            return rv;
+            return rv.reported(error);
         }
         if (*fm).fnum != (*b).handle {
             pos.lnum = 0 as ::core::ffi::c_int as linenr_T;
@@ -130,6 +130,6 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
         rv = arena_array(arena, 2 as size_t);
         array_add(&mut rv, Object::integer(pos.lnum as Integer));
         array_add(&mut rv, Object::integer(pos.col as Integer));
-        return rv;
+        return rv.reported(error);
     }
 }

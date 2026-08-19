@@ -8,31 +8,27 @@
 
 use super::*;
 
-pub unsafe extern "C" fn buffer_insert(
-    mut buffer: Buffer,
-    mut lnum: Integer,
-    mut lines: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
-    unsafe {
-        nvim_buf_set_lines(0 as uint64_t, buffer, lnum, lnum, true, lines, arena, err);
-    }
+pub unsafe fn buffer_insert(
+    buffer: Buffer,
+    lnum: Integer,
+    lines: Array,
+    arena: *mut Arena,
+) -> Result<(), Error> {
+    unsafe { nvim_buf_set_lines(0 as uint64_t, buffer, lnum, lnum, true, lines, arena) }
 }
 
-pub unsafe extern "C" fn buffer_get_line(
-    mut buffer: Buffer,
-    mut index: Integer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> String_0 {
+pub unsafe fn buffer_get_line(
+    buffer: Buffer,
+    index: Integer,
+    arena: *mut Arena,
+) -> Result<String_0, Error> {
     unsafe {
         let mut rv: String_0 = String_0 {
             data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             size: 0 as size_t,
         };
-        index = convert_index(index as int64_t) as Integer;
-        let mut slice: Array = nvim_buf_get_lines(
+        let index = convert_index(index as int64_t) as Integer;
+        let slice: Array = nvim_buf_get_lines(
             0 as uint64_t,
             buffer,
             index,
@@ -40,37 +36,33 @@ pub unsafe extern "C" fn buffer_get_line(
             true,
             arena,
             ::core::ptr::null_mut::<lua_State>(),
-            err,
-        );
-        if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
-            && slice.size != 0
-        {
+        )?;
+        if slice.size != 0 {
             rv = (*slice.items.offset(0 as ::core::ffi::c_int as isize))
                 .data
                 .string;
         }
-        return rv;
+        Ok(rv)
     }
 }
 
-pub unsafe extern "C" fn buffer_set_line(
-    mut buffer: Buffer,
-    mut index: Integer,
-    mut line: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+pub unsafe fn buffer_set_line(
+    buffer: Buffer,
+    index: Integer,
+    line: String_0,
+    arena: *mut Arena,
+) -> Result<(), Error> {
     unsafe {
         let mut l: Object = object {
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed { string: line },
         };
-        let mut array: Array = Array {
+        let array: Array = Array {
             size: 1 as size_t,
             capacity: 0,
             items: &raw mut l,
         };
-        index = convert_index(index as int64_t) as Integer;
+        let index = convert_index(index as int64_t) as Integer;
         nvim_buf_set_lines(
             0 as uint64_t,
             buffer,
@@ -79,24 +71,22 @@ pub unsafe extern "C" fn buffer_set_line(
             true,
             array,
             arena,
-            err,
-        );
+        )
     }
 }
 
-pub unsafe extern "C" fn buffer_del_line(
-    mut buffer: Buffer,
-    mut index: Integer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+pub unsafe fn buffer_del_line(
+    buffer: Buffer,
+    index: Integer,
+    arena: *mut Arena,
+) -> Result<(), Error> {
     unsafe {
-        let mut array: Array = Array {
+        let array: Array = Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        index = convert_index(index as int64_t) as Integer;
+        let index = convert_index(index as int64_t) as Integer;
         nvim_buf_set_lines(
             0 as uint64_t,
             buffer,
@@ -105,25 +95,23 @@ pub unsafe extern "C" fn buffer_del_line(
             true,
             array,
             arena,
-            err,
-        );
+        )
     }
 }
 
-pub unsafe extern "C" fn buffer_get_line_slice(
-    mut buffer: Buffer,
-    mut start: Integer,
-    mut end: Integer,
-    mut include_start: Boolean,
-    mut include_end: Boolean,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn buffer_get_line_slice(
+    buffer: Buffer,
+    start: Integer,
+    end: Integer,
+    include_start: Boolean,
+    include_end: Boolean,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
     unsafe {
-        start = (convert_index(start as int64_t) + !include_start as ::core::ffi::c_int as int64_t)
-            as Integer;
-        end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
-        return nvim_buf_get_lines(
+        let start = (convert_index(start as int64_t)
+            + !include_start as ::core::ffi::c_int as int64_t) as Integer;
+        let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
+        nvim_buf_get_lines(
             0 as uint64_t,
             buffer,
             start,
@@ -131,35 +119,24 @@ pub unsafe extern "C" fn buffer_get_line_slice(
             false,
             arena,
             ::core::ptr::null_mut::<lua_State>(),
-            err,
-        );
+        )
     }
 }
 
-pub unsafe extern "C" fn buffer_set_line_slice(
-    mut buffer: Buffer,
-    mut start: Integer,
-    mut end: Integer,
-    mut include_start: Boolean,
-    mut include_end: Boolean,
-    mut replacement: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+pub unsafe fn buffer_set_line_slice(
+    buffer: Buffer,
+    start: Integer,
+    end: Integer,
+    include_start: Boolean,
+    include_end: Boolean,
+    replacement: Array,
+    arena: *mut Arena,
+) -> Result<(), Error> {
     unsafe {
-        start = (convert_index(start as int64_t) + !include_start as ::core::ffi::c_int as int64_t)
-            as Integer;
-        end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
-        nvim_buf_set_lines(
-            0 as uint64_t,
-            buffer,
-            start,
-            end,
-            false,
-            replacement,
-            arena,
-            err,
-        );
+        let start = (convert_index(start as int64_t)
+            + !include_start as ::core::ffi::c_int as int64_t) as Integer;
+        let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
+        nvim_buf_set_lines(0 as uint64_t, buffer, start, end, false, replacement, arena)
     }
 }
 

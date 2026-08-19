@@ -10,38 +10,39 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::has_key;
+use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 
-pub unsafe extern "C" fn nvim_create_user_command(
-    mut channel_id: uint64_t,
-    mut name: String_0,
-    mut cmd: Object,
-    mut opts: *mut KeyDict_user_command,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_create_user_command(
+    channel_id: uint64_t,
+    name: String_0,
+    cmd: Object,
+    opts: *mut KeyDict_user_command,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         create_user_command(channel_id, name, cmd, opts, 0 as ::core::ffi::c_int, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_del_user_command(mut name: String_0, mut err: *mut Error) {
-    unsafe {
-        nvim_buf_del_user_command(-1 as Buffer, name, err);
-    }
+pub unsafe fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
+    unsafe { nvim_buf_del_user_command(-1 as Buffer, name) }
 }
 
-pub unsafe extern "C" fn nvim_buf_create_user_command(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
-    mut name: String_0,
-    mut cmd: Object,
-    mut opts: *mut KeyDict_user_command,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_create_user_command(
+    channel_id: uint64_t,
+    buf: Buffer,
+    name: String_0,
+    cmd: Object,
+    opts: *mut KeyDict_user_command,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut target_buf: *mut buf_T = find_buffer_by_handle(buf, err);
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         let mut save_curbuf: *mut buf_T = curbuf.get();
         curbuf.set(target_buf);
@@ -55,13 +56,12 @@ pub unsafe extern "C" fn nvim_buf_create_user_command(
         );
         curbuf.set(save_curbuf);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_del_user_command(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut gap: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
         if buf == -1 as ::core::ffi::c_int {
@@ -69,7 +69,7 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
         } else {
             let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                return;
+                return ().reported(error);
             }
             gap = &raw mut (*b).b_ucmds;
         }
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
                             .wrapping_mul(::core::mem::size_of::<ucmd_T>()),
                     );
                 }
-                return;
+                return ().reported(error);
             }
             i += 1;
         }
@@ -98,6 +98,7 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
             name.data,
         );
     }
+    ().reported(error)
 }
 
 pub unsafe fn create_user_command(
@@ -508,22 +509,20 @@ pub unsafe fn create_user_command(
     }
 }
 
-pub unsafe extern "C" fn nvim_get_commands(
-    mut opts: *mut KeyDict_get_commands,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
-    unsafe {
-        return nvim_buf_get_commands(-1 as Buffer, opts, arena, err);
-    }
+pub unsafe fn nvim_get_commands(
+    opts: *mut KeyDict_get_commands,
+    arena: *mut Arena,
+) -> Result<Dict, Error> {
+    unsafe { nvim_buf_get_commands(-1 as Buffer, opts, arena) }
 }
 
-pub unsafe extern "C" fn nvim_buf_get_commands(
-    mut buf: Buffer,
-    mut opts: *mut KeyDict_get_commands,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_buf_get_commands(
+    buf: Buffer,
+    opts: *mut KeyDict_get_commands,
+    arena: *mut Arena,
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut global: bool = buf == -1 as ::core::ffi::c_int;
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -531,7 +530,8 @@ pub unsafe extern "C" fn nvim_buf_get_commands(
                 size: 0 as size_t,
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<KeyValuePair>(),
-            };
+            }
+            .reported(error);
         }
         if global {
             if (*opts).builtin {
@@ -544,9 +544,10 @@ pub unsafe extern "C" fn nvim_buf_get_commands(
                     size: 0 as size_t,
                     capacity: 0 as size_t,
                     items: ::core::ptr::null_mut::<KeyValuePair>(),
-                };
+                }
+                .reported(error);
             }
-            return commands_array(::core::ptr::null_mut::<buf_T>(), arena);
+            return commands_array(::core::ptr::null_mut::<buf_T>(), arena).reported(error);
         }
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if (*opts).builtin as ::core::ffi::c_int != 0 || b.is_null() {
@@ -554,8 +555,9 @@ pub unsafe extern "C" fn nvim_buf_get_commands(
                 size: 0 as size_t,
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<KeyValuePair>(),
-            };
+            }
+            .reported(error);
         }
-        return commands_array(b, arena);
+        return commands_array(b, arena).reported(error);
     }
 }

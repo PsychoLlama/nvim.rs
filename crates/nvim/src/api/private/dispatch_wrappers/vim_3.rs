@@ -50,9 +50,8 @@ pub unsafe fn handle_nvim_put(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_put(arg_1, arg_2, arg_3, arg_4, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_put(arg_1, arg_2, arg_3, arg_4, arena) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -142,10 +141,7 @@ pub unsafe fn handle_nvim_select_popupmenu_item(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_select_popupmenu_item(arg_1, arg_2, arg_3, &raw mut arg_4, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    unsafe { nvim_select_popupmenu_item(arg_1, arg_2, arg_3, &raw mut arg_4) };
     NIL
 }
 
@@ -191,10 +187,7 @@ pub unsafe fn handle_nvim_set_client_info(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_client_info(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    unsafe { nvim_set_client_info(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arena) };
     NIL
 }
 
@@ -229,9 +222,8 @@ pub unsafe fn handle_nvim_set_current_buf(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_current_buf(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_current_buf(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -262,9 +254,8 @@ pub unsafe fn handle_nvim_set_current_dir(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_current_dir(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_current_dir(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -300,9 +291,8 @@ pub unsafe fn handle_nvim_set_current_line(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_current_line(arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_current_line(arg_1, arena) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -338,9 +328,8 @@ pub unsafe fn handle_nvim_set_current_tabpage(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_current_tabpage(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_current_tabpage(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -376,9 +365,8 @@ pub unsafe fn handle_nvim_set_current_win(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_current_win(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_current_win(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -422,9 +410,8 @@ pub unsafe fn handle_nvim_set_hl(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_hl(channel_id, arg_1, arg_2, &raw mut arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_hl(channel_id, arg_1, arg_2, &raw mut arg_3) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -455,9 +442,8 @@ pub unsafe fn handle_nvim_set_hl_ns(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_hl_ns(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_hl_ns(arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -488,10 +474,7 @@ pub unsafe fn handle_nvim_set_hl_ns_fast(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_hl_ns_fast(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    unsafe { nvim_set_hl_ns_fast(arg_1) };
     NIL
 }
 
@@ -538,9 +521,8 @@ pub unsafe fn handle_nvim_set_keymap(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_keymap(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_keymap(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -572,9 +554,8 @@ pub unsafe fn handle_nvim_set_var(
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_var(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_var(arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -606,9 +587,8 @@ pub unsafe fn handle_nvim_set_vvar(
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_vvar(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_set_vvar(arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -639,9 +619,9 @@ pub unsafe fn handle_nvim_strwidth(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_strwidth(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_strwidth(arg_1) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }

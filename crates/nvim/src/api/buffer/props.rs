@@ -8,42 +8,44 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::types::{FAIL, OK};
 
-pub unsafe extern "C" fn nvim_buf_get_var(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_buf_get_var(
+    buf: Buffer,
+    name: String_0,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return dict_get_value((*b).b_vars, name, arena, err);
+        return dict_get_value((*b).b_vars, name, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_get_changedtick(mut buf: Buffer, mut err: *mut Error) -> Integer {
+pub unsafe fn nvim_buf_get_changedtick(buf: Buffer) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let b: *const buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return -1 as Integer;
+            return (-1 as Integer).reported(error);
         }
-        return buf_get_changedtick(b);
+        return buf_get_changedtick(b).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_get_keymap(
-    mut buf: Buffer,
-    mut mode: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_buf_get_keymap(
+    buf: Buffer,
+    mode: String_0,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
@@ -51,33 +53,37 @@ pub unsafe extern "C" fn nvim_buf_get_keymap(
                 size: 0 as size_t,
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<Object>(),
-            };
+            }
+            .reported(error);
         }
-        return keymap_array(mode, b, arena);
+        return keymap_array(mode, b, arena).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_set_keymap(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
-    mut mode: String_0,
-    mut lhs: String_0,
-    mut rhs: String_0,
-    mut opts: *mut KeyDict_keymap,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_set_keymap(
+    channel_id: uint64_t,
+    buf: Buffer,
+    mode: String_0,
+    lhs: String_0,
+    rhs: String_0,
+    opts: *mut KeyDict_keymap,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         modify_keymap(channel_id, buf, false, mode, lhs, rhs, opts, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_del_keymap(
-    mut channel_id: uint64_t,
-    mut buf: Buffer,
-    mut mode: String_0,
-    mut lhs: String_0,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_del_keymap(
+    channel_id: uint64_t,
+    buf: Buffer,
+    mode: String_0,
+    lhs: String_0,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rhs: String_0 = String_0 {
             data: c"".as_ptr() as *mut ::core::ffi::c_char,
@@ -94,18 +100,16 @@ pub unsafe extern "C" fn nvim_buf_del_keymap(
             err,
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_set_var(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut value: Object,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_set_var(buf: Buffer, name: String_0, value: Object) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return;
+            return ().reported(error);
         }
         dict_set_var(
             (*b).b_vars,
@@ -117,34 +121,33 @@ pub unsafe extern "C" fn nvim_buf_set_var(
             err,
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_del_var(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_del_var(buf: Buffer, name: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return;
+            return ().reported(error);
         }
         dict_set_var(
             (*b).b_vars,
             name,
-            object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
+            NIL,
             true,
             false,
             ::core::ptr::null_mut::<Arena>(),
             err,
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_get_name(mut buf: Buffer, mut err: *mut Error) -> String_0 {
+pub unsafe fn nvim_buf_get_name(buf: Buffer) -> Result<String_0, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rv: String_0 = String_0 {
             data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -152,21 +155,19 @@ pub unsafe extern "C" fn nvim_buf_get_name(mut buf: Buffer, mut err: *mut Error)
         };
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() || (*b).b_ffname.is_null() {
-            return rv;
+            return rv.reported(error);
         }
-        return cstr_as_string((*b).b_ffname);
+        return cstr_as_string((*b).b_ffname).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_set_name(
-    mut buf: Buffer,
-    mut name: String_0,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return;
+            return ().reported(error);
         }
         let mut ren_ret: ::core::ffi::c_int = OK;
         let mut tstate: TryState = TryState {
@@ -195,7 +196,7 @@ pub unsafe extern "C" fn nvim_buf_set_name(
         }
         try_leave(&raw mut tstate, err);
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         if ren_ret == FAIL {
             api_set_error(
@@ -205,9 +206,10 @@ pub unsafe extern "C" fn nvim_buf_set_name(
             );
         }
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_is_loaded(mut buf: Buffer) -> Boolean {
+pub unsafe fn nvim_buf_is_loaded(buf: Buffer) -> Boolean {
     unsafe {
         let mut stub: Error = Error {
             type_0: kErrorTypeNone,
@@ -219,15 +221,13 @@ pub unsafe extern "C" fn nvim_buf_is_loaded(mut buf: Buffer) -> Boolean {
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_delete(
-    mut buf: Buffer,
-    mut opts: *mut KeyDict_buf_delete,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         let mut force: bool = (*opts).force;
         let mut unload: bool = (*opts).unload;
@@ -248,12 +248,13 @@ pub unsafe extern "C" fn nvim_buf_delete(
                 kErrorTypeException,
                 c"Failed to unload buffer.".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_buf_is_valid(mut buf: Buffer) -> Boolean {
+pub unsafe fn nvim_buf_is_valid(buf: Buffer) -> Boolean {
     unsafe {
         let mut stub: Error = Error {
             type_0: kErrorTypeNone,

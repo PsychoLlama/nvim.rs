@@ -41,9 +41,8 @@ pub unsafe fn handle_nvim_ui_attach(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_attach(channel_id, arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_attach(channel_id, arg_1, arg_2, arg_3) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -70,9 +69,8 @@ pub unsafe fn handle_nvim_ui_detach(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_detach(channel_id, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_detach(channel_id) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -115,9 +113,8 @@ pub unsafe fn handle_nvim_ui_pum_set_bounds(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -148,9 +145,8 @@ pub unsafe fn handle_nvim_ui_pum_set_height(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_pum_set_height(channel_id, arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_pum_set_height(channel_id, arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -181,10 +177,7 @@ pub unsafe fn handle_nvim_ui_send(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_send(channel_id, arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    unsafe { nvim_ui_send(channel_id, arg_1) };
     NIL
 }
 
@@ -285,9 +278,8 @@ pub unsafe fn handle_nvim_ui_try_resize(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_try_resize(channel_id, arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_try_resize(channel_id, arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -326,9 +318,8 @@ pub unsafe fn handle_nvim_ui_try_resize_grid(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -367,9 +358,8 @@ pub unsafe fn handle_ui_attach(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { ui_attach(channel_id, arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { ui_attach(channel_id, arg_1, arg_2, arg_3) } {
+        return failure(error, e);
     }
     NIL
 }

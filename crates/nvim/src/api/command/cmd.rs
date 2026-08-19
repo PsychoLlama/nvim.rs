@@ -35,7 +35,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, has_key};
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
 use crate::types::{FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -113,18 +113,18 @@ fn sub_keyset<K>(dict: Dict, get_field: FieldHashfn, err: &mut Error) -> Option<
     }
 }
 
-pub unsafe extern "C" fn nvim_cmd(
+pub unsafe fn nvim_cmd(
     channel_id: uint64_t,
     cmd: *mut KeyDict_cmd,
     opts: *mut KeyDict_cmd_opts,
     arena: *mut Arena,
-    err: *mut Error,
-) -> String_0 {
+) -> Result<String_0, Error> {
+    let mut slot = ERROR_INIT;
+    let err = &mut slot;
     // SAFETY: the dispatcher decodes both keydicts onto its own frame and
     // keeps them alive across the call; neither is reachable from anything
-    // this function runs, so a shared borrow of each holds throughout. `err`
-    // is the dispatcher's own slot, ours alone until we return.
-    let (cmd, opts, err) = unsafe { (&*cmd, &*opts, &mut *err) };
+    // this function runs, so a shared borrow of each holds throughout.
+    let (cmd, opts) = unsafe { (&*cmd, &*opts) };
 
     // SAFETY: `exarg_T` and `CmdParseInfo` are plain C aggregates whose
     // all-zero state is the valid "nothing parsed yet" one; the C original
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn nvim_cmd(
     let mut cmdline: *mut c_char = ptr::null_mut();
 
     let mut retv = EMPTY_STRING;
-    // SAFETY: `arena` and `err` are the dispatcher's, live for the call.
+    // SAFETY: `arena` is the dispatcher's, live for the call.
     if unsafe { prepare_cmd(cmd, &mut ea, &mut cmdinfo, &mut cmdline, arena, err) } {
         // SAFETY: `prepare_cmd` returning true means `ea`/`cmdinfo` describe
         // a resolved, validated command.
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn nvim_cmd(
         xfree(ea.args.cast());
         xfree(ea.arglens.cast());
     }
-    retv
+    retv.reported(slot)
 }
 
 /// Turn the Dict into a resolved, validated `exarg_T` plus its rendered

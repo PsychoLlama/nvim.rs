@@ -33,10 +33,10 @@ pub unsafe fn handle_nvim__buf_stats(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim__buf_stats(arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim__buf_stats(arg_1, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
@@ -79,10 +79,10 @@ pub unsafe fn handle_nvim_buf_attach(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_attach(channel_id, arg_1, arg_2, &raw mut arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_attach(channel_id, arg_1, arg_2, &raw mut arg_3) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
@@ -120,9 +120,8 @@ pub unsafe fn handle_nvim_buf_del_keymap(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_del_keymap(channel_id, arg_1, arg_2, arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_buf_del_keymap(channel_id, arg_1, arg_2, arg_3) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -157,10 +156,10 @@ pub unsafe fn handle_nvim_buf_del_mark(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_del_mark(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_del_mark(arg_1, arg_2) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
@@ -194,9 +193,8 @@ pub unsafe fn handle_nvim_buf_del_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_del_var(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_buf_del_var(arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -241,9 +239,8 @@ pub unsafe fn handle_nvim_buf_delete(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_delete(arg_1, &raw mut arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_buf_delete(arg_1, &raw mut arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -274,10 +271,10 @@ pub unsafe fn handle_nvim_buf_detach(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_detach(channel_id, arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_detach(channel_id, arg_1) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
@@ -307,10 +304,10 @@ pub unsafe fn handle_nvim_buf_get_changedtick(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_changedtick(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_changedtick(arg_1) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
@@ -344,10 +341,10 @@ pub unsafe fn handle_nvim_buf_get_keymap(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_keymap(arg_1, arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_keymap(arg_1, arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
@@ -389,7 +386,7 @@ pub unsafe fn handle_nvim_buf_get_lines(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe {
+    let rv = match unsafe {
         nvim_buf_get_lines(
             channel_id,
             arg_1,
@@ -398,12 +395,11 @@ pub unsafe fn handle_nvim_buf_get_lines(
             arg_4,
             arena,
             core::ptr::null_mut(),
-            error,
         )
+    } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
     };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
@@ -437,10 +433,10 @@ pub unsafe fn handle_nvim_buf_get_mark(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_mark(arg_1, arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_mark(arg_1, arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
@@ -470,10 +466,10 @@ pub unsafe fn handle_nvim_buf_get_name(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_name(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_name(arg_1) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeString, object_data { string: rv })
 }
 
@@ -507,10 +503,10 @@ pub unsafe fn handle_nvim_buf_get_offset(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_offset(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_offset(arg_1, arg_2) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
@@ -565,7 +561,7 @@ pub unsafe fn handle_nvim_buf_get_text(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe {
+    let rv = match unsafe {
         nvim_buf_get_text(
             channel_id,
             arg_1,
@@ -576,12 +572,11 @@ pub unsafe fn handle_nvim_buf_get_text(
             &raw mut arg_6,
             arena,
             core::ptr::null_mut(),
-            error,
         )
+    } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
     };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
@@ -615,10 +610,10 @@ pub unsafe fn handle_nvim_buf_get_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_var(arg_1, arg_2, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_get_var(arg_1, arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     rv
 }
 
@@ -708,10 +703,10 @@ pub unsafe fn handle_nvim_buf_line_count(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_line_count(arg_1, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_line_count(arg_1) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
@@ -762,19 +757,10 @@ pub unsafe fn handle_nvim_buf_set_keymap(
         };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe {
-        nvim_buf_set_keymap(
-            channel_id,
-            arg_1,
-            arg_2,
-            arg_3,
-            arg_4,
-            &raw mut arg_5,
-            error,
-        )
-    };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) =
+        unsafe { nvim_buf_set_keymap(channel_id, arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) }
+    {
+        return failure(error, e);
     }
     NIL
 }
@@ -826,9 +812,10 @@ pub unsafe fn handle_nvim_buf_set_lines(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_set_lines(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) =
+        unsafe { nvim_buf_set_lines(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arena) }
+    {
+        return failure(error, e);
     }
     NIL
 }
@@ -880,10 +867,10 @@ pub unsafe fn handle_nvim_buf_set_mark(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_set_mark(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_buf_set_mark(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
@@ -917,9 +904,8 @@ pub unsafe fn handle_nvim_buf_set_name(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_buf_set_name(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_buf_set_name(arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -975,13 +961,10 @@ pub unsafe fn handle_nvim_buf_set_text(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe {
-        nvim_buf_set_text(
-            channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arena, error,
-        )
-    };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) =
+        unsafe { nvim_buf_set_text(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arena) }
+    {
+        return failure(error, e);
     }
     NIL
 }

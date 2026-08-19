@@ -9,13 +9,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{dict_put, has_key};
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
 
-pub unsafe extern "C" fn nvim_get_context(
-    mut opts: *mut KeyDict_context,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_get_context(
+    opts: *mut KeyDict_context,
+    arena: *mut Arena,
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut types: Array = Array {
             size: 0 as size_t,
@@ -55,7 +56,8 @@ pub unsafe extern "C" fn nvim_get_context(
                             size: 0 as size_t,
                             capacity: 0 as size_t,
                             items: ::core::ptr::null_mut::<KeyValuePair>(),
-                        };
+                        }
+                        .reported(error);
                     }
                 }
                 i = i.wrapping_add(1);
@@ -65,11 +67,13 @@ pub unsafe extern "C" fn nvim_get_context(
         ctx_save(&raw mut ctx, int_types);
         let mut dict: Dict = ctx_to_dict(&raw mut ctx, arena);
         ctx_free(&raw mut ctx);
-        return dict;
+        return dict.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_load_context(mut dict: Dict, mut err: *mut Error) -> Object {
+pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut ctx: Context = CONTEXT_INIT;
         let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
@@ -80,14 +84,11 @@ pub unsafe extern "C" fn nvim_load_context(mut dict: Dict, mut err: *mut Error) 
         }
         ctx_free(&raw mut ctx);
         did_emsg.set(save_did_emsg);
-        return object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        return NIL.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_get_mode(mut arena: *mut Arena) -> Dict {
+pub unsafe fn nvim_get_mode(arena: *mut Arena) -> Dict {
     unsafe {
         let mut rv: Dict = arena_dict(arena, 2 as size_t);
         let mut modestr: *mut ::core::ffi::c_char =

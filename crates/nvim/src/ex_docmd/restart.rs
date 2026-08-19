@@ -282,7 +282,9 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                     quit_cmd_copy = concat_str(c"confirm ".as_ptr(), quit_cmd);
                     quit_cmd = quit_cmd_copy;
                 }
-                nvim_command(cstr_as_string(quit_cmd), &raw mut err);
+                if let Err(e) = nvim_command(cstr_as_string(quit_cmd)) {
+                    err = e;
+                }
                 xfree(quit_cmd_copy as *mut c_void);
 
                 if err.type_0 as c_int != kErrorTypeNone as c_int {
@@ -372,13 +374,12 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
             return;
         }
 
-        // Tell the UI's channel not to take the server down with it.
-        let mut detach_err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
-        nvim__chan_set_detach((*chan).id, true, &raw mut detach_err);
-        api_clear_error(&raw mut detach_err);
+        // Tell the UI's channel not to take the server down with it. A
+        // failure here is not worth reporting, but its message is still ours
+        // to free.
+        if let Err(mut detach_err) = nvim__chan_set_detach((*chan).id, true) {
+            api_clear_error(&raw mut detach_err);
+        }
 
         let mut err2 = Error {
             type_0: kErrorTypeNone,

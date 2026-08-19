@@ -9,13 +9,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 
-pub unsafe extern "C" fn nvim_create_augroup(
-    mut channel_id: uint64_t,
-    mut name: String_0,
-    mut opts: *mut KeyDict_create_augroup,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe fn nvim_create_augroup(
+    channel_id: uint64_t,
+    name: String_0,
+    opts: *mut KeyDict_create_augroup,
+) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut augroup_name_0: *mut ::core::ffi::c_char = name.data;
         let mut clear_autocmds: bool = if (*opts).is_set__create_augroup_
@@ -32,7 +34,7 @@ pub unsafe extern "C" fn nvim_create_augroup(
         augroup = augroup_add(augroup_name_0);
         if augroup == AUGROUP_ERROR as ::core::ffi::c_int {
             api_set_error(err, kErrorTypeException, c"Failed to set augroup".as_ptr());
-            return -1 as Integer;
+            return (-1 as Integer).reported(error);
         }
         if clear_autocmds {
             let mut event: event_T = EVENT_BUFADD;
@@ -42,11 +44,13 @@ pub unsafe extern "C" fn nvim_create_augroup(
             }
         }
         current_sctx.set(save_current_sctx);
-        return augroup as Integer;
+        return (augroup as Integer).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_del_augroup_by_id(mut id: Integer, mut err: *mut Error) {
+pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -66,9 +70,12 @@ pub unsafe extern "C" fn nvim_del_augroup_by_id(mut id: Integer, mut err: *mut E
         augroup_del(name, false);
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_del_augroup_by_name(mut name: String_0, mut err: *mut Error) {
+pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -83,6 +90,7 @@ pub unsafe extern "C" fn nvim_del_augroup_by_name(mut name: String_0, mut err: *
         augroup_del(name.data, false);
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }
 
 pub(crate) unsafe fn get_augroup_from_object(

@@ -104,10 +104,10 @@ use crate::types::{
     VV_VIRTNUM, Window, bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values,
     dobuf_start_values, except_T, foldinfo_T, handle_T, int64_t, kCdScopeGlobal,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFalse, kNone, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kTrue, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
-    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
-    tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, kTrue, linenr_T,
+    mpack_token_type_t, msg_data, msglist_T, object, object_data as C2Rust_Unnamed, pos_T,
+    ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, tabpage_T, uint8_t, uint16_t,
+    uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

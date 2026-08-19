@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{OK, OPT_LOCAL, kErrorTypeNone, kFalse, kTrue};
+use crate::types::{OK, OPT_LOCAL, kFalse, kTrue};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;
@@ -129,14 +129,10 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
         }
         let lnum = lines.len() as linenr_T;
 
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut(),
-        };
         let mut arena = ARENA_EMPTY;
         // Setting the lines is the editor's own doing, not a plugin's.
         let original_textlock = textlock.replace(0);
-        nvim_buf_set_lines(
+        let set = nvim_buf_set_lines(
             0,
             (*buf).handle as Buffer,
             0,
@@ -144,10 +140,9 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
             false,
             replacement,
             &raw mut arena,
-            &raw mut err,
         );
         textlock.set(original_textlock);
-        if err.type_0 != kErrorTypeNone {
+        if let Err(mut err) = set {
             emsg(err.msg);
             api_clear_error(&raw mut err);
         }

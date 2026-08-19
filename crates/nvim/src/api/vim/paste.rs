@@ -8,17 +8,18 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::types::{NUL, PUT_CURSEND};
 
-pub unsafe extern "C" fn nvim_paste(
-    mut channel_id: uint64_t,
-    mut data: String_0,
-    mut crlf: Boolean,
-    mut phase: Integer,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Boolean {
+pub unsafe fn nvim_paste(
+    channel_id: uint64_t,
+    data: String_0,
+    crlf: Boolean,
+    phase: Integer,
+    arena: *mut Arena,
+) -> Result<Boolean, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut lines: Array = Array {
             size: 0,
@@ -30,14 +31,8 @@ pub unsafe extern "C" fn nvim_paste(
             capacity: 0,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        let mut args__items: [Object; 2] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 2];
-        let mut rv: Object = Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        let mut args__items: [Object; 2] = [NIL; 2];
+        let mut rv: Object = NIL;
         static cancelled: GlobalCell<bool> = GlobalCell::new(false);
         if !(phase >= -1 as Integer && phase <= 3 as Integer) {
             api_err_invalid(
@@ -47,7 +42,7 @@ pub unsafe extern "C" fn nvim_paste(
                 phase as int64_t,
                 false,
             );
-            return false;
+            return false.reported(error);
         }
         's_151: {
             if phase == -1 as Integer || phase == 1 as Integer {
@@ -64,10 +59,7 @@ pub unsafe extern "C" fn nvim_paste(
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<Object>(),
             };
-            args__items = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 2];
+            args__items = [NIL; 2];
             args.capacity = 2 as size_t;
             args.items = &raw mut args__items as *mut Object;
             array_add(&mut args, Object::array(lines));
@@ -119,18 +111,19 @@ pub unsafe extern "C" fn nvim_paste(
         if phase == -1 as Integer || phase == 3 as Integer {
             cancelled.set(false);
         }
-        return retval as Boolean;
+        return (retval as Boolean).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_put(
-    mut lines: Array,
-    mut type_0: String_0,
-    mut after: Boolean,
-    mut follow: Boolean,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_put(
+    lines: Array,
+    type_0: String_0,
+    after: Boolean,
+    follow: Boolean,
+    arena: *mut Arena,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut reg: [yankreg_T; 1] = [yankreg_T {
             y_array: ::core::ptr::null_mut::<String_0>(),
@@ -142,10 +135,10 @@ pub unsafe extern "C" fn nvim_put(
         }];
         if !prepare_yankreg_from_object(&raw mut reg as *mut yankreg_T, type_0, lines.size) {
             api_err_invalid(err, c"type".as_ptr(), type_0.data, 0 as int64_t, true);
-            return;
+            return ().reported(error);
         }
         if lines.size == 0 as size_t {
-            return;
+            return ().reported(error);
         }
         (*(&raw mut reg as *mut yankreg_T)).y_array = arena_alloc(
             arena,
@@ -164,7 +157,7 @@ pub unsafe extern "C" fn nvim_put(
                     api_typename(kObjectTypeString),
                     api_typename((*lines.items.add(i)).type_0),
                 );
-                return;
+                return ().reported(error);
             }
             let mut line: String_0 = (*lines.items.add(i)).data.string;
             *(*(&raw mut reg as *mut yankreg_T)).y_array.add(i) = copy_string(line, arena);
@@ -209,4 +202,5 @@ pub unsafe extern "C" fn nvim_put(
         VIsual_active.set(VIsual_was_active);
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }

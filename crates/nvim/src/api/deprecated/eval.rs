@@ -9,55 +9,51 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use crate::api::vim::nvim_exec_lua;
 
-pub unsafe extern "C" fn nvim_exec(
-    mut channel_id: uint64_t,
-    mut src: String_0,
-    mut output: Boolean,
-    mut err: *mut Error,
-) -> String_0 {
+pub unsafe fn nvim_exec(
+    channel_id: uint64_t,
+    src: String_0,
+    output: Boolean,
+) -> Result<String_0, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: output };
-        return exec_impl(channel_id, src, &raw mut opts, err);
+        return exec_impl(channel_id, src, &raw mut opts, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_command_output(
-    mut channel_id: uint64_t,
-    mut command: String_0,
-    mut err: *mut Error,
-) -> String_0 {
+pub unsafe fn nvim_command_output(
+    channel_id: uint64_t,
+    command: String_0,
+) -> Result<String_0, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: true };
-        return exec_impl(channel_id, command, &raw mut opts, err);
+        return exec_impl(channel_id, command, &raw mut opts, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_execute_lua(
-    mut code: String_0,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
-    unsafe {
-        return nlua_exec(
-            code,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            args,
-            kRetObject,
-            arena,
-            err,
-        );
-    }
+pub unsafe fn nvim_execute_lua(
+    code: String_0,
+    args: Array,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    // The old name of `nvim_exec_lua`, and nothing else: the two had the same
+    // transpiled body.
+    unsafe { nvim_exec_lua(code, args, arena) }
 }
 
-pub unsafe extern "C" fn nvim_call_atomic(
-    mut channel_id: uint64_t,
-    mut calls: Array,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_call_atomic(
+    channel_id: uint64_t,
+    calls: Array,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut rv: Array = arena_array(arena, 2 as size_t);
         let mut results: Array = arena_array(arena, calls.size);
@@ -156,6 +152,6 @@ pub unsafe extern "C" fn nvim_call_atomic(
             }
         }
         api_clear_error(&raw mut nested_error);
-        return rv;
+        return rv.reported(error);
     }
 }

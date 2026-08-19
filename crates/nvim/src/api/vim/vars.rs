@@ -8,53 +8,42 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 
-pub unsafe extern "C" fn nvim_get_current_line(
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> String_0 {
+pub unsafe fn nvim_get_current_line(arena: *mut Arena) -> Result<String_0, Error> {
     unsafe {
-        return buffer_get_line(
+        buffer_get_line(
             (*curbuf.get()).handle as Buffer,
             ((*curwin.get()).w_cursor.lnum - 1 as linenr_T) as Integer,
             arena,
-            err,
-        );
+        )
     }
 }
 
-pub unsafe extern "C" fn nvim_set_current_line(
-    mut line: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_set_current_line(line: String_0, arena: *mut Arena) -> Result<(), Error> {
     unsafe {
         buffer_set_line(
             (*curbuf.get()).handle as Buffer,
             ((*curwin.get()).w_cursor.lnum - 1 as linenr_T) as Integer,
             line,
             arena,
-            err,
-        );
+        )
     }
 }
 
-pub unsafe extern "C" fn nvim_del_current_line(mut arena: *mut Arena, mut err: *mut Error) {
+pub unsafe fn nvim_del_current_line(arena: *mut Arena) -> Result<(), Error> {
     unsafe {
         buffer_del_line(
             (*curbuf.get()).handle as Buffer,
             ((*curwin.get()).w_cursor.lnum - 1 as linenr_T) as Integer,
             arena,
-            err,
-        );
+        )
     }
 }
 
-pub unsafe extern "C" fn nvim_get_var(
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut di: *mut dictitem_T =
             tv_dict_find(get_globvar_dict(), name.data, name.size as ptrdiff_t);
@@ -69,10 +58,7 @@ pub unsafe extern "C" fn nvim_get_var(
                     c"Key not found: %s".as_ptr(),
                     name.data,
                 );
-                return object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed { boolean: false },
-                };
+                return NIL.reported(error);
             }
             di = tv_dict_find(get_globvar_dict(), name.data, name.size as ptrdiff_t);
         }
@@ -83,16 +69,15 @@ pub unsafe extern "C" fn nvim_get_var(
                 c"Key not found: %s".as_ptr(),
                 name.data,
             );
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return vim_to_object(&raw mut (*di).di_tv, arena, true);
+        return vim_to_object(&raw mut (*di).di_tv, arena, true).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_set_var(mut name: String_0, mut value: Object, mut err: *mut Error) {
+pub unsafe fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         dict_set_var(
             get_globvar_dict(),
@@ -104,36 +89,37 @@ pub unsafe extern "C" fn nvim_set_var(mut name: String_0, mut value: Object, mut
             err,
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_del_var(mut name: String_0, mut err: *mut Error) {
+pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         dict_set_var(
             get_globvar_dict(),
             name,
-            object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
+            NIL,
             true,
             false,
             ::core::ptr::null_mut::<Arena>(),
             err,
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_get_vvar(
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_get_vvar(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
-        return dict_get_value(get_vimvar_dict(), name, arena, err);
+        return dict_get_value(get_vimvar_dict(), name, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_set_vvar(mut name: String_0, mut value: Object, mut err: *mut Error) {
+pub unsafe fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         dict_set_var(
             get_vimvar_dict(),
@@ -145,4 +131,5 @@ pub unsafe extern "C" fn nvim_set_vvar(mut name: String_0, mut value: Object, mu
             err,
         );
     }
+    ().reported(error)
 }

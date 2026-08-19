@@ -6,13 +6,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 
-pub unsafe extern "C" fn nvim_get_hl_by_id(
-    mut hl_id: Integer,
-    mut rgb: Boolean,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_get_hl_by_id(
+    hl_id: Integer,
+    rgb: Boolean,
+    arena: *mut Arena,
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut dic: Dict = Dict {
             size: 0 as size_t,
@@ -27,19 +29,20 @@ pub unsafe extern "C" fn nvim_get_hl_by_id(
                 hl_id as int64_t,
                 false,
             );
-            return dic;
+            return dic.reported(error);
         }
         let mut attrcode: ::core::ffi::c_int = syn_id2attr(hl_id as ::core::ffi::c_int);
-        return hl_get_attr_by_id(attrcode as Integer, rgb, arena, err);
+        return hl_get_attr_by_id(attrcode as Integer, rgb, arena, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_get_hl_by_name(
-    mut name: String_0,
-    mut rgb: Boolean,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_get_hl_by_name(
+    name: String_0,
+    rgb: Boolean,
+    arena: *mut Arena,
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut result: Dict = Dict {
             size: 0 as size_t,
@@ -55,8 +58,8 @@ pub unsafe extern "C" fn nvim_get_hl_by_name(
                 0 as int64_t,
                 true,
             );
-            return result;
+            return result.reported(error);
         }
-        return nvim_get_hl_by_id(id as Integer, rgb, arena, err);
+        nvim_get_hl_by_id(id as Integer, rgb, arena)
     }
 }

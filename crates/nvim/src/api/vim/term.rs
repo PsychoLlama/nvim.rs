@@ -9,17 +9,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, has_key};
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, has_key};
 
-pub unsafe extern "C" fn nvim_open_term(
-    mut buf: Buffer,
-    mut opts: *mut KeyDict_open_term,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Result<Integer, Error> {
+    let mut slot = ERROR_INIT;
+    let err = &raw mut slot;
     unsafe {
         let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
         if b.is_null() {
-            return 0 as Integer;
+            return (0 as Integer).reported(slot);
         }
         if b == cmdwin_buf.get() {
             api_set_error(
@@ -28,7 +26,7 @@ pub unsafe extern "C" fn nvim_open_term(
                 c"%s".as_ptr(),
                 &raw const e_cmdwin as *const ::core::ffi::c_char,
             );
-            return 0 as Integer;
+            return (0 as Integer).reported(slot);
         }
         let mut may_read_buffer: bool = true;
         if !(*b).terminal.is_null() {
@@ -39,7 +37,7 @@ pub unsafe extern "C" fn nvim_open_term(
                     c"Terminal already connected to buffer %d".as_ptr(),
                     (*b).handle,
                 );
-                return 0 as Integer;
+                return (0 as Integer).reported(slot);
             }
             buf_close_terminal(b);
             may_read_buffer = false;
@@ -116,7 +114,7 @@ pub unsafe extern "C" fn nvim_open_term(
                 api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error);
             }
         }
-        return (*chan).id as Integer;
+        return ((*chan).id as Integer).reported(slot);
     }
 }
 
@@ -138,10 +136,7 @@ unsafe fn term_write(
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        let mut args__items: [Object; 3] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 3];
+        let mut args__items: [Object; 3] = [NIL; 3];
         args.capacity = 3 as size_t;
         args.items = &raw mut args__items as *mut Object;
         array_add(&mut args, Object::integer((*chan).id as Integer));
@@ -180,15 +175,13 @@ unsafe fn term_close(mut data: *mut ::core::ffi::c_void) {
     }
 }
 
-pub unsafe extern "C" fn nvim_chan_send(
-    mut chan: Integer,
-    mut data: String_0,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
+    let mut slot = ERROR_INIT;
+    let err = &raw mut slot;
     unsafe {
         let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         if data.size == 0 {
-            return;
+            return ().reported(slot);
         }
         channel_send(
             chan as uint64_t,
@@ -201,4 +194,5 @@ pub unsafe extern "C" fn nvim_chan_send(
             api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error);
         }
     }
+    ().reported(slot)
 }

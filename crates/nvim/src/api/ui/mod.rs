@@ -32,7 +32,9 @@ pub use line::remote_ui_raw_line;
 pub use packer::remote_ui_flush_pending_data;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
-use crate::api::private::helpers::{api_set_error, api_typename, cstr_as_string, string_to_cstr};
+use crate::api::private::helpers::{
+    ERROR_INIT, Reported, api_set_error, api_typename, cstr_as_string, string_to_cstr,
+};
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
@@ -166,13 +168,14 @@ pub unsafe fn remote_ui_wait_for_attach() {
 /// # Safety
 ///
 /// `err` must be writable, and `options` valid for the duration.
-pub unsafe extern "C" fn nvim_ui_attach(
+pub unsafe fn nvim_ui_attach(
     channel_id: u64,
     width: Integer,
     height: Integer,
     options: Dict,
-    err: *mut Error,
-) {
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         if find_ui(channel_id).is_some() {
             api_set_error(
@@ -181,7 +184,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
                 c"UI already attached to channel: %ld".as_ptr(),
                 channel_id,
             );
-            return;
+            return ().reported(error);
         }
         if !ui_can_attach_more() {
             api_set_error(
@@ -189,7 +192,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
                 kErrorTypeException,
                 c"Maximum UI count reached".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         if width <= 0 || height <= 0 {
             api_set_error(
@@ -197,7 +200,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
                 kErrorTypeValidation,
                 c"Expected width > 0 and height > 0".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
 
         let ui = Box::into_raw(Box::new(RemoteUI::new(channel_id, width, height)));
@@ -213,7 +216,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
                 // can simply be dropped. `term_name` is the only owned
                 // field an option sets, and not on an error path.
                 drop(Box::from_raw(ui));
-                return;
+                return ().reported(error);
             }
         }
 
@@ -237,6 +240,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
         }
         may_trigger_vim_suspend_resume(false);
     }
+    ().reported(error)
 }
 
 impl RemoteUI {
@@ -295,16 +299,15 @@ impl RemoteUI {
 /// # Safety
 ///
 /// As [`nvim_ui_attach`].
-pub unsafe extern "C" fn ui_attach(
+pub unsafe fn ui_attach(
     channel_id: u64,
     width: Integer,
     height: Integer,
     enable_rgb: Boolean,
-    err: *mut Error,
-) {
+) -> Result<(), Error> {
     let mut opts = DictBuf::<1>::new();
     opts.insert(c"rgb", Object::boolean(enable_rgb));
-    unsafe { nvim_ui_attach(channel_id, width, height, opts.dict(), err) };
+    unsafe { nvim_ui_attach(channel_id, width, height, opts.dict()) }
 }
 
 /// Tells the editor that this UI gained or lost the user's attention.
@@ -312,7 +315,7 @@ pub unsafe extern "C" fn ui_attach(
 /// # Safety
 ///
 /// `error` must be writable.
-pub unsafe extern "C" fn nvim_ui_set_focus(channel_id: u64, gained: Boolean, error: *mut Error) {
+pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean, error: *mut Error) {
     unsafe {
         if get_ui_or_err(channel_id, error).is_null() {
             return;
@@ -332,8 +335,11 @@ pub unsafe extern "C" fn nvim_ui_set_focus(channel_id: u64, gained: Boolean, err
 /// # Safety
 ///
 /// `err` must be writable.
-pub unsafe extern "C" fn nvim_ui_detach(channel_id: u64, err: *mut Error) {
+pub unsafe fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe { remote_ui_disconnect(channel_id, err, false) };
+    ().reported(error)
 }
 
 /// Tells a UI to reconnect to `server_addr`.
@@ -361,16 +367,17 @@ pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char, err: 
 /// # Safety
 ///
 /// `err` must be writable.
-pub unsafe extern "C" fn nvim_ui_try_resize(
+pub unsafe fn nvim_ui_try_resize(
     channel_id: u64,
     width: Integer,
     height: Integer,
-    err: *mut Error,
-) {
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let ui = get_ui_or_err(channel_id, err);
         if ui.is_null() {
-            return;
+            return ().reported(error);
         }
         if width <= 0 || height <= 0 {
             api_set_error(
@@ -378,7 +385,7 @@ pub unsafe extern "C" fn nvim_ui_try_resize(
                 kErrorTypeValidation,
                 c"Expected width > 0 and height > 0".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         (*ui).width = width as c_int;
         (*ui).height = height as c_int;
@@ -386,6 +393,7 @@ pub unsafe extern "C" fn nvim_ui_try_resize(
         // change what every other one is sent.
         ui_refresh();
     }
+    ().reported(error)
 }
 
 /// Changes one negotiated option after attaching.
@@ -393,7 +401,7 @@ pub unsafe extern "C" fn nvim_ui_try_resize(
 /// # Safety
 ///
 /// `error` must be writable and `value` valid for the duration.
-pub unsafe extern "C" fn nvim_ui_set_option(
+pub unsafe fn nvim_ui_set_option(
     channel_id: u64,
     name: String_0,
     value: Object,
@@ -589,25 +597,27 @@ unsafe fn wrong_type(
 /// # Safety
 ///
 /// `err` must be writable.
-pub unsafe extern "C" fn nvim_ui_try_resize_grid(
+pub unsafe fn nvim_ui_try_resize_grid(
     channel_id: u64,
     grid: Integer,
     width: Integer,
     height: Integer,
-    err: *mut Error,
-) {
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         if get_ui_or_err(channel_id, err).is_null() {
-            return;
+            return ().reported(error);
         }
         if grid == DEFAULT_GRID_HANDLE {
             // The default grid is the screen, so resizing it is a window
             // resize like any other.
-            nvim_ui_try_resize(channel_id, width, height, err);
+            return nvim_ui_try_resize(channel_id, width, height);
         } else {
             ui_grid_resize(grid as handle_T, width as c_int, height as c_int, err);
         }
     }
+    ().reported(error)
 }
 
 /// Tells the editor how many lines this UI's popupmenu can show.
@@ -615,11 +625,13 @@ pub unsafe extern "C" fn nvim_ui_try_resize_grid(
 /// # Safety
 ///
 /// `err` must be writable.
-pub unsafe extern "C" fn nvim_ui_pum_set_height(channel_id: u64, height: Integer, err: *mut Error) {
+pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let ui = get_ui_or_err(channel_id, err);
         if ui.is_null() {
-            return;
+            return ().reported(error);
         }
         if height <= 0 {
             api_set_error(
@@ -627,7 +639,7 @@ pub unsafe extern "C" fn nvim_ui_pum_set_height(channel_id: u64, height: Integer
                 kErrorTypeValidation,
                 c"Expected pum height > 0".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         if !(*ui).ui_ext[kUIPopupmenu as usize] {
             api_set_error(
@@ -635,10 +647,11 @@ pub unsafe extern "C" fn nvim_ui_pum_set_height(channel_id: u64, height: Integer
                 kErrorTypeValidation,
                 c"UI must support the ext_popupmenu option".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         (*ui).pum_nlines = height as c_int;
     }
+    ().reported(error)
 }
 
 /// Tells the editor where this UI drew its popupmenu, so that `pumvisible()`
@@ -647,18 +660,19 @@ pub unsafe extern "C" fn nvim_ui_pum_set_height(channel_id: u64, height: Integer
 /// # Safety
 ///
 /// `err` must be writable.
-pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
+pub unsafe fn nvim_ui_pum_set_bounds(
     channel_id: u64,
     width: Float,
     height: Float,
     row: Float,
     col: Float,
-    err: *mut Error,
-) {
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let ui = get_ui_or_err(channel_id, err);
         if ui.is_null() {
-            return;
+            return ().reported(error);
         }
         if !(*ui).ui_ext[kUIPopupmenu as usize] {
             api_set_error(
@@ -666,15 +680,15 @@ pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
                 kErrorTypeValidation,
                 c"UI must support the ext_popupmenu option".as_ptr(),
             );
-            return;
+            return ().reported(error);
         }
         if width <= 0.0 {
             api_set_error(err, kErrorTypeValidation, c"Expected width > 0".as_ptr());
-            return;
+            return ().reported(error);
         }
         if height <= 0.0 {
             api_set_error(err, kErrorTypeValidation, c"Expected height > 0".as_ptr());
-            return;
+            return ().reported(error);
         }
         (*ui).pum_row = row;
         (*ui).pum_col = col;
@@ -682,6 +696,7 @@ pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
         (*ui).pum_height = height;
         (*ui).pum_pos = true;
     }
+    ().reported(error)
 }
 
 /// Forwards `content` to every UI that owns a terminal, as `ui_send`.
@@ -689,6 +704,6 @@ pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
 /// # Safety
 ///
 /// `content` must be valid for the duration of the call.
-pub unsafe extern "C" fn nvim_ui_send(_channel_id: u64, content: String_0, _err: *mut Error) {
+pub unsafe fn nvim_ui_send(_channel_id: u64, content: String_0) {
     ui_call_ui_send(content);
 }

@@ -9,14 +9,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 
-pub unsafe extern "C" fn nvim_buf_get_number(mut buffer: Buffer, mut err: *mut Error) -> Integer {
+pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
         if buf.is_null() {
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
-        return (*buf).handle as Integer;
+        return ((*buf).handle as Integer).reported(error);
     }
 }
 
@@ -36,31 +39,29 @@ unsafe fn src2ns(mut src_id: *mut Integer) -> uint32_t {
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_clear_highlight(
-    mut buffer: Buffer,
-    mut ns_id: Integer,
-    mut line_start: Integer,
-    mut line_end: Integer,
-    mut err: *mut Error,
-) {
-    unsafe {
-        nvim_buf_clear_namespace(buffer, ns_id, line_start, line_end, err);
-    }
+pub unsafe fn nvim_buf_clear_highlight(
+    buffer: Buffer,
+    ns_id: Integer,
+    line_start: Integer,
+    line_end: Integer,
+) -> Result<(), Error> {
+    unsafe { nvim_buf_clear_namespace(buffer, ns_id, line_start, line_end) }
 }
 
-pub unsafe extern "C" fn nvim_buf_add_highlight(
-    mut buffer: Buffer,
+pub unsafe fn nvim_buf_add_highlight(
+    buffer: Buffer,
     mut ns_id: Integer,
-    mut hl_group: String_0,
-    mut line: Integer,
-    mut col_start: Integer,
+    hl_group: String_0,
+    line: Integer,
+    col_start: Integer,
     mut col_end: Integer,
-    mut err: *mut Error,
-) -> Integer {
+) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
         if buf.is_null() {
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         if !(line >= 0 as Integer && line < MAXLNUM as ::core::ffi::c_int as Integer) {
             api_err_invalid(
@@ -70,7 +71,7 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
                 0 as int64_t,
                 false,
             );
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         if !(col_start >= 0 as Integer && col_start <= MAXCOL as ::core::ffi::c_int as Integer) {
             api_err_invalid(
@@ -80,20 +81,20 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
                 0 as int64_t,
                 false,
             );
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         if col_end < 0 as Integer || col_end > MAXCOL as ::core::ffi::c_int as Integer {
             col_end = MAXCOL as ::core::ffi::c_int as Integer;
         }
         let mut ns: uint32_t = src2ns(&raw mut ns_id);
         if !(line < (*buf).b_ml.ml_line_count as Integer) {
-            return ns_id;
+            return ns_id.reported(error);
         }
         let mut hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if hl_group.size > 0 as size_t {
             hl_id = syn_check_group(hl_group.data, hl_group.size);
         } else {
-            return ns_id;
+            return ns_id.reported(error);
         }
         let mut end_line: ::core::ffi::c_int = line as ::core::ffi::c_int;
         if col_end == MAXCOL as ::core::ffi::c_int as Integer {
@@ -118,22 +119,23 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
             false,
             ::core::ptr::null_mut::<Error>(),
         );
-        return ns_id;
+        return ns_id.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_set_virtual_text(
-    mut buffer: Buffer,
+pub unsafe fn nvim_buf_set_virtual_text(
+    buffer: Buffer,
     mut src_id: Integer,
-    mut line: Integer,
-    mut chunks: Array,
-    mut _opts: *mut KeyDict_empty,
-    mut err: *mut Error,
-) -> Integer {
+    line: Integer,
+    chunks: Array,
+    _opts: *mut KeyDict_empty,
+) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
         if buf.is_null() {
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {
             api_set_error(
@@ -141,13 +143,13 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
                 kErrorTypeValidation,
                 c"Line number outside range".as_ptr(),
             );
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         let mut ns_id: uint32_t = src2ns(&raw mut src_id);
         let mut width: ::core::ffi::c_int = 0;
         let mut virt_text: VirtText = parse_virt_text(chunks, err, &raw mut width);
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return 0 as Integer;
+            return (0 as Integer).reported(error);
         }
         let mut existing: *mut DecorVirtText =
             decor_find_virttext(buf, line as ::core::ffi::c_int, ns_id as uint64_t);
@@ -155,7 +157,7 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
             clear_virttext(&raw mut (*existing).data.virt_text);
             (*existing).data.virt_text = virt_text;
             (*existing).width = width;
-            return src_id;
+            return src_id.reported(error);
         }
         let mut vt: *mut DecorVirtText =
             xmalloc(::core::mem::size_of::<DecorVirtText>()) as *mut DecorVirtText;
@@ -203,6 +205,6 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
             false,
             ::core::ptr::null_mut::<Error>(),
         );
-        return src_id;
+        return src_id.reported(error);
     }
 }

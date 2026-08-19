@@ -8,13 +8,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::types::{OPT_GLOBAL, OPT_LOCAL};
 
-pub unsafe extern "C" fn nvim_get_option_info(
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         return get_vimoption(
             name,
@@ -23,55 +22,57 @@ pub unsafe extern "C" fn nvim_get_option_info(
             curwin.get(),
             arena,
             err,
-        );
+        )
+        .reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_set_option(
-    mut channel_id: uint64_t,
-    mut name: String_0,
-    mut value: Object,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_set_option(
+    channel_id: uint64_t,
+    name: String_0,
+    value: Object,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         set_option_to(channel_id, NULL, kOptScopeGlobal, name, value, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_get_option(mut name: String_0, mut err: *mut Error) -> Object {
+pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
-        return get_option_from(NULL, kOptScopeGlobal, name, err);
+        return get_option_from(NULL, kOptScopeGlobal, name, err).reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_get_option(
-    mut buffer: Buffer,
-    mut name: String_0,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
         if buf.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return get_option_from(buf as *mut ::core::ffi::c_void, kOptScopeBuf, name, err);
+        return get_option_from(buf as *mut ::core::ffi::c_void, kOptScopeBuf, name, err)
+            .reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_buf_set_option(
-    mut channel_id: uint64_t,
-    mut buffer: Buffer,
-    mut name: String_0,
-    mut value: Object,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_buf_set_option(
+    channel_id: uint64_t,
+    buffer: Buffer,
+    name: String_0,
+    value: Object,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
         if buf.is_null() {
-            return;
+            return ().reported(error);
         }
         set_option_to(
             channel_id,
@@ -82,36 +83,34 @@ pub unsafe extern "C" fn nvim_buf_set_option(
             err,
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_win_get_option(
-    mut window: Window,
-    mut name: String_0,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_win_get_option(window: Window, name: String_0) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut win: *mut win_T = find_window_by_handle(window, err);
         if win.is_null() {
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL.reported(error);
         }
-        return get_option_from(win as *mut ::core::ffi::c_void, kOptScopeWin, name, err);
+        return get_option_from(win as *mut ::core::ffi::c_void, kOptScopeWin, name, err)
+            .reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_win_set_option(
-    mut channel_id: uint64_t,
-    mut window: Window,
-    mut name: String_0,
-    mut value: Object,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_win_set_option(
+    channel_id: uint64_t,
+    window: Window,
+    name: String_0,
+    value: Object,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut win: *mut win_T = find_window_by_handle(window, err);
         if win.is_null() {
-            return;
+            return ().reported(error);
         }
         set_option_to(
             channel_id,
@@ -122,6 +121,7 @@ pub unsafe extern "C" fn nvim_win_set_option(
             err,
         );
     }
+    ().reported(error)
 }
 
 unsafe fn get_option_from(
@@ -139,18 +139,12 @@ unsafe fn get_option_from(
                 0 as int64_t,
                 true,
             );
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL;
         }
         let mut opt_idx: OptIndex = find_option(name.data);
         if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
             api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL;
         }
         let mut value: OptVal = OptVal {
             type_0: kOptValTypeNil,
@@ -171,18 +165,12 @@ unsafe fn get_option_from(
                 err,
             );
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                return object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed { boolean: false },
-                };
+                return NIL;
             }
         }
         if !(value.type_0 as ::core::ffi::c_int != kOptValTypeNil as ::core::ffi::c_int) {
             api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
-            return object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
+            return NIL;
         }
         return optval_as_object(value);
     }

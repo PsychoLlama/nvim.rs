@@ -7,14 +7,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::has_key;
+use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 
-pub unsafe extern "C" fn nvim_exec_autocmds(
-    mut event: Object,
-    mut opts: *mut KeyDict_exec_autocmds,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_exec_autocmds(
+    event: Object,
+    opts: *mut KeyDict_exec_autocmds,
+    arena: *mut Arena,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
         let mut modeline: bool = true;
@@ -28,7 +29,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
             err,
         );
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         match (*opts).group.type_0 as ::core::ffi::c_uint {
@@ -43,7 +44,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                         0 as int64_t,
                         true,
                     );
-                    return;
+                    return ().reported(error);
                 }
             }
             kObjectTypeInteger => {
@@ -61,7 +62,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                         au_group as int64_t,
                         false,
                     );
-                    return;
+                    return ().reported(error);
                 }
             }
             _ => {
@@ -72,7 +73,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                         c"String or Integer".as_ptr(),
                         api_typename((*opts).group.type_0),
                     );
-                    return;
+                    return ().reported(error);
                 }
             }
         }
@@ -95,16 +96,16 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
             || !(has_key((*opts).is_set__exec_autocmds_, 4 as ::core::ffi::c_int)))
         {
             api_err_conflict(err, c"buf".as_ptr(), c"buffer".as_ptr());
-            return;
+            return ().reported(error);
         }
         if has_buf {
             if has_key((*opts).is_set__exec_autocmds_, 5 as ::core::ffi::c_int) {
                 api_err_conflict(err, c"pattern".as_ptr(), c"buf".as_ptr());
-                return;
+                return ().reported(error);
             }
             b = find_buffer_by_handle(buf, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                return;
+                return ().reported(error);
             }
         }
         let mut patterns: Array = get_patterns_from_pattern_or_buf(
@@ -116,7 +117,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
             err,
         );
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return;
+            return ().reported(error);
         }
         if has_key(
             (*opts).is_set__exec_autocmds_,
@@ -147,7 +148,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                     0 as int64_t,
                     true,
                 );
-                return;
+                return ().reported(error);
             }
             let mut pat_index: size_t = 0 as size_t;
             while pat_index < patterns.size {
@@ -177,4 +178,5 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
             do_modelines(0 as ::core::ffi::c_int);
         }
     }
+    ().reported(error)
 }

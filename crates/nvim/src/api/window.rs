@@ -1,7 +1,7 @@
 use crate::api::private::helpers::{
-    api_clear_error, api_set_error, arena_array, arena_dict, array_add, dict_get_value, dict_put,
-    dict_set_var, find_buffer_by_handle, find_window_by_handle, has_key, normalize_index,
-    try_enter, try_leave,
+    ERROR_INIT, NIL, Reported, api_clear_error, api_set_error, arena_array, arena_dict, array_add,
+    dict_get_value, dict_put, dict_set_var, find_buffer_by_handle, find_window_by_handle, has_key,
+    normalize_index, try_enter, try_leave,
 };
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::autocmd::is_aucmd_win;
@@ -22,9 +22,8 @@ use crate::pos::MAXCOL;
 use crate::types::{
     Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LuaRef,
     LuaRetMode, NS, Object, String_0, Tabpage, TryState, Window, buf_T, colnr_T, except_T, int64_t,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeInteger, kObjectTypeNil,
-    linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, pos_T, size_t, switchwin_T,
-    tabpage_T, win_T, win_execute_T,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeInteger, linenr_T,
+    msglist_T, pos_T, size_t, switchwin_T, tabpage_T, win_T, win_execute_T,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -45,18 +44,22 @@ pub const KEYSET_OPTIDX_win_text_height__start_row: ::core::ffi::c_int = 3 as ::
 pub const KEYSET_OPTIDX_win_text_height__max_height: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_win_text_height__start_vcol: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub unsafe extern "C" fn nvim_win_get_buf(mut win: Window, mut err: *mut Error) -> Buffer {
+pub unsafe fn nvim_win_get_buf(win: Window) -> Result<Buffer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return 0 as Buffer;
+        return (0 as Buffer).reported(error);
     }
-    return (*(*w).w_buffer).handle as Buffer;
+    return ((*(*w).w_buffer).handle as Buffer).reported(error);
 }
-pub unsafe extern "C" fn nvim_win_set_buf(mut win: Window, mut buf: Buffer, mut err: *mut Error) {
+pub unsafe fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
     if w.is_null() || b.is_null() {
-        return;
+        return ().reported(error);
     }
     if w == cmdwin_win.get() || w == cmdwin_old_curwin.get() || b == cmdwin_buf.get() {
         api_set_error(
@@ -65,15 +68,14 @@ pub unsafe extern "C" fn nvim_win_set_buf(mut win: Window, mut buf: Buffer, mut 
             c"%s".as_ptr(),
             &raw const e_cmdwin as *const ::core::ffi::c_char,
         );
-        return;
+        return ().reported(error);
     }
     win_set_buf(w, b, err);
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_get_cursor(
-    mut win: Window,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_win_get_cursor(win: Window, arena: *mut Arena) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut rv: Array = ARRAY_DICT_INIT;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if !w.is_null() {
@@ -81,12 +83,14 @@ pub unsafe extern "C" fn nvim_win_get_cursor(
         array_add(&mut rv, Object::integer((*w).w_cursor.lnum as Integer));
         array_add(&mut rv, Object::integer((*w).w_cursor.col as Integer));
     }
-    return rv;
+    return rv.reported(error);
 }
-pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mut err: *mut Error) {
+pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return;
+        return ().reported(error);
     }
     if pos.size != 2 as size_t
         || (*pos.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
@@ -100,7 +104,7 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
             c"[row, col] array".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
         );
-        return;
+        return ().reported(error);
     }
     let mut row: int64_t = (*pos.items.offset(0 as ::core::ffi::c_int as isize))
         .data
@@ -116,7 +120,7 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
             0 as int64_t,
             false,
         );
-        return;
+        return ().reported(error);
     }
     if col > MAXCOL as ::core::ffi::c_int as int64_t || col < 0 as int64_t {
         api_err_invalid(
@@ -126,7 +130,7 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
             0 as int64_t,
             false,
         );
-        return;
+        return ().reported(error);
     }
     (*w).w_cursor.lnum = row as linenr_T;
     (*w).w_cursor.col = col as colnr_T;
@@ -150,22 +154,23 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
     restore_win(&raw mut switchwin, true);
     redraw_later(w, UPD_VALID);
     (*w).w_redr_status = true;
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_get_height(mut win: Window, mut err: *mut Error) -> Integer {
+pub unsafe fn nvim_win_get_height(win: Window) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return 0 as Integer;
+        return (0 as Integer).reported(error);
     }
-    return (*w).w_height as Integer;
+    return ((*w).w_height as Integer).reported(error);
 }
-pub unsafe extern "C" fn nvim_win_set_height(
-    mut win: Window,
-    mut height: Integer,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_win_set_height(win: Window, height: Integer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return;
+        return ().reported(error);
     }
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -179,22 +184,23 @@ pub unsafe extern "C" fn nvim_win_set_height(
     try_enter(&raw mut tstate);
     win_setheight_win(height as ::core::ffi::c_int, w);
     try_leave(&raw mut tstate, err);
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_get_width(mut win: Window, mut err: *mut Error) -> Integer {
+pub unsafe fn nvim_win_get_width(win: Window) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return 0 as Integer;
+        return (0 as Integer).reported(error);
     }
-    return (*w).w_width as Integer;
+    return ((*w).w_width as Integer).reported(error);
 }
-pub unsafe extern "C" fn nvim_win_set_width(
-    mut win: Window,
-    mut width: Integer,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_win_set_width(win: Window, width: Integer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return;
+        return ().reported(error);
     }
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -208,31 +214,27 @@ pub unsafe extern "C" fn nvim_win_set_width(
     try_enter(&raw mut tstate);
     win_setwidth_win(width as ::core::ffi::c_int, w);
     try_leave(&raw mut tstate, err);
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_get_var(
-    mut win: Window,
-    mut name: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_win_get_var(
+    win: Window,
+    name: String_0,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        return NIL.reported(error);
     }
-    return dict_get_value((*w).w_vars, name, arena, err);
+    return dict_get_value((*w).w_vars, name, arena, err).reported(error);
 }
-pub unsafe extern "C" fn nvim_win_set_var(
-    mut win: Window,
-    mut name: String_0,
-    mut value: Object,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_win_set_var(win: Window, name: String_0, value: Object) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return;
+        return ().reported(error);
     }
     dict_set_var(
         (*w).w_vars,
@@ -243,34 +245,29 @@ pub unsafe extern "C" fn nvim_win_set_var(
         ::core::ptr::null_mut::<Arena>(),
         err,
     );
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_del_var(
-    mut win: Window,
-    mut name: String_0,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_win_del_var(win: Window, name: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return;
+        return ().reported(error);
     }
     dict_set_var(
         (*w).w_vars,
         name,
-        object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        },
+        NIL,
         true,
         false,
         ::core::ptr::null_mut::<Arena>(),
         err,
     );
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_get_position(
-    mut win: Window,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Array {
+pub unsafe fn nvim_win_get_position(win: Window, arena: *mut Arena) -> Result<Array, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut rv: Array = ARRAY_DICT_INIT;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if !w.is_null() {
@@ -278,27 +275,31 @@ pub unsafe extern "C" fn nvim_win_get_position(
         array_add(&mut rv, Object::integer((*w).w_winrow as Integer));
         array_add(&mut rv, Object::integer((*w).w_wincol as Integer));
     }
-    return rv;
+    return rv.reported(error);
 }
-pub unsafe extern "C" fn nvim_win_get_tabpage(mut win: Window, mut err: *mut Error) -> Tabpage {
+pub unsafe fn nvim_win_get_tabpage(win: Window) -> Result<Tabpage, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut rv: Tabpage = 0 as Tabpage;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if !w.is_null() {
         rv = (*win_find_tabpage(w)).handle as Tabpage;
     }
-    return rv;
+    return rv.reported(error);
 }
-pub unsafe extern "C" fn nvim_win_get_number(mut win: Window, mut err: *mut Error) -> Integer {
+pub unsafe fn nvim_win_get_number(win: Window) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut rv: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return rv as Integer;
+        return (rv as Integer).reported(error);
     }
     let mut tabnr: ::core::ffi::c_int = 0;
     win_get_tabwin((*w).handle, &raw mut tabnr, &raw mut rv);
-    return rv as Integer;
+    return (rv as Integer).reported(error);
 }
-pub unsafe extern "C" fn nvim_win_is_valid(mut win: Window) -> Boolean {
+pub unsafe fn nvim_win_is_valid(win: Window) -> Boolean {
     let mut stub: Error = Error {
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -307,10 +308,12 @@ pub unsafe extern "C" fn nvim_win_is_valid(mut win: Window) -> Boolean {
     api_clear_error(&raw mut stub);
     return ret;
 }
-pub unsafe extern "C" fn nvim_win_hide(mut win: Window, mut err: *mut Error) {
+pub unsafe fn nvim_win_hide(win: Window) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() || !can_close_in_cmdwin(w, err) {
-        return;
+        return ().reported(error);
     }
     let mut tabpage: *mut tabpage_T = win_find_tabpage(w);
     let mut tstate: TryState = TryState {
@@ -333,11 +336,14 @@ pub unsafe extern "C" fn nvim_win_hide(mut win: Window, mut err: *mut Error) {
         win_close_othertab(w, 0 as ::core::ffi::c_int, tabpage, false);
     }
     try_leave(&raw mut tstate, err);
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_close(mut win: Window, mut force: Boolean, mut err: *mut Error) {
+pub unsafe fn nvim_win_close(win: Window, force: Boolean) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() || !can_close_in_cmdwin(w, err) {
-        return;
+        return ().reported(error);
     }
     let mut tabpage: *mut tabpage_T = win_find_tabpage(w);
     let mut tstate: TryState = TryState {
@@ -360,24 +366,17 @@ pub unsafe extern "C" fn nvim_win_close(mut win: Window, mut force: Boolean, mut
         },
     );
     try_leave(&raw mut tstate, err);
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_call(
-    mut win: Window,
-    mut fun: LuaRef,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_win_call(win: Window, fun: LuaRef) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        return NIL.reported(error);
     }
     let mut tabpage: *mut tabpage_T = win_find_tabpage(w);
-    let mut res: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
+    let mut res: Object = NIL;
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -423,38 +422,38 @@ pub unsafe extern "C" fn nvim_win_call(
     }
     win_execute_after(&raw mut win_execute_args);
     try_leave(&raw mut tstate, err);
-    return res;
+    return res.reported(error);
 }
-pub unsafe extern "C" fn nvim_win_set_hl_ns(
-    mut win: Window,
-    mut ns_id: Integer,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return;
+        return ().reported(error);
     }
     if !(ns_id >= -1 as Integer) {
         api_err_invalid(err, c"namespace".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
-        return;
+        return ().reported(error);
     }
     (*w).w_ns_hl = ns_id as NS as ::core::ffi::c_int;
     (*w).w_hl_needs_update = true_0;
     redraw_later(w, UPD_NOT_VALID);
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_win_text_height(
-    mut win: Window,
-    mut opts: *mut KeyDict_win_text_height,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_win_text_height(
+    win: Window,
+    opts: *mut KeyDict_win_text_height,
+    arena: *mut Arena,
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
     // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.
     let mut rv: Dict = arena_dict(arena, 4 as size_t);
     let w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
-        return rv;
+        return rv.reported(error);
     }
     let buf: *mut buf_T = (*w).w_buffer;
     let line_count: linenr_T = (*buf).b_ml.ml_line_count;
@@ -484,7 +483,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
             c"%s".as_ptr(),
             c"Line index out of bounds".as_ptr(),
         );
-        return rv;
+        return rv.reported(error);
     }
     if !(start_lnum <= end_lnum) {
         api_set_error(
@@ -493,7 +492,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
             c"%s".as_ptr(),
             c"'start_row' is higher than 'end_row'".as_ptr(),
         );
-        return rv;
+        return rv.reported(error);
     }
     if has_key(
         (*opts).is_set__win_text_height_,
@@ -506,7 +505,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 c"%s".as_ptr(),
                 c"'start_vcol' specified without 'start_row'".as_ptr(),
             );
-            return rv;
+            return rv.reported(error);
         }
         start_vcol = (*opts).start_vcol as int64_t;
         if !(start_vcol >= 0 as int64_t && start_vcol <= MAXCOL as ::core::ffi::c_int as int64_t) {
@@ -517,7 +516,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 0 as int64_t,
                 false,
             );
-            return rv;
+            return rv.reported(error);
         }
     }
     if has_key(
@@ -531,7 +530,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 c"%s".as_ptr(),
                 c"'end_vcol' specified without 'end_row'".as_ptr(),
             );
-            return rv;
+            return rv.reported(error);
         }
         end_vcol = (*opts).end_vcol as int64_t;
         if !(end_vcol >= 0 as int64_t && end_vcol <= MAXCOL as ::core::ffi::c_int as int64_t) {
@@ -542,7 +541,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 0 as int64_t,
                 false,
             );
-            return rv;
+            return rv.reported(error);
         }
     }
     let mut max: int64_t = INT64_MAX as int64_t;
@@ -558,7 +557,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 0 as int64_t,
                 false,
             );
-            return rv;
+            return rv.reported(error);
         }
         max = (*opts).max_height as int64_t;
     }
@@ -570,7 +569,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 c"%s".as_ptr(),
                 c"'start_vcol' is higher than 'end_vcol'".as_ptr(),
             );
-            return rv;
+            return rv.reported(error);
         }
     }
     let mut fill: int64_t = 0 as int64_t;
@@ -599,6 +598,6 @@ pub unsafe extern "C" fn nvim_win_text_height(
         Object::integer((end_lnum - 1 as linenr_T) as Integer),
     );
     dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol));
-    return rv;
+    return rv.reported(error);
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -1,4 +1,4 @@
-use crate::api::private::helpers::api_typename;
+use crate::api::private::helpers::{ERROR_INIT, Reported, api_typename};
 use crate::api::private::validate::api_err_exp;
 use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
@@ -8,11 +8,7 @@ use crate::types::{
     Error, Integer, Object, String_0, VV_TERMRESPONSE, kObjectTypeString, ptrdiff_t, uint64_t,
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub unsafe extern "C" fn nvim_error_event(
-    mut channel_id: uint64_t,
-    mut _type_0: Integer,
-    mut msg: String_0,
-) {
+pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
     logmsg_c!(
         LOGLVL_ERR,
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -28,12 +24,13 @@ pub unsafe extern "C" fn nvim_error_event(
         },
     );
 }
-pub unsafe extern "C" fn nvim_ui_term_event(
-    mut _channel_id: uint64_t,
-    mut event: String_0,
-    mut value: Object,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_ui_term_event(
+    _channel_id: uint64_t,
+    event: String_0,
+    value: Object,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     if strequal(c"termresponse".as_ptr(), event.data) {
         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
@@ -44,7 +41,7 @@ pub unsafe extern "C" fn nvim_ui_term_event(
                 api_typename(kObjectTypeString),
                 api_typename(value.type_0),
             );
-            return;
+            return ().reported(error);
         }
         let termresponse: String_0 = value.data.string;
         set_vim_var_string(
@@ -54,4 +51,5 @@ pub unsafe extern "C" fn nvim_ui_term_event(
         );
         do_termresponse_autocmd(termresponse);
     }
+    ().reported(error)
 }

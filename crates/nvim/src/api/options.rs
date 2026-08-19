@@ -1,6 +1,6 @@
 use crate::api::private::helpers::{
-    api_set_error, api_set_sctx, api_typename, find_buffer_by_handle, find_window_by_handle,
-    has_key, try_enter, try_leave,
+    ERROR_INIT, NIL, Reported, api_set_error, api_set_sctx, api_typename, find_buffer_by_handle,
+    find_window_by_handle, has_key, try_enter, try_leave,
 };
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::autocmd::{
@@ -21,8 +21,7 @@ use crate::types::{
     Arena, Dict, Error, FAIL, KeyDict_option, KeyValuePair, OK, OPT_GLOBAL, OPT_LOCAL, Object,
     OptIndex, OptScope, OptVal, OptValData, OptValType, String_0, TryState, aco_save_T, bln_values,
     buf_T, bufref_T, except_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeNil, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t,
-    uint64_t, win_T,
+    linenr_T, msglist_T, sctx_T, size_t, uint64_t, win_T,
 };
 use crate::window::close_windows;
 use ::libc::strcmp;
@@ -299,11 +298,12 @@ unsafe fn wipe_ft_buf(mut buf: *mut buf_T) {
     }
     unblock_autocmds();
 }
-pub unsafe extern "C" fn nvim_get_option_value(
-    mut name: String_0,
-    mut opts: *mut KeyDict_option,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_get_option_value(
+    name: String_0,
+    opts: *mut KeyDict_option,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut opt_idx: OptIndex = kOptAleph;
     let mut opt_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut scope: OptScope = kOptScopeGlobal;
@@ -320,10 +320,7 @@ pub unsafe extern "C" fn nvim_get_option_value(
         err,
     ) == 0
     {
-        return object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        return NIL.reported(error);
     }
     let mut aco: aco_save_T = aco_save_T::default();
     let mut aco_used: bool = false;
@@ -335,10 +332,7 @@ pub unsafe extern "C" fn nvim_get_option_value(
         if !ftbuf.is_null() {
             wipe_ft_buf(ftbuf);
         }
-        return object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        return NIL.reported(error);
     }
     if !ftbuf.is_null() {
         debug_assert!(from.is_null(), "!from");
@@ -355,22 +349,20 @@ pub unsafe extern "C" fn nvim_get_option_value(
         if !(value.type_0 as ::core::ffi::c_int != kOptValTypeNil as ::core::ffi::c_int) {
             api_err_invalid(err, c"option".as_ptr(), name.data, 0 as int64_t, true);
         } else {
-            return optval_as_object(value);
+            return optval_as_object(value).reported(error);
         }
     }
     optval_free(value);
-    return object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
+    return NIL.reported(error);
 }
-pub unsafe extern "C" fn nvim_set_option_value(
-    mut channel_id: uint64_t,
-    mut name: String_0,
-    mut value: Object,
-    mut opts: *mut KeyDict_option,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_set_option_value(
+    channel_id: uint64_t,
+    name: String_0,
+    value: Object,
+    opts: *mut KeyDict_option,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut opt_idx: OptIndex = kOptAleph;
     let mut opt_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut scope: OptScope = kOptScopeGlobal;
@@ -386,7 +378,7 @@ pub unsafe extern "C" fn nvim_set_option_value(
         err,
     ) == 0
     {
-        return;
+        return ().reported(error);
     }
     if scope as ::core::ffi::c_uint == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
         && opt_flags == 0 as ::core::ffi::c_int
@@ -402,24 +394,23 @@ pub unsafe extern "C" fn nvim_set_option_value(
             c"valid option type".as_ptr(),
             api_typename(value.type_0),
         );
-        return;
+        return ().reported(error);
     };
     let save_current_sctx: sctx_T = api_set_sctx(channel_id);
     set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
     current_sctx.set(save_current_sctx);
+    ().reported(error)
 }
-pub unsafe extern "C" fn nvim_get_all_options_info(
-    mut arena: *mut Arena,
-    mut _err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_get_all_options_info(arena: *mut Arena) -> Dict {
     return get_all_vimoptions(arena);
 }
-pub unsafe extern "C" fn nvim_get_option_info2(
-    mut name: String_0,
-    mut opts: *mut KeyDict_option,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
+pub unsafe fn nvim_get_option_info2(
+    name: String_0,
+    opts: *mut KeyDict_option,
+    arena: *mut Arena,
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     let mut opt_idx: OptIndex = kOptAleph;
     let mut opt_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut scope: OptScope = kOptScopeGlobal;
@@ -435,7 +426,7 @@ pub unsafe extern "C" fn nvim_get_option_info2(
         err,
     ) == 0
     {
-        return ARRAY_DICT_INIT;
+        return ARRAY_DICT_INIT.reported(error);
     }
     let mut buf: *mut buf_T = if scope as ::core::ffi::c_uint
         == kOptScopeBuf as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -451,7 +442,7 @@ pub unsafe extern "C" fn nvim_get_option_info2(
     } else {
         curwin.get()
     };
-    return get_vimoption(name, opt_flags, buf, win, arena, err);
+    return get_vimoption(name, opt_flags, buf, win, arena, err).reported(error);
 }
 pub const KEYSET_OPTIDX_option__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_option__win: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

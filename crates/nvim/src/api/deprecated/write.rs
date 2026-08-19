@@ -9,13 +9,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
 use crate::kvec::Kvec;
 use crate::types::NUL;
 
-pub unsafe extern "C" fn nvim_subscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
+pub unsafe fn nvim_subscribe(_channel_id: uint64_t, _event: String_0) {}
 
-pub unsafe extern "C" fn nvim_unsubscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
+pub unsafe fn nvim_unsubscribe(_channel_id: uint64_t, _event: String_0) {}
 
 unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
     unsafe {
@@ -145,41 +145,39 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
     }
 }
 
-pub unsafe extern "C" fn nvim_out_write(mut str: String_0) {
+pub unsafe fn nvim_out_write(str: String_0) {
     unsafe {
         write_msg(str, false, false);
     }
 }
 
-pub unsafe extern "C" fn nvim_err_write(mut str: String_0) {
+pub unsafe fn nvim_err_write(str: String_0) {
     unsafe {
         write_msg(str, true, false);
     }
 }
 
-pub unsafe extern "C" fn nvim_err_writeln(mut str: String_0) {
+pub unsafe fn nvim_err_writeln(str: String_0) {
     unsafe {
         write_msg(str, true, true);
     }
 }
 
-pub unsafe extern "C" fn nvim_notify(
-    mut msg_0: String_0,
-    mut log_level: Integer,
-    mut opts: Dict,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe fn nvim_notify(
+    msg_0: String_0,
+    log_level: Integer,
+    opts: Dict,
+    arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut args: Array = Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        let mut args__items: [Object; 3] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 3];
+        let mut args__items: [Object; 3] = [NIL; 3];
         args.capacity = 3 as size_t;
         args.items = &raw mut args__items as *mut Object;
         array_add(&mut args, Object::string(msg_0));
@@ -195,6 +193,7 @@ pub unsafe extern "C" fn nvim_notify(
             kRetObject,
             arena,
             err,
-        );
+        )
+        .reported(error);
     }
 }

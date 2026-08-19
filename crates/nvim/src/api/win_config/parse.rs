@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::NIL;
 use crate::kvec::Kvec;
 use crate::types::NUL;
 
@@ -233,10 +234,7 @@ pub(crate) unsafe fn parse_win_config(
     mut err: *mut Error,
 ) -> bool {
     unsafe {
-        let mut border_style: Object = Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
+        let mut border_style: Object = NIL;
         let mut has_relative: bool = false;
         let mut relative_is_win: bool = false;
         let mut is_split: bool = false;
@@ -553,10 +551,7 @@ pub(crate) unsafe fn parse_win_config(
                         api_err_required(err, c"'footer' requires 'footer_pos'".as_ptr());
                         break '_fail;
                     }
-                    border_style = object {
-                        type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed { boolean: false },
-                    };
+                    border_style = NIL;
                     if has_key(
                         (*config).is_set__win_config_,
                         KEYSET_OPTIDX_win_config__border,

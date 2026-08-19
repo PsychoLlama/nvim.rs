@@ -8,21 +8,22 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::dict_put_str;
+use crate::api::private::helpers::{ERROR_INIT, Reported, dict_put_str};
 use crate::types::NUL;
 use core::ffi::c_char;
 use core::ptr;
 
-pub unsafe extern "C" fn nvim_exec2(
+pub unsafe fn nvim_exec2(
     channel_id: uint64_t,
     src: String_0,
     opts: *mut KeyDict_exec_opts,
-    err: *mut Error,
-) -> Dict {
+) -> Result<Dict, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let output: String_0 = exec_impl(channel_id, src, opts, err);
         if (*err).type_0 != kErrorTypeNone || !(*opts).output {
-            return Dict::EMPTY;
+            return Dict::EMPTY.reported(error);
         }
         // Heap-allocated rather than arena-allocated: the caller frees this
         // dictionary key by key, so the key is a copy too.
@@ -32,7 +33,7 @@ pub unsafe extern "C" fn nvim_exec2(
             cstr_to_string(c"output".as_ptr()),
             Object::string(output),
         );
-        result
+        result.reported(error)
     }
 }
 
@@ -97,11 +98,14 @@ pub unsafe fn exec_impl(
     }
 }
 
-pub unsafe extern "C" fn nvim_command(cmd: String_0, err: *mut Error) {
+pub unsafe fn nvim_command(cmd: String_0) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut tstate: TryState = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
         do_cmdline_cmd(cmd.data);
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }

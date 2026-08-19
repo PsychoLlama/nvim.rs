@@ -9,12 +9,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, dict_put};
+use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
 
-pub unsafe extern "C" fn nvim_get_api_info(
-    mut channel_id: uint64_t,
-    mut arena: *mut Arena,
-) -> Array {
+pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array {
     unsafe {
         let mut rv: Array = arena_array(arena, 2 as size_t);
         debug_assert!(
@@ -27,15 +24,14 @@ pub unsafe extern "C" fn nvim_get_api_info(
     }
 }
 
-pub unsafe extern "C" fn nvim_set_client_info(
-    mut channel_id: uint64_t,
-    mut name: String_0,
+pub unsafe fn nvim_set_client_info(
+    channel_id: uint64_t,
+    name: String_0,
     mut version: Dict,
-    mut type_0: String_0,
-    mut methods: Dict,
-    mut attributes: Dict,
-    mut arena: *mut Arena,
-    mut _err: *mut Error,
+    type_0: String_0,
+    methods: Dict,
+    attributes: Dict,
+    arena: *mut Arena,
 ) {
     unsafe {
         let mut info: Dict = Dict {
@@ -48,10 +44,7 @@ pub unsafe extern "C" fn nvim_set_client_info(
                 data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 size: 0,
             },
-            value: Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
+            value: NIL,
         }; 5];
         info.capacity = 5 as size_t;
         info.items = &raw mut info__items as *mut KeyValuePair;
@@ -92,11 +85,9 @@ pub unsafe extern "C" fn nvim_set_client_info(
     }
 }
 
-pub unsafe extern "C" fn nvim__chan_set_detach(
-    mut channel_id: uint64_t,
-    mut detach: Boolean,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut chan: *mut Channel = find_channel(channel_id);
         if chan.is_null() {
@@ -106,17 +97,17 @@ pub unsafe extern "C" fn nvim__chan_set_detach(
                 c"%s".as_ptr(),
                 &raw const e_invchan as *const ::core::ffi::c_char,
             );
-            return;
+            return ().reported(error);
         }
         (*chan).detach = detach;
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_get_chan_info(
-    mut channel_id: uint64_t,
+pub unsafe fn nvim_get_chan_info(
+    channel_id: uint64_t,
     mut chan: Integer,
-    mut arena: *mut Arena,
-    mut _err: *mut Error,
+    arena: *mut Arena,
 ) -> Dict {
     unsafe {
         if chan < 0 as Integer {
@@ -137,13 +128,13 @@ pub unsafe extern "C" fn nvim_get_chan_info(
     }
 }
 
-pub unsafe extern "C" fn nvim_list_chans(mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_chans(arena: *mut Arena) -> Array {
     unsafe {
         return channel_all_info(arena);
     }
 }
 
-pub unsafe extern "C" fn nvim_list_uis(mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_uis(arena: *mut Arena) -> Array {
     unsafe {
         return ui_array(arena);
     }

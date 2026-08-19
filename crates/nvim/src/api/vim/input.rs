@@ -10,16 +10,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::keycodes::{
     KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSELEFT,
     KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTMOUSE, KE_X1MOUSE, KE_X2MOUSE,
 };
 
-pub unsafe extern "C" fn nvim_feedkeys(
-    mut keys: String_0,
-    mut mode: String_0,
-    mut escape_ks: Boolean,
-) {
+pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
     unsafe {
         let mut remap: bool = true;
         let mut insert: bool = false;
@@ -104,22 +101,23 @@ pub unsafe extern "C" fn nvim_feedkeys(
     }
 }
 
-pub unsafe extern "C" fn nvim_input(mut channel_id: uint64_t, mut keys: String_0) -> Integer {
+pub unsafe fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
     unsafe {
         may_trigger_vim_suspend_resume(false);
         return input_enqueue(channel_id, keys) as Integer;
     }
 }
 
-pub unsafe extern "C" fn nvim_input_mouse(
-    mut button: String_0,
-    mut action: String_0,
-    mut modifier: String_0,
-    mut grid: Integer,
-    mut row: Integer,
-    mut col: Integer,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_input_mouse(
+    button: String_0,
+    action: String_0,
+    modifier: String_0,
+    grid: Integer,
+    row: Integer,
+    col: Integer,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut code: ::core::ffi::c_int = 0;
         let mut modmask: ::core::ffi::c_int = 0;
@@ -183,7 +181,7 @@ pub unsafe extern "C" fn nvim_input_mouse(
                                 c"Invalid modifier: %c".as_ptr(),
                                 byte as ::core::ffi::c_int,
                             );
-                            return;
+                            return ().reported(error);
                         }
                         modmask |= mod_0;
                     }
@@ -196,7 +194,7 @@ pub unsafe extern "C" fn nvim_input_mouse(
                     row as ::core::ffi::c_int,
                     col as ::core::ffi::c_int,
                 );
-                return;
+                return ().reported(error);
             }
         }
         api_set_error(
@@ -205,13 +203,14 @@ pub unsafe extern "C" fn nvim_input_mouse(
             c"invalid button or action".as_ptr(),
         );
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_replace_termcodes(
-    mut str: String_0,
-    mut from_part: Boolean,
-    mut do_lt: Boolean,
-    mut special: Boolean,
+pub unsafe fn nvim_replace_termcodes(
+    str: String_0,
+    from_part: Boolean,
+    do_lt: Boolean,
+    special: Boolean,
 ) -> String_0 {
     unsafe {
         if str.size == 0 as size_t {
@@ -244,42 +243,40 @@ pub unsafe extern "C" fn nvim_replace_termcodes(
     }
 }
 
-pub unsafe extern "C" fn nvim_get_keymap(mut mode: String_0, mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array {
     unsafe {
         return keymap_array(mode, ::core::ptr::null_mut::<buf_T>(), arena);
     }
 }
 
-pub unsafe extern "C" fn nvim_set_keymap(
-    mut channel_id: uint64_t,
-    mut mode: String_0,
-    mut lhs: String_0,
-    mut rhs: String_0,
-    mut opts: *mut KeyDict_keymap,
-    mut err: *mut Error,
-) {
+pub unsafe fn nvim_set_keymap(
+    channel_id: uint64_t,
+    mode: String_0,
+    lhs: String_0,
+    rhs: String_0,
+    opts: *mut KeyDict_keymap,
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_del_keymap(
-    mut channel_id: uint64_t,
-    mut mode: String_0,
-    mut lhs: String_0,
-    mut err: *mut Error,
-) {
-    unsafe {
-        nvim_buf_del_keymap(channel_id, -1 as Buffer, mode, lhs, err);
-    }
+pub unsafe fn nvim_del_keymap(
+    channel_id: uint64_t,
+    mode: String_0,
+    lhs: String_0,
+) -> Result<(), Error> {
+    unsafe { nvim_buf_del_keymap(channel_id, -1 as Buffer, mode, lhs) }
 }
 
-pub unsafe extern "C" fn nvim_select_popupmenu_item(
-    mut item: Integer,
+pub unsafe fn nvim_select_popupmenu_item(
+    item: Integer,
     mut insert: Boolean,
-    mut finish: Boolean,
-    mut _opts: *mut KeyDict_empty,
-    mut _err: *mut Error,
+    finish: Boolean,
+    _opts: *mut KeyDict_empty,
 ) {
     if finish {
         insert = true;

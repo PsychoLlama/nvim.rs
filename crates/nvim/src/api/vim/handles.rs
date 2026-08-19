@@ -8,10 +8,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
 use crate::types::OPT_LOCAL;
 
-pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
     unsafe {
         let mut n: size_t = 0 as size_t;
         let mut b: *mut buf_T = firstbuf.get();
@@ -29,17 +29,19 @@ pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
     }
 }
 
-pub unsafe extern "C" fn nvim_get_current_buf() -> Buffer {
+pub unsafe fn nvim_get_current_buf() -> Buffer {
     unsafe {
         return (*curbuf.get()).handle as Buffer;
     }
 }
 
-pub unsafe extern "C" fn nvim_set_current_buf(mut buf: Buffer, mut err: *mut Error) {
+pub unsafe fn nvim_set_current_buf(buf: Buffer) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return;
+            return ().reported(error);
         }
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -60,9 +62,10 @@ pub unsafe extern "C" fn nvim_set_current_buf(mut buf: Buffer, mut err: *mut Err
         );
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_list_wins(mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_wins(arena: *mut Arena) -> Array {
     unsafe {
         let mut n: size_t = 0 as size_t;
         let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
@@ -96,17 +99,19 @@ pub unsafe extern "C" fn nvim_list_wins(mut arena: *mut Arena) -> Array {
     }
 }
 
-pub unsafe extern "C" fn nvim_get_current_win() -> Window {
+pub unsafe fn nvim_get_current_win() -> Window {
     unsafe {
         return (*curwin.get()).handle as Window;
     }
 }
 
-pub unsafe extern "C" fn nvim_set_current_win(mut win: Window, mut err: *mut Error) {
+pub unsafe fn nvim_set_current_win(win: Window) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut w: *mut win_T = find_window_by_handle(win, err);
         if w.is_null() {
-            return;
+            return ().reported(error);
         }
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -124,13 +129,12 @@ pub unsafe extern "C" fn nvim_set_current_win(mut win: Window, mut err: *mut Err
         goto_tabpage_win(win_find_tabpage(w), w);
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }
 
-pub unsafe extern "C" fn nvim_create_buf(
-    mut listed: Boolean,
-    mut scratch: Boolean,
-    mut err: *mut Error,
-) -> Buffer {
+pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut ret: Buffer = 0 as Buffer;
         let mut tstate: TryState = TryState {
@@ -248,11 +252,11 @@ pub unsafe extern "C" fn nvim_create_buf(
                 c"Failed to create buffer".as_ptr(),
             );
         }
-        return ret;
+        return ret.reported(error);
     }
 }
 
-pub unsafe extern "C" fn nvim_list_tabpages(mut arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_tabpages(arena: *mut Arena) -> Array {
     unsafe {
         let mut n: size_t = 0 as size_t;
         let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
@@ -270,17 +274,19 @@ pub unsafe extern "C" fn nvim_list_tabpages(mut arena: *mut Arena) -> Array {
     }
 }
 
-pub unsafe extern "C" fn nvim_get_current_tabpage() -> Tabpage {
+pub unsafe fn nvim_get_current_tabpage() -> Tabpage {
     unsafe {
         return (*curtab.get()).handle as Tabpage;
     }
 }
 
-pub unsafe extern "C" fn nvim_set_current_tabpage(mut tabpage: Tabpage, mut err: *mut Error) {
+pub unsafe fn nvim_set_current_tabpage(tabpage: Tabpage) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut tp: *mut tabpage_T = find_tab_by_handle(tabpage, err);
         if tp.is_null() {
-            return;
+            return ().reported(error);
         }
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -295,4 +301,5 @@ pub unsafe extern "C" fn nvim_set_current_tabpage(mut tabpage: Tabpage, mut err:
         goto_tabpage_tp(tp, true, true);
         try_leave(&raw mut tstate, err);
     }
+    ().reported(error)
 }

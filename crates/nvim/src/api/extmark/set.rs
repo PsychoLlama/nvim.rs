@@ -10,16 +10,18 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::kvec::Kvec;
 
-pub unsafe extern "C" fn nvim_buf_set_extmark(
-    mut buf: Buffer,
-    mut ns_id: Integer,
+pub unsafe fn nvim_buf_set_extmark(
+    buf: Buffer,
+    ns_id: Integer,
     mut line: Integer,
     mut col: Integer,
-    mut opts: *mut KeyDict_set_extmark,
-    mut err: *mut Error,
-) -> Integer {
+    opts: *mut KeyDict_set_extmark,
+) -> Result<Integer, Error> {
+    let mut error = ERROR_INIT;
+    let err = &raw mut error;
     unsafe {
         let mut id: uint32_t = 0;
         let mut line2: ::core::ffi::c_int = 0;
@@ -837,10 +839,10 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     != kErrorTypeNone as ::core::ffi::c_int
                                 {
                                     decor_free(decor);
-                                    return 0 as Integer;
+                                    return (0 as Integer).reported(error);
                                 }
                             }
-                            return id as Integer;
+                            return (id as Integer).reported(error);
                         }
                     }
                 }
@@ -851,6 +853,6 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
         if !url.is_null() {
             xfree(url as *mut ::core::ffi::c_void);
         }
-        return 0 as Integer;
+        return (0 as Integer).reported(error);
     }
 }
