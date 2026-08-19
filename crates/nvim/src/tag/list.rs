@@ -11,7 +11,7 @@ use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::pos::MAXCOL;
-use crate::types::OK;
+use crate::types::{IOSIZE, MAXPATHL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

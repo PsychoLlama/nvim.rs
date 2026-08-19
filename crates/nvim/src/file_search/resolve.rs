@@ -12,6 +12,7 @@
 use super::*;
 use crate::path::buffer_path;
 use crate::semsg_c;
+use crate::types::MAXPATHL;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
@@ -176,14 +177,14 @@ unsafe fn try_suffixes(namelen: size_t, find_what: c_int, suffixes: *mut c_char)
             if *suffix == 0 {
                 return ptr::null_mut();
             }
-            debug_assert!(namelen <= MAXPATHL);
+            debug_assert!(namelen <= MAXPATHL as usize);
             // `copy_option_part` answers what it wrote, which is at most
             // MAXPATHL - namelen - 1.
             len = namelen
                 + copy_option_part(
                     &raw mut suffix,
                     name_buff.add(namelen),
-                    MAXPATHL - namelen,
+                    MAXPATHL as usize - namelen,
                     c",".as_ptr().cast_mut(),
                 );
         }
@@ -217,7 +218,7 @@ unsafe fn find_without_path(
         let relative = rel_to_curdir(file_to_find)
             && options & FNAME_REL as c_int != 0
             && !rel_fname.is_null()
-            && rel_fnamelen + file_to_findlen < MAXPATHL;
+            && rel_fnamelen + file_to_findlen < MAXPATHL as usize;
 
         // Run 1 is relative to "rel_fname"'s directory, run 2 is relative to
         // the current directory. Only run 2 happens when the first does not
@@ -226,13 +227,13 @@ unsafe fn find_without_path(
             let len = if run == 1 && relative {
                 let len = vim_snprintf(
                     name_buff,
-                    MAXPATHL,
+                    MAXPATHL as usize,
                     c"%.*s%s".as_ptr(),
                     path_tail(rel_fname.cast_mut()).offset_from(rel_fname) as c_int,
                     rel_fname,
                     file_to_find,
                 ) as size_t;
-                debug_assert!(len < MAXPATHL);
+                debug_assert!(len < MAXPATHL as usize);
                 len
             } else if run == 1 {
                 continue;
@@ -296,11 +297,11 @@ unsafe fn find_along_option(
                 return ptr::null_mut();
             }
 
-            let mut buf = vec![0 as c_char; MAXPATHL];
+            let mut buf = vec![0 as c_char; MAXPATHL as usize];
             copy_option_part(
                 DIR.ptr(),
                 buf.as_mut_ptr(),
-                MAXPATHL,
+                MAXPATHL as usize,
                 c" ,".as_ptr().cast_mut(),
             );
             // Splits the entry at an unescaped ';', leaving the entry in

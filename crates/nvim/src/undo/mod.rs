@@ -67,7 +67,6 @@ mod header {
 
     pub const EOF: c_int = -1;
     pub const SIZE_MAX: c_ulong = 18446744073709551615;
-    pub const MAXPATHL: c_int = 4096;
     pub const NMARKS: c_int = 26;
 
     /// `open` flags.
@@ -121,7 +120,6 @@ pub struct bufinfo_T {
     pub bi_buf: *mut buf_T,
     pub bi_fp: *mut FILE,
 }
-pub const IOSIZE: c_int = 1024 + 1;
 pub const CPO_UNDO: c_int = 'u' as c_int;
 pub const NO_LOCAL_UNDOLEVEL: c_int = -123456;
 static u_newcount: GlobalCell<c_int> = GlobalCell::new(0);

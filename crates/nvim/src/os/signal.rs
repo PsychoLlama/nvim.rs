@@ -19,8 +19,8 @@ use crate::main::{IObuff, curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
 use crate::os::cshim::snprintf;
 use crate::types::{
-    SignalWatcher, VV_DYING, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
-    uv_signal_t,
+    IOSIZE, SignalWatcher, VV_DYING, uv__queue, uv_handle_type, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t,
 };
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -45,7 +45,6 @@ pub const SIGPWR: c_int = 30;
 
 const SIG_SETMASK: c_int = 2;
 const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-const IOSIZE: usize = 1025;
 
 /// The signals the editor watches, in the order upstream registered them.
 /// `WATCHERS[i]` is the watcher for `WATCHED[i]`.
@@ -208,7 +207,7 @@ fn deadly_signal(signum: c_int) -> ! {
         );
         snprintf(
             IObuff.ptr() as *mut c_char,
-            IOSIZE,
+            IOSIZE as usize,
             c"Nvim: Caught deadly signal '%s'\n".as_ptr(),
             name,
         );

@@ -10,7 +10,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::{IOSIZE, get_global_lstate, nlua_error, nlua_pcall, nlua_typval_exec};
+use super::{get_global_lstate, nlua_error, nlua_pcall, nlua_typval_exec};
 use crate::change::inserted_bytes;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
@@ -28,7 +28,7 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CMD_equal, FAIL, FileDescriptor, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t,
+    CMD_equal, FAIL, FileDescriptor, IOSIZE, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t,
     typval_T,
 };
 use crate::undo::u_save;

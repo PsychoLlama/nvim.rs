@@ -17,7 +17,7 @@ use core::ffi::{c_char, c_int, c_long, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, MAXPATHL, NUL, OK};
 
 /// Try to recover `curbuf` from its swap file.
 ///

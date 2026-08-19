@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::types::{FAIL, IOSIZE, NUL};
 
 /// Every variable of `ht`, one per line, each name prefixed with `prefix`.
 ///

@@ -77,7 +77,6 @@ const SIN_INSERT: c_uint = 2;
 const SIN_UNDO: c_uint = 4;
 const SIN_NOMARK: c_uint = 8;
 pub const FO_Q_COMS: c_int = 'q' as c_int;
-pub const IOSIZE: c_int = 1024 + 1;
 
 /// The screen column byte `col` of line `lnum` sits at.
 ///

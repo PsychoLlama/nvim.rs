@@ -12,8 +12,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{
-    FCERR_NONE, FCERR_OTHER, IOSIZE, get_global_lstate, kRetLuaref, kRetMulti, kRetNilBool,
-    kRetObject, nlua_error, nlua_fast_cfpcall, nlua_pcall, nlua_pushref, nlua_ref_global,
+    FCERR_NONE, FCERR_OTHER, get_global_lstate, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
+    nlua_error, nlua_fast_cfpcall, nlua_pcall, nlua_pushref, nlua_ref_global,
 };
 use crate::api::private::helpers::{api_set_error, arena_array};
 use crate::ex_cmds::check_secure;
@@ -30,9 +30,9 @@ use crate::main::IObuff;
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::types::{
-    Arena, Array, Error, ErrorType, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER, VAR_UNKNOWN,
-    expand_T, garray_T, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, lua_Integer,
-    lua_State, size_t, typval_T, varnumber_T,
+    Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER,
+    VAR_UNKNOWN, expand_T, garray_T, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    lua_Integer, lua_State, size_t, typval_T, varnumber_T,
 };
 use ::libc::{memcpy, strlen};
 

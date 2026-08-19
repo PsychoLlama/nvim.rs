@@ -15,7 +15,7 @@ use core::ffi::CStr;
 
 use super::*;
 use crate::keycodes::Ctrl_V;
-use crate::types::{NUL, VV_ECHOSPACE};
+use crate::types::{MAXPATHL, NUL, VV_ECHOSPACE};
 
 /// `VIsual_mode` for a linewise selection.
 const VISUAL_LINE: c_int = 'V' as c_int;

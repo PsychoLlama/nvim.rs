@@ -14,7 +14,7 @@ use crate::main::{IObuff, NameBuff};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup};
 use crate::os::env::{expand_env_save, os_env_exists, os_getenv, os_getenv_noalloc};
 use crate::path::{concat_fnames_realloc, path_fnamecmp, path_is_absolute};
-use crate::types::{XDGVarType, size_t};
+use crate::types::{IOSIZE, XDGVarType, size_t};
 use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
@@ -25,8 +25,6 @@ pub const kXDGRuntimeDir: XDGVarType = 4;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGDataDirs: XDGVarType = 6;
 
-/// Size of `IObuff`, the scratch buffer [`get_xdg_home`] assembles in.
-const IOSIZE: usize = 1024 + 1;
 const PATHSEP: u8 = b'/';
 /// Separator between entries of `$XDG_*_DIRS`.
 const ENV_SEP: u8 = b':';
@@ -198,7 +196,7 @@ pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
         let appname_len = CStr::from_ptr(appname).to_bytes().len();
         // Windows appends "-data" to the data/state homes; the headroom is
         // asserted on every platform.
-        debug_assert!(appname_len < IOSIZE - c"-data".count_bytes() - 1);
+        debug_assert!(appname_len < IOSIZE as usize - c"-data".count_bytes() - 1);
         if dir.is_null() {
             return dir;
         }

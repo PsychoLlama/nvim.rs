@@ -22,7 +22,7 @@ use crate::os::time::os_delay;
 use crate::path::{ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
 use crate::semsg_c;
 use crate::strings::vim_strchr;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, OK, READBIN};
 use core::ops::Range;
 
 /// The `vimglob()` shell function, for a POSIX shell.

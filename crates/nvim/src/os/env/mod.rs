@@ -37,7 +37,7 @@ use crate::os::fs::{os_dirname, os_realpath};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::strings::striequal;
-use crate::types::{OK, expand_T, int64_t, size_t};
+use crate::types::{IOSIZE, MAXPATHL, OK, expand_T, int64_t, size_t};
 use ::libc::{getpid, strcasecmp, strcmp, strcpy, strlen, strpbrk, uname, utsname};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -45,8 +45,6 @@ use core::ptr;
 // The libuv error codes this file distinguishes, retyped from the `c_int`
 // anonymous enum c2rust emitted.
 
-const MAXPATHL: usize = 4096;
-const IOSIZE: usize = 1024 + 1;
 /// How much of a name `get_env_name` copies into `xp_buf`.
 const EXPAND_BUF_LEN: size_t = 256;
 /// `$PATH`'s separator, and it as a string.
@@ -183,7 +181,7 @@ pub unsafe extern "C" fn os_getenv_buf(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_getenv_noalloc(name: *const c_char) -> *mut c_char {
     // SAFETY: the caller's contract; `NameBuff` is `MAXPATHL` bytes.
-    unsafe { os_getenv_buf(name, NameBuff.ptr().cast(), MAXPATHL) }
+    unsafe { os_getenv_buf(name, NameBuff.ptr().cast(), MAXPATHL as usize) }
 }
 
 /// Whether environment variable `name` is defined, empty or not.
@@ -384,11 +382,12 @@ pub fn init_homedir() {
             var = os_uv_homedir();
         }
         // Resolve links, so the answer is the "real" directory.
-        if !var.is_null() && !os_realpath(var, IObuff.ptr().cast(), IOSIZE).is_null() {
+        if !var.is_null() && !os_realpath(var, IObuff.ptr().cast(), IOSIZE as usize).is_null() {
             var = IObuff.ptr().cast();
         }
         // Last resort: wherever nvim was started.
-        if (var.is_null() || *var == 0) && os_dirname(os_buf.ptr().cast(), MAXPATHL) == OK {
+        if (var.is_null() || *var == 0) && os_dirname(os_buf.ptr().cast(), MAXPATHL as usize) == OK
+        {
             var = os_buf.ptr().cast();
         }
         if !var.is_null() {
@@ -399,7 +398,8 @@ pub fn init_homedir() {
 }
 
 /// libuv's answer for the home directory, in a static buffer, or NULL.
-static homedir_buf: GlobalCell<[c_char; MAXPATHL]> = GlobalCell::new([0; MAXPATHL]);
+static homedir_buf: GlobalCell<[c_char; MAXPATHL as usize]> =
+    GlobalCell::new([0; MAXPATHL as usize]);
 
 fn os_uv_homedir() -> *mut c_char {
     // SAFETY: `homedir_buf` is this module's own static and libuv writes at
@@ -407,10 +407,10 @@ fn os_uv_homedir() -> *mut c_char {
     unsafe {
         let buf = homedir_buf.ptr().cast::<c_char>();
         *buf = 0;
-        let mut homedir_size: size_t = MAXPATHL;
+        let mut homedir_size: size_t = MAXPATHL as usize;
         // http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir
         let ret_value = uv_os_homedir(buf, &raw mut homedir_size);
-        if ret_value == 0 && homedir_size < MAXPATHL {
+        if ret_value == 0 && homedir_size < MAXPATHL as usize {
             return buf;
         }
         logmsg_c!(
@@ -461,7 +461,7 @@ pub unsafe extern "C" fn os_setenv_append_path(fname: *const c_char) -> bool {
         }
         let tail = path_tail_with_sep(fname.cast_mut());
         let dirlen = tail.offset_from(fname) as size_t;
-        debug_assert!(tail >= fname.cast_mut() && dirlen + 1 < MAXPATHL);
+        debug_assert!(tail >= fname.cast_mut() && dirlen + 1 < MAXPATHL as usize);
         xmemcpyz(os_buf.ptr().cast(), fname.cast(), dirlen);
 
         let path = os_getenv(c"PATH".as_ptr());

@@ -13,7 +13,7 @@
 
 use super::*;
 
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr, slice};
 

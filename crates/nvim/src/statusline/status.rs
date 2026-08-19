@@ -24,7 +24,7 @@ use crate::main::{default_gridview, redraw_cmdline, wild_menu_showing};
 use crate::memory::xstrlcpy;
 use crate::os::env::home_replace;
 use crate::types::ui::kUIWildmenu;
-use crate::types::{buf_T, win_T};
+use crate::types::{MAXPATHL, buf_T, win_T};
 use crate::ui::ui_has;
 use crate::winlayer::Frame;
 

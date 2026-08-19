@@ -25,10 +25,10 @@ use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfre
 use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    Arena, Array, Channel, Dict, Integer, Object, String_0, VAR_DICT, VAR_UNKNOWN, VAR_UNLOCKED,
-    event_T, hashtab_T, int64_t, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair, object_data,
-    save_v_event_T, size_t, typval_T, typval_vval_union, uint64_t,
+    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, String_0, VAR_DICT, VAR_UNKNOWN,
+    VAR_UNLOCKED, event_T, hashtab_T, int64_t, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair,
+    object_data, save_v_event_T, typval_T, typval_vval_union, uint64_t,
 };
 use ::libc::qsort;
 
@@ -37,9 +37,6 @@ use super::{
     channel_decref, channel_incref, channel_map, channel_proc, channel_pty, empty_dict,
     find_channel, main_loop_events,
 };
-
-/// The capacity of `IObuff`.
-const IOSIZE: size_t = 1025;
 
 // ---------------------------------------------------------------------------
 // Object constructors
@@ -176,7 +173,7 @@ fn source_name_line() -> CString {
         // SAFETY: `eval_fmt_source_name_line` only `snprintf`s into the buffer
         // it is handed, so the result is NUL-terminated within `IOSIZE`.
         unsafe {
-            eval_fmt_source_name_line(buf.as_mut_ptr(), IOSIZE);
+            eval_fmt_source_name_line(buf.as_mut_ptr(), IOSIZE as usize);
             CStr::from_ptr(buf.as_ptr()).to_owned()
         }
     })

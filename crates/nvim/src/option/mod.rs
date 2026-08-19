@@ -166,8 +166,6 @@ pub const STATUS_HEIGHT: c_uint = 1;
 pub const MIN_COLUMNS: c_uint = 12;
 pub const kListchars: CharsOption = 1;
 pub const kFillchars: CharsOption = 0;
-/// The longest path the option module will build or expand.
-pub const MAXPATHL: c_int = 4096;
 pub const ROOT_UID: c_int = 0 as c_int;
 pub const BF_SYN_SET: c_int = 0x200 as c_int;
 pub const B_IMODE_USE_INSERT: c_int = -1 as c_int;
@@ -209,7 +207,6 @@ pub const NO_LOCAL_UNDOLEVEL: c_int = -123456 as c_int;
 pub const SB_MAX: c_int = 1000000 as c_int;
 pub const MAX_NUMBERWIDTH: c_int = 20 as c_int;
 pub const TABSTOP_MAX: c_int = 9999 as c_int;
-pub const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
 pub const DFLT_ERRORFILE: &::core::ffi::CStr = c"errors.err";
 pub const DFLT_HELPFILE: &::core::ffi::CStr = c"$VIMRUNTIME/doc/help.txt";
 pub const NO_SCREEN: c_int = 2 as c_int;

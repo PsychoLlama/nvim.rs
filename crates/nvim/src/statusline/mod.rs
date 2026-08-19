@@ -56,7 +56,7 @@ use crate::main::{NameBuff, hl_attr_active};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
-    AlignTextPos, Array, Dict, GridView, Object, OptIndex, OptValType, ScreenGrid,
+    AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptValType, ScreenGrid,
     StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord, StlFlag,
     VV_LNUM, VV_RELNUM, WinSplit, WinStyle, hlf_T, linenr_T, schar_T, size_t, statuscol_T,
     stl_hlrec_t, varnumber_T, win_T,
@@ -154,8 +154,6 @@ pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,

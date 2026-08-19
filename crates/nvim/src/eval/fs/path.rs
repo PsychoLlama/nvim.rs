@@ -23,7 +23,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{MAXPATHL, Owned, at, err, frame, from, is_sep, ret_string, str_arg, str_arg_chk};
+use super::{Owned, at, err, frame, from, is_sep, ret_string, str_arg, str_arg_chk};
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::memory::{xrealloc, xstrlcat};
@@ -32,7 +32,7 @@ use crate::path::{
     add_pathsep, after_pathsep, path_is_absolute, path_next_component, path_tail,
     path_tail_with_sep, shorten_dir_len, simplify_filename,
 };
-use crate::types::{EvalFuncData, VAR_STRING, size_t, typval_T, varnumber_T};
+use crate::types::{EvalFuncData, MAXPATHL, VAR_STRING, size_t, typval_T, varnumber_T};
 use ::libc::{memcpy, readlink};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

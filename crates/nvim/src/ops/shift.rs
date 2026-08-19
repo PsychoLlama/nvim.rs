@@ -20,7 +20,7 @@
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::types::{FAIL, IOSIZE, NUL};
 
 /// `<` and `>` over the operator's region.
 ///

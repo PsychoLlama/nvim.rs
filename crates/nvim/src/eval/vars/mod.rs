@@ -220,7 +220,6 @@ pub(crate) const LVAL_INITIAL_VALUE: lval_T = lval_T {
 /// How deep `:const` locks the value it stores.
 pub const DICT_MAXNEST: c_int = 100;
 
-pub const IOSIZE: c_int = 1024 + 1;
 pub const SID_LUA: c_int = -8;
 pub const SID_STR: c_int = -10;
 

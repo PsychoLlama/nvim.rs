@@ -37,7 +37,7 @@
 
 use super::flag::{
     CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,
-    CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER, IOSIZE,
+    CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER,
 };
 use super::{cause_abort, iobuff, message};
 use crate::ascii::ascii_isdigit;
@@ -58,8 +58,8 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::smsg_c;
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::types::{
-    FAIL, NUL, OK, VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T, except_type_T,
-    exception_state_T, int64_t, list_T, msglist_T, ptrdiff_t,
+    FAIL, IOSIZE, NUL, OK, VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T,
+    except_type_T, exception_state_T, int64_t, list_T, msglist_T, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -530,7 +530,7 @@ pub(super) unsafe fn discard_exception(excp: *mut except_T, was_finished: bool) 
                 },
                 (*excp).value,
             );
-            xstrlcpy(iobuff(), saved_iobuff, IOSIZE);
+            xstrlcpy(iobuff(), saved_iobuff, IOSIZE as usize);
             xfree(saved_iobuff.cast());
         }
         if (*excp).type_0 != ET_INTERRUPT {
@@ -583,11 +583,16 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
             return;
         }
         let len = if (*excp).throw_lnum == 0 {
-            vim_snprintf_safelen(iobuff(), IOSIZE, c"%s".as_ptr(), (*excp).throw_name)
+            vim_snprintf_safelen(
+                iobuff(),
+                IOSIZE as usize,
+                c"%s".as_ptr(),
+                (*excp).throw_name,
+            )
         } else {
             vim_snprintf_safelen(
                 iobuff(),
-                IOSIZE,
+                IOSIZE as usize,
                 c"%s, line %ld".as_ptr(),
                 (*excp).throw_name,
                 (*excp).throw_lnum as int64_t,
@@ -716,7 +721,7 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
             CSTP_RETURN => get_return_cmd(value),
             _ if pending & CSTP_THROW != 0 => {
                 // "%s made pending" becomes "Exception made pending: %s".
-                vim_snprintf(iobuff(), IOSIZE, mesg, c"Exception".as_ptr());
+                vim_snprintf(iobuff(), IOSIZE as usize, mesg, c"Exception".as_ptr());
                 mesg = concat_str(iobuff(), c": %s".as_ptr());
                 (*value.cast::<except_T>()).value
             }

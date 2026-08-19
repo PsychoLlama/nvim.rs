@@ -24,15 +24,13 @@ use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::input_get;
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, Callback_data, MultiQueue, NUL};
+use crate::types::{Callback, Callback_data, IOSIZE, MultiQueue, NUL};
 use crate::ui::{ui_flush, ui_has};
 use ::libc::atoi;
 use core::ffi::{c_char, c_int, c_void};
 
 const EXPAND_NOTHING: c_int = 0;
 const ESC: c_int = 0x1b;
-/// `IObuff`'s size, which the buffer itself is declared with in main.
-const IOSIZE: usize = 1024 + 1;
 /// The unset callback, as `CALLBACK_NONE`.
 const CALLBACK_NONE: Callback = Callback {
     data: Callback_data {
@@ -57,7 +55,7 @@ pub unsafe fn ask_yesno(str: *const c_char) -> c_int {
     let prompt = IObuff.with_mut(|buf| unsafe {
         snprintf(
             buf.as_mut_ptr(),
-            IOSIZE,
+            IOSIZE as usize,
             gettext(c"%s (y/n)?".as_ptr()),
             str,
         );

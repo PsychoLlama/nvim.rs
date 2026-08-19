@@ -33,13 +33,14 @@ use crate::options::{opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_val
 use crate::os::cshim::{snprintf, strncmp};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CompleteListItemGetter, FAIL, NUL, OK, colnr_T, expand_T, optexpand_T, regmatch_T, size_t,
+    CompleteListItemGetter, FAIL, IOSIZE, NUL, OK, colnr_T, expand_T, optexpand_T, regmatch_T,
+    size_t,
 };
 use ::libc::strcmp;
 
 use super::{
-    COCU_ALL, CPO_VI, FO_ALL, IOSIZE, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name,
-    get_listchars_name, opt_values, vim_regexec,
+    COCU_ALL, CPO_VI, FO_ALL, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name, get_listchars_name,
+    opt_values, vim_regexec,
 };
 
 /// The completion result under construction: an `xmalloc`ed `char *` array

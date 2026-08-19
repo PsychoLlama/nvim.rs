@@ -15,9 +15,10 @@ use crate::semsg_c;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, NUL, OK, OptInt, OptValType,
-    SpellAddType, XDGVarType, buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T,
-    hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T, time_t, uint8_t, vimconv_T,
+    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, IOSIZE, MAXPATHL, NUL, OK,
+    OptInt, OptValType, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T, file_comparison,
+    fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T, time_t, uint8_t,
+    vimconv_T,
 };
 use crate::ui::ui_flush;
 use ::libc::{memset, strcmp, strlen};
@@ -225,11 +226,8 @@ pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
 pub const SPL_FNAME_ADD: &::core::ffi::CStr = c".add.";
 pub const SPL_FNAME_ASCII: &::core::ffi::CStr = c".ascii.";

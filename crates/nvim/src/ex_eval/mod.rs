@@ -143,7 +143,6 @@ pub(crate) mod flag {
     pub const THROW_ON_ERROR: bool = true;
 
     pub const ESTACK_NONE: estack_arg_T = 0;
-    pub const IOSIZE: usize = 1024 + 1;
 }
 
 const E_MULTIPLE_ELSE: &CStr = c"E583: Multiple :else";

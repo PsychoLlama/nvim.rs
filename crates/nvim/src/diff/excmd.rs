@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, MAXPATHL, NUL, OK};
 use core::ffi::{c_char, c_int};
 
 /// `:diffpatch {file}`: apply a patch to a copy of the current buffer and

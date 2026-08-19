@@ -122,9 +122,6 @@ const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
-/// `IObuff`'s size, which several chunk builders here measure against.
-pub const IOSIZE: c_int = 1024 + 1;
-
 /// An empty garray, growing one item at a time.
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0,

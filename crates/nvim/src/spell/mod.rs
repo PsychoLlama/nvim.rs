@@ -168,9 +168,7 @@ pub const CHAR_OTHER: CharType = 0;
 pub const CHAR_UPPER: CharType = 1;
 pub const CHAR_DIGIT: CharType = 2;
 
-pub const MAXPATHL: c_int = 4096;
 pub const TAB: c_int = '\t' as c_int;
-pub const IOSIZE: c_int = 1025;
 
 /// The longest `SYLLABLE` item.
 pub const SY_MAXLEN: c_int = 30;

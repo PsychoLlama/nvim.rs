@@ -30,8 +30,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    MAXPATHL, Owned, VALID_HEAD, VALID_PATH, at, frame, from, is_sep, numbuf, ret_string,
-    str_arg_buf, str_arg_chk,
+    Owned, VALID_HEAD, VALID_PATH, at, frame, from, is_sep, numbuf, ret_string, str_arg_buf,
+    str_arg_chk,
 };
 use crate::eval::do_string_sub;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
@@ -43,7 +43,7 @@ use crate::path::{
     vim_isAbsName,
 };
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
-use crate::types::{EvalFuncData, buf_T, size_t, typval_T};
+use crate::types::{EvalFuncData, MAXPATHL, buf_T, size_t, typval_T};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::replace;
 use core::ptr;

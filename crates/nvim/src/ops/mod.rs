@@ -221,8 +221,5 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 
-/// Size of `IObuff`, the shared message buffer.
-pub const IOSIZE: ::core::ffi::c_int = 1024 + 1;
-
 pub const true_0: ::core::ffi::c_int = 1;
 pub const false_0: ::core::ffi::c_int = 0;

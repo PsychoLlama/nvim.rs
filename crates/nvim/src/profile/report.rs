@@ -12,15 +12,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    IOSIZE, NL, PROFILE_FNAME, func_line, prl_item, profile_cmp, profile_msg_str,
-    profiled_functions, script_item,
+    NL, PROFILE_FNAME, func_line, prl_item, profile_cmp, profile_msg_str, profiled_functions,
+    script_item,
 };
 use crate::fileio::vim_fgets;
 use crate::keycodes::K_SPECIAL;
 use crate::memory::xfree;
 use crate::os::fs::os_fopen;
 use crate::runtime::{get_scriptname, script_items};
-use crate::types::{proftime_T, scriptitem_T, ufunc_T};
+use crate::types::{IOSIZE, proftime_T, scriptitem_T, ufunc_T};
 use ::libc::fclose;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::OsStr;
@@ -206,15 +206,15 @@ unsafe fn script_dump_source(fd: &mut dyn Write, si: &scriptitem_T) -> io::Resul
     if sfd.is_null() {
         return write!(fd, "Cannot open file!\n");
     }
-    let mut buf = [0 as c_char; IOSIZE];
+    let mut buf = [0 as c_char; IOSIZE as usize];
     let mut i = 0;
     // SAFETY: `buf` is `IOSIZE` chars, which is the bound handed over, and
     // `sfd` is the handle just opened; it is closed below.
-    while !unsafe { vim_fgets(buf.as_mut_ptr(), IOSIZE as c_int, sfd) } {
+    while !unsafe { vim_fgets(buf.as_mut_ptr(), IOSIZE, sfd) } {
         // When a line has been truncated, append NL, taking care of
         // multibyte characters.
-        if buf[IOSIZE - 2] != 0 && buf[IOSIZE - 2] != NL {
-            let mut n = IOSIZE - 2;
+        if buf[IOSIZE as usize - 2] != 0 && buf[IOSIZE as usize - 2] != NL {
+            let mut n = IOSIZE as usize - 2;
             // Move back to the first byte of the char.
             while n > 0 && (buf[n] as u8 & 0xc0) == 0x80 {
                 n -= 1;

@@ -45,7 +45,7 @@ use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FAIL, ListReaderState, MessagePackType, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
+    FAIL, IOSIZE, ListReaderState, MessagePackType, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
     VAR_UNLOCKED, garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use ::libc::{abort, strlen};
@@ -60,7 +60,6 @@ use self::text::{encode_vim_to_echo, encode_vim_to_string};
 
 pub const kMPString: MessagePackType = 4;
 pub const NOTDONE: c_int = 2;
-pub const IOSIZE: c_int = 1024 + 1;
 
 /// The UTF-16 surrogate range, which a JSON `\u` escape has to spell a
 /// character above the BMP with — and which a *string* may not contain.

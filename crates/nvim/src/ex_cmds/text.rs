@@ -29,13 +29,10 @@ use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
 use crate::strings::vim_snprintf;
-use crate::types::{NUL, cmdidx_T, exarg_T};
+use crate::types::{IOSIZE, NUL, cmdidx_T, exarg_T};
 use crate::undo::u_save;
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
-
-/// How wide `IObuff` is; every writer here bounds itself by it.
-const IOSIZE: usize = 1025;
 
 /// `:ascii` and `ga` -- describe the code point under the cursor.
 ///
@@ -142,7 +139,7 @@ unsafe fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
     unsafe {
         vim_snprintf(
             IObuff.ptr().cast::<c_char>(),
-            IOSIZE,
+            IOSIZE as usize,
             gettext(fmt.as_ptr()),
             transchar(c),
             nonprint.as_ptr(),
@@ -198,7 +195,7 @@ unsafe fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
     unsafe {
         vim_snprintf(
             IObuff.ptr().cast::<c_char>().add(used),
-            IOSIZE - used,
+            IOSIZE as usize - used,
             gettext(fmt.as_ptr()),
             c,
             c,

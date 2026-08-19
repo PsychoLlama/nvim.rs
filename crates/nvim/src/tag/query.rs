@@ -10,13 +10,9 @@
 use super::*;
 use crate::pos::MAXCOL;
 use crate::smsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, MAXPATHL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
-
-/// A field's value is copied into a buffer this big; anything longer is
-/// truncated, as upstream truncates it.
-const MAXPATHL: usize = super::MAXPATHL as usize;
 
 /// Command-line completion of tag names.
 ///
@@ -295,7 +291,7 @@ unsafe fn add_tag_field(
             return FAIL;
         }
 
-        let mut value = Vec::with_capacity(MAXPATHL);
+        let mut value = Vec::with_capacity(MAXPATHL as usize);
         if !start.is_null() {
             let end = if end.is_null() {
                 // Only an unbracketed value has its line ending trimmed.
@@ -307,7 +303,7 @@ unsafe fn add_tag_field(
             } else {
                 end
             };
-            let len = (end.offset_from(start) as usize).min(MAXPATHL - 1);
+            let len = (end.offset_from(start) as usize).min(MAXPATHL as usize - 1);
             value.extend_from_slice(core::slice::from_raw_parts(start, len));
         }
         value.push(0);

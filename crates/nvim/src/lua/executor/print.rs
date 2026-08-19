@@ -11,7 +11,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::{IOSIZE, in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, require_ref};
+use super::{in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, require_ref};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -31,7 +31,7 @@ use crate::profile::{time_msg, time_pop, time_push};
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Event, HlMessage, HlMessageChunk, MessageData, Object, String_0, VAR_FIXED, VAR_STRING,
+    Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, String_0, VAR_FIXED, VAR_STRING,
     intptr_t, lua_State, proftime_T, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use crate::ui::ui_has;

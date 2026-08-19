@@ -217,8 +217,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -300,7 +298,6 @@ pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
 pub const CPO_CONCAT: ::core::ffi::c_int = 'C' as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1;
 pub const SID_CMDARG: ::core::ffi::c_int = -2;
@@ -362,5 +359,4 @@ static runtime_expand_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0)
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const READBIN: &::core::ffi::CStr = c"rb";
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;

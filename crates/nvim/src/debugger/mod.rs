@@ -54,9 +54,9 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regf
 use crate::runtime::{estack_sfile, sourcing_lnum};
 use crate::state::MODE_NORMAL;
 use crate::types::{
-    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, FAIL, NUL, OK, buf_T, colnr_T,
-    estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t, tasave_T,
-    typval_T, uint8_t, varnumber_T,
+    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, FAIL, MAXPATHL, NUL, OK,
+    buf_T, colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
+    tasave_T, typval_T, uint8_t, varnumber_T,
 };
 use crate::{semsg, semsg_c, smsg, smsg_c};
 use ::libc::{atoi, strcmp, strcpy, strlen};
@@ -71,8 +71,6 @@ pub const ESTACK_NONE: estack_arg_T = 0;
 pub const EXPR_IS: crate::types::exprtype_T = 9;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
-pub const DEFAULT_MAXPATHL: c_int = 4096;
-pub const MAXPATHL: c_int = DEFAULT_MAXPATHL;
 pub const KS_EXTRA: c_int = 253;
 pub const true_0: c_int = 1;
 pub const false_0: c_int = 0;

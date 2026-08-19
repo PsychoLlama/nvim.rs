@@ -14,7 +14,7 @@ use super::*;
 use crate::highlight_group::{HLF_D, HLF_R};
 use crate::regexp::RE_MAGIC;
 use crate::smsg_c;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, IOSIZE, NUL, OK};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 

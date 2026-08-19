@@ -36,9 +36,9 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
-    AdditionalData, CMOD_KEEPPATTERNS, EvalFuncData, FAIL, HistoryType, OK, OptInt, Timestamp,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T,
-    varnumber_T,
+    AdditionalData, CMOD_KEEPPATTERNS, EvalFuncData, FAIL, HistoryType, IOSIZE, OK, OptInt,
+    Timestamp, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t,
+    typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -50,8 +50,6 @@ pub const HIST_EXPR: HistoryType = 2;
 pub const HIST_INPUT: HistoryType = 3;
 pub const HIST_DEBUG: HistoryType = 4;
 pub const HIST_COUNT: usize = 5;
-
-const IOSIZE: c_int = 1024 + 1;
 
 /// Names accepted by `:history` and `histget()` etc., indexed by history
 /// type. NUL-terminated because [`get_history_arg`] hands them to C-string

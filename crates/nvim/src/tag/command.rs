@@ -14,7 +14,7 @@ use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, OK, VV_SWAPCOMMAND};
+use crate::types::{FAIL, IOSIZE, OK, VV_SWAPCOMMAND};
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;

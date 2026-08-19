@@ -60,7 +60,6 @@ const EXPAND_USER_FUNC: c_int = 19;
 const EXPAND_PROFILE: c_int = 35;
 /// First byte of a `<SNR>`-mangled function name.
 const NL: c_char = b'\n' as c_char;
-const IOSIZE: usize = 1024 + 1;
 /// Offset of `uf_name` inside `ufunc_T`: hash keys point at the name, this
 /// recovers the function (the transpiled `HI2UF`, same constant as
 /// eval/userfunc/ uses).

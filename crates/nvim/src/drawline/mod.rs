@@ -101,8 +101,6 @@ mod special;
 /// the window's own attributes.
 pub const TERM_ATTRS_MAX: ::core::ffi::c_int = 1024;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 /// The most negative `int`, which `draw_virt_text` uses as "this virtual
 /// text has no column yet".
 pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;

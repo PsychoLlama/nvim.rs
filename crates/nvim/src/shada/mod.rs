@@ -295,7 +295,6 @@ pub type SRNIFlags = ::core::ffi::c_uint;
 pub const PTRDIFF_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = 4096;
 pub const ROOT_UID: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const KV_INITIAL_VALUE: AdditionalDataBuilder = AdditionalDataBuilder {
     size: 0 as size_t,

@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{CMD_cd, CMD_lcd, OK};
+use crate::types::{CMD_cd, CMD_lcd, MAXPATHL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

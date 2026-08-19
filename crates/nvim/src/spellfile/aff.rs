@@ -45,7 +45,7 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::spell::init_spell_chartab;
 use crate::strings::vim_snprintf;
-use crate::types::{CONV_NONE, NUL, size_t, uint8_t};
+use crate::types::{CONV_NONE, IOSIZE, NUL, size_t, uint8_t};
 use ::libc::{atoi, fclose, strcat, strcmp, strcpy, strlen};
 
 use super::affix::{handle_affix_entry, handle_affix_header};
@@ -53,8 +53,8 @@ use super::flags::{affitem2flag, process_compflags};
 use super::tables::{add_comppat, add_rep_entry, append_info, handle_map, handle_sal};
 use super::{
     _ISdigit, AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, COMP_CHECKCASE, COMP_CHECKDUP,
-    COMP_CHECKREP, COMP_CHECKTRIPLE, FAIL, IOSIZE, MAXLINELEN, TAB, afffile_T, affheader_T,
-    spell_message, spellinfo_T,
+    COMP_CHECKREP, COMP_CHECKTRIPLE, FAIL, MAXLINELEN, TAB, afffile_T, affheader_T, spell_message,
+    spellinfo_T,
 };
 
 /// The most items one `.aff` line is split into; the rest are ignored.

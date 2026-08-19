@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{CONV_NONE, VAR_LIST, VAR_STRING};
+use crate::types::{CONV_NONE, IOSIZE, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

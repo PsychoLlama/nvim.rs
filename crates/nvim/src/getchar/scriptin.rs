@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::MAXPATHL;
 use core::ffi::{c_char, c_int};
 
 /// The `scriptin` entry `curscript` names.

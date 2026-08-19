@@ -43,7 +43,7 @@ use crate::path::{
 };
 use crate::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    BoolVarValue, CdCause, CdScope, FileID, OK, cmdarg_T, event_T, linenr_T, ptrdiff_t,
+    BoolVarValue, CdCause, CdScope, FileID, MAXPATHL, OK, cmdarg_T, event_T, linenr_T, ptrdiff_t,
     save_v_event_T, size_t,
 };
 use ::libc::{abort, strcpy, strlen};
@@ -92,9 +92,6 @@ const LITERAL_DIR: ExpandFlags = ExpandFlags::DIR
 /// `'cpoptions'` flag: a `'tags'` entry starting with `"./"` is relative to
 /// the current directory rather than to the current file.
 pub const CPO_DOTTAG: c_int = 'd' as c_int;
-
-/// The longest path name the searcher will build, buffers included.
-pub const MAXPATHL: usize = 4096;
 
 /// How far `**` descends when the pattern does not say.
 pub const FF_MAX_STAR_STAR_EXPAND: u8 = 30;
@@ -252,7 +249,7 @@ pub(crate) struct TooLong;
 impl Candidate {
     fn new() -> Self {
         Candidate {
-            buf: vec![0; MAXPATHL],
+            buf: vec![0; MAXPATHL as usize],
             len: 0,
         }
     }
@@ -282,7 +279,7 @@ impl Candidate {
         at + unsafe {
             vim_snprintf(
                 self.as_mut_ptr().add(at),
-                MAXPATHL - at,
+                MAXPATHL as usize - at,
                 c"%s%s%s".as_ptr(),
                 parts[0],
                 parts[1],
@@ -305,7 +302,7 @@ impl Candidate {
     }
 
     fn push(&mut self, byte: u8) -> Result<(), TooLong> {
-        if self.len + 1 >= MAXPATHL {
+        if self.len + 1 >= MAXPATHL as usize {
             return Err(TooLong);
         }
         self.buf[self.len] = byte;
@@ -355,7 +352,7 @@ impl FindContext {
             if !vim_isAbsName(frame.fix_path.as_ptr())
                 && let Some(start_dir) = &self.start_dir
             {
-                if start_dir.len() + 1 >= MAXPATHL {
+                if start_dir.len() + 1 >= MAXPATHL as usize {
                     return Err(TooLong);
                 }
                 file_path.len = file_path.write_at(
@@ -366,14 +363,14 @@ impl FindContext {
                         c"".as_ptr(),
                     ],
                 );
-                if file_path.len >= MAXPATHL {
+                if file_path.len >= MAXPATHL as usize {
                     return Err(TooLong);
                 }
             }
 
             // Append the fixed part of the search path.
             let fix_path = &frame.fix_path;
-            if file_path.len + fix_path.len() + 1 >= MAXPATHL {
+            if file_path.len + fix_path.len() + 1 >= MAXPATHL as usize {
                 return Err(TooLong);
             }
             file_path.len = file_path.write_at(
@@ -384,7 +381,7 @@ impl FindContext {
                     c"".as_ptr(),
                 ],
             );
-            if file_path.len >= MAXPATHL {
+            if file_path.len >= MAXPATHL as usize {
                 return Err(TooLong);
             }
 
@@ -480,12 +477,12 @@ impl FindContext {
                 // Prepare the filename to be checked for existence below.
                 let dirlen = strlen(dir);
                 let wanted = &self.file_to_search;
-                if dirlen + 1 + wanted.len() >= MAXPATHL {
+                if dirlen + 1 + wanted.len() >= MAXPATHL as usize {
                     return Err(TooLong);
                 }
                 file_path.len = file_path
                     .write_at(0, [dir, Candidate::separator(dir, dirlen), wanted.as_ptr()]);
-                if file_path.len >= MAXPATHL {
+                if file_path.len >= MAXPATHL as usize {
                     return Err(TooLong);
                 }
 
@@ -521,14 +518,14 @@ impl FindContext {
                     if *suffix == 0 {
                         break;
                     }
-                    debug_assert!(stem <= MAXPATHL);
+                    debug_assert!(stem <= MAXPATHL as usize);
                     // `copy_option_part` answers what it wrote, which is at
                     // most MAXPATHL - stem - 1.
                     file_path.len = stem
                         + copy_option_part(
                             &raw mut suffix,
                             file_path.as_mut_ptr().add(stem),
-                            MAXPATHL - stem,
+                            MAXPATHL as usize - stem,
                             c",".as_ptr().cast_mut(),
                         );
                 }
@@ -544,8 +541,8 @@ impl FindContext {
     /// `file_path` must hold a NUL-terminated name.
     unsafe fn shorten(&self, file_path: &mut Candidate) {
         unsafe {
-            let mut curdir = [0 as c_char; MAXPATHL];
-            if os_dirname(curdir.as_mut_ptr(), MAXPATHL) != OK {
+            let mut curdir = [0 as c_char; MAXPATHL as usize];
+            if os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) != OK {
                 return;
             }
             let base = file_path.as_mut_ptr();
@@ -743,7 +740,7 @@ impl FindContext {
             if start_dir.is_empty() {
                 return Ok(false);
             }
-            if start_dir.len() + 1 + self.fix_path.len() >= MAXPATHL {
+            if start_dir.len() + 1 + self.fix_path.len() >= MAXPATHL as usize {
                 return Err(TooLong);
             }
 
@@ -755,7 +752,7 @@ impl FindContext {
                     self.fix_path.as_ptr(),
                 ],
             );
-            if file_path.len >= MAXPATHL {
+            if file_path.len >= MAXPATHL as usize {
                 return Err(TooLong);
             }
 

@@ -61,7 +61,7 @@ use crate::spellsuggest::{
 };
 use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::ui::kUIMessages;
-use crate::types::{NUL, colnr_T, int64_t, pos_T};
+use crate::types::{IOSIZE, NUL, colnr_T, int64_t, pos_T};
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy, strlen};
@@ -70,9 +70,6 @@ use core::{mem, ptr};
 
 /// The escape the redo buffer ends the change-word command with.
 const ESC: c_int = 0x1b;
-
-/// The size of [`IObuff`], which every message here is formatted into.
-const IOSIZE: usize = 1025;
 
 /// The shared scratch buffer messages are formatted into.
 fn iobuff() -> *mut c_char {
@@ -273,7 +270,7 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
             // untranslated message right-to-left.
             fmt = c":ot \"%.*s\" egnahC".as_ptr().cast_mut();
         }
-        vim_snprintf(iobuff(), IOSIZE, fmt, sug.su_badlen, sug.su_badptr);
+        vim_snprintf(iobuff(), IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr);
         msg_puts(iobuff());
         msg_clr_eos();
         msg_putchar('\n' as c_int);
@@ -331,20 +328,20 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
             );
         }
 
-        vim_snprintf(iobuff(), IOSIZE, c"%2d".as_ptr(), i + 1);
+        vim_snprintf(iobuff(), IOSIZE as usize, c"%2d".as_ptr(), i + 1);
         if cmdmsg_rl.get() {
             rl_mirror_ascii(iobuff(), ptr::null_mut());
         }
         msg_puts(iobuff());
 
-        vim_snprintf(iobuff(), IOSIZE, c" \"%s\"".as_ptr(), wcopyp);
+        vim_snprintf(iobuff(), IOSIZE as usize, c" \"%s\"".as_ptr(), wcopyp);
         msg_puts(iobuff());
 
         // The word may replace more than the bad word does.
         if badlen < stp.st_orglen {
             vim_snprintf(
                 iobuff(),
-                IOSIZE,
+                IOSIZE as usize,
                 gettext(c" < \"%.*s\"".as_ptr()),
                 stp.st_orglen,
                 badptr,
@@ -370,7 +367,7 @@ unsafe fn show_score(stp: &suggest_T) {
         if sps_flags.get() & (SPS_DOUBLE | SPS_BEST) != 0 {
             vim_snprintf(
                 iobuff(),
-                IOSIZE,
+                IOSIZE as usize,
                 c" (%s%d - %d)".as_ptr(),
                 if stp.st_salscore {
                     c"s ".as_ptr()
@@ -381,7 +378,7 @@ unsafe fn show_score(stp: &suggest_T) {
                 stp.st_altscore,
             );
         } else {
-            vim_snprintf(iobuff(), IOSIZE, c" (%d)".as_ptr(), stp.st_score);
+            vim_snprintf(iobuff(), IOSIZE as usize, c" (%d)".as_ptr(), stp.st_score);
         }
         if cmdmsg_rl.get() {
             // Mirror the numbers, but keep the leading space.
@@ -417,7 +414,7 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
             repl_from.set(xstrnsave(sug.su_badptr, sug.su_badlen as usize));
             vim_snprintf(
                 iobuff(),
-                IOSIZE,
+                IOSIZE as usize,
                 c"%s%.*s".as_ptr(),
                 stp.st_word,
                 sug.su_badlen - stp.st_orglen,

@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, MAXPATHL, NUL, OK};
 
 /// Whether the reader has nothing more to give.
 pub(crate) unsafe fn file_eof(fp: *const FileDescriptor) -> bool {

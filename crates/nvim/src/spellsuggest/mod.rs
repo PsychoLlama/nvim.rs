@@ -72,7 +72,9 @@ use crate::spellsuggest::soundalike::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::strings::vim_strchr;
-use crate::types::{FAIL, FILE, NUL, OK, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
+use crate::types::{
+    FAIL, FILE, MAXPATHL, NUL, OK, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T,
+};
 use ::libc::{atoi, fclose, strcasecmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
@@ -84,10 +86,6 @@ pub use crate::spell::MAXWLEN;
 
 /// A tab, which sound folding treats as a space.
 pub const TAB: c_int = '\t' as c_int;
-
-/// The longest path, which is also the size of the scratch buffer one
-/// `'spellsuggest'` item is copied into.
-const MAXPATHL: usize = 4096;
 
 // Word flags. These live beside each word in the tree, except for
 // `WF_MIXCAP`, which only ever appears in `su_badflags`.
@@ -344,7 +342,7 @@ pub unsafe fn spell_check_sps() -> c_int {
     // SAFETY: the caller guarantees the option; `buf` is `MAXPATHL`, which
     // is what `copy_option_part` is told it may fill.
     unsafe {
-        let mut buf = [0 as c_char; MAXPATHL];
+        let mut buf = [0 as c_char; MAXPATHL as usize];
         let bufp = buf.as_mut_ptr();
 
         sps_flags.set(0);
@@ -352,7 +350,12 @@ pub unsafe fn spell_check_sps() -> c_int {
 
         let mut p = p_sps.get();
         while *p as c_int != NUL {
-            copy_option_part(&raw mut p, bufp, MAXPATHL, c",".as_ptr().cast_mut());
+            copy_option_part(
+                &raw mut p,
+                bufp,
+                MAXPATHL as usize,
+                c",".as_ptr().cast_mut(),
+            );
             let part = CStr::from_ptr(bufp).to_bytes();
 
             // Zero means "this item said nothing about the method", -1
@@ -482,7 +485,7 @@ unsafe fn spell_find_suggest(
         static EXPR_BUSY: GlobalCell<bool> = GlobalCell::new(false);
 
         let mut attr: hlf_T = HLF_COUNT;
-        let mut buf = [0 as c_char; MAXPATHL];
+        let mut buf = [0 as c_char; MAXPATHL as usize];
         let bufp = buf.as_mut_ptr();
 
         ptr::write_bytes(su, 0, 1);
@@ -582,7 +585,12 @@ unsafe fn spell_find_suggest(
         let mut did_intern = false;
         let mut p = sps_copy;
         while *p as c_int != NUL {
-            copy_option_part(&raw mut p, bufp, MAXPATHL, c",".as_ptr().cast_mut());
+            copy_option_part(
+                &raw mut p,
+                bufp,
+                MAXPATHL as usize,
+                c",".as_ptr().cast_mut(),
+            );
             let part = CStr::from_ptr(bufp).to_bytes();
 
             if part.starts_with(b"expr:") {

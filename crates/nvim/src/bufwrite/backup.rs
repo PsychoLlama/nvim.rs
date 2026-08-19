@@ -20,7 +20,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
-use crate::types::NUL;
+use crate::types::{IOSIZE, MAXPATHL, NUL};
 
 /// `st_mode & S_IFMT` for a regular file.
 const S_IFREG: uint64_t = 0o100000;

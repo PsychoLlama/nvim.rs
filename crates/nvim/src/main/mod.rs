@@ -146,8 +146,6 @@ pub struct PumWant {
 }
 pub(crate) const NULL_0: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-pub(crate) const DEFAULT_MAXPATHL: c_int = 4096 as c_int;
-pub(crate) const MAXPATHL: c_int = DEFAULT_MAXPATHL;
 pub(crate) const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -656,7 +654,6 @@ pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614
 pub static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 #[unsafe(no_mangle)]
 pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
 pub(crate) const SYS_VIMRC_FILE: [c_char; 17] = c_bytes(b"$VIM/sysinit.vim\0");
 pub(crate) const VIMRC_FILE: [c_char; 8] = c_bytes(b".nvimrc\0");
 pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {

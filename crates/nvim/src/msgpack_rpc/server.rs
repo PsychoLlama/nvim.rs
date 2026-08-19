@@ -17,7 +17,7 @@ use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
-use crate::types::{SocketWatcher, VV_SEND_SERVER, kFalse, kNone, kTrue, size_t, uint32_t};
+use crate::types::{IOSIZE, SocketWatcher, VV_SEND_SERVER, kFalse, kNone, kTrue, size_t, uint32_t};
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;
 
@@ -30,8 +30,6 @@ mod known {
     pub const XDG_RUNTIME_DIR: c_int = 4;
     /// libuv's handle type for a TCP socket.
     pub const UV_TCP: c_uint = 12;
-    /// The capacity of `IObuff`.
-    pub const IOSIZE: usize = 1025;
     /// How many connections the kernel may queue behind a listening socket.
     pub const MAX_CONNECTIONS: c_int = 32;
 }
@@ -94,7 +92,7 @@ pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
         };
         snprintf(
             IObuff.ptr().cast::<c_char>(),
-            IOSIZE,
+            IOSIZE as usize,
             if user_arg == kTrue {
                 c"Failed to --listen: %s: \"%s\"".as_ptr()
             } else {

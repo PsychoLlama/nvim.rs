@@ -14,6 +14,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::regexp::{RE_MAGIC, RE_NOBREAK};
+use crate::types::MAXPATHL;
 
 /// How deep a `**` may recurse. Upstream's limit, and the reason a pattern
 /// over a symlink loop terminates.

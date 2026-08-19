@@ -52,8 +52,8 @@ use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 use crate::types::{
-    CMOD_LOCKMARKS, FAIL, FileInfo, OK, aco_save_T, buf_T, bufref_T, exarg_T, iconv_t, int64_t,
-    linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
+    CMOD_LOCKMARKS, FAIL, FileInfo, IOSIZE, MAXPATHL, OK, aco_save_T, buf_T, bufref_T, exarg_T,
+    iconv_t, int64_t, linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
@@ -237,8 +237,6 @@ pub const O_APPEND: ::core::ffi::c_int = 0o2000 as ::core::ffi::c_int;
 pub const __O_NOFOLLOW: ::core::ffi::c_int = 0o400000 as ::core::ffi::c_int;
 pub const O_NOFOLLOW: ::core::ffi::c_int = __O_NOFOLLOW;
 pub const UV_FS_COPYFILE_FICLONE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
@@ -881,7 +879,6 @@ pub unsafe fn buf_write(
     }
 }
 
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -20,7 +20,7 @@
 use super::*;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL};
-use crate::types::{NUL, VV_VIRTNUM};
+use crate::types::{MAXPATHL, NUL, VV_VIRTNUM};
 
 /// The widest a `'statuscolumn'` may grow the number column to.
 ///

@@ -36,7 +36,8 @@ use crate::path::shorten_dir;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUITabline;
 use crate::types::{
-    Arena, Buffer, Object, StlClickDefinition_type_0, String_0, Tabpage, buf_T, tabpage_T, win_T,
+    Arena, Buffer, MAXPATHL, Object, StlClickDefinition_type_0, String_0, Tabpage, buf_T,
+    tabpage_T, win_T,
 };
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::bufIsChanged;

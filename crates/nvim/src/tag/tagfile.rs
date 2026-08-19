@@ -13,12 +13,9 @@ use crate::cmdexpand::{WildMode, WildOpts};
 use crate::file_search::Name;
 use crate::path::tail_index;
 use crate::runtime::DIP_ALL;
+use crate::types::MAXPATHL;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-
-/// The `'tags'` and `'helpfile'` names are copied into a buffer this big;
-/// anything longer is truncated, as upstream does.
-const MAXPATHL: usize = super::MAXPATHL as usize;
 
 /// How deep [`vim_findfile`] may descend under a `'tags'` entry.
 const FIND_LEVEL: c_int = 100;
@@ -183,7 +180,7 @@ impl Entry {
         // The entry is copied into a fixed buffer first, because
         // `copy_option_part` truncates there and `vim_findfile_stopdir`
         // rewrites in place.
-        let mut buf = vec![0 as c_char; MAXPATHL];
+        let mut buf = vec![0 as c_char; MAXPATHL as usize];
         // SAFETY: `at` indexes into `tags`, which is NUL-terminated, and
         // `buf` is `MAXPATHL` writable bytes that both calls terminate.
         unsafe {
@@ -191,7 +188,7 @@ impl Entry {
             copy_option_part(
                 &raw mut read,
                 buf.as_mut_ptr(),
-                MAXPATHL - 1,
+                MAXPATHL as usize - 1,
                 c" ,".as_ptr().cast_mut(),
             );
             *at = read.offset_from(tags.as_ptr()) as usize;
@@ -246,7 +243,7 @@ impl HelpTags {
         }
         // Upstream copies it into a `MAXPATHL` buffer with four bytes
         // held back for "tags"; the truncation is kept.
-        let hf = &hf[..hf.len().min(MAXPATHL - c"tags".count_bytes() - 1)];
+        let hf = &hf[..hf.len().min(MAXPATHL as usize - c"tags".count_bytes() - 1)];
         let mut name = Name::from_bytes(&[&hf[..tail_index(hf)], b"tags".as_slice()].concat());
         simplify(&mut name);
         // Avoid answering a name 'runtimepath' already gave us.
@@ -335,7 +332,11 @@ pub(crate) unsafe fn expand_tag_fname(
         {
             let name = CStr::from_ptr(fname).to_bytes();
             let mut joined = Name::from_bytes(
-                &[dir, &name[..name.len().min(MAXPATHL - dir.len() - 1)]].concat(),
+                &[
+                    dir,
+                    &name[..name.len().min(MAXPATHL as usize - dir.len() - 1)],
+                ]
+                .concat(),
             );
             // Translate names like "src/a/../b/file.c" into "src/b/file.c".
             simplify(&mut joined);

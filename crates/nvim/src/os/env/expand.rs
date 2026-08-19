@@ -15,7 +15,7 @@ use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
-use crate::types::expand_T;
+use crate::types::{MAXPATHL, expand_T};
 
 const EXPAND_FILES: c_int = 2;
 
@@ -39,7 +39,7 @@ pub unsafe fn expand_env_save_opt(src: *mut c_char, one: bool) -> *mut c_char {
     // SAFETY: the caller's contract; `p` is `MAXPATHL` bytes, which is what
     // `expand_env_esc` is told.
     unsafe {
-        let p = xmalloc(MAXPATHL) as *mut c_char;
+        let p = xmalloc(MAXPATHL as usize) as *mut c_char;
         expand_env_esc(src, p, MAXPATHL as c_int, false, one, ptr::null_mut());
         p
     }

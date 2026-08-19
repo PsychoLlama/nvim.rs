@@ -29,7 +29,9 @@ use crate::os::env::os_setenv;
 use crate::os::shell::{ShellOpts, get_cmd_output};
 use crate::path::{path_tail, path_tail_with_sep};
 use crate::profile::time_msg;
-use crate::types::{VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T};
+use crate::types::{
+    MAXPATHL, VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T,
+};
 use crate::{semsg_c, smsg_c};
 use ::libc::setlocale;
 use core::ffi::{CStr, c_char, c_int};
@@ -48,9 +50,6 @@ const LC_COLLATE: c_int = 3;
 const LC_MESSAGES: c_int = 5;
 const LC_ALL: c_int = 6;
 const VIM_LC_MESSAGES: c_int = LC_MESSAGES;
-
-/// `MAXPATHL` — the buffer [`init_locale`] builds the catalogue path in.
-const MAXPATHL: usize = 4096;
 
 /// The locale currently in effect for `what`, as libc reports it.
 ///
@@ -118,7 +117,7 @@ pub fn set_lang_var() {
 /// point rather than whatever the user's locale uses; vimscript's number
 /// syntax is not localised.
 pub fn init_locale() {
-    let mut localepath: [c_char; MAXPATHL] = [0; MAXPATHL];
+    let mut localepath: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     // SAFETY: both locale names are static NUL-terminated literals, and
     // `v:progpath` is set from the executable path in `init_path`, which
     // startup runs before this, so it is a non-NULL NUL-terminated string.
@@ -132,11 +131,11 @@ pub fn init_locale() {
         // `$prefix/bin/nvim` -> `$prefix/share/locale`: drop the executable,
         // then overwrite the directory it sat in.
         let base = localepath.as_mut_ptr();
-        xstrlcpy(base, get_vim_var_str(VV_PROGPATH), MAXPATHL);
+        xstrlcpy(base, get_vim_var_str(VV_PROGPATH), MAXPATHL as usize);
         *path_tail_with_sep(base) = 0;
         let tail = path_tail(base);
         let used = tail.offset_from(base) as usize;
-        xstrlcpy(tail, c"share/locale".as_ptr(), MAXPATHL - used);
+        xstrlcpy(tail, c"share/locale".as_ptr(), MAXPATHL as usize - used);
         bindtextdomain(PROJECT_NAME.as_ptr(), base);
         textdomain(PROJECT_NAME.as_ptr());
     }

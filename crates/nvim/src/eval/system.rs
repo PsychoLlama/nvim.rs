@@ -32,15 +32,11 @@ use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
-    EvalFuncData, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VV_SHELL_ERROR,
-    buf_T, kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T,
-    varnumber_T,
+    EvalFuncData, IOSIZE, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VV_SHELL_ERROR, buf_T, kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t,
+    typval_T, varnumber_T,
 };
 use ::libc::strlen;
-
-/// The scratch a "not executable" complaint is rendered into. `MAXPATHL`
-/// in the C.
-const MAXPATHL: usize = 1025;
 
 /// Build a `NULL`-terminated argument vector out of a String (through the
 /// shell) or a List (directly). `cmd`, when given, comes back naming the
@@ -82,10 +78,10 @@ pub unsafe fn tv_to_argv(
         let mut exe_resolved: *mut c_char = null_mut();
         if arg0.is_null() || !os_can_exe(arg0, &raw mut exe_resolved, true) {
             if !arg0.is_null() && !executable.is_null() {
-                let mut buf: [c_char; MAXPATHL] = [0; MAXPATHL];
+                let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
                 snprintf(
                     buf.as_mut_ptr(),
-                    size_of::<[c_char; MAXPATHL]>(),
+                    size_of::<[c_char; IOSIZE as usize]>(),
                     c"'%s' is not executable".as_ptr(),
                     arg0,
                 );

@@ -211,8 +211,6 @@ pub const BF_READERR: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const EXFLAG_NR: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const EXFLAG_PRINT: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
@@ -414,7 +412,6 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
         }
     }
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

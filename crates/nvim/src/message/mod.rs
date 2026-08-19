@@ -88,11 +88,12 @@ use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, M
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Arena, Array, Dict, Error, Event, FILE, HlMessage, HlMessageChunk, Integer, KeyDict_echo_opts,
-    MessageData, Object, OptInt, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG,
-    colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
-    kObjectTypeInteger, kObjectTypeNil, object, object_data as C2Rust_Unnamed_11, ptrdiff_t,
-    sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
+    Arena, Array, Dict, Error, Event, FILE, HlMessage, HlMessageChunk, IOSIZE, Integer,
+    KeyDict_echo_opts, MessageData, Object, OptInt, String_0, VV_ERRMSG, VV_SCROLLSTART,
+    VV_STATUSMSG, VV_WARNINGMSG, colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T,
+    garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, object,
+    object_data as C2Rust_Unnamed_11, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T,
+    typval_vval_union, uint64_t,
 };
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -212,7 +213,6 @@ static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
 
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;

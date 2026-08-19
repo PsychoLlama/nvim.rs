@@ -10,7 +10,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::semsg_c;
-use crate::types::{FAIL, NUL, OK, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{FAIL, IOSIZE, NUL, OK, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// The pattern, column and length for normal (CTRL-N / CTRL-P) completion.
 ///

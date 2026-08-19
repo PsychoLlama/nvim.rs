@@ -166,6 +166,5 @@ pub const CPO_MATCHBSL: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
 pub const CPO_LINEOFF: ::core::ffi::c_int = 'o' as ::core::ffi::c_int;
 pub const CPO_MATCH: ::core::ffi::c_int = '%' as ::core::ffi::c_int;
 pub const CPO_SCOLON: ::core::ffi::c_int = ';' as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

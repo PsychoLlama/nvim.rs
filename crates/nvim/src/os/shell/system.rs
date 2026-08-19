@@ -28,7 +28,7 @@ use crate::memory::{xfree, xrealloc, xstrlcpy};
 use crate::message::{msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_start};
 use crate::msg_schedule_semsg_c;
 use crate::os::cshim::gettext;
-use crate::types::{LibuvProc, MultiQueue, Proc, RStream, Stream, WBuffer};
+use crate::types::{LibuvProc, MAXPATHL, MultiQueue, Proc, RStream, Stream, WBuffer};
 use crate::ui::{ui_busy_start, ui_busy_stop};
 
 /// Synchronously run a command, in the shell only if `argv` says so.
@@ -103,8 +103,8 @@ pub(crate) unsafe fn do_os_system(
         }
 
         // Copy the program name in case it has to be reported.
-        let mut prog: [c_char; MAXPATHL] = [0; MAXPATHL];
-        xstrlcpy(prog.as_mut_ptr(), *argv, MAXPATHL);
+        let mut prog: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
+        xstrlcpy(prog.as_mut_ptr(), *argv, MAXPATHL as usize);
 
         let mut uvproc: LibuvProc = libuv_proc_init(main_loop.ptr(), (&raw mut buf).cast());
         let proc: *mut Proc = &raw mut uvproc.proc;

@@ -14,7 +14,7 @@ use crate::eval::vars::{set_vim_var_string, v_exception, v_throwpoint};
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::ex_docmd::{
-    ETYPE_EXCEPT, IOSIZE, ML_EMPTY, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_error_buf,
+    ETYPE_EXCEPT, ML_EMPTY, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_error_buf,
     ex_pressedreturn, loop_cookie, wcmd_T,
 };
 use crate::ex_eval::discard_current_exception;
@@ -38,7 +38,8 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FAIL, LineGetter, OK, OptInt, VV_EXITREASON, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
+    FAIL, IOSIZE, LineGetter, OK, OptInt, VV_EXITREASON, garray_T, linenr_T, msglist_T, ptrdiff_t,
+    size_t,
 };
 
 /// Take the whole exception environment out of the way, and answer it.

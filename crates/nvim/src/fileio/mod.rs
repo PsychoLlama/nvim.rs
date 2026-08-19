@@ -81,7 +81,7 @@ use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CheckItem, Directory, FAIL, FILE, FileInfo, OK, OptInt, OptVal, OptValData, OptValType,
+    CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValData, OptValType,
     aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t,
     linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t,
     uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
@@ -166,8 +166,6 @@ pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const UV_FS_COPYFILE_EXCL: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const BASENAMELEN: ::core::ffi::c_int = NAME_MAX - 5 as ::core::ffi::c_int;
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const BF_CHECK_RO: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
@@ -594,7 +592,6 @@ pub unsafe fn write_eintr(fd: c_int, buf: *mut c_void, bufsize: size_t) -> ssize
         written
     }
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const BAD_REPLACE: ::core::ffi::c_int = '?' as ::core::ffi::c_int;
 pub const BAD_KEEP: ::core::ffi::c_int = -1 as ::core::ffi::c_int;

@@ -94,8 +94,6 @@ pub const kFileNoSymlink: C2Rust_Unnamed_19 = 8;
 pub const kFileWriteOnly: C2Rust_Unnamed_19 = 4;
 pub const kFileReadOnly: C2Rust_Unnamed_19 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static e_error_while_writing_str: [::core::ffi::c_char; 29] =
@@ -571,4 +569,3 @@ pub unsafe fn f_browsedir(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
-pub const READBIN: &::core::ffi::CStr = c"rb";

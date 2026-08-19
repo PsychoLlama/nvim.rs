@@ -21,7 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{__S_IFMT, Args, READBIN, SEEK_END, SEEK_SET, frame, no_fileinfo, str_arg};
+use super::{__S_IFMT, Args, SEEK_END, SEEK_SET, frame, no_fileinfo, str_arg};
 use crate::eval::typval::{
     tv_blob_alloc_ret, tv_blob_free, tv_get_number, tv_list_alloc_ret, tv_list_append_owned_tv,
     tv_list_first, tv_list_item_remove, tv_list_len,
@@ -34,8 +34,9 @@ use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
 use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::types::{
-    EvalFuncData, FILE, FileInfo, VAR_STRING, VAR_UNLOCKED, blob_T, int64_t, kListLenUnknown,
-    list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
+    EvalFuncData, FILE, FileInfo, READBIN, VAR_STRING, VAR_UNLOCKED, blob_T, int64_t,
+    kListLenUnknown, list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    uint64_t,
 };
 use ::libc::{fclose, fileno, fread, fseeko, memcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};

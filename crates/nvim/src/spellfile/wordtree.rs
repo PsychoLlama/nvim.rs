@@ -49,11 +49,11 @@ use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
 use crate::strings::vim_snprintf;
-use crate::types::{NUL, hashtab_T, int16_t, uint8_t, uint16_t};
+use crate::types::{IOSIZE, NUL, hashtab_T, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
 use ::libc::strlen;
 
-use super::{FAIL, IOSIZE, MAXWLEN, OK, WF_KEEPCAP, spell_message, spellinfo_T};
+use super::{FAIL, MAXWLEN, OK, WF_KEEPCAP, spell_message, spellinfo_T};
 
 /// Bytes handed out per arena block.
 const SBLOCKSIZE: usize = 16000;

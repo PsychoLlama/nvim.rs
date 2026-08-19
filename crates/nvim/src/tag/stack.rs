@@ -10,7 +10,7 @@
 use super::*;
 use crate::highlight_group::HLF_D;
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, OK, VAR_DICT, VAR_LIST};
+use crate::types::{FAIL, IOSIZE, OK, VAR_DICT, VAR_LIST};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

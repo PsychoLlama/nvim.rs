@@ -29,14 +29,14 @@ use crate::garray::ga_grow;
 use crate::main::exit::os_exit;
 use crate::main::usage::{mainerr, usage, version};
 use crate::main::{
-    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, IOSIZE, IObuff, MAX_ARG_CMDS,
-    MAXPATHL, SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx,
-    embedded_mode, err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown,
-    err_too_many_args, exmode_active, global_alist, headless_mode, kOptArabic, kOptKeymap,
-    kOptRightleft, kOptShadafile, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
-    kOptVerbosefile, kOptWindow, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc,
-    p_verbose, p_write, readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd,
-    stdin_isatty, stdout_isatty, time_msg_at,
+    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, IObuff, MAX_ARG_CMDS,
+    SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx, embedded_mode,
+    err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args,
+    exmode_active, global_alist, headless_mode, kOptArabic, kOptKeymap, kOptRightleft,
+    kOptShadafile, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, kOptVerbosefile,
+    kOptWindow, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write,
+    readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
+    time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::{reset_modifiable, set_option_value_give_err, set_options_bin};
@@ -50,8 +50,8 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    FAIL, NUL, OK, OptInt, OptVal, OptValData, VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T,
-    kFalse, kTrue, linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
+    FAIL, IOSIZE, MAXPATHL, NUL, OK, OptInt, OptVal, OptValData, VV_PROGNAME, VV_PROGPATH,
+    VV_SWAPCOMMAND, aentry_T, kFalse, kTrue, linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
 };
 use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
 

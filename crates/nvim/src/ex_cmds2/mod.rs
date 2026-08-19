@@ -76,8 +76,9 @@ use crate::path::vim_FullName;
 use crate::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::semsg_c;
 use crate::types::{
-    CMD_first, CMD_sfirst, CMOD_CONFIRM, FAIL, NUL, OK, VV_SWAPCOMMAND, aentry_T, buf_T, bufref_T,
-    exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
+    CMD_first, CMD_sfirst, CMOD_CONFIRM, FAIL, MAXPATHL, NUL, OK, VV_SWAPCOMMAND, aentry_T, buf_T,
+    bufref_T, exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T,
+    win_T,
 };
 use crate::undo::bufIsChanged;
 use crate::window::goto_tabpage_win;
@@ -88,7 +89,7 @@ use core::ptr;
 
 use flag::{
     CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
-    DOBUF_UNLOAD, DOCMD_VERBOSE, MAXPATHL, ML_EMPTY, VIM_QUESTION,
+    DOBUF_UNLOAD, DOCMD_VERBOSE, ML_EMPTY, VIM_QUESTION,
 };
 
 pub use listdo::ex_listdo;
@@ -125,8 +126,6 @@ mod flag {
 
     /// `memline` flags: the buffer holds a single empty line.
     pub const ML_EMPTY: c_int = 0x1;
-
-    pub const MAXPATHL: usize = 4096;
 }
 
 // -- List walks -------------------------------------------------------------
@@ -235,8 +234,8 @@ unsafe fn script_host_execute_file(name: &CStr, eap: *mut exarg_T) {
         if (*eap).skip != 0 {
             return;
         }
-        let mut buffer: [c_char; MAXPATHL] = [0; MAXPATHL];
-        vim_FullName((*eap).arg, buffer.as_mut_ptr(), MAXPATHL, false);
+        let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
+        vim_FullName((*eap).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false);
 
         let args = tv_list_alloc(3 as ptrdiff_t);
         tv_list_append_string(args, buffer.as_ptr(), -1 as ssize_t);

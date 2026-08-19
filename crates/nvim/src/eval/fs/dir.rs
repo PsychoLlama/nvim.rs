@@ -24,8 +24,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    __S_IFMT, Args, FAIL, MAXPATHL, NUMBUFLEN, Owned, frame, no_fileinfo, numbuf, ret_string,
-    str_arg, str_arg_buf,
+    __S_IFMT, Args, FAIL, NUMBUFLEN, Owned, frame, no_fileinfo, numbuf, ret_string, str_arg,
+    str_arg_buf,
 };
 use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk, tv_get_string_buf};
 use crate::eval::userfunc::{add_defer, can_add_defer};
@@ -42,7 +42,7 @@ use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, o
 use crate::path::{FullName_save, path_tail, path_tail_with_sep};
 use crate::semsg_c;
 use crate::types::{
-    CdScope, EvalFuncData, OK, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, kCdScopeGlobal,
+    CdScope, EvalFuncData, MAXPATHL, OK, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, kCdScopeGlobal,
     kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, tabpage_T, typval_T,
     typval_vval_union, uint64_t, varnumber_T, win_T,
 };

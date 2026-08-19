@@ -8,7 +8,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, OK, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
+use crate::types::{
+    FAIL, MAXPATHL, OK, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
+};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CStr;
@@ -93,12 +95,12 @@ pub unsafe fn do_autocmd_dirchanged(
 /// @return  OK or FAIL
 pub unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> c_int {
     unsafe {
-        let mut dir = [0 as c_char; MAXPATHL];
-        xstrlcpy(dir.as_mut_ptr(), fname, MAXPATHL);
+        let mut dir = [0 as c_char; MAXPATHL as usize];
+        xstrlcpy(dir.as_mut_ptr(), fname, MAXPATHL as usize);
         *path_tail_with_sep(dir.as_mut_ptr()) = 0;
 
         let name_buff = NameBuff.ptr().cast::<c_char>();
-        if os_dirname(name_buff, MAXPATHL) != OK {
+        if os_dirname(name_buff, MAXPATHL as usize) != OK {
             *name_buff = 0;
         }
         if pathcmp(dir.as_ptr(), name_buff, -1) == 0 {

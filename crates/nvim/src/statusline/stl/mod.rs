@@ -79,9 +79,9 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    OptIndex, StlClickRecord, VAR_NUMBER, VAR_UNLOCKED, VV_LNUM, VV_VIRTNUM, VimVarIndex, colnr_T,
-    int64_t, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union,
-    varnumber_T, win_T,
+    MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VAR_UNLOCKED, VV_LNUM, VV_VIRTNUM, VimVarIndex,
+    colnr_T, int64_t, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T,
+    typval_vval_union, varnumber_T, win_T,
 };
 use crate::undo::bufIsChanged;
 use crate::winlayer::{Buf, Win};

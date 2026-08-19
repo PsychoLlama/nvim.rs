@@ -6149,6 +6149,7 @@ static const int MAXLINELEN = 500;
 static const int MAXLNUM = 2147483647;
 static const int MAXMAPLEN = 50;
 static const int MAXMAPLEN_BUF = 51;
+static const int MAXPATHL = 4096;
 static const int MAXREGIONS = 8;
 static const int MAXSUFLEN = 30;
 static const int MAXWLEN = 254;

@@ -19,6 +19,7 @@ use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
 use super::*;
+use crate::types::MAXPATHL;
 
 /// Where the last component of `name` starts — what [`path_tail`] answers,
 /// as an index. Leading separators are the head of the path rather than part

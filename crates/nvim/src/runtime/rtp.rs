@@ -18,7 +18,7 @@
 
 use super::*;
 
-use crate::types::OK;
+use crate::types::{MAXPATHL, OK};
 use core::ffi::{CStr, c_char};
 use core::ptr;
 

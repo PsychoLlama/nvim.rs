@@ -48,7 +48,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    NUL, bufref_T, garray_T, langp_T, regprog_T, size_t, slang_T, synblock_T, win_T,
+    MAXPATHL, NUL, bufref_T, garray_T, langp_T, regprog_T, size_t, slang_T, synblock_T, win_T,
 };
 use crate::window::win_valid_any_tab;
 use ::libc::{strcasecmp, strcmp, strcpy, strlen};
@@ -56,8 +56,8 @@ use ::libc::{strcasecmp, strcmp, strcpy, strlen};
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;
 use super::{
-    MAXPATHL, MAXWLEN, REGION_ALL, SPL_FNAME_TMPL, first_lang, int_wordlist, kEqualFiles,
-    repl_from, repl_to, spelload_T,
+    MAXWLEN, REGION_ALL, SPL_FNAME_TMPL, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to,
+    spelload_T,
 };
 use crate::runtime::DIP_ALL;
 

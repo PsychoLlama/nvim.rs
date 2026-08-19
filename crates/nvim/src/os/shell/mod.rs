@@ -53,7 +53,8 @@ use crate::strings::{vim_snprintf, vim_strnsave_unquoted, vim_strsave_escaped_ex
 use crate::tag::tag_freematch;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    NUL, StringBuilder, VV_SHELL_ERROR, linenr_T, proftime_T, size_t, stream_read_cb, varnumber_T,
+    NUL, READBIN, StringBuilder, VV_SHELL_ERROR, linenr_T, proftime_T, size_t, stream_read_cb,
+    varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use ::libc::{fclose, fopen, fread, fseek, ftell, strcmp, strcpy, strlen};
@@ -86,10 +87,8 @@ crate::flag_set! {
 }
 
 const PROF_YES: c_int = 1;
-const MAXPATHL: usize = 4096;
 const SEEK_SET: c_int = 0;
 const SEEK_END: c_int = 2;
-const READBIN: &CStr = c"rb";
 
 const TAB: c_int = '\t' as c_int;
 const NL: c_int = '\n' as c_int;

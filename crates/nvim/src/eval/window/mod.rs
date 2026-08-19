@@ -63,7 +63,6 @@ use crate::types::*;
 use ::libc::{memset, strcmp, strtol};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{mem, ptr};
-pub const MAXPATHL: c_int = 4096;
 pub const FR_LEAF: c_int = 0;
 pub const FR_ROW: c_int = 1;
 pub const LOWEST_WIN_ID: c_uint = 1000;

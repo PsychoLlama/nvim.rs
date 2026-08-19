@@ -12,6 +12,7 @@ use core::ffi::{c_char, c_int};
 use crate::bufwrite::translate;
 
 use super::*;
+use crate::types::IOSIZE;
 
 /// Everything the closing message needs to know about how the read went.
 pub(crate) struct Outcome {

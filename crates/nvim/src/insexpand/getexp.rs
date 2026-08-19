@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::path::ExpandFlags;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, IOSIZE, NUL, OK};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.

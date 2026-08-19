@@ -336,7 +336,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 /// Message for CTRL-X mode, indexed by `ctrl_x_mode` with `CTRL_X_WANT_IDENT`
 /// masked off (C's `CTRL_X_MSG(i)` macro; see `ctrl_x_msg`). `None` is

@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::search::SEARCH_KEEP;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, IOSIZE, OK};
 use core::ffi::{c_char, c_int, c_uint};
 use core::{ptr, slice};
 

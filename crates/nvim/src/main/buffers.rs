@@ -29,10 +29,10 @@ use crate::fileio::readfile;
 use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
-    BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, IOSIZE, IObuff, NameBuff, READ_NEW, READ_STDIN,
-    SEA_DIALOG, SEA_NONE, SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last,
-    autocmd_no_enter, autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin, global_alist,
-    got_int, kOptErrorfile, kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll,
+    BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, IObuff, NameBuff, READ_NEW, READ_STDIN, SEA_DIALOG,
+    SEA_NONE, SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, autocmd_no_enter,
+    autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin, global_alist, got_int,
+    kOptErrorfile, kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll,
     no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm, recoverymode, swap_exists_action,
     swap_exists_did_quit, time_msg_at,
 };
@@ -46,8 +46,8 @@ use crate::path::vim_FullName;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Integer, OptInt, OptVal, OptValData, VAR_FIXED, VV_ARGF, aentry_T, bufref_T, exarg_T, handle_T,
-    kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t, win_T,
+    IOSIZE, Integer, OptInt, OptVal, OptValData, VAR_FIXED, VV_ARGF, aentry_T, bufref_T, exarg_T,
+    handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t, win_T,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{

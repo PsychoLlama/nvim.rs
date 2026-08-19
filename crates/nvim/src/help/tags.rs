@@ -36,12 +36,12 @@ use crate::path::{ExpandFlags, FreeWild, add_pathsep, gen_expand_wildcards, path
 use crate::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::semsg_c;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
-use crate::types::{FAIL, FILE, NUL, exarg_T, expand_T, size_t, uint8_t};
+use crate::types::{FAIL, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t};
 use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::flag::{EXPAND_DIRECTORIES, IOSIZE, MAXPATHL, kEqualFiles};
+use super::flag::{EXPAND_DIRECTORIES, kEqualFiles};
 
 /// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
 /// out at each site: written that way, the five calls below each wrap onto

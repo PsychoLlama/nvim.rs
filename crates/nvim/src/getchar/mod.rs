@@ -149,8 +149,6 @@ pub const kFileCreate: C2Rust_Unnamed_34 = 2;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,

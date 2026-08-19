@@ -24,6 +24,7 @@ use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
     win_opt,
 };
+use crate::types::MAXPATHL;
 use crate::winlayer::Win;
 
 /// Everything `nvim_eval_statusline()` needs to have settled before it can

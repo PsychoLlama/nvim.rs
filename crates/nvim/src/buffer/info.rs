@@ -47,7 +47,9 @@ use crate::statusline::build_stl_str_hl;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
-use crate::types::{OptIndex, OptInt, buf_T, exarg_T, int64_t, linenr_T, size_t, time_t, win_T};
+use crate::types::{
+    IOSIZE, MAXPATHL, OptIndex, OptInt, buf_T, exarg_T, int64_t, linenr_T, size_t, time_t, win_T,
+};
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{bufIsChanged, curbufIsChanged, undo_fmt_time};
 use crate::winlayer::{Buf, Win, buffers};

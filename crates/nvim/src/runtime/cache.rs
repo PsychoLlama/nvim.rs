@@ -28,7 +28,7 @@
 use super::*;
 use crate::path::ExpandFlags;
 
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, MAXPATHL, OK};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

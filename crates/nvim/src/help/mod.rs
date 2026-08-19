@@ -51,9 +51,9 @@ use crate::pos::MAXCOL;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, LuaRetMode, NUL, OK, Object, OptInt, OptVal,
-    OptValData, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString, linenr_T, size_t,
-    win_T,
+    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt,
+    OptVal, OptValData, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString, linenr_T,
+    size_t, win_T,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::{semsg_c, smsg_c};
@@ -97,17 +97,11 @@ mod flag {
     pub const kRetNilBool: LuaRetMode = 1;
     /// `OptVal`'s string tag.
     pub const kOptValTypeString: c_int = 2;
-
-    /// `IObuff`'s size, which every line read here must fit in.
-    pub const IOSIZE: c_int = 1025;
-    /// `NameBuff`'s size, and the longest path this will build.
-    pub const MAXPATHL: c_int = 4096;
 }
 
 use flag::{
-    DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, IOSIZE, OPT_LOCAL, TAG_HELP, TAG_KEEP_LANG,
-    TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kOptValTypeString, kRetNilBool,
-    kRetObject,
+    DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, OPT_LOCAL, TAG_HELP, TAG_KEEP_LANG, TAG_MANY,
+    TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kOptValTypeString, kRetNilBool, kRetObject,
 };
 
 /// An error slot with nothing in it: C's `ERROR_INIT`.

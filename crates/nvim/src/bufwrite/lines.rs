@@ -14,7 +14,7 @@
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::types::NUL;
+use crate::types::{IOSIZE, NUL};
 
 /// What a pass over the lines produced.
 #[derive(Default)]

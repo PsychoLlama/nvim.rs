@@ -37,9 +37,9 @@ use crate::os::cshim::{gettext, strstr};
 use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
-    BoolVarValue, EvalFuncData, FAIL, FILE, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_UNKNOWN,
-    VV_EXCEPTION, VV_TESTING, VarType, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse,
-    kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
+    BoolVarValue, EvalFuncData, FAIL, FILE, IOSIZE, READBIN, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
+    VAR_UNKNOWN, VV_EXCEPTION, VV_TESTING, VarType, estack_arg_T, float_T, garray_T, int64_t,
+    kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 use ::libc::{fclose, fgetc, strcmp};
 
@@ -61,11 +61,6 @@ const ESTACK_NONE: estack_arg_T = 0;
 /// `NUMBUFLEN`: the scratch buffer the `tv_get_string_buf_chk` family wants,
 /// and what a formatted number goes into.
 const NUMBUFLEN: usize = 65;
-/// The capacity of `IObuff`, which is the width `assert_equalfile()`'s verdict
-/// is formatted to.
-const IOSIZE: size_t = 1025;
-/// `os_fopen` mode: read, binary.
-const READBIN: &CStr = c"rb";
 
 const E_ASSERT_FAILS_SECOND_ARG: &CStr =
     c"E856: \"assert_fails()\" second argument must be a string or a list with one or two strings";
@@ -268,7 +263,7 @@ unsafe fn assert_beeps(argvars: *mut typval_T, no_beep: bool) -> c_int {
 /// plus the tail of the line it was on.
 struct FileDiff {
     /// The verdict, e.g. `difference at byte 3, line 1`. Empty means equal.
-    verdict: [c_char; IOSIZE],
+    verdict: [c_char; IOSIZE as usize],
     verdict_len: size_t,
     /// The last bytes read from each file, up to the difference.
     line1: [c_char; 200],
@@ -287,7 +282,7 @@ struct FileDiff {
 /// Both names are C strings.
 unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDiff {
     let mut diff = FileDiff {
-        verdict: [0; IOSIZE],
+        verdict: [0; IOSIZE as usize],
         verdict_len: 0,
         line1: [0; 200],
         line2: [0; 200],
@@ -301,15 +296,23 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
         let cant_read = (&raw const e_cant_read_file_str).cast::<c_char>();
         let fd1: *mut FILE = os_fopen(fname1, READBIN.as_ptr());
         if fd1.is_null() {
-            diff.verdict_len =
-                vim_snprintf_safelen(diff.verdict.as_mut_ptr(), IOSIZE, cant_read, fname1);
+            diff.verdict_len = vim_snprintf_safelen(
+                diff.verdict.as_mut_ptr(),
+                IOSIZE as usize,
+                cant_read,
+                fname1,
+            );
             return diff;
         }
         let fd2: *mut FILE = os_fopen(fname2, READBIN.as_ptr());
         if fd2.is_null() {
             fclose(fd1);
-            diff.verdict_len =
-                vim_snprintf_safelen(diff.verdict.as_mut_ptr(), IOSIZE, cant_read, fname2);
+            diff.verdict_len = vim_snprintf_safelen(
+                diff.verdict.as_mut_ptr(),
+                IOSIZE as usize,
+                cant_read,
+                fname2,
+            );
             return diff;
         }
 
@@ -323,7 +326,7 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
                     diff.verdict_len = xstrlcpy(
                         diff.verdict.as_mut_ptr(),
                         c"first file is shorter".as_ptr(),
-                        IOSIZE,
+                        IOSIZE as usize,
                     );
                 }
                 break;
@@ -332,7 +335,7 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
                 diff.verdict_len = xstrlcpy(
                     diff.verdict.as_mut_ptr(),
                     c"second file is shorter".as_ptr(),
-                    IOSIZE,
+                    IOSIZE as usize,
                 );
                 break;
             }
@@ -342,7 +345,7 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
             if c1 != c2 {
                 diff.verdict_len = vim_snprintf_safelen(
                     diff.verdict.as_mut_ptr(),
-                    IOSIZE,
+                    IOSIZE as usize,
                     c"difference at byte %ld, line %ld".as_ptr(),
                     count,
                     linecount,
