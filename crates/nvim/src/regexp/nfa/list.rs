@@ -32,8 +32,8 @@ use crate::os::cshim::gettext;
 use crate::regexp::{
     ADDSTATE_HERE_OFFSET, CaptureSlots, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, NFA_BOF,
     NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN9,
-    NFA_NCLOSE, NFA_NOPEN, NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND,
-    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, PimEnd, Rex, multipos, nfa_endp, nfa_ll_index, nfa_pim_T,
+    NFA_NCLOSE, NFA_NOPEN, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN,
+    NFA_ZOPEN9, NFA_ZSTART, PimEnd, PimResult, Rex, multipos, nfa_endp, nfa_ll_index, nfa_pim_T,
     nfa_state_T, nfa_thread_T, regsub_T, regsubs_T,
 };
 use crate::types::{NUL, colnr_T, linenr_T, uint8_t};
@@ -85,7 +85,7 @@ const BLANK_THREAD: nfa_thread_T = nfa_thread_T {
     state: core::ptr::null_mut(),
     count: 0,
     pim: nfa_pim_T {
-        result: NFA_PIM_UNUSED,
+        result: PimResult::Unused,
         state: core::ptr::null_mut(),
         subs: BLANK_SUBS,
         end: PimEnd {
@@ -213,7 +213,7 @@ impl ThreadList {
         let thread = &mut self.threads[self.n];
         thread.state = state;
         match pim {
-            None => thread.pim.result = NFA_PIM_UNUSED,
+            None => thread.pim.result = PimResult::Unused,
             Some(pim) => copy_pim(rex, &mut thread.pim, pim),
         }
         copy_sub(rex, &mut thread.subs.norm, &subs.norm);

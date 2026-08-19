@@ -22,10 +22,9 @@ use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows};
 use crate::main::got_int;
 use crate::mbyte::{utf_fold, utf_ptr2char};
 use crate::regexp::{
-    AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_MOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH, NFA_PIM_TODO,
-    NFA_PIM_UNUSED, NFA_TOO_EXPENSIVE, Rex, nfa_endp, nfa_match, nfa_pim_T, nfa_regprog_T,
-    nfa_state_T, nfa_time_count, nfa_time_limit, recursive_regmatch, reg_breakcheck, reg_nextline,
-    regsubs_T, skip_to_start,
+    AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_MOPEN, NFA_TOO_EXPENSIVE, PimResult, Rex, nfa_endp,
+    nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit,
+    recursive_regmatch, reg_breakcheck, reg_nextline, regsubs_T, skip_to_start,
 };
 use crate::types::{FAIL, NUL};
 
@@ -275,7 +274,7 @@ unsafe fn deliver(
     };
 
     let idx = *listidx as usize;
-    let mut carries_pim = thislist.thread(idx).pim.result != NFA_PIM_UNUSED;
+    let mut carries_pim = thislist.thread(idx).pim.result != PimResult::Unused;
 
     // The lookaround was postponed to here: settle it now, either
     // because there is no more input to postpone past or because the
@@ -283,7 +282,7 @@ unsafe fn deliver(
     if carries_pim && (clen == 0 || match_follows(add_state, 0)) {
         let t = thislist.thread_mut(idx);
         let pim_state = t.pim.state;
-        let result = if t.pim.result == NFA_PIM_TODO {
+        let result = if t.pim.result == PimResult::Todo {
             let result = recursive_regmatch(
                 rex,
                 pim_state,
@@ -294,9 +293,9 @@ unsafe fn deliver(
                 run.listids,
             );
             t.pim.result = if result != 0 {
-                NFA_PIM_MATCH
+                PimResult::Match
             } else {
-                NFA_PIM_NOMATCH
+                PimResult::NoMatch
             };
             if lookaround_held(pim_state, result) {
                 // Keep what the lookaround captured, but not its idea
@@ -311,7 +310,7 @@ unsafe fn deliver(
             result
         } else {
             // Already decided, on an earlier thread.
-            (t.pim.result == NFA_PIM_MATCH) as c_int
+            (t.pim.result == PimResult::Match) as c_int
         };
         if !lookaround_held(pim_state, result) {
             // The lookaround failed: the thread dies rather than being

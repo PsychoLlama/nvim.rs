@@ -213,7 +213,7 @@ pub struct nfa_thread_T {
 pub type nfa_pim_T = nfa_pim_S;
 #[derive(Copy, Clone)]
 pub struct nfa_pim_S {
-    pub result: c_int,
+    pub result: PimResult,
     pub state: *mut nfa_state_T,
     pub subs: regsubs_T,
     pub end: PimEnd,
@@ -680,10 +680,19 @@ pub const CLASS_o9: c_int = 0x2 as c_int;
 pub const CLASS_underscore: c_int = 0x1 as c_int;
 static state_ptr: GlobalCell<*mut nfa_state_T> =
     GlobalCell::new(core::ptr::null_mut::<nfa_state_T>());
-pub const NFA_PIM_UNUSED: c_int = 0;
-pub const NFA_PIM_TODO: c_int = 1;
-pub const NFA_PIM_MATCH: c_int = 2;
-pub const NFA_PIM_NOMATCH: c_int = 3;
+/// How far a postponed lookaround has got -- upstream's `NFA_PIM_*`, which
+/// share the `NFA_` prefix with the opcodes and are a different family.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum PimResult {
+    /// The thread carries no postponed lookaround.
+    Unused,
+    /// One is postponed and has not been run.
+    Todo,
+    /// It ran and matched.
+    Match,
+    /// It ran and did not match.
+    NoMatch,
+}
 static nfa_match: GlobalCell<c_int> = GlobalCell::new(0);
 static nfa_time_limit: GlobalCell<*mut proftime_T> =
     GlobalCell::new(core::ptr::null_mut::<proftime_T>());

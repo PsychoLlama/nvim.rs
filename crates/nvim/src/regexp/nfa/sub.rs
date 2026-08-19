@@ -16,9 +16,9 @@ use core::ffi::c_int;
 
 use crate::regexp::{
     NFA_ANY, NFA_ANY_COMPOSING, NFA_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG,
-    NFA_END_PATTERN, NFA_IDENT, NFA_MATCH, NFA_MCLOSE, NFA_NEWL, NFA_NUPPER_IC, NFA_PIM_UNUSED,
-    NFA_SPLIT, NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE_NEG_FIRST,
-    NFA_START_NEG_COLL, NSUBEXP, Rex, linepos, multipos, nfa_pim_T, nfa_state_T, regsub_T,
+    NFA_END_PATTERN, NFA_IDENT, NFA_MATCH, NFA_MCLOSE, NFA_NEWL, NFA_NUPPER_IC, NFA_SPLIT,
+    NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_NEG_COLL,
+    NSUBEXP, PimResult, Rex, linepos, multipos, nfa_pim_T, nfa_state_T, regsub_T,
 };
 
 /// How far [`match_follows`] follows the machine before giving up.
@@ -234,7 +234,7 @@ pub(crate) fn copy_pim(rex: Rex, to: &mut nfa_pim_T, from: &nfa_pim_T) {
 /// Are two threads carrying the same postponed lookaround? A lookaround that
 /// has already been decided, or none at all, counts as "no lookaround".
 pub(crate) fn pim_equal(rex: Rex, one: Option<&nfa_pim_T>, two: Option<&nfa_pim_T>) -> bool {
-    let unused = |p: Option<&nfa_pim_T>| p.is_none_or(|p| p.result == NFA_PIM_UNUSED);
+    let unused = |p: Option<&nfa_pim_T>| p.is_none_or(|p| p.result == PimResult::Unused);
     let (Some(one), Some(two)) = (one, two) else {
         return unused(one) && unused(two);
     };

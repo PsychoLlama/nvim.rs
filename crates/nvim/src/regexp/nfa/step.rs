@@ -20,12 +20,12 @@ use crate::regexp::{
     NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_END_COLL, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG,
     NFA_END_PATTERN, NFA_EOF, NFA_EOL, NFA_EOW, NFA_IDENT, NFA_LNUM, NFA_LNUM_LT, NFA_MARK,
     NFA_MARK_LT, NFA_MATCH, NFA_MOPEN1, NFA_MOPEN9, NFA_NEWL, NFA_NOPEN, NFA_NUPPER_IC,
-    NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_RANGE_MIN, NFA_SKIP, NFA_START_COLL, NFA_START_INVISIBLE,
-    NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
-    NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
-    NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_TOO_EXPENSIVE,
-    NFA_VCOL, NFA_VCOL_LT, NFA_VISUAL, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1, NFA_ZREF9, NFA_ZSTART,
-    Rex, nfa_endp, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, reg_prev_class, regsubs_T,
+    NFA_RANGE_MIN, NFA_SKIP, NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE_FIRST,
+    NFA_START_INVISIBLE_BEFORE_NEG, NFA_START_INVISIBLE_BEFORE_NEG_FIRST,
+    NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG, NFA_START_INVISIBLE_NEG_FIRST,
+    NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_TOO_EXPENSIVE, NFA_VCOL, NFA_VCOL_LT, NFA_VISUAL,
+    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1, NFA_ZREF9, NFA_ZSTART, PimResult, Rex, nfa_endp, nfa_match,
+    nfa_pim_T, nfa_regprog_T, nfa_state_T, reg_prev_class, regsubs_T,
 };
 use crate::types::{FAIL, NUL};
 
@@ -457,7 +457,7 @@ unsafe fn start_lookaround(
         let state = thislist.thread(idx).state;
         // Postponing is only worth it when the compiler said so, and a
         // thread that already carries one runs it now.
-        let run_now = thislist.thread(idx).pim.result != NFA_PIM_UNUSED
+        let run_now = thislist.thread(idx).pim.result != PimResult::Unused
             || matches!(
                 op(state),
                 NFA_START_INVISIBLE_FIRST
@@ -469,7 +469,7 @@ unsafe fn start_lookaround(
             // Hand the lookaround to whatever comes after it.
             let mut pim: nfa_pim_T = core::mem::zeroed();
             pim.state = state;
-            pim.result = NFA_PIM_TODO;
+            pim.result = PimResult::Todo;
             pim.subs.norm.in_use = 0;
             pim.subs.synt.in_use = 0;
             if rex.multi() {
