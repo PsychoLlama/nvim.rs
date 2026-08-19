@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::guard::Allow;
 use crate::types::NUL;
 
 unsafe fn redraw_status(mut wp: *mut win_T, mut opts: *mut KeyDict_redraw, mut flush: *mut bool) {
@@ -189,8 +190,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             flush_ui = true;
         }
         let mut save_lz: bool = p_lz.get() != 0;
-        let mut save_rd: ::core::ffi::c_int = RedrawingDisabled.get();
-        RedrawingDisabled.set(0 as ::core::ffi::c_int);
+        let redraw = Allow::redraw();
         p_lz.set(0);
         if (*opts).statuscolumn as ::core::ffi::c_int != 0
             || (*opts).statusline as ::core::ffi::c_int != 0
@@ -231,7 +231,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         if flush_ui {
             ui_flush();
         }
-        RedrawingDisabled.set(save_rd);
+        drop(redraw);
         p_lz.set(save_lz as ::core::ffi::c_int);
     }
     ().reported(error)

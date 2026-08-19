@@ -21,6 +21,7 @@
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
+use crate::guard::Suppress;
 use crate::types::{FAIL, MAXPATHL, OK};
 
 /// A zeroed `sctx_T`; `getnextac` fills `patcmd.script_ctx` in from the
@@ -367,7 +368,7 @@ pub unsafe fn apply_autocmds_group(
             autocmd_match.set(fname);
 
             // Don't redraw while running autocommands.
-            *RedrawingDisabled.ptr() += 1;
+            let redraw_off = Suppress::redraw();
 
             // `es_name` and `es_lnum` are filled in by `aucmd_next`.
             estack_push(ETYPE_AUCMD, ::core::ptr::null_mut(), 0);
@@ -490,7 +491,7 @@ pub unsafe fn apply_autocmds_group(
                 }
             }
 
-            *RedrawingDisabled.ptr() -= 1;
+            drop(redraw_off);
             autocmd_busy.set(save_autocmd_busy);
             filechangeshell_busy.set(false);
             autocmd_nested.set(save_autocmd_nested);

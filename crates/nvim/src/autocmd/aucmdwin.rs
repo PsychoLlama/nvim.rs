@@ -16,6 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 
 /// Whether `win` is one of the autocommand windows currently in use.
 pub unsafe fn is_aucmd_win(win: *mut win_T) -> bool {
@@ -138,9 +139,9 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
             // window title.
             let save_acd = p_acd.get();
             p_acd.set(0);
-            *RedrawingDisabled.ptr() += 1;
+            let redraw_off = Suppress::redraw();
             win_enter(auc_win, false);
-            *RedrawingDisabled.ptr() -= 1;
+            drop(redraw_off);
             p_acd.set(save_acd);
             unblock_autocmds();
             curwin.set(auc_win);

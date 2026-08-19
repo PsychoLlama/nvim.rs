@@ -46,11 +46,11 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::{aborting, should_abort};
 use crate::fold::foldUpdateAll;
+use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::main::{
-    RedrawingDisabled, curbuf, curwin, exiting, exmode_active, keep_help_flag,
-    msg_listdo_overwrite, msg_scroll, msg_scrolled_ign, p_awa, p_so, p_sol, p_ur, p_verbose,
-    skip_redraw, swap_exists_action,
+    curbuf, curwin, exiting, exmode_active, keep_help_flag, msg_listdo_overwrite, msg_scroll,
+    msg_scrolled_ign, p_awa, p_so, p_sol, p_ur, p_verbose, skip_redraw, swap_exists_action,
 };
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc, xstrdup};
@@ -206,7 +206,10 @@ pub unsafe fn do_ecmd(
     let mut oldwin = oldwin;
     let mut free_fname = ptr::null_mut::<c_char>();
     let mut retval = FAIL;
-    let mut did_inc_redrawing_disabled = false;
+    // Held from "the buffer is settled" to "the cursor is in the right
+    // line", which is past the block below on one path and inside it on the
+    // other.
+    let mut redraw_off = None;
     let mut state = Ecmd {
         newlnum,
         newcol: -1,
@@ -352,8 +355,7 @@ pub unsafe fn do_ecmd(
 
         // Don't redraw until the cursor is in the right line, otherwise
         // autocommands may cause ml_get errors.
-        RedrawingDisabled.set(RedrawingDisabled.get() + 1);
-        did_inc_redrawing_disabled = true;
+        redraw_off = Some(Suppress::redraw());
 
         let buf = curbuf.get();
         // SAFETY: `curbuf` is live.
@@ -453,8 +455,7 @@ pub unsafe fn do_ecmd(
             }
         }
 
-        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
-        did_inc_redrawing_disabled = false;
+        drop(redraw_off.take());
         if !skip_redraw.get() {
             // SAFETY: `so_ptr` points into the current window or at the global
             // 'scrolloff', both live for this call.
@@ -477,9 +478,7 @@ pub unsafe fn do_ecmd(
         }
     }
 
-    if did_inc_redrawing_disabled {
-        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
-    }
+    drop(redraw_off.take());
     if did_set_swapcommand {
         // SAFETY: main thread; a NULL clears the variable.
         unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };

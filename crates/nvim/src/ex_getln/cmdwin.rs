@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Allow;
 use crate::keycodes::Ctrl_C;
 use crate::types::{CmdModFlags, FAIL, NUL, OK, OptionSetFlags};
 
@@ -306,14 +307,13 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
             stuffcharReadbuff(K_NOP);
         }
 
-        let save_redrawing_disabled = RedrawingDisabled.get();
-        RedrawingDisabled.set(0);
+        let redraw = Allow::redraw();
         let save_count = crate::clipboard::save_batch_count();
 
         // Call the main loop until <CR> or CTRL-C is typed.
         normal_enter(true, false);
 
-        RedrawingDisabled.set(save_redrawing_disabled);
+        drop(redraw);
         crate::clipboard::restore_batch_count(save_count);
 
         let save_KeyTyped = KeyTyped.get();

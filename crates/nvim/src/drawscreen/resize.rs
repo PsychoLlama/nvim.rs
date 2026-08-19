@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 
 /// The largest screen this port will allocate, so that `Rows * Columns` cannot
 /// overflow.
@@ -204,10 +205,10 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 msg_grid_invalid.set(true);
             }
 
-            RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+            let redraw_off = Suppress::redraw();
             win_new_screensize(); // fit the windows in the new screen
             comp_col(); // recompute the shown-command and ruler columns
-            RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+            drop(redraw_off);
 
             retry_count += 1;
             if retry_count > 3 {

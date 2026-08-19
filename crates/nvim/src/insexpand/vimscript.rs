@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::types::{
     FAIL, NUL, OK, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
@@ -331,11 +332,9 @@ pub unsafe fn f_complete_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.
 pub unsafe fn f_complete_check(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
-        let saved = RedrawingDisabled.get();
-        RedrawingDisabled.set(0);
+        let _redraw = Allow::redraw();
         ins_compl_check_keys(0, true);
         (*rettv).vval.v_number = ins_compl_interrupted() as varnumber_T;
-        RedrawingDisabled.set(saved);
     }
 }
 

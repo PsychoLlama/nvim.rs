@@ -2,7 +2,7 @@
 //! redrawing, `:redir`, highlighting and the digraph table.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::guard::Suppress;
+use crate::guard::{Allow, Saved, Suppress};
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -20,9 +20,9 @@ use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
-    RedrawingDisabled, State, VIsual_active, cmdpreview, curwin, e_invarg2, msg_col, msg_didout,
-    need_maketitle, need_wait_return, no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg,
-    redir_vname, redraw_cmdline,
+    State, VIsual_active, cmdpreview, curwin, e_invarg2, msg_col, msg_didout, need_maketitle,
+    need_wait_return, no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg, redir_vname,
+    redraw_cmdline,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{msg, msg_ext_set_kind};
@@ -154,7 +154,7 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
         if cmdpreview.get() {
             return;
         }
-        let (r, p) = suspend_lazyredraw();
+        let lazyredraw_off = suspend_lazyredraw();
         validate_cursor(curwin.get());
         update_topline(curwin.get());
         if (*eap).forceit != 0 {
@@ -167,7 +167,7 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
         if need_maketitle.get() {
             maketitle();
         }
-        resume_lazyredraw(r, p);
+        drop(lazyredraw_off);
         // The command line is clean again after a full redraw.
         msg_didout.set(false);
         msg_col.set(0);
@@ -188,7 +188,7 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
         } else {
             status_redraw_curbuf();
         }
-        let (r, p) = suspend_lazyredraw();
+        let lazyredraw_off = suspend_lazyredraw();
         if State.get() & MODE_CMDLINE != 0 {
             redraw_statuslines();
         } else {
@@ -197,7 +197,7 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
             }
             update_screen();
         }
-        resume_lazyredraw(r, p);
+        drop(lazyredraw_off);
         ui_flush();
     }
 }
@@ -205,26 +205,34 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
 /// `:redrawtabline`.
 pub(crate) unsafe fn ex_redrawtabline(_eap: *mut exarg_T) {
     unsafe {
-        let (r, p) = suspend_lazyredraw();
+        let lazyredraw_off = suspend_lazyredraw();
         draw_tabline();
-        resume_lazyredraw(r, p);
+        drop(lazyredraw_off);
         ui_flush();
     }
 }
 
-/// Take the redraw suppression counter and 'lazyredraw' out of the way,
-/// answering what they were.
-fn suspend_lazyredraw() -> (c_int, c_int) {
-    let saved = (RedrawingDisabled.get(), p_lz.get());
-    RedrawingDisabled.set(0);
-    p_lz.set(0);
-    saved
+/// The redraw suppression counter and 'lazyredraw' held out of the way,
+/// and put back when the guard is dropped.
+struct LazyRedrawOff {
+    _redraw: Saved,
+    p_lz: c_int,
 }
 
-/// Put both back.
-fn resume_lazyredraw(r: c_int, p: c_int) {
-    RedrawingDisabled.set(r);
-    p_lz.set(p);
+impl Drop for LazyRedrawOff {
+    fn drop(&mut self) {
+        p_lz.set(self.p_lz);
+    }
+}
+
+/// Take both out of the way until the answer is dropped.
+fn suspend_lazyredraw() -> LazyRedrawOff {
+    let off = LazyRedrawOff {
+        _redraw: Allow::redraw(),
+        p_lz: p_lz.get(),
+    };
+    p_lz.set(0);
+    off
 }
 
 /// Stop capturing message output, whichever destination is open.

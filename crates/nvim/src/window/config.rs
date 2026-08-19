@@ -27,7 +27,8 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::fold::getDeepestNesting;
 use crate::grid::{grid_adjust, win_grid_alloc};
-use crate::main::{Columns, RedrawingDisabled, Rows, default_grid, float_anchor_str, p_acd, p_ch};
+use crate::guard::Suppress;
+use crate::main::{Columns, Rows, default_grid, float_anchor_str, p_acd, p_ch};
 use crate::r#move::textpos2screenpos;
 use crate::os::cshim::strncmp;
 use crate::plines::win_text_height;
@@ -71,7 +72,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     let win_handle = win.handle;
     // SAFETY: a live window; the answer is its tab page.
     let tab = unsafe { win_find_tabpage(win.raw()) };
-    RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+    let _redraw_off = Suppress::redraw();
 
     let mut switchwin = switchwin_T {
         sw_curwin: ptr::null_mut::<win_T>(),
@@ -110,7 +111,6 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     cur_win().validate_cursor();
     // SAFETY: the state `switch_win_noblock` saved.
     unsafe { restore_win_noblock(&raw mut switchwin, true) };
-    RedrawingDisabled.set(RedrawingDisabled.get() - 1);
 }
 
 pub unsafe fn win_fdccol_count(wp: *mut win_T) -> c_int {

@@ -19,12 +19,13 @@ use crate::drawscreen::{
 use crate::eval::typval::kCallbackNone;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
+use crate::guard::Allow;
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::main::{
-    IObuff, RedrawingDisabled, State, curwin, ex_normal_busy, exmode_active, highlight_match,
-    msg_didout, need_wait_return, no_u_sync, p_lz, search_match_endcol, search_match_lines,
+    IObuff, State, curwin, ex_normal_busy, exmode_active, highlight_match, msg_didout,
+    need_wait_return, no_u_sync, p_lz, search_match_endcol, search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmallocz, xstrdup};
@@ -175,8 +176,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     unsafe { (*curwin.get()).w_onebuf_opt.wo_fen = 0 };
 
     // Invert the matched string; the inversion is removed afterwards.
-    let temp = RedrawingDisabled.get();
-    RedrawingDisabled.set(0 as c_int);
+    let redraw = Allow::redraw();
     // Avoid calling update_screen() in vgetorpeek().
     p_lz.set(0);
 
@@ -239,7 +239,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     // SAFETY: message state.
     unsafe { gotocmdline(true) };
     p_lz.set(save_p_lz);
-    RedrawingDisabled.set(temp);
+    drop(redraw);
 
     // Restore the line.
     if !orig_line.is_null() {

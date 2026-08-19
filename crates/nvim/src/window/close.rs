@@ -22,11 +22,12 @@ use crate::buffer::{BufRef, bt_prompt, buf_valid, close_buffer, is_changed, rese
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::ex_docmd::cmdmod_has;
+use crate::guard::Suppress;
 use crate::keycodes::Ctrl_C;
 use crate::main::{
-    RedrawingDisabled, State, autocmd_busy, clear_cmdline, cmdwin_old_curwin, cmdwin_result,
-    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_floatonly, firstbuf, firstwin,
-    lastwin, mode_displayed, p_confirm, p_write, restart_edit, stop_insert_mode,
+    State, autocmd_busy, clear_cmdline, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
+    curbuf, curtab, curwin, e_cmdwin, e_floatonly, firstbuf, firstwin, lastwin, mode_displayed,
+    p_confirm, p_write, restart_edit, stop_insert_mode,
 };
 use crate::r#move::WinValid;
 use crate::state::MODE_INSERT;
@@ -123,7 +124,7 @@ pub unsafe fn close_windows(buf: *mut buf_T, keep_curwin: bool) {
 /// Close every window showing `buf`, on this tab page and every other, unless
 /// there is only one non-floating window left.
 fn close_all(buf: Buf, keep_curwin: bool) {
-    RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+    let _redraw_off = Suppress::redraw();
     'theend: {
         // Start from `lastwin` to close floating windows showing the buffer
         // first. When the autocommand window is involved `win_close()` may need
@@ -177,7 +178,6 @@ fn close_all(buf: Buf, keep_curwin: bool) {
             tab = nexttp;
         }
     }
-    RedrawingDisabled.set(RedrawingDisabled.get() - 1);
 }
 
 /// Whether `wp` or the buffer it shows is pinned against closing.

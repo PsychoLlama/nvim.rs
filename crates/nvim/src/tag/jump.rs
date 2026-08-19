@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::guard::Lock;
+use crate::guard::{Lock, Suppress};
 use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
 use crate::types::{CpoFlag, FAIL, OK};
@@ -425,10 +425,10 @@ impl Jump {
                 return NOTAGFILE;
             }
 
-            *RedrawingDisabled.ptr() += 1;
+            let redraw_off = Suppress::redraw();
             self.open_preview();
             if !self.open_window() {
-                *RedrawingDisabled.ptr() -= 1;
+                drop(redraw_off);
                 return FAIL;
             }
 
@@ -452,7 +452,7 @@ impl Jump {
 
             // Anything above zero means the file could not be opened.
             if opened > 0 {
-                *RedrawingDisabled.ptr() -= 1;
+                drop(redraw_off);
                 if postponed_split.get() != 0 {
                     win_close(curwin.get(), false, false);
                     postponed_split.set(0);
@@ -484,7 +484,7 @@ impl Jump {
                 redraw_later(curwin.get(), UPD_VALID);
                 win_enter(self.saved_win, true);
             }
-            *RedrawingDisabled.ptr() -= 1;
+            drop(redraw_off);
             retval
         }
     }

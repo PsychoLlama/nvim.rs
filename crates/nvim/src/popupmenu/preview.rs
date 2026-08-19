@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::guard::Allow;
+use crate::guard::{Allow, Suppress};
 use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
 use crate::types::{OK, OptionSetFlags};
@@ -318,7 +318,7 @@ unsafe fn pum_show_info(
         if p_pvh.get() > 0 && p_pvh.get() < OptInt::from(g_do_tagpreview.get()) {
             g_do_tagpreview.set(p_pvh.get() as c_int);
         }
-        RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+        let redraw_off = Suppress::redraw();
         // An autocommand that syncs undo here does weird things to the tree.
         no_u_sync.set(no_u_sync.get() + 1);
 
@@ -334,7 +334,7 @@ unsafe fn pum_show_info(
         }
 
         no_u_sync.set(no_u_sync.get() - 1);
-        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+        drop(redraw_off);
         g_do_tagpreview.set(0);
 
         if (*curwin.get()).w_onebuf_opt.wo_pvw != 0 || (*curwin.get()).w_float_is_info {

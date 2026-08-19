@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::guard::Lock;
+use crate::guard::{Allow, Lock};
 use crate::types::{IOSIZE, NUL, ShmFlag};
 
 /// The highlight attribute for the inserted-but-not-accepted text at
@@ -652,8 +652,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
 pub(crate) unsafe fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     unsafe {
         // RedrawingDisabled may be set when invoked through complete().
-        let n = RedrawingDisabled.get();
-        RedrawingDisabled.set(0);
+        let _redraw = Allow::redraw();
 
         // If the cursor moved or the display scrolled, the menu has to be
         // rebuilt rather than only redrawn.
@@ -663,6 +662,5 @@ pub(crate) unsafe fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
         }
         ins_compl_show_pum();
         setcursor();
-        RedrawingDisabled.set(n);
     }
 }

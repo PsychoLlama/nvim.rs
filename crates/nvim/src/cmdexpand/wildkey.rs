@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Allow;
 use crate::keycodes::{Ctrl_N, Ctrl_P};
 use crate::types::ExpandContext;
 use core::ffi::{c_char, c_int};
@@ -265,10 +266,7 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: *mut CmdlineInfo) {
         }
 
         let skt = KeyTyped.get();
-        let old_redrawing_disabled = RedrawingDisabled.get();
-        if (*cclp).input_fn != 0 {
-            RedrawingDisabled.set(0);
-        }
+        let redraw = ((*cclp).input_fn != 0).then(Allow::redraw);
 
         // Clear highlighting applied during wildmenu activity.
         set_no_hlsearch(true);
@@ -295,8 +293,6 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: *mut CmdlineInfo) {
         wild_menu_showing.set(0);
 
         KeyTyped.set(skt);
-        if (*cclp).input_fn != 0 {
-            RedrawingDisabled.set(old_redrawing_disabled);
-        }
+        drop(redraw);
     }
 }

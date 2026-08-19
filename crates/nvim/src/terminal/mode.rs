@@ -34,9 +34,10 @@ use crate::drawscreen::{
 };
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
+use crate::guard::Allow;
 use crate::main::{
-    RedrawingDisabled, State, clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw,
-    redraw_cmdline, redraw_mode, restart_edit, stop_insert_mode, window_handles,
+    State, clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw, redraw_cmdline,
+    redraw_mode, restart_edit, stop_insert_mode, window_handles,
 };
 use crate::memory::{strequal, xstrdup};
 use crate::r#move::{set_topline, validate_cursor};
@@ -352,10 +353,9 @@ pub unsafe fn terminal_enter() -> bool {
     unsafe { terminal_check_size(s.term.raw()) };
 
     let save_state = State.get();
-    s.save_rd = RedrawingDisabled.get();
     State.set(MODE_TERMINAL);
     mapped_ctrl_c.set(mapped_ctrl_c.get() | MODE_TERMINAL);
-    RedrawingDisabled.set(0);
+    let redraw = Allow::redraw();
     set_terminal_winopts(s);
     s.term.pending.cursor = true;
     adjust_topline_cursor(s.term, buf, 0);
@@ -388,7 +388,7 @@ pub unsafe fn terminal_enter() -> bool {
         restart_edit.set(0);
     }
     State.set(save_state);
-    RedrawingDisabled.set(s.save_rd);
+    drop(redraw);
     if !s.cursor_visible {
         ui_busy_stop();
     }

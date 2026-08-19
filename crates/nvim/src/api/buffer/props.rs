@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
+use crate::guard::Suppress;
 use crate::types::{FAIL, OK};
 
 pub unsafe fn nvim_buf_get_var(
@@ -178,16 +179,16 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
         try_enter(&raw mut tstate);
         let is_curbuf: bool = b == curbuf.get();
         let save_acd: ::core::ffi::c_int = p_acd.get();
+        let redraw_off = (!is_curbuf).then(Suppress::redraw);
         if !is_curbuf {
-            (*RedrawingDisabled.ptr()) += 1;
             p_acd.set(0 as ::core::ffi::c_int);
         }
         let mut aco: aco_save_T = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, b);
         ren_ret = rename_buffer(name.data());
         aucmd_restbuf(&raw mut aco);
+        drop(redraw_off);
         if !is_curbuf {
-            (*RedrawingDisabled.ptr()) -= 1;
             p_acd.set(save_acd);
         }
         try_leave(&raw mut tstate, err);

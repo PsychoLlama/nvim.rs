@@ -28,11 +28,12 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::garray::ga_clear;
+use crate::guard::Suppress;
 use crate::hashtab::hash_init;
 use crate::insexpand::clear_cpt_callbacks;
 use crate::main::{
-    RedrawingDisabled, buffer_handles, curbuf, e_buffer_nr_not_found, e_noalt, emsg_silent,
-    firstbuf, in_assert_fails, jop_flags, lastbuf, p_sol, swb_flags,
+    buffer_handles, curbuf, e_buffer_nr_not_found, e_noalt, emsg_silent, firstbuf, in_assert_fails,
+    jop_flags, lastbuf, p_sol, swb_flags,
 };
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::memory::{xcalloc, xfree, xstrdup};
@@ -622,7 +623,7 @@ pub unsafe fn buflist_getfile(
         return FAIL;
     }
 
-    RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+    let redraw_off = Suppress::redraw();
     let (handle, setmark, no_name) = (
         buf.handle as c_int,
         options & GETF_SETMARK as c_int != 0,
@@ -630,7 +631,7 @@ pub unsafe fn buflist_getfile(
     );
     // SAFETY: a live buffer's handle, and no file name to load under it.
     let failed = unsafe { getfile(handle, no_name, no_name, setmark, lnum, forceit != 0) } > 0;
-    RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+    drop(redraw_off);
     if failed {
         return FAIL;
     }

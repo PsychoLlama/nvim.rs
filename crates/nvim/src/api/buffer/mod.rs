@@ -18,8 +18,8 @@ use crate::decoration::kMTMetaLines;
 use crate::lua::executor::nlua_call_ref;
 use crate::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
 use crate::main::{
-    RedrawingDisabled, State, VIsual, VIsual_active, VIsual_mode, curbuf, curtab, curwin,
-    first_tabpage, firstwin, p_acd,
+    State, VIsual, VIsual_active, VIsual_mode, curbuf, curtab, curwin, first_tabpage, firstwin,
+    p_acd,
 };
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
