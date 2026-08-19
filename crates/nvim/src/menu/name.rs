@@ -18,6 +18,7 @@ use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
 use super::*;
+use crate::cstr;
 use crate::keycodes::Ctrl_V;
 
 /// The accelerator separator inside a menu name. `\t` in a `:menu` argument
@@ -207,7 +208,7 @@ pub(crate) struct MenuText {
 pub(crate) fn menu_text(name: &CStr) -> MenuText {
     let bytes = name.to_bytes();
     let (head, actext) = match bytes.iter().position(|&b| b == TAB) {
-        Some(tab) => (&bytes[..tab], Some(cstring(&bytes[tab + 1..]))),
+        Some(tab) => (&bytes[..tab], Some(cstr::owned(&bytes[tab + 1..]))),
         None => (bytes, None),
     };
 
@@ -228,14 +229,8 @@ pub(crate) fn menu_text(name: &CStr) -> MenuText {
     }
 
     MenuText {
-        display: cstring(&display),
+        display: cstr::owned(&display),
         mnemonic,
         actext,
     }
-}
-
-/// `bytes` as an owned C string. Menu names come from the command line,
-/// which `ex_docmd` has already split on NUL, so there is never one inside.
-pub(crate) fn cstring(bytes: &[u8]) -> CString {
-    CString::new(bytes).expect("a menu name holds no interior NUL")
 }

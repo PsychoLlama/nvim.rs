@@ -23,10 +23,11 @@ use super::{
     STL_FILENAME, STL_FOLDCOL, STL_FULLPATH, STL_HELPFLAG_ALT, STL_HIGHLIGHT, STL_HIGHLIGHT_COMB,
     STL_MODIFIED_ALT, STL_OFFSET_X, STL_PREVIEWFLAG_ALT, STL_ROFLAG_ALT, STL_SEPARATE, STL_SIGNCOL,
     STL_TABCLOSENR, STL_TABPAGENR, STL_TRUNCMARK, STL_USER_HL, STL_VIM_EXPR, STL_VIRTCOL_ALT,
-    StlItem, StlScratch, TMPLEN, as_number, cells_at, char_len_at, cstr_at, dup_cstring, group,
+    StlItem, StlScratch, TMPLEN, as_number, cells_at, char_len_at, dup_cstring, group,
     in_insert_mode, kNumBaseDecimal, kNumBaseHexadecimal, parse, put_number, strsize_at, syntax_id,
     tr, upper, vim_var, with_scratch,
 };
+use crate::cstr;
 use crate::decoration::SCL_NUM;
 use crate::types::Vv;
 
@@ -408,7 +409,7 @@ fn vim_expr(
     }
     *pos = start;
 
-    let Some(result) = env.eval(cstr_at(out, start)) else {
+    let Some(result) = env.eval(cstr::in_bytes(&out[start..])) else {
         return Expr::Value {
             num: -1,
             itemisflag: true,

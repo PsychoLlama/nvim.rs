@@ -53,6 +53,7 @@ use std::ffi::CString;
 use super::*;
 use crate::buffer::{append_arg_number, bt_quickfix, buf_spname, calc_percentage, get_rel_pos};
 use crate::charset::{ptr2cells, trans_characters, vim_strsize};
+use crate::cstr;
 use crate::decoration::SIGN_WIDTH;
 use crate::digraph::keymap_str;
 use crate::drawline::{fill_foldcolumn, use_cursor_line_highlight};
@@ -201,7 +202,7 @@ impl Env {
             unsafe { trans_characters(nb.as_mut_ptr(), MAXPATHL) };
         });
         with_name_buff(|nb| {
-            let bytes = as_cstr(nb).to_bytes();
+            let bytes = cstr::in_chars(nb).to_bytes();
             let from = if tail {
                 // SAFETY: `NameBuff` was just NUL-terminated by the fill
                 // above; `path_tail` answers a position inside it.
@@ -241,7 +242,7 @@ impl Env {
         // SAFETY: the buffer is this frame's, and its length is what
         // `get_rel_pos` is told.
         unsafe { get_rel_pos(self.win.raw(), buf.as_mut_ptr().cast::<c_char>(), TMPLEN) };
-        text.extend_from_slice(cstr_at(&buf, 0).to_bytes());
+        text.extend_from_slice(cstr::in_bytes(&buf).to_bytes());
     }
 
     /// `%a`: the argument list position, when there is one.
@@ -257,7 +258,7 @@ impl Env {
             )
         };
         if len > 0 {
-            text.extend_from_slice(cstr_at(&buf, 0).to_bytes());
+            text.extend_from_slice(cstr::in_bytes(&buf).to_bytes());
         }
     }
 
@@ -331,7 +332,7 @@ impl Env {
                 return;
             }
         }
-        showcmd_buf.with(|buf| text.extend_from_slice(as_cstr(buf).to_bytes()));
+        showcmd_buf.with(|buf| text.extend_from_slice(cstr::in_chars(buf).to_bytes()));
     }
 
     /// How wide the fold column is here, which is what `%C` draws.
@@ -512,18 +513,10 @@ pub(super) fn free_cstring(cmd: *mut c_char) {
 // The output buffer, wrapped
 // ---------------------------------------------------------------------------
 
-/// The NUL-terminated string starting at `at`.
-///
-/// Every stage keeps the write cursor NUL-terminated before it measures, so
-/// the terminator is always inside the buffer.
-pub(super) fn cstr_at(out: &[u8], at: usize) -> &CStr {
-    CStr::from_bytes_until_nul(&out[at..]).unwrap_or(c"")
-}
-
 /// How many screen cells the string at `at` takes.
 pub(super) fn strsize_at(out: &[u8], at: usize) -> c_int {
-    // SAFETY: [`cstr_at`] has established the terminator.
-    unsafe { vim_strsize(cstr_at(out, at).as_ptr()) }
+    // SAFETY: [`cstr::in_bytes`] has established the terminator.
+    unsafe { vim_strsize(cstr::in_bytes(&out[at..]).as_ptr()) }
 }
 
 /// How many screen cells the *character* at `at` takes.

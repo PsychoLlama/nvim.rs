@@ -687,14 +687,6 @@ pub(crate) fn with_name_buff<R>(f: impl FnOnce(&mut [c_char; MAXPATHL as usize])
     NameBuff.with_mut(f)
 }
 
-/// The NUL-terminated contents of `buf` as a C string.
-pub(crate) fn as_cstr(buf: &[c_char]) -> &CStr {
-    // SAFETY: every writer of these buffers NUL-terminates; `from_bytes_until_nul`
-    // still checks, and the fallback is the empty string rather than a panic.
-    let bytes = unsafe { slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len()) };
-    CStr::from_bytes_until_nul(bytes).unwrap_or(c"")
-}
-
 // ---------------------------------------------------------------------------
 // The entry points the drawing layer calls in
 // ---------------------------------------------------------------------------

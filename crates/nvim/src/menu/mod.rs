@@ -34,6 +34,7 @@ use std::ffi::CString;
 
 use crate::autocmd::{EVENT_MENUPOPUP, apply_autocmds};
 use crate::charset::skipwhite;
+use crate::cstr;
 use crate::eval::typval::{
     tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
     tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_len, tv_list_alloc,
@@ -279,25 +280,25 @@ impl Menu {
     /// The pre-translation name, for a node `:menutranslate` renamed.
     pub(crate) fn en_name(&self) -> Option<&CStr> {
         // SAFETY: the invariant; null unless a translation applied.
-        unsafe { cstr_opt(self.en_name) }
+        unsafe { cstr::at_opt(self.en_name) }
     }
 
     /// The pre-translation displayed name.
     pub(crate) fn en_dname(&self) -> Option<&CStr> {
         // SAFETY: as [`Menu::en_name`]; the two are set together.
-        unsafe { cstr_opt(self.en_dname) }
+        unsafe { cstr::at_opt(self.en_dname) }
     }
 
     /// The accelerator text, i.e. whatever followed the name's `<Tab>`.
     pub(crate) fn actext(&self) -> Option<&CStr> {
         // SAFETY: the invariant; null unless the name carried a TAB.
-        unsafe { cstr_opt(self.actext) }
+        unsafe { cstr::at_opt(self.actext) }
     }
 
     /// The right-hand side stored for one mode.
     pub(crate) fn rhs(&self, idx: usize) -> Option<&CStr> {
         // SAFETY: the invariant; unset modes hold null.
-        unsafe { cstr_opt(self.strings[idx]) }
+        unsafe { cstr::at_opt(self.strings[idx]) }
     }
 
     /// Whether the node is available in any of `modes`.
@@ -469,15 +470,6 @@ impl CText {
     pub(crate) fn starts_with(&self, prefix: &[u8]) -> bool {
         self.bytes().starts_with(prefix)
     }
-}
-
-/// `ptr` as a string, or `None` for C's `NULL`.
-///
-/// # Safety
-/// A non-null `ptr` must name a NUL-terminated string outliving `'a`.
-unsafe fn cstr_opt<'a>(ptr: *const c_char) -> Option<&'a CStr> {
-    // SAFETY: the caller's obligation, minus the null case.
-    (!ptr.is_null()).then(|| unsafe { CStr::from_ptr(ptr) })
 }
 
 /// A writable copy of `s` for the parsers that take a name apart in place.

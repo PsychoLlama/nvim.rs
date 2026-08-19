@@ -9,6 +9,8 @@
 
 #![forbid(unsafe_code)]
 
+use crate::cstr;
+
 use core::ffi::{CStr, c_int};
 
 use super::{NumberBase, kNumBaseHexadecimal};
@@ -128,7 +130,7 @@ pub(super) struct NumPlan {
 impl NumPlan {
     /// The template, for the caller to hand to `vim_snprintf`.
     pub fn template(&self) -> &CStr {
-        CStr::from_bytes_until_nul(&self.template).unwrap_or(c"")
+        cstr::in_bytes(&self.template)
     }
 }
 

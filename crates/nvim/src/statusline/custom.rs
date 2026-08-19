@@ -28,6 +28,7 @@ use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{col_print, get_rel_pos};
 use crate::charset::{transstr_buf, vim_strsize};
+use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_ascii, schar_get};
 use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len};
@@ -705,7 +706,7 @@ pub unsafe fn redraw_ruler() {
     // SAFETY: the message grid's view is live; the batch is flushed below.
     unsafe { view_line_start(msg_grid_adj.ptr(), Rows.get() - 1) };
     DID_RULER_COL.set(off + this_ru_col);
-    let w = paint_cstr(DID_RULER_COL.get(), as_cstr(&buffer), attr);
+    let w = paint_cstr(DID_RULER_COL.get(), cstr::in_chars(&buffer), attr);
     paint_fill(DID_RULER_COL.get() + w, off + width, fillchar, attr);
     paint_flush();
 }

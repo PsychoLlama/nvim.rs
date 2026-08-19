@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::eval::vars::get_vim_var_str;
 use crate::event::libuv::{
     uv_gettimeofday, uv_mutex_init_recursive, uv_mutex_lock, uv_mutex_unlock, uv_print_all_handles,
@@ -103,12 +104,6 @@ fn log_try_create(fname: &[u8]) -> bool {
     true
 }
 
-/// What a C callee left in a `c_char` buffer, up to the first NUL.
-fn cstr_bytes(buf: &[c_char]) -> Vec<u8> {
-    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-    buf[..end].iter().map(|&c| c as u8).collect()
-}
-
 /// `xstrlcpy` into a `LOG_PATH_SIZE` buffer, as an answer instead of a
 /// side effect: the path cut to fit, and whether `src` was too long to fit
 /// (upstream's `len >= size` test).
@@ -149,7 +144,7 @@ fn expand_log_file_var() -> (Vec<u8>, bool) {
             LOG_PATH_SIZE as c_int - 1,
         )
     };
-    let expanded = cstr_bytes(&buf);
+    let expanded = cstr::in_chars(&buf).to_bytes().to_vec();
     let user_set = expanded != ENV_LOGFILE_REF.to_bytes();
     (expanded, user_set)
 }

@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::log::logmsg_c;
 use crate::{msg_schedule_semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
@@ -117,7 +118,7 @@ unsafe fn vim_mktempdir() {
         let data = user.as_mut_ptr().cast::<c_void>();
         memchrsub(data, b'/' as c_char, b'_' as c_char, user.len());
         memchrsub(data, b'\\' as c_char, b'_' as c_char, user.len());
-        let user = CStr::from_bytes_until_nul(&user).unwrap_or(c"").to_bytes();
+        let user = cstr::in_bytes(&user).to_bytes();
 
         // Make sure the umask doesn't remove the executable bit. "repl" has
         // been reported to use "0177".

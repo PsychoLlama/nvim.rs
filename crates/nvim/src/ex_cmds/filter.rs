@@ -18,6 +18,7 @@ use crate::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
 use crate::charset::skipwhite;
+use crate::cstr;
 use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds2::autowrite_all;
@@ -55,7 +56,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, NUL, OK, OptInt, buf_T, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{bufIsChanged, u_save};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// The last `:!` command, so that a later `!` in the argument can stand for
@@ -76,15 +77,6 @@ unsafe fn xmalloc_cstr(bytes: &[u8]) -> *mut c_char {
         *buf.add(bytes.len()) = 0;
         buf
     }
-}
-
-/// The bytes of a C string, without its terminator.
-///
-/// # Safety
-/// `s` must be a live NUL-terminated string that outlives the borrow.
-unsafe fn cstr_bytes<'a>(s: *const c_char) -> &'a [u8] {
-    // SAFETY: caller's contract.
-    unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
 /// Check that [`prevcmd`] is set; if it is not, report it.
@@ -137,7 +129,7 @@ pub unsafe fn do_bang(
     // bang standing for the whole of the previous command.
     let mut ins_prevcmd = forceit;
     // SAFETY: `arg` is the command's NUL-terminated argument.
-    let mut trail = unsafe { cstr_bytes(skipwhite(arg)) }.to_vec();
+    let mut trail = unsafe { cstr::bytes_at(skipwhite(arg)) }.to_vec();
     let mut head: Vec<u8> = Vec::new();
     let assembled = loop {
         // SAFETY: main thread, message state.
@@ -147,7 +139,7 @@ pub unsafe fn do_bang(
         let mut text = head;
         if ins_prevcmd {
             // SAFETY: checked non-NULL just above.
-            text.extend_from_slice(unsafe { cstr_bytes(prevcmd.get()) });
+            text.extend_from_slice(unsafe { cstr::bytes_at(prevcmd.get()) });
         }
         // Only the newly appended argument is scanned for a bang, but the
         // escape test may look one byte back into what came before it.
@@ -191,7 +183,7 @@ pub unsafe fn do_bang(
         }
 
         // SAFETY: 'shellquote' is a live option string.
-        let shq = unsafe { cstr_bytes(p_shq.get()) };
+        let shq = unsafe { cstr::bytes_at(p_shq.get()) };
         if !shq.is_empty() {
             if free_newcmd {
                 // SAFETY: our own allocation.
@@ -200,7 +192,7 @@ pub unsafe fn do_bang(
             // SAFETY: `prevcmd` is live -- either `prevcmd_is_set` passed
             // above, or the assembled command was just stored in it.
             let mut quoted = shq.to_vec();
-            quoted.extend_from_slice(unsafe { cstr_bytes(prevcmd.get()) });
+            quoted.extend_from_slice(unsafe { cstr::bytes_at(prevcmd.get()) });
             quoted.extend_from_slice(shq);
             // SAFETY: option and command bytes, so no interior NUL.
             newcmd = unsafe { xmalloc_cstr(&quoted) };
@@ -706,7 +698,7 @@ enum Shell {
 /// Main thread; 'shell' must be a live option string.
 unsafe fn shell_kind() -> Shell {
     // SAFETY: caller's contract; a NULL length asks only for the tail.
-    let tail = unsafe { cstr_bytes(invocation_path_tail(p_sh.get(), ptr::null_mut())) };
+    let tail = unsafe { cstr::bytes_at(invocation_path_tail(p_sh.get(), ptr::null_mut())) };
     if tail.starts_with(b"fish") {
         Shell::Fish
     } else if tail.starts_with(b"pwsh") || tail.starts_with(b"powershell") {
@@ -733,12 +725,12 @@ pub unsafe fn make_filter_cmd(
     let (shell, cmd_bytes, itmp_bytes, srr_len) = unsafe {
         (
             shell_kind(),
-            cstr_bytes(cmd),
-            (!itmp.is_null()).then(|| cstr_bytes(itmp)),
+            cstr::bytes_at(cmd),
+            (!itmp.is_null()).then(|| cstr::bytes_at(itmp)),
             if otmp.is_null() {
                 0
             } else {
-                cstr_bytes(p_srr.get()).len()
+                cstr::bytes_at(p_srr.get()).len()
             },
         )
     };
@@ -766,7 +758,7 @@ pub unsafe fn make_filter_cmd(
     }
     if !otmp.is_null() {
         // SAFETY: checked non-NULL.
-        len += unsafe { cstr_bytes(otmp) }.len() + srr_len + 2; // two extra spaces
+        len += unsafe { cstr::bytes_at(otmp) }.len() + srr_len + 2; // two extra spaces
     }
 
     let text = filter_cmd_text(shell, cmd_bytes, itmp_bytes, !otmp.is_null(), do_in);
@@ -854,9 +846,9 @@ pub unsafe fn append_redir(
     fname: *const c_char,
 ) {
     // SAFETY: caller's contract.
-    let used = unsafe { cstr_bytes(buf) }.len();
+    let used = unsafe { cstr::bytes_at(buf) }.len();
     // SAFETY: as above.
-    let formats = has_percent_s(unsafe { cstr_bytes(opt) });
+    let formats = has_percent_s(unsafe { cstr::bytes_at(opt) });
     // SAFETY: `used` is inside the allocation, and the writes below stay
     // within `buflen`.  One `%s` for one string in either format.
     unsafe {

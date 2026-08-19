@@ -38,6 +38,7 @@ use core::marker::PhantomData;
 use core::mem::offset_of;
 use core::slice;
 
+use crate::cstr;
 use crate::eval::typval::{
     tv_blob_copy, tv_blob_remove, tv_blob_set_ret, tv_check_for_string_or_list_or_blob_arg,
     tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret, tv_dict_copy, tv_dict_extend,
@@ -710,7 +711,7 @@ pub(crate) fn cstr_of<'a>(tv: &mut typval_T) -> &'a CStr {
 #[inline(always)]
 pub(crate) fn cstr_of_chk<'a>(tv: &mut typval_T) -> Option<&'a CStr> {
     // SAFETY: `tv_get_string_chk` answers a NUL-terminated string, or NULL.
-    unsafe { tv_get_string_chk(tv).as_ref().map(|s| CStr::from_ptr(s)) }
+    unsafe { cstr::at_opt(tv_get_string_chk(tv)) }
 }
 
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.

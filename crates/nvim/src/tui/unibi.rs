@@ -23,6 +23,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::cstr;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::io::Read;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -128,13 +129,6 @@ fn int32(p: &[u8], off: usize) -> i32 {
     if n <= 0x7fff_ffff { n as i32 } else { -1 }
 }
 
-/// A NUL-terminated string starting at `off` in `table`, whose final byte
-/// the parser has already forced to NUL (as the C did in its copy).
-fn cstr_at(table: &[u8], off: usize) -> CString {
-    let end = table[off..].iter().position(|&b| b == 0).unwrap() + off;
-    CString::new(&table[off..end]).unwrap()
-}
-
 /// `unibi_from_mem`: parse a compiled terminfo description. `None` is the
 /// C's NULL-with-errno for every malformed-input path.
 pub fn from_mem(data: &[u8]) -> Option<Term> {
@@ -203,7 +197,7 @@ pub fn from_mem(data: &[u8]) -> Option<Term> {
     for i in 0..NSTR {
         strs.push(match str_offs.get(i) {
             Some(&off) if off >= 0 && (off as usize) < tablsz => {
-                Some(cstr_at(&table, off as usize))
+                Some(cstr::in_bytes(&table[off as usize..]).to_owned())
             }
             _ => None,
         });
@@ -301,11 +295,11 @@ pub fn from_mem(data: &[u8]) -> Option<Term> {
     }
     term.ext_strs = val_offs
         .iter()
-        .map(|off| off.map(|v| cstr_at(&ext_table, v)))
+        .map(|off| off.map(|v| cstr::in_bytes(&ext_table[v..]).to_owned()))
         .collect();
     let names: Vec<CString> = name_offs
         .iter()
-        .map(|&v| cstr_at(&ext_table, s_sum + v))
+        .map(|&v| cstr::in_bytes(&ext_table[s_sum + v..]).to_owned())
         .collect();
     term.ext_bool_names = names[..extbool].to_vec();
     term.ext_str_names = names[extbool + extnum..].to_vec();

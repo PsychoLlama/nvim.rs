@@ -12,6 +12,8 @@
 
 use core::ffi::c_int;
 
+use crate::cstr;
+
 use super::{Built, Fill, Kind, StlScratch, cells_at, char_len_at, free_cstring, strsize_at};
 
 /// Cut the line down to `maxwidth` cells.
@@ -156,7 +158,7 @@ pub(super) fn spread(
         let seploc = start + dislocation;
 
         // Shift the rest of the line right, NUL included, and fill the gap.
-        let len = super::cstr_at(out, start).to_bytes().len();
+        let len = cstr::in_bytes(&out[start..]).to_bytes().len();
         out.copy_within(start..start + len + 1, seploc);
         let mut at = start;
         while at < seploc {

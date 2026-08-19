@@ -28,6 +28,7 @@ pub mod clipboard;
 pub mod cmdexpand;
 pub mod cmdhist;
 pub mod context;
+pub mod cstr;
 pub mod cursor;
 pub mod cursor_shape;
 pub mod debugger;
