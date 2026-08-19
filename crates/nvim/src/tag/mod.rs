@@ -30,7 +30,7 @@ use crate::main::{
     Columns, IObuff, KeyTyped, RedrawingDisabled, State, cmdmod, curbuf, curtab, curwin, e_invarg,
     e_listreq, emsg_off, fdo_flags, g_do_tagpreview, g_tag_at_cursor, got_int, jop_flags,
     keep_help_flag, magic_overruled, msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent,
-    no_hlsearch, p_cpo, p_enc, p_hf, p_hlg, p_ic, p_scs, p_sft, p_tags, p_tbs, p_tgst, p_tl, p_tr,
+    no_hlsearch, p_enc, p_hf, p_hlg, p_ic, p_scs, p_sft, p_tags, p_tbs, p_tgst, p_tl, p_tr,
     p_verbose, p_ws, postponed_split, postponed_split_flags, sandbox, secure, swb_flags, tc_flags,
     vim_ignored,
 };
@@ -167,7 +167,6 @@ pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const TAGSTACKSIZE: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const CPO_TAGPAT: ::core::ffi::c_int = 't' as ::core::ffi::c_int;
 pub const NOTAGFILE: ::core::ffi::c_int = 99 as ::core::ffi::c_int;
 static nofile_fname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());

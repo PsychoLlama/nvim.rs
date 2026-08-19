@@ -16,21 +16,22 @@ use crate::charset::{getdigits_int32, skipdigits, skipwhite};
 use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::onecmd::shift_cmd_args;
-use crate::ex_docmd::{CPO_BAR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount};
+use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount};
 use crate::keycodes::Ctrl_V;
-use crate::main::{curbuf, p_cpo};
+use crate::main::curbuf;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
+use crate::option::cpo_has;
 use crate::os::cshim::{gettext, memmove};
 use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
-use crate::strings::{del_trailing_spaces, vim_strchr};
+use crate::strings::del_trailing_spaces;
 use crate::types::ex_cmds::exarg_T;
 use crate::types::pos::linenr_T;
 use crate::types::{
     CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep, CMD_lvimgrepadd, CMD_put,
     CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, CmdAddr,
-    ExArgt, FAIL, NUL, OK, size_t,
+    CpoFlag, ExArgt, FAIL, NUL, OK, size_t,
 };
 use ::libc::strlen;
 
@@ -260,8 +261,7 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
                     break;
                 }
             } else if ends_argument(ea, p) {
-                let escaped = (vim_strchr(p_cpo.get(), CPO_BAR).is_null()
-                    || !ea.argt.has(ExArgt::CTRLV))
+                let escaped = (!cpo_has(CpoFlag::BAR) || !ea.argt.has(ExArgt::CTRLV))
                     && *p.offset(-1) as c_int == '\\' as c_int;
                 if escaped {
                     p = p.offset(-1);

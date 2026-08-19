@@ -20,8 +20,9 @@
 use super::*;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::r#move::WinValid;
+use crate::option::cpo_has;
 use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL};
-use crate::types::{MAXPATHL, NUL, Vv};
+use crate::types::{CpoFlag, MAXPATHL, NUL, Vv};
 
 /// The widest a `'statuscolumn'` may grow the number column to.
 ///
@@ -482,7 +483,7 @@ impl WinLineVars {
     pub(crate) unsafe fn draw_lnum_col(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
         unsafe {
-            let has_cpo_n = !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null();
+            let has_cpo_n = cpo_has(CpoFlag::NUMCOL);
             if (*wp).w_onebuf_opt.wo_nu == 0 && (*wp).w_onebuf_opt.wo_rnu == 0 {
                 return;
             }

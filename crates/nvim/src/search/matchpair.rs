@@ -11,8 +11,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::option::cpo_has;
 use crate::pos::MAXCOL;
-use crate::types::NUL;
+use crate::types::{CpoFlag, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -849,8 +850,8 @@ unsafe fn find_match(
         let lisp = (*curbuf.get()).b_p_lisp != 0; // engage Lisp-specific hacks ;)
 
         // vi compatible matching, and "don't recognise backslashes".
-        let cpo_match = !vim_strchr(p_cpo.get(), CPO_MATCH).is_null();
-        let cpo_bsl = !vim_strchr(p_cpo.get(), CPO_MATCHBSL).is_null();
+        let cpo_match = cpo_has(CpoFlag::MATCH);
+        let cpo_bsl = cpo_has(CpoFlag::MATCHBSL);
 
         // Direction to search when initc is '/', '*' or '#'.
         let dir = if flags & FM_BACKWARD != 0 {

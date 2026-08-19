@@ -16,13 +16,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::main::{cmdwin_buf, curbuf, curwin, p_paste};
 use crate::mbyte::{utf_iscomposing_first, utf_ptr2char};
-use crate::strings::vim_strchr;
+use crate::types::FoFlag;
 use crate::window::win_fdccol_count;
 
 mod auto;
@@ -47,20 +47,7 @@ pub const SIN_CHANGED: c_uint = 1;
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 
 // The 'formatoptions' flag letters this family reads. Each is the option's
-// own spelling, so a flag test is `has_format_option(FO_WRAP)`.
-pub const FO_WRAP: c_int = 't' as c_int;
-pub const FO_WRAP_COMS: c_int = 'c' as c_int;
-pub const FO_Q_COMS: c_int = 'q' as c_int;
-pub const FO_Q_NUMBER: c_int = 'n' as c_int;
-pub const FO_Q_SECOND: c_int = '2' as c_int;
-pub const FO_INS_VI: c_int = 'v' as c_int;
-pub const FO_INS_BLANK: c_int = 'b' as c_int;
-pub const FO_MBYTE_BREAK: c_int = 'm' as c_int;
-pub const FO_ONE_LETTER: c_int = '1' as c_int;
-pub const FO_WHITE_PAR: c_int = 'w' as c_int;
-pub const FO_AUTO: c_int = 'a' as c_int;
-pub const FO_RIGOROUS_TW: c_int = ']' as c_int;
-pub const FO_PERIOD_ABBR: c_int = 'p' as c_int;
+// own spelling, so a flag test is `has_format_option(FoFlag::WRAP)`.
 
 // The 'comments' item flag letters: `s`tart, `m`iddle, `e`nd, `f`irst.
 pub const COM_START: c_int = 's' as c_int;
@@ -73,8 +60,10 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 ///
 /// # Safety
 /// There must be a current buffer.
-pub unsafe fn has_format_option(x: c_int) -> bool {
-    unsafe { p_paste.get() == 0 && !vim_strchr((*curbuf.get()).b_p_fo, x).is_null() }
+pub unsafe fn has_format_option(x: FoFlag) -> bool {
+    // The dereference stays behind the `&&`: with no current buffer the
+    // left half is what keeps the right one from running.
+    unsafe { p_paste.get() == 0 && x.is_in(CStr::from_ptr((*curbuf.get()).b_p_fo)) }
 }
 
 /// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the

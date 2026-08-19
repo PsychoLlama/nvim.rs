@@ -35,8 +35,7 @@ use crate::highlight_group::{
 };
 use crate::main::{
     called_emsg, curwin, e_dictreq, e_invalwindow, e_invarg2, e_invcmd, e_listarg, e_listreq,
-    e_trailing_arg, got_int, p_cpo, p_rdt, search_first_line, search_hl_has_cursor_lnum,
-    search_last_line,
+    e_trailing_arg, got_int, p_rdt, search_first_line, search_hl_has_cursor_lnum, search_last_line,
 };
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
@@ -45,7 +44,6 @@ use crate::message::emsg;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
-use crate::strings::vim_strchr;
 use crate::types::{
     EvalFuncData, VAR_LIST, VAR_NUMBER, colnr_T, dict_T, dictitem_T, exarg_T, int64_t, linenr_T,
     list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T, uint8_t,
@@ -59,10 +57,6 @@ mod vimscript;
 pub use self::vimscript::*;
 
 use crate::regexp::re_multiline;
-
-/// The `'cpoptions'` flag that makes a search continue at the end of the
-/// previous match rather than one character past its start.
-pub const CPO_SEARCH: c_int = 'c' as c_int;
 
 /// The scratch buffer `tv_get_string_buf_chk` needs to render a non-string
 /// argument into.

@@ -47,8 +47,8 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
     CA_COMMAND_BUSY, MOD_MASK_SHIFT, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
-    NormalState, SHM_FILEINFO, check_scrollbind, clearop, clearopbeep, current_oap,
-    end_visual_mode, find_command, normal_execute, nv_cmds, unshift_special,
+    NormalState, check_scrollbind, clearop, clearopbeep, current_oap, end_visual_mode,
+    find_command, normal_execute, nv_cmds, unshift_special,
 };
 use crate::option::shortmess;
 use crate::options::kOptFdoFlagAll;
@@ -59,7 +59,7 @@ use crate::state::{
     state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{NUL, OP_NOP, VimState, cmdarg_T, int64_t, oparg_T};
+use crate::types::{NUL, OP_NOP, ShmFlag, VimState, cmdarg_T, int64_t, oparg_T};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use ::libc::time;
@@ -473,7 +473,7 @@ fn normal_redraw() {
             msg_hist_off.set(false);
             xfree(copy.cast::<c_void>());
         }
-        if need_fileinfo.get() && !shortmess(SHM_FILEINFO as c_int) {
+        if need_fileinfo.get() && !shortmess(ShmFlag::FILEINFO) {
             fileinfo(0, 1, false);
             need_fileinfo.set(false);
         }

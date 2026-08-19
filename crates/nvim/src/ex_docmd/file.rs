@@ -19,9 +19,8 @@ use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
-    CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, ML_EMPTY, cmdmod_has, ex_pressedreturn,
-    kDirectionNotSet,
+    DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT,
+    ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, ML_EMPTY, cmdmod_has, ex_pressedreturn, kDirectionNotSet,
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -30,7 +29,7 @@ use crate::fileio::readfile;
 use crate::getchar::stuffReadbuff;
 use crate::main::{
     RedrawingDisabled, curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active,
-    global_busy, msg_scroll, need_wait_return, no_wait_return, p_awa, p_cpo, p_shada,
+    global_busy, msg_scroll, need_wait_return, no_wait_return, p_awa, p_shada,
     pending_exmode_active, readonlymode, recoverymode,
 };
 use crate::mark::setpcmark;
@@ -39,18 +38,17 @@ use crate::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
 use crate::memory::xfree;
 use crate::message::{emsg, msg};
 use crate::normal::normal_enter;
-use crate::option::get_findfunc;
+use crate::option::{cpo_has, get_findfunc};
 use crate::os::cshim::gettext;
 use crate::path::path_fnamecmp;
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
-use crate::strings::vim_strchr;
 use crate::types::ui::kUICmdline;
 use crate::types::{
     CMD_badd, CMD_balt, CMD_edit, CMD_enew, CMD_new, CMD_rshada, CMD_rviminfo, CMD_split,
     CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CmdModFlags,
-    FAIL, NUL, OK, cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T,
+    CpoFlag, FAIL, NUL, OK, cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbufIsChanged, u_compute_hash, u_read_undo, u_save, u_savedel, u_write_undo};
@@ -517,7 +515,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
             )
         } else {
             // 'cpoptions' `a` makes `:read file` set the alternate file.
-            if !vim_strchr(p_cpo.get(), CPO_ALTREAD).is_null() {
+            if cpo_has(CpoFlag::ALTREAD) {
                 setaltfname((*eap).arg, (*eap).arg, 1);
             }
             readfile(

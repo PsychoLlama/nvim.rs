@@ -15,9 +15,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    CPO_ALTWRITE, CPO_OVERNEW, ECMD_FORCEIT, ECMD_HIDE, FAIL, GETFILE_ERROR, GETFILE_NOT_WRITTEN,
-    GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER, SHM_FILEINFO, VIM_QUESTION, VIM_YES,
-    buf_autocmd, do_bang, do_ecmd,
+    ECMD_FORCEIT, ECMD_HIDE, FAIL, GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER,
+    GETFILE_SAME_FILE, NODE_OTHER, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
 };
 use crate::arglist::do_argfile;
 use crate::autocmd::{
@@ -39,22 +38,20 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::main::{
     curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_isadir2, e_readonly, emsg_silent,
-    exiting, firstbuf, getout, no_wait_return, p_confirm, p_cpo, p_dir, p_wa, p_write,
-    redraw_tabline,
+    exiting, firstbuf, getout, no_wait_return, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
 };
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, vim_dialog_yesno};
-use crate::option::{copy_option_part, shortmess};
+use crate::option::{copy_option_part, cpo_has, shortmess};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
 use crate::semsg_c;
-use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, MAXPATHL, NUL, OK, OptionSetFlags, buf_T,
-    bufref_T, exarg_T, int32_t, int64_t, linenr_T,
+    CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, CpoFlag, MAXPATHL, NUL, OK, OptionSetFlags,
+    ShmFlag, buf_T, bufref_T, exarg_T, int32_t, int64_t, linenr_T,
 };
 use crate::undo::{bufIsChanged, curbufIsChanged};
 use crate::window::check_can_set_curbuf_forceit;
@@ -180,7 +177,7 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
         }
 
         // print file name if no argument or 'F' is not in 'shortmess'
-        if *(*eap).arg as c_int == NUL || !shortmess(SHM_FILEINFO as c_int) {
+        if *(*eap).arg as c_int == NUL || !shortmess(ShmFlag::FILEINFO) {
             fileinfo(0, 0, (*eap).forceit != 0);
         }
     }
@@ -300,7 +297,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
     if other {
         // SAFETY: the names are live and 'cpoptions' is a live option string.
         alt_buf = unsafe {
-            if !vim_strchr(p_cpo.get(), CPO_ALTWRITE).is_null() || (*eap).cmdidx == CMD_saveas {
+            if cpo_has(CpoFlag::ALTWRITE) || (*eap).cmdidx == CMD_saveas {
                 setaltfname(ffname, fname, 1)
             } else {
                 buflist_findname(ffname)
@@ -525,8 +522,7 @@ pub unsafe fn check_overwrite(
         || unsafe {
             !bt_nofilename(buf)
                 && ((*buf).b_flags.has(BufFlags::NOTEDITED)
-                    || (*buf).b_flags.has(BufFlags::NEW)
-                        && vim_strchr(p_cpo.get(), CPO_OVERNEW).is_null()
+                    || (*buf).b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
                     || (*buf).b_flags.has(BufFlags::READERR))
         };
     // SAFETY: `ffname` is a live file name.

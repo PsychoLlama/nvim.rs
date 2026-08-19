@@ -10,15 +10,14 @@ use core::ffi::{CStr, c_char, c_int};
 use super::{
     CLASS_ALNUM, CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE,
     CLASS_FNAME, CLASS_GRAPH, CLASS_IDENT, CLASS_KEYWORD, CLASS_LOWER, CLASS_NONE, CLASS_PRINT,
-    CLASS_PUNCT, CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, CPO_LITERAL,
-    MAGIC_ALL, RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER,
-    RI_WHITE, RI_WORD, reg_cpo_lit, reg_magic,
+    CLASS_PUNCT, CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, MAGIC_ALL,
+    RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WHITE, RI_WORD,
+    reg_cpo_lit, reg_magic,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::p_cpo;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::strings::vim_strchr;
-use crate::types::regprog_T;
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, regprog_T};
 
 /// A magic metacharacter is held as its byte minus 256, so that the parser
 /// can tell `*` (a repeat) from `\*` (a literal star) by sign alone. These
@@ -207,7 +206,6 @@ pub(crate) unsafe fn take_bracketed(pp: &mut *mut c_char, delim: u8) -> c_int {
 /// friends literal inside a `[]` collection. Read once per compile rather
 /// than per character.
 pub(crate) fn refresh_cpo_flags() {
-    // SAFETY: `p_cpo` is the NUL-terminated 'cpoptions' string.
-    let literal = unsafe { !vim_strchr(p_cpo.get(), CPO_LITERAL).is_null() };
+    let literal = cpo_has(CpoFlag::LITERAL);
     reg_cpo_lit.set(literal as c_int);
 }

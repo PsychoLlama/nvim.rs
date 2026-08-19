@@ -18,7 +18,8 @@ use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FAIL, NUL, OK};
 
 /// Insert the NUL-terminated string `p` at the cursor.
 ///
@@ -86,7 +87,7 @@ unsafe fn vreplace_extent(
         // Disable 'list' while measuring, unless 'cpo' has the `L` flag: it
         // changes how wide a TAB looks.
         let old_list = (*curwin.get()).w_onebuf_opt.wo_list;
-        if old_list != 0 && vim_strchr(p_cpo.get(), CPO_LISTWM).is_null() {
+        if old_list != 0 && !cpo_has(CpoFlag::LISTWM) {
             (*curwin.get()).w_onebuf_opt.wo_list = false as c_int;
         }
 

@@ -11,7 +11,7 @@ use super::*;
 use crate::keycodes::{
     Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
-use crate::types::{BS_START, FAIL, NUL};
+use crate::types::{BsFlag, FAIL, NUL, ShmFlag};
 
 /// Delete one character before the cursor and show the subset of the matches
 /// that match the word now before it.
@@ -37,7 +37,7 @@ pub unsafe fn ins_compl_bs() -> c_int {
         if from_start < 0
             || (from_start == 0 && !ctrl_x_mode_omni())
             || ctrl_x_mode_eval()
-            || (!can_bs(BS_START) && from_start - compl_length.get() < 0)
+            || (!can_bs(BsFlag::START) && from_start - compl_length.get() < 0)
         {
             return K_BS;
         }
@@ -369,7 +369,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         ins_compl_free();
         compl_started.set(false);
         compl_matches.set(0);
-        if !shortmess(SHM_COMPLETIONMENU) {
+        if !shortmess(ShmFlag::COMPLETIONMENU) {
             msg_clr_cmdline(); // necessary for "noshowmode"
         }
         ctrl_x_mode.set(CTRL_X_NORMAL);

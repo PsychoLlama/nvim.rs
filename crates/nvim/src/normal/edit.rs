@@ -34,7 +34,7 @@ use crate::memory::xfree;
 use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::{
-    CA_COMMAND_BUSY, CAR, DEL, ESC, FO_OPEN_COMS, ML_DEL_MESSAGE, ML_EMPTY, NL, OPENLINE_DO_COM,
+    CA_COMMAND_BUSY, CAR, DEL, ESC, ML_DEL_MESSAGE, ML_EMPTY, NL, OPENLINE_DO_COM,
     REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, checkclearop, checkclearopq,
     clearop, clearopbeep, nv_object, nv_operator, prep_redo, prep_redo_cmd, v_swap_corners,
     v_visop,
@@ -50,7 +50,7 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::strings::vim_strchr;
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
-    NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE, PUT_BLOCK_INNER, PUT_CURSEND,
+    FoFlag, NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE, PUT_BLOCK_INNER, PUT_CURSEND,
     PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, cmdarg_T, colnr_T, linenr_T, size_t,
     yankreg_T,
 };
@@ -471,7 +471,7 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
                 } else {
                     FORWARD as c_int
                 },
-                if has_format_option(FO_OPEN_COMS) {
+                if has_format_option(FoFlag::OPEN_COMS) {
                     OPENLINE_DO_COM as c_int
                 } else {
                     0

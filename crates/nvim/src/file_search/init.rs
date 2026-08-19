@@ -11,8 +11,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::option::cpo_has;
 use crate::semsg_c;
-use crate::types::{FAIL, MAXPATHL};
+use crate::types::{CpoFlag, FAIL, MAXPATHL};
 use ::libc::strtol;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -70,10 +71,7 @@ unsafe fn starting_dir(
     unsafe {
         let dot_slash =
             *path == b'.' as c_char && (vim_ispathsep(*path.add(1) as c_int) || *path.add(1) == 0);
-        if dot_slash
-            && (!tagfile || vim_strchr(p_cpo.get(), CPO_DOTTAG).is_null())
-            && !rel_fname.is_null()
-        {
+        if dot_slash && (!tagfile || !cpo_has(CpoFlag::DOTTAG)) && !rel_fname.is_null() {
             let len = path_tail(rel_fname.cast_mut()).offset_from(rel_fname) as usize;
             ctx.start_dir = Some(
                 if !vim_isAbsName(rel_fname) && len + 1 < MAXPATHL as usize {

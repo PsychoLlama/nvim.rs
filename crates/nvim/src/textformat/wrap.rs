@@ -109,14 +109,14 @@ impl BreakSearch {
             // 'formatoptions' `p`: don't break after a period followed by
             // fewer than two spaces -- that is an abbreviation, not a
             // sentence end.
-            if has_format_option(FO_PERIOD_ABBR) && cc == '.' as c_int && wcc < 2 {
+            if has_format_option(FoFlag::PERIOD_ABBR) && cc == '.' as c_int && wcc < 2 {
                 return Step::Again;
             }
             // Don't break inside the comment leader.
             if (*curwin.get()).w_cursor.col < self.leader_len {
                 return Step::Stop;
             }
-            if has_format_option(FO_ONE_LETTER) {
+            if has_format_option(FoFlag::ONE_LETTER) {
                 // Don't break after a one-letter word.
                 if (*curwin.get()).w_cursor.col == 0 {
                     return Step::Stop; // a one-letter word at the start
@@ -247,7 +247,7 @@ impl BreakSearch {
     /// There must be a current line and the cursor must be on it.
     unsafe fn run(&mut self, flags: c_int, fo_ins_blank: bool) {
         unsafe {
-            while (!fo_ins_blank && !has_format_option(FO_INS_VI))
+            while (!fo_ins_blank && !has_format_option(FoFlag::INS_VI))
                 || flags & INSCHAR_FORMAT as c_int != 0
                 || (*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
                 || (*curwin.get()).w_cursor.col >= (*Insstart.ptr()).col
@@ -334,10 +334,10 @@ pub unsafe fn internal_format(
         let win = curwin.get();
         let mut save_char = NUL as c_char;
         let mut haveto_redraw = false;
-        let fo_ins_blank = has_format_option(FO_INS_BLANK);
-        let fo_multibyte = has_format_option(FO_MBYTE_BREAK);
-        let fo_rigor_tw = has_format_option(FO_RIGOROUS_TW);
-        let fo_white_par = has_format_option(FO_WHITE_PAR);
+        let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
+        let fo_multibyte = has_format_option(FoFlag::MBYTE_BREAK);
+        let fo_rigor_tw = has_format_option(FoFlag::RIGOROUS_TW);
+        let fo_white_par = has_format_option(FoFlag::WHITE_PAR);
         let mut first_line = true;
         let mut no_leader = false;
         let mut do_comments = flags & INSCHAR_DO_COM as c_int != 0;
@@ -369,7 +369,7 @@ pub unsafe fn internal_format(
 
             if no_leader {
                 do_comments = false;
-            } else if flags & INSCHAR_FORMAT as c_int == 0 && has_format_option(FO_WRAP_COMS) {
+            } else if flags & INSCHAR_FORMAT as c_int == 0 && has_format_option(FoFlag::WRAP_COMS) {
                 do_comments = true;
             }
             let leader_len = if do_comments { wrap_leader_len() } else { 0 };
@@ -382,7 +382,7 @@ pub unsafe fn internal_format(
             }
             if flags & INSCHAR_FORMAT as c_int == 0
                 && leader_len == 0
-                && !has_format_option(FO_WRAP)
+                && !has_format_option(FoFlag::WRAP)
             {
                 break;
             }
@@ -490,7 +490,7 @@ pub unsafe fn internal_format(
                     // Auto-wrap of numbered lists. Outside Insert mode --
                     // that is, from `format_lines` -- `INSCHAR_COM_LIST` is
                     // set and `open_line` above has already done this.
-                    if second_indent < 0 && has_format_option(FO_Q_NUMBER) {
+                    if second_indent < 0 && has_format_option(FoFlag::Q_NUMBER) {
                         second_indent = get_number_indent((*win).w_cursor.lnum - 1);
                     }
                     if second_indent >= 0 {

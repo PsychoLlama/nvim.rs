@@ -11,7 +11,8 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_LUA};
-use crate::types::NUL;
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -276,7 +277,7 @@ pub(crate) unsafe fn str_to_mapargs(
         // The next whitespace character ends {lhs} -- unless it is preceded
         // by a CTRL-V, or by a backslash when 'cpoptions' has no 'B'.
         let mut lhs_end = to_parse;
-        let do_backslash = vim_strchr(p_cpo.get(), CPO_BSLASH).is_null();
+        let do_backslash = !cpo_has(CpoFlag::BSLASH);
         while *lhs_end != 0 && (is_unmap || !ascii_iswhite(c_int::from(*lhs_end))) {
             let escape =
                 c_int::from(*lhs_end) == Ctrl_V || (do_backslash && *lhs_end == b'\\' as c_char);

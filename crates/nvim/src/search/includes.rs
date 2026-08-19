@@ -15,7 +15,7 @@ use crate::file_search::FileNameOpts;
 use crate::highlight_group::{HLF_D, HLF_R};
 use crate::regexp::RE_MAGIC;
 use crate::smsg_c;
-use crate::types::{FAIL, IOSIZE, NUL, OK};
+use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -454,7 +454,7 @@ unsafe fn handle_include(
             matched: false,
         });
         let name = walk.files.innermost().name.as_ptr();
-        if action == ACTION_EXPAND && !shortmess(SHM_COMPLETIONSCAN as c_int) && !silent {
+        if action == ACTION_EXPAND && !shortmess(ShmFlag::COMPLETIONSCAN) && !silent {
             msg_hist_off.set(true); // reset in msg_trunc()
             vim_snprintf(
                 IObuff.ptr() as *mut c_char,

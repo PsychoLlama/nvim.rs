@@ -54,15 +54,14 @@ use crate::drawscreen::{
     redrawWinline, redrawing, win_cursorline_standout,
 };
 use crate::fold::foldAdjustCursor;
-use crate::main::{VIsual_active, cmdwin_win, curbuf, p_cpo};
-use crate::option::{get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
+use crate::main::{VIsual_active, cmdwin_win, curbuf};
+use crate::option::{cpo_has, get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
 use crate::options::kOptCuloptFlagScreenline;
 use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,
 };
-use crate::strings::vim_strchr;
-use crate::types::{MotionType, NUL, colnr_T, int64_t, linenr_T, win_T, wline_T};
+use crate::types::{CpoFlag, MotionType, NUL, colnr_T, int64_t, linenr_T, win_T, wline_T};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
@@ -103,9 +102,6 @@ crate::flag_set! {
     const TOPLINE = 0x80;
 }
 
-/// 'cpoptions' flag: the wrapped part of a 'number'ed line is indented too.
-const CPO_NUMCOL: c_int = 'n' as c_int;
-
 // ---------------------------------------------------------------------------
 // The window, as this family reads it
 //
@@ -128,8 +124,7 @@ impl Win {
     /// get. Positive only with 'number'/'relativenumber' and `n` in
     /// 'cpoptions'.
     pub(super) fn col_off2(self) -> c_int {
-        // SAFETY: 'cpoptions' is a NUL-terminated option string.
-        let indents = unsafe { !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null() };
+        let indents = cpo_has(CpoFlag::NUMCOL);
         if indents { self.number_col() } else { 0 }
     }
 

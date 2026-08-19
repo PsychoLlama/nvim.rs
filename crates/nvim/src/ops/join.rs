@@ -21,7 +21,8 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
-use crate::types::{FAIL, NUL, OK};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FAIL, FoFlag, NUL, OK};
 
 /// Where the text of a line starts once its comment leader is skipped, and
 /// whether the line ends *inside* an unclosed comment.
@@ -126,7 +127,7 @@ pub unsafe fn do_join(
 ) -> c_int {
     unsafe {
         debug_assert!(count >= 1);
-        let remove_comments = use_formatoptions && has_format_option(FO_REMOVE_COMS);
+        let remove_comments = use_formatoptions && has_format_option(FoFlag::REMOVE_COMS);
 
         if save_undo
             && u_save(
@@ -220,9 +221,9 @@ unsafe fn measure_join(
                     // 'formatoptions' M: no space between two multi-byte
                     // characters. B: no space if either side is a character
                     // that eats one.
-                    && (!has_format_option(FO_MBYTE_JOIN)
+                    && (!has_format_option(FoFlag::MBYTE_JOIN)
                         || (utf_ptr2char(plan.curr) < 0x100 && endcurr1 < 0x100))
-                    && (!has_format_option(FO_MBYTE_JOIN2)
+                    && (!has_format_option(FoFlag::MBYTE_JOIN2)
                         || (utf_ptr2char(plan.curr) < 0x100 && !utf_eat_space(endcurr1))
                         || (endcurr1 < 0x100 && !utf_eat_space(utf_ptr2char(plan.curr))))
                 {
@@ -392,7 +393,7 @@ unsafe fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: 
 
         // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*
         // join, Vim at the column of the last.
-        (*curwin.get()).w_cursor.col = if !vim_strchr(p_cpo.get(), CPO_JOINCOL).is_null() {
+        (*curwin.get()).w_cursor.col = if cpo_has(CpoFlag::JOINCOL) {
             plan.currsize
         } else {
             col

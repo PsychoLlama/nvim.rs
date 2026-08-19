@@ -48,8 +48,8 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    IOSIZE, MAXPATHL, OptIndex, OptInt, OptionSetFlags, buf_T, exarg_T, int64_t, linenr_T, size_t,
-    time_t, win_T,
+    IOSIZE, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, buf_T, exarg_T, int64_t, linenr_T,
+    size_t, time_t, win_T,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{bufIsChanged, curbufIsChanged, undo_fmt_time};
@@ -399,7 +399,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let modified = curbuf_changed();
     out.put_flags([
         if modified {
-            if shortmess(SHM_MOD as c_int) {
+            if shortmess(ShmFlag::MOD) {
                 c" [+]".as_ptr()
             } else {
                 tr(c" [Modified]")
@@ -423,7 +423,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
             c"".as_ptr()
         },
         if buf.b_p_ro != 0 {
-            if shortmess(SHM_RO as c_int) {
+            if shortmess(ShmFlag::RO) {
                 tr(c"[RO]")
             } else {
                 tr(c"[readonly]")

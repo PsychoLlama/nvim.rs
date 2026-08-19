@@ -89,7 +89,7 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, Dict, Event, FILE, HlMessage, HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts,
-    MessageData, Object, OptInt, String_0, Vv, colnr_T, estack_T, estack_arg_T, exarg_T,
+    MessageData, Object, OptInt, ShmFlag, String_0, Vv, colnr_T, estack_T, estack_arg_T, exarg_T,
     flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, object,
     object_data as C2Rust_Unnamed_11, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T,
     typval_vval_union, uint64_t,
@@ -143,10 +143,6 @@ pub struct msg_hist {
     pub append: bool,
 }
 pub type MessageHistoryEntry = msg_hist;
-/// `'shortmess'` flags: `T` truncates a long message in the middle, `t`
-/// truncates a file message at the head.
-pub const SHM_TRUNCALL: c_uint = 84;
-pub const SHM_TRUNC: c_uint = 116;
 /// [`do_dialog`] answers, as `confirm()` reports them.
 pub const VIM_DISCARDALL: c_uint = 6;
 pub const VIM_ALL: c_uint = 5;
@@ -566,7 +562,7 @@ pub unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
         // May truncate the message to avoid a hit-return prompt.
         if (msg_scroll.get() == 0
             && !need_wait_return.get()
-            && shortmess(SHM_TRUNCALL as c_int)
+            && shortmess(ShmFlag::TRUNCALL)
             && !exmode_active.get()
             && msg_silent.get() == 0
             && !ui_has(kUIMessages))
@@ -768,7 +764,7 @@ pub unsafe fn msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
         let mut s = s;
         let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get() - 1;
         if room > 0
-            && (force || (shortmess(SHM_TRUNC as c_int) && !exmode_active.get()))
+            && (force || (shortmess(ShmFlag::TRUNC) && !exmode_active.get()))
             && strlen(s) as c_int - room > 0
         {
             // May have up to 18 bytes per cell (6 per char, up to two

@@ -148,7 +148,6 @@ pub const BFA_WIPE: bfa_values = 2;
 pub const BFA_DEL: bfa_values = 1;
 pub const READ_NOWINENTER: C2Rust_Unnamed_29 = 128;
 pub const ETYPE_MODELINE: etype_T = 4;
-pub const SHM_FILEINFO: C2Rust_Unnamed_24 = 70;
 pub const READ_BUFFER: C2Rust_Unnamed_29 = 8;
 pub const READ_STDIN: C2Rust_Unnamed_29 = 4;
 pub const READ_NEW: C2Rust_Unnamed_29 = 1;
@@ -168,8 +167,6 @@ pub struct bufmatch_T {
 }
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_30 = -2147483648;
 
-pub const SHM_RO: C2Rust_Unnamed_24 = 114;
-pub const SHM_MOD: C2Rust_Unnamed_24 = 109;
 pub const READ_DUMMY: C2Rust_Unnamed_29 = 16;
 pub const ECMD_HIDE: C2Rust_Unnamed_27 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
@@ -380,7 +377,6 @@ static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
 static lasticon: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const CPO_INTMOD: ::core::ffi::c_int = 'i' as ::core::ffi::c_int;
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -580,11 +576,6 @@ pub(crate) fn set_pcmark() {
 pub(crate) fn is_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
     unsafe { bufIsChanged(buf.raw()) }
-}
-
-/// Whether `'shortmess'` contains `flag`.
-pub(crate) fn short_mess(flag: c_int) -> bool {
-    shortmess(flag)
 }
 
 /// `semsg(fmt, n)`, for the three errors that name a buffer number.

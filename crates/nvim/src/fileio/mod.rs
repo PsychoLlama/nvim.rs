@@ -33,7 +33,7 @@ use crate::main::{
     firstbuf, firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col,
     msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
     need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
-    p_ar, p_ccv, p_cpo, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode,
+    p_ar, p_ccv, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode,
     redraw_cmdline, redraw_tabline, restart_edit, stdin_fd, swap_exists_action, vim_ignored,
 };
 use crate::mbyte::{
@@ -82,9 +82,9 @@ use crate::strings::{sort_strings, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValData, OptValType,
-    OptionSetFlags, aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t,
-    int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t,
-    time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T,
+    iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t,
+    ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -148,11 +148,6 @@ pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const CONV_RESTLEN: C2Rust_Unnamed_29 = 30;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub const ICONV_MULT: C2Rust_Unnamed_30 = 8;
-pub const SHM_OVERALL: C2Rust_Unnamed_35 = 79;
-pub const SHM_LINES: C2Rust_Unnamed_35 = 108;
-pub const SHM_RO: C2Rust_Unnamed_35 = 114;
-pub const SHM_OVER: C2Rust_Unnamed_35 = 111;
-pub const SHM_FILEINFO: C2Rust_Unnamed_35 = 70;
 pub const VIM_WARNING: C2Rust_Unnamed_33 = 2;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
@@ -190,7 +185,7 @@ pub unsafe fn filemess(buf: *mut buf_T, name: *mut c_char, s: *mut c_char) {
         // For the first message we may have to start a new line. Further ones
         // overwrite the previous one; reset `msg_scroll` before calling this.
         let msg_scroll_save = msg_scroll.get();
-        if shortmess(SHM_OVERALL as c_int)
+        if shortmess(ShmFlag::OVERALL)
             && msg_listdo_overwrite.get() == 0
             && !exiting.get()
             && p_verbose.get() == 0
@@ -368,7 +363,7 @@ pub unsafe fn msg_add_lines(insert_space: c_int, lnum: linenr_T, nchars: off_T) 
         let mut len = strlen(io);
         let space = if insert_space != 0 { c" " } else { c"" }.as_ptr();
 
-        if shortmess(SHM_LINES as c_int) {
+        if shortmess(ShmFlag::LINES) {
             // l10n: L as in line, B as in byte.
             snprintf(
                 io.add(len),
@@ -596,7 +591,6 @@ pub const EOL_UNKNOWN: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const CPO_FNAMER: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
 pub const EOVERFLOW: ::core::ffi::c_int = 75 as ::core::ffi::c_int;
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

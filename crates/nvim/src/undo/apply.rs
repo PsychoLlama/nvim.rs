@@ -5,6 +5,7 @@ use super::tree::*;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::edit::BeginlineOpts;
+use crate::option::cpo_has;
 use crate::pos::MAXLNUM;
 use crate::{semsg_c, smsg_keep_c};
 
@@ -13,7 +14,7 @@ pub unsafe fn u_undo(mut count: c_int) {
         u_sync(true);
         count = 1;
     }
-    if vim_strchr(p_cpo.get(), CPO_UNDO).is_null() {
+    if !cpo_has(CpoFlag::UNDO) {
         undo_undoes.set(true);
     } else {
         undo_undoes.set(!undo_undoes.get());
@@ -21,7 +22,7 @@ pub unsafe fn u_undo(mut count: c_int) {
     u_doit(count, false, true);
 }
 pub unsafe fn u_redo(mut count: c_int) {
-    if vim_strchr(p_cpo.get(), CPO_UNDO).is_null() {
+    if !cpo_has(CpoFlag::UNDO) {
         undo_undoes.set(false);
     }
     u_doit(count, false, true);

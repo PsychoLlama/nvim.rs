@@ -173,7 +173,6 @@ pub const SEA_CHOICE_DELETE: sea_choice_T = 4;
 pub const SEA_CHOICE_RECOVER: sea_choice_T = 3;
 pub const SEA_CHOICE_EDIT: sea_choice_T = 2;
 pub const SEA_CHOICE_READONLY: sea_choice_T = 1;
-pub const SHM_ATTENTION: C2Rust_Unnamed_25 = 65;
 pub type upd_block0_T = ::core::ffi::c_uint;
 pub const UB_SAME_DIR: upd_block0_T = 1;
 pub const UB_FNAME: upd_block0_T = 0;

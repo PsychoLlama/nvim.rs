@@ -45,9 +45,9 @@ use crate::main::{
     bot_top_msg, called_emsg, cmd_silent, curbuf, curwin, dollar_vcol, e_interr, e_invarg2,
     e_nopresub, e_noprevre, e_patnotf2, emsg_off, fdo_flags, g_do_tagpreview, got_int,
     msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled, msg_silent, no_hlsearch,
-    no_smartcase, p_cpo, p_def, p_hls, p_ic, p_inc, p_js, p_mat, p_msc, p_ri, p_scs, p_sel, p_siso,
-    p_so, p_verbose, p_ws, rc_did_emsg, sc_col, search_match_endcol, search_match_lines,
-    searchcmdlen, top_bot_msg,
+    no_smartcase, p_def, p_hls, p_ic, p_inc, p_js, p_mat, p_msc, p_ri, p_scs, p_sel, p_siso, p_so,
+    p_verbose, p_ws, rc_did_emsg, sc_col, search_match_endcol, search_match_lines, searchcmdlen,
+    top_bot_msg,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -119,9 +119,6 @@ pub const FORWARD: Direction = 1;
 pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_17 = 83;
-pub const SHM_COMPLETIONSCAN: C2Rust_Unnamed_17 = 67;
-pub const SHM_SEARCH: C2Rust_Unnamed_17 = 115;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub const HIST_SEARCH: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
@@ -157,9 +154,3 @@ pub const LSIZE: C2Rust_Unnamed_29 = 512;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const CPO_SEARCH: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
-pub const CPO_SHOWMATCH: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
-pub const CPO_MATCHBSL: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
-pub const CPO_LINEOFF: ::core::ffi::c_int = 'o' as ::core::ffi::c_int;
-pub const CPO_MATCH: ::core::ffi::c_int = '%' as ::core::ffi::c_int;
-pub const CPO_SCOLON: ::core::ffi::c_int = ';' as ::core::ffi::c_int;

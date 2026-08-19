@@ -278,10 +278,6 @@ pub const FORCE_NOBIN: c_int = 2 as c_int;
 pub const EXFLAG_LIST: c_int = 0x1 as c_int;
 pub const EXFLAG_NR: c_int = 0x2 as c_int;
 pub const EXFLAG_PRINT: c_int = 0x4 as c_int;
-pub const CPO_ALTREAD: c_int = 'a' as c_int;
-pub const CPO_BAR: c_int = 'b' as c_int;
-pub const CPO_EXECBUF: c_int = 'e' as c_int;
-pub const CPO_NOSYMLINKS: c_int = '~' as c_int;
 static e_ambiguous_use_of_user_defined_command: [c_char; 44] =
     c_bytes(b"E464: Ambiguous use of user-defined command\0");
 static e_no_call_stack_to_substitute_for_stack: [c_char; 48] =

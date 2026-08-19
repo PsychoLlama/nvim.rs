@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{IOSIZE, NUL};
+use crate::types::{IOSIZE, NUL, ShmFlag};
 
 /// The highlight attribute for the inserted-but-not-accepted text at
 /// `lnum`/`col`, or −1 where there is none.
@@ -630,7 +630,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
         }
 
         redraw_mode.set(true);
-        if shortmess(SHM_COMPLETIONMENU) {
+        if shortmess(ShmFlag::COMPLETIONMENU) {
             return;
         }
         if edit_submode_extra.get().is_null() {

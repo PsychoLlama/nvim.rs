@@ -20,8 +20,8 @@ use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::modifier::expr_map_locked;
 use crate::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::ex_docmd::{
-    CPO_EXECBUF, DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, ML_EMPTY, OPTION_MAGIC_OFF,
-    OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES, kMTLineWise,
+    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, ML_EMPTY, OPTION_MAGIC_OFF, OPTION_MAGIC_ON,
+    REMAP_NONE, REMAP_YES, kMTLineWise,
 };
 use crate::ex_getln::getexline;
 use crate::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -34,8 +34,8 @@ use crate::main::{
     State, VIsual_active, curbuf, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invarg2,
     e_invrange, e_secure, e_trailing_arg, e_undobang_cannot_redo_or_move_branch, ex_no_reprint,
     ex_normal_busy, exec_from_reg, finish_op, firstwin, force_restart_edit, got_int,
-    magic_overruled, main_loop, msg_didout, msg_scroll, opcount, p_cpo, p_mmd,
-    pending_end_reg_executing, reg_executing, restart_edit, stop_insert_mode, typebuf, virtual_op,
+    magic_overruled, main_loop, msg_didout, msg_scroll, opcount, p_mmd, pending_end_reg_executing,
+    reg_executing, restart_edit, stop_insert_mode, typebuf, virtual_op,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::mbyte::utfc_ptr2len;
@@ -49,7 +49,7 @@ use crate::r#move::{
 };
 use crate::normal::{end_visual_mode, get_vtopline, normal_cmd, set_cursor_for_append_to_line};
 use crate::ops::{clear_oparg, do_join, op_delete, op_shift};
-use crate::option::get_scrolloff_value;
+use crate::option::{cpo_has, get_scrolloff_value};
 use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::plines::plines_m_win_fill;
@@ -57,11 +57,10 @@ use crate::pos::MAXLNUM;
 use crate::register::{do_execreg, do_put, op_yank};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
-use crate::strings::vim_strchr;
 use crate::types::{
     CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen, CMD_list, CMD_move, CMD_number,
-    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, FAIL, NUL,
-    OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T,
+    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, CpoFlag, FAIL,
+    NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T,
     exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t,
     ssize_t, uint8_t,
 };
@@ -449,13 +448,7 @@ pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
         }
         // 'cpoptions' `e` makes `:@` run the register's last line
         // immediately rather than leaving it on the command line.
-        if do_execreg(
-            c,
-            1,
-            !vim_strchr(p_cpo.get(), CPO_EXECBUF).is_null() as c_int,
-            1,
-        ) == FAIL
-        {
+        if do_execreg(c, 1, cpo_has(CpoFlag::EXECBUF) as c_int, 1) == FAIL {
             beep_flush();
             return;
         }

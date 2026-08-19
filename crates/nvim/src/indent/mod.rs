@@ -72,7 +72,6 @@ const SIN_CHANGED: c_uint = 1;
 const SIN_INSERT: c_uint = 2;
 const SIN_UNDO: c_uint = 4;
 const SIN_NOMARK: c_uint = 8;
-pub const FO_Q_COMS: c_int = 'q' as c_int;
 
 /// The screen column byte `col` of line `lnum` sits at.
 ///
@@ -806,7 +805,7 @@ pub unsafe fn get_number_indent(lnum: linenr_T) -> c_int {
         // In `format_lines` -- that is, outside Insert mode -- 'formatoptions'
         // `q` is needed as well before a leader is stepped over.
         let mut lead_len = 0;
-        if State.get() & MODE_INSERT != 0 || has_format_option(FO_Q_COMS) {
+        if State.get() & MODE_INSERT != 0 || has_format_option(FoFlag::Q_COMS) {
             lead_len = get_leader_len(
                 ml_get(lnum),
                 ::core::ptr::null_mut::<*mut c_char>(),

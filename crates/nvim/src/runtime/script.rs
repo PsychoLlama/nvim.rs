@@ -17,7 +17,8 @@
 
 use super::*;
 
-use crate::types::{FAIL, IOSIZE, MAXPATHL, NUL, OK};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FAIL, IOSIZE, MAXPATHL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -511,7 +512,7 @@ pub unsafe fn getsourceline(
     // Only concatenate lines starting with a `\` when 'cpoptions' does not
     // contain the 'C' flag.
     // SAFETY: `p_cpo` is the option's own string.
-    if !line.is_null() && do_concat && unsafe { vim_strchr(p_cpo.get(), CPO_CONCAT) }.is_null() {
+    if !line.is_null() && do_concat && !cpo_has(CpoFlag::CONCAT) {
         // SAFETY: as above.
         line = unsafe { concat_continuations(sp, line) };
     }

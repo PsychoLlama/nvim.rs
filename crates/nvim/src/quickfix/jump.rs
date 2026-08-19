@@ -16,7 +16,7 @@
 use super::*;
 use crate::edit::BeginlineOpts;
 use crate::search::SEARCH_KEEP;
-use crate::types::{FAIL, IOSIZE, OK};
+use crate::types::{FAIL, IOSIZE, OK, ShmFlag};
 use core::ffi::{c_char, c_int, c_uint};
 use core::{ptr, slice};
 
@@ -300,7 +300,7 @@ unsafe fn qf_jump_print_msg(
         if curbuf.get() == old_curbuf && (*curwin.get()).w_cursor.lnum == old_lnum {
             msg_scroll.set(true as c_int);
         } else if (msg_scrolled.get() == 0 || p_ch.get() == 0 && msg_scrolled.get() == 1)
-            && shortmess(SHM_OVERALL as c_int)
+            && shortmess(ShmFlag::OVERALL)
         {
             msg_scroll.set(false as c_int);
         }

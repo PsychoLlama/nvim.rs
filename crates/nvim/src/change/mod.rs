@@ -49,8 +49,8 @@ use crate::main::{
     curbuf, curbuf_splice_pending, curtab, curwin, did_ai, did_si, emsg_silent,
     end_comment_pending, first_tabpage, firstwin, highlight_match, in_assert_fails,
     inhibit_delete_count, last_cursormoved, last_cursormoved_win, msg_col, msg_row, msg_scroll,
-    msg_silent, need_maketitle, need_wait_return, orig_line_count, p_cpo, p_deco, p_paste, p_ri,
-    p_sm, p_sr, redraw_cmdline, redraw_not_allowed, redraw_tabline, restart_edit,
+    msg_silent, need_maketitle, need_wait_return, orig_line_count, p_deco, p_paste, p_ri, p_sm,
+    p_sr, redraw_cmdline, redraw_not_allowed, redraw_tabline, restart_edit,
     search_hl_has_cursor_lnum, silent_mode, vr_lines_changed,
 };
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
@@ -140,9 +140,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub const FO_NO_OPEN_COMS: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-pub const CPO_LISTWM: ::core::ffi::c_int = 'L' as ::core::ffi::c_int;
-pub const CPO_DOLLAR: ::core::ffi::c_int = '$' as ::core::ffi::c_int;
 pub const COM_NEST: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const COM_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;
 pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;

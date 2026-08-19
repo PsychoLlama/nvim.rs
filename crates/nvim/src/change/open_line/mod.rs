@@ -34,7 +34,7 @@ use core::ffi::{c_char, c_int, c_void};
 use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_leader};
 use self::smart::smart_indent;
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::types::{FAIL, FoFlag, NUL};
 
 mod comment;
 mod smart;
@@ -432,7 +432,7 @@ pub unsafe fn open_line(
                 && (*curbuf.get()).b_p_cin != 0
                 && do_cindent
                 && dir == FORWARD
-                && (!has_format_option(FO_NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
+                && (!has_format_option(FoFlag::NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
             {
                 // A line comment after code: `code(); // why`.
                 comment_start = check_linecomment(saved_line);

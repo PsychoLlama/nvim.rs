@@ -46,8 +46,8 @@ use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    ChangedtickDictItem, CmdModFlags, NUL, OK, OptInt, Terminal, VAR_FIXED, VAR_NUMBER, colnr_T,
-    dictitem_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
+    ChangedtickDictItem, CmdModFlags, NUL, OK, OptInt, ShmFlag, Terminal, VAR_FIXED, VAR_NUMBER,
+    colnr_T, dictitem_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::undo::u_sync;
 use crate::window::{get_last_winid, win_valid};
@@ -392,7 +392,7 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
         }
         load_current_buffer();
     } else {
-        if msg_silent.get() == 0 && !short_mess(SHM_FILEINFO as c_int) {
+        if msg_silent.get() == 0 && !shortmess(ShmFlag::FILEINFO) {
             need_fileinfo.set(true); // display file info after redraw
         }
         check_timestamp(cur_buf()); // check if file changed

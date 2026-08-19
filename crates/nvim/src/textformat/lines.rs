@@ -221,7 +221,7 @@ unsafe fn join_next_line(
         let strip = if next_leader_len > 0 {
             next_leader_len
         } else if second_indent > 0 {
-            // The "leader" `FO_Q_SECOND` left behind.
+            // The "leader" `FoFlag::Q_SECOND` left behind.
             getwhitecols_curline() as c_int
         } else {
             0
@@ -276,12 +276,12 @@ pub unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
         // paragraph has ended: 3 * 'textwidth'.
         let max_len = comp_textwidth(true) * 3;
 
-        let do_comments = has_format_option(FO_Q_COMS);
+        let do_comments = has_format_option(FoFlag::Q_COMS);
         // Format comments with `n` or `2`.
         let mut do_comments_list = false;
-        let do_second_indent = has_format_option(FO_Q_SECOND);
-        let do_number_indent = has_format_option(FO_Q_NUMBER);
-        let do_trail_white = has_format_option(FO_WHITE_PAR);
+        let do_second_indent = has_format_option(FoFlag::Q_SECOND);
+        let do_number_indent = has_format_option(FoFlag::Q_NUMBER);
+        let do_trail_white = has_format_option(FoFlag::WHITE_PAR);
 
         // The previous and current lines.
         let mut is_not_par = if (*curwin.get()).w_cursor.lnum > 1 {

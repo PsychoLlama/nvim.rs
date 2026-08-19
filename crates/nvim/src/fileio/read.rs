@@ -17,8 +17,9 @@ use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
+use crate::option::cpo_has;
 use crate::pos::MAXCOL;
-use crate::types::{CmdModFlags, FAIL, OK, OptionSetFlags};
+use crate::types::{CmdModFlags, CpoFlag, FAIL, OK, OptionSetFlags};
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {
@@ -134,7 +135,7 @@ pub unsafe fn readfile(
             if (*curbuf.get()).b_ffname.is_null()
                 && !how.filtering
                 && !fname.is_null()
-                && !vim_strchr(p_cpo.get(), CPO_FNAMER).is_null()
+                && cpo_has(CpoFlag::FNAMER)
                 && !how.dummy
                 && set_rw_fname(fname, sfname) == FAIL
             {

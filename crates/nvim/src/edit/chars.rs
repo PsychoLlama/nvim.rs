@@ -27,7 +27,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{MB_MAXCHAR, NUL};
+use crate::types::{FoFlag, MB_MAXCHAR, NUL};
 
 /// Upstream's `ISSPECIAL`: a character that needs processing other than the
 /// simple insert this file can do.
@@ -167,7 +167,8 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
 unsafe fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c_int) {
     unsafe {
         let force_format = flags & INSCHAR_FORMAT as c_int;
-        let fo_ins_blank = has_format_option(FO_INS_BLANK);
+        let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
+        let fo_ins_long = has_format_option(FoFlag::INS_LONG);
 
         if textwidth <= 0 {
             return;
@@ -178,7 +179,7 @@ unsafe fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textw
                     && State.get() & VREPLACE_FLAG == 0
                     && *get_cursor_pos_ptr() as c_int != NUL)
                 && ((*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
-                    || ((!has_format_option(FO_INS_LONG) || Insstart_textlen.get() <= textwidth)
+                    || ((!fo_ins_long || Insstart_textlen.get() <= textwidth)
                         && (!fo_ins_blank || Insstart_blank_vcol.get() <= textwidth))));
         if !wanted {
             return;

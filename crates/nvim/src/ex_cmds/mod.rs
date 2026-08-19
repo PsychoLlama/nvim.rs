@@ -105,8 +105,6 @@ pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
 pub const BFA_KEEP_UNDO: bfa_values = 4;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const SHM_FILEINFO: C2Rust_Unnamed_21 = 70;
-pub const SHM_OVERALL: C2Rust_Unnamed_21 = 79;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const STR2NR_FORCE: C2Rust_Unnamed_22 = 128;
 pub const STR2NR_HEX: C2Rust_Unnamed_22 = 4;
@@ -206,10 +204,6 @@ pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const CPO_ALTWRITE: ::core::ffi::c_int = 'A' as ::core::ffi::c_int;
-pub const CPO_OVERNEW: ::core::ffi::c_int = 'O' as ::core::ffi::c_int;
-pub const CPO_REMMARK: ::core::ffi::c_int = 'R' as ::core::ffi::c_int;
-pub const CPO_UNDO: ::core::ffi::c_int = 'u' as ::core::ffi::c_int;
 /// Fire `event` for `buf`: no file name, no pattern, no forcing -- the shape
 /// every buffer-lifecycle autocommand in this family uses.
 ///

@@ -24,7 +24,8 @@ use core::ffi::c_int;
 use super::*;
 use crate::ex_docmd::cmdmod_has;
 use crate::r#move::WinValid;
-use crate::types::{FAIL, NUL};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FAIL, NUL};
 
 /// The three CTRL-G commands that are spelled with a letter.
 const CTRL_G_UP: c_int = b'k' as c_int;
@@ -280,7 +281,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
             if *count > 0 {
                 // Repeat what was typed.  Vi repeats the insert without
                 // replacing characters.
-                if !vim_strchr(p_cpo.get(), CPO_REPLCNT).is_null() {
+                if cpo_has(CpoFlag::REPLCNT) {
                     (*State.ptr()) &= !REPLACE_FLAG;
                 }
                 start_redo_ins();

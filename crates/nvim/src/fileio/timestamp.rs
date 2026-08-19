@@ -17,7 +17,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::highlight_group::{HLF_E, HLF_W};
-use crate::types::{FAIL, OK, Vv};
+use crate::types::{FAIL, OK, ShmFlag, Vv};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
 static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);
@@ -605,7 +605,7 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
                 MAXLNUM as linenr_T,
                 &raw mut ea,
                 flags,
-                shortmess(SHM_FILEINFO as c_int),
+                shortmess(ShmFlag::FILEINFO),
             ) != OK
             {
                 if !aborting() {

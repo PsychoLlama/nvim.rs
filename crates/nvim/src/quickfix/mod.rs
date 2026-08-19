@@ -220,7 +220,6 @@ pub const BLN_NOOPT: bln_values = 16;
 pub const BLN_DUMMY: bln_values = 4;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub const SHM_OVERALL: c_uint = 79;
 pub const ECMD_NOWINENTER: c_uint = 64;
 pub const ECMD_OLDBUF: c_uint = 4;
 pub const ECMD_SET_HELP: c_uint = 2;

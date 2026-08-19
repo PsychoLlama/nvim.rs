@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CPO_REMMARK, FAIL, READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
+use super::{FAIL, READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
@@ -33,7 +33,7 @@ use crate::main::{
     Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps,
     e_cant_read_file_str, e_noprev, e_notmp, firstbuf, global_busy, got_int, info_message, msg_buf,
     msg_col, msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, no_wait_return,
-    p_cpo, p_report, p_sh, p_shq, p_srr, p_stmp, p_warn, silent_mode,
+    p_report, p_sh, p_shq, p_srr, p_stmp, p_warn, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
@@ -44,6 +44,7 @@ use crate::message::{
     wait_return,
 };
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
+use crate::option::cpo_has;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::input::os_breakcheck;
@@ -51,9 +52,9 @@ use crate::os::shell::{ShellOpts, call_shell};
 use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;
 use crate::semsg_c;
-use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
+use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
-use crate::types::{CmdModFlags, NUL, OK, OptInt, buf_T, exarg_T, linenr_T};
+use crate::types::{CmdModFlags, CpoFlag, NUL, OK, OptInt, buf_T, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{bufIsChanged, u_save};
 use core::ffi::{c_char, c_int};
@@ -509,7 +510,7 @@ unsafe fn do_filter(
             if do_in {
                 if cmdmod_has(CmdModFlags::KEEPMARKS)
                     // SAFETY: 'cpoptions' is a live option string.
-                    || unsafe { vim_strchr(p_cpo.get(), CPO_REMMARK) }.is_null()
+                    || !cpo_has(CpoFlag::REMMARK)
                 {
                     // TODO(bfredl): Currently not active for extmarks. What
                     // would we do if columns don't match, assume added/deleted

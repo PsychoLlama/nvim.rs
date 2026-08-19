@@ -60,7 +60,7 @@ use crate::main::{
     GA_EMPTY_INIT_VALUE, IObuff, NameBuff, cmdmod, curbuf, current_sctx, debug_break_level,
     debug_tick, did_source_packages, do_profiling, e_argreq, e_dirnotf, e_interr, e_invarg,
     e_invargNval, e_norange, e_notopen, ex_nesting_level, global_busy, got_int, listcmd_busy,
-    msg_col, p_cpo, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
+    msg_col, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
 };
 use crate::map::{map_put_ref_String_int, map_ref_String_int, mh_get_String, mh_put_String};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
@@ -94,7 +94,7 @@ use crate::profile::{
     time_pop, time_push,
 };
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
-use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
     Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
     EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int,
@@ -307,7 +307,6 @@ unsafe fn map_get_String_int(
 }
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
-pub const CPO_CONCAT: ::core::ffi::c_int = 'C' as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1;

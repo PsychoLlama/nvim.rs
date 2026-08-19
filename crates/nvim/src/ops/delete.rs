@@ -25,8 +25,9 @@ use core::ffi::{c_char, c_int, c_void};
 use super::*;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
+use crate::option::cpo_has;
 use crate::register::is_append_register;
-use crate::types::NUL;
+use crate::types::{CpoFlag, NUL};
 use crate::undo::{UndoFailed, saved};
 
 /// The region was not deleted, and the buffer is as it was.
@@ -123,7 +124,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
         } else if !op_virtual() {
             // Operating on an empty region is an error when 'cpoptions'
             // contains 'E' (Vi compatible).
-            if !vim_strchr(p_cpo.get(), CPO_EMPTYREGION).is_null() {
+            if cpo_has(CpoFlag::EMPTYREGION) {
                 beep_flush();
             }
             return Ok(());
@@ -407,7 +408,7 @@ unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> Result<(), UndoFailed> {
 
         // 'cpoptions' `$`: show a `$` at the end of the change rather than
         // removing the text now.
-        if !vim_strchr(p_cpo.get(), CPO_DOLLAR).is_null()
+        if cpo_has(CpoFlag::DOLLAR)
             && (*oap).op_type == OP_CHANGE
             && (*oap).end.lnum == (*curwin.get()).w_cursor.lnum
             && !(*oap).is_VIsual

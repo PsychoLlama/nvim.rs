@@ -15,7 +15,7 @@ use core::ffi::CStr;
 
 use super::*;
 use crate::keycodes::Ctrl_V;
-use crate::types::{MAXPATHL, NUL, Vv};
+use crate::types::{MAXPATHL, NUL, ShmFlag, Vv};
 
 /// `VIsual_mode` for a linewise selection.
 const VISUAL_LINE: c_int = 'V' as c_int;
@@ -94,7 +94,7 @@ pub unsafe fn showmode() -> c_int {
 
             if do_mode {
                 put(c"--");
-                if !edit_submode.get().is_null() && !shortmess(SHM_COMPLETIONMENU as c_int) {
+                if !edit_submode.get().is_null() && !shortmess(ShmFlag::COMPLETIONMENU) {
                     // CTRL-X in Insert mode. These get long, so they are budgeted
                     // against the room left rather than allowed to wrap; an
                     // external message UI imposes no limit of its own.
@@ -292,7 +292,7 @@ pub unsafe fn clearmode() {
 pub(crate) unsafe fn recording_mode(hl_id: c_int) {
     // SAFETY: the message layer on the main thread.
     unsafe {
-        if shortmess(SHM_RECORDING as c_int) {
+        if shortmess(ShmFlag::RECORDING) {
             return;
         }
         msg_puts_hl(gettext(c"recording".as_ptr()), hl_id, false);

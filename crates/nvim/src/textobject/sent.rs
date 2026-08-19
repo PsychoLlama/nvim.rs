@@ -14,15 +14,14 @@ use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::gchar_cursor;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
-use crate::main::{
-    VIsual, VIsual_active, VIsual_mode, curbuf, curwin, p_cpo, p_sel, redraw_cmdline,
-};
+use crate::main::{VIsual, VIsual_active, VIsual_mode, curbuf, curwin, p_sel, redraw_cmdline};
 use crate::mark::setpcmark;
 use crate::memline::{decl, gchar_pos, inc, incl, ml_get};
+use crate::option::cpo_has;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
-use crate::types::{Direction, FAIL, NUL, OK, oparg_T, pos_T};
+use crate::types::{CpoFlag, Direction, FAIL, NUL, OK, oparg_T, pos_T};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
 type StepFn = unsafe fn(*mut pos_T) -> c_int;
@@ -110,7 +109,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                 // The line the search started on, so that a backward search
                 // that crossed one can step back onto it.
                 let startlnum = pos.lnum;
-                let cpo_j = !vim_strchr(p_cpo.get(), CPO_ENDOFSENT).is_null();
+                let cpo_j = cpo_has(CpoFlag::ENDOFSENT);
 
                 loop {
                     // Find the end of the sentence.

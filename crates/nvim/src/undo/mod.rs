@@ -25,8 +25,8 @@ use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
     IObuff, KeyTyped, VIsual, VIsual_active, curbuf, curtab, curwin, e_modifiable, e_sandbox,
-    e_textlock, fdo_flags, firstbuf, firstwin, global_busy, got_int, no_u_sync, p_cpo, p_fs,
-    p_udir, p_ul, p_verbose, sandbox, textlock,
+    e_textlock, fdo_flags, firstbuf, firstwin, global_busy, got_int, no_u_sync, p_fs, p_udir, p_ul,
+    p_verbose, sandbox, textlock,
 };
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
@@ -52,7 +52,7 @@ use crate::pos::clearpos;
 use crate::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::spell::spell_check_window;
 use crate::state::virtual_active;
-use crate::strings::{sort_strings, vim_snprintf, vim_snprintf_add, vim_strchr};
+use crate::strings::{sort_strings, vim_snprintf, vim_snprintf_add};
 use crate::types::*;
 use ::libc::{
     abort, close, fclose, fdopen, fflush, fread, fwrite, getuid, memcmp, memset, strcmp, strftime,
@@ -116,7 +116,6 @@ pub struct bufinfo_T {
     pub bi_buf: *mut buf_T,
     pub bi_fp: *mut FILE,
 }
-pub const CPO_UNDO: c_int = 'u' as c_int;
 pub const NO_LOCAL_UNDOLEVEL: c_int = -123456;
 static u_newcount: GlobalCell<c_int> = GlobalCell::new(0);
 static u_oldcount: GlobalCell<c_int> = GlobalCell::new(0);

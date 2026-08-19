@@ -33,7 +33,7 @@ use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_active, VIsual_select, VIsual_select_reg, allow_keys,
     clear_cmdline, curbuf, curwin, did_cursorhold, fdo_flags, finish_op, km_startsel,
     langmap_mapchar, mod_mask, mode_displayed, motion_force, msg_col, msg_didout, msg_nowait,
-    no_mapping, no_u_sync, no_zero_mapping, opcount, p_cpo, p_langmap, p_lrm, p_tm, p_ttm,
+    no_mapping, no_u_sync, no_zero_mapping, opcount, p_langmap, p_lrm, p_tm, p_ttm,
     restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
@@ -43,8 +43,8 @@ use crate::mbyte::{
 };
 use crate::memory::xfree;
 use crate::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CPO_DIGRAPH, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL,
-    NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, add_to_showcmd,
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL, NV_CMDS_SIZE,
+    NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, add_to_showcmd,
     check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
     normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmd_idx, nv_cmds,
@@ -56,9 +56,9 @@ use crate::state::{
     MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE, MODE_SELECT,
     get_real_state, may_trigger_modechanged,
 };
-use crate::strings::vim_strchr;
 use crate::types::{
-    GraphemeState, NUL, OP_COLON, OP_NOP, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
+    CpoFlag, GraphemeState, NUL, OP_COLON, OP_NOP, OptInt, VimState, cmdarg_T, int16_t, int64_t,
+    oparg_T,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use ::libc::qsort;
@@ -68,6 +68,7 @@ use crate::getchar::{
     AppendCharToRedobuff, AppendNumberToRedobuff, AppendToRedobuff, ResetRedobuff,
 };
 use crate::r#move::{do_check_cursorbind, validate_cursor};
+use crate::option::cpo_has;
 
 /// `find_command` returns a row index that has to fit an `int16_t`.
 const _: () = assert!(NV_CMDS_SIZE <= i16::MAX as usize);
@@ -358,7 +359,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
                 if *cp == Ctrl_K
                     && ((*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_LANG != 0
                         || slot == Slot::Extra)
-                    && vim_strchr(p_cpo.get(), CPO_DIGRAPH).is_null()
+                    && !cpo_has(CpoFlag::DIGRAPH)
                 {
                     (*s).c = get_digraph(false);
                     if (*s).c > 0 {

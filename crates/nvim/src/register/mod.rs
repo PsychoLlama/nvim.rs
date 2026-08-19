@@ -65,8 +65,8 @@ use crate::keycodes::{
 use crate::main::{
     Columns, State, VIsual_active, VIsual_mode, c_bytes, curbuf, curwin, e_nobufnr, e_noinstext,
     e_nolastcmd, e_noprevre, e_resulting_text_too_long, got_int, last_cmdline, msg_ext_skip_flush,
-    must_redraw, new_last_cmdline, p_ch, p_cpo, p_report, p_sel, pending_end_reg_executing,
-    redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit, textlock,
+    must_redraw, new_last_cmdline, p_ch, p_report, p_sel, pending_end_reg_executing, redir_reg,
+    reg_executing, reg_recorded, reg_recording, restart_edit, textlock,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
@@ -173,7 +173,6 @@ pub const FIND_STRING: ::core::ffi::c_int = 2;
 pub const FIND_IDENT: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const CPO_REGAPPEND: ::core::ffi::c_int = '>' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;

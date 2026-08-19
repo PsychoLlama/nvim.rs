@@ -200,7 +200,7 @@ pub(crate) unsafe fn paragraph_start(lnum: linenr_T) -> bool {
         if *ml_get(lnum - 1) as c_int == NUL {
             return true; // after an empty line
         }
-        let do_comments = has_format_option(FO_Q_COMS);
+        let do_comments = has_format_option(FoFlag::Q_COMS);
         let mut prev = Leader::NONE;
         let mut this = Leader::NONE;
         if fmt_check_par(lnum - 1, &mut prev, do_comments) {
@@ -209,10 +209,10 @@ pub(crate) unsafe fn paragraph_start(lnum: linenr_T) -> bool {
         if fmt_check_par(lnum, &mut this, do_comments) {
             return true; // `lnum` is not a paragraph line
         }
-        if has_format_option(FO_WHITE_PAR) && !ends_in_white(lnum - 1) {
+        if has_format_option(FoFlag::WHITE_PAR) && !ends_in_white(lnum - 1) {
             return true; // the previous line is missing its trailing space
         }
-        if has_format_option(FO_Q_NUMBER) && get_number_indent(lnum) > 0 {
+        if has_format_option(FoFlag::Q_NUMBER) && get_number_indent(lnum) > 0 {
             return true; // a numbered item starts at `lnum`
         }
         // A change of comment leader.

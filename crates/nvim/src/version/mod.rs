@@ -30,11 +30,10 @@ use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
 use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
-use crate::strings::vim_strchr;
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Arena, Array, Error, OptInt, exarg_T, kErrorTypeNone, kObjectTypeString, tabpage_T,
+    Arena, Array, Error, OptInt, ShmFlag, exarg_T, kErrorTypeNone, kObjectTypeString, tabpage_T,
 };
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
@@ -42,9 +41,6 @@ use crate::window::{LOWEST_WIN_ID, one_window};
 pub const NVIM_VERSION_MAJOR: c_int = 0;
 pub const NVIM_VERSION_MINOR: c_int = 12;
 pub const NVIM_VERSION_PATCH: c_int = 4;
-
-/// `'shortmess'` flag `I`: no intro screen.
-const SHM_INTRO: c_int = b'I' as c_int;
 
 /// The banner, NUL-terminated for the C-ABI callers that print it
 /// (`:version`, `nvim -v`, the intro screen, shada's generator field). The
@@ -411,7 +407,7 @@ pub unsafe fn may_show_intro() -> bool {
             && (*curbuf.get()).handle == 1
             && (*curwin.get()).handle == LOWEST_WIN_ID as c_int
             && one_window(curwin.get(), ptr::null_mut::<tabpage_T>())
-            && vim_strchr(p_shm.get(), SHM_INTRO).is_null()
+            && !ShmFlag::INTRO.is_in(CStr::from_ptr(p_shm.get()))
     }
 }
 

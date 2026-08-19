@@ -10,7 +10,9 @@
 use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::semsg_c;
-use crate::types::{ExpandContext, FAIL, IOSIZE, NUL, OK, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{
+    ExpandContext, FAIL, IOSIZE, NUL, OK, ShmFlag, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+};
 
 /// The pattern, column and length for normal (CTRL-N / CTRL-P) completion.
 ///
@@ -322,7 +324,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
             }
             ctrl_x_mode.set(CTRL_X_NORMAL);
             edit_submode.set(ptr::null_mut());
-            if !shortmess(SHM_COMPLETIONMENU) {
+            if !shortmess(ShmFlag::COMPLETIONMENU) {
                 msg_clr_cmdline();
             }
             return FAIL;
@@ -532,7 +534,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
         }
 
         if compl_status_adding() {
-            if !shortmess(SHM_COMPLETIONMENU) {
+            if !shortmess(ShmFlag::COMPLETIONMENU) {
                 edit_submode_pre.set(gettext(c" Adding".as_ptr()));
             }
             if ctrl_x_mode_line_or_eval() {
@@ -552,7 +554,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
             (*compl_startpos.ptr()).col = compl_col.get();
         }
 
-        if !shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete.get() {
+        if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
             if compl_cont_status.get() & CONT_LOCAL != 0 {
                 edit_submode.set(ctrl_x_msg(CTRL_X_LOCAL_MSG));
             } else {
@@ -600,7 +602,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
         // showmode() might reset the internal line pointers, so it must be
         // called before line = ml_get(), or when this address is no longer
         // needed. -- Acevedo.
-        if !shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete.get() {
+        if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
             edit_submode_extra.set(gettext(c"-- Searching...".as_ptr()));
             edit_submode_highl.set(HLF_COUNT);
             showmode();
@@ -694,7 +696,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> c_int {
             (*compl_cont_status.ptr()) &= !CONT_S_IPOS;
         }
 
-        if !shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete.get() {
+        if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
             ins_compl_show_statusmsg();
         }
 

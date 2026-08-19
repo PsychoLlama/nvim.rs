@@ -20,7 +20,8 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
-use crate::types::{IOSIZE, MAXPATHL, NUL};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
 
 /// `st_mode & S_IFMT` for a regular file.
 const S_IFREG: uint64_t = 0o100000;
@@ -136,7 +137,7 @@ pub(crate) unsafe fn get_fileinfo(
         // a backup would otherwise hide the problem until it is too late.
         target.readonly = os_file_is_writable(fname) == 0;
         if !forceit && target.readonly {
-            return Err(Some(if !vim_strchr(p_cpo.get(), CPO_FWRITE).is_null() {
+            return Err(Some(if cpo_has(CpoFlag::FWRITE) {
                 WriteError::numbered(c"E504", E_READONLY_CPO)
             } else {
                 WriteError::numbered(c"E505", c"is read-only (add ! to override)")
@@ -477,7 +478,7 @@ unsafe fn backup_by_rename(
     unsafe {
         // 'cpoptions' "W" means not overwriting a read-only file. A rename
         // may be possible anyway, so it needs its own check here.
-        if target.readonly && !vim_strchr(p_cpo.get(), CPO_FWRITE).is_null() {
+        if target.readonly && cpo_has(CpoFlag::FWRITE) {
             return Err(WriteError::numbered(c"E504", E_READONLY_CPO));
         }
 
@@ -679,7 +680,7 @@ pub(crate) unsafe fn open_write_file(
                 c"E212: Can't open file for writing: %s",
                 fd,
             ));
-            if !(req.forceit && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null() && target.perm >= 0) {
+            if !(req.forceit && !cpo_has(CpoFlag::FWRITE) && target.perm >= 0) {
                 return None;
             }
             // We are going to write to the file after all, so it should be

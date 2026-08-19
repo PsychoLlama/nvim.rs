@@ -8,19 +8,20 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uchar, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::bt_prompt;
+use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
 use crate::eval::typval::{callback_free, kCallbackNone, tv_dict_add_tv, tv_dict_alloc, tv_free};
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::main::{
     OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, bkc_flags, curbuf, empty_string_option,
-    magic_overruled, need_maketitle, p_bs, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm,
-    p_siso, p_so, redraw_tabline, ve_flags,
+    magic_overruled, need_maketitle, p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh,
+    p_shm, p_siso, p_so, redraw_tabline, ve_flags,
 };
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::*;
@@ -29,16 +30,15 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{FullName_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BS_NOSTOP, BS_START, Callback, Callback_data, FAIL, NUL, OK, OptIndex, OptVal, OptValData,
-    OptionSetFlags, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t,
-    vimoption_T, win_T,
+    BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptIndex, OptVal, OptValData,
+    OptionSetFlags, ShmFlag, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
+    uint8_t, vimoption_T, win_T,
 };
 use ::libc::{strcmp, strlen};
 
 use super::{
-    EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, SHM_LINES, SHM_MOD, SHM_RO, SHM_WRI, get_varp,
-    kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeString, option_has_scope,
-    optval_from_varp, set_option_direct,
+    EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_varp, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin,
+    kOptValTypeString, option_has_scope, optval_from_varp, set_option_direct,
 };
 use crate::state::MODE_TERMINAL;
 
@@ -68,15 +68,19 @@ pub fn get_findfunc() -> *mut c_char {
 
 /// Whether 'shortmess' asks for message `x` to be shortened. The `a` flag is
 /// an abbreviation standing for these four and nothing else.
-pub fn shortmess(x: c_int) -> bool {
-    const ABBREVIATED: [c_uint; 4] = [SHM_RO, SHM_MOD, SHM_LINES, SHM_WRI];
+pub fn shortmess(x: ShmFlag) -> bool {
+    const ABBREVIATED: [ShmFlag; 4] = [ShmFlag::RO, ShmFlag::MOD, ShmFlag::LINES, ShmFlag::WRI];
     // SAFETY: 'shortmess' is a string option; the null test is upstream's.
-    unsafe {
-        !p_shm.ptr().is_null()
-            && (!vim_strchr(p_shm.get(), x).is_null()
-                || (!vim_strchr(p_shm.get(), 'a' as c_int).is_null()
-                    && ABBREVIATED.contains(&(x as c_uint))))
-    }
+    let Some(shm) = (unsafe { cstr::at_opt(p_shm.get()) }) else {
+        return false;
+    };
+    x.is_in(shm) || (ShmFlag::ABBREVIATIONS.is_in(shm) && ABBREVIATED.contains(&x))
+}
+
+/// Whether 'cpoptions' contains `flag`.
+pub fn cpo_has(flag: CpoFlag) -> bool {
+    // SAFETY: 'cpoptions' is a string option and is never null.
+    flag.is_in(unsafe { CStr::from_ptr(p_cpo.get()) })
 }
 
 /// Record where a vimrc was found in `$MYVIMRC`/`$MYVIMDIR`, unless the
@@ -230,17 +234,17 @@ pub unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback
 
 /// Whether 'backspace' allows backspacing over `what`. A prompt buffer never
 /// lets the prompt itself be backspaced over.
-pub fn can_bs(what: c_int) -> bool {
+pub fn can_bs(what: BsFlag) -> bool {
     // SAFETY: `curbuf` is live; 'backspace' is a string option.
     unsafe {
-        if what == BS_START && bt_prompt(curbuf.get()) {
+        if what == BsFlag::START && bt_prompt(curbuf.get()) {
             return false;
         }
         // The historic numeric spelling: 2 is everything but "nostop".
         if *p_bs.get() == b'2' as c_char {
-            return what != BS_NOSTOP;
+            return what != BsFlag::NOSTOP;
         }
-        !vim_strchr(p_bs.get(), what).is_null()
+        what.is_in(CStr::from_ptr(p_bs.get()))
     }
 }
 

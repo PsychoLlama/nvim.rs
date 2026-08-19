@@ -22,7 +22,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{c_uint, c_void};
 
 use crate::types::MotionType;
 
@@ -43,7 +43,3 @@ pub const kMTCharWise: MotionType = 0;
 /// `findmatchlimit`'s "search forward" flag.
 pub const FM_FORWARD: c_uint = 2;
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
-/// 'cpoptions' `J`: a sentence ends at `.` `!` `?` followed by *two* spaces.
-pub const CPO_ENDOFSENT: c_int = 'J' as c_int;
-/// 'cpoptions' `M`: a `\` before a bracket does not make it escaped.
-pub const CPO_MATCHBSL: c_int = 'M' as c_int;

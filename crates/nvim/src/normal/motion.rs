@@ -19,16 +19,16 @@ use crate::fold::hasFolding;
 use crate::getchar::beep_flush;
 use crate::main::{
     VIsual_active, VIsual_mode, VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, curbuf,
-    curwin, ins_at_eol, mod_mask, p_cpo, p_sel, p_ww, restart_edit,
+    curwin, ins_at_eol, mod_mask, p_sel, p_ww, restart_edit,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, MOD_MASK_CTRL, MOD_MASK_SHIFT, TAB, adjust_for_sel,
-    clearopbeep, kMTCharWise, kMTLineWise, may_fold_open, nv_page, unadjust_for_sel,
+    CA_NO_ADJ_OP_END, CAR, MOD_MASK_CTRL, MOD_MASK_SHIFT, TAB, adjust_for_sel, clearopbeep,
+    kMTCharWise, kMTLineWise, may_fold_open, nv_page, unadjust_for_sel,
 };
-use crate::option::{get_showbreak_value, get_ve_flags};
+use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
 use crate::options::{
     kOptFdoFlagBlock, kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagPercent, kOptVeFlagOnemore,
 };
@@ -40,7 +40,8 @@ use crate::state::virtual_active;
 use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
 use crate::types::{
-    Direction, FAIL, NUL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T, oparg_T,
+    CpoFlag, Direction, FAIL, NUL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T,
+    oparg_T,
 };
 use core::ffi::{c_int, c_uint};
 
@@ -740,7 +741,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
         if !word_end && (*(*cap).oap).op_type == OP_CHANGE {
             let c = gchar_cursor();
             if c != NUL && !ascii_iswhite(c) {
-                if !vim_strchr(p_cpo.get(), CPO_CHANGEW).is_null() {
+                if cpo_has(CpoFlag::CHANGEW) {
                     (*(*cap).oap).inclusive = true;
                     word_end = true;
                 }

@@ -120,8 +120,8 @@ use crate::main::{
     force_restart_edit, got_int, hl_attr_active, ins_at_eol, km_startsel, langmap_mapchar,
     last_cursormoved, last_cursormoved_win, mod_mask, msg_scroll, msg_silent, must_redraw,
     need_check_timestamps, need_highlight_changed, need_start_insertmode, no_abbr, no_mapping,
-    no_u_sync, old_indent, orig_line_count, p_ari, p_ch, p_cpo, p_deco, p_langmap, p_lrm, p_paste,
-    p_ri, p_smd, p_sol, p_sta, p_ww, pum_want, redraw_cmdline, redraw_mode, reg_recording,
+    no_u_sync, old_indent, orig_line_count, p_ari, p_ch, p_deco, p_langmap, p_lrm, p_paste, p_ri,
+    p_smd, p_sol, p_sta, p_ww, pum_want, redraw_cmdline, redraw_mode, reg_recording,
     replace_offset, restart_VIsual_select, restart_edit, sandbox, spell_redraw_lnum,
     stop_insert_mode, test_disable_char_avail, textlock, u_sync_once, vgetc_busy, vr_lines_changed,
     where_paste_started,
@@ -180,10 +180,10 @@ use crate::textformat::{
 use crate::textobject::{bck_word, fwd_word};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CharsizeArg, CmdModFlags, INSCHAR_CTRLV,
-    INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo,
-    String_0, VimState, Vv, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, int32_t, int64_t,
-    linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t, varnumber_T, win_T,
+    CharsizeArg, CmdModFlags, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt,
+    PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, buf_T, cmdarg_T,
+    colnr_T, event_T, int32_t, int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
+    uint8_t, varnumber_T, win_T,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -281,15 +281,6 @@ pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const ESC_STR: &::core::ffi::CStr = c"\x1B";
 pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
 pub const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
-pub const FO_RET_COMS: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
-pub const FO_INS_LONG: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
-pub const FO_INS_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;
-pub const FO_WHITE_PAR: ::core::ffi::c_int = 'w' as ::core::ffi::c_int;
-pub const FO_AUTO: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
-pub const CPO_INDENT: ::core::ffi::c_int = 'I' as ::core::ffi::c_int;
-pub const CPO_LISTWM: ::core::ffi::c_int = 'L' as ::core::ffi::c_int;
-pub const CPO_BACKSPACE: ::core::ffi::c_int = 'v' as ::core::ffi::c_int;
-pub const CPO_REPLCNT: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 static compl_busy: GlobalCell<bool> = GlobalCell::new(false);

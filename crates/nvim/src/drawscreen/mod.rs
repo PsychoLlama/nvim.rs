@@ -44,8 +44,8 @@ use crate::main::{
     mode_displayed, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_grid,
     msg_grid_scroll_discount, msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush,
     msg_silent, must_redraw, must_redraw_pum, need_diff_redraw, need_highlight_changed,
-    need_maketitle, need_wait_return, no_hlsearch, ns_hl_fast, p_ch, p_columns, p_cpo, p_hls,
-    p_icon, p_lines, p_lz, p_paste, p_rdt, p_ri, p_ru, p_sc, p_sloc, p_smd, p_title, p_wbr, p_wmw,
+    need_maketitle, need_wait_return, no_hlsearch, ns_hl_fast, p_ch, p_columns, p_hls, p_icon,
+    p_lines, p_lz, p_paste, p_rdt, p_ri, p_ru, p_sc, p_sloc, p_smd, p_title, p_wbr, p_wmw,
     redraw_cmdline, redraw_mode, redraw_not_allowed, redraw_tabline, reg_recording,
     resizing_screen, restart_edit, ru_col, ru_wid, sc_col, screen_search_hl,
     search_hl_has_cursor_lnum, starting, stl_syntax, tab_page_click_defs, tab_page_click_defs_size,
@@ -121,9 +121,6 @@ pub(crate) use self::winupdate::*;
 mod winlines;
 pub use self::winlines::*;
 use crate::regexp::re_multiline;
-/// `'shortmess'` flags this module tests.
-pub const SHM_RECORDING: ::core::ffi::c_int = b'q' as ::core::ffi::c_int;
-pub const SHM_COMPLETIONMENU: ::core::ffi::c_int = b'c' as ::core::ffi::c_int;
 /// How much of a window has to be redrawn, ordered by severity. Each value
 /// implies every lower one.
 pub type RedrawType = ::core::ffi::c_int;
@@ -143,7 +140,6 @@ pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
-pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 /// The windows of the current tab page, in layout order.
 ///
 /// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The current tab page keeps its window

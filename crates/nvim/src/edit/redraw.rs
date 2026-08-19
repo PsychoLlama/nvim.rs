@@ -20,7 +20,8 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{MB_MAXCHAR, NUL};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, MB_MAXCHAR, NUL};
 
 /// Redraw for Insert mode.
 ///
@@ -285,7 +286,7 @@ pub(crate) unsafe fn get_nolist_virtcol() -> colnr_T {
         {
             return 0;
         }
-        if (*win).w_onebuf_opt.wo_list != 0 && vim_strchr(p_cpo.get(), CPO_LISTWM).is_null() {
+        if (*win).w_onebuf_opt.wo_list != 0 && !cpo_has(CpoFlag::LISTWM) {
             return getvcol_nolist(&raw mut (*win).w_cursor);
         }
         validate_virtcol(win);

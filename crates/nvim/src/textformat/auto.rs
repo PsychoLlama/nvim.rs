@@ -44,7 +44,7 @@ static did_add_space: GlobalCell<bool> = GlobalCell::new(false);
 /// There must be a current line, and it must be modifiable.
 pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     unsafe {
-        if !has_format_option(FO_AUTO) {
+        if !has_format_option(FoFlag::AUTO) {
             return;
         }
 
@@ -65,7 +65,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
             let mut cc = gchar_cursor();
             if !whitechar(cc)
                 && (*curwin.get()).w_cursor.col > 0
-                && has_format_option(FO_ONE_LETTER)
+                && has_format_option(FoFlag::ONE_LETTER)
             {
                 dec_cursor();
             }
@@ -99,8 +99,8 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         }
 
         // With `c` in 'formatoptions' and `t` missing, only comments format.
-        if has_format_option(FO_WRAP_COMS)
-            && !has_format_option(FO_WRAP)
+        if has_format_option(FoFlag::WRAP_COMS)
+            && !has_format_option(FoFlag::WRAP)
             && get_leader_len(old, ::core::ptr::null_mut::<*mut c_char>(), false, true) == 0
         {
             return;
@@ -133,7 +133,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         // not before means the line was broken. Because of the trailing-blank
         // rule above, `w` in 'formatoptions' then needs a space added to keep
         // the paragraph formatted.
-        if !wasatend && has_format_option(FO_WHITE_PAR) {
+        if !wasatend && has_format_option(FoFlag::WHITE_PAR) {
             let linep = get_cursor_line_ptr();
             let len = get_cursor_line_len();
             if (*curwin.get()).w_cursor.col == len {

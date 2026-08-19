@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use crate::bufwrite::translate;
 
 use super::*;
-use crate::types::IOSIZE;
+use crate::types::{IOSIZE, ShmFlag};
 
 /// Everything the closing message needs to know about how the read went.
 pub(crate) struct Outcome {
@@ -54,7 +54,7 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
         }
         if (*curbuf.get()).b_p_ro != 0 {
             note(
-                if shortmess(SHM_RO as c_int) {
+                if shortmess(ShmFlag::RO) {
                     translate(c"[RO]")
                 } else {
                     translate(c"[readonly]")

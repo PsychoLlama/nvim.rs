@@ -102,7 +102,7 @@ pub unsafe fn ex_listdo(eap: *mut exarg_T) {
         return;
     }
 
-    // Temporarily override SHM_OVER and SHM_OVERALL so that a file message
+    // Temporarily override ShmFlag::OVER and ShmFlag::OVERALL so that a file message
     // does not overwrite output from the command.
     msg_listdo_overwrite.set(msg_listdo_overwrite.get() + 1);
 

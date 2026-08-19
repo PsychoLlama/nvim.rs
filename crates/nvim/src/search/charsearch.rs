@@ -8,7 +8,8 @@
 
 use super::*;
 use crate::mbyte::MAX_SCHAR_SIZE;
-use crate::types::{FAIL, NUL, OK};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FAIL, NUL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -115,7 +116,7 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
             // Force a move of at least one character, so that ";" and ","
             // move the cursor even when it is right in front of the
             // character being looked for.
-            if vim_strchr(p_cpo.get(), CPO_SCOLON).is_null() && count == 1 && t_cmd {
+            if !cpo_has(CpoFlag::SCOLON) && count == 1 && t_cmd {
                 stop = false;
             }
         }

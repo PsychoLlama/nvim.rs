@@ -14,7 +14,7 @@
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::types::{IOSIZE, NUL};
+use crate::types::{IOSIZE, NUL, ShmFlag};
 
 /// What a pass over the lines produced.
 #[derive(Default)]
@@ -232,8 +232,8 @@ pub(crate) unsafe fn report_written(
         }
         msg_add_lines(insert_space as c_int, written.lnum, written.nchars as off_T);
 
-        if !shortmess(SHM_WRITE as c_int) {
-            let short = shortmess(SHM_WRI as c_int);
+        if !shortmess(ShmFlag::WRITE) {
+            let short = shortmess(ShmFlag::WRI);
             note(match (append, short) {
                 (true, true) => c" [a]",
                 (true, false) => c" appended",

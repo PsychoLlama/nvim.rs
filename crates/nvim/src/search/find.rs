@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_SEARCH;
 use crate::search::{
@@ -16,7 +17,7 @@ use crate::search::{
     SEARCH_START,
 };
 use crate::semsg_c;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{CpoFlag, FAIL, NUL, OK, ShmFlag};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -411,7 +412,7 @@ pub unsafe fn searchit(
             tm: ptr::null_mut(),
             timed_out: ptr::null_mut(),
             options,
-            from_match_end: !vim_strchr(p_cpo.get(), CPO_SEARCH).is_null(),
+            from_match_end: cpo_has(CpoFlag::SEARCH),
             called_emsg_before: called_emsg.get(),
         };
         if !extra_arg.is_null() {
@@ -616,8 +617,8 @@ pub unsafe fn searchit(
                 } else {
                     1
                 };
-                if !shortmess(SHM_SEARCH as c_int)
-                    && shortmess(SHM_SEARCHCOUNT as c_int)
+                if !shortmess(ShmFlag::SEARCH)
+                    && shortmess(ShmFlag::SEARCHCOUNT)
                     && s.opt(SEARCH_MSG)
                 {
                     let msg = if dir == BACKWARD {
@@ -722,7 +723,7 @@ pub unsafe fn search_for_exact_line(
                     break;
                 }
                 (*pos).lnum = (*buf).b_ml.ml_line_count;
-                if !shortmess(SHM_SEARCH as c_int) {
+                if !shortmess(ShmFlag::SEARCH) {
                     give_warning(gettext(top_bot_msg.ptr().cast()), true, false);
                 }
             } else if (*pos).lnum > (*buf).b_ml.ml_line_count {
@@ -730,7 +731,7 @@ pub unsafe fn search_for_exact_line(
                 if p_ws.get() == 0 {
                     break;
                 }
-                if !shortmess(SHM_SEARCH as c_int) {
+                if !shortmess(ShmFlag::SEARCH) {
                     give_warning(gettext(bot_top_msg.ptr().cast()), true, false);
                 }
             }

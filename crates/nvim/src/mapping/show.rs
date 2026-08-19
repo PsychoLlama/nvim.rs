@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
-use crate::types::{CMD_map, CMD_unmap, ExpandContext, FAIL, NUL, OK};
+use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, FAIL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -109,7 +109,7 @@ pub(crate) unsafe fn translate_mapping(
         let mut ga: garray_T = core::mem::zeroed();
         ga_init(&raw mut ga, 1, 40);
 
-        let cpo_bslash = !vim_strchr(cpo_val, CPO_BSLASH).is_null();
+        let cpo_bslash = !vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()).is_null();
         let mut str = str_in.cast::<u8>();
         while *str != 0 {
             let mut c = c_int::from(*str);

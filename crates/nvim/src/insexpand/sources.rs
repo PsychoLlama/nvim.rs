@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::path::ExpandFlags;
-use crate::types::{FAIL, IOSIZE, NUL, OK};
+use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
@@ -229,7 +229,8 @@ pub(crate) unsafe fn ins_compl_files(
         while i < count as isize && !got_int.get() && !ins_compl_interrupted() {
             let file = *files.offset(i);
             let fp = os_fopen(file, c"r".as_ptr()); // open dictionary file
-            if flags != DICT_EXACT && !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete.get() {
+            let quiet = shortmess(ShmFlag::COMPLETIONSCAN);
+            if flags != DICT_EXACT && !quiet && !compl_autocomplete.get() {
                 vim_snprintf(
                     IObuff.ptr().cast::<c_char>(),
                     IOSIZE as size_t,

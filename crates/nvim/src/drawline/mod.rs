@@ -38,8 +38,8 @@ use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_co
 use crate::main::{
     State, VIsual, VIsual_active, VIsual_mode, cmdwin_type, cmdwin_win, cterm_normal_bg_color,
     curwin, decor_state, did_emsg, dollar_vcol, dy_flags, highlight_attr, highlight_match,
-    hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol, normal_bg, p_cpo, p_sel,
-    screen_search_hl, search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
+    hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol, normal_bg, p_sel, screen_search_hl,
+    search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
 };
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
@@ -105,7 +105,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 /// text has no column yet".
 pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// Draw one buffer line, and answer the window row after it.
 ///

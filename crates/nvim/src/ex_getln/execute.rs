@@ -14,7 +14,8 @@ use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
     Ctrl_Y, Ctrl_Z,
 };
-use crate::types::{ExpandContext, NUL, OK, kErrorTypeNone};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, ExpandContext, NUL, OK, kErrorTypeNone};
 
 /// What `CTRL-\` did with the key typed after it.
 enum CtrlBsl {
@@ -384,7 +385,7 @@ pub(crate) unsafe fn command_line_execute(
         if (*s).c == '\n' as ::core::ffi::c_int
             || (*s).c == '\r' as ::core::ffi::c_int
             || (*s).c == K_KENTER
-            || ((*s).c == ESC && (!KeyTyped.get() || !vim_strchr(p_cpo.get(), CPO_ESC).is_null()))
+            || ((*s).c == ESC && (!KeyTyped.get() || cpo_has(CpoFlag::ESC)))
         {
             // In Ex mode a backslash escapes a newline.
             if exmode_active.get()

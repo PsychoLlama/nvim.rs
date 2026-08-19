@@ -15,6 +15,8 @@
 use super::*;
 use crate::decoration::SIGN_WIDTH;
 use crate::r#move::WinValid;
+use crate::option::cpo_has;
+use crate::types::CpoFlag;
 
 /// What the previous line of the walk was.
 ///
@@ -843,7 +845,7 @@ pub unsafe fn win_draw_end(
                     );
                 }
                 if ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
-                    && vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null()
+                    && !cpo_has(CpoFlag::NUMCOL)
                 {
                     let width = number_width(wp) + 1;
                     n = grid_line_fill(

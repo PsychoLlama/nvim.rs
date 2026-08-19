@@ -77,8 +77,8 @@ use crate::main::{
     global_busy, got_int, highlight_match, lines_left, magic_overruled, mod_mask, mouse_col,
     mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled, msg_silent,
     need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, no_mapping, p_ari, p_arshape,
-    p_cedit, p_ch, p_cpo, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl, p_tal,
-    p_tbidi, p_wbr, p_wc, p_wcm, p_wim, p_wmnu, pum_want, quit_more, redir_off, redraw_cmdline,
+    p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl, p_tal, p_tbidi,
+    p_wbr, p_wc, p_wcm, p_wim, p_wmnu, pum_want, quit_more, redir_off, redraw_cmdline,
     redraw_tabline, redrawing_cmdline, restart_edit, search_first_line, search_last_line,
     search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, typebuf,
     wild_menu_showing, wim_flags,
@@ -470,7 +470,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const CPO_ESC: ::core::ffi::c_int = 'x' as ::core::ffi::c_int;
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

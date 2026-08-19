@@ -33,7 +33,8 @@ use core::ffi::{c_int, c_void};
 use super::*;
 use crate::keycodes::{K_COMMAND, K_LUA};
 use crate::r#move::WinValid;
-use crate::types::{NUL, OK};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FoFlag, NUL, OK};
 
 /// The Visual area a `.` replays: its mode and size, not its position.
 ///
@@ -87,7 +88,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
 
         // A yank can be redone when 'cpoptions' has `y`, but never the one the
         // clipboard does for itself.
-        let redo_yank = !vim_strchr(p_cpo.get(), CPO_YANK).is_null() && !gui_yank;
+        let redo_yank = cpo_has(CpoFlag::YANK) && !gui_yank;
 
         // Unwanted line breaks would move every column measured below.
         reset_lbr();
@@ -134,8 +135,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
             && !(op_virtual() && (*oap).start.coladd != (*oap).end.coladd);
         // For delete, change and yank it is an error to operate on an empty
         // region when 'cpoptions' has `E` (Vi compatible).
-        let empty_region_error =
-            (*oap).empty && !vim_strchr(p_cpo.get(), CPO_EMPTYREGION).is_null();
+        let empty_region_error = (*oap).empty && cpo_has(CpoFlag::EMPTYREGION);
 
         // Force a redraw for an empty Visual region, an unmodifiable buffer,
         // or a fold: none of those will redraw by themselves.
@@ -247,7 +247,7 @@ unsafe fn record_operator_redo(cap: *mut cmdarg_T, oap: *mut oparg_T, redo_yank:
         if (*cap).cmdchar == '/' as c_int || (*cap).cmdchar == '?' as c_int {
             // A search: without 'cpoptions' `r` the pattern goes in too, so
             // that the repeat really is the same command.
-            if vim_strchr(p_cpo.get(), CPO_REDO).is_null() {
+            if !cpo_has(CpoFlag::REDO) {
                 AppendToRedobuffLit((*cap).searchbuf, -1);
             }
             AppendToRedobuff(c"\n".as_ptr());
@@ -713,7 +713,7 @@ unsafe fn run_operator(
                     let _ = op_delete(oap);
                     // Save the cursor line for undo if that has not happened.
                     if (*oap).motion_type == kMTLineWise
-                        && has_format_option(FO_AUTO)
+                        && has_format_option(FoFlag::AUTO)
                         && u_save_cursor() == OK
                     {
                         auto_format(false, true);
@@ -745,7 +745,7 @@ unsafe fn run_operator(
             }
 
             OP_FILTER => {
-                if !vim_strchr(p_cpo.get(), CPO_FILTER).is_null() {
+                if cpo_has(CpoFlag::FILTER) {
                     // Use whichever `!cmd` was last used.
                     AppendToRedobuff(c"!\r".as_ptr());
                 } else {

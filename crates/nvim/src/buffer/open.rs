@@ -31,19 +31,19 @@ use crate::charset::buf_init_chartab;
 use crate::fileio::{prep_exarg, readfile};
 use crate::help::get_local_additions;
 use crate::indent_c::parse_cino;
-use crate::main::{getout, got_int, p_cpo, readonlymode, v_dying};
+use crate::main::{getout, got_int, readonlymode, v_dying};
 use crate::memfile::MfDirty;
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_open};
 use crate::memory::xrealloc;
 use crate::r#move::WinValid;
-use crate::option::{boolean_optval, set_option_value_give_err};
+use crate::option::{boolean_optval, cpo_has, set_option_value_give_err};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
-use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, StringBuilder, aco_save_T,
-    colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T, win_T,
+    CpoFlag, FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, ShmFlag, String_0,
+    StringBuilder, aco_save_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T,
+    win_T,
 };
 use crate::winlayer::buffers;
 use ::libc::strcmp;
@@ -102,12 +102,6 @@ fn init_chartab(mut buf: Buf) {
 fn parse_cindent_options(mut buf: Buf) {
     // SAFETY: a live buffer.
     unsafe { parse_cino(buf.raw()) };
-}
-
-/// Whether `'cpoptions'` contains `flag`.
-fn cpo_has(flag: c_int) -> bool {
-    // SAFETY: `p_cpo` is a NUL-terminated option value.
-    !unsafe { vim_strchr(p_cpo.get(), flag) }.is_null()
 }
 
 /// Whether this buffer has no readable file behind its name.
@@ -229,7 +223,7 @@ pub fn get_highest_fnum() -> c_int {
 /// bytes are already in the buffer, so re-reading them with the corrected
 /// options costs no file access.
 fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> c_int {
-    let silent = short_mess(SHM_FILEINFO as c_int);
+    let silent = shortmess(ShmFlag::FILEINFO);
 
     let line_count = cur_buf().line_count();
     let (ffname, fname) = match read_stdin {
@@ -311,7 +305,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     let mut retval = OK;
     let old_tw: OptInt = cur_buf().b_p_tw;
     let mut read_fifo = false;
-    let silent = short_mess(SHM_FILEINFO as c_int);
+    let silent = shortmess(ShmFlag::FILEINFO);
 
     // The 'readonly' flag is only set when BufFlags::NEVERLOADED is being reset.
     // When re-entering the same buffer, it should not change, because the
@@ -405,9 +399,9 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     // When reading stdin, the buffer contents always needs writing, so set the
     // changed flag.  Unless in readonly mode: "ls | nvim -R -".  When
     // interrupted and 'cpoptions' contains 'i' set changed flag.
-    if got_int.get() && cpo_has(CPO_INTMOD)
+    if got_int.get() && cpo_has(CpoFlag::INTMOD)
         || buf.b_modified_was_set
-        || aborting_now() && cpo_has(CPO_INTMOD)
+        || aborting_now() && cpo_has(CpoFlag::INTMOD)
     {
         set_changed(buf);
     } else if retval != FAIL && !read_stdin && !read_fifo {

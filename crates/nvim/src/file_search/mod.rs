@@ -24,7 +24,7 @@ use crate::global_cell::GlobalCell;
 use crate::main::{
     NameBuff, VIsual_active, curbuf, current_sctx, curwin, e_cant_find_directory_str_in_cdpath,
     e_cant_find_file_str_in_path, e_no_more_directory_str_found_in_cdpath,
-    e_no_more_file_str_found_in_path, got_int, line_msg, p_cdpath, p_cpo, p_fic,
+    e_no_more_file_str_found_in_path, got_int, line_msg, p_cdpath, p_fic,
 };
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
@@ -100,10 +100,6 @@ const LITERAL_DIR: ExpandFlags = ExpandFlags::DIR
     .or(ExpandFlags::ADDSLASH)
     .or(ExpandFlags::SILENT)
     .or(ExpandFlags::NOTWILD);
-
-/// `'cpoptions'` flag: a `'tags'` entry starting with `"./"` is relative to
-/// the current directory rather than to the current file.
-pub const CPO_DOTTAG: c_int = 'd' as c_int;
 
 /// How far `**` descends when the pattern does not say.
 pub const FF_MAX_STAR_STAR_EXPAND: u8 = 30;

@@ -12,8 +12,8 @@
 //! | [`bs_delete_chars`] | everything else: delete backwards until a stopping rule fires |
 //!
 //! The guard is most of what makes the key complicated: 'backspace' decides
-//! whether it may cross the start of the insert (`BS_START`), an auto-indent
-//! (`BS_INDENT`) or a line break (`BS_EOL`), a prompt buffer's prompt is off
+//! whether it may cross the start of the insert (`BsFlag::START`), an auto-indent
+//! (`BsFlag::INDENT`) or a line break (`BsFlag::EOL`), a prompt buffer's prompt is off
 //! limits, and 'revins' turns all of it around.  Replace and Virtual Replace
 //! mode never delete at all -- they restore from the replace stack.
 //!
@@ -25,7 +25,8 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::option::cpo_has;
+use crate::types::{BsFlag, CpoFlag, FAIL, FoFlag, NUL};
 
 /// Which backwards-delete key is running.
 ///
@@ -60,7 +61,7 @@ pub(crate) unsafe fn ins_del() {
         if gchar_cursor() == NUL {
             // Delete the newline.
             let temp = (*curwin.get()).w_cursor.col;
-            if !can_bs(BS_EOL) || do_join(2, false, true, false, false) == FAIL {
+            if !can_bs(BsFlag::EOL) || do_join(2, false, true, false, false) == FAIL {
                 vim_beep(kOptBoFlagBackspace as ::core::ffi::c_uint);
             } else {
                 (*curwin.get()).w_cursor.col = temp;
@@ -105,14 +106,14 @@ unsafe fn bs_blocked() -> bool {
         let cursor = (*curwin.get()).w_cursor;
         let start = *Insstart_orig.ptr();
         (cursor.lnum == 1 && cursor.col == 0)
-            || (!can_bs(BS_START)
+            || (!can_bs(BsFlag::START)
                 && ((arrow_used.get() && !bt_prompt(curbuf.get()))
                     || (cursor.lnum == start.lnum && cursor.col <= start.col)))
-            || (!can_bs(BS_INDENT)
+            || (!can_bs(BsFlag::INDENT)
                 && !arrow_used.get()
                 && ai_col.get() > 0
                 && cursor.col <= ai_col.get())
-            || (!can_bs(BS_EOL) && cursor.col == 0)
+            || (!can_bs(BsFlag::EOL) && cursor.col == 0)
     }
 }
 
@@ -237,7 +238,7 @@ pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_
         // Vim erases it.  The vi behaviour is emulated by pretending a
         // dollar is displayed even when there is not one.
         //  --pkv Sun Jan 19 01:56:40 EST 2003
-        if !vim_strchr(p_cpo.get(), CPO_BACKSPACE).is_null() && dollar_vcol.get() == -1 {
+        if cpo_has(CpoFlag::BACKSPACE) && dollar_vcol.get() == -1 {
             dollar_vcol.set((*curwin.get()).w_virtcol);
         }
 
@@ -298,7 +299,7 @@ unsafe fn bs_join_line() -> bool {
 
             // With `aw` in 'formatoptions' the space at the end of the line
             // has to go too, or auto-formatting would break the line again.
-            if has_format_option(FO_AUTO) && has_format_option(FO_WHITE_PAR) {
+            if has_format_option(FoFlag::AUTO) && has_format_option(FoFlag::WHITE_PAR) {
                 let ptr = ml_get_buf(curbuf.get(), (*curwin.get()).w_cursor.lnum);
                 let len = get_cursor_line_len();
                 if len > 0 && *ptr.offset((len - 1) as isize) as c_int == ' ' as c_int {
@@ -519,7 +520,7 @@ unsafe fn bs_delete_chars(mut mode: Backspace, mincol: colnr_T) {
             // something left this key is allowed to take.
             let more = revins_on.get()
                 || ((*curwin.get()).w_cursor.col > mincol
-                    && (can_bs(BS_NOSTOP)
+                    && (can_bs(BsFlag::NOSTOP)
                         || ((*curwin.get()).w_cursor.lnum != (*Insstart_orig.ptr()).lnum
                             || (*curwin.get()).w_cursor.col != (*Insstart_orig.ptr()).col)));
             if !more {

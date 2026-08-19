@@ -34,16 +34,15 @@ use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf, strncasecmp, strncmp};
 use crate::strings::vim_strchr;
-use crate::types::{MB_MAXBYTES, NUL, key_extra, scid_T, size_t, uvarnumber_T, varnumber_T};
+use crate::types::{
+    CpoFlag, MB_MAXBYTES, NUL, key_extra, scid_T, size_t, uvarnumber_T, varnumber_T,
+};
 use ::libc::strlen;
 
 mod codes;
 pub use self::codes::*;
 mod tables;
 pub use self::tables::*;
-
-/// `'cpoptions'` flag: a backslash is *not* a substitute for CTRL-V.
-const CPO_BSLASH: c_int = 'B' as c_int;
 
 /// [`vim_str2nr`] flags: accept decimal, octal, hex and binary alike.
 const STR2NR_ALL: c_int = 15;
@@ -572,7 +571,7 @@ pub unsafe fn get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut b
 /// unless `REPTERM_NO_SIMPLIFY` — simplifications such as `<C-H>` to 0x08.
 ///
 /// `sid_arg` is the script id `<SID>` stands for, or 0 to take the current
-/// one. Only `CPO_BSLASH` is read out of `cpo_val`.
+/// one. Only `CpoFlag::BSLASH` is read out of `cpo_val`.
 ///
 /// # Safety
 /// `from` must be readable for `from_len` bytes and `bufp` must be writable.
@@ -591,7 +590,7 @@ pub unsafe fn replace_termcodes(
     unsafe {
         let end = from.add(from_len).sub(1);
         // A backslash is a special character unless 'cpoptions' contains B.
-        let do_backslash = vim_strchr(cpo_val, CPO_BSLASH).is_null();
+        let do_backslash = vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()).is_null();
         let do_special = flags & REPTERM_NO_SPECIAL == 0;
         let allocated = (*bufp).is_null();
         // Worst case one character becomes six bytes (a shifted special key),

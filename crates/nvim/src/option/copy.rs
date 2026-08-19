@@ -53,9 +53,8 @@ use crate::optionstr::{
     check_buf_options, check_signcolumn, check_string_option, clear_string_option,
 };
 use crate::spell::compile_cap_prog;
-use crate::strings::vim_strchr;
 use crate::tag::set_buflocal_tfu_callback;
-use crate::types::{CmdModFlags, NUL, OptInt, buf_T, colnr_T, int16_t, win_T, winopt_T};
+use crate::types::{CmdModFlags, CpoFlag, NUL, OptInt, buf_T, colnr_T, int16_t, win_T, winopt_T};
 use crate::window::{check_colorcolumn, set_winbar_win};
 
 use super::{
@@ -63,11 +62,7 @@ use super::{
     change_option_default, check_blending, fill_culopt_flags, kFillchars, kListchars,
     parse_winhl_opt, set_chars_option,
 };
-
-/// The two 'cpo' flags that decide when a buffer's options are copied:
-/// 's' copies them the first time the buffer is entered, 'S' every time.
-const CPO_BUFOPT: c_int = 's' as c_int;
-const CPO_BUFOPTGLOB: c_int = 'S' as c_int;
+use crate::option::cpo_has;
 
 /// The string every unset string option shares.
 fn unset_string() -> *mut c_char {
@@ -372,9 +367,8 @@ pub unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
         }
 
         let entering = flags & BCO_ENTER as c_int != 0;
-        let keep_global = vim_strchr(p_cpo.get(), CPO_BUFOPTGLOB).is_null() || !entering;
-        let keep_local =
-            (*buf).b_p_initialized || (!entering && !vim_strchr(p_cpo.get(), CPO_BUFOPT).is_null());
+        let keep_global = !cpo_has(CpoFlag::BUFOPTGLOB) || !entering;
+        let keep_local = (*buf).b_p_initialized || (!entering && cpo_has(CpoFlag::BUFOPT));
         let should_copy = !(keep_global && keep_local);
 
         if should_copy || flags & BCO_ALWAYS as c_int != 0 {

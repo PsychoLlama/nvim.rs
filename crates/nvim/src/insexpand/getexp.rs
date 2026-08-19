@@ -10,7 +10,7 @@
 use super::*;
 use crate::cmdexpand::Expanded;
 use crate::path::ExpandFlags;
-use crate::types::{FAIL, IOSIZE, NUL, OK};
+use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
@@ -116,7 +116,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                     (*st).dict = (*(*st).ins_buf).b_fname;
                     (*st).dict_f = DICT_EXACT;
                 }
-                if !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete.get() {
+                if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                     let buf = (*st).ins_buf;
                     vim_snprintf(
                         IObuff.ptr() as *mut c_char,
@@ -174,7 +174,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                         compl_type = CTRL_X_BUFNAMES;
                     } else if flag == ']' as c_int || flag == 't' as c_int {
                         compl_type = CTRL_X_TAGS;
-                        if !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete.get() {
+                        if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                             vim_snprintf(
                                 IObuff.ptr() as *mut c_char,
                                 IOSIZE as size_t,

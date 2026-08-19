@@ -16,6 +16,10 @@
 //! This is for the families a caller `|`s together. A family that is an
 //! enumeration — one value at a time, with a meaningful "what is it" question
 //! — wants a real `enum` and an exhaustive `match` instead; see `WildMode`.
+//!
+//! [`char_flags!`] is the third shape: a family whose members are *letters*
+//! of a string option, where the set is the option's value and membership is
+//! a substring search rather than a bit test.
 #![forbid(unsafe_code)]
 
 /// Declare a C flag family as a newtype over `c_int`.
@@ -148,6 +152,79 @@ macro_rules! flag_set {
         impl ::core::fmt::Debug for $Name {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 write!(f, "{}({:#x})", ::core::stringify!($Name), self.0)
+            }
+        }
+    };
+}
+
+/// Declare a family of option *letters* as a newtype over the byte.
+///
+/// ```ignore
+/// crate::char_flags! {
+///     /// `'cpoptions'` — which Vi compatibilities are switched on.
+///     pub struct CpoFlag;
+///
+///     /// `a`: `:read` sets the alternate file name.
+///     const ALTREAD = b'a';
+/// }
+/// ```
+///
+/// Four of the option families the C headers spell as a run of `#define`s
+/// are not bit words at all: `'cpoptions'`, `'shortmess'`,
+/// `'formatoptions'` and `'backspace'` each hold a *string of letters*, and
+/// every query is "is this letter in that string". c2rust re-emitted them as
+/// `c_int` character literals — and, where the header used an enum, as bare
+/// decimal (`ShmFlag::RO = 114`), which hid what they were.
+///
+/// The generated type carries the letter as a `u8`, and the only three
+/// things a caller ever wants: [`is_in`](#method.is_in) — the membership
+/// test, over the option's value as a [`CStr`](core::ffi::CStr) — plus
+/// `byte` and `as_c_int` for the edges that still take a raw character.
+/// There is deliberately no `|`: two letters are not a value, they are a
+/// two-character string, and the option parser is what builds those.
+#[macro_export]
+macro_rules! char_flags {
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $Name:ident;
+        $( $(#[$cmeta:meta])* const $MEMBER:ident = $value:expr; )+
+    ) => {
+        $(#[$meta])*
+        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+        #[repr(transparent)]
+        $vis struct $Name(u8);
+
+        // As with `flag_set!`: a family that never crosses a raw-character
+        // edge still gets `as_c_int`, because the macro is uniform.
+        #[allow(dead_code)]
+        impl $Name {
+            $( $(#[$cmeta])* pub const $MEMBER: Self = Self($value); )+
+
+            /// Whether `letters` — a string option's value — names this
+            /// flag. Upstream writes `vim_strchr(p_xx, FLAG) != NULL`; the
+            /// needle is always ASCII, where `vim_strchr` is `strchr`, so a
+            /// byte search is the same answer.
+            #[inline]
+            pub fn is_in(self, letters: &::core::ffi::CStr) -> bool {
+                letters.to_bytes().contains(&self.0)
+            }
+
+            /// The letter itself.
+            #[inline]
+            pub const fn byte(self) -> u8 {
+                self.0
+            }
+
+            /// The letter as the `c_int` the unrewritten callees take.
+            #[inline]
+            pub const fn as_c_int(self) -> ::core::ffi::c_int {
+                self.0 as ::core::ffi::c_int
+            }
+        }
+
+        impl ::core::fmt::Debug for $Name {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                write!(f, "{}({:?})", ::core::stringify!($Name), self.0 as char)
             }
         }
     };

@@ -23,11 +23,13 @@ use crate::mark::setpcmark;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::{decl, inc, incl, ml_get_pos};
 use crate::memory::{xfree, xmalloc};
+use crate::option::cpo_has;
 use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
-use crate::strings::vim_strchr;
-use crate::types::{FAIL, NUL, OK, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, typval_T};
+use crate::types::{
+    CpoFlag, FAIL, NUL, OK, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, typval_T,
+};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.
@@ -90,7 +92,7 @@ pub unsafe fn current_block(
         // Search backwards for the unclosed bracket. Quotes are ignored here,
         // but 'cpoptions' `M` is kept because that is the user's choice.
         let save_cpo = p_cpo.get();
-        p_cpo.set(if vim_strchr(p_cpo.get(), CPO_MATCHBSL).is_null() {
+        p_cpo.set(if !cpo_has(CpoFlag::MATCHBSL) {
             c"%".as_ptr() as *mut c_char
         } else {
             c"%M".as_ptr() as *mut c_char

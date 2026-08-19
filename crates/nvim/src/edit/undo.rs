@@ -24,7 +24,8 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FAIL, FoFlag, NUL, OK};
 
 /// Called when an arrow key is used in Insert mode: for undo and redo it
 /// resembles hitting `<Esc>`.
@@ -168,7 +169,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
             // insertion, but appending a line that ends in a space needs it.
             // Only when something was actually inserted, or undo breaks.
             let mut cc = 0;
-            if !ins_need_undo.get() && has_format_option(FO_AUTO) {
+            if !ins_need_undo.get() && has_format_option(FoFlag::AUTO) {
                 let tpos = (*curwin.get()).w_cursor;
 
                 // At the end of a line after a space, formatting would move
@@ -210,7 +211,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
             if nomove == 0
                 && did_ai.get()
                 && (esc != 0
-                    || (vim_strchr(p_cpo.get(), CPO_INDENT).is_null()
+                    || (!cpo_has(CpoFlag::INDENT)
                         && (*curwin.get()).w_cursor.lnum != (*end_insert_pos).lnum))
                 && (*end_insert_pos).lnum <= (*curbuf.get()).b_ml.ml_line_count
             {

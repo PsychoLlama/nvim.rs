@@ -27,6 +27,8 @@ use core::ffi::{c_int, c_void};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::option::cpo_has;
+use crate::types::CpoFlag;
 
 /// Every window in every tabpage.
 ///
@@ -417,7 +419,7 @@ pub unsafe fn changed_bytes(lnum: linenr_T, col: colnr_T) {
         // being displayed at the end of the changed text.
         if spell_check_window(curwin.get())
             && lnum < (*curbuf.get()).b_ml.ml_line_count
-            && vim_strchr(p_cpo.get(), CPO_DOLLAR).is_null()
+            && !cpo_has(CpoFlag::DOLLAR)
         {
             redrawWinline(curwin.get(), lnum + 1);
         }

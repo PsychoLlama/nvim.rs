@@ -21,7 +21,7 @@ use crate::bufwrite::translate;
 use crate::memfile::mf_fname;
 
 use super::*;
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{FAIL, MAXPATHL, OK, ShmFlag};
 
 /// The file, open and ready to read.
 pub(crate) struct Opened {
@@ -149,7 +149,7 @@ pub(crate) unsafe fn open_source(
         }
 
         msg_scroll.set(
-            (!((shortmess(SHM_OVER as c_int) && msg_listdo_overwrite.get() == 0)
+            (!((shortmess(ShmFlag::OVER) && msg_listdo_overwrite.get() == 0)
                 || (*curbuf.get()).b_help)
                 || p_verbose.get() != 0) as c_int,
         );

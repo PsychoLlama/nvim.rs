@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
 use crate::search::{
@@ -20,7 +21,7 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
-use crate::types::{CmdModFlags, FAIL, NUL};
+use crate::types::{CmdModFlags, CpoFlag, FAIL, NUL, ShmFlag};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -289,7 +290,7 @@ unsafe fn echo_search_cmd(
         if !(options & SEARCH_ECHO != 0
             && messaging()
             && msg_silent.get() == 0
-            && (!cmd_silent.get() || !shortmess(SHM_SEARCHCOUNT as c_int)))
+            && (!cmd_silent.get() || !shortmess(ShmFlag::SEARCHCOUNT)))
         {
             return (Echo::none(), false);
         }
@@ -311,7 +312,7 @@ unsafe fn echo_search_cmd(
             (searchstr, searchstrlen)
         };
 
-        let with_stats = !shortmess(SHM_SEARCHCOUNT as c_int) || cmd_silent.get();
+        let with_stats = !shortmess(ShmFlag::SEARCHCOUNT) || cmd_silent.get();
         let size = echo_size(plen, off_len, with_stats);
         let mut echo = Echo {
             buf: Owned(xmalloc(size) as *mut c_char),
@@ -358,7 +359,7 @@ unsafe fn echo_search_cmd(
             msg_nowait.set(true);
         }
 
-        (echo, !shortmess(SHM_SEARCHCOUNT as c_int))
+        (echo, !shortmess(ShmFlag::SEARCHCOUNT))
     }
 }
 
@@ -480,7 +481,7 @@ pub unsafe fn do_search(
 
         // A line offset is not remembered; this is vi compatible.
         let mut off = search_offset();
-        if off.line && !vim_strchr(p_cpo.get(), CPO_LINEOFF).is_null() {
+        if off.line && cpo_has(CpoFlag::LINEOFF) {
             off.line = false;
             off.off = 0;
             set_search_offset(off);
@@ -639,7 +640,7 @@ pub unsafe fn do_search(
                     // Restore the second '/' or '?' for normal_cmd().
                     *dircp = cmd.delim as c_char;
                 }
-                if !shortmess(SHM_SEARCH as c_int) && !sia.is_null() && (*sia).sa_wrapped != 0 {
+                if !shortmess(ShmFlag::SEARCH) && !sia.is_null() && (*sia).sa_wrapped != 0 {
                     show_top_bot_msg = true;
                 }
                 if c == FAIL {
@@ -844,7 +845,7 @@ pub unsafe fn showmatch(c: c_int) {
 
         // Brief pause, unless 'm' is present in 'cpo' and a character is
         // available.
-        if !vim_strchr(p_cpo.get(), CPO_SHOWMATCH).is_null() {
+        if cpo_has(CpoFlag::SHOWMATCH) {
             os_delay(p_mat.get() as u64 * 100 + 8, true);
         } else if !char_avail() {
             os_delay(p_mat.get() as u64 * 100 + 9, false);

@@ -47,8 +47,8 @@ use crate::main::{
     IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
     VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, curbuf, curbuf_splice_pending,
     curwin, did_ai, disable_fold_update, e_invarg, e_modifiable, empty_string_option, finish_op,
-    got_int, motion_force, mouse_dragging, msg_scroll, no_lines_msg, p_ch, p_cpo, p_fp, p_js,
-    p_opfunc, p_report, p_ri, p_sbr, p_sel, p_shm, p_sol, p_sr, redo_VIsual_busy, repeat_cmdline,
+    got_int, motion_force, mouse_dragging, msg_scroll, no_lines_msg, p_ch, p_fp, p_js, p_opfunc,
+    p_report, p_ri, p_sbr, p_sel, p_shm, p_sol, p_sr, redo_VIsual_busy, repeat_cmdline,
     repeat_luaref, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit,
     virtual_op,
 };
@@ -197,20 +197,6 @@ pub const ML_EMPTY: ::core::ffi::c_int = 0x1;
 
 /// `get_fileformat`: lines end with CR LF, so a line break is two bytes.
 pub const EOL_DOS: ::core::ffi::c_int = 1;
-
-/// 'formatoptions' letters this module reads.
-pub const FO_MBYTE_JOIN: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
-pub const FO_MBYTE_JOIN2: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
-pub const FO_AUTO: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
-pub const FO_REMOVE_COMS: ::core::ffi::c_int = 'j' as ::core::ffi::c_int;
-
-/// 'cpoptions' letters this module reads.
-pub const CPO_EMPTYREGION: ::core::ffi::c_int = 'E' as ::core::ffi::c_int;
-pub const CPO_JOINCOL: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;
-pub const CPO_REDO: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
-pub const CPO_YANK: ::core::ffi::c_int = 'y' as ::core::ffi::c_int;
-pub const CPO_DOLLAR: ::core::ffi::c_int = '$' as ::core::ffi::c_int;
-pub const CPO_FILTER: ::core::ffi::c_int = '!' as ::core::ffi::c_int;
 
 /// 'comments' flag: this leader ends a three-part comment.
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;

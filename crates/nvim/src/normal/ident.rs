@@ -30,8 +30,8 @@ use crate::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::message::{emsg, messaging};
 use crate::normal::{
     DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH,
-    POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked, checkclearopq, clearop,
-    clearopbeep, get_visual_text, normal_search,
+    POUND, VSE_NONE, check_text_or_curbuf_locked, checkclearopq, clearop, clearopbeep,
+    get_visual_text, normal_search,
 };
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
@@ -45,7 +45,8 @@ use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
 use crate::types::{
-    NUL, OK, OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t, win_T,
+    NUL, OK, OP_NOP, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t,
+    uint8_t, win_T,
 };
 use crate::undo::curbufIsChanged;
 use crate::window::check_can_set_curbuf_disabled;
@@ -280,7 +281,7 @@ pub(crate) unsafe fn nv_gd(oap: *mut oparg_T, nchar: c_int, thisblock: c_int) {
         }
         // The search left a "search hit" message that has nothing to say
         // here, unless 'shortmess' has already suppressed it.
-        if messaging() && msg_silent.get() == 0 && !shortmess(SHM_SEARCHCOUNT as c_int) {
+        if messaging() && msg_silent.get() == 0 && !shortmess(ShmFlag::SEARCHCOUNT) {
             clear_cmdline.set(true);
         }
     }

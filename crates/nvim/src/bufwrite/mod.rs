@@ -31,13 +31,13 @@ use crate::input::ask_yesno;
 use crate::main::{
     IObuff, curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting, got_int,
     msg_scroll, msg_silent, need_maketitle, no_wait_return, p_bdir, p_bex, p_bk, p_bsk, p_ccv,
-    p_cpo, p_fs, p_pm, p_wb,
+    p_fs, p_pm, p_wb,
 };
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::{emsg, msg, msg_progress, msg_puts_hl, set_keep_msg};
-use crate::option::{copy_option_part, get_bkc_flags, get_fileformat_force, shortmess};
+use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
@@ -51,10 +51,11 @@ use crate::os::fs::{
 use crate::os::input::os_breakcheck;
 use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
-use crate::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
+use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
-    CmdModFlags, FAIL, FileInfo, IOSIZE, MAXPATHL, OK, aco_save_T, buf_T, bufref_T, exarg_T,
-    iconv_t, int64_t, linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
+    CmdModFlags, CpoFlag, FAIL, FileInfo, IOSIZE, MAXPATHL, OK, ShmFlag, aco_save_T, buf_T,
+    bufref_T, exarg_T, iconv_t, int64_t, linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t,
+    uv_uid_t, vim_acl_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
@@ -214,8 +215,6 @@ pub struct bw_info {
     pub bw_iconv_fd: iconv_t,
 }
 pub const WRITEBUFSIZE: C2Rust_Unnamed_17 = 8192;
-pub const SHM_WRI: C2Rust_Unnamed_20 = 119;
-pub const SHM_WRITE: C2Rust_Unnamed_20 = 87;
 pub const FIO_LATIN1: C2Rust_Unnamed_16 = 1;
 pub const FIO_ENDIAN_L: C2Rust_Unnamed_16 = 128;
 pub const FIO_UTF16: C2Rust_Unnamed_16 = 16;
@@ -224,7 +223,6 @@ pub const FIO_UCS4: C2Rust_Unnamed_16 = 8;
 pub const FIO_NOCONVERT: C2Rust_Unnamed_16 = 8192;
 pub const FIO_UTF8: C2Rust_Unnamed_16 = 2;
 pub const ICONV_MULT: C2Rust_Unnamed_18 = 8;
-pub const SHM_OVER: C2Rust_Unnamed_20 = 111;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
@@ -334,8 +332,8 @@ pub unsafe fn buf_write(
             && buf == curbuf.get()
             && !bt_nofilename(buf)
             && !req.filtering
-            && (!req.append || !vim_strchr(p_cpo.get(), CPO_FNAMEAPP).is_null())
-            && !vim_strchr(p_cpo.get(), CPO_FNAMEW).is_null()
+            && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
+            && cpo_has(CpoFlag::FNAMEW)
         {
             if set_rw_fname(fname, sfname) == FAIL {
                 return FAIL;
@@ -391,13 +389,11 @@ pub unsafe fn buf_write(
             (*buf).b_op_end = orig.end;
         }
         // Overwrite the previous file message, or don't.
-        msg_scroll.set(
-            if shortmess(SHM_OVER as ::core::ffi::c_int) && !exiting.get() {
-                0
-            } else {
-                1
-            },
-        );
+        msg_scroll.set(if shortmess(ShmFlag::OVER) && !exiting.get() {
+            0
+        } else {
+            1
+        });
         if !req.filtering {
             filemess(buf, fname, c"".as_ptr().cast_mut()); // show that we are busy
         }
@@ -494,7 +490,7 @@ pub unsafe fn buf_write(
                     && target.perm >= 0
                     && target.perm & 0o200 == 0
                     && file_info_old.stat.st_uid == getuid() as uint64_t
-                    && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null()
+                    && !cpo_has(CpoFlag::FWRITE)
                 {
                     target.perm |= 0o200;
                     os_setperm(fname, target.perm);
@@ -502,7 +498,7 @@ pub unsafe fn buf_write(
                 }
                 // With ":w!" over the current file, 'readonly' makes no
                 // sense; reset it unless 'cpoptions' contains "Z".
-                if req.forceit && overwriting && vim_strchr(p_cpo.get(), CPO_KEEPRO).is_null() {
+                if req.forceit && overwriting && !cpo_has(CpoFlag::KEEPRO) {
                     (*buf).b_p_ro = 0;
                     need_maketitle.set(true); // set the window title later
                     status_redraw_all(); // redraw status lines later
@@ -761,7 +757,7 @@ pub unsafe fn buf_write(
                         && whole
                         && !req.append
                         && !writer.conv_error
-                        && (overwriting || !vim_strchr(p_cpo.get(), CPO_PLUS).is_null())
+                        && (overwriting || cpo_has(CpoFlag::PLUS))
                     {
                         unchanged(buf, true, false);
                         let changedtick = buf_get_changedtick(buf);
@@ -880,9 +876,4 @@ pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const CPO_FNAMEW: ::core::ffi::c_int = 'F' as ::core::ffi::c_int;
-pub const CPO_FNAMEAPP: ::core::ffi::c_int = 'P' as ::core::ffi::c_int;
-pub const CPO_FWRITE: ::core::ffi::c_int = 'W' as ::core::ffi::c_int;
-pub const CPO_KEEPRO: ::core::ffi::c_int = 'Z' as ::core::ffi::c_int;
-pub const CPO_PLUS: ::core::ffi::c_int = '+' as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

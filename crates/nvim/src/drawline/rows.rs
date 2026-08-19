@@ -14,7 +14,8 @@ use super::*;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP};
 use crate::r#move::WinValid;
-use crate::types::NUL;
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, NUL};
 
 impl Cells {
     /// Draw everything left of the text on this screen row: the fold, sign and
@@ -315,7 +316,7 @@ impl Cells {
                 wlv.need_showbreak = true;
             }
             if (*f.statuscol).draw
-                && !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null()
+                && cpo_has(CpoFlag::NUMCOL)
                 && wlv.row > wlv.startrow + wlv.filler_lines
             {
                 // "n" in 'cpo': the status column is drawn on the first row

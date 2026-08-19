@@ -713,7 +713,6 @@ static nfa_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
 });
 static regexp_engine: GlobalCell<c_int> = GlobalCell::new(0);
 pub const GRAPHEME_STATE_INIT: c_int = 0;
-pub const CPO_LITERAL: c_int = 'l' as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const RE_MAGIC: ::core::ffi::c_int = 1;
 pub const RE_STRING: ::core::ffi::c_int = 2;

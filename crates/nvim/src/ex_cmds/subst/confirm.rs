@@ -17,14 +17,14 @@ use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
 use crate::eval::typval::kCallbackNone;
-use crate::ex_cmds::{CPO_UNDO, ESC, print_line_no_prefix};
+use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::main::{
     IObuff, RedrawingDisabled, State, curwin, ex_normal_busy, exmode_active, highlight_match,
-    msg_didout, need_wait_return, no_u_sync, p_cpo, p_lz, search_match_endcol, search_match_lines,
+    msg_didout, need_wait_return, no_u_sync, p_lz, search_match_endcol, search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmallocz, xstrdup};
@@ -33,12 +33,13 @@ use crate::mouse::setmouse;
 use crate::r#move::{
     do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,
 };
+use crate::option::cpo_has;
 use crate::os::cshim::{gettext, snprintf};
 use crate::plines::getvcol;
-use crate::strings::{concat_str, vim_strchr, xstrnsave};
+use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Callback, Callback_data, ExpandContext, IOSIZE, NUL, colnr_T, linenr_T, size_t,
+    Callback, Callback_data, CpoFlag, ExpandContext, IOSIZE, NUL, colnr_T, linenr_T, size_t,
 };
 use crate::ui::ui_has;
 use ::libc::{memset, strlen};
@@ -71,7 +72,7 @@ fn no_callback() -> Callback {
 /// from the command line the prompt runs.
 fn cpo_no_undo_sync() -> bool {
     // SAFETY: 'cpoptions' is a live string option.
-    !unsafe { vim_strchr(p_cpo.get(), CPO_UNDO) }.is_null()
+    cpo_has(CpoFlag::UNDO)
 }
 
 /// Ex mode's prompt: print the line, then a row of `^` under the match.

@@ -24,7 +24,8 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::option::cpo_has;
+use crate::types::{CpoFlag, FAIL, FoFlag, NUL};
 
 /// `i_CTRL-T` and `i_CTRL-D`: add or remove one 'shiftwidth' of indent.
 ///
@@ -211,7 +212,7 @@ unsafe fn tab_spaces_to_tabs() {
 
         // 'list' changes what a TAB is worth; unless 'cpoptions' has `L`, it
         // must not be allowed to.
-        if vim_strchr(p_cpo.get(), CPO_LISTWM).is_null() {
+        if !cpo_has(CpoFlag::LISTWM) {
             (*curwin.get()).w_onebuf_opt.wo_list = 0;
         }
 
@@ -392,7 +393,7 @@ pub(crate) unsafe fn ins_eol(c: c_int) -> bool {
         AppendToRedobuff(NL_STR.as_ptr());
         let ok = open_line(
             FORWARD,
-            if has_format_option(FO_RET_COMS) {
+            if has_format_option(FoFlag::RET_COMS) {
                 OPENLINE_DO_COM
             } else {
                 0

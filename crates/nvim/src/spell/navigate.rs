@@ -49,12 +49,12 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{
-    DecorState, NUL, colnr_T, hlf_T, linenr_T, pos_T, size_t, smt_T, uint8_t, win_T,
+    DecorState, NUL, ShmFlag, colnr_T, hlf_T, linenr_T, pos_T, size_t, smt_T, uint8_t, win_T,
 };
 use ::libc::{memset, strcpy, strlen};
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
-use super::{MAXWLEN, SHM_SEARCH, SMT_BAD, SMT_RARE};
+use super::{MAXWLEN, SMT_BAD, SMT_RARE};
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPR};
 use crate::spell::SMT_ALL;
 
@@ -283,7 +283,7 @@ pub unsafe fn spell_move_to(
                     // again, to accept its last match.
                     lnum = (*(*wp).w_buffer).b_ml.ml_line_count;
                     wrapped = true;
-                    if !shortmess(SHM_SEARCH as c_int) {
+                    if !shortmess(ShmFlag::SEARCH) {
                         give_warning(gettext(top_bot_msg.ptr() as *const c_char), true, false);
                     }
                 }
@@ -298,7 +298,7 @@ pub unsafe fn spell_move_to(
                     // again, to accept its first match.
                     lnum = 1;
                     wrapped = true;
-                    if !shortmess(SHM_SEARCH as c_int) {
+                    if !shortmess(ShmFlag::SEARCH) {
                         give_warning(gettext(bot_top_msg.ptr() as *const c_char), true, false);
                     }
                 }

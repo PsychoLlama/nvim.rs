@@ -17,10 +17,10 @@ use crate::ex_docmd::cmdmod_has;
 use crate::path::ExpandFlags;
 use crate::semsg_c;
 use ::libc::{EINVAL, ENOENT};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv};
+use crate::types::{CmdModFlags, FAIL, MAXPATHL, NUL, OK, ShmFlag, Vv};
 
 /// Rename the swap file after the buffer's file name changed.
 ///
@@ -371,7 +371,7 @@ unsafe fn resolve_swapfile_clash(
         // buffer was not already recovered, and 'shortmess' allows it.
         if swapfile_is_for_other_file(buf, fname)
             || (*curbuf.get()).b_flags.has(BufFlags::RECOVERED)
-            || !vim_strchr(p_shm.get(), SHM_ATTENTION as c_int).is_null()
+            || ShmFlag::ATTENTION.is_in(CStr::from_ptr(p_shm.get()))
         {
             return false;
         }

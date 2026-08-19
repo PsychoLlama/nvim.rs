@@ -15,30 +15,29 @@ use crate::eval::typval::{
 };
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::eval::{callback_call, get_copyID, set_ref_in_callback};
-use crate::ex_docmd::{CPO_NOSYMLINKS, ffu_cb, kCdCauseManual, prev_dir};
+use crate::ex_docmd::{ffu_cb, kCdCauseManual, prev_dir};
 use crate::ex_getln::allbuf_locked;
 use crate::file_search::{do_autocmd_dirchanged, vim_chdir};
 use crate::fileio::shorten_fnames;
 use crate::main::{
     KeyTyped, NameBuff, curbuf, current_sctx, curtab, curwin, e_cant_find_file_str_in_path,
     e_failed, e_invalid_return_type_from_findfunc, e_invarg, e_no_more_file_str_found_in_path,
-    globaldir, last_chdir_reason, p_cdh, p_cpo, p_ffu, p_verbose, textlock,
+    globaldir, last_chdir_reason, p_cdh, p_ffu, p_verbose, textlock,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, msg};
-use crate::option::{get_option_sctx, option_set_callback_func};
+use crate::option::{cpo_has, get_option_sctx, option_set_callback_func};
 use crate::options::kOptFindfunc;
 use crate::optionstr::free_string_option;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env;
 use crate::os::fs::os_dirname;
 use crate::path::pathcmp;
-use crate::strings::vim_strchr;
 use crate::types::{
-    BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdScope, FAIL, MAXPATHL, NUL,
-    OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T,
-    exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T,
-    listitem_T, optset_T, sctx_T, size_t, typval_T,
+    BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdScope, CpoFlag, FAIL,
+    MAXPATHL, NUL, OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
+    kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
 use ::libc::strcmp;
 
@@ -266,7 +265,7 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
             _ => unreachable!("post_chdir with an invalid scope"),
         }
         last_chdir_reason.set(ptr::null_mut());
-        shorten_fnames(vim_strchr(p_cpo.get(), CPO_NOSYMLINKS).is_null() as c_int);
+        shorten_fnames(!cpo_has(CpoFlag::NOSYMLINKS) as c_int);
         if trigger_dirchanged {
             do_autocmd_dirchanged(&raw mut cwd as *mut c_char, scope, kCdCauseManual, false);
         }

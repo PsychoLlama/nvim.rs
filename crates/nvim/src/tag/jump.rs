@@ -9,8 +9,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
-use crate::types::{FAIL, OK};
+use crate::types::{CpoFlag, FAIL, OK};
 use crate::window::WSP_VERT;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -567,7 +568,7 @@ impl Jump {
             let save_no_hlsearch = no_hlsearch.get();
             // With 't' in 'cpoptions' the tag's pattern becomes the one
             // "n" repeats; without it, the pattern is not stored.
-            let search_options = if vim_strchr(p_cpo.get(), CPO_TAGPAT).is_null() {
+            let search_options = if !cpo_has(CpoFlag::TAGPAT) {
                 SEARCH_KEEP as c_int
             } else {
                 0

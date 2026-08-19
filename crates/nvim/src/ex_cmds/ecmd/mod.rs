@@ -27,8 +27,7 @@ use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
 use super::{
     BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, ECMD_ADDBUF, ECMD_ALTBUF,
     ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP,
-    FAIL, KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT, SHM_FILEINFO,
-    SHM_OVERALL,
+    FAIL, KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER, apply_autocmds_retval};
@@ -66,8 +65,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    NUL, OK, OptInt, OptionSetFlags, String_0, Vv, bufref_T, exarg_T, linenr_T, ptrdiff_t, time_t,
-    win_T,
+    NUL, OK, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, bufref_T, exarg_T, linenr_T, ptrdiff_t,
+    time_t, win_T,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -775,7 +774,7 @@ unsafe fn place_cursor(state: &Ecmd) {
 unsafe fn report_file_info() {
     let msg_scroll_save = msg_scroll.get();
     // Obey the 'O' flag in 'cpoptions': overwrite any previous file message.
-    if shortmess(SHM_OVERALL as c_int)
+    if shortmess(ShmFlag::OVERALL)
         && msg_listdo_overwrite.get() == 0
         && !exiting.get()
         && p_verbose.get() == 0
@@ -792,7 +791,7 @@ unsafe fn report_file_info() {
     msg_scroll.set(msg_scroll_save);
     msg_scrolled_ign.set(true);
 
-    if !shortmess(SHM_FILEINFO as c_int) {
+    if !shortmess(ShmFlag::FILEINFO) {
         // SAFETY: as above.
         unsafe { fileinfo(0, 1, false) };
     }

@@ -156,13 +156,214 @@ pub struct vimoption_T {
     pub script_ctx: sctx_T,
 }
 
-/// `'backspace'` flags, as the letters `can_bs` is asked about. `BS_NOSTOP`
-/// behaves exactly like `BS_START` except that it does not stop at the start
-/// of the insert point.
-pub const BS_INDENT: ::core::ffi::c_int = 'i' as ::core::ffi::c_int;
-pub const BS_EOL: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
-pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-pub const BS_NOSTOP: ::core::ffi::c_int = 'p' as ::core::ffi::c_int;
+crate::char_flags! {
+    /// A letter of `'cpoptions'` — which Vi compatibilities are switched on.
+    /// Ask with [`cpo_has`](crate::option::cpo_has).
+    pub struct CpoFlag;
+
+    /// `a`: `:read` sets the alternate file name.
+    const ALTREAD = b'a';
+    /// `A`: `:write` sets the alternate file name.
+    const ALTWRITE = b'A';
+    /// `b`: `\|` ends a mapping.
+    const BAR = b'b';
+    /// `B`: a backslash in a mapping is not special.
+    const BSLASH = b'B';
+    /// `c`: searching continues at the end of the match.
+    const SEARCH = b'c';
+    /// `C`: do not concatenate sourced lines.
+    const CONCAT = b'C';
+    /// `d`: `./tags` in `'tags'` means the current directory.
+    const DOTTAG = b'd';
+    /// `D`: no digraph after `r`, `f`, etc.
+    const DIGRAPH = b'D';
+    /// `e`: an executed register ending in a newline runs its last line.
+    const EXECBUF = b'e';
+    /// `E`: operating on an empty region is an error.
+    const EMPTYREGION = b'E';
+    /// `f`: `:read file` sets the file name when there is none.
+    const FNAMER = b'f';
+    /// `F`: `:write file` sets the file name when there is none.
+    const FNAMEW = b'F';
+    /// `i`: interrupting a read leaves the buffer modified.
+    const INTMOD = b'i';
+    /// `I`: remove auto-indent more often.
+    const INDENT = b'I';
+    /// `J`: two spaces are needed to detect the end of a sentence.
+    const ENDOFSENT = b'J';
+    /// `K`: do not wait for a key code in mappings.
+    const KOFFSET = b'K';
+    /// `l`: the character after a backslash in a collection is literal.
+    const LITERAL = b'l';
+    /// `L`: `'list'` changes the effective `'wrapmargin'`.
+    const LISTWM = b'L';
+    /// `m`: `'showmatch'` waits half a second even on more input.
+    const SHOWMATCH = b'm';
+    /// `M`: `%` ignores the use of backslashes.
+    const MATCHBSL = b'M';
+    /// `n`: the `'number'` column is also used for wrapped text.
+    const NUMCOL = b'n';
+    /// `o`: a search offset is not kept for the next search.
+    const LINEOFF = b'o';
+    /// `O`: silently overwrite a file that appeared since the buffer opened.
+    const OVERNEW = b'O';
+    /// `P`: `:write >>file` sets the file name when there is none.
+    const FNAMEAPP = b'P';
+    /// `q`: `3J` leaves the cursor after the first join.
+    const JOINCOL = b'q';
+    /// `r`: `:s` with no pattern redoes the last `:s`, not the last search.
+    const REDO = b'r';
+    /// `R`: filtering lines removes their marks.
+    const REMMARK = b'R';
+    /// `s`: buffer-local options are copied on first entry to the buffer.
+    const BUFOPT = b's';
+    /// `S`: buffer-local options are copied on every entry to the buffer.
+    const BUFOPTGLOB = b'S';
+    /// `t`: the tag pattern is remembered for `n`.
+    const TAGPAT = b't';
+    /// `u`: `u` undoes itself.
+    const UNDO = b'u';
+    /// `v`: backspacing in Replace keeps the deleted text on screen.
+    const BACKSPACE = b'v';
+    /// `W`: `:w!` does not overwrite a read-only file.
+    const FWRITE = b'W';
+    /// `x`: `<Esc>` on the command line executes it.
+    const ESC = b'x';
+    /// `X`: `R` with a count deletes the characters only once.
+    const REPLCNT = b'X';
+    /// `y`: a yank can be redone with `.`.
+    const YANK = b'y';
+    /// `Z`: `:w!` does not reset `'readonly'`.
+    const KEEPRO = b'Z';
+    /// `$`: a one-line change draws a `$` instead of redrawing.
+    const DOLLAR = b'$';
+    /// `!`: a repeated filter command does not reuse the last external one.
+    const FILTER = b'!';
+    /// `%`: `%` does not match inside unmatched preprocessor directives.
+    const MATCH = b'%';
+    /// `+`: `:write file` resets `'modified'`.
+    const PLUS = b'+';
+    /// `>`: appending to a register inserts a newline first.
+    const REGAPPEND = b'>';
+    /// `;`: `,` and `;` skip over the character they are already on.
+    const SCOLON = b';';
+    /// `~`: do not resolve symlinks when changing directory.
+    const NOSYMLINKS = b'~';
+    /// `_`: `cw` on a blank changes only that blank.
+    const CHANGEW = b'_';
+}
+
+crate::char_flags! {
+    /// A letter of `'shortmess'` — which messages are shortened or dropped.
+    /// Ask with [`shortmess`](crate::option::shortmess), which also honours
+    /// [`ABBREVIATIONS`](Self::ABBREVIATIONS).
+    pub struct ShmFlag;
+
+    /// `r`: "readonly".
+    const RO = b'r';
+    /// `m`: "modified".
+    const MOD = b'm';
+    /// `l`: "L" instead of "lines".
+    const LINES = b'l';
+    /// `w`: "[w]" instead of "written".
+    const WRI = b'w';
+    /// `a`: shorten all of [`RO`](Self::RO), [`MOD`](Self::MOD),
+    /// [`LINES`](Self::LINES) and [`WRI`](Self::WRI), and nothing else.
+    const ABBREVIATIONS = b'a';
+    /// `W`: do not say "written" at all.
+    const WRITE = b'W';
+    /// `t`: truncate file messages.
+    const TRUNC = b't';
+    /// `T`: truncate all messages.
+    const TRUNCALL = b'T';
+    /// `o`: overwrite file messages.
+    const OVER = b'o';
+    /// `O`: overwrite more messages.
+    const OVERALL = b'O';
+    /// `s`: no "search hit BOTTOM" messages.
+    const SEARCH = b's';
+    /// `A`: no ATTENTION messages.
+    const ATTENTION = b'A';
+    /// `I`: no intro message.
+    const INTRO = b'I';
+    /// `c`: no completion menu messages.
+    const COMPLETIONMENU = b'c';
+    /// `C`: no completion scanning messages.
+    const COMPLETIONSCAN = b'C';
+    /// `q`: no "recording" message.
+    const RECORDING = b'q';
+    /// `F`: no file info messages.
+    const FILEINFO = b'F';
+    /// `S`: no search count, the `[1/10]` indicator.
+    const SEARCHCOUNT = b'S';
+}
+
+crate::char_flags! {
+    /// A letter of `'formatoptions'` — how automatic formatting behaves.
+    /// Ask with [`has_format_option`](crate::textformat::has_format_option),
+    /// which reads the *buffer's* value and answers no under `'paste'`.
+    pub struct FoFlag;
+
+    /// `t`: wrap text at `'textwidth'`.
+    const WRAP = b't';
+    /// `c`: wrap comments at `'textwidth'`, inserting the leader.
+    const WRAP_COMS = b'c';
+    /// `r`: insert the comment leader after hitting `<CR>`.
+    const RET_COMS = b'r';
+    /// `o`: insert the comment leader after `o` or `O`.
+    const OPEN_COMS = b'o';
+    /// `/`: with `o`, do not insert the leader for a trailing `//` comment.
+    const NO_OPEN_COMS = b'/';
+    /// `q`: `gq` formats comments too.
+    const Q_COMS = b'q';
+    /// `n`: recognise numbered lists when formatting.
+    const Q_NUMBER = b'n';
+    /// `2`: the second line of a paragraph gives the indent.
+    const Q_SECOND = b'2';
+    /// `v`: Vi-compatible wrapping — only on blanks typed this insert.
+    const INS_VI = b'v';
+    /// `l`: a line already longer than `'textwidth'` is not wrapped.
+    const INS_LONG = b'l';
+    /// `b`: wrap only on a blank at or before `'textwidth'`.
+    const INS_BLANK = b'b';
+    /// `m`: break before and after a multi-byte character.
+    const MBYTE_BREAK = b'm';
+    /// `M`: no space before or after a multi-byte character when joining.
+    const MBYTE_JOIN = b'M';
+    /// `B`: no space between two multi-byte characters when joining.
+    const MBYTE_JOIN2 = b'B';
+    /// `1`: do not break a line after a one-letter word.
+    const ONE_LETTER = b'1';
+    /// `w`: trailing white space continues the paragraph.
+    const WHITE_PAR = b'w';
+    /// `a`: reformat the paragraph on every change.
+    const AUTO = b'a';
+    /// `]`: respect `'textwidth'` rigorously.
+    const RIGOROUS_TW = b']';
+    /// `j`: remove comment leaders when joining lines.
+    const REMOVE_COMS = b'j';
+    /// `p`: do not break a single space after a period.
+    const PERIOD_ABBR = b'p';
+}
+
+crate::char_flags! {
+    /// A letter of `'backspace'` — what `<BS>` may erase in Insert mode.
+    /// Ask with [`can_bs`](crate::option::can_bs).
+    ///
+    /// [`NOSTOP`](Self::NOSTOP) behaves exactly like [`START`](Self::START)
+    /// except that it does not stop at the start of the insert point, so
+    /// `can_bs(START)` deliberately answers yes for either letter.
+    pub struct BsFlag;
+
+    /// `i`: erase autoindent.
+    const INDENT = b'i';
+    /// `l`: erase past the start of the line.
+    const EOL = b'l';
+    /// `s`: erase past the start of the insert point.
+    const START = b's';
+    /// `p`: [`START`](Self::START), without stopping at the insert point.
+    const NOSTOP = b'p';
+}
 
 /// The fixed value of `'maxcombine'`: the most composing characters that can
 /// follow a base character.

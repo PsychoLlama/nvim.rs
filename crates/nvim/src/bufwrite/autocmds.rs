@@ -17,9 +17,10 @@ use crate::ex_docmd::cmdmod_has;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
-use crate::types::{CmdModFlags, FAIL, OK, event_T};
+use crate::types::{CmdModFlags, CpoFlag, FAIL, OK, event_T};
 
 use super::*;
+use crate::option::cpo_has;
 
 /// How a write was asked for. Chooses which autocommand events fire, and is
 /// carried through `buf_write` because most of its decisions turn on these.
@@ -218,7 +219,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 if mode.req.reset_changed
                     && (*buf).b_changed != 0
                     && !mode.req.append
-                    && (mode.overwriting || !vim_strchr(p_cpo.get(), CPO_PLUS).is_null())
+                    && (mode.overwriting || cpo_has(CpoFlag::PLUS))
                 {
                     // Buffer still changed: the autocommands didn't work
                     // properly.

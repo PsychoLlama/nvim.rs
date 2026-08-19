@@ -11,8 +11,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
+use crate::types::CpoFlag;
 
 /// Walks `search_hl` together with a window's match list.
 ///
@@ -247,7 +249,7 @@ unsafe fn next_search_hl(
             if (*shl).lnum == 0 {
                 // No useful previous match: search from the line's start.
                 matchcol = 0;
-            } else if vim_strchr(p_cpo.get(), CPO_SEARCH).is_null()
+            } else if !cpo_has(CpoFlag::SEARCH)
                 || ((*shl).rm.endpos[0].lnum == 0
                     && (*shl).rm.endpos[0].col <= (*shl).rm.startpos[0].col)
             {
