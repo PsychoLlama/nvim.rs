@@ -146,10 +146,7 @@ fn prepare_exarg(eap: &mut exarg_T, mut buf: Buf) {
 }
 
 fn set_option_string(id: c_int, value: &'static CStr) {
-    let string = String_0 {
-        data: value.as_ptr().cast_mut(),
-        size: value.count_bytes(),
-    };
+    let string = String_0::from_raw_parts(value.as_ptr().cast_mut(), value.count_bytes());
     let val = OptVal {
         type_0: kOptValTypeString,
         data: OptValData { string },

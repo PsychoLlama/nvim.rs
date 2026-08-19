@@ -19,8 +19,8 @@ use core::{mem, ptr};
 /// `ascii_iswhite` has already answered false for one and returned.
 pub(crate) unsafe fn string_iswhite(str: String_0) -> bool {
     unsafe {
-        for i in 0..str.size {
-            if !ascii_iswhite(*str.data.add(i) as c_int) {
+        for i in 0..str.len() {
+            if !ascii_iswhite(*str.data().add(i) as c_int) {
                 return false;
             }
         }
@@ -175,9 +175,9 @@ pub(crate) unsafe fn build_cmdline_str(
         let argstart_idx: size_t = cmdline.size;
         for i in 0..argc {
             let s: String_0 = (*args.items.add(i)).data.string;
-            *(*eap).arglens.add(i) = s.size;
+            *(*eap).arglens.add(i) = s.len();
             cmdline_concat_str(&raw mut cmdline, c" ");
-            cmdline_concat(&raw mut cmdline, s.data, s.size);
+            cmdline_concat(&raw mut cmdline, s.data(), s.len());
         }
         // The NUL is part of `size`, so that `arg` below can point at it.
         cmdline_concat(&raw mut cmdline, c"".as_ptr(), 1);

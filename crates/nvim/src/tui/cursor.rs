@@ -92,13 +92,13 @@ pub unsafe fn decode_cursor_entry(args: Dict) -> cursorentry_T {
         let mut entry = shape_entry(SHAPE_IDX_N);
         for i in 0..args.size {
             let item = &*args.items.add(i);
-            let key = if item.key.data.is_null() {
+            let key = if item.key.data().is_null() {
                 b"".as_slice()
             } else {
-                CStr::from_ptr(item.key.data).to_bytes()
+                CStr::from_ptr(item.key.data()).to_bytes()
             };
             match key {
-                b"cursor_shape" => entry.shape = decode_shape(item.value.data.string.data),
+                b"cursor_shape" => entry.shape = decode_shape(item.value.data.string.data()),
                 b"blinkon" => entry.blinkon = item.value.data.integer as c_int,
                 b"blinkoff" => entry.blinkoff = item.value.data.integer as c_int,
                 b"attr_id" => entry.id = item.value.data.integer as c_int,

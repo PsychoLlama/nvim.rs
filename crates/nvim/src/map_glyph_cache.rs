@@ -78,7 +78,7 @@ pub unsafe fn mh_put_glyph(
     if (*(*h).hash.offset(idx as isize)).wrapping_add(1 as uint32_t) <= 1 as uint32_t {
         (*h).size = (*h).size.wrapping_add(1);
         (*h).n_occupied = (*h).n_occupied.wrapping_add(1);
-        let mut size: uint32_t = (key.size as uint32_t).wrapping_add(1 as uint32_t);
+        let mut size: uint32_t = (key.len() as uint32_t).wrapping_add(1 as uint32_t);
         let mut pos: uint32_t = (*h).n_keys;
         (*h).n_keys = (*h).n_keys.wrapping_add(size);
         if (*h).n_keys > (*h).keys_capacity {
@@ -99,10 +99,10 @@ pub unsafe fn mh_put_glyph(
         }
         memcpy(
             (*set).keys.offset(pos as isize) as *mut ::core::ffi::c_void,
-            key.data as *const ::core::ffi::c_void,
-            key.size,
+            key.data() as *const ::core::ffi::c_void,
+            key.len(),
         );
-        *(*set).keys.add((pos as size_t).wrapping_add(key.size)) = NUL as ::core::ffi::c_char;
+        *(*set).keys.add((pos as size_t).wrapping_add(key.len())) = NUL as ::core::ffi::c_char;
         *(*h).hash.offset(idx as isize) = pos.wrapping_add(1 as uint32_t);
         return pos;
     } else {

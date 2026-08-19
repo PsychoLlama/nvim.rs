@@ -11,7 +11,6 @@
 
 use crate::semsg_c;
 use core::ffi::{CStr, c_int, c_void};
-use core::ptr;
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, nlua_pop_Object};
 use crate::api::private::helpers::{
@@ -35,12 +34,6 @@ use ::libc::memchr;
 
 /// Refused when the Lua stack will not grow far enough to walk the table.
 const E1502_GROW_STACK: &CStr = c"E1502: Lua failed to grow stack to %i";
-
-/// The empty [`String_0`], for the paths that answer "no string".
-const EMPTY_STRING: String_0 = String_0 {
-    data: ptr::null_mut(),
-    size: 0,
-};
 
 /// Classify the table on top of the stack.
 ///
@@ -181,12 +174,13 @@ pub unsafe fn nlua_pop_String(
         if lua_type(lstate, -1) != LUA_TSTRING {
             lua_pop(lstate, 1);
             api_set_error(err, kErrorTypeValidation, c"Expected Lua string".as_ptr());
-            return EMPTY_STRING;
+            return String_0::NULL;
         }
-        let mut ret = EMPTY_STRING;
-        ret.data = lua_tolstring(lstate, -1, &raw mut ret.size).cast_mut();
-        debug_assert!(!ret.data.is_null());
-        ret.data = arena_memdupz(arena, ret.data, ret.size);
+        let mut ret = String_0::NULL;
+        let data = lua_tolstring(lstate, -1, ret.len_mut()).cast_mut();
+        ret.set_data(data);
+        debug_assert!(!ret.data().is_null());
+        ret.set_data(arena_memdupz(arena, ret.data(), ret.len()));
         lua_pop(lstate, 1);
         ret
     }

@@ -234,11 +234,11 @@ pub unsafe fn get_clipboard(mut name: c_int, target: &mut *mut yankreg_T, quiet:
                 }
             }
 
-            if (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size - 1)).size == 0 {
+            if (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size - 1)).len() == 0 {
                 // A known-to-be charwise yank might have a final linebreak, but
                 // otherwise there is no line after the final newline.
                 if (*reg).y_type != kMTCharWise {
-                    xfree((*(*reg).y_array.add((*reg).y_size - 1)).data as *mut c_void);
+                    xfree((*(*reg).y_array.add((*reg).y_size - 1)).data() as *mut c_void);
                     (*reg).y_size -= 1;
                     if (*reg).y_type == kMTUnknown {
                         (*reg).y_type = kMTLineWise;
@@ -256,7 +256,7 @@ pub unsafe fn get_clipboard(mut name: c_int, target: &mut *mut yankreg_T, quiet:
         // Error path: leave the register empty.
         if !(*reg).y_array.is_null() {
             for i in 0..(*reg).y_size {
-                xfree((*(*reg).y_array.add(i)).data as *mut c_void);
+                xfree((*(*reg).y_array.add(i)).data() as *mut c_void);
             }
             xfree((*reg).y_array as *mut c_void);
         }
@@ -305,7 +305,7 @@ pub unsafe fn set_clipboard(mut name: c_int, reg: *mut yankreg_T) {
         let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
         for i in 0..reg.y_size {
             let line = *reg.y_array.add(i);
-            tv_list_append_string(lines, line.data, line.size as ssize_t);
+            tv_list_append_string(lines, line.data(), line.len() as ssize_t);
         }
         if trailing {
             tv_list_append_string(lines, core::ptr::null(), 0);

@@ -14,7 +14,7 @@ use crate::highlight::HlAttrFlags;
 
 pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
     unsafe {
-        return syn_check_group(name.data, name.size) as Integer;
+        return syn_check_group(name.data(), name.len()) as Integer;
     }
 }
 
@@ -39,12 +39,12 @@ pub unsafe fn nvim_set_hl(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut hl_id: ::core::ffi::c_int = syn_check_group(name.data, name.size);
+        let mut hl_id: ::core::ffi::c_int = syn_check_group(name.data(), name.len());
         if !(hl_id != 0 as ::core::ffi::c_int) {
             api_err_invalid(
                 err,
                 c"highlight name".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
@@ -132,7 +132,7 @@ pub unsafe fn nvim_set_hl_ns_fast(ns_id: Integer) {
 pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
     unsafe {
         // An API string is NUL-terminated.
-        return name_to_color(::core::ffi::CStr::from_ptr(name.data)).0 as Integer;
+        return name_to_color(::core::ffi::CStr::from_ptr(name.data())).0 as Integer;
     }
 }
 

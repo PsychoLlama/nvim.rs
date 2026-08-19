@@ -490,8 +490,8 @@ unsafe fn ex_let_option(
                         boolean_optval(tristate_from_int(new_n))
                     };
                 } else if curval.type_0 == kOptValTypeString {
-                    let curval_data = curval.data.string.data;
-                    let newval_data = newval.data.string.data;
+                    let curval_data = curval.data.string.data();
+                    let newval_data = newval.data.string.data();
                     if !curval_data.is_null() && !newval_data.is_null() {
                         let newval_old = newval;
                         newval = OptVal {

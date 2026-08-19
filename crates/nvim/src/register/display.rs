@@ -79,7 +79,7 @@ unsafe fn dis_register(yb: *mut yankreg_T, name: c_int, type_0: c_int, hl_id: c_
         let mut do_show = false;
         let mut j: size_t = 0;
         while !do_show && j < (*yb).y_size {
-            do_show = !message_filtered((*(*yb).y_array.add(j)).data);
+            do_show = !message_filtered((*(*yb).y_array.add(j)).data());
             j = j.wrapping_add(1);
         }
         if !do_show && (*yb).y_size != 0 {
@@ -103,7 +103,7 @@ unsafe fn dis_register(yb: *mut yankreg_T, name: c_int, type_0: c_int, hl_id: c_
                 msg_puts_hl(c"^J".as_ptr(), hl_id, false);
                 n -= 2;
             }
-            let mut p = (*(*yb).y_array.add(j)).data;
+            let mut p = (*(*yb).y_array.add(j)).data();
             while c_int::from(*p) != NUL && {
                 n -= ptr2cells(p);
                 n >= 0
@@ -183,7 +183,7 @@ pub unsafe fn ex_display(eap: *mut exarg_T) {
             arg,
             '.' as c_int,
             c"\n  c  \".   ".as_ptr(),
-            insert.data,
+            insert.data(),
             true,
         );
         dis_special(

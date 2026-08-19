@@ -129,12 +129,12 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             // The Blob adopts the packer's allocation as-is, capacity and
             // all; nothing copies.
             let b: *mut blob_T = tv_blob_alloc_ret(rettv);
-            (*b).bv_ga.ga_data = data.data as *mut c_void;
-            (*b).bv_ga.ga_len = data.size as c_int;
+            (*b).bv_ga.ga_data = data.data() as *mut c_void;
+            (*b).bv_ga.ga_len = data.len() as c_int;
             (*b).bv_ga.ga_maxlen = packer.endptr.offset_from(packer.startptr) as c_int;
         } else {
             let l = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-            encode_list_write(l as *mut c_void, data.data, data.size);
+            encode_list_write(l as *mut c_void, data.data(), data.len());
             api_free_string(data);
         }
     }

@@ -55,12 +55,12 @@ pub unsafe fn nvim_get_autocmds(
             match (*opts).group.type_0 as ::core::ffi::c_uint {
                 kObjectTypeNil => {}
                 kObjectTypeString => {
-                    group = augroup_find((*opts).group.data.string.data);
+                    group = augroup_find((*opts).group.data.string.data());
                     if !(group >= 0 as ::core::ffi::c_int) {
                         api_err_invalid(
                             err,
                             c"group".as_ptr(),
-                            (*opts).group.data.string.data,
+                            (*opts).group.data.string.data(),
                             0 as int64_t,
                             true,
                         );
@@ -122,7 +122,7 @@ pub unsafe fn nvim_get_autocmds(
                             api_err_invalid(
                                 err,
                                 c"event".as_ptr(),
-                                v.data.string.data,
+                                v.data.string.data(),
                                 0 as int64_t,
                                 true,
                             );
@@ -156,7 +156,7 @@ pub unsafe fn nvim_get_autocmds(
                                 api_err_invalid(
                                     err,
                                     c"event".as_ptr(),
-                                    event_v.data.string.data,
+                                    event_v.data.string.data(),
                                     0 as int64_t,
                                     true,
                                 );
@@ -210,7 +210,7 @@ pub unsafe fn nvim_get_autocmds(
                         if v_0.type_0 as ::core::ffi::c_uint
                             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
-                            pattern_filters[pattern_filter_count as usize] = v_0.data.string.data;
+                            pattern_filters[pattern_filter_count as usize] = v_0.data.string.data();
                             pattern_filter_count += 1 as ::core::ffi::c_int;
                         } else if v_0.type_0 as ::core::ffi::c_uint
                             == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -242,7 +242,7 @@ pub unsafe fn nvim_get_autocmds(
                                     break '_cleanup;
                                 }
                                 pattern_filters[pattern_filter_count as usize] =
-                                    item.data.string.data;
+                                    item.data.string.data();
                                 pattern_filter_count += 1 as ::core::ffi::c_int;
                                 item_index = item_index.wrapping_add(1);
                             }
@@ -339,7 +339,7 @@ pub unsafe fn nvim_get_autocmds(
                 let mut bufnr_index_0: size_t = 0 as size_t;
                 while bufnr_index_0 < buffers.size {
                     let mut bufnr_0: Object = *buffers.items.add(bufnr_index_0);
-                    pattern_filters[pattern_filter_count as usize] = bufnr_0.data.string.data;
+                    pattern_filters[pattern_filter_count as usize] = bufnr_0.data.string.data();
                     pattern_filter_count += 1 as ::core::ffi::c_int;
                     bufnr_index_0 = bufnr_index_0.wrapping_add(1);
                 }
@@ -443,13 +443,7 @@ pub unsafe fn nvim_get_autocmds(
                                                 dict_put(
                                                     &mut autocmd_info,
                                                     c"command",
-                                                    Object::string(String_0 {
-                                                        data: ::core::ptr::null_mut::<
-                                                            ::core::ffi::c_char,
-                                                        >(
-                                                        ),
-                                                        size: 0 as size_t,
-                                                    }),
+                                                    Object::string(String_0::NULL),
                                                 );
                                                 let mut cb: *mut Callback =
                                                     &raw mut (*ac).handler_fn;

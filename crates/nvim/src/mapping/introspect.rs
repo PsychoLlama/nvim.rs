@@ -383,15 +383,15 @@ pub unsafe fn f_mapcheck(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// `mode` must be a live API string.
 pub(crate) unsafe fn parse_shortname_mode(mode: String_0) -> (c_int, bool, *mut c_char) {
     unsafe {
-        let mut p = if mode.size > 0 {
-            mode.data
+        let mut p = if mode.len() > 0 {
+            mode.data()
         } else {
             c"m".as_ptr().cast_mut()
         };
         let forceit = c_int::from(*p) == c_int::from(b'!');
         let int_mode = get_map_mode(&raw mut p, forceit);
         if forceit {
-            debug_assert_eq!(p, mode.data);
+            debug_assert_eq!(p, mode.data());
             p = p.add(1);
         }
         let is_abbrev = int_mode & (MODE_INSERT | MODE_CMDLINE) != 0 && *p == b'a' as c_char;

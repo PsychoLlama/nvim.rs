@@ -444,7 +444,7 @@ pub unsafe fn nvim_win_set_config(
         );
         let mut old_style: WinStyle = (*w).w_config.style;
         let mut fconfig: WinConfig = (*w).w_config;
-        let mut to_split: bool = (*config).relative.size == 0 as size_t
+        let mut to_split: bool = (*config).relative.len() == 0 as size_t
             && !(has_key(
                 (*config).is_set__win_config_,
                 KEYSET_OPTIDX_win_config__external,

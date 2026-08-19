@@ -214,9 +214,9 @@ impl Put {
             let land = land_block(oldp, col);
             *textcol = land.textcol;
 
-            let yanklen = (*self.y_array.add(i)).size as c_int;
+            let yanklen = (*self.y_array.add(i)).len() as c_int;
             let spaces = if self.flags & PUT_BLOCK_INNER as c_int == 0 {
-                right_padding((*self.y_array.add(i)).data, self.y_width)
+                right_padding((*self.y_array.add(i)).data(), self.y_width)
             } else {
                 0
             };
@@ -251,7 +251,7 @@ impl Put {
             for j in 0..self.count {
                 memmove(
                     ptr as *mut c_void,
-                    (*self.y_array.add(i)).data as *const c_void,
+                    (*self.y_array.add(i)).data() as *const c_void,
                     yanklen as size_t,
                 );
                 ptr = ptr.offset(yanklen as isize);

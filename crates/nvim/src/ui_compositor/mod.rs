@@ -863,9 +863,9 @@ pub unsafe fn ui_comp_msg_set_pos(
     msg.comp_row = row as c_int;
     if scrolled && row > 0 {
         msg_sep_row.set(row as c_int - 1);
-        if !sep_char.data.is_null() {
+        if !sep_char.data().is_null() {
             // SAFETY: the caller's obligation.
-            msg_sep_char.set(unsafe { schar_from_buf(sep_char.data, sep_char.size) });
+            msg_sep_char.set(unsafe { schar_from_buf(sep_char.data(), sep_char.len()) });
         }
     } else {
         msg_sep_row.set(-1);

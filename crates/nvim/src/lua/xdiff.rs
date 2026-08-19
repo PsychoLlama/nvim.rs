@@ -47,14 +47,8 @@ pub const KEYSET_OPTIDX_xdl_diff__interhunkctxlen: ::core::ffi::c_int = 6 as ::c
 pub const KEYDICT_INIT: KeyDict_xdl_diff = KeyDict_xdl_diff {
     is_set__xdl_diff_: 0 as OptionalKeys,
     on_hunk: 0,
-    result_type: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
-    algorithm: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
+    result_type: String_0::NULL,
+    algorithm: String_0::NULL,
     ctxlen: 0,
     interhunkctxlen: 0,
     linematch: Object {
@@ -334,8 +328,8 @@ unsafe fn process_xdl_diff_opts(
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_xdl_diff__result_type
             != 0 as ::core::ffi::c_ulonglong
         {
-            if !strequal(c"unified".as_ptr(), opts.result_type.data) {
-                if strequal(c"indices".as_ptr(), opts.result_type.data) {
+            if !strequal(c"unified".as_ptr(), opts.result_type.data()) {
+                if strequal(c"indices".as_ptr(), opts.result_type.data()) {
                     had_result_type_indices = true;
                 } else {
                     api_set_error(
@@ -351,12 +345,12 @@ unsafe fn process_xdl_diff_opts(
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_xdl_diff__algorithm
             != 0 as ::core::ffi::c_ulonglong
         {
-            if !strequal(c"myers".as_ptr(), opts.algorithm.data) {
-                if strequal(c"minimal".as_ptr(), opts.algorithm.data) {
+            if !strequal(c"myers".as_ptr(), opts.algorithm.data()) {
+                if strequal(c"minimal".as_ptr(), opts.algorithm.data()) {
                     (*params).flags |= XDF_NEED_MINIMAL as ::core::ffi::c_ulong;
-                } else if strequal(c"patience".as_ptr(), opts.algorithm.data) {
+                } else if strequal(c"patience".as_ptr(), opts.algorithm.data()) {
                     (*params).flags |= XDF_PATIENCE_DIFF as ::core::ffi::c_ulong;
-                } else if strequal(c"histogram".as_ptr(), opts.algorithm.data) {
+                } else if strequal(c"histogram".as_ptr(), opts.algorithm.data()) {
                     (*params).flags |= XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong;
                 } else {
                     api_set_error(err, kErrorTypeValidation, c"not a valid algorithm".as_ptr());

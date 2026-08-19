@@ -115,13 +115,8 @@ pub unsafe fn nlua_pop_Object(
                     let s = lua_tolstring(lstate, -2, &raw mut len);
                     let idx = (*cur.obj).data.dict.size;
                     (*cur.obj).data.dict.size = idx.wrapping_add(1);
-                    (*(*cur.obj).data.dict.items.add(idx)).key = arena_string(
-                        arena,
-                        String_0 {
-                            data: s.cast_mut(),
-                            size: len,
-                        },
-                    );
+                    (*(*cur.obj).data.dict.items.add(idx)).key =
+                        arena_string(arena, String_0::from_raw_parts(s.cast_mut(), len));
                     stack.push(cur);
                     cur = ObjPopStackItem::leaf(
                         &raw mut (*(*cur.obj).data.dict.items.add(idx)).value,
@@ -151,10 +146,7 @@ pub unsafe fn nlua_pop_Object(
                         let s = lua_tolstring(lstate, -1, &raw mut len);
                         *cur.obj = Object::string(arena_string(
                             arena,
-                            String_0 {
-                                data: s.cast_mut(),
-                                size: len,
-                            },
+                            String_0::from_raw_parts(s.cast_mut(), len),
                         ));
                         break 'converted;
                     }

@@ -116,7 +116,7 @@ pub unsafe fn nvim_call_atomic(
                     .data
                     .array;
                 let mut handler: MsgpackRpcRequestHandler =
-                    msgpack_rpc_get_handler_for(name.data, name.size, &raw mut nested_error);
+                    msgpack_rpc_get_handler_for(name.data(), name.len(), &raw mut nested_error);
                 if nested_error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                 {
                     break;

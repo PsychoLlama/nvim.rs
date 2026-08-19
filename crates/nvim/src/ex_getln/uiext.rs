@@ -43,10 +43,7 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
             push(&mut item, Object::integer(0));
             push(
                 &mut item,
-                Object::string(String_0 {
-                    data: buf,
-                    size: len,
-                }),
+                Object::string(String_0::from_raw_parts(buf, len)),
             );
             push(&mut item, Object::integer(0));
             push(&mut content, Object::array(item));
@@ -68,10 +65,10 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: *mut CmdlineInfo) {
                 debug_assert!(chunk.end >= chunk.start);
                 push(
                     &mut item,
-                    Object::string(String_0 {
-                        data: (*line).cmdbuff.offset(chunk.start as isize),
-                        size: (chunk.end - chunk.start) as size_t,
-                    }),
+                    Object::string(String_0::from_raw_parts(
+                        (*line).cmdbuff.offset(chunk.start as isize),
+                        (chunk.end - chunk.start) as size_t,
+                    )),
                 );
                 push(&mut item, Object::integer(chunk.hl_id as Integer));
                 push(&mut content, Object::array(item));

@@ -346,7 +346,7 @@ unsafe fn get_option_newval(
                     opt_idx,
                     argp,
                     varp,
-                    oldval.data.string.data,
+                    oldval.data.string.data(),
                     &raw mut op,
                     flags,
                 );

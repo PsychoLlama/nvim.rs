@@ -93,10 +93,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const STRING_INIT: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-};
 pub const DECOR_ID_INVALID: ::core::ffi::c_uint = UINT32_MAX;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
 pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {
@@ -163,7 +159,6 @@ pub const KEYSET_OPTIDX_get_extmarks__type: ::core::ffi::c_int = 1 as ::core::ff
 pub const KEYSET_OPTIDX_get_extmarks__limit: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_get_extmarks__hl_name: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_ns_opts__wins: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const NULL_STRING: String_0 = STRING_INIT;
 pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
     is_set__ns_opts_: 0 as OptionalKeys,
     wins: Array {

@@ -107,7 +107,7 @@ unsafe fn field(dict: &Dict, index: size_t) -> (&CStr, &Object) {
     // and its key is a NUL-terminated string.
     unsafe {
         let pair = &*dict.items.add(index);
-        (CStr::from_ptr(pair.key.data), &pair.value)
+        (CStr::from_ptr(pair.key.data()), &pair.value)
     }
 }
 
@@ -220,10 +220,8 @@ pub(crate) unsafe fn remote_request(
             type_0: kErrorTypeNone,
             msg: ptr::null_mut(),
         };
-        let script = String_0 {
-            data: CS_REMOTE.as_ptr() as *mut c_char,
-            size: CS_REMOTE.count_bytes(),
-        };
+        let script =
+            String_0::from_raw_parts(CS_REMOTE.as_ptr() as *mut c_char, CS_REMOTE.count_bytes());
         let reply = nlua_exec(
             script,
             ptr::null(),
@@ -262,14 +260,14 @@ pub(crate) unsafe fn remote_request(
                     if value.type_0 != kObjectTypeString {
                         bad_reply_type(c"errmsg");
                     }
-                    fprintf(stderr, c"%s\n".as_ptr(), value.data.string.data);
+                    fprintf(stderr, c"%s\n".as_ptr(), value.data.string.data());
                     os_exit(2);
                 }
                 b"result" => {
                     if value.type_0 != kObjectTypeString {
                         bad_reply_type(c"result");
                     }
-                    printf(c"%s".as_ptr(), value.data.string.data);
+                    printf(c"%s".as_ptr(), value.data.string.data());
                 }
                 b"tabbed" => {
                     if value.type_0 != kObjectTypeBoolean {

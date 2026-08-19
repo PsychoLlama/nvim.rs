@@ -219,9 +219,9 @@ pub(crate) unsafe fn get_next_include_file_completion(compl_type: c_int) {
     unsafe {
         let pattern = compl_pattern.get();
         find_pattern_in_path(
-            pattern.data,
+            pattern.data(),
             compl_direction.get(),
-            pattern.size,
+            pattern.len(),
             false,
             false,
             if compl_type == CTRL_X_PATH_DEFINES && compl_cont_status.get() & CONT_SOL == 0 {
@@ -246,7 +246,7 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
     dict_f: c_int,
 ) {
     unsafe {
-        let pattern = compl_pattern.get().data;
+        let pattern = compl_pattern.get().data();
         if thesaurus_func_complete(compl_type) {
             expand_by_function(compl_type, pattern, ptr::null_mut());
             return;
@@ -278,7 +278,7 @@ pub(crate) unsafe fn get_next_tag_completion() {
     unsafe {
         // Set `p_ic` from `p_ic`, `p_scs` and the pattern, for `find_tags`.
         let save_p_ic = p_ic.get();
-        p_ic.set(ignorecase(compl_pattern.get().data));
+        p_ic.set(ignorecase(compl_pattern.get().data()));
         g_tag_at_cursor.set(true);
 
         let mut matches: *mut *mut c_char = ptr::null_mut();
@@ -286,7 +286,7 @@ pub(crate) unsafe fn get_next_tag_completion() {
         // Bounded to TAG_MANY, which is what stops an empty pattern finding
         // an enormous number of matches.
         if find_tags(
-            compl_pattern.get().data,
+            compl_pattern.get().data(),
             &raw mut num_matches,
             &raw mut matches,
             TAG_REGEXP
@@ -329,7 +329,7 @@ pub(crate) unsafe fn get_next_filename_completion() {
             let last_sep = strrchr(leader, PATHSEP);
             if last_sep.is_null() {
                 // No path separator: match everything in the current dir.
-                xfree(compl_pattern.get().data.cast::<c_void>());
+                xfree(compl_pattern.get().data().cast::<c_void>());
                 compl_pattern.set(cbuf_to_string(c"*".as_ptr(), 1));
             } else if *last_sep.offset(1) as c_int == NUL {
                 // The leader ends in a separator: nothing to fuzzy-match.
@@ -345,11 +345,8 @@ pub(crate) unsafe fn get_next_filename_completion() {
                     path_len as c_int,
                     leader,
                 );
-                xfree(compl_pattern.get().data.cast::<c_void>());
-                compl_pattern.set(String_0 {
-                    data: path_with_wildcard,
-                    size: path_len + 1,
-                });
+                xfree(compl_pattern.get().data().cast::<c_void>());
+                compl_pattern.set(String_0::from_raw_parts(path_with_wildcard, path_len + 1));
                 // Restrict the leader to the file-name part.
                 leader = last_sep.offset(1);
                 leader_len -= path_len;
@@ -358,7 +355,7 @@ pub(crate) unsafe fn get_next_filename_completion() {
 
         if expand_wildcards(
             1,
-            &raw mut (*compl_pattern.ptr()).data,
+            (*compl_pattern.ptr()).data_mut(),
             &raw mut num_matches,
             &raw mut matches,
             ExpandFlags::FILE | ExpandFlags::DIR | ExpandFlags::ADDSLASH | ExpandFlags::SILENT,
@@ -368,7 +365,7 @@ pub(crate) unsafe fn get_next_filename_completion() {
         }
 
         // Expand `~/` so the completion shows the shortened name.
-        tilde_replace(compl_pattern.get().data, num_matches, matches);
+        tilde_replace(compl_pattern.get().data(), num_matches, matches);
 
         if in_fuzzy_collect {
             let mut fuzzy_indices = GARRAY_T_INIT;
@@ -456,8 +453,8 @@ pub(crate) unsafe fn get_next_cmdline_completion() {
         let pattern = compl_pattern.get();
         if expand_cmdline(
             compl_xp.ptr(),
-            pattern.data,
-            pattern.size as c_int,
+            pattern.data(),
+            pattern.len() as c_int,
             &raw mut num_matches,
             &raw mut matches,
         ) == Expanded::Ok
@@ -471,7 +468,7 @@ pub(crate) unsafe fn get_next_cmdline_completion() {
 pub(crate) unsafe fn get_next_spell_completion(lnum: linenr_T) {
     unsafe {
         let mut matches: *mut *mut c_char = ptr::null_mut();
-        let num_matches = expand_spelling(lnum, compl_pattern.get().data, &raw mut matches);
+        let num_matches = expand_spelling(lnum, compl_pattern.get().data(), &raw mut matches);
         if num_matches > 0 {
             ins_compl_add_matches(num_matches, matches, p_ic.get());
         } else {
@@ -508,11 +505,11 @@ pub(crate) unsafe fn get_next_completion_match(
                     // Invoked by an `F`/`o` entry in 'complete'.
                     get_cpt_func_completion_matches((*st).func_cb);
                 } else {
-                    expand_by_function(type_0, compl_pattern.get().data, ptr::null_mut());
+                    expand_by_function(type_0, compl_pattern.get().data(), ptr::null_mut());
                 }
             }
             CTRL_X_OMNI => {
-                expand_by_function(type_0, compl_pattern.get().data, ptr::null_mut());
+                expand_by_function(type_0, compl_pattern.get().data(), ptr::null_mut());
             }
             CTRL_X_SPELL => get_next_spell_completion((*st).first_match_pos.lnum),
             CTRL_X_BUFNAMES => get_next_bufname_token(),
@@ -680,7 +677,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: *mut pos_T) -> c_int {
 
             // If complete() was called then `compl_pattern` has been reset and
             // the rest of this cannot work; bail out.
-            if compl_pattern.get().data.is_null() {
+            if compl_pattern.get().data().is_null() {
                 break;
             }
 

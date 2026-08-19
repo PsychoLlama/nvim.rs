@@ -126,31 +126,19 @@ pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
     fixed: false,
     focusable: false,
     footer: NIL,
-    footer_pos: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
+    footer_pos: String_0::NULL,
     hide: false,
     height: 0,
     mouse: false,
-    relative: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
+    relative: String_0::NULL,
     row: 0.,
-    style: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
+    style: String_0::NULL,
     noautocmd: false,
     vertical: false,
     win: 0,
     width: 0,
     zindex: 0,
-    anchor: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
+    anchor: String_0::NULL,
     border: NIL,
     bufpos: Array {
         size: 0,
@@ -158,15 +146,9 @@ pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
         items: ::core::ptr::null_mut::<Object>(),
     },
     col: 0.,
-    split: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
+    split: String_0::NULL,
     title: NIL,
-    title_pos: String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    },
+    title_pos: String_0::NULL,
     _cmdline_offset: 0,
 };
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

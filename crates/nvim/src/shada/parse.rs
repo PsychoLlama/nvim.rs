@@ -119,7 +119,7 @@ unsafe fn parse_search_pattern(
                 *error,
             );
             // The keyset may have been left holding a borrowed pattern.
-            (*it).pat = NULL_STRING;
+            (*it).pat = String_0::NULL;
             return Err(Malformed);
         }
         if !has_key(
@@ -157,7 +157,7 @@ unsafe fn parse_mark(
             n: 0,
             l: 0,
             c: 0,
-            f: NULL_STRING,
+            f: String_0::NULL,
         };
         if !cursor.keydict(
             (&raw mut it).cast::<c_void>(),
@@ -198,7 +198,7 @@ unsafe fn parse_mark(
             (*mark).mark.col = it.c as colnr_T;
         }
         if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__f) {
-            (*mark).fname = xmemdupz(it.f.data.cast::<c_void>(), it.f.size).cast::<c_char>();
+            (*mark).fname = xmemdupz(it.f.data().cast::<c_void>(), it.f.len()).cast::<c_char>();
         }
 
         if (*mark).fname.is_null() {
@@ -371,7 +371,7 @@ unsafe fn parse_history(
             return Err(Malformed);
         };
         let item = cursor.string();
-        if item.data.is_null() {
+        if item.data().is_null() {
             semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: history entry at position %lu has wrong history string type"
@@ -381,7 +381,7 @@ unsafe fn parse_history(
             );
             return Err(Malformed);
         }
-        let text = core::slice::from_raw_parts(item.data.cast::<u8>(), item.size);
+        let text = item.as_bytes();
         if text.contains(&0) {
             semsg_c!(
                 gettext(
@@ -453,7 +453,7 @@ unsafe fn parse_variable(
             return Err(Malformed);
         }
         let name = cursor.string();
-        if name.data.is_null() {
+        if name.data().is_null() {
             semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: variable entry at position %lu has wrong variable name type"
@@ -464,11 +464,11 @@ unsafe fn parse_variable(
             return Err(Malformed);
         }
         let global_var = &raw mut (*entry).data.global_var;
-        (*global_var).name = xmemdupz(name.data.cast::<c_void>(), name.size).cast::<c_char>();
+        (*global_var).name = xmemdupz(name.data().cast::<c_void>(), name.len()).cast::<c_char>();
 
         let binval = cursor.string();
         let mut is_blob = false;
-        if !binval.data.is_null() {
+        if !binval.data().is_null() {
             if len > 2 {
                 if cursor.integer() != Some(VAR_TYPE_BLOB as Integer) {
                     semsg_c!(
@@ -482,7 +482,7 @@ unsafe fn parse_variable(
                 }
                 is_blob = true;
             }
-            (*global_var).value = decode_string(binval.data, binval.size, is_blob, false);
+            (*global_var).value = decode_string(binval.data(), binval.len(), is_blob, false);
         } else if cursor.typval(&raw mut (*global_var).value) as c_uint != MPACK_OK {
             semsg_c!(
                 gettext(
@@ -516,7 +516,7 @@ unsafe fn parse_sub_string(
             return Err(Malformed);
         }
         let sub = cursor.string();
-        if sub.data.is_null() {
+        if sub.data().is_null() {
             semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: sub string entry at position %lu has wrong sub string type"
@@ -527,7 +527,7 @@ unsafe fn parse_sub_string(
             return Err(Malformed);
         }
         (*entry).data.sub_string.sub =
-            xmemdupz(sub.data.cast::<c_void>(), sub.size).cast::<c_char>();
+            xmemdupz(sub.data().cast::<c_void>(), sub.len()).cast::<c_char>();
         Ok((len - 1) as uint32_t)
     }
 }
@@ -567,7 +567,7 @@ unsafe fn parse_buffer_list(
                 is_set___shada_buflist_item_: 0,
                 l: 0,
                 c: 0,
-                f: NULL_STRING,
+                f: String_0::NULL,
             };
             let mut item_extra = KV_INITIAL_VALUE;
             if !cursor.keydict(
@@ -606,7 +606,7 @@ unsafe fn parse_buffer_list(
                 it.is_set___shada_buflist_item_,
                 KEYSET_OPTIDX__shada_buflist_item__f,
             ) {
-                (*e).fname = xmemdupz(it.f.data.cast::<c_void>(), it.f.size).cast::<c_char>();
+                (*e).fname = xmemdupz(it.f.data().cast::<c_void>(), it.f.len()).cast::<c_char>();
             }
 
             let complaint: Option<&CStr> = if (*e).pos.lnum <= 0 {

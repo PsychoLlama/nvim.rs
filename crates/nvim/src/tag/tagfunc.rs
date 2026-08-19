@@ -46,7 +46,7 @@ pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
     // option string and `os_buf` is the buffer it applies to.
     unsafe {
         let buf = (*args).os_buf.cast::<buf_T>();
-        let value = (*args).os_newval.string.data;
+        let value = (*args).os_newval.string.data();
         let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func(value, &raw mut (*buf).b_tfu_cb)
         } else {

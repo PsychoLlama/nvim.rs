@@ -436,10 +436,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
             }
             // Set up the preview namespace if it is not already set.
             if cmdpreview_ns.get() == 0 {
-                cmdpreview_ns.set(nvim_create_namespace(String_0 {
-                    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0,
-                }) as ::core::ffi::c_int);
+                cmdpreview_ns.set(nvim_create_namespace(String_0::NULL) as ::core::ffi::c_int);
             }
 
             cmdpreview.set(true);

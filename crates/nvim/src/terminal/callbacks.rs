@@ -119,10 +119,10 @@ pub fn buf_set_term_title(buf: Option<Buf>, title: &[u8]) {
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut(),
     };
-    let title = Object::string(String_0 {
-        data: title.as_ptr().cast::<c_char>().cast_mut(),
-        size: title.len(),
-    });
+    let title = Object::string(String_0::from_raw_parts(
+        title.as_ptr().cast::<c_char>().cast_mut(),
+        title.len(),
+    ));
     let (vars, key, arena) = (
         buf.b_vars,
         static_cstring(c"term_title"),

@@ -426,10 +426,7 @@ fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
     // SAFETY: `text` holds its own length in readable bytes, and the copy
     // becomes the event's to free.
     let copy = unsafe { xmemdupz(text.as_ptr().cast(), text.len()) };
-    let owned = String_0 {
-        data: copy.cast(),
-        size: text.len(),
-    };
+    let owned = String_0::from_raw_parts(copy.cast(), text.len());
     let parts = [
         Object::integer(attr as Integer),
         Object::string(owned),

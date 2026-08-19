@@ -81,10 +81,7 @@ pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> schar_T {
             return sc;
         }
 
-        let str = String_0 {
-            data: buf as *mut c_char,
-            size: len,
-        };
+        let str = String_0::from_raw_parts(buf as *mut c_char, len);
         let mut status: MHPutStatus = kMHExisting;
         let idx = mh_put_glyph(GLYPH_CACHE.ptr(), str, &raw mut status);
         debug_assert!(idx < 0xffffff, "idx < 0xFFFFFF");

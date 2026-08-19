@@ -40,11 +40,6 @@ use crate::types::{ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-const EMPTY_STRING: String_0 = String_0 {
-    data: ptr::null_mut(),
-    size: 0,
-};
-
 const EMPTY_ARRAY: Array = Array {
     size: 0,
     capacity: 0,
@@ -136,7 +131,7 @@ pub unsafe fn nvim_cmd(
     // it for the whole of `execute_cmd`.
     let mut cmdline: *mut c_char = ptr::null_mut();
 
-    let mut retv = EMPTY_STRING;
+    let mut retv = String_0::NULL;
     // SAFETY: `arena` is the dispatcher's, live for the call.
     if unsafe { prepare_cmd(cmd, &mut ea, &mut cmdinfo, &mut cmdline, arena, err) } {
         // SAFETY: `prepare_cmd` returning true means `ea`/`cmdinfo` describe
@@ -187,7 +182,7 @@ unsafe fn prepare_cmd(
         let first = if args.size > 0 {
             // SAFETY: `args` was built above; item 0 is in bounds and is a
             // String by construction.
-            unsafe { (*args.items).data.string.data }
+            unsafe { (*args.items).data.string.data() }
         } else {
             ptr::null_mut()
         };
@@ -236,7 +231,7 @@ unsafe fn resolve_command(
     }
 
     // SAFETY: the key is set, so `cmd.cmd` is a NUL-terminated keydict String.
-    let named = unsafe { *cmd.cmd.data } as c_int != NUL;
+    let named = unsafe { *cmd.cmd.data() } as c_int != NUL;
     let has_range = has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__range) && cmd.range.size > 0;
     let has_mods = has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__mods);
 
@@ -247,7 +242,7 @@ unsafe fn resolve_command(
 
     // SAFETY: `arena` is the caller's; `find_ex_command` reads `ea.cmd`,
     // which the arena copy keeps alive for the whole call.
-    let cmdname = unsafe { arena_string(arena, cmd.cmd) }.data;
+    let cmdname = unsafe { arena_string(arena, cmd.cmd) }.data();
     ea.cmd = cmdname;
     let mut p = unsafe { find_ex_command(ea, ptr::null_mut()) };
 
@@ -260,7 +255,7 @@ unsafe fn resolve_command(
     {
         // SAFETY: as above.
         unsafe {
-            p = arena_string(arena, cmd.cmd).data;
+            p = arena_string(arena, cmd.cmd).data();
             let ret = apply_autocmds(EVENT_CMDUNDEFINED, p, p, true, ptr::null_mut());
             p = if ret as c_int != 0 && !aborting() {
                 find_ex_command(ea, ptr::null_mut())
@@ -341,9 +336,9 @@ unsafe fn collect_args(
                 kObjectTypeString => {
                     let str = first.data.string;
                     let mut endptr: *mut c_char = ptr::null_mut();
-                    let val = strtol(str.data, &raw mut endptr, 10);
+                    let val = strtol(str.data(), &raw mut endptr, 10);
                     // The whole string has to be the number.
-                    (*endptr as c_int == NUL && str.size > 0).then_some(val as int64_t)
+                    (*endptr as c_int == NUL && str.len() > 0).then_some(val as int64_t)
                 }
                 _ => None,
             }
@@ -519,13 +514,13 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool 
         err_cannot_accept(err, c"register", cmd);
         return false;
     }
-    if cmd.reg.size != 1 {
-        err_expected(err, c"reg", c"single character", cmd.reg.data);
+    if cmd.reg.len() != 1 {
+        err_expected(err, c"reg", c"single character", cmd.reg.data());
         return false;
     }
 
     // SAFETY: the size is 1, so byte 0 is in bounds.
-    let regname = unsafe { *cmd.reg.data };
+    let regname = unsafe { *cmd.reg.data() };
     if regname as c_int == '=' as c_int {
         err_validation(err, c"Cannot use register \"=");
         return false;
@@ -572,7 +567,7 @@ fn err_cannot_accept(err: &mut Error, what: &CStr, cmd: &KeyDict_cmd) {
             kErrorTypeValidation,
             c"Command cannot accept %s: %s".as_ptr(),
             what.as_ptr(),
-            cmd.cmd.data,
+            cmd.cmd.data(),
         )
     };
 }
@@ -658,7 +653,7 @@ fn apply_mods(
     }
     if has_key(mods.is_set__cmd_mods_, KEYSET_OPTIDX_cmd_mods__split) {
         // SAFETY: `mods.split` is a NUL-terminated keydict String.
-        let split = unsafe { CStr::from_ptr(mods.split.data) };
+        let split = unsafe { CStr::from_ptr(mods.split.data()) };
         match split_direction(split) {
             Some(Some(bit)) => cmdinfo.cmdmod.cmod_split |= bit,
             // The empty string is "no direction", not a bad one.
@@ -734,7 +729,7 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo, err: &m
     cmdinfo.cmdmod.cmod_filter_force = filter.force;
     // A bare `filter!` with an empty pattern still inverts the match.
     // SAFETY: `filter.pattern` is a NUL-terminated keydict String.
-    if unsafe { *filter.pattern.data } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
+    if unsafe { *filter.pattern.data() } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
         // SAFETY: the pattern outlives the compiled program, which
         // `undo_cmdmod` frees.
         unsafe {
@@ -831,21 +826,19 @@ unsafe fn run_cmd(
     // SAFETY: paired with the `try_enter` above.
     unsafe { try_leave(&raw mut tstate, err) };
 
-    let mut retv = EMPTY_STRING;
+    let mut retv = String_0::NULL;
     let failed = err.type_0 as c_int != kErrorTypeNone as c_int;
     if !failed && capture && capture_local.ga_len > 1 {
-        let captured = String_0 {
-            data: capture_local.ga_data.cast(),
-            size: capture_local.ga_len as size_t,
-        };
+        let captured =
+            String_0::from_raw_parts(capture_local.ga_data.cast(), capture_local.ga_len as size_t);
         // SAFETY: the garray holds `ga_len` bytes of message text.
         retv = unsafe { arena_string(arena, captured) };
         // Messages open with a newline the caller did not ask for.
         // SAFETY: the arena copy is non-empty and NUL-terminated.
-        if unsafe { *retv.data } as c_int == '\n' as c_int {
+        if unsafe { *retv.data() } as c_int == '\n' as c_int {
             // SAFETY: the copy is longer than the byte just skipped.
-            retv.data = unsafe { retv.data.add(1) };
-            retv.size -= 1;
+            retv.set_data(unsafe { retv.data().add(1) });
+            retv.set_len(retv.len() - 1);
         }
     }
     if capture {

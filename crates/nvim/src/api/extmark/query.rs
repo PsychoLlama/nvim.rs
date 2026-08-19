@@ -210,20 +210,20 @@ pub unsafe fn nvim_buf_get_extmarks(
             (*opts).is_set__get_extmarks_,
             KEYSET_OPTIDX_get_extmarks__type,
         ) {
-            if strequal((*opts).type_0.data, c"sign".as_ptr()) {
+            if strequal((*opts).type_0.data(), c"sign".as_ptr()) {
                 type_0 = kExtmarkSign;
-            } else if strequal((*opts).type_0.data, c"virt_text".as_ptr()) {
+            } else if strequal((*opts).type_0.data(), c"virt_text".as_ptr()) {
                 type_0 = kExtmarkVirtText;
-            } else if strequal((*opts).type_0.data, c"virt_lines".as_ptr()) {
+            } else if strequal((*opts).type_0.data(), c"virt_lines".as_ptr()) {
                 type_0 = kExtmarkVirtLines;
-            } else if strequal((*opts).type_0.data, c"highlight".as_ptr()) {
+            } else if strequal((*opts).type_0.data(), c"highlight".as_ptr()) {
                 type_0 = kExtmarkHighlight;
             } else if true {
                 api_err_exp(
                     err,
                     c"type".as_ptr(),
                     c"sign, virt_text, virt_lines or highlight".as_ptr(),
-                    (*opts).type_0.data,
+                    (*opts).type_0.data(),
                 );
                 return rv.reported(error);
             }
@@ -424,7 +424,7 @@ pub unsafe fn nvim__buf_debug_extmarks(
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return NULL_STRING.reported(error);
+            return String_0::NULL.reported(error);
         }
         return mt_inspect(&mut (*b).b_marktree[0], keys, dot).reported(error);
     }

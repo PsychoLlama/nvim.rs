@@ -87,9 +87,9 @@ pub unsafe fn get_vimoption(
 ) -> Dict {
     // SAFETY: the caller's pointers are live.
     unsafe {
-        let opt_idx: OptIndex = find_option_len(name.data, name.size);
+        let opt_idx: OptIndex = find_option_len(name.data(), name.len());
         if opt_idx == kOptInvalid {
-            api_err_invalid(err, c"option (not found)".as_ptr(), name.data, 0, true);
+            api_err_invalid(err, c"option (not found)".as_ptr(), name.data(), 0, true);
             return Dict {
                 size: 0 as size_t,
                 capacity: 0 as size_t,

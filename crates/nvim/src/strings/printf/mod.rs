@@ -271,11 +271,6 @@ pub unsafe extern "C" fn arena_printf(
     mut c2rust_args: ...
 ) -> String_0 {
     unsafe {
-        const EMPTY: String_0 = String_0 {
-            data: ptr::null_mut(),
-            size: 0,
-        };
-
         let mut remaining: size_t = 0;
         let mut buf = ptr::null_mut::<c_char>();
         if !arena.is_null() {
@@ -288,22 +283,19 @@ pub unsafe extern "C" fn arena_printf(
 
         let mut printed = vsnprintf(buf, remaining, fmt, c2rust_args.clone());
         if printed < 0 {
-            return EMPTY;
+            return String_0::NULL;
         }
 
         if printed as size_t >= remaining {
             buf = arena_alloc(arena, printed as size_t + 1, false) as *mut c_char;
             printed = vsnprintf(buf, printed as size_t + 1, fmt, c2rust_args.clone());
             if printed < 0 {
-                return EMPTY;
+                return String_0::NULL;
             }
         } else {
             (*arena).pos += printed as size_t + 1;
         }
 
-        String_0 {
-            data: buf,
-            size: printed as size_t,
-        }
+        String_0::from_raw_parts(buf, printed as size_t)
     }
 }

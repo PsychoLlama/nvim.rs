@@ -73,10 +73,10 @@ fn borrowed(value: &'static CStr) -> OptVal {
     OptVal {
         type_0: kOptValTypeString,
         data: OptValData {
-            string: String_0 {
-                data: value.as_ptr() as *mut c_char,
-                size: value.count_bytes() as size_t,
-            },
+            string: String_0::from_raw_parts(
+                value.as_ptr() as *mut c_char,
+                value.count_bytes() as size_t,
+            ),
         },
     }
 }
@@ -398,7 +398,7 @@ pub fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVa
         {
             return (*opt).def_val;
         }
-        let expanded = option_expand(opt_idx, (*opt).def_val.data.string.data);
+        let expanded = option_expand(opt_idx, (*opt).def_val.data.string.data());
         if expanded.is_null() {
             (*opt).def_val
         } else {

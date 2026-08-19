@@ -217,7 +217,7 @@ pub unsafe fn nvim_parse_cmd(
     // the arena copy outlives everything `parse_cmdline` leaves pointing into
     // it, including `ea.arg` and `ea.nextcmd`.
     let parsed = unsafe {
-        let mut cmdline = arena_memdupz(arena, str.data, str.size);
+        let mut cmdline = arena_memdupz(arena, str.data(), str.len());
         parse_cmdline(
             &raw mut cmdline,
             &raw mut ea,

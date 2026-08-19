@@ -269,7 +269,7 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
             }
             kOptValTypeString => {
                 rettv.v_type = VAR_STRING;
-                rettv.vval.v_string = value.data.string.data;
+                rettv.vval.v_string = value.data.string.data();
             }
             // `kOptValTypeNil` is the remaining arm.
             _ => {}

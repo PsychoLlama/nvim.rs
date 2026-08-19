@@ -168,9 +168,9 @@ pub unsafe fn check_string_array(
         if disallow_nl {
             let l: String_0 = (*arr.items.add(i)).data.string;
             if !memchr(
-                l.data as *const ::core::ffi::c_void,
+                l.data() as *const ::core::ffi::c_void,
                 '\n' as ::core::ffi::c_int,
-                l.size,
+                l.len(),
             )
             .is_null()
             {

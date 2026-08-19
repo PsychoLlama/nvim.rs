@@ -425,7 +425,7 @@ unsafe fn terminfo_disable(tui: *mut TUIData) {
         if (*tui).modes.theme_updates() {
             tui_set_term_mode(&mut *tui, THEME_UPDATES, false);
         }
-        tui_mode_change(&mut *tui, NULL_STRING, 0);
+        tui_mode_change(&mut *tui, String_0::NULL, 0);
         tui_mouse_off(&mut *tui);
         terminfo_out(&mut *tui, kTerm_exit_attribute_mode);
         terminfo_out(&mut *tui, kTerm_cursor_normal);
@@ -438,7 +438,7 @@ unsafe fn terminfo_disable(tui: *mut TUIData) {
         if (*tui).modes.grapheme_clusters() {
             tui_set_term_mode(&mut *tui, GRAPHEME_CLUSTERS, false);
         }
-        tui_set_title(&mut *tui, NULL_STRING);
+        tui_set_title(&mut *tui, String_0::NULL);
         if (*tui).cursor_has_color {
             terminfo_out(&mut *tui, kTerm_reset_cursor_color);
         }
@@ -449,13 +449,6 @@ unsafe fn terminfo_disable(tui: *mut TUIData) {
         flush(&mut *tui);
     }
 }
-
-/// An empty API string, for the sinks that take one and are being called to
-/// mean "nothing".
-const NULL_STRING: String_0 = String_0 {
-    data: core::ptr::null_mut(),
-    size: 0,
-};
 
 /// Close the terminal down and give back everything terminfo allocated.
 ///

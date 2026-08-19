@@ -257,7 +257,7 @@ impl Scan {
                 os_exit(0);
             } else if self.tail_is(c"api-info") {
                 let data = api_metadata_raw();
-                let written = os_write(STDOUT_FILENO, data.data, data.size, false);
+                let written = os_write(STDOUT_FILENO, data.data(), data.len(), false);
                 if written < 0 as ptrdiff_t {
                     semsg_c!(
                         gettext(c"E5420: Failed to write to file: %s".as_ptr()),

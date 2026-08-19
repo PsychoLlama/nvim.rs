@@ -34,13 +34,13 @@ pub(crate) unsafe fn dict_get_value(
     // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
     // caller's text.
     unsafe {
-        let di = tv_dict_find(dict, key.data, key.size as ptrdiff_t);
+        let di = tv_dict_find(dict, key.data(), key.len() as ptrdiff_t);
         if di.is_null() {
             api_set_error(
                 err,
                 kErrorTypeValidation,
                 c"Key not found: %s".as_ptr(),
-                key.data,
+                key.data(),
             );
             return NIL;
         }
@@ -61,7 +61,7 @@ pub(crate) unsafe fn dict_check_writable(
 ) -> *mut dictitem_T {
     // SAFETY: as `dict_get_value`.
     unsafe {
-        let di = tv_dict_find(dict, key.data, key.size as ptrdiff_t);
+        let di = tv_dict_find(dict, key.data(), key.len() as ptrdiff_t);
         if !di.is_null() {
             let flags = (*di).di_flags as c_int;
             if flags & DI_FLAGS_RO != 0 {
@@ -69,28 +69,28 @@ pub(crate) unsafe fn dict_check_writable(
                     err,
                     kErrorTypeException,
                     c"Key is read-only: %s".as_ptr(),
-                    key.data,
+                    key.data(),
                 );
             } else if flags & DI_FLAGS_LOCK != 0 {
                 api_set_error(
                     err,
                     kErrorTypeException,
                     c"Key is locked: %s".as_ptr(),
-                    key.data,
+                    key.data(),
                 );
             } else if del && flags & DI_FLAGS_FIX != 0 {
                 api_set_error(
                     err,
                     kErrorTypeException,
                     c"Key is fixed: %s".as_ptr(),
-                    key.data,
+                    key.data(),
                 );
             }
         } else if (*dict).dv_lock as u64 != 0 {
             api_set_error(err, kErrorTypeException, c"Dict is locked".as_ptr());
-        } else if key.size == 0 {
+        } else if key.len() == 0 {
             api_set_error(err, kErrorTypeValidation, c"Key name is empty".as_ptr());
-        } else if key.size > c_int::MAX as size_t {
+        } else if key.len() > c_int::MAX as size_t {
             api_set_error(err, kErrorTypeValidation, c"Key name is too long".as_ptr());
         }
         di
@@ -123,12 +123,12 @@ pub(crate) unsafe fn dict_set_var(
                     err,
                     kErrorTypeValidation,
                     c"Key not found: %s".as_ptr(),
-                    key.data,
+                    key.data(),
                 );
                 return rv;
             }
             if watched {
-                tv_dict_watcher_notify(dict, key.data, ptr::null_mut(), &raw mut (*di).di_tv);
+                tv_dict_watcher_notify(dict, key.data(), ptr::null_mut(), &raw mut (*di).di_tv);
             }
             if retval {
                 rv = vim_to_object(&raw mut (*di).di_tv, arena, false);
@@ -152,7 +152,7 @@ pub(crate) unsafe fn dict_set_var(
         };
 
         if di.is_null() {
-            di = tv_dict_item_alloc_len(key.data, key.size);
+            di = tv_dict_item_alloc_len(key.data(), key.len());
             tv_dict_add(dict, di);
         } else {
             if retval {
@@ -162,7 +162,7 @@ pub(crate) unsafe fn dict_set_var(
             let mut type_error = false;
             if dict == get_vimvar_dict()
                 && !before_set_vvar(
-                    key.data,
+                    key.data(),
                     di,
                     &raw mut tv,
                     true,
@@ -173,7 +173,7 @@ pub(crate) unsafe fn dict_set_var(
                 tv_clear(&raw mut tv);
                 if type_error {
                     let fmt = c"Setting v:%s to value with wrong type".as_ptr();
-                    api_set_error(err, kErrorTypeValidation, fmt, key.data);
+                    api_set_error(err, kErrorTypeValidation, fmt, key.data());
                 }
                 return rv;
             }
@@ -185,7 +185,7 @@ pub(crate) unsafe fn dict_set_var(
 
         tv_copy(&raw mut tv, &raw mut (*di).di_tv);
         if watched {
-            tv_dict_watcher_notify(dict, key.data, &raw mut tv, &raw mut oldtv);
+            tv_dict_watcher_notify(dict, key.data(), &raw mut tv, &raw mut oldtv);
             tv_clear(&raw mut oldtv);
         }
         tv_clear(&raw mut tv);

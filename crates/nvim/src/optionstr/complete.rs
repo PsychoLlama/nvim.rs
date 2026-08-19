@@ -314,7 +314,7 @@ pub unsafe fn did_set_spelllang(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, window and new value.
     let (wp, opt_flags, value) =
-        unsafe { (win(args), (*args).os_flags, (*args).os_newval.string.data) };
+        unsafe { (win(args), (*args).os_flags, (*args).os_newval.string.data()) };
     let words = opt_spo_values.ptr().cast::<*const c_char>();
     // SAFETY: a C string, the table's own word list, and each scope's mask.
     unsafe {

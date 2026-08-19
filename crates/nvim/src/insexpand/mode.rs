@@ -304,25 +304,25 @@ pub unsafe fn ins_compl_preinsert_longest() -> bool {
 /// completion started, or the original text when nothing was typed.
 pub fn ins_compl_leader() -> *mut c_char {
     let leader = compl_leader.get();
-    if leader.data.is_null() {
-        compl_orig_text.get().data
+    if leader.data().is_null() {
+        compl_orig_text.get().data()
     } else {
-        leader.data
+        leader.data()
     }
 }
 
 pub(crate) fn ins_compl_leader_len() -> size_t {
     let leader = compl_leader.get();
-    if leader.data.is_null() {
-        compl_orig_text.get().size
+    if leader.data().is_null() {
+        compl_orig_text.get().len()
     } else {
-        leader.size
+        leader.len()
     }
 }
 
 /// The shown match spans more than one line.
 pub(crate) unsafe fn ins_compl_has_multiple() -> bool {
-    unsafe { !vim_strchr((*compl_shown_match.get()).cp_str.data, NL).is_null() }
+    unsafe { !vim_strchr((*compl_shown_match.get()).cp_str.data(), NL).is_null() }
 }
 
 /// `lnum` is one of the lines a multi-line match is being inserted over.
@@ -344,8 +344,8 @@ pub unsafe fn ins_compl_long_shown_match() -> bool {
     let shown = compl_shown_match.get();
     !shown.is_null()
         && unsafe {
-            !(*shown).cp_str.data.is_null()
-                && (*shown).cp_str.size as colnr_T > (*curwin.get()).w_cursor.col - compl_col.get()
+            !(*shown).cp_str.data().is_null()
+                && (*shown).cp_str.len() as colnr_T > (*curwin.get()).w_cursor.col - compl_col.get()
         }
 }
 

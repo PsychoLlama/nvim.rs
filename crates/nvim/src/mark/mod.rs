@@ -159,10 +159,7 @@ unsafe fn do_markset_autocmd(mut c: c_char, mut pos: *mut pos_T, mut buf: *mut b
     }
     let mut data: Dict = ARRAY_DICT_INIT;
     let mut data__items: [KeyValuePair; 3] = [KeyValuePair {
-        key: String_0 {
-            data: ptr::null_mut(),
-            size: 0,
-        },
+        key: String_0::from_raw_parts(ptr::null_mut(), 0),
         value: Object {
             type_0: kObjectTypeNil,
             data: object_data { boolean: false },
@@ -178,10 +175,7 @@ unsafe fn do_markset_autocmd(mut c: c_char, mut pos: *mut pos_T, mut buf: *mut b
         value: object {
             type_0: kObjectTypeString,
             data: object_data {
-                string: String_0 {
-                    data: &raw mut mark_str as *mut c_char,
-                    size: 1,
-                },
+                string: String_0::from_raw_parts(&raw mut mark_str as *mut c_char, 1),
             },
         },
     };

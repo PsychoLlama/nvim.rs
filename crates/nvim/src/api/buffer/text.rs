@@ -36,11 +36,10 @@ pub unsafe fn nvim_buf_set_text(
         if replacement.size == 0 as size_t {
             array_add(
                 &mut scratch,
-                Object::string(String_0 {
-                    data: c"".as_ptr() as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 1]>()
-                        .wrapping_sub(1 as size_t),
-                }),
+                Object::string(String_0::from_raw_parts(
+                    c"".as_ptr() as *mut ::core::ffi::c_char,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 1]>().wrapping_sub(1 as size_t),
+                )),
             );
             replacement = scratch;
         }
@@ -152,7 +151,7 @@ pub unsafe fn nvim_buf_set_text(
             .add(replacement.size.wrapping_sub(1 as size_t)))
         .data
         .string;
-        let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.size);
+        let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.len());
         let mut last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
         if replacement.size == 1 as size_t {
             firstlen = firstlen.wrapping_add(last_part_len);
@@ -166,36 +165,36 @@ pub unsafe fn nvim_buf_set_text(
         );
         memcpy(
             first.offset(start_col as isize) as *mut ::core::ffi::c_void,
-            first_item.data as *const ::core::ffi::c_void,
-            first_item.size,
+            first_item.data() as *const ::core::ffi::c_void,
+            first_item.len(),
         );
         memchrsub(
             first.offset(start_col as isize) as *mut ::core::ffi::c_void,
             NUL as ::core::ffi::c_char,
             NL as ::core::ffi::c_char,
-            first_item.size,
+            first_item.len(),
         );
         if replacement.size == 1 as size_t {
             memcpy(
-                first.offset(start_col as isize).add(first_item.size) as *mut ::core::ffi::c_void,
+                first.offset(start_col as isize).add(first_item.len()) as *mut ::core::ffi::c_void,
                 str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
                 last_part_len,
             );
         } else {
-            last = arena_allocz(arena, last_item.size.wrapping_add(last_part_len));
+            last = arena_allocz(arena, last_item.len().wrapping_add(last_part_len));
             memcpy(
                 last as *mut ::core::ffi::c_void,
-                last_item.data as *const ::core::ffi::c_void,
-                last_item.size,
+                last_item.data() as *const ::core::ffi::c_void,
+                last_item.len(),
             );
             memchrsub(
                 last as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
                 NL as ::core::ffi::c_char,
-                last_item.size,
+                last_item.len(),
             );
             memcpy(
-                last.add(last_item.size) as *mut ::core::ffi::c_void,
+                last.add(last_item.len()) as *mut ::core::ffi::c_void,
                 str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
                 last_part_len,
             );
@@ -206,23 +205,23 @@ pub unsafe fn nvim_buf_set_text(
             true,
         ) as *mut *mut ::core::ffi::c_char;
         *lines.offset(0 as ::core::ffi::c_int as isize) = first;
-        new_byte += first_item.size as bcount_t;
+        new_byte += first_item.len() as bcount_t;
         let mut i_0: size_t = 1 as size_t;
         while i_0 < new_len.wrapping_sub(1 as size_t) {
             let l: String_0 = (*replacement.items.add(i_0)).data.string;
-            *lines.add(i_0) = arena_memdupz(arena, l.data, l.size);
+            *lines.add(i_0) = arena_memdupz(arena, l.data(), l.len());
             memchrsub(
                 *lines.add(i_0) as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
                 NL as ::core::ffi::c_char,
-                l.size,
+                l.len(),
             );
-            new_byte += l.size as bcount_t + 1 as bcount_t;
+            new_byte += l.len() as bcount_t + 1 as bcount_t;
             i_0 = i_0.wrapping_add(1);
         }
         if replacement.size > 1 as size_t {
             *lines.add(replacement.size.wrapping_sub(1 as size_t)) = last;
-            new_byte += last_item.size as bcount_t + 1 as bcount_t;
+            new_byte += last_item.len() as bcount_t + 1 as bcount_t;
         }
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -352,7 +351,7 @@ pub unsafe fn nvim_buf_set_text(
                         end_row as linenr_T,
                         end_col as colnr_T,
                         new_len as linenr_T,
-                        last_item.size as colnr_T,
+                        last_item.len() as colnr_T,
                         1 as colnr_T,
                     );
                     check_visual_pos();
@@ -365,7 +364,7 @@ pub unsafe fn nvim_buf_set_text(
                     col_extent,
                     old_byte,
                     new_len as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    last_item.size as colnr_T,
+                    last_item.len() as colnr_T,
                     new_byte,
                     kExtmarkUndo,
                 );
@@ -396,7 +395,7 @@ pub unsafe fn nvim_buf_set_text(
                                     end_row as linenr_T,
                                     end_col as colnr_T,
                                     new_len as linenr_T,
-                                    last_item.size as colnr_T,
+                                    last_item.len() as colnr_T,
                                 );
                             } else {
                                 fix_cursor(

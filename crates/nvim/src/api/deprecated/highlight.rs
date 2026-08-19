@@ -49,12 +49,12 @@ pub unsafe fn nvim_get_hl_by_name(
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<KeyValuePair>(),
         };
-        let mut id: ::core::ffi::c_int = syn_name2id(name.data);
+        let mut id: ::core::ffi::c_int = syn_name2id(name.data());
         if !(id != 0 as ::core::ffi::c_int) {
             api_err_invalid(
                 err,
                 c"highlight name".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );

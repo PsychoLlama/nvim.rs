@@ -67,7 +67,7 @@ fn decode(bytes: &[u8]) -> Decoded {
 fn text(object: &Object) -> Vec<u8> {
     assert_eq!(object.type_0, kObjectTypeString);
     let string = unsafe { object.data.string };
-    unsafe { std::slice::from_raw_parts(string.data.cast::<u8>(), string.size) }.to_vec()
+    unsafe { string.as_bytes() }.to_vec()
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn decodes_strings_and_containers() {
     assert_eq!(dict.object.type_0, kObjectTypeDict);
     let entries = unsafe { dict.object.data.dict };
     assert_eq!(entries.size, 1);
-    assert_eq!(unsafe { (*entries.items).key.size }, 1);
+    assert_eq!(unsafe { (*entries.items).key.len() }, 1);
     assert_eq!(unsafe { (*entries.items).value.data.integer }, 42);
 }
 
@@ -114,8 +114,8 @@ fn decodes_strings_and_containers() {
 fn decoded_strings_are_nul_terminated() {
     let string = decode(&[0xa3, b'a', b'b', b'c']);
     let raw = unsafe { string.object.data.string };
-    assert_eq!(raw.size, 3);
-    assert_eq!(unsafe { *raw.data.add(3) }, 0);
+    assert_eq!(raw.len(), 3);
+    assert_eq!(unsafe { *raw.data().add(3) }, 0);
 }
 
 /// Handles arrive as extension objects whose type byte is the handle kind's

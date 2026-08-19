@@ -625,17 +625,17 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -
             return 0;
         }
         let str = val.data.string;
-        if str.size == 0 || strcasecmp(str.data, c"NONE".as_ptr()) == 0 {
+        if str.len() == 0 || strcasecmp(str.data(), c"NONE".as_ptr()) == 0 {
             return -1;
         }
-        let name = CStr::from_ptr(str.data);
+        let name = CStr::from_ptr(str.data());
         let color = if rgb {
             name_to_color(name).0 as int32_t
         } else {
             name_to_ctermcolor(name)
         };
         if color < 0 {
-            api_err_invalid(err, c"highlight color".as_ptr(), str.data, 0, true);
+            api_err_invalid(err, c"highlight color".as_ptr(), str.data(), 0, true);
         }
         color
     }

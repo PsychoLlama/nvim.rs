@@ -19,7 +19,7 @@ pub unsafe fn nvim_create_augroup(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut augroup_name_0: *mut ::core::ffi::c_char = name.data;
+        let mut augroup_name_0: *mut ::core::ffi::c_char = name.data();
         let mut clear_autocmds: bool = if (*opts).is_set__create_augroup_
             as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_augroup__clear
@@ -87,7 +87,7 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
             did_emsg: 0,
         };
         try_enter(&raw mut tstate);
-        augroup_del(name.data, false);
+        augroup_del(name.data(), false);
         try_leave(&raw mut tstate, err);
     }
     ().reported(error)
@@ -103,12 +103,12 @@ pub(crate) unsafe fn get_augroup_from_object(
         match group.type_0 as ::core::ffi::c_uint {
             kObjectTypeNil => return AUGROUP_DEFAULT as ::core::ffi::c_int,
             kObjectTypeString => {
-                au_group = augroup_find(group.data.string.data);
+                au_group = augroup_find(group.data.string.data());
                 if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                     api_err_invalid(
                         err,
                         c"group".as_ptr(),
-                        group.data.string.data,
+                        group.data.string.data(),
                         0 as int64_t,
                         true,
                     );

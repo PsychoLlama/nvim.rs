@@ -187,8 +187,8 @@ impl Reading {
 
             // The pattern takes the entry's string and extra data over.
             let spat = SearchPattern {
-                pat: pat.pat.data,
-                patlen: pat.pat.size,
+                pat: pat.pat.data(),
+                patlen: pat.pat.len(),
                 magic: pat.magic,
                 no_scs: !pat.smartcase,
                 timestamp: entry.timestamp,
@@ -602,11 +602,11 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
 /// keeps its registers, jumps, buffer list and variables in this format.
 pub unsafe fn shada_read_string(string: String_0, flags: c_int) {
     unsafe {
-        if string.size == 0 {
+        if string.len() == 0 {
             return;
         }
         let mut sd_reader: FileDescriptor = core::mem::zeroed();
-        file_open_buffer(&raw mut sd_reader, string.data, string.size);
+        file_open_buffer(&raw mut sd_reader, string.data(), string.len());
         shada_read(&raw mut sd_reader, flags);
         close_file(&raw mut sd_reader);
     }

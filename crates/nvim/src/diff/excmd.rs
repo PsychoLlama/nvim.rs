@@ -276,10 +276,10 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
             OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
-                    string: String_0 {
-                        data: c"diff".as_ptr() as *mut c_char,
-                        size: ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
-                    },
+                    string: String_0::from_raw_parts(
+                        c"diff".as_ptr() as *mut c_char,
+                        ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
+                    ),
                 },
             },
             OptionSetFlags::LOCAL,

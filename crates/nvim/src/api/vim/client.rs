@@ -40,10 +40,7 @@ pub unsafe fn nvim_set_client_info(
             items: ::core::ptr::null_mut::<KeyValuePair>(),
         };
         let mut info__items: [KeyValuePair; 5] = [KeyValuePair {
-            key: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            },
+            key: String_0::NULL,
             value: NIL,
         }; 5];
         info.capacity = 5 as size_t;
@@ -52,7 +49,7 @@ pub unsafe fn nvim_set_client_info(
         let mut has_major: bool = false;
         let mut i: size_t = 0 as size_t;
         while i < version.size {
-            if strequal((*version.items.add(i)).key.data, c"major".as_ptr()) {
+            if strequal((*version.items.add(i)).key.data(), c"major".as_ptr()) {
                 has_major = true;
                 break;
             } else {

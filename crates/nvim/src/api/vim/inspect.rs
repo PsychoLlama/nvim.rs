@@ -107,12 +107,11 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
                 a.items = &raw mut a__items as *mut Object;
                 array_add(&mut a, Object::integer(pid));
                 let mut o: Object = nlua_exec(
-                    String_0 {
-                        data: c"return vim._os_proc_children(...)".as_ptr()
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 34]>()
+                    String_0::from_raw_parts(
+                        c"return vim._os_proc_children(...)".as_ptr() as *mut ::core::ffi::c_char,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 34]>()
                             .wrapping_sub(1 as size_t),
-                    },
+                    ),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     a,
                     kRetObject,
@@ -182,10 +181,10 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
         };
         array_add(&mut a, Object::integer(pid));
         let mut o: Object = nlua_exec(
-            String_0 {
-                data: c"return vim._os_proc_info(...)".as_ptr() as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 30]>().wrapping_sub(1 as size_t),
-            },
+            String_0::from_raw_parts(
+                c"return vim._os_proc_info(...)".as_ptr() as *mut ::core::ffi::c_char,
+                ::core::mem::size_of::<[::core::ffi::c_char; 30]>().wrapping_sub(1 as size_t),
+            ),
             ::core::ptr::null::<::core::ffi::c_char>(),
             a,
             kRetObject,
@@ -284,6 +283,6 @@ pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, E
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        return unpack(str.data, str.size, arena, err).reported(error);
+        return unpack(str.data(), str.len(), arena, err).reported(error);
     }
 }

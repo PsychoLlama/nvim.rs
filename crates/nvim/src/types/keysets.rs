@@ -405,10 +405,7 @@ impl KeyDict_highlight {
             bg_indexed: false,
             force: false,
             update: false,
-            url: String_0 {
-                data: core::ptr::null_mut(),
-                size: 0,
-            },
+            url: String_0::NULL,
         }
     }
 }

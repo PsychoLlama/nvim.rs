@@ -44,10 +44,7 @@ pub unsafe extern "C" fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> 
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         // An empty tree renders as nothing at all: the C handed back its
         // untouched growarray, which is a null string.
-        return String_0 {
-            data: ptr::null_mut(),
-            size: 0,
-        };
+        return String_0::from_raw_parts(ptr::null_mut(), 0);
     };
     let mut out = String::new();
     if dot {
@@ -60,10 +57,7 @@ pub unsafe extern "C" fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> 
     // SAFETY: `out` names `len` initialised bytes, which is what `xmemdupz`
     // copies into the fresh block it answers.
     let data = unsafe { xmemdupz(out.as_ptr().cast(), out.len()) };
-    String_0 {
-        data: data.cast(),
-        size: out.len(),
-    }
+    String_0::from_raw_parts(data.cast(), out.len())
 }
 
 /// The id a paired mark is known by in the dump: the `(ns, id)` handle with

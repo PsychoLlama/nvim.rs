@@ -25,10 +25,7 @@ fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
     OptVal {
         type_0: kOptValTypeString,
         data: OptValData {
-            string: String_0 {
-                data: value.as_ptr().cast_mut(),
-                size: value.count_bytes(),
-            },
+            string: String_0::from_raw_parts(value.as_ptr().cast_mut(), value.count_bytes()),
         },
     }
 }

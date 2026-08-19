@@ -237,9 +237,9 @@ pub unsafe fn nvim_buf_set_extmark(
                             | kSHConceal as ::core::ffi::c_int)
                             as uint16_t;
                         has_hl = true;
-                        if (*opts).conceal.size > 0 as size_t {
+                        if (*opts).conceal.len() > 0 as size_t {
                             let mut ch: ::core::ffi::c_int = 0;
-                            hl.conceal_char = utfc_ptr2schar((*opts).conceal.data, &raw mut ch);
+                            hl.conceal_char = utfc_ptr2schar((*opts).conceal.data(), &raw mut ch);
                             if !(hl.conceal_char != 0
                                 && vim_isprintc(ch) as ::core::ffi::c_int != 0)
                             {
@@ -261,8 +261,8 @@ pub unsafe fn nvim_buf_set_extmark(
                             | kSHConcealLines as ::core::ffi::c_int)
                             as uint16_t;
                         has_hl = true;
-                        if (*opts).conceal_lines.size > 0 as size_t {
-                            if !(*(*opts).conceal_lines.data as ::core::ffi::c_int
+                        if (*opts).conceal_lines.len() > 0 as size_t {
+                            if !(*(*opts).conceal_lines.data() as ::core::ffi::c_int
                                 == '\0' as ::core::ffi::c_int)
                             {
                                 api_set_error(
@@ -292,21 +292,21 @@ pub unsafe fn nvim_buf_set_extmark(
                         KEYSET_OPTIDX_set_extmark__virt_text_pos,
                     ) {
                         let mut str: String_0 = (*opts).virt_text_pos;
-                        if strequal(c"eol".as_ptr(), str.data) {
+                        if strequal(c"eol".as_ptr(), str.data()) {
                             virt_text.pos = kVPosEndOfLine;
-                        } else if strequal(c"overlay".as_ptr(), str.data) {
+                        } else if strequal(c"overlay".as_ptr(), str.data()) {
                             virt_text.pos = kVPosOverlay;
-                        } else if strequal(c"right_align".as_ptr(), str.data) {
+                        } else if strequal(c"right_align".as_ptr(), str.data()) {
                             virt_text.pos = kVPosRightAlign;
-                        } else if strequal(c"eol_right_align".as_ptr(), str.data) {
+                        } else if strequal(c"eol_right_align".as_ptr(), str.data()) {
                             virt_text.pos = kVPosEndOfLineRightAlign;
-                        } else if strequal(c"inline".as_ptr(), str.data) {
+                        } else if strequal(c"inline".as_ptr(), str.data()) {
                             virt_text.pos = kVPosInline;
                         } else if true {
                             api_err_invalid(
                                 err,
                                 c"virt_text_pos".as_ptr(),
-                                str.data,
+                                str.data(),
                                 0 as int64_t,
                                 true,
                             );
@@ -341,11 +341,11 @@ pub unsafe fn nvim_buf_set_extmark(
                         KEYSET_OPTIDX_set_extmark__hl_mode,
                     ) {
                         let mut str_0: String_0 = (*opts).hl_mode;
-                        if strequal(c"replace".as_ptr(), str_0.data) {
+                        if strequal(c"replace".as_ptr(), str_0.data()) {
                             virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
-                        } else if strequal(c"combine".as_ptr(), str_0.data) {
+                        } else if strequal(c"combine".as_ptr(), str_0.data()) {
                             virt_text.hl_mode = kHlModeCombine as ::core::ffi::c_int as uint8_t;
-                        } else if strequal(c"blend".as_ptr(), str_0.data) {
+                        } else if strequal(c"blend".as_ptr(), str_0.data()) {
                             if virt_text.pos as ::core::ffi::c_uint
                                 == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
@@ -365,7 +365,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             api_err_invalid(
                                 err,
                                 c"hl_mode".as_ptr(),
-                                str_0.data,
+                                str_0.data(),
                                 0 as int64_t,
                                 true,
                             );
@@ -382,14 +382,14 @@ pub unsafe fn nvim_buf_set_extmark(
                         KEYSET_OPTIDX_set_extmark__virt_lines_overflow,
                     ) {
                         let mut str_1: String_0 = (*opts).virt_lines_overflow;
-                        if strequal(c"scroll".as_ptr(), str_1.data) {
+                        if strequal(c"scroll".as_ptr(), str_1.data()) {
                             virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
-                        } else if !strequal(c"trunc".as_ptr(), str_1.data) {
+                        } else if !strequal(c"trunc".as_ptr(), str_1.data()) {
                             if true {
                                 api_err_invalid(
                                     err,
                                     c"virt_lines_overflow".as_ptr(),
-                                    str_1.data,
+                                    str_1.data(),
                                     0 as int64_t,
                                     true,
                                 );
@@ -477,7 +477,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     ) {
                         sign.text[0 as ::core::ffi::c_int as usize] = 0 as schar_T;
                         if init_sign_text(
-                            (*opts).sign_text.data,
+                            (*opts).sign_text.data(),
                             &raw mut sign.text as *mut schar_T,
                             false,
                         ) == 0

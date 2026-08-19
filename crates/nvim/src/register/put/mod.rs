@@ -163,23 +163,23 @@ unsafe fn split_expr_result(insert_string: String_0) -> (*mut String_0, size_t, 
         let mut y_type = kMTCharWise;
         loop {
             let mut y_size: size_t = 0;
-            let mut ptr = insert_string.data;
-            let mut ptrlen = insert_string.size;
+            let mut ptr = insert_string.data();
+            let mut ptrlen = insert_string.len();
             while !ptr.is_null() {
                 if !y_array.is_null() {
-                    (*y_array.add(y_size)).data = ptr;
+                    (*y_array.add(y_size)).set_data(ptr);
                 }
                 y_size = y_size.wrapping_add(1);
                 let mut tmp = vim_strchr(ptr, '\n' as c_int);
                 if tmp.is_null() {
                     if !y_array.is_null() {
-                        (*y_array.add(y_size.wrapping_sub(1))).size = ptrlen;
+                        (*y_array.add(y_size.wrapping_sub(1))).set_len(ptrlen);
                     }
                 } else {
                     if !y_array.is_null() {
                         *tmp = NUL as c_char;
                         let len = tmp.offset_from(ptr) as size_t;
-                        (*y_array.add(y_size.wrapping_sub(1))).size = len;
+                        (*y_array.add(y_size.wrapping_sub(1))).set_len(len);
                         ptrlen = ptrlen.wrapping_sub(len.wrapping_add(1));
                     }
                     tmp = tmp.add(1);
@@ -356,19 +356,11 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
         }
 
         // A computed register becomes a fake one-line yankreg.
-        let mut insert_string = String_0 {
-            data: ::core::ptr::null_mut(),
-            size: 0,
-        };
+        let mut insert_string = String_0::NULL;
         let mut allocated = false;
         if reg.is_null()
-            && get_spec_reg(
-                regname,
-                &raw mut insert_string.data,
-                &raw mut allocated,
-                true,
-            )
-            && insert_string.data.is_null()
+            && get_spec_reg(regname, insert_string.data_mut(), &raw mut allocated, true)
+            && insert_string.data().is_null()
         {
             return;
         }
@@ -398,8 +390,8 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
             split_pos: 0,
         };
 
-        if !insert_string.data.is_null() {
-            insert_string.size = strlen(insert_string.data);
+        if !insert_string.data().is_null() {
+            insert_string.set_len(strlen(insert_string.data()));
             if regname == '=' as c_int {
                 // Only `"=` can produce more than one line.
                 (put.y_array, put.y_size, put.y_type) = split_expr_result(insert_string);
@@ -474,7 +466,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
                     if put.dir == FORWARD && gchar_cursor() != NUL {
                         let bytelen = utfc_ptr2len(get_cursor_pos_ptr());
                         col += bytelen;
-                        if (*put.y_array).size != 0 {
+                        if (*put.y_array).len() != 0 {
                             (*curwin.get()).w_cursor.col += bytelen;
                             (*curbuf.get()).b_op_end.col += bytelen;
                         }
@@ -511,7 +503,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
             (*curbuf.get()).b_op_end = orig_end;
         }
         if allocated {
-            xfree(insert_string.data as *mut c_void);
+            xfree(insert_string.data() as *mut c_void);
         }
         if regname == '=' as c_int {
             xfree(put.y_array as *mut c_void);

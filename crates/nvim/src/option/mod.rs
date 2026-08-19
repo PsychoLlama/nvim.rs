@@ -38,8 +38,7 @@ use crate::highlight::HlAttrFlags;
 use crate::main::empty_string_option;
 use crate::optionstr::set_chars_option;
 use crate::types::{
-    CharsOption, HlAttrs, OptScope, OptValType, RgbValue, String_0, int16_t, int32_t, size_t,
-    xp_prefix_T,
+    CharsOption, HlAttrs, OptScope, OptValType, RgbValue, int16_t, int32_t, xp_prefix_T,
 };
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -137,10 +136,6 @@ pub const ROOT_UID: c_int = 0 as c_int;
 pub const B_IMODE_USE_INSERT: c_int = -1 as c_int;
 pub const B_IMODE_NONE: c_int = 0 as c_int;
 pub const KEYMAP_INIT: c_int = 1 as c_int;
-pub const NULL_STRING: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<c_char>(),
-    size: 0 as size_t,
-};
 pub const TAB: c_int = '\t' as c_int;
 pub const CTRL_F_STR: &::core::ffi::CStr = c"\x06";
 pub const FORCE_BIN: c_int = 1 as c_int;

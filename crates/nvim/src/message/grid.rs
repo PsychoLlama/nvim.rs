@@ -29,10 +29,7 @@ pub(crate) unsafe fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
             (*msg_grid.ptr()).handle.into(),
             row.into(),
             scrolled,
-            String_0 {
-                data: sep.as_mut_ptr(),
-                size,
-            },
+            String_0::from_raw_parts(sep.as_mut_ptr(), size),
             (*msg_grid.ptr()).zindex.into(),
             (*msg_grid.ptr()).comp_index as Integer,
         );
@@ -389,26 +386,23 @@ pub(crate) unsafe fn inc_msg_scrolled() {
         if *get_vim_var_str(Vv::Scrollstart) == 0 {
             // v:scrollstart is empty: set it to the script/function name and
             // line number the scrolling started at.
-            let mut p = String_0 {
-                data: (*sourcing_top()).es_name,
-                size: 0,
-            };
+            let mut p = String_0::from_raw_parts((*sourcing_top()).es_name, 0);
             let mut tofree: *mut c_char = ptr::null_mut();
-            if p.data.is_null() {
+            if p.data().is_null() {
                 p = cstr_as_string(gettext(c"Unknown".as_ptr()));
             } else {
-                let tofreesize = strlen(p.data) + 40;
+                let tofreesize = strlen(p.data()) + 40;
                 tofree = xmalloc(tofreesize).cast();
-                p.size = vim_snprintf_safelen(
+                p.set_len(vim_snprintf_safelen(
                     tofree,
                     tofreesize,
                     gettext(c"%s line %ld".as_ptr()),
-                    p.data,
+                    p.data(),
                     (*sourcing_top()).es_lnum as int64_t,
-                );
-                p.data = tofree;
+                ));
+                p.set_data(tofree);
             }
-            set_vim_var_string(Vv::Scrollstart, p.data, p.size as ptrdiff_t);
+            set_vim_var_string(Vv::Scrollstart, p.data(), p.len() as ptrdiff_t);
             xfree(tofree.cast());
         }
         msg_scrolled.set(msg_scrolled.get() + 1);

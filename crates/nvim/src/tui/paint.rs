@@ -636,7 +636,7 @@ fn repaint_row(tui: &mut TUIData, row: c_int, left: c_int, right: c_int) {
 /// `path` must be a valid API string.
 pub unsafe fn tui_screenshot(tui: &mut TUIData, path: String_0) {
     // SAFETY: the caller guarantees `path`.
-    let file = unsafe { fopen(path.data, c"w".as_ptr()) };
+    let file = unsafe { fopen(path.data(), c"w".as_ptr()) };
     if file.is_null() {
         return;
     }

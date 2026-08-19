@@ -478,10 +478,7 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     let mut cwd = [0; 4096];
     let mut cwdlen = cwd.len();
     if unsafe { uv_cwd(cwd.as_mut_ptr(), &raw mut cwdlen) } == 0 {
-        ui_call_chdir(String_0 {
-            data: cwd.as_mut_ptr(),
-            size: cwdlen,
-        });
+        ui_call_chdir(String_0::from_raw_parts(cwd.as_mut_ptr(), cwdlen));
     }
 
     for widget in kUILinegrid as usize..kUIExtCount as usize {

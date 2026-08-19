@@ -247,10 +247,10 @@ pub unsafe fn modify_keymap(
             }
 
             if !set_maparg_lhs_rhs(
-                lhs.data,
-                lhs.size,
-                rhs.data,
-                rhs.size,
+                lhs.data(),
+                lhs.len(),
+                rhs.data(),
+                rhs.len(),
                 lua_funcref,
                 p_cpo.get(),
                 &raw mut parsed_args,
@@ -261,7 +261,7 @@ pub unsafe fn modify_keymap(
                     err,
                     kErrorTypeValidation,
                     c"LHS exceeds maximum map length: %s".as_ptr(),
-                    lhs.data,
+                    lhs.data(),
                 );
                 break 'fail_and_free;
             }
@@ -270,12 +270,12 @@ pub unsafe fn modify_keymap(
             if is_abbrev {
                 p = p.add(1);
             }
-            if mode.size > 0 && p.offset_from(mode.data) as size_t != mode.size {
+            if mode.len() > 0 && p.offset_from(mode.data()) as size_t != mode.len() {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
                     c"Invalid mode shortname: \"%s\"".as_ptr(),
-                    mode.data,
+                    mode.data(),
                 );
                 break 'fail_and_free;
             }
@@ -292,7 +292,7 @@ pub unsafe fn modify_keymap(
                 && parsed_args.rhs_len == 0
                 && !parsed_args.rhs_is_noop
             {
-                if rhs.size == 0 {
+                if rhs.len() == 0 {
                     // Assume the caller wants the RHS to be a <Nop>.
                     parsed_args.rhs_is_noop = true;
                 } else {
@@ -352,7 +352,7 @@ pub unsafe fn modify_keymap(
                     } else {
                         E_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
                     },
-                    lhs.data,
+                    lhs.data(),
                 ),
                 6 => api_set_error(
                     err,
@@ -362,7 +362,7 @@ pub unsafe fn modify_keymap(
                     } else {
                         E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
                     },
-                    lhs.data,
+                    lhs.data(),
                 ),
                 _ => {}
             }

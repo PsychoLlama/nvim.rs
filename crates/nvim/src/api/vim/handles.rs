@@ -178,11 +178,11 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                     OptVal {
                         type_0: kOptValTypeString,
                         data: OptValData {
-                            string: String_0 {
-                                data: c"hide".as_ptr() as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
+                            string: String_0::from_raw_parts(
+                                c"hide".as_ptr() as *mut ::core::ffi::c_char,
+                                ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
                                     .wrapping_sub(1 as size_t),
-                            },
+                            ),
                         },
                     },
                     OptionSetFlags::LOCAL,
@@ -195,11 +195,11 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                     OptVal {
                         type_0: kOptValTypeString,
                         data: OptValData {
-                            string: String_0 {
-                                data: c"nofile".as_ptr() as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
+                            string: String_0::from_raw_parts(
+                                c"nofile".as_ptr() as *mut ::core::ffi::c_char,
+                                ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
                                     .wrapping_sub(1 as size_t),
-                            },
+                            ),
                         },
                     },
                     OptionSetFlags::LOCAL,

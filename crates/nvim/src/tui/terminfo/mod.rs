@@ -212,10 +212,10 @@ pub unsafe fn terminfo_info_msg(
         }
     }
 
-    String_0 {
-        data: xmemdupz(msg.as_ptr() as *const c_void, msg.len()) as *mut c_char,
-        size: msg.len(),
-    }
+    String_0::from_raw_parts(
+        xmemdupz(msg.as_ptr() as *const c_void, msg.len()) as *mut c_char,
+        msg.len(),
+    )
 }
 
 /// Expand a parameterised capability into `[buf_start, buf_end)`.

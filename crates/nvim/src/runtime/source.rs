@@ -633,10 +633,7 @@ unsafe fn range_is_lua(eap: *const exarg_T) -> bool {
         msg: ptr::null_mut(),
     };
     let src = c"return require('vim._core.util').source_is_lua(...)";
-    let script = String_0 {
-        data: src.as_ptr().cast_mut(),
-        size: src.count_bytes(),
-    };
+    let script = String_0::from_raw_parts(src.as_ptr().cast_mut(), src.count_bytes());
     // SAFETY: `items` and `err` live on this frame and outlive the call,
     // which retains neither; the result's union is read under its own tag.
     unsafe {

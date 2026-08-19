@@ -381,7 +381,7 @@ unsafe fn block_def2str(bd: &block_def) -> String_0 {
         );
         at += bd.endspaces as usize;
         *data.add(at) = NUL as c_char;
-        String_0 { data, size: at }
+        String_0::from_raw_parts(data, at)
     }
 }
 
@@ -410,8 +410,8 @@ pub unsafe fn f_getregion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
                 charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive);
                 block_def2str(&bd)
             };
-            debug_assert!(!text.data.is_null());
-            tv_list_append_allocated_string(rettv.vval.v_list, text.data);
+            debug_assert!(!text.data().is_null());
+            tv_list_append_allocated_string(rettv.vval.v_list, text.data());
         }
     }
 }

@@ -95,11 +95,9 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
     unsafe {
         // Non-local return if the scope names nothing.
         let dict = nlua_get_var_scope(lstate);
-        let mut key = String_0 {
-            data: ptr::null_mut(),
-            size: 0,
-        };
-        key.data = luaL_checklstring(lstate, 3, &raw mut key.size).cast_mut();
+        let mut key = String_0::NULL;
+        let data = luaL_checklstring(lstate, 3, key.len_mut()).cast_mut();
+        key.set_data(data);
 
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 
@@ -120,7 +118,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
                 return 0;
             }
             if watched {
-                tv_dict_watcher_notify(dict, key.data, ptr::null_mut(), &raw mut (*di).di_tv);
+                tv_dict_watcher_notify(dict, key.data(), ptr::null_mut(), &raw mut (*di).di_tv);
             }
             tv_dict_item_remove(dict, di);
             return 0;
@@ -135,13 +133,13 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
 
         let mut oldtv = TV_INITIAL_VALUE;
         if di.is_null() {
-            di = tv_dict_item_alloc_len(key.data, key.size);
+            di = tv_dict_item_alloc_len(key.data(), key.len());
             tv_dict_add(dict, di);
         } else {
             let mut type_error = false;
             if dict == get_vimvar_dict()
                 && !before_set_vvar(
-                    key.data,
+                    key.data(),
                     di,
                     &raw mut tv,
                     true,
@@ -154,7 +152,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
                     return luaL_error(
                         lstate,
                         c"Setting v:%s to value with wrong type".as_ptr(),
-                        key.data,
+                        key.data(),
                     );
                 }
                 return 0;
@@ -168,7 +166,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         tv_copy(&raw mut tv, &raw mut (*di).di_tv);
 
         if watched {
-            tv_dict_watcher_notify(dict, key.data, &raw mut tv, &raw mut oldtv);
+            tv_dict_watcher_notify(dict, key.data(), &raw mut tv, &raw mut oldtv);
             tv_clear(&raw mut oldtv);
         }
         tv_clear(&raw mut tv);

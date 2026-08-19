@@ -53,9 +53,9 @@ unsafe fn validate_option_value_args(
     mut err: *mut Error,
 ) -> ::core::ffi::c_int {
     if has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__scope) {
-        if strcmp((*opts).scope.data, c"local".as_ptr()) == 0 {
+        if strcmp((*opts).scope.data(), c"local".as_ptr()) == 0 {
             *opt_flags = OptionSetFlags::LOCAL;
-        } else if strcmp((*opts).scope.data, c"global".as_ptr()) == 0 {
+        } else if strcmp((*opts).scope.data(), c"global".as_ptr()) == 0 {
             *opt_flags = OptionSetFlags::GLOBAL;
         } else if true {
             api_err_exp(
@@ -69,7 +69,7 @@ unsafe fn validate_option_value_args(
     }
     *scope = kOptScopeGlobal;
     if !filetype.is_null() && has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__filetype) {
-        *filetype = (*opts).filetype.data;
+        *filetype = (*opts).filetype.data();
     }
     if has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__win) {
         *scope = kOptScopeWin;
@@ -214,11 +214,10 @@ unsafe fn do_ft_buf(
         OptVal {
             type_0: kOptValTypeString,
             data: OptValData {
-                string: String_0 {
-                    data: c"hide".as_ptr() as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                        .wrapping_sub(1 as size_t),
-                },
+                string: String_0::from_raw_parts(
+                    c"hide".as_ptr() as *mut ::core::ffi::c_char,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
+                ),
             },
         },
         OptionSetFlags::LOCAL,
@@ -229,11 +228,10 @@ unsafe fn do_ft_buf(
         OptVal {
             type_0: kOptValTypeString,
             data: OptValData {
-                string: String_0 {
-                    data: c"nofile".as_ptr() as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                        .wrapping_sub(1 as size_t),
-                },
+                string: String_0::from_raw_parts(
+                    c"nofile".as_ptr() as *mut ::core::ffi::c_char,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
+                ),
             },
         },
         OptionSetFlags::LOCAL,
@@ -311,7 +309,7 @@ pub unsafe fn nvim_get_option_value(
     let mut filetype: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if validate_option_value_args(
         opts,
-        name.data,
+        name.data(),
         &raw mut opt_idx,
         &raw mut opt_flags,
         &raw mut scope,
@@ -347,7 +345,7 @@ pub unsafe fn nvim_get_option_value(
     }
     if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
         if !(value.type_0 as ::core::ffi::c_int != kOptValTypeNil as ::core::ffi::c_int) {
-            api_err_invalid(err, c"option".as_ptr(), name.data, 0 as int64_t, true);
+            api_err_invalid(err, c"option".as_ptr(), name.data(), 0 as int64_t, true);
         } else {
             return optval_as_object(value).reported(error);
         }
@@ -369,7 +367,7 @@ pub unsafe fn nvim_set_option_value(
     let mut to: *mut ::core::ffi::c_void = NULL;
     if validate_option_value_args(
         opts,
-        name.data,
+        name.data(),
         &raw mut opt_idx,
         &raw mut opt_flags,
         &raw mut scope,
@@ -397,7 +395,7 @@ pub unsafe fn nvim_set_option_value(
         return ().reported(error);
     };
     let save_current_sctx: sctx_T = api_set_sctx(channel_id);
-    set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
+    set_option_value_for(name.data(), opt_idx, optval, opt_flags, scope, to, err);
     current_sctx.set(save_current_sctx);
     ().reported(error)
 }
@@ -417,7 +415,7 @@ pub unsafe fn nvim_get_option_info2(
     let mut from: *mut ::core::ffi::c_void = NULL;
     if validate_option_value_args(
         opts,
-        name.data,
+        name.data(),
         &raw mut opt_idx,
         &raw mut opt_flags,
         &raw mut scope,

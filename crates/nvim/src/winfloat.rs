@@ -378,10 +378,7 @@ fn create_scratch_buffer(err: &mut Error) -> Buffer {
     }
 }
 fn set_bufhidden_wipe(buf: Buf) {
-    let s = String_0 {
-        data: c"wipe".as_ptr().cast_mut(),
-        size: c"wipe".count_bytes(),
-    };
+    let s = String_0::from_raw_parts(c"wipe".as_ptr().cast_mut(), c"wipe".count_bytes());
     let wipe = OptVal {
         type_0: kOptValTypeString,
         data: OptValData { string: s },

@@ -959,7 +959,7 @@ unsafe fn get_config_string(buf: *mut buf_T, key: *const c_char) -> *mut c_char 
     if obj.type_0 == kObjectTypeString {
         // SAFETY: the object is a string, so this is the live arm — and the
         // bytes are the variable's, so nothing here owns them.
-        return unsafe { obj.data.string.data };
+        return unsafe { obj.data.string.data() };
     }
     // SAFETY: not a string, so there is no borrowed `String` to release.
     unsafe { api_free_object(obj) };

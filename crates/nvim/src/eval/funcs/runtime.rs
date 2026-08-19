@@ -253,10 +253,7 @@ fn has_wsl() -> bool {
         // argument list is empty, and `err` is a live out-parameter.
         let o: Object = unsafe {
             nlua_exec(
-                String_0 {
-                    data: PROBE.as_ptr() as *mut c_char,
-                    size: PROBE.len(),
-                },
+                String_0::from_raw_parts(PROBE.as_ptr() as *mut c_char, PROBE.len()),
                 ptr::null(),
                 Array {
                     size: 0,

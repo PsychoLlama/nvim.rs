@@ -23,10 +23,8 @@ pub unsafe fn buffer_get_line(
     arena: *mut Arena,
 ) -> Result<String_0, Error> {
     unsafe {
-        let mut rv: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0 as size_t,
-        };
+        let mut rv: String_0 =
+            String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
         let index = convert_index(index as int64_t) as Integer;
         let slice: Array = nvim_buf_get_lines(
             0 as uint64_t,

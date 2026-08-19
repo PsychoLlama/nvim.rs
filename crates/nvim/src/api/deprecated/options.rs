@@ -132,7 +132,7 @@ unsafe fn get_option_from(
     mut err: *mut Error,
 ) -> Object {
     unsafe {
-        if !(name.size > 0 as size_t) {
+        if !(name.len() > 0 as size_t) {
             api_err_invalid(
                 err,
                 c"option name".as_ptr(),
@@ -142,9 +142,10 @@ unsafe fn get_option_from(
             );
             return NIL;
         }
-        let mut opt_idx: OptIndex = find_option(name.data);
+        let opt_name = name.data();
+        let mut opt_idx: OptIndex = find_option(opt_name);
         if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
-            api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
+            api_err_invalid(err, c"option name".as_ptr(), opt_name, 0 as int64_t, true);
             return NIL;
         }
         let mut value: OptVal = NIL_OPTVAL;
@@ -167,7 +168,7 @@ unsafe fn get_option_from(
             }
         }
         if !(value.type_0 as ::core::ffi::c_int != kOptValTypeNil as ::core::ffi::c_int) {
-            api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
+            api_err_invalid(err, c"option name".as_ptr(), opt_name, 0 as int64_t, true);
             return NIL;
         }
         return optval_as_object(value);
@@ -183,7 +184,7 @@ unsafe fn set_option_to(
     mut err: *mut Error,
 ) {
     unsafe {
-        if !(name.size > 0 as size_t) {
+        if !(name.len() > 0 as size_t) {
             api_err_invalid(
                 err,
                 c"option name".as_ptr(),
@@ -193,9 +194,10 @@ unsafe fn set_option_to(
             );
             return;
         }
-        let mut opt_idx: OptIndex = find_option(name.data);
+        let opt_name = name.data();
+        let mut opt_idx: OptIndex = find_option(opt_name);
         if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
-            api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
+            api_err_invalid(err, c"option name".as_ptr(), opt_name, 0 as int64_t, true);
             return;
         }
         let Some(optval) = object_as_optval(value) else {
@@ -220,7 +222,7 @@ unsafe fn set_option_to(
             OptionSetFlags::LOCAL
         };
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
-        set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
+        set_option_value_for(opt_name, opt_idx, optval, opt_flags, scope, to, err);
         current_sctx.set(save_current_sctx);
     }
 }

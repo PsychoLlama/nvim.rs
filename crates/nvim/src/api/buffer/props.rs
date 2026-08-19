@@ -85,10 +85,8 @@ pub unsafe fn nvim_buf_del_keymap(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut rhs: String_0 = String_0 {
-            data: c"".as_ptr() as *mut ::core::ffi::c_char,
-            size: 0 as size_t,
-        };
+        let mut rhs: String_0 =
+            String_0::from_raw_parts(c"".as_ptr() as *mut ::core::ffi::c_char, 0 as size_t);
         modify_keymap(
             channel_id,
             buf,
@@ -149,10 +147,8 @@ pub unsafe fn nvim_buf_get_name(buf: Buffer) -> Result<String_0, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut rv: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0 as size_t,
-        };
+        let mut rv: String_0 =
+            String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() || (*b).b_ffname.is_null() {
             return rv.reported(error);
@@ -188,7 +184,7 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
         }
         let mut aco: aco_save_T = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, b);
-        ren_ret = rename_buffer(name.data);
+        ren_ret = rename_buffer(name.data());
         aucmd_restbuf(&raw mut aco);
         if !is_curbuf {
             (*RedrawingDisabled.ptr()) -= 1;

@@ -205,10 +205,7 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
                 OptVal {
                     type_0: kOptValTypeString,
                     data: OptValData {
-                        string: String_0 {
-                            data: c"".as_ptr().cast_mut(),
-                            size: 0,
-                        },
+                        string: String_0::from_raw_parts(c"".as_ptr().cast_mut(), 0),
                     },
                 },
                 OptionSetFlags::LOCAL,

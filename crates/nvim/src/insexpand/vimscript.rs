@@ -245,8 +245,8 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
             flags |= CP_ICASE;
         }
         if ins_compl_add(
-            (*compl_orig_text.ptr()).data,
-            (*compl_orig_text.ptr()).size as c_int,
+            (*compl_orig_text.ptr()).data(),
+            (*compl_orig_text.ptr()).len() as c_int,
             ptr::null_mut(),
             ptr::null(),
             false,
@@ -350,7 +350,7 @@ pub(crate) unsafe fn fill_complete_info_dict(
             tv_dict_add_str(di, key.as_ptr().cast(), key.len(), val)
         };
 
-        add_str("word", (*match_0).cp_str.data);
+        add_str("word", (*match_0).cp_str.data());
         add_str("abbr", (*match_0).cp_text[CPT_ABBR as usize]);
         add_str("menu", (*match_0).cp_text[CPT_MENU as usize]);
         add_str("kind", (*match_0).cp_text[CPT_KIND as usize]);

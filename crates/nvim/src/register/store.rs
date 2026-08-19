@@ -220,7 +220,7 @@ pub unsafe fn update_yankreg_width(reg: *mut yankreg_T) {
         let mut maxlen: size_t = 0;
         for i in 0..(*reg).y_size {
             let line = *(*reg).y_array.add(i);
-            maxlen = maxlen.max(mb_string2cells_len(line.data, line.size));
+            maxlen = maxlen.max(mb_string2cells_len(line.data(), line.len()));
         }
         debug_assert!(maxlen <= c_int::MAX as size_t);
         (*reg).y_width = (*reg).y_width.max(maxlen as c_int - 1);
@@ -358,9 +358,9 @@ pub unsafe fn free_register(reg: *mut yankreg_T) {
         }
         for i in (0..(*reg).y_size).rev() {
             let line = &mut *(*reg).y_array.add(i);
-            xfree(line.data as *mut c_void);
-            line.data = ::core::ptr::null_mut();
-            line.size = 0;
+            xfree(line.data() as *mut c_void);
+            line.set_data(::core::ptr::null_mut());
+            line.set_len(0);
         }
         xfree((*reg).y_array as *mut c_void);
         (*reg).y_array = ::core::ptr::null_mut();
@@ -433,6 +433,6 @@ unsafe fn reg_empty(reg: *const yankreg_T) -> bool {
     unsafe {
         (*reg).y_array.is_null()
             || (*reg).y_size == 0
-            || (*reg).y_size == 1 && (*reg).y_type == kMTCharWise && (*(*reg).y_array).size == 0
+            || (*reg).y_size == 1 && (*reg).y_type == kMTCharWise && (*(*reg).y_array).len() == 0
     }
 }

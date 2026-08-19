@@ -320,9 +320,9 @@ unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     unsafe {
         let tag = if err.type_0 == kErrorTypeNone
             && res.type_0 == kObjectTypeString
-            && res.data.string.size > 0
+            && res.data.string.len() > 0
         {
-            xstrdup(res.data.string.data)
+            xstrdup(res.data.string.data())
         } else {
             ptr::null_mut()
         };
@@ -589,7 +589,7 @@ pub unsafe fn find_help_tags(
             res.type_0 == kObjectTypeString,
             "res.type == kObjectTypeString"
         );
-        xstrlcpy(iobuff, res.data.string.data, IOSIZE as usize);
+        xstrlcpy(iobuff, res.data.string.data(), IOSIZE as usize);
         api_free_object(res);
     }
 

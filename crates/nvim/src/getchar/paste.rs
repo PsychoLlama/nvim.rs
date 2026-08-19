@@ -63,8 +63,8 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
             return;
         }
 
-        let mut s: *const c_char = str.data;
-        let end = str.data.add(str.size);
+        let mut s: *const c_char = str.data();
+        let end = str.data().add(str.len());
         while s < end {
             // A run of bytes that need no escaping goes in one piece.
             let start = s;
@@ -151,10 +151,7 @@ pub unsafe fn paste_repeat(count: c_int) {
         }
         *no_mapping.ptr() -= 1;
 
-        let str = String_0 {
-            data: ga.ga_data.cast(),
-            size: ga.ga_len as usize,
-        };
+        let str = String_0::from_raw_parts(ga.ga_data.cast(), ga.ga_len as usize);
         let mut arena: Arena = ARENA_EMPTY;
         let mut err = Error {
             type_0: kErrorTypeNone,

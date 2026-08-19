@@ -185,8 +185,8 @@ pub unsafe fn tui_ui_send(tui: &mut TUIData, content: String_0) {
     unsafe {
         let mut req: uv_write_t = core::mem::zeroed();
         let buf = uv_buf_t {
-            base: content.data,
-            len: content.size,
+            base: content.data(),
+            len: content.len(),
         };
         let ret = uv_write(
             &raw mut req,
@@ -222,7 +222,7 @@ pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
     if !tui.can_set_title {
         return;
     }
-    let too_long = title.size > MAX_TITLE;
+    let too_long = title.len() > MAX_TITLE;
     if too_long {
         // SAFETY: the format string takes no arguments.
         unsafe {
@@ -236,19 +236,19 @@ pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
             )
         };
     }
-    if title.size > 0 && !too_long {
+    if title.len() > 0 && !too_long {
         if !tui.title_enabled {
             out(tui, b"\x1b[22;0t");
             tui.title_enabled = true;
         }
         // The title and its brackets have to reach the terminal in one
         // piece, so make room for all of it before starting.
-        if tui.staging.room() < title.size + 2 * TERMINFO_SEQ_LIMIT {
+        if tui.staging.room() < title.len() + 2 * TERMINFO_SEQ_LIMIT {
             flush(tui);
         }
         terminfo_out(tui, kTerm_to_status_line);
         // SAFETY: the caller guarantees `title`.
-        unsafe { out_raw(tui, title.data, title.size) };
+        unsafe { out_raw(tui, title.data(), title.len()) };
         terminfo_out(tui, kTerm_from_status_line);
     } else if tui.title_enabled {
         out(tui, b"\x1b[23;0t");
@@ -268,7 +268,7 @@ pub fn tui_set_icon(_tui: &mut TUIData, _icon: String_0) {}
 /// option's name implies.
 pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
     // SAFETY: the caller guarantees `name` and `value`'s type.
-    let is = |option: &core::ffi::CStr| unsafe { strequal(name.data, option.as_ptr()) };
+    let is = |option: &core::ffi::CStr| unsafe { strequal(name.data(), option.as_ptr()) };
     let boolean = || unsafe { value.data.boolean };
     let integer = || unsafe { value.data.integer };
 
@@ -324,7 +324,7 @@ pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
 pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
     // SAFETY: the caller guarantees `path`.
     unsafe {
-        let err = uv_chdir(path.data);
+        let err = uv_chdir(path.data());
         if err != 0 {
             logmsg_c!(
                 LOGLVL_ERR,
@@ -333,7 +333,7 @@ pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
                 0,
                 true,
                 c"Failed to chdir to %s: %s".as_ptr(),
-                path.data,
+                path.data(),
                 uv_strerror(err),
             );
         }
@@ -376,6 +376,6 @@ fn show_verbose_terminfo(tui: &TUIData) {
             c"nvim_echo".as_ptr(),
             args.array(),
         );
-        xfree(info.data.cast());
+        xfree(info.data().cast());
     }
 }

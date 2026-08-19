@@ -54,12 +54,12 @@ pub(crate) unsafe fn format_progress_message(
     unsafe {
         let mut updated = EMPTY_HL_MESSAGE;
 
-        if (*msg_data).title.size != 0 {
+        if (*msg_data).title.len() != 0 {
             hl_msg_push(
                 &mut updated,
                 HlMessageChunk {
                     text: copy_string((*msg_data).title, ptr::null_mut()),
-                    hl_id: status_hl_id((*msg_data).status.data),
+                    hl_id: status_hl_id((*msg_data).status.data()),
                 },
             );
             hl_msg_push(
@@ -131,10 +131,7 @@ pub unsafe fn msg_progress(
             id: Object::string(cstr_as_string(id)),
             // Not `static_cstring(c"")`: upstream leaves this field zeroed,
             // so `title.data` is null rather than a pointer to "".
-            title: String_0 {
-                data: ptr::null_mut(),
-                size: 0,
-            },
+            title: String_0::from_raw_parts(ptr::null_mut(), 0),
             status: cstr_as_string(status),
             percent: 0,
             source: static_cstring(c"nvim"),
@@ -200,8 +197,8 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
 
         // The autocommand pattern is the message's source, so an autocommand
         // can match one producer's progress.
-        let pattern = if !msg_data.is_null() && (*msg_data).source.size > 0 {
-            (*msg_data).source.data
+        let pattern = if !msg_data.is_null() && (*msg_data).source.len() > 0 {
+            (*msg_data).source.data()
         } else {
             c"".as_ptr().cast_mut()
         };

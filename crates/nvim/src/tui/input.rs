@@ -196,10 +196,10 @@ pub unsafe fn tinput_stop(input: *mut TermInput) {
 
 /// Send everything staged to the editor, as a paste or as typed keys.
 fn tinput_flush(input: &mut TermInput) {
-    let keys = String_0 {
-        data: input.key_buffer.as_mut_ptr().cast::<c_char>(),
-        size: input.key_buffer_len,
-    };
+    let keys = String_0::from_raw_parts(
+        input.key_buffer.as_mut_ptr().cast::<c_char>(),
+        input.key_buffer_len,
+    );
     if input.paste != PASTE_NONE {
         let mut args = ArrayBuf::<3>::new();
         args.push(Object::string(keys));
@@ -249,10 +249,10 @@ fn send(name: &CStr, args: Array) {
 fn send_term_event(response: &mut [u8]) {
     let mut args = ArrayBuf::<2>::new();
     args.push(Object::literal("termresponse"));
-    args.push(Object::string(String_0 {
-        data: response.as_mut_ptr().cast::<c_char>(),
-        size: response.len(),
-    }));
+    args.push(Object::string(String_0::from_raw_parts(
+        response.as_mut_ptr().cast::<c_char>(),
+        response.len(),
+    )));
     send(c"nvim_ui_term_event", args.array());
 }
 

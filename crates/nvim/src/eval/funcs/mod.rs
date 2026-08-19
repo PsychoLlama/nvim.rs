@@ -159,10 +159,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const STRING_INIT: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-};
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
     << ::core::mem::size_of::<uint64_t>()
         .wrapping_mul(8_usize)
@@ -178,10 +174,10 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_data: NULL_0,
 };
 pub const CONTEXT_INIT: Context = Context {
-    regs: STRING_INIT,
-    jumps: STRING_INIT,
-    bufs: STRING_INIT,
-    gvars: STRING_INIT,
+    regs: String_0::NULL,
+    jumps: String_0::NULL,
+    bufs: String_0::NULL,
+    gvars: String_0::NULL,
     funcs: ARRAY_DICT_INIT,
 };
 static e_string_list_or_blob_required: [::core::ffi::c_char; 37] =

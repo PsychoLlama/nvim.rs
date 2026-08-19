@@ -151,17 +151,17 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
         // `restart_edit` was set and nothing was inserted, or `CTRL-O w`
         // followed by `<Left>` would clear `last_insert`.
         let inserted = get_inserted();
-        let added = if inserted.data.is_null() {
+        let added = if inserted.data().is_null() {
             0
         } else {
-            inserted.size as c_int - new_insert_skip.get()
+            inserted.len() as c_int - new_insert_skip.get()
         };
         if did_restart_edit.get() == 0 || added > 0 {
-            xfree((*last_insert.ptr()).data as *mut ::core::ffi::c_void);
+            xfree((*last_insert.ptr()).data() as *mut ::core::ffi::c_void);
             last_insert.set(inserted); // structure copy
             last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
         } else {
-            xfree(inserted.data as *mut ::core::ffi::c_void);
+            xfree(inserted.data() as *mut ::core::ffi::c_void);
         }
 
         if !arrow_used.get() && !end_insert_pos.is_null() {

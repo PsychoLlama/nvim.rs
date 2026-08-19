@@ -43,25 +43,27 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> c_int {
         if is_append_register(regname) && !(*reg).y_array.is_null() {
             // Append to the register's last line rather than replacing it.
             let pp = (*reg).y_array.add((*reg).y_size.wrapping_sub(1));
-            let tmplen = (*pp).size.wrapping_add(plen);
+            let tmplen = (*pp).len().wrapping_add(plen);
             let tmp = xmalloc(tmplen.wrapping_add(1)) as *mut c_char;
-            memcpy(tmp as *mut c_void, (*pp).data as *const c_void, (*pp).size);
-            memcpy(tmp.add((*pp).size) as *mut c_void, p as *const c_void, plen);
+            memcpy(
+                tmp as *mut c_void,
+                (*pp).data() as *const c_void,
+                (*pp).len(),
+            );
+            memcpy(
+                tmp.add((*pp).len()) as *mut c_void,
+                p as *const c_void,
+                plen,
+            );
             *tmp.add(tmplen) = NUL as c_char;
             xfree(p as *mut c_void);
-            xfree((*pp).data as *mut c_void);
-            *pp = String_0 {
-                data: tmp,
-                size: tmplen,
-            };
+            xfree((*pp).data() as *mut c_void);
+            *pp = String_0::from_raw_parts(tmp, tmplen);
         } else {
             free_register(reg);
             (*reg).additional_data = ::core::ptr::null_mut();
             (*reg).y_array = xmalloc(::core::mem::size_of::<String_0>()) as *mut String_0;
-            *(*reg).y_array = String_0 {
-                data: p,
-                size: plen,
-            };
+            *(*reg).y_array = String_0::from_raw_parts(p, plen);
             (*reg).y_size = 1;
             (*reg).y_type = kMTCharWise;
         }
@@ -285,7 +287,7 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
             if cmd_start == 0 {
                 break;
             }
-            let p = skipwhite((*lines.add(cmd_start)).data);
+            let p = skipwhite((*lines.add(cmd_start)).data());
             if c_int::from(*p) != '\\' as c_int && !is_continuation_comment(p) {
                 break;
             }
@@ -293,10 +295,10 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
 
         // Then concatenate it, dropping each continuation's leading `\`.
         let mut tmp = lines.add(cmd_start);
-        ga_concat_len(&raw mut ga, (*tmp).data, (*tmp).size);
+        ga_concat_len(&raw mut ga, (*tmp).data(), (*tmp).len());
         for j in cmd_start + 1..=cmd_end {
             tmp = lines.add(j);
-            let mut p = skipwhite((*tmp).data);
+            let mut p = skipwhite((*tmp).data());
             if c_int::from(*p) == '\\' as c_int {
                 if ga.ga_len > 400 {
                     ga_set_growsize(&raw mut ga, ga.ga_len.min(8000));
@@ -305,7 +307,7 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
                 ga_concat_len(
                     &raw mut ga,
                     p,
-                    (*tmp).data.add((*tmp).size).offset_from(p) as size_t,
+                    (*tmp).data().add((*tmp).len()).offset_from(p) as size_t,
                 );
             }
         }
@@ -425,7 +427,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
                 }
             }
 
-            let mut str = (*(*reg).y_array.add(i)).data;
+            let mut str = (*(*reg).y_array.add(i)).data();
             let mut free_str = false;
             if colon != 0 && i > 0 {
                 // A `\`-continued Ex command has to be joined back up before
@@ -514,7 +516,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
                     if u_save_cursor() == FAIL {
                         return FAIL;
                     }
-                    del_chars(mb_charlen((*(*reg).y_array).data), 1);
+                    del_chars(mb_charlen((*(*reg).y_array).data()), 1);
                     let curpos = (*curwin.get()).w_cursor;
                     if oneright() == FAIL {
                         dir = FORWARD;
@@ -531,7 +533,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
                     PUT_CURSEND as c_int,
                 );
             } else {
-                stuffescaped((*(*reg).y_array.add(i)).data, literally);
+                stuffescaped((*(*reg).y_array.add(i)).data(), literally);
                 if (*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) {
                     stuffcharReadbuff('\n' as c_int);
                 }
@@ -553,7 +555,7 @@ pub unsafe fn cmdline_paste_reg(regname: c_int, literally_arg: bool, remcr: bool
             return FAIL != 0;
         }
         for i in 0..(*reg).y_size {
-            cmdline_paste_str((*(*reg).y_array.add(i)).data, literally);
+            cmdline_paste_str((*(*reg).y_array.add(i)).data(), literally);
             // Add a <CR> between lines, unless the caller is going to.
             if i < (*reg).y_size.wrapping_sub(1) && !remcr {
                 cmdline_paste_str(c"\r".as_ptr(), literally);

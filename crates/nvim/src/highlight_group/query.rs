@@ -120,7 +120,7 @@ pub unsafe fn ns_get_hl_defs(
         let mut id = -1;
         if has_key(opts, KEYSET_OPTIDX_get_highlight__name) {
             let create = !has_key(opts, KEYSET_OPTIDX_get_highlight__create) || (*opts).create;
-            let (name, len) = ((*opts).name.data, (*opts).name.size);
+            let (name, len) = ((*opts).name.data(), (*opts).name.len());
             id = if create {
                 syn_check_group(name, len)
             } else {

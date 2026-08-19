@@ -29,11 +29,12 @@ use crate::types::{FAIL, NUL, OK};
 /// Must run on the main thread; frees and replaces `last_insert`.
 pub(crate) unsafe fn set_last_insert(c: c_int) {
     unsafe {
-        xfree((*last_insert.ptr()).data as *mut ::core::ffi::c_void);
-        (*last_insert.ptr()).data =
-            xmalloc((MB_MAXBYTES as c_int * 3 + 5) as size_t) as *mut ::core::ffi::c_char;
+        xfree((*last_insert.ptr()).data() as *mut ::core::ffi::c_void);
+        (*last_insert.ptr()).set_data(
+            xmalloc((MB_MAXBYTES as c_int * 3 + 5) as size_t) as *mut ::core::ffi::c_char,
+        );
 
-        let start = (*last_insert.ptr()).data;
+        let start = (*last_insert.ptr()).data();
         let mut s = start;
         // The CTRL-V is only needed to enter a special character.
         if c < ' ' as c_int || c == DEL {
@@ -45,7 +46,7 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
         s = s.offset(1);
         *s = NUL as c_char;
 
-        (*last_insert.ptr()).size = s.offset_from(start) as size_t;
+        (*last_insert.ptr()).set_len(s.offset_from(start) as size_t);
         last_insert_skip.set(0);
     }
 }
@@ -64,7 +65,7 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
 pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> c_int {
     unsafe {
         let mut insert = get_last_insert(); // text to be inserted
-        if insert.data.is_null() {
+        if insert.data().is_null() {
             emsg(gettext(&raw const e_noinstext as *const c_char));
             return FAIL;
         }
@@ -76,11 +77,11 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
 
         // Cut the text at the last ESC: what follows it is not part of the
         // insert.
-        let mut i = insert.size;
+        let mut i = insert.len();
         while i > 0 {
             i -= 1;
-            if *insert.data.add(i) as c_int == ESC {
-                insert.size = i;
+            if *insert.data().add(i) as c_int == ESC {
+                insert.set_len(i);
                 break;
             }
         }
@@ -90,18 +91,18 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
         // nothing follows it (no ESC is coming) or when the text is repeated
         // and starts with CTRL-D.  -- Acevedo
         let mut last = NUL as c_char;
-        if insert.size > 0 {
-            let p = insert.data.add(insert.size - 1);
+        if insert.len() > 0 {
+            let p = insert.data().add(insert.len() - 1);
             if (*p as c_int == '0' as c_int || *p as c_int == '^' as c_int)
-                && (no_esc != 0 || (*insert.data as c_int == Ctrl_D && count > 1))
+                && (no_esc != 0 || (*insert.data() as c_int == Ctrl_D && count > 1))
             {
                 last = *p;
-                insert.size -= 1;
+                insert.set_len(insert.len() - 1);
             }
         }
 
         loop {
-            stuffReadbuffLen(insert.data, insert.size as ptrdiff_t);
+            stuffReadbuffLen(insert.data(), insert.len() as ptrdiff_t);
             // The quoted forms: `0` as `<C-V>048`, `^` as `<C-V>^`.
             if last == b'0' as c_char {
                 stuffReadbuffLen(c"\x16048".as_ptr(), 4);
@@ -130,15 +131,15 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
 /// The answer is invalidated by the next [`set_last_insert`] or insert.
 pub(crate) unsafe fn get_last_insert() -> String_0 {
     unsafe {
-        if (*last_insert.ptr()).data.is_null() {
-            NULL_STRING
+        if (*last_insert.ptr()).data().is_null() {
+            String_0::NULL
         } else {
-            String_0 {
-                data: (*last_insert.ptr())
-                    .data
+            String_0::from_raw_parts(
+                (*last_insert.ptr())
+                    .data()
                     .offset(last_insert_skip.get() as isize),
-                size: (*last_insert.ptr()).size - last_insert_skip.get() as size_t,
-            }
+                (*last_insert.ptr()).len() - last_insert_skip.get() as size_t,
+            )
         }
     }
 }
@@ -151,14 +152,14 @@ pub(crate) unsafe fn get_last_insert() -> String_0 {
 pub(crate) unsafe fn get_last_insert_save() -> *mut c_char {
     unsafe {
         let mut insert = get_last_insert();
-        if insert.data.is_null() {
+        if insert.data().is_null() {
             return ::core::ptr::null_mut();
         }
 
-        let s = xmemdupz(insert.data as *const ::core::ffi::c_void, insert.size) as *mut c_char;
-        if insert.size > 0 && *s.add(insert.size - 1) as c_int == ESC {
-            insert.size -= 1;
-            *s.add(insert.size) = NUL as c_char;
+        let s = xmemdupz(insert.data() as *const ::core::ffi::c_void, insert.len()) as *mut c_char;
+        if insert.len() > 0 && *s.add(insert.len() - 1) as c_int == ESC {
+            insert.set_len(insert.len() - 1);
+            *s.add(insert.len()) = NUL as c_char;
         }
         s
     }

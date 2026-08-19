@@ -29,7 +29,7 @@ impl Put {
     /// `lnum`/`col` must be a valid position, and undo already saved.
     pub(crate) unsafe fn charwise_one_line(&mut self, mut lnum: linenr_T, mut col: colnr_T) {
         unsafe {
-            let yanklen = (*self.y_array).size as c_int;
+            let yanklen = (*self.y_array).len() as c_int;
             let start_lnum = lnum;
             let mut end_lnum = 0;
             let mut first_byte_off = 0;
@@ -104,7 +104,7 @@ impl Put {
                     for _ in 0..self.count {
                         memmove(
                             ptr as *mut c_void,
-                            (*self.y_array).data as *const c_void,
+                            (*self.y_array).data() as *const c_void,
                             yanklen as size_t,
                         );
                         ptr = ptr.offset(yanklen as isize);
@@ -177,21 +177,21 @@ impl Put {
             let ptr = ml_get(lnum).offset(col as isize);
             let ptrlen = (ml_get_len(lnum) - col) as size_t;
             let last = *self.y_array.add(self.y_size.wrapping_sub(1));
-            let newp = xmalloc(ptrlen.wrapping_add(last.size).wrapping_add(1)) as *mut c_char;
-            strcpy(newp, last.data);
-            strcpy(newp.add(last.size), ptr);
+            let newp = xmalloc(ptrlen.wrapping_add(last.len()).wrapping_add(1)) as *mut c_char;
+            strcpy(newp, last.data());
+            strcpy(newp.add(last.len()), ptr);
             ml_append(lnum, newp, 0, false);
             xfree(newp as *mut c_void);
 
             // The head of the cursor line keeps the register's *first* line.
-            let yanklen = (*self.y_array).size as c_int;
+            let yanklen = (*self.y_array).len() as c_int;
             let oldp = ml_get(lnum);
             let newp = xmalloc((col + yanklen + 1) as size_t) as *mut c_char;
             memmove(newp as *mut c_void, oldp as *const c_void, col as size_t);
             // +1 to bring the NUL across.
             memmove(
                 newp.offset(col as isize) as *mut c_void,
-                (*self.y_array).data as *const c_void,
+                (*self.y_array).data() as *const c_void,
                 (yanklen + 1) as size_t,
             );
             ml_replace(lnum, newp, false);
@@ -284,12 +284,12 @@ impl Put {
             // column corrected for whatever the reindent above removed.
             (*curbuf.get()).b_op_end.lnum = new_lnum;
             let last = *self.y_array.add(self.y_size.wrapping_sub(1));
-            let col = (last.size as colnr_T - lendiff).max(0);
+            let col = (last.len() as colnr_T - lendiff).max(0);
             if col > 1 {
                 (*curbuf.get()).b_op_end.col = col - 1;
-                if last.size > 0 {
+                if last.len() > 0 {
                     (*curbuf.get()).b_op_end.col -=
-                        utf_head_off(last.data, last.data.add(last.size - 1));
+                        utf_head_off(last.data(), last.data().add(last.len() - 1));
                 }
             } else {
                 (*curbuf.get()).b_op_end.col = 0;
@@ -365,7 +365,7 @@ impl Put {
                         // A charwise register's last line is already on the
                         // second half of the split.
                         if self.y_type != kMTCharWise || i < self.y_size.wrapping_sub(1) {
-                            if ml_append(lnum, (*self.y_array.add(i)).data, 0, false) == FAIL {
+                            if ml_append(lnum, (*self.y_array.add(i)).data(), 0, false) == FAIL {
                                 break 'error;
                             }
                             new_lnum += 1;
@@ -393,10 +393,10 @@ impl Put {
                     if self.y_type == kMTCharWise || splits_a_line {
                         let mut totsize: bcount_t = 0;
                         for i in 0..self.y_size.wrapping_sub(1) {
-                            totsize += (*self.y_array.add(i)).size as bcount_t + 1;
+                            totsize += (*self.y_array.add(i)).len() as bcount_t + 1;
                         }
                         let lastsize =
-                            (*self.y_array.add(self.y_size.wrapping_sub(1))).size as c_int;
+                            (*self.y_array.add(self.y_size.wrapping_sub(1))).len() as c_int;
                         totsize += lastsize as bcount_t;
                         if self.y_type == kMTCharWise {
                             extmark_splice(

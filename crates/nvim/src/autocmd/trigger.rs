@@ -217,7 +217,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                     object_to_vim(item.value, &raw mut tv, &raw mut err);
                     // A value `v:event` cannot hold is dropped, not fatal.
                     if err.type_0 == kErrorTypeNone {
-                        tv_dict_add_tv(v_event, item.key.data, item.key.size, &raw mut tv);
+                        tv_dict_add_tv(v_event, item.key.data(), item.key.len(), &raw mut tv);
                         tv_clear(&raw mut tv);
                     } else {
                         api_clear_error(&raw mut err);

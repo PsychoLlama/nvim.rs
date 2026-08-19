@@ -51,7 +51,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
         let mut tstate: TryState = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
         let ok = eval0(
-            expr.data,
+            expr.data(),
             &raw mut rettv,
             ptr::null_mut::<exarg_T>(),
             EVALARG_EVALUATE.ptr(),
@@ -67,7 +67,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
                     kErrorTypeException,
                     c"Failed to evaluate expression: '%.*s'".as_ptr(),
                     256 as c_int,
-                    expr.data,
+                    expr.data(),
                 );
             } else {
                 rv = vim_to_object(&raw mut rettv, arena, false);
@@ -114,8 +114,8 @@ unsafe fn call_function_with(
             let mut tstate: TryState = TRY_STATE_INIT;
             try_enter(&raw mut tstate);
             call_func(
-                fn_0.data,
-                fn_0.size as c_int,
+                fn_0.data(),
+                fn_0.len() as c_int,
                 &raw mut rettv,
                 args.size as c_int,
                 vim_args.as_mut_ptr(),
@@ -163,7 +163,7 @@ pub unsafe fn nvim_call_dict_function(
                 let mut tstate: TryState = TRY_STATE_INIT;
                 try_enter(&raw mut tstate);
                 let eval_ret = eval0(
-                    dict.data.string.data,
+                    dict.data.string.data(),
                     &raw mut rettv,
                     ptr::null_mut::<exarg_T>(),
                     EVALARG_EVALUATE.ptr(),
@@ -217,14 +217,14 @@ unsafe fn call_in_dict(
         }
         // A Dict argument was converted whole, so its function member is
         // already `fn_0`; a String argument named a dictionary to look in.
-        if !fn_0.data.is_null() && fn_0.size > 0 && dict.type_0 != kObjectTypeDict {
-            let di: *mut dictitem_T = tv_dict_find(self_dict, fn_0.data, fn_0.size as ptrdiff_t);
+        if !fn_0.data().is_null() && fn_0.len() > 0 && dict.type_0 != kObjectTypeDict {
+            let di: *mut dictitem_T = tv_dict_find(self_dict, fn_0.data(), fn_0.len() as ptrdiff_t);
             if di.is_null() {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
                     c"Not found: %s".as_ptr(),
-                    fn_0.data,
+                    fn_0.data(),
                 );
                 return Object::NIL;
             }
@@ -241,16 +241,16 @@ unsafe fn call_in_dict(
                     err,
                     kErrorTypeValidation,
                     c"Not a function: %s".as_ptr(),
-                    fn_0.data,
+                    fn_0.data(),
                 );
                 return Object::NIL;
             }
-            *fn_0 = String_0 {
-                data: (*di).di_tv.vval.v_string,
-                size: strlen((*di).di_tv.vval.v_string),
-            };
+            *fn_0 = String_0::from_raw_parts(
+                (*di).di_tv.vval.v_string,
+                strlen((*di).di_tv.vval.v_string),
+            );
         }
-        if fn_0.data.is_null() || fn_0.size < 1 {
+        if fn_0.data().is_null() || fn_0.len() < 1 {
             api_set_error(
                 err,
                 kErrorTypeValidation,

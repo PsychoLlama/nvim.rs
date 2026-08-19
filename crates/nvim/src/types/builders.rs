@@ -30,10 +30,7 @@ use core::ffi::{CStr, c_char};
 /// anything a C callee will treat as a C string, because a Rust `str`
 /// literal has no terminator past its last byte — see [`static_cstring`].
 pub const fn static_string(text: &'static str) -> String_0 {
-    String_0 {
-        data: text.as_ptr().cast::<c_char>().cast_mut(),
-        size: text.len(),
-    }
+    String_0::from_raw_parts(text.as_ptr().cast::<c_char>().cast_mut(), text.len())
 }
 
 /// [`static_string`] for the callees that read one byte past `size`.
@@ -43,10 +40,7 @@ pub const fn static_string(text: &'static str) -> String_0 {
 /// the C literals it was translating. This is why [`DictBuf::insert`] takes
 /// a `CStr` rather than a `str`.
 pub const fn static_cstring(text: &'static CStr) -> String_0 {
-    String_0 {
-        data: text.as_ptr().cast_mut(),
-        size: text.count_bytes(),
-    }
+    String_0::from_raw_parts(text.as_ptr().cast_mut(), text.count_bytes())
 }
 
 impl Object {
@@ -295,7 +289,7 @@ mod tests {
     fn dict_nests_in_an_array() {
         let mut opts = DictBuf::<1>::new();
         opts.insert(c"verbose", Object::boolean(true));
-        assert_eq!(opts.items[0].key.size, "verbose".len());
+        assert_eq!(opts.items[0].key.len(), "verbose".len());
         assert_eq!(opts.items[0].value.type_0, kObjectTypeBoolean);
 
         let entry = opts.object();

@@ -123,7 +123,7 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
             let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
             for i in 0..(*reg).y_size {
                 let line = *(*reg).y_array.add(i);
-                tv_list_append_string(list, line.data, line.size as c_int as ssize_t);
+                tv_list_append_string(list, line.data(), line.len() as c_int as ssize_t);
             }
             return list as *mut c_void;
         }
@@ -134,7 +134,7 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
             |i: size_t| (*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1);
         let mut len: size_t = 0;
         for i in 0..(*reg).y_size {
-            len = len.wrapping_add((*(*reg).y_array.add(i)).size);
+            len = len.wrapping_add((*(*reg).y_array.add(i)).len());
             if needs_nl(i) {
                 len = len.wrapping_add(1);
             }
@@ -143,8 +143,8 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
         let mut at: size_t = 0;
         for i in 0..(*reg).y_size {
             let line = *(*reg).y_array.add(i);
-            strcpy(retval.add(at), line.data);
-            at = at.wrapping_add(line.size);
+            strcpy(retval.add(at), line.data());
+            at = at.wrapping_add(line.len());
             if needs_nl(i) {
                 *retval.add(at) = '\n' as c_char;
                 at = at.wrapping_add(1);
@@ -322,7 +322,7 @@ unsafe fn str_to_reg(
                 // Appending continues the register's current last line.
                 let extra = if append {
                     lnum = lnum.wrapping_sub(1);
-                    (*pp.add(lnum)).size
+                    (*pp.add(lnum)).len()
                 } else {
                     0
                 };
@@ -330,7 +330,7 @@ unsafe fn str_to_reg(
                 if extra > 0 {
                     memcpy(
                         s as *mut c_void,
-                        (*pp.add(lnum)).data as *const c_void,
+                        (*pp.add(lnum)).data() as *const c_void,
                         extra,
                     );
                 }
@@ -343,13 +343,10 @@ unsafe fn str_to_reg(
                 }
                 let s_len = extra.wrapping_add(line_len);
                 if append {
-                    xfree((*pp.add(lnum)).data as *mut c_void);
+                    xfree((*pp.add(lnum)).data() as *mut c_void);
                     append = false;
                 }
-                *pp.add(lnum) = String_0 {
-                    data: s,
-                    size: s_len,
-                };
+                *pp.add(lnum) = String_0::from_raw_parts(s, s_len);
                 // A NUL in the text is how the editor spells a newline.
                 memchrsub(s as *mut c_void, NUL as c_char, '\n' as c_char, s_len);
 
@@ -556,10 +553,10 @@ pub unsafe fn prepare_yankreg_from_object(
     _lines: size_t,
 ) -> bool {
     unsafe {
-        let type_0 = if regtype.data.is_null() {
+        let type_0 = if regtype.data().is_null() {
             NUL
         } else {
-            c_int::from(*regtype.data)
+            c_int::from(*regtype.data())
         };
         (*reg).y_type = match type_0 {
             0 => kMTUnknown, // "" means "work it out from the text"
@@ -570,18 +567,18 @@ pub unsafe fn prepare_yankreg_from_object(
         };
 
         (*reg).y_width = 0;
-        if regtype.size > 1 {
+        if regtype.len() > 1 {
             // A width only means something for a block.
             if (*reg).y_type != kMTBlockWise {
                 return false;
             }
-            if !ascii_isdigit(c_int::from(*regtype.data.add(1))) {
+            if !ascii_isdigit(c_int::from(*regtype.data().add(1))) {
                 return false;
             }
-            let mut p: *const c_char = regtype.data.add(1);
+            let mut p: *const c_char = regtype.data().add(1);
             (*reg).y_width = getdigits_int(&raw mut p as *mut *mut c_char, false, 1) - 1;
             // Nothing may follow the width.
-            if regtype.size > p.offset_from(regtype.data) as size_t {
+            if regtype.len() > p.offset_from(regtype.data()) as size_t {
                 return false;
             }
         }
@@ -602,7 +599,7 @@ pub unsafe fn prepare_yankreg_from_object(
 pub unsafe fn finish_yankreg_from_object(reg: *mut yankreg_T, clipboard_adjust: bool) {
     unsafe {
         let ends_empty =
-            (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size.wrapping_sub(1))).size == 0;
+            (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size.wrapping_sub(1))).len() == 0;
         if ends_empty {
             if (*reg).y_type != kMTCharWise {
                 if (*reg).y_type == kMTUnknown || clipboard_adjust {

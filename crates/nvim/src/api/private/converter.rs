@@ -89,20 +89,9 @@ impl ObjectSink {
     /// `data` must point at `len` readable bytes.
     unsafe fn cbuf_to_obj(&mut self, data: *const c_char, len: size_t) -> Object {
         let string = if self.reuse_strdata {
-            String_0 {
-                data: if len != 0 { data } else { c"".as_ptr() }.cast_mut(),
-                size: len,
-            }
+            String_0::from_raw_parts(if len != 0 { data } else { c"".as_ptr() }.cast_mut(), len)
         } else {
-            unsafe {
-                arena_string(
-                    self.arena,
-                    String_0 {
-                        data: data.cast_mut(),
-                        size: len,
-                    },
-                )
-            }
+            unsafe { arena_string(self.arena, String_0::from_raw_parts(data.cast_mut(), len)) }
         };
         object {
             type_0: kObjectTypeString,
@@ -331,10 +320,7 @@ impl TypvalSink for ObjectSink {
             let key = if key.type_0 == kObjectTypeString {
                 key.data.string
             } else {
-                String_0 {
-                    data: INVALID_KEY.as_ptr().cast_mut(),
-                    size: INVALID_KEY.count_bytes(),
-                }
+                String_0::from_raw_parts(INVALID_KEY.as_ptr().cast_mut(), INVALID_KEY.count_bytes())
             };
             let dict = self.open_dict();
             (*dict.items.add(dict.size)).key = key;
@@ -466,7 +452,7 @@ pub unsafe fn object_to_vim_take_luaref(
             }
             kObjectTypeString => {
                 let mut s: String_0 = (*obj).data.string;
-                *tv = decode_string(s.data, s.size, false, false);
+                *tv = decode_string(s.data(), s.len(), false, false);
             }
             kObjectTypeArray => {
                 let list: *mut list_T = tv_list_alloc((*obj).data.array.size as ptrdiff_t);
@@ -496,7 +482,7 @@ pub unsafe fn object_to_vim_take_luaref(
                 while (i_0 as size_t) < (*obj).data.dict.size {
                     let mut item: *mut KeyValuePair = (*obj).data.dict.items.offset(i_0 as isize);
                     let mut key: String_0 = (*item).key;
-                    let di: *mut dictitem_T = tv_dict_item_alloc(key.data);
+                    let di: *mut dictitem_T = tv_dict_item_alloc(key.data());
                     object_to_vim_take_luaref(
                         &raw mut (*item).value,
                         &raw mut (*di).di_tv,

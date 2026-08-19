@@ -483,10 +483,7 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
             let mut need_clear = false;
             msg_ext_set_kind(c"wmsg".as_ptr());
             msg_multiline(
-                String_0 {
-                    data: msg.items,
-                    size: msg.size,
-                },
+                String_0::from_raw_parts(msg.items, msg.size),
                 0,
                 false,
                 false,
@@ -654,24 +651,22 @@ pub unsafe fn recover_names(
         let mut names: [*mut c_char; 6] = [core::ptr::null_mut(); 6];
         // One buffer for the directory name, big enough for the longest
         // entry in 'directory'.
-        let mut dir_name = String_0 {
-            data: xmalloc(strlen(p_dir.get()) + 1) as *mut c_char,
-            size: 0,
-        };
+        let mut dir_name =
+            String_0::from_raw_parts(xmalloc(strlen(p_dir.get()) + 1) as *mut c_char, 0);
         let mut dirp = p_dir.get();
         while *dirp != 0 {
             // Isolate one directory name and advance `dirp` past it. The
             // buffer is known to be large enough, hence the 31000.
-            dir_name.size = copy_option_part(
+            dir_name.set_len(copy_option_part(
                 &raw mut dirp,
-                dir_name.data,
+                dir_name.data(),
                 31000,
                 c",".as_ptr().cast_mut(),
-            );
+            ));
 
             let num_names;
-            let current_dir =
-                *dir_name.data as c_int == '.' as c_int && *dir_name.data.offset(1) as c_int == NUL;
+            let current_dir = *dir_name.data() as c_int == '.' as c_int
+                && *dir_name.data().offset(1) as c_int == NUL;
             if fname.is_null() {
                 // Every swap file, under whatever name. On unix a leading dot
                 // is special, so the two forms are listed separately.
@@ -680,22 +675,22 @@ pub unsafe fn recover_names(
                     *slot = if current_dir {
                         xmemdupz(pattern.as_ptr().cast(), pattern.count_bytes()) as *mut c_char
                     } else {
-                        concat_fnames(dir_name.data, pattern.as_ptr(), true)
+                        concat_fnames(dir_name.data(), pattern.as_ptr(), true)
                     };
                 }
                 num_names = 3;
             } else if current_dir {
                 num_names = recov_file_names(&mut names, fname_res, true);
             } else {
-                let end = dir_name.data.add(dir_name.size);
-                let tail = if after_pathsep(dir_name.data, end) != 0
-                    && dir_name.size > 1
+                let end = dir_name.data().add(dir_name.len());
+                let tail = if after_pathsep(dir_name.data(), end) != 0
+                    && dir_name.len() > 1
                     && *end.offset(-1) as c_int == *end.offset(-2) as c_int
                 {
                     // Ends with "//": the swap file's name holds the full path.
-                    make_percent_swname(dir_name.data, end, fname_res)
+                    make_percent_swname(dir_name.data(), end, fname_res)
                 } else {
-                    concat_fnames(dir_name.data, path_tail(fname_res), true)
+                    concat_fnames(dir_name.data(), path_tail(fname_res), true)
                 };
                 num_names = recov_file_names(&mut names, tail, false);
                 xfree(tail.cast());
@@ -780,7 +775,7 @@ pub unsafe fn recover_names(
                     }
                 } else {
                     msg_puts(gettext(c"   In directory ".as_ptr()));
-                    msg_home_replace(dir_name.data);
+                    msg_home_replace(dir_name.data());
                     msg_puts(c":\n".as_ptr());
                 }
 
@@ -801,10 +796,7 @@ pub unsafe fn recover_names(
                         swapfile_info(*files.offset(i as isize), &raw mut msg_buf);
                         let mut need_clear = false;
                         msg_multiline(
-                            String_0 {
-                                data: msg_buf.items,
-                                size: msg_buf.size,
-                            },
+                            String_0::from_raw_parts(msg_buf.items, msg_buf.size),
                             0,
                             false,
                             false,
@@ -816,7 +808,7 @@ pub unsafe fn recover_names(
                 ui_flush();
             } else if !ret_list.is_null() {
                 for i in 0..num_files {
-                    let name = concat_fnames(dir_name.data, *files.offset(i as isize), true);
+                    let name = concat_fnames(dir_name.data(), *files.offset(i as isize), true);
                     tv_list_append_allocated_string(ret_list, name);
                 }
             } else {
@@ -831,7 +823,7 @@ pub unsafe fn recover_names(
             }
         }
         msg_ext_skip_flush.set(false);
-        xfree(dir_name.data.cast());
+        xfree(dir_name.data().cast());
         file_count
     }
 }

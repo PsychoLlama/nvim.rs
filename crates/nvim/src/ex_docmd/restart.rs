@@ -252,15 +252,15 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                     break 'fail_2;
                 }
                 if result.type_0 as c_int != kObjectTypeString as c_int
-                    || result.data.string.size == 0
+                    || result.data.string.len() == 0
                 {
                     emsg(c"restart failed: could not get listen address from new server".as_ptr());
                     break 'fail_2;
                 }
                 // Copied out before the arena it lives in is freed.
                 let listen_addr = xmemdupz(
-                    result.data.string.data as *const c_void,
-                    result.data.string.size,
+                    result.data.string.data() as *const c_void,
+                    result.data.string.len(),
                 ) as *mut c_char;
                 arena_mem_free(result_mem);
                 result_mem = ptr::null_mut();

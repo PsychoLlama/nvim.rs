@@ -171,10 +171,7 @@ unsafe extern "C" fn out_data_event(argv: *mut *mut c_void) {
         msg_ext_set_append(true);
         let mut need_clear = true;
         msg_multiline(
-            String_0 {
-                data: text,
-                size: count,
-            },
+            String_0::from_raw_parts(text, count),
             hl,
             false,
             false,

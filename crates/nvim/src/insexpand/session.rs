@@ -72,8 +72,8 @@ pub(crate) unsafe fn get_normal_compl_info(
                 c"\\<"
             };
             let (data, n) = build_pattern(prefix, compl_length.get());
-            (*compl_pattern.ptr()).data = data;
-            (*compl_pattern.ptr()).size = n - 1;
+            (*compl_pattern.ptr()).set_data(data);
+            (*compl_pattern.ptr()).set_len(n - 1);
         } else {
             // Upstream decrements in the `else if` test itself, so only these
             // two branches see the smaller column.
@@ -112,12 +112,12 @@ pub(crate) unsafe fn get_normal_compl_info(
                     strcpy(data, c"\\<".as_ptr());
                     quote_meta(data.offset(2), line.offset(compl_col.get() as isize), 1);
                     strcat(data, c"\\k".as_ptr());
-                    (*compl_pattern.ptr()).data = data;
-                    (*compl_pattern.ptr()).size = strlen(data);
+                    (*compl_pattern.ptr()).set_data(data);
+                    (*compl_pattern.ptr()).set_len(strlen(data));
                 } else {
                     let (data, n) = build_pattern(c"\\<", compl_length.get());
-                    (*compl_pattern.ptr()).data = data;
-                    (*compl_pattern.ptr()).size = n - 1;
+                    (*compl_pattern.ptr()).set_data(data);
+                    (*compl_pattern.ptr()).set_len(n - 1);
                 }
             }
         }
@@ -202,8 +202,8 @@ pub(crate) unsafe fn get_cmdline_compl_info(line: *mut c_char, curs_col: colnr_T
         compl_pattern.set(cbuf_to_string(line, curs_col as size_t));
         set_cmd_context(
             compl_xp.ptr(),
-            (*compl_pattern.ptr()).data,
-            (*compl_pattern.ptr()).size as c_int,
+            (*compl_pattern.ptr()).data(),
+            (*compl_pattern.ptr()).len() as c_int,
             curs_col,
             false,
         );
@@ -220,7 +220,7 @@ pub(crate) unsafe fn get_cmdline_compl_info(line: *mut c_char, curs_col: colnr_T
             compl_col.set(
                 (*compl_xp.ptr())
                     .xp_pattern
-                    .offset_from((*compl_pattern.ptr()).data) as colnr_T,
+                    .offset_from((*compl_pattern.ptr()).data()) as colnr_T,
             );
         }
         compl_length.set(curs_col - compl_col.get());
@@ -579,8 +579,8 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
             flags |= CP_ICASE;
         }
         if ins_compl_add(
-            (*compl_orig_text.ptr()).data,
-            (*compl_orig_text.ptr()).size as c_int,
+            (*compl_orig_text.ptr()).data(),
+            (*compl_orig_text.ptr()).len() as c_int,
             ptr::null_mut(),
             ptr::null(),
             false,

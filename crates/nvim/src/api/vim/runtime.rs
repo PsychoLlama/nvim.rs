@@ -44,7 +44,7 @@ pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        if !(text.size <= 2147483647 as ::core::ffi::c_int as size_t) {
+        if !(text.len() <= 2147483647 as ::core::ffi::c_int as size_t) {
             api_err_invalid(
                 err,
                 c"text length".as_ptr(),
@@ -54,12 +54,12 @@ pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
             );
             return (0 as Integer).reported(error);
         }
-        return (mb_string2cells(text.data) as Integer).reported(error);
+        return (mb_string2cells(text.data()) as Integer).reported(error);
     }
 }
 
 pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error> {
-    unsafe { nvim_get_runtime_file(NULL_STRING, true, arena) }
+    unsafe { nvim_get_runtime_file(String_0::NULL, true, arena) }
 }
 
 pub unsafe fn nvim__runtime_inspect(arena: *mut Arena) -> Array {
@@ -106,8 +106,8 @@ pub unsafe fn nvim_get_runtime_file(
         };
         try_enter(&raw mut tstate);
         do_in_runtimepath(
-            (if name.size != 0 {
-                name.data as *const ::core::ffi::c_char
+            (if name.len() != 0 {
+                name.data() as *const ::core::ffi::c_char
             } else {
                 c"".as_ptr()
             }) as *mut ::core::ffi::c_char,
@@ -195,7 +195,7 @@ pub unsafe fn nvim__get_runtime(
             while i < res.size {
                 let mut name: String_0 = (*res.items.add(i)).data.string;
                 do_source(
-                    name.data,
+                    name.data(),
                     false,
                     DOSO_NONE as ::core::ffi::c_int,
                     ::core::ptr::null_mut::<::core::ffi::c_int>(),
@@ -211,7 +211,7 @@ pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        if !(dir.size < 4096 as size_t) {
+        if !(dir.len() < 4096 as size_t) {
             api_err_invalid(
                 err,
                 c"directory name".as_ptr(),
@@ -224,10 +224,10 @@ pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
         let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
         memcpy(
             &raw mut string as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            dir.data as *const ::core::ffi::c_void,
-            dir.size,
+            dir.data() as *const ::core::ffi::c_void,
+            dir.len(),
         );
-        string[dir.size] = NUL as ::core::ffi::c_char;
+        string[dir.len()] = NUL as ::core::ffi::c_char;
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
             private_msg_list: ::core::ptr::null_mut::<msglist_T>(),

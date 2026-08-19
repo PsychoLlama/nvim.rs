@@ -321,7 +321,7 @@ pub unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size: size_
             }
             filtered.clear();
             // SAFETY: a register's line is NUL-terminated.
-            let bytes = unsafe { CStr::from_ptr(line.data) }.to_bytes();
+            let bytes = unsafe { CStr::from_ptr(line.data()) }.to_bytes();
             let mut at = 0;
             while at < bytes.len() {
                 let src = bytes[at..].as_ptr().cast::<c_char>();

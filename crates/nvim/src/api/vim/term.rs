@@ -143,10 +143,10 @@ unsafe fn term_write(
         array_add(&mut args, Object::buffer(terminal_buf((*chan).term)));
         array_add(
             &mut args,
-            Object::string(String_0 {
-                data: buf as *mut ::core::ffi::c_char,
-                size: size,
-            }),
+            Object::string(String_0::from_raw_parts(
+                buf as *mut ::core::ffi::c_char,
+                size,
+            )),
         );
         (*textlock.ptr()) += 1;
         nlua_call_ref(
@@ -180,13 +180,13 @@ pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error>
     let err = &raw mut slot;
     unsafe {
         let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        if data.size == 0 {
+        if data.len() == 0 {
             return ().reported(slot);
         }
         channel_send(
             chan as uint64_t,
-            data.data,
-            data.size,
+            data.data(),
+            data.len(),
             false,
             &raw mut error,
         );

@@ -287,10 +287,10 @@ static compl_busy: GlobalCell<bool> = GlobalCell::new(false);
 static Insstart_textlen: GlobalCell<colnr_T> = GlobalCell::new(0);
 static Insstart_blank_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
 static update_Insstart_orig: GlobalCell<bool> = GlobalCell::new(true);
-static last_insert: GlobalCell<String_0> = GlobalCell::new(String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-});
+static last_insert: GlobalCell<String_0> = GlobalCell::new(String_0::from_raw_parts(
+    ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    0 as size_t,
+));
 static last_insert_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static new_insert_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static did_restart_edit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -342,7 +342,3 @@ pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_CMD: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
-pub const NULL_STRING: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-};

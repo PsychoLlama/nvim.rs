@@ -166,9 +166,9 @@ unsafe fn insert_enter(s: *mut InsertState) {
         // Everything in the redo buffer up to here belongs to the command,
         // not to the text that was typed.
         let inserted = get_inserted();
-        new_insert_skip.set(inserted.size as c_int);
-        if !inserted.data.is_null() {
-            xfree(inserted.data as *mut ::core::ffi::c_void);
+        new_insert_skip.set(inserted.len() as c_int);
+        if !inserted.data().is_null() {
+            xfree(inserted.data() as *mut ::core::ffi::c_void);
         }
         old_indent.set(0);
 

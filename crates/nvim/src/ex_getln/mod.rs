@@ -618,10 +618,10 @@ pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
     OptVal {
         type_0: kOptValTypeString,
         data: OptValData {
-            string: String_0 {
-                data: value.as_ptr() as *mut ::core::ffi::c_char,
-                size: value.count_bytes() as size_t,
-            },
+            string: String_0::from_raw_parts(
+                value.as_ptr() as *mut ::core::ffi::c_char,
+                value.count_bytes() as size_t,
+            ),
         },
     }
 }

@@ -257,7 +257,7 @@ unsafe fn is_fast(name: &CStr, args: Array) -> bool {
     }
     // `kind` is `msg_show`'s first argument, and an unkinded message
     // carries it as an empty string with no buffer behind it at all.
-    let kind = unsafe { (*args.items).data.string.data };
+    let kind = unsafe { (*args.items).data.string.data() };
     if kind.is_null() {
         return true;
     }

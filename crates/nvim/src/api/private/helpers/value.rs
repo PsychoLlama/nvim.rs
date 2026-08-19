@@ -8,7 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{EMPTY_HL_MESSAGE, NIL, STRING_INIT, api_set_error, cstr_as_string};
+use super::{EMPTY_HL_MESSAGE, NIL, api_set_error, cstr_as_string};
 use crate::api::private::metadata::PACKED_API_METADATA;
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::global_cell::GlobalCell;
@@ -107,21 +107,18 @@ pub(crate) unsafe fn dict_put_str(dict: &mut Dict, key: String_0, value: Object)
 pub(crate) unsafe fn arena_string(arena: *mut Arena, str: String_0) -> String_0 {
     // SAFETY: `str` has `size` readable bytes.
     unsafe {
-        if str.size != 0 {
-            return String_0 {
-                data: arena_memdupz(arena, str.data, str.size),
-                size: str.size,
-            };
+        if str.len() != 0 {
+            return String_0::from_raw_parts(
+                arena_memdupz(arena, str.data(), str.len()),
+                str.len(),
+            );
         }
         let empty = if arena.is_null() {
             xstrdup(c"".as_ptr())
         } else {
             c"".as_ptr() as *mut c_char
         };
-        String_0 {
-            data: empty,
-            size: 0,
-        }
+        String_0::from_raw_parts(empty, 0)
     }
 }
 
@@ -153,7 +150,7 @@ pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayB
 
 pub(crate) unsafe fn api_free_string(value: String_0) {
     // SAFETY: `value` owns its allocation.
-    unsafe { xfree(value.data.cast()) };
+    unsafe { xfree(value.data().cast()) };
 }
 
 /// Free `value` and everything below it. Only for objects that were built on
@@ -233,13 +230,10 @@ pub(crate) unsafe fn api_luarefs_free_dict(value: Dict) {
 pub(crate) unsafe fn copy_string(str: String_0, arena: *mut Arena) -> String_0 {
     // SAFETY: `str` is null or has `size` readable bytes.
     unsafe {
-        if str.data.is_null() {
-            return STRING_INIT;
+        if str.data().is_null() {
+            return String_0::NULL;
         }
-        String_0 {
-            data: arena_memdupz(arena, str.data, str.size),
-            size: str.size,
-        }
+        String_0::from_raw_parts(arena_memdupz(arena, str.data(), str.len()), str.len())
     }
 }
 
@@ -265,7 +259,7 @@ pub(crate) unsafe fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict {
             *rv.items.add(i) = key_value_pair {
                 // The key's length is re-derived rather than copied, so a
                 // key holding a NUL comes back truncated. Upstream's shape.
-                key: cstr_as_string(copy_string(item.key, arena).data),
+                key: cstr_as_string(copy_string(item.key, arena).data()),
                 value: copy_object(item.value, arena),
             };
         }
@@ -345,10 +339,10 @@ pub(crate) unsafe fn api_metadata() -> Object {
 /// [`api_metadata`] still packed, for a caller that is going to forward it
 /// over the wire unchanged.
 pub(crate) fn api_metadata_raw() -> String_0 {
-    String_0 {
-        data: PACKED_API_METADATA.as_ptr() as *mut c_char,
-        size: PACKED_API_METADATA.len(),
-    }
+    String_0::from_raw_parts(
+        PACKED_API_METADATA.as_ptr() as *mut c_char,
+        PACKED_API_METADATA.len(),
+    )
 }
 
 // -- Object conversion -----------------------------------------------------
@@ -402,8 +396,8 @@ pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: *mut
         match obj.type_0 {
             kObjectTypeString => {
                 let str = obj.data.string;
-                if str.size != 0 {
-                    syn_check_group(str.data, str.size)
+                if str.len() != 0 {
+                    syn_check_group(str.data(), str.len())
                 } else {
                     0
                 }

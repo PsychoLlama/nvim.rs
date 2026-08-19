@@ -7,7 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CAR, NL, STRING_INIT, api_set_error, arena_string, arena_take_arraybuilder};
+use super::{CAR, NL, api_set_error, arena_string, arena_take_arraybuilder};
 use crate::api::private::validate::api_err_invalid;
 use crate::kvec::InitVec;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
@@ -19,16 +19,37 @@ use crate::types::{
 };
 use ::libc::{strlen, strnlen};
 use core::ffi::c_char;
-use core::{mem, ptr};
+use core::{mem, ptr, slice};
 
 // -- Strings ---------------------------------------------------------------
+
+/// The reading half of [`String_0`], which cannot live with the type:
+/// `types/` forbids `unsafe` and this dereferences the pointer.
+impl String_0 {
+    /// The bytes.
+    ///
+    /// [`String_0::NULL`] answers the empty slice: `slice::from_raw_parts`
+    /// may not be handed a null pointer even for a zero length, and the
+    /// empty answer is what every caller wants there.
+    ///
+    /// # Safety
+    /// A non-null string must have [`len`](String_0::len) readable bytes at
+    /// [`data`](String_0::data), unwritten for `'a`.
+    pub unsafe fn as_bytes<'a>(&self) -> &'a [u8] {
+        if self.is_null() {
+            return &[];
+        }
+        // SAFETY: caller's contract.
+        unsafe { slice::from_raw_parts(self.data().cast::<u8>(), self.len()) }
+    }
+}
 
 /// A copy of the C string `str`, owned by the caller.
 pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
     // SAFETY: `str` is null or NUL-terminated.
     unsafe {
         if str.is_null() {
-            return STRING_INIT;
+            return String_0::NULL;
         }
         cbuf_to_string(str, strlen(str))
     }
@@ -38,18 +59,13 @@ pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
 /// however many NULs the bytes themselves hold.
 pub(crate) unsafe fn cbuf_to_string(buf: *const c_char, size: size_t) -> String_0 {
     // SAFETY: `buf` has `size` readable bytes.
-    unsafe {
-        String_0 {
-            data: xmemdupz(buf.cast(), size).cast(),
-            size,
-        }
-    }
+    unsafe { String_0::from_raw_parts(xmemdupz(buf.cast(), size).cast(), size) }
 }
 
 /// A NUL-terminated copy of `str`'s bytes, owned by the caller.
 pub(crate) unsafe fn string_to_cstr(str: String_0) -> *mut c_char {
     // SAFETY: `str` has `size` readable bytes.
-    unsafe { xstrndup(str.data, str.size) }
+    unsafe { xstrndup(str.data(), str.len()) }
 }
 
 /// `str` viewed as an API string, borrowing rather than copying.
@@ -57,12 +73,9 @@ pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
     // SAFETY: `str` is null or NUL-terminated.
     unsafe {
         if str.is_null() {
-            return STRING_INIT;
+            return String_0::NULL;
         }
-        String_0 {
-            data: str as *mut c_char,
-            size: strlen(str),
-        }
+        String_0::from_raw_parts(str as *mut c_char, strlen(str))
     }
 }
 
@@ -70,22 +83,14 @@ pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
 /// `maxsize` bytes.
 pub(crate) unsafe fn cstrn_as_string(str: *mut c_char, maxsize: size_t) -> String_0 {
     // SAFETY: `str` has `maxsize` readable bytes.
-    unsafe {
-        String_0 {
-            data: str,
-            size: strnlen(str, maxsize),
-        }
-    }
+    unsafe { String_0::from_raw_parts(str, strnlen(str, maxsize)) }
 }
 
 /// Take `ga`'s buffer as an API string, leaving the growarray empty.
 pub(crate) unsafe fn ga_take_string(ga: *mut garray_T) -> String_0 {
     // SAFETY: `ga` is the caller's growarray of bytes.
     unsafe {
-        let str = String_0 {
-            data: (*ga).ga_data.cast(),
-            size: (*ga).ga_len as size_t,
-        };
+        let str = String_0::from_raw_parts((*ga).ga_data.cast(), (*ga).ga_len as size_t);
         (*ga).ga_data = ptr::null_mut();
         (*ga).ga_len = 0;
         (*ga).ga_maxlen = 0;
@@ -112,11 +117,11 @@ pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Ar
         items.init();
 
         let mut i: size_t = 0;
-        while i < input.size {
-            let start = input.data.add(i);
+        while i < input.len() {
+            let start = input.data().add(i);
             let mut end = start;
             let mut line_len: size_t = 0;
-            while line_len < input.size - i {
+            while line_len < input.len() - i {
                 end = start.add(line_len);
                 if *end == NL || (crlf && *end == CAR) {
                     break;
@@ -125,27 +130,21 @@ pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Ar
             }
             i += line_len;
             let ends_line = *end == NL || (crlf && *end == CAR);
-            if crlf && *end == CAR && i + 1 < input.size && *end.add(1) == NL {
+            if crlf && *end == CAR && i + 1 < input.len() && *end.add(1) == NL {
                 i += 1;
             }
 
-            let s = arena_string(
-                arena,
-                String_0 {
-                    data: start,
-                    size: line_len,
-                },
-            );
-            memchrsub(s.data.cast(), NUL as c_char, NL, line_len);
+            let s = arena_string(arena, String_0::from_raw_parts(start, line_len));
+            memchrsub(s.data().cast(), NUL as c_char, NL, line_len);
             items.push(object {
                 type_0: kObjectTypeString,
                 data: object_data { string: s },
             });
-            if i + 1 == input.size && ends_line {
+            if i + 1 == input.len() && ends_line {
                 items.push(object {
                     type_0: kObjectTypeString,
                     data: object_data {
-                        string: STRING_INIT,
+                        string: String_0::NULL,
                     },
                 });
             }
@@ -207,7 +206,7 @@ pub(crate) unsafe fn buf_get_text(
                 0,
                 false,
             );
-            return STRING_INIT;
+            return String_0::NULL;
         }
         let bufstr = ml_get_buf(buf, lnum as linenr_T);
         let line_length = ml_get_buf_len(buf, lnum as linenr_T) as int64_t;
@@ -218,11 +217,11 @@ pub(crate) unsafe fn buf_get_text(
         if start_col > end_col {
             let msg = c"start_col must be less than or equal to end_col".as_ptr();
             api_set_error(err, kErrorTypeValidation, msg);
-            return STRING_INIT;
+            return String_0::NULL;
         }
-        String_0 {
-            data: bufstr.offset(start_col as isize),
-            size: (end_col - start_col) as size_t,
-        }
+        String_0::from_raw_parts(
+            bufstr.offset(start_col as isize),
+            (end_col - start_col) as size_t,
+        )
     }
 }

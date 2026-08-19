@@ -287,10 +287,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut vimmenu_T) {
 /// Tell the UI whether to send mouse-move events.
 fn set_mousemoveevent(on: bool) {
     ui_call_option_set(
-        String_0 {
-            data: c"mousemoveevent".as_ptr().cast_mut(),
-            size: 14,
-        },
+        String_0::from_raw_parts(c"mousemoveevent".as_ptr().cast_mut(), 14),
         Object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed_12 { boolean: on },

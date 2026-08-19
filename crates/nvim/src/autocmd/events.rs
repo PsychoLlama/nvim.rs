@@ -53,10 +53,10 @@ pub unsafe fn event_name2nr(
 pub unsafe fn event_name2nr_str(str: String_0) -> event_T {
     // An empty API string has a null `data`, which is not a valid pointer
     // even for a zero-length slice.
-    let wanted: &[u8] = if str.size == 0 {
+    let wanted: &[u8] = if str.len() == 0 {
         &[]
     } else {
-        unsafe { slice::from_raw_parts(str.data.cast::<u8>(), str.size) }
+        unsafe { str.as_bytes() }
     };
     match event_name_index(wanted) {
         Some(at) => EVENT_NAMES[at].event.unsigned_abs(),

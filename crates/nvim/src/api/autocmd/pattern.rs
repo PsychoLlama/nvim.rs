@@ -87,7 +87,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             if pattern.type_0 as ::core::ffi::c_uint
                 == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                let mut pat: *const ::core::ffi::c_char = pattern.data.string.data;
+                let mut pat: *const ::core::ffi::c_char = pattern.data.string.data();
                 let mut patlen: size_t = aucmd_span_pattern(pat, &raw mut pat);
                 while patlen != 0 {
                     // `kv_push`, whose growth step c2rust expanded inline.
@@ -99,10 +99,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
                     )
                     .push(Object::string(arena_string(
                         arena,
-                        String_0 {
-                            data: pat as *mut ::core::ffi::c_char,
-                            size: patlen,
-                        },
+                        String_0::from_raw_parts(pat as *mut ::core::ffi::c_char, patlen),
                     )));
                     patlen = aucmd_span_pattern(pat.add(patlen), &raw mut pat);
                 }
@@ -125,7 +122,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
                 let mut entry_index: size_t = 0 as size_t;
                 while entry_index < array.size {
                     let mut entry: Object = *array.items.add(entry_index);
-                    let mut pat_0: *const ::core::ffi::c_char = entry.data.string.data;
+                    let mut pat_0: *const ::core::ffi::c_char = entry.data.string.data();
                     let mut patlen_0: size_t = aucmd_span_pattern(pat_0, &raw mut pat_0);
                     while patlen_0 != 0 {
                         // `kv_push`, whose growth step c2rust expanded inline.
@@ -137,10 +134,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
                         )
                         .push(Object::string(arena_string(
                             arena,
-                            String_0 {
-                                data: pat_0 as *mut ::core::ffi::c_char,
-                                size: patlen_0,
-                            },
+                            String_0::from_raw_parts(pat_0 as *mut ::core::ffi::c_char, patlen_0),
                         )));
                         patlen_0 = aucmd_span_pattern(pat_0.add(patlen_0), &raw mut pat_0);
                     }

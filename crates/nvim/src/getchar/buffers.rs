@@ -150,7 +150,7 @@ pub unsafe fn get_recorded() -> *mut c_char {
 /// Callable at any time; the answer owns its bytes.
 pub unsafe fn get_inserted() -> String_0 {
     let (data, size) = unsafe { buff_contents(redobuff.ptr(), false) };
-    String_0 { data, size }
+    String_0::from_raw_parts(data, size)
 }
 
 /// Append `s` to `buf` after its current block.

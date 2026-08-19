@@ -20,7 +20,7 @@ use crate::semsg_c;
 unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_char) {
     unsafe {
         if !name.is_null() {
-            let mut key = STRING_INIT;
+            let mut key = String_0::NULL;
             map_del_String_int(
                 map_augroup_name_to_id.ptr(),
                 cstr_as_string(name),
@@ -168,8 +168,8 @@ pub unsafe fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c
         }
 
         let key = map_get_int_String(map_augroup_id_to_name.ptr(), group);
-        if !key.data.is_null() {
-            return key.data;
+        if !key.data().is_null() {
+            return key.data();
         }
         // The id existed but is no longer in the map, so it was deleted.
         get_deleted_augroup().cast_mut()
@@ -204,7 +204,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
                 // A group `:augroup!` renamed lists as `--Deleted--`; its
                 // key is still the old name.
                 if value > 0 {
-                    msg_puts(name.data);
+                    msg_puts(name.data());
                 } else {
                     msg_puts(augroup_name(value));
                 }

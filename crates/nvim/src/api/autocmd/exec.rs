@@ -36,12 +36,12 @@ pub unsafe fn nvim_exec_autocmds(
         match (*opts).group.type_0 as ::core::ffi::c_uint {
             kObjectTypeNil => {}
             kObjectTypeString => {
-                au_group = augroup_find((*opts).group.data.string.data);
+                au_group = augroup_find((*opts).group.data.string.data());
                 if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                     api_err_invalid(
                         err,
                         c"group".as_ptr(),
-                        (*opts).group.data.string.data,
+                        (*opts).group.data.string.data(),
                         0 as int64_t,
                         true,
                     );
@@ -145,7 +145,7 @@ pub unsafe fn nvim_exec_autocmds(
                 api_err_invalid(
                     err,
                     c"event".as_ptr(),
-                    event_str.data.string.data,
+                    event_str.data.string.data(),
                     0 as int64_t,
                     true,
                 );
@@ -155,7 +155,7 @@ pub unsafe fn nvim_exec_autocmds(
             while pat_index < patterns.size {
                 let mut pat: Object = *patterns.items.add(pat_index);
                 let mut fname: *mut ::core::ffi::c_char = if !has_buf {
-                    pat.data.string.data
+                    pat.data.string.data()
                 } else {
                     ::core::ptr::null_mut::<::core::ffi::c_char>()
                 };

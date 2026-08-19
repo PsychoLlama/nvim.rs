@@ -144,12 +144,12 @@ pub unsafe fn nvim_buf_set_lines(
         let mut i: size_t = 0 as size_t;
         while i < new_len {
             let l: String_0 = (*replacement.items.add(i)).data.string;
-            *lines.add(i) = arena_memdupz(arena, l.data, l.size);
+            *lines.add(i) = arena_memdupz(arena, l.data(), l.len());
             memchrsub(
                 *lines.add(i) as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
                 NL as ::core::ffi::c_char,
-                l.size,
+                l.len(),
             );
             i = i.wrapping_add(1);
         }
@@ -333,10 +333,7 @@ pub unsafe fn nvim_buf_get_text(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        let mut str: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        };
+        let mut str: String_0 = String_0::NULL;
         let mut rv: Array = Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
@@ -385,8 +382,8 @@ pub unsafe fn nvim_buf_get_text(
                 push_linestr(
                     lstate,
                     &raw mut rv,
-                    line.data,
-                    line.size,
+                    line.data(),
+                    line.len(),
                     0 as ::core::ffi::c_int,
                     replace_nl,
                     arena,
@@ -405,8 +402,8 @@ pub unsafe fn nvim_buf_get_text(
                 push_linestr(
                     lstate,
                     &raw mut rv,
-                    str.data,
-                    str.size,
+                    str.data(),
+                    str.len(),
                     0 as ::core::ffi::c_int,
                     replace_nl,
                     arena,
@@ -428,8 +425,8 @@ pub unsafe fn nvim_buf_get_text(
                     push_linestr(
                         lstate,
                         &raw mut rv,
-                        str.data,
-                        str.size,
+                        str.data(),
+                        str.len(),
                         size.wrapping_sub(1 as size_t) as ::core::ffi::c_int,
                         replace_nl,
                         arena,
@@ -519,21 +516,18 @@ unsafe fn push_linestr(
                 idx + 1 as ::core::ffi::c_int,
             );
         } else {
-            let mut str: String_0 = String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0 as size_t,
-            };
+            let mut str: String_0 = String_0::from_raw_parts(
+                ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                0 as size_t,
+            );
             if len > 0 as size_t {
                 str = arena_string(
                     arena,
-                    String_0 {
-                        data: s as *mut ::core::ffi::c_char,
-                        size: len,
-                    },
+                    String_0::from_raw_parts(s as *mut ::core::ffi::c_char, len),
                 );
                 if replace_nl {
                     strchrsub(
-                        str.data,
+                        str.data(),
                         '\n' as ::core::ffi::c_char,
                         NUL as ::core::ffi::c_char,
                     );

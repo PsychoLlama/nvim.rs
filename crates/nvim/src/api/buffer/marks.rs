@@ -18,11 +18,11 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
         if b.is_null() {
             return (res as Boolean).reported(error);
         }
-        if !(name.size == 1 as size_t) {
+        if !(name.len() == 1 as size_t) {
             api_err_invalid(
                 err,
                 c"mark name (must be a single char)".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
@@ -33,10 +33,10 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
             curwin.get(),
             ::core::ptr::null_mut::<fmark_T>(),
             kMarkAllNoResolve,
-            *name.data as ::core::ffi::c_int,
+            *name.data() as ::core::ffi::c_int,
         );
         if fm.is_null() {
-            api_err_invalid(err, c"mark name".as_ptr(), name.data, 0 as int64_t, true);
+            api_err_invalid(err, c"mark name".as_ptr(), name.data(), 0 as int64_t, true);
             return (res as Boolean).reported(error);
         }
         if (*fm).mark.lnum != 0 as linenr_T && (*fm).fnum == (*b).handle {
@@ -61,11 +61,11 @@ pub unsafe fn nvim_buf_set_mark(
         if b.is_null() {
             return (res as Boolean).reported(error);
         }
-        if !(name.size == 1 as size_t) {
+        if !(name.len() == 1 as size_t) {
             api_err_invalid(
                 err,
                 c"mark name (must be a single char)".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
@@ -93,11 +93,11 @@ pub unsafe fn nvim_buf_get_mark(
         if b.is_null() {
             return rv.reported(error);
         }
-        if !(name.size == 1 as size_t) {
+        if !(name.len() == 1 as size_t) {
             api_err_invalid(
                 err,
                 c"mark name (must be a single char)".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
@@ -109,7 +109,7 @@ pub unsafe fn nvim_buf_get_mark(
             col: 0,
             coladd: 0,
         };
-        let mut mark: ::core::ffi::c_char = *name.data;
+        let mut mark: ::core::ffi::c_char = *name.data();
         fm = mark_get(
             b,
             curwin.get(),
@@ -118,7 +118,7 @@ pub unsafe fn nvim_buf_get_mark(
             mark as ::core::ffi::c_int,
         );
         if fm.is_null() {
-            api_err_invalid(err, c"mark name".as_ptr(), name.data, 0 as int64_t, true);
+            api_err_invalid(err, c"mark name".as_ptr(), name.data(), 0 as int64_t, true);
             return rv.reported(error);
         }
         if (*fm).fnum != (*b).handle {

@@ -132,17 +132,17 @@ pub fn mpack_check_buffer(packer: &mut PackerBuffer) {
 /// # Safety
 /// `str` must describe `str.size` readable bytes at `str.data`.
 pub unsafe fn mpack_str(str: String_0, packer: &mut PackerBuffer) {
-    let header = format::str_header(str.size).expect("string too long for msgpack");
+    let header = format::str_header(str.len()).expect("string too long for msgpack");
     emit(&mut packer.ptr, header.bytes());
-    mpack_raw(str.data, str.size, packer);
+    mpack_raw(str.data(), str.len(), packer);
 }
 
 /// # Safety
 /// `str` must describe `str.size` readable bytes at `str.data`.
 pub unsafe fn mpack_bin(str: String_0, packer: &mut PackerBuffer) {
-    let header = format::bin_header(str.size).expect("blob too long for msgpack");
+    let header = format::bin_header(str.len()).expect("blob too long for msgpack");
     emit(&mut packer.ptr, header.bytes());
-    mpack_raw(str.data, str.size, packer);
+    mpack_raw(str.data(), str.len(), packer);
 }
 
 /// Copies `len` opaque bytes, flushing as often as it takes.
@@ -358,8 +358,5 @@ unsafe fn flush_string_buffer(buffer: *mut PackerBuffer) {
 
 /// Takes ownership of everything written to a [`packer_string_buffer`].
 pub fn packer_take_string(buffer: &PackerBuffer) -> String_0 {
-    String_0 {
-        data: buffer.startptr,
-        size: buffer.ptr.addr() - buffer.startptr.addr(),
-    }
+    String_0::from_raw_parts(buffer.startptr, buffer.ptr.addr() - buffer.startptr.addr())
 }

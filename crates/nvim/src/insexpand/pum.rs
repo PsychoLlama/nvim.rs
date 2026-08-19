@@ -135,23 +135,23 @@ pub(crate) unsafe fn prepend_startcol_text(
 ) {
     unsafe {
         let prepend_len = compl_col.get() - startcol;
-        let new_length = prepend_len + (*src).size as c_int;
+        let new_length = prepend_len + (*src).len() as c_int;
 
-        (*dest).size = new_length as size_t;
-        (*dest).data = xmalloc(new_length as size_t + 1) as *mut c_char; // +1 for NUL
+        (*dest).set_len(new_length as size_t);
+        (*dest).set_data(xmalloc(new_length as size_t + 1) as *mut c_char); // +1 for NUL
 
         let line = ml_get((*curwin.get()).w_cursor.lnum);
         memmove(
-            (*dest).data.cast::<c_void>(),
+            (*dest).data().cast::<c_void>(),
             line.offset(startcol as isize).cast::<c_void>(),
             prepend_len as size_t,
         );
         memmove(
-            (*dest).data.offset(prepend_len as isize).cast::<c_void>(),
-            (*src).data.cast::<c_void>(),
-            (*src).size,
+            (*dest).data().offset(prepend_len as isize).cast::<c_void>(),
+            (*src).data().cast::<c_void>(),
+            (*src).len(),
         );
-        *(*dest).data.offset(new_length as isize) = NUL as c_char;
+        *(*dest).data().offset(new_length as isize) = NUL as c_char;
     }
 }
 
@@ -163,11 +163,11 @@ pub(crate) unsafe fn prepend_startcol_text(
 /// cached in `adjusted_leader`, which `match_0 == NULL` clears.
 pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool) -> *mut String_0 {
     unsafe {
-        static adjusted_leader: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
+        static adjusted_leader: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 
         if match_0.is_null() {
-            xfree(adjusted_leader.get().data.cast::<c_void>());
-            adjusted_leader.set(STRING_INIT);
+            xfree(adjusted_leader.get().data().cast::<c_void>());
+            adjusted_leader.set(String_0::NULL);
             return ptr::null_mut();
         }
 
@@ -181,7 +181,7 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool
             }
             let startcol = (*cpt_sources_array.get().offset(cpt_idx as isize)).cs_startcol;
 
-            if compl_leader.get().data.is_null() {
+            if compl_leader.get().data().is_null() {
                 // The leader is not set yet (`'autocomplete'` fires before
                 // `compl_leader` is initialised). Matches starting at or after
                 // `compl_col` fall back to the original text; matches starting
@@ -199,15 +199,15 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool
             }
             if startcol >= 0 && startcol < compl_col.get() {
                 let prepend_len = compl_col.get() - startcol;
-                let new_length = prepend_len + compl_leader.get().size as c_int;
+                let new_length = prepend_len + compl_leader.get().len() as c_int;
                 if cached
-                    && new_length as size_t == adjusted_leader.get().size
-                    && !adjusted_leader.get().data.is_null()
+                    && new_length as size_t == adjusted_leader.get().len()
+                    && !adjusted_leader.get().data().is_null()
                 {
                     return adjusted_leader.ptr();
                 }
-                xfree(adjusted_leader.get().data.cast::<c_void>());
-                adjusted_leader.set(STRING_INIT);
+                xfree(adjusted_leader.get().data().cast::<c_void>());
+                adjusted_leader.set(String_0::NULL);
                 prepend_startcol_text(adjusted_leader.ptr(), compl_leader.ptr(), startcol);
                 return adjusted_leader.ptr();
             }
@@ -231,11 +231,8 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         // stale. Reproduced deliberately; every reader guards on `.data`.
         if ins_compl_need_restart() {
             let leader = compl_leader.get();
-            xfree(leader.data.cast::<c_void>());
-            compl_leader.set(String_0 {
-                data: ptr::null_mut(),
-                size: leader.size,
-            });
+            xfree(leader.data().cast::<c_void>());
+            compl_leader.set(String_0::from_raw_parts(ptr::null_mut(), leader.len()));
         }
 
         let compl_no_select = get_cot_flags() & kOptCotFlagNoselect != 0
@@ -250,7 +247,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         // match after it and don't highlight anything.
         let mut shown_match_ok = match_at_original_text(compl_shown_match.get());
 
-        if strequal(compl_leader.get().data, compl_orig_text.get().data) && !shown_match_ok {
+        if strequal(compl_leader.get().data(), compl_orig_text.get().data()) && !shown_match_ok {
             compl_shown_match.set(if compl_no_select {
                 compl_first_match.get()
             } else {
@@ -280,16 +277,16 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
             // Apply 'smartcase' behaviour during normal mode.
             if ctrl_x_mode_normal()
                 && p_inf.get() == 0
-                && !(*leader).data.is_null()
-                && ignorecase((*leader).data) == 0
+                && !(*leader).data().is_null()
+                && ignorecase((*leader).data()) == 0
                 && !cot_fuzzy()
             {
                 (*comp).cp_flags &= !CP_ICASE;
             }
 
             if !match_at_original_text(comp)
-                && ((*leader).data.is_null()
-                    || ins_compl_equal(comp, (*leader).data, (*leader).size)
+                && ((*leader).data().is_null()
+                    || ins_compl_equal(comp, (*leader).data(), (*leader).len())
                     || (cot_fuzzy() && (*comp).cp_score != FUZZY_SCORE_NONE))
             {
                 // Limit the number of items from each source where
@@ -385,7 +382,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         while !comp.is_null() {
             let item = &mut *array.offset(i);
             item.pum_text = if (*comp).cp_text[CPT_ABBR as usize].is_null() {
-                (*comp).cp_str.data
+                (*comp).cp_str.data()
             } else {
                 (*comp).cp_text[CPT_ABBR as usize]
             };
@@ -436,7 +433,7 @@ pub unsafe fn ins_compl_show_pum() {
             let shown = compl_shown_match.get();
             for i in 0..compl_match_arraysize.get() {
                 let text = (*compl_match_array.get().offset(i as isize)).pum_text;
-                if text == (*shown).cp_str.data || text == (*shown).cp_text[CPT_ABBR as usize] {
+                if text == (*shown).cp_str.data() || text == (*shown).cp_text[CPT_ABBR as usize] {
                     cur = i;
                     break;
                 }

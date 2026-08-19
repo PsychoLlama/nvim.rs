@@ -15,8 +15,8 @@ pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: Stri
         true,
         c"async error on channel %ld: %s".as_ptr(),
         channel_id,
-        if msg.size != 0 {
-            msg.data as *const ::core::ffi::c_char
+        if msg.len() != 0 {
+            msg.data() as *const ::core::ffi::c_char
         } else {
             c"".as_ptr()
         },
@@ -29,7 +29,7 @@ pub unsafe fn nvim_ui_term_event(
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    if strequal(c"termresponse".as_ptr(), event.data) {
+    if strequal(c"termresponse".as_ptr(), event.data()) {
         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
@@ -44,8 +44,8 @@ pub unsafe fn nvim_ui_term_event(
         let termresponse: String_0 = value.data.string;
         set_vim_var_string(
             Vv::Termresponse,
-            termresponse.data,
-            termresponse.size as ptrdiff_t,
+            termresponse.data(),
+            termresponse.len() as ptrdiff_t,
         );
         do_termresponse_autocmd(termresponse);
     }

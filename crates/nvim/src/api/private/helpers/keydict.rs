@@ -96,10 +96,10 @@ pub(crate) unsafe fn api_dict_to_keydict(
     unsafe {
         for i in 0..dict.size {
             let k = (*dict.items.add(i)).key;
-            let field = hashy.expect("non-null function pointer")(k.data, k.size);
+            let field = hashy.expect("non-null function pointer")(k.data(), k.len());
             if field.is_null() {
                 let fmt = c"Invalid key: '%.*s'".as_ptr();
-                api_set_error(err, kErrorTypeValidation, fmt, k.size as c_int, k.data);
+                api_set_error(err, kErrorTypeValidation, fmt, k.len() as c_int, k.data());
                 return false;
             }
             // Optional fields record that they were given, so that the API
@@ -129,7 +129,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 kObjectTypeInteger if (*field).is_hlgroup => {
                     let mut hl_id = 0;
                     if (*value).type_0 != kObjectTypeNil {
-                        hl_id = object_to_hl_id(*value, k.data, err);
+                        hl_id = object_to_hl_id(*value, k.data(), err);
                         if (*err).type_0 != kErrorTypeNone {
                             return false;
                         }
@@ -192,7 +192,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 }
                 kObjectTypeLuaRef => {
                     let fmt = c"Invalid key: '%.*s' is only allowed from Lua".as_ptr();
-                    api_set_error(err, kErrorTypeValidation, fmt, k.size as c_int, k.data);
+                    api_set_error(err, kErrorTypeValidation, fmt, k.len() as c_int, k.data());
                     return false;
                 }
                 _ => abort(),

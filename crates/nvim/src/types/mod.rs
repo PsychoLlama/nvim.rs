@@ -4,6 +4,7 @@
 // Every name is unique crate-wide and glob-re-exported so sibling
 // files can `use super::*`.
 pub mod api;
+pub mod api_string;
 pub mod arglist;
 pub mod ascii;
 pub mod autocmd;
@@ -124,6 +125,7 @@ pub mod xdiff;
 mod name_uniqueness;
 
 pub use self::api::*;
+pub use self::api_string::*;
 pub use self::arglist::*;
 pub use self::ascii::*;
 pub use self::autocmd::*;

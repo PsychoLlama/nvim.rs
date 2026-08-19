@@ -333,9 +333,9 @@ pub unsafe fn msg_multiline(
     need_clear: *mut bool,
 ) {
     unsafe {
-        let mut s = str.data.cast_const();
+        let mut s = str.data().cast_const();
         let mut chunk = s;
-        while (s.offset_from(str.data) as size_t) < str.size {
+        while (s.offset_from(str.data()) as size_t) < str.len() {
             if check_int && got_int.get() {
                 return;
             }
@@ -356,10 +356,10 @@ pub unsafe fn msg_multiline(
         }
         // The tail, and the whole of an empty message: an empty `str` still
         // has to reach `msg_outtrans_len`, which is what clears the line.
-        if *chunk != 0 || chunk == str.data.cast_const() {
+        if *chunk != 0 || chunk == str.data().cast_const() {
             msg_outtrans_len(
                 chunk,
-                (str.size - chunk.offset_from(str.data) as size_t) as c_int,
+                (str.len() - chunk.offset_from(str.data()) as size_t) as c_int,
                 hl_id,
                 hist,
             );
@@ -438,7 +438,7 @@ pub unsafe fn msg_multihl(
             let chunk = *hl_msg.items.add(i);
             is_multihl.set(is_multihl.get() + 1);
             if err {
-                emsg_multiline(chunk.text.data, kind, chunk.hl_id, true);
+                emsg_multiline(chunk.text.data(), kind, chunk.hl_id, true);
             } else {
                 msg_multiline(chunk.text, chunk.hl_id, true, false, &raw mut need_clear);
             }
@@ -506,7 +506,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
             && (s != keep_msg.get().cast_const()
                 || (*s as u8 != b'<'
                     && !msg_hist_last.get().is_null()
-                    && strcmp(s, (*(*msg_hist_last.get()).msg.items).text.data) != 0))
+                    && strcmp(s, (*(*msg_hist_last.get()).msg.items).text.data()) != 0))
         {
             msg_hist_add(s, -1, hl_id);
         }

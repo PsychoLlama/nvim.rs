@@ -347,7 +347,7 @@ unsafe fn report_call_error(err: *mut Error, result: &Object) {
             err,
             kErrorTypeException,
             c"%s".as_ptr(),
-            result.data.string.data,
+            result.data.string.data(),
         );
         return;
     }
@@ -365,7 +365,7 @@ unsafe fn report_call_error(err: *mut Error, result: &Object) {
                     err,
                     kind.data.integer as ErrorType,
                     c"%s".as_ptr(),
-                    message.data.string.data,
+                    message.data.string.data(),
                 );
                 return;
             }
@@ -809,8 +809,8 @@ pub unsafe fn get_client_info(chan: *mut Channel, key: *const c_char) -> *const 
     let key = CStr::from_ptr(key);
     for i in 0..info.size {
         let item = &*info.items.add(i);
-        if item.value.type_0 == kObjectTypeString && CStr::from_ptr(item.key.data) == key {
-            return item.value.data.string.data;
+        if item.value.type_0 == kObjectTypeString && CStr::from_ptr(item.key.data()) == key {
+            return item.value.data.string.data();
         }
     }
     ptr::null()

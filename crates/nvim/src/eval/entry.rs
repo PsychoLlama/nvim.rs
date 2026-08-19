@@ -726,10 +726,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
             Object {
                 type_0: kObjectTypeString,
                 data: object_data {
-                    string: String_0 {
-                        data: null_mut(),
-                        size: 0 as size_t,
-                    },
+                    string: String_0::from_raw_parts(null_mut(), 0 as size_t),
                 },
             }
         }

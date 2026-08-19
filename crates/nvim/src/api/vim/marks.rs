@@ -14,24 +14,24 @@ pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
     let err = &raw mut error;
     unsafe {
         let mut res: bool = false;
-        if !(name.size == 1 as size_t) {
+        if !(name.len() == 1 as size_t) {
             api_err_invalid(
                 err,
                 c"mark name (must be a single char)".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
             return (res as Boolean).reported(error);
         }
-        if !(*name.data as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && *name.data as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || ascii_isdigit(*name.data as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
+        if !(*name.data() as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+            && *name.data() as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+            || ascii_isdigit(*name.data() as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
         {
             api_err_invalid(
                 err,
                 c"mark name (must be file/uppercase)".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
@@ -61,30 +61,30 @@ pub unsafe fn nvim_get_mark(
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        if !(name.size == 1 as size_t) {
+        if !(name.len() == 1 as size_t) {
             api_err_invalid(
                 err,
                 c"mark name (must be a single char)".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
             return rv.reported(error);
         }
-        if !(*name.data as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && *name.data as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || ascii_isdigit(*name.data as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
+        if !(*name.data() as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+            && *name.data() as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+            || ascii_isdigit(*name.data() as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
         {
             api_err_invalid(
                 err,
                 c"mark name (must be file/uppercase)".as_ptr(),
-                name.data,
+                name.data(),
                 0 as int64_t,
                 true,
             );
             return rv.reported(error);
         }
-        let mut mark: *mut xfmark_T = mark_get_global(false, *name.data as ::core::ffi::c_int);
+        let mut mark: *mut xfmark_T = mark_get_global(false, *name.data() as ::core::ffi::c_int);
         let mut pos: pos_T = (*mark).fmark.mark;
         let mut allocated: bool = false;
         let mut bufnr: ::core::ffi::c_int = 0;

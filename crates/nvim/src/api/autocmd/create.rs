@@ -152,7 +152,7 @@ pub unsafe fn nvim_create_autocmd(
                                     (*opts).is_set__create_autocmd_,
                                     KEYSET_OPTIDX_create_autocmd__desc,
                                 ) {
-                                    desc = (*opts).desc.data;
+                                    desc = (*opts).desc.data();
                                 }
                                 if !(event_array.size > 0 as size_t) {
                                     api_err_required(err, c"event".as_ptr());
@@ -175,7 +175,7 @@ pub unsafe fn nvim_create_autocmd(
                                             api_err_invalid(
                                                 err,
                                                 c"event".as_ptr(),
-                                                event_str.data.string.data,
+                                                event_str.data.string.data(),
                                                 0 as int64_t,
                                                 true,
                                             );
@@ -191,8 +191,8 @@ pub unsafe fn nvim_create_autocmd(
                                                 retval = autocmd_register(
                                                     autocmd_id,
                                                     event_nr,
-                                                    pat.data.string.data,
-                                                    pat.data.string.size as ::core::ffi::c_int,
+                                                    pat.data.string.data(),
+                                                    pat.data.string.len() as ::core::ffi::c_int,
                                                     au_group,
                                                     (*opts).once,
                                                     (*opts).nested,
@@ -324,7 +324,7 @@ pub unsafe fn nvim_clear_autocmds(
                 let mut pat_object_index: size_t = 0 as size_t;
                 while pat_object_index < patterns.size {
                     let mut pat_object: Object = *patterns.items.add(pat_object_index);
-                    let mut pat: *mut ::core::ffi::c_char = pat_object.data.string.data;
+                    let mut pat: *mut ::core::ffi::c_char = pat_object.data.string.data();
                     if !clear_autocmd(event, pat, au_group, err) {
                         return ().reported(error);
                     }
@@ -343,7 +343,7 @@ pub unsafe fn nvim_clear_autocmds(
                     api_err_invalid(
                         err,
                         c"event".as_ptr(),
-                        event_str.data.string.data,
+                        event_str.data.string.data(),
                         0 as int64_t,
                         true,
                     );
@@ -352,7 +352,7 @@ pub unsafe fn nvim_clear_autocmds(
                 let mut pat_object_index_0: size_t = 0 as size_t;
                 while pat_object_index_0 < patterns.size {
                     let mut pat_object_0: Object = *patterns.items.add(pat_object_index_0);
-                    let mut pat_0: *mut ::core::ffi::c_char = pat_object_0.data.string.data;
+                    let mut pat_0: *mut ::core::ffi::c_char = pat_object_0.data.string.data();
                     if !clear_autocmd(event_nr, pat_0, au_group, err) {
                         return ().reported(error);
                     }

@@ -43,10 +43,10 @@ pub(crate) fn static_cstr_optval(s: &'static CStr) -> OptVal {
     OptVal {
         type_0: kOptValTypeString,
         data: OptValData {
-            string: String_0 {
-                data: s.as_ptr() as *mut c_char,
-                size: s.to_bytes().len() as size_t,
-            },
+            string: String_0::from_raw_parts(
+                s.as_ptr() as *mut c_char,
+                s.to_bytes().len() as size_t,
+            ),
         },
     }
 }

@@ -313,20 +313,18 @@ pub(crate) unsafe fn list_join_inner(
             if got_int.get() {
                 break;
             }
-            let mut s = String_0 {
-                data: ::core::ptr::null_mut(),
-                size: 0,
-            };
-            s.data = encode_tv2echo(&raw mut (*item).li_tv, &raw mut s.size);
-            if s.data.is_null() {
+            let mut s = String_0::NULL;
+            let data = encode_tv2echo(&raw mut (*item).li_tv, s.len_mut());
+            s.set_data(data);
+            if s.data().is_null() {
                 return FAIL;
             }
 
-            sumlen += s.size;
+            sumlen += s.len();
 
             let p = ga_append_via_ptr(join_gap, ::core::mem::size_of::<Join>()) as *mut Join;
             (*p).s = s;
-            (*p).tofree = s.data;
+            (*p).tofree = s.data();
 
             line_breakcheck();
         }
@@ -347,8 +345,8 @@ pub(crate) unsafe fn list_join_inner(
                 ga_concat_len(gap, sep, seplen);
             }
             let p = ((*join_gap).ga_data as *const Join).offset(i as isize);
-            if !(*p).s.data.is_null() {
-                ga_concat_len(gap, (*p).s.data, (*p).s.size);
+            if !(*p).s.data().is_null() {
+                ga_concat_len(gap, (*p).s.data(), (*p).s.len());
             }
             line_breakcheck();
             i += 1;

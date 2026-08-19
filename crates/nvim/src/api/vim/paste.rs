@@ -66,11 +66,10 @@ pub unsafe fn nvim_paste(
             array_add(&mut args, Object::array(lines));
             array_add(&mut args, Object::integer(phase));
             rv = nlua_exec(
-                String_0 {
-                    data: c"return vim.paste(...)".as_ptr() as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 22]>()
-                        .wrapping_sub(1 as size_t),
-                },
+                String_0::from_raw_parts(
+                    c"return vim.paste(...)".as_ptr() as *mut ::core::ffi::c_char,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 22]>().wrapping_sub(1 as size_t),
+                ),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 args,
                 kRetNilBool,
@@ -92,7 +91,7 @@ pub unsafe fn nvim_paste(
                 terminal_set_streamed_paste((*curbuf.get()).terminal, false);
             }
             if !cancelled.get() && (phase == -1 as Integer || phase == 1 as Integer) {
-                paste_store(channel_id, PastePhase::Start, NULL_STRING, crlf);
+                paste_store(channel_id, PastePhase::Start, String_0::NULL, crlf);
             }
             if !cancelled.get() {
                 paste_store(channel_id, PastePhase::Chunk, data, crlf);
@@ -105,7 +104,7 @@ pub unsafe fn nvim_paste(
                         -1 as ::core::ffi::c_int
                     }) as Integer
             {
-                paste_store(channel_id, PastePhase::End, NULL_STRING, crlf);
+                paste_store(channel_id, PastePhase::End, String_0::NULL, crlf);
             }
         }
         let mut retval: bool = !cancelled.get();
@@ -135,7 +134,7 @@ pub unsafe fn nvim_put(
             additional_data: ::core::ptr::null_mut::<AdditionalData>(),
         }];
         if !prepare_yankreg_from_object(&raw mut reg as *mut yankreg_T, type_0, lines.size) {
-            api_err_invalid(err, c"type".as_ptr(), type_0.data, 0 as int64_t, true);
+            api_err_invalid(err, c"type".as_ptr(), type_0.data(), 0 as int64_t, true);
             return ().reported(error);
         }
         if lines.size == 0 as size_t {
@@ -163,11 +162,11 @@ pub unsafe fn nvim_put(
             let mut line: String_0 = (*lines.items.add(i)).data.string;
             *(*(&raw mut reg as *mut yankreg_T)).y_array.add(i) = copy_string(line, arena);
             memchrsub(
-                (*(*(&raw mut reg as *mut yankreg_T)).y_array.add(i)).data
+                (*(*(&raw mut reg as *mut yankreg_T)).y_array.add(i)).data()
                     as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
                 NL as ::core::ffi::c_char,
-                line.size,
+                line.len(),
             );
             i = i.wrapping_add(1);
         }

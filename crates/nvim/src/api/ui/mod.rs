@@ -435,7 +435,7 @@ unsafe fn ui_set_option(
     unsafe {
         // `name.data` can be null, which `strequal` treats as no match; a
         // `CStr` conversion here would not survive it.
-        let named = |want: &CStr| strequal(name.data, want.as_ptr());
+        let named = |want: &CStr| strequal(name.data(), want.as_ptr());
 
         if named(c"override") {
             if wrong_type(err, c"override".as_ptr(), kObjectTypeBoolean, value) {
@@ -532,7 +532,7 @@ unsafe fn ui_set_option(
         // the pre-0.3 spelling of `ext_popupmenu` and still accepted.
         let is_popupmenu = named(c"popupmenu_external");
         for ext in 0..kUIExtCount as usize {
-            if !strequal(name.data, ui_ext_names.get()[ext])
+            if !strequal(name.data(), ui_ext_names.get()[ext])
                 && !(ext == kUIPopupmenu as usize && is_popupmenu)
             {
                 continue;
@@ -540,7 +540,7 @@ unsafe fn ui_set_option(
             if value.type_0 != kObjectTypeBoolean {
                 api_err_exp(
                     err,
-                    name.data,
+                    name.data(),
                     c"Boolean".as_ptr(),
                     api_typename(value.type_0),
                 );
@@ -563,7 +563,7 @@ unsafe fn ui_set_option(
             return;
         }
 
-        api_err_invalid(err, c"UI option".as_ptr(), name.data, 0, true);
+        api_err_invalid(err, c"UI option".as_ptr(), name.data(), 0, true);
     }
 }
 

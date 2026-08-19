@@ -188,10 +188,7 @@ const fn string(value: &'static CStr) -> OptVal {
     OptVal {
         type_0: kOptValTypeString,
         data: OptValData {
-            string: String_0 {
-                data: value.as_ptr().cast_mut(),
-                size: value.count_bytes(),
-            },
+            string: String_0::from_cstr(value),
         },
     }
 }

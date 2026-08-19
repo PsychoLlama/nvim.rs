@@ -66,7 +66,7 @@ pub unsafe fn exec_impl(
             msg_col.set(0);
         }
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
-        do_source_str(src.data, c"nvim_exec2()".as_ptr() as *mut c_char);
+        do_source_str(src.data(), c"nvim_exec2()".as_ptr() as *mut c_char);
         if capture {
             capture_ga.set(save_capture_ga);
             msg_silent.set(save_msg_silent);
@@ -80,21 +80,21 @@ pub unsafe fn exec_impl(
         // message from whatever was on screen; drop it. A one-byte capture is
         // that newline alone, i.e. nothing was printed.
         if (*err).type_0 == kErrorTypeNone && capture && capture_local.ga_len > 1 {
-            let mut s: String_0 = String_0 {
-                data: capture_local.ga_data.cast::<c_char>(),
-                size: capture_local.ga_len as size_t,
-            };
-            if *s.data == '\n' as c_char {
-                memmove(s.data.cast(), s.data.add(1).cast(), s.size - 1);
-                *s.data.add(s.size - 1) = NUL as c_char;
-                s.size -= 1;
+            let mut s: String_0 = String_0::from_raw_parts(
+                capture_local.ga_data.cast::<c_char>(),
+                capture_local.ga_len as size_t,
+            );
+            if *s.data() == '\n' as c_char {
+                memmove(s.data().cast(), s.data().add(1).cast(), s.len() - 1);
+                *s.data().add(s.len() - 1) = NUL as c_char;
+                s.set_len(s.len() - 1);
             }
             return s;
         }
         if capture {
             ga_clear(&raw mut capture_local);
         }
-        STRING_INIT
+        String_0::NULL
     }
 }
 
@@ -104,7 +104,7 @@ pub unsafe fn nvim_command(cmd: String_0) -> Result<(), Error> {
     unsafe {
         let mut tstate: TryState = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
-        do_cmdline_cmd(cmd.data);
+        do_cmdline_cmd(cmd.data());
         try_leave(&raw mut tstate, err);
     }
     ().reported(error)

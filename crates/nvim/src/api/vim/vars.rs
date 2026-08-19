@@ -46,28 +46,28 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
     let err = &raw mut error;
     unsafe {
         let mut di: *mut dictitem_T =
-            tv_dict_find(get_globvar_dict(), name.data, name.size as ptrdiff_t);
+            tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t);
         if di.is_null() {
             let mut found: bool =
-                script_autoload(name.data, name.size, false) as ::core::ffi::c_int != 0
+                script_autoload(name.data(), name.len(), false) as ::core::ffi::c_int != 0
                     && !aborting();
             if !found {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
                     c"Key not found: %s".as_ptr(),
-                    name.data,
+                    name.data(),
                 );
                 return NIL.reported(error);
             }
-            di = tv_dict_find(get_globvar_dict(), name.data, name.size as ptrdiff_t);
+            di = tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t);
         }
         if di.is_null() {
             api_set_error(
                 err,
                 kErrorTypeValidation,
                 c"Key not found: %s".as_ptr(),
-                name.data,
+                name.data(),
             );
             return NIL.reported(error);
         }

@@ -44,10 +44,6 @@ pub const MTDAMAGE_PAIR_INIT: MTDamagePair = MTDamagePair {
     start: MTDAMAGE_INIT,
     end: MTDAMAGE_INIT,
 };
-pub const STRING_INIT: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0,
-};
 /// Discard a bucket table and start again with room for `n_min_buckets`. The
 /// caller rehashes: the glyph cache keeps its own keys array and calls this
 /// directly.
@@ -293,7 +289,7 @@ pub unsafe fn map_put_ref_int_String(
         &mut (*map).set.keys,
         &mut (*map).values,
         key,
-        STRING_INIT,
+        String_0::NULL,
         key_alloc,
         new_item,
     )
@@ -490,7 +486,7 @@ pub unsafe fn map_del_int_String(
         (*map).set.keys,
         (*map).values,
         key,
-        STRING_INIT,
+        String_0::NULL,
         key_alloc,
     )
 }

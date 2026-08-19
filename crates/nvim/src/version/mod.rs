@@ -329,7 +329,7 @@ pub unsafe fn list_lua_version() {
         debug_assert!(err.type_0 == kErrorTypeNone, "a literal chunk cannot fail");
         // Not a debug assertion: the union field read below depends on it.
         assert!(ret.type_0 == kObjectTypeString, "_VERSION is a string");
-        msg_puts(ret.data.string.data);
+        msg_puts(ret.data.string.data());
         api_free_object(ret);
     }
 }

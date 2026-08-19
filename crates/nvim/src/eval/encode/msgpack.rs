@@ -36,7 +36,7 @@ struct MsgpackSink<'a> {
 impl MsgpackSink<'_> {
     /// A string as msgpack's `String_0` sees it: pointer and length, no NUL.
     fn buf(data: *mut c_char, size: size_t) -> String_0 {
-        String_0 { data, size }
+        String_0::from_raw_parts(data, size)
     }
 }
 

@@ -41,8 +41,8 @@ pub unsafe fn nvim_parse_expression(
 
         let mut parser_lines: [ParserLine; 2] = [
             ParserLine {
-                data: expr.data,
-                size: expr.size,
+                data: expr.data(),
+                size: expr.len(),
                 allocated: false,
             },
             ParserLine {
@@ -96,10 +96,7 @@ pub unsafe fn nvim_parse_expression(
                 c"message",
                 Object::string(arena_string(arena, cstr_as_string(east.err.msg))),
             );
-            let arg = String_0 {
-                data: east.err.arg.cast_mut(),
-                size: east.err.arg_len as size_t,
-            };
+            let arg = String_0::from_raw_parts(east.err.arg.cast_mut(), east.err.arg_len as size_t);
             dict_put(
                 &mut err_dict,
                 c"arg",
@@ -146,8 +143,8 @@ pub unsafe fn nvim_parse_expression(
 unsafe fn parse_flags(flags: String_0, err: *mut Error) -> Option<c_int> {
     unsafe {
         let mut pflags: c_int = 0;
-        for i in 0..flags.size {
-            let ch: c_char = *flags.data.add(i);
+        for i in 0..flags.len() {
+            let ch: c_char = *flags.data().add(i);
             match ch as u8 {
                 b'm' => pflags |= kExprFlagsMulti as c_int,
                 b'E' => pflags |= kExprFlagsDisallowEOC as c_int,
@@ -280,7 +277,7 @@ unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut 
         // The string body is owned by the node; hand the copy over and free it
         // here, since the node itself is about to go.
         let string_body = |value: *mut c_char, size: size_t| {
-            Object::string(arena_string(arena, String_0 { data: value, size }))
+            Object::string(arena_string(arena, String_0::from_raw_parts(value, size)))
         };
         match type_0 {
             kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString => {
@@ -357,7 +354,7 @@ unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut 
                 // Plain "=" has no augmentation, and the table's slot for it is
                 // the empty string rather than a name.
                 let augmentation = if asgn_type == kExprAsgnPlain {
-                    STRING_INIT
+                    String_0::NULL
                 } else {
                     cstr_as_string(expr_asgn_type_tab.with(|tab| tab[asgn_type as usize]))
                 };

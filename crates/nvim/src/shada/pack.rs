@@ -179,7 +179,7 @@ pub(crate) unsafe fn shada_pack_entry(
         }
 
         let packed = payload.packed();
-        if max_kbyte != 0 && packed.size > max_kbyte * 1024 {
+        if max_kbyte != 0 && packed.len() > max_kbyte * 1024 {
             return kSDWriteSuccessful; // too big to keep; not an error
         }
 
@@ -194,9 +194,9 @@ pub(crate) unsafe fn shada_pack_entry(
             },
         );
         mpack_uint64(&mut (*packer).ptr, entry.timestamp);
-        if packed.size > 0 {
-            mpack_uint64(&mut (*packer).ptr, packed.size as uint64_t);
-            mpack_raw(packed.data, packed.size, &mut *packer);
+        if packed.len() > 0 {
+            mpack_uint64(&mut (*packer).ptr, packed.len() as uint64_t);
+            mpack_raw(packed.data(), packed.len(), &mut *packer);
         }
 
         if (*packer).anyint != 0 {
@@ -265,10 +265,7 @@ unsafe fn pack_variable(
         // unbounded, overrunning it for a long enough variable name; built
         // here in a buffer that fits.
         let mut vardesc = b"variable g:".to_vec();
-        vardesc.extend_from_slice(core::slice::from_raw_parts(
-            varname.data.cast::<u8>(),
-            varname.size,
-        ));
+        vardesc.extend_from_slice(varname.as_bytes());
         vardesc.push(0);
 
         if encode_vim_to_msgpack(

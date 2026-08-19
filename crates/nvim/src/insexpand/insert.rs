@@ -52,7 +52,7 @@ pub(crate) unsafe fn fuzzy_longest_match() {
         if num_bests == 1 {
             // No more candidates: insert the match string itself.
             if !more_candidates {
-                ins_compl_longest_insert((*compl).cp_str.data);
+                ins_compl_longest_insert((*compl).cp_str.data());
             }
             compl_num_bests.set(0);
             return;
@@ -69,11 +69,11 @@ pub(crate) unsafe fn fuzzy_longest_match() {
             compl = (*compl).cp_next;
         }
 
-        let mut prefix = (*best[0]).cp_str.data;
-        let mut prefix_len = (*best[0]).cp_str.size as c_int;
+        let mut prefix = (*best[0]).cp_str.data();
+        let mut prefix_len = (*best[0]).cp_str.len() as c_int;
         for &m in &best[1..] {
             let mut prefix_ptr = prefix;
-            let mut match_ptr = (*m).cp_str.data;
+            let mut match_ptr = (*m).cp_str.data();
             let mut j: c_int = 0;
             while j < prefix_len && *match_ptr as c_int != NUL && *prefix_ptr as c_int != NUL {
                 if strncmp(prefix_ptr, match_ptr, utfc_ptr2len(prefix_ptr) as size_t) != 0 {
@@ -108,7 +108,7 @@ pub(crate) unsafe fn ins_compl_update_shown_match() {
 
         // True while the leader hides the shown match and `step` can move on.
         let hidden = |leader: *mut String_0, step: *mut compl_T| {
-            !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
+            !ins_compl_equal(compl_shown_match.get(), (*leader).data(), (*leader).len())
                 && !step.is_null()
                 && !is_first_match(step)
         };
@@ -121,7 +121,7 @@ pub(crate) unsafe fn ins_compl_update_shown_match() {
         // If we didn't find it searching forward, and compl_shows_dir is
         // backward, find the last match.
         if compl_shows_dir_backward()
-            && !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
+            && !ins_compl_equal(compl_shown_match.get(), (*leader).data(), (*leader).len())
             && ((*compl_shown_match.get()).cp_next.is_null()
                 || is_first_match((*compl_shown_match.get()).cp_next))
         {
@@ -141,13 +141,13 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
         // appropriately.
         let mut orig_col = 0;
         if new_leader {
-            let mut orig = (*compl_orig_text.ptr()).data;
+            let mut orig = (*compl_orig_text.ptr()).data();
             let mut leader = ins_compl_leader();
             while *orig as c_int != NUL && utf_ptr2char(orig) == utf_ptr2char(leader) {
                 leader = leader.offset(utf_ptr2len(leader) as isize);
                 orig = orig.offset(utf_ptr2len(orig) as isize);
             }
-            orig_col = orig.offset_from((*compl_orig_text.ptr()).data) as c_int;
+            orig_col = orig.offset_from((*compl_orig_text.ptr()).data()) as c_int;
         }
 
         // In insert mode: delete the typed part.
@@ -165,14 +165,14 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
 
         // What follows the cursor on the last line, which the line deletion
         // below would take with it; re-inserted at the end.
-        let mut remaining = STRING_INIT;
+        let mut remaining = String_0::NULL;
         if (*curwin.get()).w_cursor.lnum > compl_lnum.get() {
             if (*curwin.get()).w_cursor.col < get_cursor_line_len() {
                 remaining = cbuf_to_string(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t);
             }
             while (*curwin.get()).w_cursor.lnum > compl_lnum.get() {
                 if ml_delete((*curwin.get()).w_cursor.lnum) == FAIL {
-                    xfree(remaining.data.cast::<c_void>());
+                    xfree(remaining.data().cast::<c_void>());
                     return;
                 }
                 deleted_lines_mark((*curwin.get()).w_cursor.lnum, 1);
@@ -184,18 +184,18 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
 
         if (*curwin.get()).w_cursor.col > col {
             if stop_arrow() == FAIL {
-                xfree(remaining.data.cast::<c_void>());
+                xfree(remaining.data().cast::<c_void>());
                 return;
             }
             backspace_until_column(col);
             compl_ins_end_col.set((*curwin.get()).w_cursor.col);
         }
 
-        if !remaining.data.is_null() {
+        if !remaining.data().is_null() {
             orig_col = (*curwin.get()).w_cursor.col;
-            ins_str(remaining.data, remaining.size);
+            ins_str(remaining.data(), remaining.len());
             (*curwin.get()).w_cursor.col = orig_col;
-            xfree(remaining.data.cast::<c_void>());
+            xfree(remaining.data().cast::<c_void>());
         }
 
         // TODO(vim): is this sufficient for redrawing?  Redrawing everything
@@ -245,8 +245,8 @@ pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
         let shown = compl_shown_match.get();
         let compl_len = get_compl_len();
         let preinsert = ins_compl_has_preinsert();
-        let mut cp_str = (*shown).cp_str.data;
-        let mut cp_str_len = (*shown).cp_str.size;
+        let mut cp_str = (*shown).cp_str.data();
+        let mut cp_str_len = (*shown).cp_str.len();
         let leader_len = ins_compl_leader_len();
         let has_multiple = !strchr(cp_str, '\n' as c_int).is_null();
 
@@ -255,8 +255,8 @@ pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
             if cp_str.is_null() {
                 cp_str = find_common_prefix(&raw mut cp_str_len, true);
                 if cp_str.is_null() {
-                    cp_str = (*shown).cp_str.data;
-                    cp_str_len = (*shown).cp_str.size;
+                    cp_str = (*shown).cp_str.data();
+                    cp_str_len = (*shown).cp_str.len();
                 }
             }
         } else if !(*cpt_sources_array.ptr()).is_null() {
@@ -395,8 +395,8 @@ pub(crate) unsafe fn find_next_completion_match(
             let shown = compl_shown_match.get();
             let leader = get_leader_for_startcol(shown, false);
             if !match_at_original_text(shown)
-                && !(*leader).data.is_null()
-                && !ins_compl_equal(shown, (*leader).data, (*leader).size)
+                && !(*leader).data().is_null()
+                && !ins_compl_equal(shown, (*leader).data(), (*leader).len())
                 && !(cot_fuzzy() && (*shown).cp_score != FUZZY_SCORE_NONE)
             {
                 todo += 1;
@@ -448,7 +448,7 @@ pub(crate) unsafe fn ins_compl_next(
             return -1;
         }
 
-        if !(*compl_leader.ptr()).data.is_null()
+        if !(*compl_leader.ptr()).data().is_null()
             && !match_at_original_text(compl_shown_match.get())
             && !cot_fuzzy()
         {
@@ -496,7 +496,7 @@ pub(crate) unsafe fn ins_compl_next(
         } else if compl_no_insert && !started && !compl_preinsert {
             ins_compl_insert_bytes(
                 (*compl_orig_text.ptr())
-                    .data
+                    .data()
                     .offset(get_compl_len() as isize),
                 -1,
             );
@@ -509,15 +509,17 @@ pub(crate) unsafe fn ins_compl_next(
                     && match_at_original_text(compl_shown_match.get());
                 ins_compl_insert(compl_preinsert || preinsert_longest, preinsert_longest);
             } else {
-                debug_assert!(!(*compl_leader.ptr()).data.is_null());
+                debug_assert!(!(*compl_leader.ptr()).data().is_null());
                 ins_compl_insert_bytes(
-                    (*compl_leader.ptr()).data.offset(get_compl_len() as isize),
+                    (*compl_leader.ptr())
+                        .data()
+                        .offset(get_compl_len() as isize),
                     -1,
                 );
             }
             if strequal(
-                (*compl_shown_match.get()).cp_str.data,
-                (*compl_orig_text.ptr()).data,
+                (*compl_shown_match.get()).cp_str.data(),
+                (*compl_orig_text.ptr()).data(),
             ) {
                 restore_orig_extmarks();
             }

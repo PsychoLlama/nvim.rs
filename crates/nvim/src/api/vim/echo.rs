@@ -22,19 +22,10 @@ pub unsafe fn nvim_echo(
         let mut is_progress: bool = false;
         let mut needs_clear: bool = false;
         let mut msg_data: MessageData = MessageData {
-            source: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            },
+            source: String_0::NULL,
             percent: 0,
-            title: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            },
-            status: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            },
+            title: String_0::NULL,
+            status: String_0::NULL,
             data: Dict {
                 size: 0,
                 capacity: 0,
@@ -52,7 +43,7 @@ pub unsafe fn nvim_echo(
         };
         let mut hl_msg: HlMessage = parse_hl_msg(chunks, (*opts).err, err);
         if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            kind = (*opts).kind.data;
+            kind = (*opts).kind.data();
             if (*opts).verbose {
                 verbose_enter();
             } else if kind.is_null() {
@@ -67,11 +58,11 @@ pub unsafe fn nvim_echo(
             is_progress = strequal(kind, c"progress".as_ptr());
             needs_clear = !history;
             if !(is_progress as ::core::ffi::c_int != 0
-                || (*opts).status.size == 0 as size_t
-                    && (*opts).title.size == 0 as size_t
+                || (*opts).status.len() == 0 as size_t
+                    && (*opts).title.len() == 0 as size_t
                     && (*opts).percent == 0 as Integer
                     && (*opts).data.size == 0 as size_t
-                    && (*opts).source.size == 0 as size_t)
+                    && (*opts).source.len() == 0 as size_t)
             {
                 api_set_error(
                     err,
@@ -81,16 +72,16 @@ pub unsafe fn nvim_echo(
                     kind,
                 );
             } else if !(!is_progress
-                || strequal((*opts).status.data, c"success".as_ptr()) as ::core::ffi::c_int != 0
-                || strequal((*opts).status.data, c"failed".as_ptr()) as ::core::ffi::c_int != 0
-                || strequal((*opts).status.data, c"running".as_ptr()) as ::core::ffi::c_int != 0
-                || strequal((*opts).status.data, c"cancel".as_ptr()) as ::core::ffi::c_int != 0)
+                || strequal((*opts).status.data(), c"success".as_ptr()) as ::core::ffi::c_int != 0
+                || strequal((*opts).status.data(), c"failed".as_ptr()) as ::core::ffi::c_int != 0
+                || strequal((*opts).status.data(), c"running".as_ptr()) as ::core::ffi::c_int != 0
+                || strequal((*opts).status.data(), c"cancel".as_ptr()) as ::core::ffi::c_int != 0)
             {
                 api_err_exp(
                     err,
                     c"status".as_ptr(),
                     c"success|failed|running|cancel".as_ptr(),
-                    (*opts).status.data,
+                    (*opts).status.data(),
                 );
             } else if !(!is_progress
                 || (*opts).percent >= 0 as Integer && (*opts).percent <= 100 as Integer)
@@ -102,7 +93,7 @@ pub unsafe fn nvim_echo(
                     0 as int64_t,
                     false,
                 );
-            } else if !(!is_progress || (*opts).source.size != 0 as size_t) {
+            } else if !(!is_progress || (*opts).source.len() != 0 as size_t) {
                 api_err_required(err, c"opts.source".as_ptr());
             } else if !((*opts).id.type_0 as ::core::ffi::c_uint
                 != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint

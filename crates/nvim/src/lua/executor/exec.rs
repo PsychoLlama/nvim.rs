@@ -77,10 +77,14 @@ unsafe fn free_chunk_buffer(buf: *mut c_char) {
 pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut typval_T) {
     unsafe {
         let head = EVALHEADER.count_bytes();
-        let lcmd_len = head + str.size + 1;
+        let lcmd_len = head + str.len() + 1;
         let lcmd = chunk_buffer(lcmd_len);
         memcpy(lcmd.cast::<c_void>(), EVALHEADER.as_ptr().cast(), head);
-        memcpy(lcmd.add(head).cast::<c_void>(), str.data.cast(), str.size);
+        memcpy(
+            lcmd.add(head).cast::<c_void>(),
+            str.data().cast(),
+            str.len(),
+        );
         *lcmd.add(lcmd_len - 1) = b')' as c_char;
         nlua_typval_exec(lcmd, lcmd_len, c"luaeval()".as_ptr(), arg, 1, true, ret_tv);
         free_chunk_buffer(lcmd);
@@ -276,7 +280,7 @@ pub unsafe fn nlua_exec(
         } else {
             c"<nvim>".as_ptr()
         };
-        if luaL_loadbuffer(lstate, str.data, str.size, name) != 0 {
+        if luaL_loadbuffer(lstate, str.data(), str.len(), name) != 0 {
             set_lua_error(err, kErrorTypeValidation, lstate);
             return Object::NIL;
         }

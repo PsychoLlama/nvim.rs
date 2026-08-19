@@ -236,10 +236,7 @@ pub unsafe fn parse_border_style(
             let mut i: size_t = 0 as size_t;
             while i < size {
                 let mut iytem: Object = *arr.items.add(i);
-                let mut string: String_0 = String_0 {
-                    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0,
-                };
+                let mut string: String_0 = String_0::NULL;
                 let mut hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 if iytem.type_0 as ::core::ffi::c_uint
                     == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -294,7 +291,9 @@ pub unsafe fn parse_border_style(
                     );
                     return;
                 }
-                if string.size != 0 && mb_string2cells_len(string.data, string.size) > 1 as size_t {
+                if string.len() != 0
+                    && mb_string2cells_len(string.data(), string.len()) > 1 as size_t
+                {
                     api_err_exp(
                         err,
                         c"border".as_ptr(),
@@ -303,10 +302,10 @@ pub unsafe fn parse_border_style(
                     );
                     return;
                 }
-                let mut len: size_t = if string.size
+                let mut len: size_t = if string.len()
                     < ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_sub(1_usize)
                 {
-                    string.size
+                    string.len()
                 } else {
                     ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_sub(1 as size_t)
                 };
@@ -314,7 +313,7 @@ pub unsafe fn parse_border_style(
                     memcpy(
                         &raw mut *chars.add(i) as *mut ::core::ffi::c_char
                             as *mut ::core::ffi::c_void,
-                        string.data as *const ::core::ffi::c_void,
+                        string.data() as *const ::core::ffi::c_void,
                         len,
                     );
                 }
@@ -387,8 +386,8 @@ pub unsafe fn parse_border_style(
             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             let mut str: String_0 = style.data.string;
-            if str.size == 0 as size_t
-                || strequal(str.data, c"none".as_ptr()) as ::core::ffi::c_int != 0
+            if str.len() == 0 as size_t
+                || strequal(str.data(), c"none".as_ptr()) as ::core::ffi::c_int != 0
             {
                 (*fconfig).border = false;
                 (*fconfig).title = false;
@@ -397,7 +396,7 @@ pub unsafe fn parse_border_style(
             }
             let mut i_0: size_t = 0 as size_t;
             while !defaults[i_0 as usize].name.is_null() {
-                if strequal(str.data, defaults[i_0 as usize].name) {
+                if strequal(str.data(), defaults[i_0 as usize].name) {
                     memcpy(
                         chars as *mut ::core::ffi::c_void,
                         &raw mut (*(&raw mut defaults as *mut C2Rust_Unnamed_15).add(i_0)).chars
@@ -432,7 +431,7 @@ pub unsafe fn parse_border_style(
                 i_0 = i_0.wrapping_add(1);
             }
             if true {
-                api_err_invalid(err, c"border".as_ptr(), str.data, 0 as int64_t, true);
+                api_err_invalid(err, c"border".as_ptr(), str.data(), 0 as int64_t, true);
                 return;
             }
         }

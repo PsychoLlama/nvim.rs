@@ -136,10 +136,10 @@ pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
         };
         const CHUNK: &core::ffi::CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
         nlua_exec(
-            String_0 {
-                data: CHUNK.as_ptr() as *mut c_char,
-                size: CHUNK.to_bytes().len() as size_t,
-            },
+            String_0::from_raw_parts(
+                CHUNK.as_ptr() as *mut c_char,
+                CHUNK.to_bytes().len() as size_t,
+            ),
             ptr::null(),
             args,
             kRetNilBool,

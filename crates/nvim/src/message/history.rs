@@ -59,7 +59,7 @@ const OPT_PROGRESS: &CStr = c"progress:";
 pub unsafe fn hl_msg_free(hl_msg: HlMessage) {
     unsafe {
         for i in 0..hl_msg.size {
-            xfree((*hl_msg.items.add(i)).text.data.cast());
+            xfree((*hl_msg.items.add(i)).text.data().cast());
         }
         xfree(hl_msg.items.cast());
     }
@@ -86,10 +86,7 @@ pub(crate) unsafe fn msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int) {
             return;
         }
 
-        let text = String_0 {
-            data: xmemdupz(start.cast(), size).cast(),
-            size,
-        };
+        let text = String_0::from_raw_parts(xmemdupz(start.cast(), size).cast(), size);
         let mut msg = EMPTY_HL_MESSAGE;
         hl_msg_push(&mut msg, HlMessageChunk { text, hl_id });
         msg_hist_add_multihl(msg, false, ptr::null_mut());

@@ -146,10 +146,7 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
                 let obj: *mut Object = (*parent).data[0].p.cast::<Object>();
                 let kv: *mut KeyValuePair = (*obj).data.dict.items.add((*parent).pos);
                 if (*parent).key_visited == 0 {
-                    (*kv).key = String_0 {
-                        data: core::ptr::null_mut(),
-                        size: 0,
-                    };
+                    (*kv).key = String_0::NULL;
                     key_location = &raw mut (*kv).key;
                 }
                 result = &raw mut (*kv).value;
@@ -193,10 +190,7 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             let len = (*node).tok.length as size_t;
             let mem = arena_alloc(&raw mut (*p).arena, len + 1, false).cast::<c_char>();
             *mem.add(len) = 0;
-            let str = String_0 {
-                data: mem,
-                size: len,
-            };
+            let str = String_0::from_raw_parts(mem, len);
             if key_location.is_null() {
                 *result = Object {
                     type_0: kObjectTypeString,
@@ -205,7 +199,7 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             } else {
                 *key_location = str;
             }
-            (*node).data[0].p = str.data.cast::<c_void>();
+            (*node).data[0].p = str.data().cast::<c_void>();
         }
         TOKEN_EXT => {
             (*node).data[0].p = result.cast::<c_void>();
@@ -713,30 +707,23 @@ unsafe fn parse_grid_line_cell(g: *mut GridLineEvent, cursor: &mut Cursor) -> Re
 /// Reads a string or binary token, returning a borrow of the buffer rather
 /// than a copy. An empty result means the next token was not one.
 pub unsafe fn unpack_string(data: *mut *const c_char, size: *mut size_t) -> String_0 {
-    const EMPTY: String_0 = String_0 {
-        data: core::ptr::null_mut(),
-        size: 0,
-    };
     let mut data2: *const c_char = *data;
     let mut size2: size_t = *size;
     let mut tok: mpack_token_t = core::mem::zeroed();
     if mpack_rtoken(&raw mut data2, &raw mut size2, &raw mut tok) != 0
         || tok.type_0 != TOKEN_STR && tok.type_0 != TOKEN_BIN
     {
-        return EMPTY;
+        return String_0::NULL;
     }
     // Checked against the *original* size, so a token header that consumed
     // several bytes leaves that much slack. Upstream's bound; the caller only
     // ever reads within the buffer it owns.
     if *size < tok.length as size_t {
-        return EMPTY;
+        return String_0::NULL;
     }
     *data = data2.add(tok.length as usize);
     *size = size2 - tok.length as size_t;
-    String_0 {
-        data: data2 as *mut c_char,
-        size: tok.length as size_t,
-    }
+    String_0::from_raw_parts(data2 as *mut c_char, tok.length as size_t)
 }
 
 /// The length of the array that starts here, or -1 if this is not one.
@@ -865,17 +852,17 @@ pub unsafe fn unpack_keydict(
     for _ in 0..tok.length {
         let item_start: *const c_char = *data;
         let key = unpack_string(data, size);
-        if key.data.is_null() {
+        if key.data().is_null() {
             *error = fail(c"has key value which is not a string", key);
             return false;
         }
-        if key.size == 0 {
+        if key.len() == 0 {
             *error = fail(c"has empty key", key);
             return false;
         }
 
         let field: *mut KeySetLink =
-            hashy.expect("keyset has no hash function")(key.data, key.size);
+            hashy.expect("keyset has no hash function")(key.data(), key.len());
         if field.is_null() {
             if unpack_skip(data, size) != 0 {
                 return false;
@@ -915,7 +902,7 @@ pub unsafe fn unpack_keydict(
             }
             field_type::STRING => {
                 let val = unpack_string(data, size);
-                if val.data.is_null() {
+                if val.data().is_null() {
                     *error = fail(c"has %.*s key value which is not a binary", key);
                     return false;
                 }
@@ -938,7 +925,7 @@ pub unsafe fn unpack_keydict(
                 }
                 for _ in 0..len {
                     let item = unpack_string(data, size);
-                    if item.data.is_null() {
+                    if item.data().is_null() {
                         *error = fail(c"has %.*s array with non-binary value", key);
                         return false;
                     }
@@ -967,8 +954,8 @@ unsafe fn fail(message: &core::ffi::CStr, key: String_0) -> *mut c_char {
     arena_printf(
         core::ptr::null_mut(),
         message.as_ptr(),
-        key.size as c_int,
-        key.data,
+        key.len() as c_int,
+        key.data(),
     )
-    .data
+    .data()
 }

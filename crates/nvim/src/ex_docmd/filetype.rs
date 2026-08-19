@@ -248,10 +248,7 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         items[0] = Object {
             type_0: kObjectTypeString,
             data: crate::types::object_data {
-                string: String_0 {
-                    data: &raw mut mods as *mut c_char,
-                    size: mods_len,
-                },
+                string: String_0::from_raw_parts(&raw mut mods as *mut c_char, mods_len),
             },
         };
         items[1] = Object {
@@ -297,8 +294,5 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
 
 /// A `'static` Lua source string as the API's counted string.
 fn lua_chunk(src: &'static CStr) -> String_0 {
-    String_0 {
-        data: src.as_ptr() as *mut c_char,
-        size: src.to_bytes().len() as size_t,
-    }
+    String_0::from_raw_parts(src.as_ptr() as *mut c_char, src.to_bytes().len() as size_t)
 }

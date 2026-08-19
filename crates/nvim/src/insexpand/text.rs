@@ -32,7 +32,7 @@ unsafe fn ins_compl_infercase_gettext(
 
         // Rule 1: were any chars converted to lower?
         let mut has_lower = false;
-        let mut p = (*compl_orig_text.ptr()).data as *const c_char;
+        let mut p = (*compl_orig_text.ptr()).data() as *const c_char;
         for i in 0..min_len {
             let c = mb_ptr2char_adv(&raw mut p);
             if mb_islower(c) {
@@ -50,7 +50,7 @@ unsafe fn ins_compl_infercase_gettext(
         // Rule 2: no lower case, 2nd consecutive letter converted to upper case.
         if !has_lower {
             let mut was_letter = false;
-            let mut p = (*compl_orig_text.ptr()).data as *const c_char;
+            let mut p = (*compl_orig_text.ptr()).data() as *const c_char;
             for i in 0..min_len {
                 let c = mb_ptr2char_adv(&raw mut p);
                 if was_letter && mb_isupper(c) && mb_islower(wca[i as usize]) {
@@ -65,7 +65,7 @@ unsafe fn ins_compl_infercase_gettext(
         }
 
         // Copy the original case of the part we typed.
-        let mut p = (*compl_orig_text.ptr()).data as *const c_char;
+        let mut p = (*compl_orig_text.ptr()).data() as *const c_char;
         for w in wca.iter_mut().take(min_len as usize) {
             let c = mb_ptr2char_adv(&raw mut p);
             if mb_islower(c) {
@@ -141,7 +141,7 @@ pub unsafe fn ins_compl_add_infercase(
         let mut tofree: *mut c_char = ptr::null_mut();
         if p_ic.get() != 0 && (*curbuf.get()).b_p_inf != 0 && len > 0 {
             let char_len = char_count(str);
-            let compl_char_len = char_count((*compl_orig_text.ptr()).data);
+            let compl_char_len = char_count((*compl_orig_text.ptr()).data());
             // "char_len" may be smaller than "compl_char_len" when using
             // thesaurus, only use the minimum when comparing.
             let min_len = char_len.min(compl_char_len);
@@ -225,7 +225,7 @@ pub(crate) unsafe fn get_next_bufname_token() {
             if (*b).b_p_bl != 0 && !(*b).b_sfname.is_null() {
                 let tail = path_tail((*b).b_sfname);
                 let orig = *compl_orig_text.ptr();
-                if strncmp(tail, orig.data, orig.size) == 0 {
+                if strncmp(tail, orig.data(), orig.len()) == 0 {
                     ins_compl_add(
                         tail,
                         strlen(tail) as c_int,
@@ -303,15 +303,15 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
             // Apply 'smartcase' behavior during normal mode.
             if ctrl_x_mode_normal()
                 && p_inf.get() == 0
-                && !(*leader).data.is_null()
-                && ignorecase((*leader).data) == 0
+                && !(*leader).data().is_null()
+                && ignorecase((*leader).data()) == 0
             {
                 (*compl).cp_flags &= !CP_ICASE;
             }
 
             if !match_at_original_text(compl)
-                && ((*leader).data.is_null()
-                    || ins_compl_equal(compl, (*leader).data, (*leader).size))
+                && ((*leader).data().is_null()
+                    || ins_compl_equal(compl, (*leader).data(), (*leader).len()))
             {
                 // Limit the number of items from each source if max_items is set.
                 let mut match_limit_exceeded = false;
@@ -332,17 +332,17 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
                     if first.is_null()
                         && strncmp(
                             ins_compl_leader(),
-                            (*compl).cp_str.data,
+                            (*compl).cp_str.data(),
                             ins_compl_leader_len(),
                         ) == 0
                     {
-                        first = (*compl).cp_str.data;
+                        first = (*compl).cp_str.data();
                         len = strlen(first) as c_int;
                     } else if !first.is_null() {
                         // Shorten the prefix to what this match still agrees on.
                         let mut j: c_int = 0; // count in bytes
                         let mut s1 = first;
-                        let mut s2 = (*compl).cp_str.data;
+                        let mut s2 = (*compl).cp_str.data();
                         while j < len && *s1 as c_int != NUL && *s2 as c_int != NUL {
                             if byte2len(*s1) != byte2len(*s2)
                                 || memcmp(s1.cast(), s2.cast(), byte2len(*s1) as size_t) != 0

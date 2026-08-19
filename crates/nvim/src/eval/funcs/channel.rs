@@ -441,10 +441,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             };
             const PEERS: &str = "return require('vim._core.server').serverlist(...)";
             let rv = nlua_exec(
-                String_0 {
-                    data: PEERS.as_ptr() as *mut c_char,
-                    size: PEERS.len(),
-                },
+                String_0::from_raw_parts(PEERS.as_ptr() as *mut c_char, PEERS.len()),
                 ptr::null(),
                 lua_args,
                 kRetObject,
@@ -465,7 +462,11 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
                 );
             } else {
                 for i in 0..rv.data.array.size {
-                    tv_list_append_string(list, (*rv.data.array.items.add(i)).data.string.data, -1);
+                    tv_list_append_string(
+                        list,
+                        (*rv.data.array.items.add(i)).data.string.data(),
+                        -1,
+                    );
                 }
             }
         }

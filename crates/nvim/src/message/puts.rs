@@ -14,15 +14,11 @@ use crate::types::{NUL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
-/// C's `ARRAY_DICT_INIT` and `STRING_INIT`: empty, and owning nothing.
+/// C's `ARRAY_DICT_INIT`: empty, and owning nothing.
 const EMPTY_ARRAY: Array = Array {
     size: 0,
     capacity: 0,
     items: ptr::null_mut(),
-};
-const EMPTY_STRING: String_0 = String_0 {
-    data: ptr::null_mut(),
-    size: 0,
 };
 
 /// Start putting a message on the screen.
@@ -143,7 +139,7 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
                     false,
                     false,
                     Object::integer(-1),
-                    EMPTY_STRING,
+                    String_0::NULL,
                 );
                 cmdline_was_last_drawn.set(false);
             }

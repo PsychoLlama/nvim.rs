@@ -86,15 +86,11 @@ const ARRAY_INIT: Array = Array {
     capacity: 0,
     items: core::ptr::null_mut(),
 };
-const STRING_INIT: String_0 = String_0 {
-    data: core::ptr::null_mut(),
-    size: 0,
-};
 const CONTEXT_INIT: Context = Context {
-    regs: STRING_INIT,
-    jumps: STRING_INIT,
-    bufs: STRING_INIT,
-    gvars: STRING_INIT,
+    regs: String_0::NULL,
+    jumps: String_0::NULL,
+    bufs: String_0::NULL,
+    gvars: String_0::NULL,
     funcs: ARRAY_INIT,
 };
 
@@ -234,10 +230,10 @@ fn shada_while_restoring() -> OptVal {
     OptVal {
         type_0: kOptValTypeString,
         data: OptValData {
-            string: String_0 {
-                data: SHADA_WHILE_RESTORING.as_ptr().cast_mut(),
-                size: SHADA_WHILE_RESTORING.count_bytes(),
-            },
+            string: String_0::from_raw_parts(
+                SHADA_WHILE_RESTORING.as_ptr().cast_mut(),
+                SHADA_WHILE_RESTORING.count_bytes(),
+            ),
         },
     }
 }
@@ -348,7 +344,7 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
     // SAFETY: the caller's contract.
     unsafe {
         for i in 0..ctx.funcs.size {
-            do_cmdline_cmd((*ctx.funcs.items.add(i)).data.string.data);
+            do_cmdline_cmd((*ctx.funcs.items.add(i)).data.string.data());
         }
     }
 }
@@ -358,7 +354,7 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 /// # Safety
 /// Main-thread editor call; `err` is a live error object.
 unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
-    let mut sbuf = STRING_INIT;
+    let mut sbuf = String_0::NULL;
     let mut list_tv = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -379,7 +375,8 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
             list_tv.v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
             "list_tv.v_type == VAR_LIST"
         );
-        if !encode_vim_list_to_buf(list_tv.vval.v_list, &raw mut sbuf.size, &raw mut sbuf.data) {
+        let (data, size) = sbuf.parts_mut();
+        if !encode_vim_list_to_buf(list_tv.vval.v_list, size, data) {
             api_set_error(
                 err,
                 kErrorTypeException,
@@ -453,19 +450,19 @@ pub unsafe fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: *mut Error) -> c
                 continue;
             }
             let array = item.value.data.array;
-            if strequal(item.key.data, c"regs".as_ptr()) {
+            if strequal(item.key.data(), c"regs".as_ptr()) {
                 types |= kCtxRegs as c_int;
                 ctx.regs = array_to_string(array, err);
-            } else if strequal(item.key.data, c"jumps".as_ptr()) {
+            } else if strequal(item.key.data(), c"jumps".as_ptr()) {
                 types |= kCtxJumps as c_int;
                 ctx.jumps = array_to_string(array, err);
-            } else if strequal(item.key.data, c"bufs".as_ptr()) {
+            } else if strequal(item.key.data(), c"bufs".as_ptr()) {
                 types |= kCtxBufs as c_int;
                 ctx.bufs = array_to_string(array, err);
-            } else if strequal(item.key.data, c"gvars".as_ptr()) {
+            } else if strequal(item.key.data(), c"gvars".as_ptr()) {
                 types |= kCtxGVars as c_int;
                 ctx.gvars = array_to_string(array, err);
-            } else if strequal(item.key.data, c"funcs".as_ptr()) {
+            } else if strequal(item.key.data(), c"funcs".as_ptr()) {
                 types |= kCtxFuncs as c_int;
                 ctx.funcs = copy_object(item.value, core::ptr::null_mut::<Arena>())
                     .data

@@ -479,10 +479,7 @@ fn eventignore_all() -> OptVal {
     OptVal {
         type_0: kOptValTypeString,
         data: OptValData {
-            string: String_0 {
-                data: c"all".as_ptr() as *mut c_char,
-                size: 3,
-            },
+            string: String_0::from_raw_parts(c"all".as_ptr() as *mut c_char, 3),
         },
     }
 }

@@ -77,7 +77,7 @@ pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*gap).ga_len {
             let mut cmd: *mut ucmd_T = ((*gap).ga_data as *mut ucmd_T).offset(i as isize);
-            if strcmp(name.data, (*cmd).uc_name) == 0 {
+            if strcmp(name.data(), (*cmd).uc_name) == 0 {
                 free_ucmd(cmd);
                 (*gap).ga_len -= 1 as ::core::ffi::c_int;
                 if i < (*gap).ga_len {
@@ -96,7 +96,7 @@ pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(
             err,
             kErrorTypeException,
             c"Invalid command (not found): %s".as_ptr(),
-            name.data,
+            name.data(),
         );
     }
     ().reported(error)
@@ -122,16 +122,17 @@ pub unsafe fn create_user_command(
         let mut luaref: LuaRef = LUA_NOREF;
         let mut compl_luaref: LuaRef = LUA_NOREF;
         let mut preview_luaref: LuaRef = LUA_NOREF;
+        let cmd_name = name.data();
         '_err: {
-            if uc_validate_name(name.data).is_null() {
-                api_err_invalid(err, c"command name".as_ptr(), name.data, 0 as int64_t, true);
+            if uc_validate_name(cmd_name).is_null() {
+                api_err_invalid(err, c"command name".as_ptr(), cmd_name, 0 as int64_t, true);
             } else if mb_islower(
-                *name.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                *cmd_name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             ) {
                 api_err_invalid(
                     err,
                     c"command name (must start with uppercase)".as_ptr(),
-                    name.data,
+                    cmd_name,
                     0 as int64_t,
                     true,
                 );
@@ -169,11 +170,11 @@ pub unsafe fn create_user_command(
                 } else if (*opts).nargs.type_0 as ::core::ffi::c_uint
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    if !((*opts).nargs.data.string.size <= 1 as size_t) {
+                    if !((*opts).nargs.data.string.len() <= 1 as size_t) {
                         api_err_invalid(
                             err,
                             c"nargs".as_ptr(),
-                            (*opts).nargs.data.string.data,
+                            (*opts).nargs.data.string.data(),
                             0 as int64_t,
                             true,
                         );
@@ -183,7 +184,7 @@ pub unsafe fn create_user_command(
                             .nargs
                             .data
                             .string
-                            .data
+                            .data()
                             .offset(0 as ::core::ffi::c_int as isize)
                             as ::core::ffi::c_int
                         {
@@ -201,7 +202,7 @@ pub unsafe fn create_user_command(
                                     api_err_invalid(
                                         err,
                                         c"nargs".as_ptr(),
-                                        (*opts).nargs.data.string.data,
+                                        (*opts).nargs.data.string.data(),
                                         0 as int64_t,
                                         true,
                                     );
@@ -243,11 +244,11 @@ pub unsafe fn create_user_command(
                             .range
                             .data
                             .string
-                            .data
+                            .data()
                             .offset(0 as ::core::ffi::c_int as isize)
                             as ::core::ffi::c_int
                             == '%' as ::core::ffi::c_int
-                            && (*opts).range.data.string.size == 1 as size_t)
+                            && (*opts).range.data.string.len() == 1 as size_t)
                         {
                             api_err_invalid(
                                 err,
@@ -327,15 +328,15 @@ pub unsafe fn create_user_command(
                             break '_err;
                         } else if !(1 as ::core::ffi::c_int
                             == parse_addr_type_arg(
-                                (*opts).addr.data.string.data,
-                                (*opts).addr.data.string.size as ::core::ffi::c_int,
+                                (*opts).addr.data.string.data(),
+                                (*opts).addr.data.string.len() as ::core::ffi::c_int,
                                 &raw mut addr_type_arg,
                             ))
                         {
                             api_err_invalid(
                                 err,
                                 c"addr".as_ptr(),
-                                (*opts).addr.data.string.data,
+                                (*opts).addr.data.string.data(),
                                 0 as int64_t,
                                 true,
                             );
@@ -381,8 +382,8 @@ pub unsafe fn create_user_command(
                         {
                             if !(1 as ::core::ffi::c_int
                                 == parse_compl_arg(
-                                    (*opts).complete.data.string.data,
-                                    (*opts).complete.data.string.size as ::core::ffi::c_int,
+                                    (*opts).complete.data.string.data(),
+                                    (*opts).complete.data.string.len() as ::core::ffi::c_int,
                                     &mut context,
                                     &mut argt,
                                     &mut compl_arg,
@@ -391,7 +392,7 @@ pub unsafe fn create_user_command(
                                 api_err_invalid(
                                     err,
                                     c"complete".as_ptr(),
-                                    (*opts).complete.data.string.data,
+                                    (*opts).complete.data.string.data(),
                                     0 as int64_t,
                                     true,
                                 );
@@ -438,13 +439,13 @@ pub unsafe fn create_user_command(
                                     == kObjectTypeString as ::core::ffi::c_int
                                         as ::core::ffi::c_uint
                                 {
-                                    rep = (*opts).desc.data.string.data;
+                                    rep = (*opts).desc.data.string.data();
                                 } else {
                                     rep = c"".as_ptr();
                                 }
                             }
                             kObjectTypeString => {
-                                rep = cmd.data.string.data;
+                                rep = cmd.data.string.data();
                             }
                             _ => {
                                 if true {
@@ -460,8 +461,8 @@ pub unsafe fn create_user_command(
                         }
                         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
                         if uc_add_command(
-                            name.data,
-                            name.size,
+                            name.data(),
+                            name.len(),
                             rep,
                             argt,
                             def,

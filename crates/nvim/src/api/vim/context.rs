@@ -37,7 +37,7 @@ pub unsafe fn nvim_get_context(
                 if (*types.items.add(i)).type_0 as ::core::ffi::c_uint
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    let s: *const ::core::ffi::c_char = (*types.items.add(i)).data.string.data;
+                    let s: *const ::core::ffi::c_char = (*types.items.add(i)).data.string.data();
                     if strequal(s, c"regs".as_ptr()) {
                         int_types |= kCtxRegs as ::core::ffi::c_int;
                     } else if strequal(s, c"jumps".as_ptr()) {

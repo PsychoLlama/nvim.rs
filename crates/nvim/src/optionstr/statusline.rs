@@ -142,7 +142,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
         // it, which is a string.
         unsafe {
             xfree((*varp).cast::<c_void>());
-            *varp = xstrdup(get_option_default(idx, flags).data.string.data);
+            *varp = xstrdup(get_option_default(idx, flags).data.string.data());
             s = *varp;
         }
     }
@@ -295,7 +295,7 @@ pub unsafe fn did_set_shada(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_shellpipe_redir(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's new value is a C string.
-    let value = unsafe { CStr::from_ptr((*args).os_newval.string.data) }.to_bytes();
+    let value = unsafe { CStr::from_ptr((*args).os_newval.string.data()) }.to_bytes();
     let bad = e_invalid_format_string_single_percent_s
         .as_ptr()
         .cast::<c_char>();

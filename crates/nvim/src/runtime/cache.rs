@@ -267,7 +267,7 @@ unsafe fn push_path(
             &mut (*search_path).items,
         );
         slot.write(SearchPathItem {
-            path: (*key_alloc).data,
+            path: (*key_alloc).data(),
             after,
             pack_inserted: false,
             has_lua: None,
@@ -454,10 +454,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                 c",".as_ptr().cast_mut(),
             )
         };
-        let the_entry = String_0 {
-            data: cur_entry,
-            size: buflen,
-        };
+        let the_entry = String_0::from_raw_parts(cur_entry, buflen);
         // SAFETY: `pack_entries` is this frame's own kvec, `pack_used` its
         // index; both are freed below.
         unsafe {
@@ -539,8 +536,8 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                     &raw mut search_path,
                     &raw mut rtp_used,
                     &raw mut after_path,
-                    item.data,
-                    item.size,
+                    item.data(),
+                    item.len(),
                     sentinel_pos_in_rtp,
                 );
             }

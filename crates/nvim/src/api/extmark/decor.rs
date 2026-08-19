@@ -252,8 +252,8 @@ pub unsafe fn parse_virt_text(
                     }
                 }
                 let mut text: *mut ::core::ffi::c_char = transstr(
-                    if str.size > 0 as size_t {
-                        str.data as *const ::core::ffi::c_char
+                    if str.len() > 0 as size_t {
+                        str.data() as *const ::core::ffi::c_char
                     } else {
                         c"".as_ptr()
                     },

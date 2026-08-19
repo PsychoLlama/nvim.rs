@@ -66,9 +66,9 @@ pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
         let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
-            option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_cfu_cb)
+            option_set_callback_func((*args).os_newval.string.data(), &raw mut (*buf).b_cfu_cb)
         } else {
-            let retval = option_set_callback_func((*args).os_newval.string.data, cfu_cb.ptr());
+            let retval = option_set_callback_func((*args).os_newval.string.data(), cfu_cb.ptr());
             if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 set_buflocal_cfu_callback(buf);
             }
@@ -93,9 +93,9 @@ pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
         let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
-            option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_ofu_cb)
+            option_set_callback_func((*args).os_newval.string.data(), &raw mut (*buf).b_ofu_cb)
         } else {
-            let retval = option_set_callback_func((*args).os_newval.string.data, ofu_cb.ptr());
+            let retval = option_set_callback_func((*args).os_newval.string.data(), ofu_cb.ptr());
             if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 set_buflocal_ofu_callback(buf);
             }
@@ -581,7 +581,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
             ins_compl_insert_bytes(ins_compl_leader(), -1);
         }
 
-        expand_by_function(0, (*cpt_compl_pattern.ptr()).data, cb);
+        expand_by_function(0, (*cpt_compl_pattern.ptr()).data(), cb);
 
         if !(*cpt_src).cs_refresh_always {
             ins_compl_delete(false);

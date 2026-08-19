@@ -2,7 +2,6 @@
 
 use core::cmp::Ordering;
 use core::ffi::CStr;
-use core::slice;
 
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::{
@@ -283,12 +282,8 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const STRING_INIT: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-};
 static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static value_init_String: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
+static value_init_String: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,

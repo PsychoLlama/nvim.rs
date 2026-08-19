@@ -157,12 +157,6 @@ pub struct StringBuilder {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct String_0 {
-    pub data: *mut ::core::ffi::c_char,
-    pub size: size_t,
-}
 pub type TermKey_Terminfo_Getstr_Hook = unsafe extern "C" fn(
     *const ::core::ffi::c_char,
     *const ::core::ffi::c_char,

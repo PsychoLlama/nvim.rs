@@ -423,7 +423,7 @@ pub(crate) unsafe fn put_set(
                 if fprintf(fd, c"%s %s=".as_ptr(), cmd, name) < 0 {
                     return FAIL;
                 }
-                let value_str = value.data.string.data;
+                let value_str = value.data.string.data();
                 if !value_str.is_null() {
                     match put_string_value(fd, cmd, name, value_str, flags) {
                         Written::Failed => return FAIL,

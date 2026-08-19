@@ -36,7 +36,7 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
         };
         (*no_wait_return.ptr()) += 1;
         let mut i: uint32_t = 0 as uint32_t;
-        while (i as size_t) < message.size {
+        while (i as size_t) < message.len() {
             if got_int.get() {
                 break;
             }
@@ -48,7 +48,7 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
             }
-            if *message.data.offset(i as isize) as ::core::ffi::c_int == NL {
+            if *message.data().offset(i as isize) as ::core::ffi::c_int == NL {
                 // `kv_push`, whose growth step c2rust expanded inline.
                 Kvec::new(
                     &mut (*line_buf).size,
@@ -71,7 +71,7 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else if *message.data.offset(i as isize) as ::core::ffi::c_int == NUL {
+            } else if *message.data().offset(i as isize) as ::core::ffi::c_int == NUL {
                 // `kv_push`, whose growth step c2rust expanded inline.
                 Kvec::new(
                     &mut (*line_buf).size,
@@ -86,7 +86,7 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
                     &mut (*line_buf).capacity,
                     &mut (*line_buf).items,
                 )
-                .push(*message.data.offset(i as isize));
+                .push(*message.data().offset(i as isize));
             }
             i = i.wrapping_add(1);
         }
@@ -184,10 +184,10 @@ pub unsafe fn nvim_notify(
         array_add(&mut args, Object::integer(log_level));
         array_add(&mut args, Object::dict(opts));
         return nlua_exec(
-            String_0 {
-                data: c"return vim.notify(...)".as_ptr() as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
-            },
+            String_0::from_raw_parts(
+                c"return vim.notify(...)".as_ptr() as *mut ::core::ffi::c_char,
+                ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
+            ),
             ::core::ptr::null::<::core::ffi::c_char>(),
             args,
             kRetObject,

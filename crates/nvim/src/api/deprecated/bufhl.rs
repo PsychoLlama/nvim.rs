@@ -26,10 +26,10 @@ pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
 unsafe fn src2ns(mut src_id: *mut Integer) -> uint32_t {
     unsafe {
         if *src_id == 0 as Integer {
-            *src_id = nvim_create_namespace(String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0 as size_t,
-            });
+            *src_id = nvim_create_namespace(String_0::from_raw_parts(
+                ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                0 as size_t,
+            ));
         }
         if *src_id < 0 as Integer {
             return ((1 as ::core::ffi::c_int as uint32_t) << 31 as ::core::ffi::c_int)
@@ -91,8 +91,8 @@ pub unsafe fn nvim_buf_add_highlight(
             return ns_id.reported(error);
         }
         let mut hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if hl_group.size > 0 as size_t {
-            hl_id = syn_check_group(hl_group.data, hl_group.size);
+        if hl_group.len() > 0 as size_t {
+            hl_id = syn_check_group(hl_group.data(), hl_group.len());
         } else {
             return ns_id.reported(error);
         }

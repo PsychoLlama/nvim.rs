@@ -76,9 +76,9 @@ pub(crate) unsafe fn ins_compl_add(
             let mut m = compl_first_match.get();
             loop {
                 if !match_at_original_text(m)
-                    && strncmp((*m).cp_str.data, str, len as size_t) == 0
-                    && ((*m).cp_str.size as c_int <= len
-                        || *(*m).cp_str.data.offset(len as isize) as c_int == NUL)
+                    && strncmp((*m).cp_str.data(), str, len as size_t) == 0
+                    && ((*m).cp_str.len() as c_int <= len
+                        || *(*m).cp_str.data().offset(len as isize) as c_int == NUL)
                 {
                     if is_nearest_active() && score > 0 && score < (*m).cp_score {
                         (*m).cp_score = score;
@@ -221,9 +221,9 @@ pub(crate) unsafe fn ins_compl_equal(match_0: *mut compl_T, str: *mut c_char, le
             return true;
         }
         if (*match_0).cp_flags & CP_ICASE != 0 {
-            return strncasecmp((*match_0).cp_str.data, str, len) == 0;
+            return strncasecmp((*match_0).cp_str.data(), str, len) == 0;
         }
-        strncmp((*match_0).cp_str.data, str, len) == 0
+        strncmp((*match_0).cp_str.data(), str, len) == 0
     }
 }
 
@@ -231,10 +231,10 @@ pub(crate) unsafe fn ins_compl_equal(match_0: *mut compl_T, str: *mut c_char, le
 /// put that prefix in the buffer.
 pub(crate) unsafe fn ins_compl_longest_match(match_0: *mut compl_T) {
     unsafe {
-        if compl_leader.get().data.is_null() {
+        if compl_leader.get().data().is_null() {
             compl_leader.set(copy_string((*match_0).cp_str, ptr::null_mut::<Arena>()));
             let had_match = (*curwin.get()).w_cursor.col > compl_col.get();
-            ins_compl_longest_insert(compl_leader.get().data);
+            ins_compl_longest_insert(compl_leader.get().data());
             if !had_match {
                 ins_compl_delete(false);
             }
@@ -242,8 +242,8 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: *mut compl_T) {
             return;
         }
 
-        let mut p = compl_leader.get().data;
-        let mut s = (*match_0).cp_str.data;
+        let mut p = compl_leader.get().data();
+        let mut s = (*match_0).cp_str.data();
         while *p as c_int != NUL {
             let c1 = utf_ptr2char(p);
             let c2 = utf_ptr2char(s);
@@ -262,12 +262,12 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: *mut compl_T) {
         if *p as c_int != NUL {
             *p = NUL as c_char;
             let leader = compl_leader.get();
-            compl_leader.set(String_0 {
-                data: leader.data,
-                size: p.offset_from(leader.data) as size_t,
-            });
+            compl_leader.set(String_0::from_raw_parts(
+                leader.data(),
+                p.offset_from(leader.data()) as size_t,
+            ));
             let had_match = (*curwin.get()).w_cursor.col > compl_col.get();
-            ins_compl_longest_insert(compl_leader.get().data);
+            ins_compl_longest_insert(compl_leader.get().data());
             if !had_match {
                 ins_compl_delete(false);
             }
@@ -414,7 +414,7 @@ pub(crate) unsafe fn set_fuzzy_score() {
 
         // Determine the pattern to match against.
         let leader = compl_leader.get();
-        let use_leader = !leader.data.is_null() && leader.size > 0;
+        let use_leader = !leader.data().is_null() && leader.len() > 0;
         let mut pattern: *mut c_char = ptr::null_mut();
         if use_leader {
             // Clear the leader cache once before the loop; the pattern is
@@ -422,18 +422,18 @@ pub(crate) unsafe fn set_fuzzy_score() {
             get_leader_for_startcol(ptr::null_mut(), true);
         } else {
             let orig = compl_orig_text.get();
-            if orig.data.is_null() || orig.size == 0 {
+            if orig.data().is_null() || orig.len() == 0 {
                 return;
             }
-            pattern = orig.data;
+            pattern = orig.data();
         }
 
         let mut comp = first;
         loop {
             if use_leader {
-                pattern = (*get_leader_for_startcol(comp, true)).data;
+                pattern = (*get_leader_for_startcol(comp, true)).data();
             }
-            (*comp).cp_score = fuzzy_match_str((*comp).cp_str.data, pattern);
+            (*comp).cp_score = fuzzy_match_str((*comp).cp_str.data(), pattern);
             comp = (*comp).cp_next;
             if comp.is_null() || is_first_match(comp) {
                 break;
@@ -490,8 +490,8 @@ pub(crate) unsafe fn sort_compl_match_list(compare: MergeSortCompareFunc) {
 /// Free one match and everything hanging off it.
 pub(crate) unsafe fn ins_compl_item_free(match_0: *mut compl_T) {
     unsafe {
-        xfree((*match_0).cp_str.data.cast::<c_void>());
-        (*match_0).cp_str = STRING_INIT;
+        xfree((*match_0).cp_str.data().cast::<c_void>());
+        (*match_0).cp_str = String_0::NULL;
         if (*match_0).cp_flags & CP_FREE_FNAME != 0 {
             xfree((*match_0).cp_fname.cast::<c_void>());
         }

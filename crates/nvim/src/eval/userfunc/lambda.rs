@@ -59,14 +59,14 @@ unsafe fn get_lambda_name() -> String_0 {
             c"<lambda>%d".as_ptr(),
             lambda_no.get(),
         );
-        String_0 {
-            data: buf,
-            size: if n < 1 {
+        String_0::from_raw_parts(
+            buf,
+            if n < 1 {
                 0
             } else {
                 n.min(LAMBDA_NAME_LEN as c_int - 1) as size_t
             },
-        }
+        )
     }
 }
 
@@ -191,7 +191,7 @@ pub unsafe fn get_lambda_tv(
             if evaluate {
                 let mut flags = 0;
                 let name = get_lambda_name();
-                let fp = alloc_ufunc(name.data, name.size);
+                let fp = alloc_ufunc(name.data(), name.len());
                 let pt = xcalloc(1, size_of::<partial_T>()) as *mut partial_T;
 
                 let mut newlines = GARRAY_EMPTY;
@@ -358,7 +358,7 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
 pub unsafe fn register_luafunc(ref_0: LuaRef) -> *mut c_char {
     unsafe {
         let name = get_lambda_name();
-        let fp = alloc_ufunc(name.data, name.size);
+        let fp = alloc_ufunc(name.data(), name.len());
         (*fp).uf_refcount = 1;
         (*fp).uf_varargs = 1;
         (*fp).uf_flags = FC_LUAREF;

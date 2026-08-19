@@ -40,15 +40,14 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, OptionSetFlags, buf_T, optset_T, size_t,
-    uint8_t, uint32_t, vimoption_T, win_T,
+    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, optset_T,
+    size_t, uint8_t, uint32_t, vimoption_T, win_T,
 };
 
 use super::{
-    HLATTRS_INIT, NO_SCREEN, NULL_STRING, didset_options_sctx, didset_window_options, get_option,
-    get_varp, kFillchars, kListchars, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll,
-    kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin, kOptValTypeString,
-    option_has_type,
+    HLATTRS_INIT, NO_SCREEN, didset_options_sctx, didset_window_options, get_option, get_varp,
+    kFillchars, kListchars, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf,
+    kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin, kOptValTypeString, option_has_type,
 };
 
 /// What 'binary' overrode, so that switching it off again restores the
@@ -331,7 +330,7 @@ pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
         let mut ns_hl: c_int = 0;
         if !wp.is_null() {
             if (*wp).w_ns_hl_winhl == 0 {
-                (*wp).w_ns_hl_winhl = nvim_create_namespace(NULL_STRING) as c_int;
+                (*wp).w_ns_hl_winhl = nvim_create_namespace(String_0::NULL) as c_int;
             } else {
                 // Reusing the namespace: bump the generation so attributes
                 // cached against it are re-resolved.

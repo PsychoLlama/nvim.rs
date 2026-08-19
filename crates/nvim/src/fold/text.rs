@@ -90,7 +90,7 @@ pub unsafe fn get_foldtext(
                 }
                 api_clear_error(&raw mut err);
             } else if obj.type_0 as c_uint == kObjectTypeString as c_int as c_uint {
-                text = obj.data.string.data;
+                text = obj.data.string.data();
                 obj = object {
                     type_0: kObjectTypeNil,
                     data: object_data { boolean: false },

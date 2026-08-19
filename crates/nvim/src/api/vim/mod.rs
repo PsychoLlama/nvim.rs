@@ -186,10 +186,6 @@ pub type C2Rust_Unnamed_40 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-pub const STRING_INIT: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-};
 /// The top bit of a channel id: an API call made by the editor itself
 /// rather than by a client.
 pub const INTERNAL_CALL_MASK: uint64_t = 1 << (::core::mem::size_of::<uint64_t>() * 8 - 1);
@@ -213,13 +209,12 @@ pub const KEYSET_OPTIDX_redraw__win: ::core::ffi::c_int = 2 as ::core::ffi::c_in
 pub const KEYSET_OPTIDX_redraw__flush: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__range: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__valid: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const NULL_STRING: String_0 = STRING_INIT;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CONTEXT_INIT: Context = Context {
-    regs: STRING_INIT,
-    jumps: STRING_INIT,
-    bufs: STRING_INIT,
-    gvars: STRING_INIT,
+    regs: String_0::NULL,
+    jumps: String_0::NULL,
+    bufs: String_0::NULL,
+    gvars: String_0::NULL,
     funcs: Array {
         size: 0 as size_t,
         capacity: 0 as size_t,

@@ -561,7 +561,7 @@ pub(crate) unsafe fn get_next_default_completion(
                     (*st).ins_buf,
                     (*st).cur_match_pos,
                     compl_direction.get(),
-                    (*compl_pattern.ptr()).data,
+                    (*compl_pattern.ptr()).data(),
                 );
             } else {
                 found_new_match = searchit(
@@ -570,8 +570,8 @@ pub(crate) unsafe fn get_next_default_completion(
                     (*st).cur_match_pos,
                     ptr::null_mut(),
                     compl_direction.get(),
-                    (*compl_pattern.ptr()).data,
-                    (*compl_pattern.ptr()).size,
+                    (*compl_pattern.ptr()).data(),
+                    (*compl_pattern.ptr()).len(),
                     1,
                     SEARCH_KEEP + SEARCH_NFMSG,
                     RE_LAST,
@@ -679,11 +679,11 @@ pub(crate) unsafe fn get_register_completion() {
         // or it starts with it.
         let starts_with_orig = |s: *mut c_char| {
             let orig = *compl_orig_text.ptr();
-            orig.data.is_null()
+            orig.data().is_null()
                 || if p_ic.get() != 0 {
-                    strncasecmp(s, orig.data, orig.size) == 0
+                    strncasecmp(s, orig.data(), orig.len()) == 0
                 } else {
-                    strncmp(s, orig.data, orig.size) == 0
+                    strncmp(s, orig.data(), orig.len()) == 0
                 }
         };
 
@@ -705,7 +705,7 @@ pub(crate) unsafe fn get_register_completion() {
             }
 
             for j in 0..(*reg).y_size as isize {
-                let str = (*(*reg).y_array.offset(j)).data;
+                let str = (*(*reg).y_array.offset(j)).data();
                 if str.is_null() {
                     continue;
                 }

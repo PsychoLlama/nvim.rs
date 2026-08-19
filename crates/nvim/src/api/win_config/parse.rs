@@ -15,10 +15,10 @@ use crate::types::NUL;
 
 unsafe fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) -> bool {
     unsafe {
-        if anchor.size == 0 as size_t {
+        if anchor.len() == 0 as size_t {
             *out = 0 as ::core::ffi::c_int;
         }
-        let mut str: *mut ::core::ffi::c_char = anchor.data;
+        let mut str: *mut ::core::ffi::c_char = anchor.data();
         if striequal(str, c"NW".as_ptr()) {
             *out = 0 as ::core::ffi::c_int as FloatAnchor;
         } else if striequal(str, c"NE".as_ptr()) {
@@ -37,7 +37,7 @@ unsafe fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) ->
 
 unsafe fn parse_float_relative(mut relative: String_0, mut out: *mut FloatRelative) -> bool {
     unsafe {
-        let mut str: *mut ::core::ffi::c_char = relative.data;
+        let mut str: *mut ::core::ffi::c_char = relative.data();
         if striequal(str, c"editor".as_ptr()) {
             *out = kFloatRelativeEditor;
         } else if striequal(str, c"win".as_ptr()) {
@@ -59,7 +59,7 @@ unsafe fn parse_float_relative(mut relative: String_0, mut out: *mut FloatRelati
 
 unsafe fn parse_config_split(mut split: String_0, mut out: *mut WinSplit) -> bool {
     unsafe {
-        let mut str: *mut ::core::ffi::c_char = split.data;
+        let mut str: *mut ::core::ffi::c_char = split.data();
         if striequal(str, c"left".as_ptr()) {
             *out = kWinSplitLeft;
         } else if striequal(str, c"right".as_ptr()) {
@@ -148,7 +148,7 @@ unsafe fn parse_bordertext(
         if bordertext.type_0 as ::core::ffi::c_uint
             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            if bordertext.data.string.size == 0 as size_t {
+            if bordertext.data.string.len() == 0 as size_t {
                 *is_present = false;
                 return;
             }
@@ -162,10 +162,10 @@ unsafe fn parse_bordertext(
                 &mut (*chunks).items,
             )
             .push(VirtTextChunk {
-                text: xstrdup(bordertext.data.string.data),
+                text: xstrdup(bordertext.data.string.data()),
                 hl_id: -1 as ::core::ffi::c_int,
             });
-            *width = mb_string2cells(bordertext.data.string.data) as ::core::ffi::c_int;
+            *width = mb_string2cells(bordertext.data.string.data()) as ::core::ffi::c_int;
             *is_present = true;
             return;
         }
@@ -193,13 +193,13 @@ unsafe fn parse_bordertext_pos(
             }
             _ => {}
         }
-        if bordertext_pos.size == 0 as size_t {
+        if bordertext_pos.len() == 0 as size_t {
             if wp.is_null() {
                 *align = kAlignLeft;
             }
             return true;
         }
-        let mut pos: *mut ::core::ffi::c_char = bordertext_pos.data;
+        let mut pos: *mut ::core::ffi::c_char = bordertext_pos.data();
         if strequal(pos, c"left".as_ptr()) {
             *align = kAlignLeft;
         } else if strequal(pos, c"center".as_ptr()) {
@@ -239,17 +239,17 @@ pub(crate) unsafe fn parse_win_config(
         let mut relative_is_win: bool = false;
         let mut is_split: bool = false;
         '_fail: {
-            if (*config).relative.size > 0 as size_t {
+            if (*config).relative.len() > 0 as size_t {
                 if !parse_float_relative((*config).relative, &raw mut (*fconfig).relative) {
                     api_err_invalid(
                         err,
                         c"relative".as_ptr(),
-                        (*config).relative.data,
+                        (*config).relative.data(),
                         0 as int64_t,
                         true,
                     );
                     break '_fail;
-                } else if (*config).relative.size > 0 as size_t
+                } else if (*config).relative.len() > 0 as size_t
                     && !(has_key((*config).is_set__win_config_, 2 as ::core::ffi::c_int)
                         && has_key((*config).is_set__win_config_, 1 as ::core::ffi::c_int))
                     && !(has_key((*config).is_set__win_config_, 12 as ::core::ffi::c_int))
@@ -301,7 +301,7 @@ pub(crate) unsafe fn parse_win_config(
                         api_err_invalid(
                             err,
                             c"split".as_ptr(),
-                            (*config).split.data,
+                            (*config).split.data(),
                             0 as int64_t,
                             true,
                         );
@@ -316,7 +316,7 @@ pub(crate) unsafe fn parse_win_config(
                         api_err_invalid(
                             err,
                             c"anchor".as_ptr(),
-                            (*config).anchor.data,
+                            (*config).anchor.data(),
                             0 as int64_t,
                             true,
                         );
@@ -583,19 +583,19 @@ pub(crate) unsafe fn parse_win_config(
                     ) {
                         if *(*config)
                             .style
-                            .data
+                            .data()
                             .offset(0 as ::core::ffi::c_int as isize)
                             as ::core::ffi::c_int
                             == NUL
                         {
                             (*fconfig).style = kWinStyleUnused;
-                        } else if striequal((*config).style.data, c"minimal".as_ptr()) {
+                        } else if striequal((*config).style.data(), c"minimal".as_ptr()) {
                             (*fconfig).style = kWinStyleMinimal;
                         } else if true {
                             api_err_invalid(
                                 err,
                                 c"style".as_ptr(),
-                                (*config).style.data,
+                                (*config).style.data(),
                                 0 as int64_t,
                                 true,
                             );

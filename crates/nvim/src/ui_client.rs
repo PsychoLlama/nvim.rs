@@ -266,7 +266,7 @@ unsafe fn api_version() -> Dict {
         assert!(metadata.size > 0, "API metadata is empty");
         for i in 0..metadata.size {
             let entry = *metadata.items.add(i);
-            if strequal(entry.key.data, c"version".as_ptr()) {
+            if strequal(entry.key.data(), c"version".as_ptr()) {
                 return entry.value.data.dict;
             }
         }
@@ -777,7 +777,7 @@ unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
         // A URL is not an attribute the terminal understands; the TUI
         // interns it and the entry keeps the index.
         if dict.is_set__highlight_ & (1 << KEYSET_OPTIDX_highlight__url) != 0 {
-            attrs.url = tui_add_url(&mut *tui.get(), dict.url.data);
+            attrs.url = tui_add_url(&mut *tui.get(), dict.url.data());
         }
         attrs
     }
@@ -810,7 +810,7 @@ pub unsafe fn ui_client_event_connect(args: Array) {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
     let address = unsafe { address.data.string };
-    let server_addr = unsafe { xmemdupz(address.data.cast(), address.size).cast::<c_char>() };
+    let server_addr = unsafe { xmemdupz(address.data().cast(), address.len()).cast::<c_char>() };
     unsafe {
         multiqueue_put_event(
             (*main_loop.ptr()).fast_events,
@@ -920,7 +920,7 @@ pub unsafe fn ui_client_attach_to_restarted_server() {
         match address {
             None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
             Some(address) => {
-                let listen_addr = address.data.string.data;
+                let listen_addr = address.data.string.data();
                 let mut err = c"".as_ptr();
                 let chan_id = channel_connect(
                     socket_address_is_tcp(CStr::from_ptr(listen_addr)),

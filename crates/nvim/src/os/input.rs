@@ -382,8 +382,8 @@ pub unsafe fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
     // and no `did_simplify` answer is wanted: simplification happens later,
     // in the typeahead.
     unsafe {
-        let mut ptr = keys.data as *const c_char;
-        let end = ptr.add(keys.size);
+        let mut ptr = keys.data() as *const c_char;
+        let end = ptr.add(keys.len());
 
         while input_space() >= MAX_TRANS_SPECIAL && ptr < end {
             let mut buf = [0u8; MAX_TRANS_SPECIAL];
@@ -432,7 +432,7 @@ pub unsafe fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
             ptr = ptr.add(1);
         }
 
-        let consumed = ptr.offset_from(keys.data as *const c_char) as size_t;
+        let consumed = ptr.offset_from(keys.data() as *const c_char) as size_t;
         process_ctrl_c();
         consumed
     }

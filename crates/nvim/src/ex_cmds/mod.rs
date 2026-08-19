@@ -272,11 +272,11 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
             OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
-                    string: String_0 {
-                        data: c"0".as_ptr() as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
+                    string: String_0::from_raw_parts(
+                        c"0".as_ptr() as *mut ::core::ffi::c_char,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                             .wrapping_sub(1 as size_t),
-                    },
+                    ),
                 },
             },
             OptionSetFlags::NONE,

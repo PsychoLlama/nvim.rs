@@ -77,11 +77,6 @@ const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
-const STRING_INIT: String_0 = String_0 {
-    data: ptr::null_mut(),
-    size: 0,
-};
-
 /// The `Object` that says "no value": upstream's `NIL`.
 pub(crate) const NIL: Object = object {
     type_0: kObjectTypeNil,
@@ -399,7 +394,7 @@ pub(crate) unsafe fn set_mark(
             col: col as colnr_T,
             coladd: 0,
         };
-        let mark = *name.data as c_int;
+        let mark = *name.data() as c_int;
         let res = setmark_pos(
             mark,
             &raw mut pos,

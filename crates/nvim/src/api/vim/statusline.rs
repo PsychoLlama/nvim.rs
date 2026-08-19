@@ -60,12 +60,12 @@ pub unsafe fn nvim_eval_statusline(
     // `%!` is an expression producing the real format, so there is nothing
     // to check until it has been evaluated.
     // SAFETY: `str` holds `size` readable bytes.
-    let named_expr = str.size >= 2
-        && unsafe { *str.data == b'%' as c_char && *str.data.add(1) == b'!' as c_char };
+    let named_expr = str.len() >= 2
+        && unsafe { *str.data() == b'%' as c_char && *str.data().add(1) == b'!' as c_char };
     if !named_expr {
         // SAFETY: `str.data` is NUL-terminated, and the message is the
         // checker's own static text.
-        let errmsg = unsafe { check_stl_option(str.data) };
+        let errmsg = unsafe { check_stl_option(str.data()) };
         if !errmsg.is_null() {
             // SAFETY: the caller's error slot.
             unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), errmsg) };
@@ -104,7 +104,7 @@ pub unsafe fn nvim_eval_statusline(
         // The API's own string: nothing can free it under the expander, so
         // unlike the drawing side this needs no private copy.
         // SAFETY: a checked API string.
-        fmt: unsafe { Fmt::borrowed(str.data) },
+        fmt: unsafe { Fmt::borrowed(str.data()) },
         opt: (kOptInvalid, OptionSetFlags::NONE),
         fillchar: ctx.fillchar,
         maxwidth: ctx.maxwidth,
@@ -160,8 +160,8 @@ impl Context {
             // A fill character is one whole character, however wide.
             // SAFETY: a checked API string.
             let single = unsafe {
-                *opts.fillchar.data != 0
-                    && utfc_ptr2len(opts.fillchar.data) as size_t == opts.fillchar.size
+                *opts.fillchar.data() != 0
+                    && utfc_ptr2len(opts.fillchar.data()) as size_t == opts.fillchar.len()
             };
             if !single {
                 // SAFETY: the caller's error slot.
@@ -177,7 +177,7 @@ impl Context {
             }
             let mut c = 0;
             // SAFETY: as above. TODO(bfredl): actually check c is single width.
-            fillchar = unsafe { utfc_ptr2schar(opts.fillchar.data, &raw mut c) };
+            fillchar = unsafe { utfc_ptr2schar(opts.fillchar.data(), &raw mut c) };
         }
 
         let mut use_bools = c_int::from(opts.use_winbar) + c_int::from(opts.use_tabline);
@@ -451,7 +451,7 @@ pub unsafe fn nvim__complete_set(
     }
     if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {
         // SAFETY: a checked API string; the answer is null or a live window.
-        let win = unsafe { win_opt(pum_set_info(index as c_int, opts.info.data)) };
+        let win = unsafe { win_opt(pum_set_info(index as c_int, opts.info.data())) };
         if let Some(win) = win {
             put(&mut rv, c"winid", Object::window(win.handle));
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));

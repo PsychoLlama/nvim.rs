@@ -205,9 +205,8 @@ fn pack(object: &mut Object) -> Vec<u8> {
     let mut buffer: PackerBuffer = packer_string_buffer();
     unsafe { mpack_object(object, &mut buffer) };
     let packed: String_0 = packer_take_string(&buffer);
-    let bytes =
-        unsafe { std::slice::from_raw_parts(packed.data.cast::<u8>(), packed.size) }.to_vec();
-    unsafe { xfree(packed.data.cast()) };
+    let bytes = unsafe { packed.as_bytes() }.to_vec();
+    unsafe { xfree(packed.data().cast()) };
     bytes
 }
 
@@ -219,10 +218,7 @@ fn string(text: &mut [u8]) -> Object {
     scalar(
         kObjectTypeString,
         object_data {
-            string: String_0 {
-                data: text.as_mut_ptr().cast::<c_char>(),
-                size: text.len(),
-            },
+            string: String_0::from_raw_parts(text.as_mut_ptr().cast::<c_char>(), text.len()),
         },
     )
 }
@@ -319,10 +315,7 @@ fn packs_a_nested_object() {
     // { "a": [1, 2], "b": { "c": true } }
     let mut inner_key = *b"c";
     let mut inner = [KeyValuePair {
-        key: String_0 {
-            data: inner_key.as_mut_ptr().cast::<c_char>(),
-            size: 1,
-        },
+        key: String_0::from_raw_parts(inner_key.as_mut_ptr().cast::<c_char>(), 1),
         value: scalar(kObjectTypeBoolean, object_data { boolean: true }),
     }];
     let mut list = [
@@ -333,17 +326,11 @@ fn packs_a_nested_object() {
     let mut b = *b"b";
     let mut entries = [
         KeyValuePair {
-            key: String_0 {
-                data: a.as_mut_ptr().cast::<c_char>(),
-                size: 1,
-            },
+            key: String_0::from_raw_parts(a.as_mut_ptr().cast::<c_char>(), 1),
             value: array(&mut list),
         },
         KeyValuePair {
-            key: String_0 {
-                data: b.as_mut_ptr().cast::<c_char>(),
-                size: 1,
-            },
+            key: String_0::from_raw_parts(b.as_mut_ptr().cast::<c_char>(), 1),
             value: dict(&mut inner),
         },
     ];

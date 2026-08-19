@@ -121,20 +121,16 @@ impl MapKey for String_0 {
     fn map_hash(&self) -> uint32_t {
         // An empty `String` carries a null `data` — the C's fold never ran a
         // single iteration for it, so it never noticed.
-        if self.size == 0 {
+        if self.len() == 0 {
             return 0;
         }
-        fold_bytes(unsafe { slice::from_raw_parts(self.data.cast::<u8>(), self.size) })
+        fold_bytes(unsafe { self.as_bytes() })
     }
     fn map_eq(&self, other: &Self) -> bool {
         // A zero-length String may carry a null `data`, so the length check
         // has to come first — upstream's `memcmp` never sees a null.
-        self.size == other.size
-            && (self.size == 0
-                || unsafe {
-                    slice::from_raw_parts(self.data.cast::<u8>(), self.size)
-                        == slice::from_raw_parts(other.data.cast::<u8>(), other.size)
-                })
+        self.len() == other.len()
+            && (self.len() == 0 || unsafe { self.as_bytes() == other.as_bytes() })
     }
 }
 

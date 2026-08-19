@@ -423,10 +423,6 @@ unsafe fn all_windows() -> impl Iterator<Item = *mut win_T> {
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub const NULL_STRING: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-};
 pub const KEYSET_OPTIDX__shada_search_pat__sp: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__c: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__f: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -512,10 +508,10 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
                 highlighted: false,
                 search_backward: false,
                 offset: 0 as Integer,
-                pat: String_0 {
-                    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0 as size_t,
-                },
+                pat: String_0::from_raw_parts(
+                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                    0 as size_t,
+                ),
             },
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),

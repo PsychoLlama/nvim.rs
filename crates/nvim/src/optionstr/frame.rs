@@ -67,7 +67,7 @@ pub(crate) unsafe fn local_window(
 /// string (every option in this module is one).
 pub(crate) unsafe fn old_value(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, and the union's string arm.
-    unsafe { (*args).os_oldval.string.data }
+    unsafe { (*args).os_oldval.string.data() }
 }
 
 /// The error buffer and its size, as the message helpers take them.

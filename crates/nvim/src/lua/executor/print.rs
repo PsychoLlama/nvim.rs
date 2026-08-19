@@ -52,10 +52,10 @@ const MSG_GROWSIZE: c_int = 80;
 unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
     unsafe {
         let chunk = HlMessageChunk {
-            text: String_0 {
-                data: (*argv.add(0)).cast::<c_char>(),
-                size: ((*argv.add(1)).expose_provenance() as intptr_t as size_t).wrapping_sub(1),
-            },
+            text: String_0::from_raw_parts(
+                (*argv.add(0)).cast::<c_char>(),
+                ((*argv.add(1)).expose_provenance() as intptr_t as size_t).wrapping_sub(1),
+            ),
             hl_id: 0,
         };
         // One chunk, so one allocation: upstream's `kv_push` onto an empty

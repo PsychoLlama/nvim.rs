@@ -199,7 +199,7 @@ unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char 
         if item.type_0 != kObjectTypeString {
             return ptr::null_mut();
         }
-        item.data.string.data
+        item.data.string.data()
     }
 }
 

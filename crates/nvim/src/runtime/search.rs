@@ -639,7 +639,7 @@ unsafe fn runtime_get_named_common(
                     buf.len(),
                     c"%s/%s".as_ptr(),
                     (*item).path,
-                    pat_item.data.string.data,
+                    pat_item.data.string.data(),
                 ) as size_t;
                 if size >= buf.len() || !os_file_is_readable(buf.as_mut_ptr()) {
                     continue;

@@ -97,17 +97,14 @@ pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: linenr_T) -> bool {
         } else {
             strlen_of(command) + 3
         };
-        let mut val = String_0 {
-            data: xmalloc(valsize) as *mut c_char,
-            size: 0,
-        };
-        val.size = if command.is_null() {
-            vim_snprintf_safelen(val.data, valsize, c"%ldG".as_ptr(), newlnum as i64)
+        let mut val = String_0::from_raw_parts(xmalloc(valsize) as *mut c_char, 0);
+        val.set_len(if command.is_null() {
+            vim_snprintf_safelen(val.data(), valsize, c"%ldG".as_ptr(), newlnum as i64)
         } else {
-            vim_snprintf_safelen(val.data, valsize, c":%s\r".as_ptr(), command)
-        };
-        set_vim_var_string(Vv::Swapcommand, val.data, val.size as ptrdiff_t);
-        xfree(val.data.cast());
+            vim_snprintf_safelen(val.data(), valsize, c":%s\r".as_ptr(), command)
+        });
+        set_vim_var_string(Vv::Swapcommand, val.data(), val.len() as ptrdiff_t);
+        xfree(val.data().cast());
     }
     true
 }

@@ -44,7 +44,7 @@ unsafe fn yank_copy_line(
         let size = (*bd).startspaces + (*bd).endspaces + (*bd).textlen;
         debug_assert!(size >= 0);
         let start = xmallocz(size as size_t) as *mut c_char;
-        (*(*reg).y_array.add(y_idx)).data = start;
+        (*(*reg).y_array.add(y_idx)).set_data(start);
 
         let mut pnew = start;
         memset(
@@ -72,7 +72,7 @@ unsafe fn yank_copy_line(
             }
         }
         *pnew = NUL as c_char;
-        (*(*reg).y_array.add(y_idx)).size = pnew.offset_from(start) as size_t;
+        (*(*reg).y_array.add(y_idx)).set_len(pnew.offset_from(start) as size_t);
     }
 }
 
@@ -110,20 +110,17 @@ unsafe fn append_to_register(curr: *mut yankreg_T, reg: *mut yankreg_T, yank_typ
             let first_new = *(*reg).y_array;
             j = j.wrapping_sub(1);
             let last_old = &mut *(*curr).y_array.add(j);
-            let joined_size = last_old.size.wrapping_add(first_new.size);
+            let joined_size = last_old.len().wrapping_add(first_new.len());
             let pnew = xmalloc(joined_size.wrapping_add(1)) as *mut c_char;
-            strcpy(pnew, last_old.data);
-            strcpy(pnew.add(last_old.size), first_new.data);
-            xfree(last_old.data as *mut c_void);
-            *last_old = String_0 {
-                data: pnew,
-                size: joined_size,
-            };
+            strcpy(pnew, last_old.data());
+            strcpy(pnew.add(last_old.len()), first_new.data());
+            xfree(last_old.data() as *mut c_void);
+            *last_old = String_0::from_raw_parts(pnew, joined_size);
             j = j.wrapping_add(1);
 
-            xfree(first_new.data as *mut c_void);
-            (*(*reg).y_array).data = ::core::ptr::null_mut();
-            (*(*reg).y_array).size = 0;
+            xfree(first_new.data() as *mut c_void);
+            (*(*reg).y_array).set_data(::core::ptr::null_mut());
+            (*(*reg).y_array).set_len(0);
             y_idx = 1;
         }
 
@@ -383,7 +380,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
         let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
         for i in 0..(*reg).y_size {
             let line = *(*reg).y_array.add(i);
-            tv_list_append_string(list, line.data, line.size as c_int as ssize_t);
+            tv_list_append_string(list, line.data(), line.len() as c_int as ssize_t);
         }
         tv_list_set_lock(list, VAR_FIXED);
         tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list);

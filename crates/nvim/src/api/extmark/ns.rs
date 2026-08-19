@@ -104,7 +104,7 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
         }
         id = next_namespace_id.get();
         next_namespace_id.set(id + 1);
-        if name.size > 0 as size_t {
+        if name.len() > 0 as size_t {
             let mut name_alloc: String_0 = copy_string(name, ::core::ptr::null_mut::<Arena>());
             map_put_String_int(namespace_ids.ptr(), name_alloc, id as ::core::ffi::c_int);
         }
@@ -115,10 +115,7 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
 pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> Dict {
     unsafe {
         let mut retval: Dict = arena_dict(arena, (*namespace_ids.ptr()).set.h.size as size_t);
-        let mut name: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        };
+        let mut name: String_0 = String_0::NULL;
         let mut id: handle_T = 0;
         let mut __i: uint32_t = 0;
         __i = 0 as uint32_t;
@@ -127,7 +124,7 @@ pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> Dict {
             id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
             dict_put_str(
                 &mut retval,
-                cstr_as_string(name.data),
+                cstr_as_string(name.data()),
                 Object::integer(id as Integer),
             );
             __i = __i.wrapping_add(1);
@@ -141,18 +138,15 @@ pub unsafe fn describe_ns(
     mut unknown: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        let mut name: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        };
+        let mut name: String_0 = String_0::NULL;
         let mut id: handle_T = 0;
         let mut __i: uint32_t = 0;
         __i = 0 as uint32_t;
         while __i < (*namespace_ids.ptr()).set.h.n_keys {
             name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
             id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
-            if id == ns_id && name.size != 0 {
-                return name.data;
+            if id == ns_id && name.len() != 0 {
+                return name.data();
             }
             __i = __i.wrapping_add(1);
         }

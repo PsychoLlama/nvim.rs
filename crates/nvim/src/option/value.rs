@@ -87,7 +87,7 @@ pub fn optval_free(value: OptVal) {
     }
     // SAFETY: the tag says the payload is the string field.
     let string = unsafe { value.data.string };
-    if string.data != empty_string_option.ptr().cast::<c_char>() {
+    if string.data() != empty_string_option.ptr().cast::<c_char>() {
         // SAFETY: a string value owns its bytes, and it is not the shared
         // empty string.
         unsafe { api_free_string(string) };
@@ -122,12 +122,12 @@ pub fn optval_equal(o1: OptVal, o2: OptVal) -> bool {
             kOptValTypeBoolean => o1.data.boolean == o2.data.boolean,
             kOptValTypeNumber => o1.data.number == o2.data.number,
             kOptValTypeString => {
-                o1.data.string.size == o2.data.string.size
-                    && (o1.data.string.data == o2.data.string.data
+                o1.data.string.len() == o2.data.string.len()
+                    && (o1.data.string.data() == o2.data.string.data()
                         || strnequal(
-                            o1.data.string.data,
-                            o2.data.string.data,
-                            o1.data.string.size,
+                            o1.data.string.data(),
+                            o2.data.string.data(),
+                            o1.data.string.len(),
                         ))
             }
             _ => unreachable!("option value type {}", o1.type_0),
@@ -202,7 +202,7 @@ pub(crate) unsafe fn set_option_varp(
         match value.type_0 {
             kOptValTypeBoolean => *varp.cast::<c_int>() = value.data.boolean,
             kOptValTypeNumber => *varp.cast::<OptInt>() = value.data.number,
-            kOptValTypeString => *varp.cast::<*mut c_char>() = value.data.string.data,
+            kOptValTypeString => *varp.cast::<*mut c_char>() = value.data.string.data(),
             _ => unreachable!("a nil value has no variable to write it to"),
         }
     }
@@ -228,9 +228,9 @@ pub(crate) fn optval_to_cstr(value: OptVal) -> *mut c_char {
             }
             kOptValTypeString => {
                 // Two quotes and the terminator.
-                let len = value.data.string.size.wrapping_add(3);
+                let len = value.data.string.len().wrapping_add(3);
                 let buf = xmalloc(len).cast::<c_char>();
-                snprintf(buf, len, c"\"%s\"".as_ptr(), value.data.string.data);
+                snprintf(buf, len, c"\"%s\"".as_ptr(), value.data.string.data());
                 buf
             }
             _ => unreachable!("option value type {}", value.type_0),
