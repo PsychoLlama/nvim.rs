@@ -13,7 +13,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, NUL, OK, OptionSetFlags};
 
 /// The compound assignment operators, as they appear before the `=`.
 const OPERATORS: &CStr = c"+-*/%.";
@@ -406,7 +406,7 @@ unsafe fn ex_let_option(
 
         // Find the end of the name.
         let mut opt_idx: OptIndex = kOptAleph;
-        let mut opt_flags: c_int = 0;
+        let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
         let p = find_option_var_end(
             &raw mut arg as *mut *const c_char,
             &raw mut opt_idx,

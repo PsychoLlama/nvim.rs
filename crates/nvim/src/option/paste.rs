@@ -23,7 +23,7 @@ use crate::options::{
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
 use crate::optionstr::free_string_option;
-use crate::types::{OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, colnr_T, optset_T};
+use crate::types::{OptIndex, OptInt, OptionSetFlags, colnr_T, optset_T};
 
 use super::{buffers, didset_options_sctx};
 
@@ -161,7 +161,10 @@ pub unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
         }
     }
     old_p_paste.set(p_paste.get());
-    didset_options_sctx((OPT_LOCAL | OPT_GLOBAL) as c_int, &PASTE_DEP_OPTS);
+    didset_options_sctx(
+        OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL,
+        &PASTE_DEP_OPTS,
+    );
     ptr::null()
 }
 

@@ -23,7 +23,7 @@ use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::env::os_getenv_noalloc;
 use crate::runtime::{DIP_ALL, source_runtime};
 use crate::types::{
-    Array, CMD_autocmd, Error, NUL, OPT_LOCAL, Object, OptVal, OptValData, String_0, exarg_T,
+    Array, CMD_autocmd, Error, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0, exarg_T,
     kErrorTypeNone, kFalse, kNone, kObjectTypeString, kTrue, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
@@ -56,7 +56,7 @@ pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
         let mut did_aucmd = false;
         do_doautocmd(arg, false, &raw mut did_aucmd);
         if call_do_modelines && did_aucmd {
-            do_modelines(0);
+            do_modelines(OptionSetFlags::NONE);
         }
     }
 }
@@ -107,7 +107,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
                     true,
                     ptr::null_mut(),
                 );
-                do_modelines(0);
+                do_modelines(OptionSetFlags::NONE);
             }
         } else if strcmp(arg, c"off".as_ptr()) == 0 {
             if plugin || indent {
@@ -207,7 +207,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
                     string: cstr_as_string(arg),
                 },
             },
-            OPT_LOCAL as c_int,
+            OptionSetFlags::LOCAL,
         );
         if arg != (*eap).arg {
             (*curbuf.get()).b_did_filetype = false;

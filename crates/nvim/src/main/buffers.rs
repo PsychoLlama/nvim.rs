@@ -46,8 +46,9 @@ use crate::path::vim_FullName;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    IOSIZE, Integer, OptInt, OptVal, OptValData, VAR_FIXED, VV_ARGF, aentry_T, bufref_T, exarg_T,
-    handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t, win_T,
+    IOSIZE, Integer, OptInt, OptVal, OptValData, OptionSetFlags, VAR_FIXED, VV_ARGF, aentry_T,
+    bufref_T, exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
+    win_T,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -125,7 +126,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
                         string: cstr_as_string((*paramp).use_ef),
                     },
                 },
-                0,
+                OptionSetFlags::NONE,
                 SID_CARG,
             );
         }
@@ -292,7 +293,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                 // Recovery failed; there is nothing to edit.
                 getout(1);
             }
-            do_modelines(0);
+            do_modelines(OptionSetFlags::NONE);
             return;
         }
 
@@ -509,7 +510,7 @@ unsafe fn set_shortmess(value: *mut c_char) {
                     string: cstr_as_string(value),
                 },
             },
-            0,
+            OptionSetFlags::NONE,
         );
     }
 }

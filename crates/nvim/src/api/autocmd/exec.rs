@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::types::OptionSetFlags;
 
 pub unsafe fn nvim_exec_autocmds(
     event: Object,
@@ -175,7 +176,7 @@ pub unsafe fn nvim_exec_autocmds(
             event_str_index = event_str_index.wrapping_add(1);
         }
         if did_aucmd as ::core::ffi::c_int != 0 && modeline as ::core::ffi::c_int != 0 {
-            do_modelines(0 as ::core::ffi::c_int);
+            do_modelines(OptionSetFlags::NONE);
         }
     }
     ().reported(error)

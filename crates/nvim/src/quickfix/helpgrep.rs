@@ -11,7 +11,7 @@ use super::*;
 use crate::path::ExpandFlags;
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::semsg_c;
-use crate::types::{CMD_helpgrep, CMD_lhelpgrep, IOSIZE, MAXPATHL, NUL, OK};
+use crate::types::{CMD_helpgrep, CMD_lhelpgrep, IOSIZE, MAXPATHL, NUL, OK, OptionSetFlags};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -268,7 +268,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
                             string: cstr_as_string(save_cpo),
                         },
                     },
-                    0,
+                    OptionSetFlags::NONE,
                 );
             }
             free_string_option(save_cpo);

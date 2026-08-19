@@ -48,7 +48,8 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    IOSIZE, MAXPATHL, OptIndex, OptInt, buf_T, exarg_T, int64_t, linenr_T, size_t, time_t, win_T,
+    IOSIZE, MAXPATHL, OptIndex, OptInt, OptionSetFlags, buf_T, exarg_T, int64_t, linenr_T, size_t,
+    time_t, win_T,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{bufIsChanged, curbufIsChanged, undo_fmt_time};
@@ -678,7 +679,13 @@ fn build_stl(dst: &mut [c_char; IOSIZE as usize], fmt: *mut c_char, opt: OptInde
     );
     // SAFETY: a live window, a writable buffer of `cap` bytes, a
     // NUL-terminated format, and four out-parameters this caller declines.
-    unsafe { build_stl_str_hl(win, out, cap, fmt, opt, 0, 0, maxlen, hl, hllen, click, stc) };
+    // The title and icon are global: neither names a scope.
+    let scope = OptionSetFlags::NONE;
+    unsafe {
+        build_stl_str_hl(
+            win, out, cap, fmt, opt, scope, 0, maxlen, hl, hllen, click, stc,
+        )
+    };
 }
 
 /// The default icon text: the buffer's name, truncated to 100 bytes at a

@@ -36,10 +36,11 @@ use crate::shada::{
     shada_read_string,
 };
 use crate::types::{
-    Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, OPT_GLOBAL, Object,
-    OptVal, OptValData, OptValType, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED, hashitem_T,
-    kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, key_value_pair,
-    object, object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union, uint8_t,
+    Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
+    OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
+    hashitem_T, kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeString,
+    key_value_pair, object, object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union,
+    uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -200,8 +201,8 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     // user's 'shada' says.
     // SAFETY: main-thread editor call; the option value is owned here.
     unsafe {
-        let op_shada = get_option_value(kOptShada, OPT_GLOBAL as c_int);
-        set_option_value(kOptShada, shada_while_restoring(), OPT_GLOBAL as c_int);
+        let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
+        set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
         if flags & kCtxRegs as c_int != 0 {
             shada_read_string((*ctx).regs, SHADA_RESTORE);
@@ -222,7 +223,7 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
             ctx_free(ctx);
         }
 
-        set_option_value(kOptShada, op_shada, OPT_GLOBAL as c_int);
+        set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
         optval_free(op_shada);
     }
     true

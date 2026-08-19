@@ -47,8 +47,8 @@ use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Array, Integer, MAXPATHL, NUL, OPT_LOCAL, Object, OptIndex, OptInt, String_0, colnr_T, hlf_T,
-    int64_t, schar_T, ssize_t, tabpage_T, win_T,
+    Array, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags, String_0, colnr_T,
+    hlf_T, int64_t, schar_T, ssize_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
@@ -80,7 +80,7 @@ struct Target {
 /// The format to expand, and which option it came from.
 struct Source {
     fmt: Fmt,
-    opt: (OptIndex, c_int),
+    opt: (OptIndex, OptionSetFlags),
 }
 
 impl Target {
@@ -117,7 +117,7 @@ impl Target {
             let source = Source {
                 // SAFETY: the option's own string.
                 fmt: unsafe { Fmt::copy_of(p_tal.get()) },
-                opt: (kOptTabline, 0),
+                opt: (kOptTabline, OptionSetFlags::NONE),
             };
             return (target.maxwidth > 0).then_some((target, source));
         };
@@ -150,7 +150,14 @@ impl Target {
             let source = Source {
                 // SAFETY: the option's own string.
                 fmt: unsafe { Fmt::copy_of(wbr) },
-                opt: (kOptWinbar, if local { OPT_LOCAL as c_int } else { 0 }),
+                opt: (
+                    kOptWinbar,
+                    if local {
+                        OptionSetFlags::LOCAL
+                    } else {
+                        OptionSetFlags::NONE
+                    },
+                ),
             };
             return (target.maxwidth > 0).then_some((target, source));
         }
@@ -193,7 +200,7 @@ impl Target {
             }
             Source {
                 fmt,
-                opt: (kOptRulerformat, 0),
+                opt: (kOptRulerformat, OptionSetFlags::NONE),
             }
         } else {
             let local = !opt_is_empty(win.w_onebuf_opt.wo_stl);
@@ -205,7 +212,14 @@ impl Target {
             Source {
                 // SAFETY: the option's own string.
                 fmt: unsafe { Fmt::copy_of(stl) },
-                opt: (kOptStatusline, if local { OPT_LOCAL as c_int } else { 0 }),
+                opt: (
+                    kOptStatusline,
+                    if local {
+                        OptionSetFlags::LOCAL
+                    } else {
+                        OptionSetFlags::NONE
+                    },
+                ),
             }
         };
 

@@ -40,8 +40,8 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, NUL, OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, buf_T, int32_t,
-    optset_T, size_t, uint8_t, uint32_t, vimoption_T, win_T,
+    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, OptionSetFlags, buf_T, int32_t, optset_T,
+    size_t, uint8_t, uint32_t, vimoption_T, win_T,
 };
 
 use super::{
@@ -74,9 +74,9 @@ pub fn did_set_title() {
 /// Apply what turning 'binary' on and off does to the four options it
 /// overrides. Their pre-'binary' values are stashed so that turning it off
 /// again restores them rather than the defaults.
-pub fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int) {
-    let local = opt_flags & OPT_GLOBAL as c_int == 0;
-    let global = opt_flags & OPT_LOCAL as c_int == 0;
+pub fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: OptionSetFlags) {
+    let local = !opt_flags.has(OptionSetFlags::GLOBAL);
+    let global = !opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: `curbuf` is live.
     unsafe {
         let buf = curbuf.get();
@@ -200,7 +200,11 @@ pub fn check_options() {
 /// # Safety
 ///
 /// `wp` must be live for the options that keep their flag in a window.
-pub unsafe fn was_set_insecurely(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c_int) -> bool {
+pub unsafe fn was_set_insecurely(
+    wp: *mut win_T,
+    opt_idx: OptIndex,
+    opt_flags: OptionSetFlags,
+) -> bool {
     debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the caller's window is live; the result points at a flag word.
     unsafe { *insecure_flag(wp, opt_idx, opt_flags) & kOptFlagInsecure != 0 }
@@ -215,10 +219,14 @@ pub unsafe fn was_set_insecurely(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c
 ///
 /// `wp` must be live for those options; the caller must pass the window the
 /// option is about to be used from.
-pub unsafe fn insecure_flag(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c_int) -> *mut uint32_t {
+pub unsafe fn insecure_flag(
+    wp: *mut win_T,
+    opt_idx: OptIndex,
+    opt_flags: OptionSetFlags,
+) -> *mut uint32_t {
     // SAFETY: the caller's window is live where the arms below need it.
     unsafe {
-        if opt_flags & OPT_LOCAL as c_int != 0 {
+        if opt_flags.has(OptionSetFlags::LOCAL) {
             debug_assert!(!wp.is_null());
             match opt_idx {
                 kOptWrap => return &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,

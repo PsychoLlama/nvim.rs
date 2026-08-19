@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::types::{
-    FAIL, MAXPATHL, OPT_LOCAL, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
+    FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -362,7 +362,7 @@ unsafe fn finish_qf_buffer() {
         // resembles reading a file into a buffer, which is more logical
         // when using autocommands.
         (*curbuf.get()).b_ro_locked += 1;
-        set_option_value_give_err(kOptFiletype, string_optval(c"qf"), OPT_LOCAL as c_int);
+        set_option_value_give_err(kOptFiletype, string_optval(c"qf"), OptionSetFlags::LOCAL);
         (*curbuf.get()).b_p_ma = false as c_int;
 
         (*curbuf.get()).b_keep_filetype = true; // don't detect 'filetype'

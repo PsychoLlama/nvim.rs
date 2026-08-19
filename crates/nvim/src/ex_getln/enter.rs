@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::drawscreen::windows_in_curtab;
-use crate::types::{NUL, kBoolVarFalse, kBoolVarTrue, kErrorTypeNone};
+use crate::types::{NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue, kErrorTypeNone};
 
 /// An all-zero [`CommandLineState`]: the fields C's designated initialiser
 /// leaves out, which the C zeroes for it.
@@ -454,7 +454,7 @@ pub(crate) unsafe fn command_line_enter(
                         string: cstr_as_string((*s).save_p_icm),
                     },
                 },
-                0,
+                OptionSetFlags::NONE,
                 SID_NONE,
             );
             State.set((*s).save_State);

@@ -43,8 +43,8 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
-    CMD_tabnew, FAIL, OK, OptInt, OptVal, OptValData, VAR_SCOPE, buf_T, handle_T, int64_t, ptr_t,
-    switchwin_T, tabpage_T,
+    CMD_tabnew, FAIL, OK, OptInt, OptVal, OptValData, OptionSetFlags, VAR_SCOPE, buf_T, handle_T,
+    int64_t, ptr_t, switchwin_T, tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::tabs;
@@ -539,7 +539,7 @@ fn set_cmdheight(n: OptInt) {
         type_0: kOptValTypeNumber,
         data: OptValData { number: n },
     };
-    set_option_value(kOptCmdheight, value, 0);
+    set_option_value(kOptCmdheight, value, OptionSetFlags::NONE);
 }
 
 /// Tell an external UI that the windows and inline floats of `old_curtab` are

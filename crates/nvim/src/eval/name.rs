@@ -25,7 +25,7 @@ use crate::option::find_option_end;
 use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OPT_GLOBAL, OPT_LOCAL, OptIndex, VAR_PARTIAL, VV_LUA, partial_T, size_t, typval_T, uint8_t,
+    NUL, OptIndex, OptionSetFlags, VAR_PARTIAL, VV_LUA, partial_T, size_t, typval_T, uint8_t,
 };
 use ::libc::strlen;
 
@@ -403,18 +403,18 @@ pub unsafe fn check_luafunc_name(str: *const c_char, paren: bool) -> c_int {
 pub unsafe fn find_option_var_end(
     arg: *mut *const c_char,
     opt_idxp: *mut OptIndex,
-    opt_flags: *mut c_int,
+    opt_flags: *mut OptionSetFlags,
 ) -> *const c_char {
     unsafe {
         let mut p = (*arg).add(1);
         if *p == b'g' as c_char && *p.add(1) == b':' as c_char {
-            *opt_flags = OPT_GLOBAL as c_int;
+            *opt_flags = OptionSetFlags::GLOBAL;
             p = p.add(2);
         } else if *p == b'l' as c_char && *p.add(1) == b':' as c_char {
-            *opt_flags = OPT_LOCAL as c_int;
+            *opt_flags = OptionSetFlags::LOCAL;
             p = p.add(2);
         } else {
-            *opt_flags = 0;
+            *opt_flags = OptionSetFlags::NONE;
         }
         let end = find_option_end(p, opt_idxp);
         *arg = if end.is_null() { *arg } else { p };

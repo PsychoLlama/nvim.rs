@@ -70,8 +70,8 @@ use crate::path::{add_pathsep, vim_FullName, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg_c;
 use crate::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK, OPT_GLOBAL,
-    OPT_SKIPRTP, VV_THIS_SESSION, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
+    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK, OptionSetFlags,
+    VV_THIS_SESSION, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -570,14 +570,13 @@ unsafe fn write_rc(
     // Mappings and options: everything for the two rc commands, and for
     // `:mksession` only when "options" is in 'sessionoptions'.
     if !view_session || (cmdidx == CMD_mksession && opts.has(kOptSsopFlagOptions)) {
-        let mut flags = OPT_GLOBAL;
+        let mut flags = OptionSetFlags::GLOBAL;
         if cmdidx == CMD_mksession && opts.has(kOptSsopFlagSkiprtp) {
-            flags |= OPT_SKIPRTP;
+            flags |= OptionSetFlags::SKIPRTP;
         }
         // SAFETY: both writers take the open handle and nothing else.
         failed |= unsafe {
-            makemap(out.raw(), ptr::null_mut()) == FAIL
-                || makeset(out.raw(), flags as c_int, 0) == FAIL
+            makemap(out.raw(), ptr::null_mut()) == FAIL || makeset(out.raw(), flags, 0) == FAIL
         };
     }
 

@@ -41,7 +41,7 @@ use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, NUL, OK, OPT_LOCAL, OptInt, OptVal, OptValData, String_0, StringBuilder, aco_save_T,
+    FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, StringBuilder, aco_save_T,
     colnr_T, exarg_T, handle_T, int64_t, kFalse, linenr_T, size_t, varnumber_T, win_T,
 };
 use crate::winlayer::buffers;
@@ -159,7 +159,7 @@ fn set_option_string(id: c_int, value: &'static CStr) {
         type_0: kOptValTypeString,
         data: OptValData { string },
     };
-    set_option_value_give_err(id, val, OPT_LOCAL as c_int);
+    set_option_value_give_err(id, val, OptionSetFlags::LOCAL);
 }
 
 fn set_option_false(id: c_int) {
@@ -167,7 +167,7 @@ fn set_option_false(id: c_int) {
         type_0: kOptValTypeBoolean,
         data: OptValData { boolean: kFalse },
     };
-    set_option_value_give_err(id, val, OPT_LOCAL as c_int);
+    set_option_value_give_err(id, val, OptionSetFlags::LOCAL);
 }
 
 /// Whether lines `a` and `b` of the two buffers differ.
@@ -457,7 +457,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     };
     // Go to the buffer that was opened, make sure it is in a window.
     in_buffer(old, || {
-        do_modelines(0);
+        do_modelines(OptionSetFlags::NONE);
         cur_buf().b_flags &= !(BF_CHECK_RO | BF_NEVERLOADED);
 
         if flags & READ_NOWINENTER as c_int == 0 {

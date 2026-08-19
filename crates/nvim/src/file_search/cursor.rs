@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, OPT_LOCAL, VV_FNAME};
+use crate::types::{FAIL, OptionSetFlags, VV_FNAME};
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
 use std::ffi::CStr;
@@ -230,7 +230,7 @@ pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c
 
         let res = eval_to_string_safe(
             (*curbuf.get()).b_p_inex,
-            was_set_insecurely(curwin.get(), kOptIncludeexpr, OPT_LOCAL as c_int),
+            was_set_insecurely(curwin.get(), kOptIncludeexpr, OptionSetFlags::LOCAL),
             true,
         );
 

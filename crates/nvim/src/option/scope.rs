@@ -27,7 +27,7 @@ use crate::os::cshim::gettext;
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
 use crate::options::*;
 use crate::types::{
-    OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, OptScope, OptVal, OptValType, OptVar, buf_T, ssize_t,
+    OptIndex, OptInt, OptScope, OptVal, OptValType, OptVar, OptionSetFlags, buf_T, ssize_t,
     vimoption_T, win_T, winopt_T,
 };
 
@@ -169,14 +169,14 @@ unsafe fn local_optint(local: *mut OptInt, global: *mut c_void) -> *mut c_void {
 /// `p` must point into the option table; `buf` and `win` must be live.
 pub unsafe fn get_varp_scope_from(
     p: *mut vimoption_T,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
 ) -> *mut c_void {
     // SAFETY: the caller's pointers are live, and `p` is a table row.
     unsafe {
         let opt_idx = get_opt_idx(p);
-        if opt_flags & OPT_GLOBAL as c_int != 0 && !option_is_global_only(opt_idx) {
+        if opt_flags.has(OptionSetFlags::GLOBAL) && !option_is_global_only(opt_idx) {
             // A window-local option's global copy is its own field in the
             // window's second `winopt_T`, not the table's `var`.
             if option_is_window_local(opt_idx) {
@@ -187,7 +187,7 @@ pub unsafe fn get_varp_scope_from(
             }
             return option_var(p);
         }
-        if opt_flags & OPT_LOCAL as c_int != 0 && option_is_global_local(opt_idx) {
+        if opt_flags.has(OptionSetFlags::LOCAL) && option_is_global_local(opt_idx) {
             // The local variable itself, sentinel and all.
             return match opt_idx {
                 kOptFormatprg => (&raw mut (*buf).b_p_fp).cast(),
@@ -236,7 +236,7 @@ pub unsafe fn get_varp_scope_from(
 /// # Safety
 ///
 /// `p` must point into the option table.
-pub unsafe fn get_varp_scope(p: *mut vimoption_T, opt_flags: c_int) -> *mut c_void {
+pub unsafe fn get_varp_scope(p: *mut vimoption_T, opt_flags: OptionSetFlags) -> *mut c_void {
     // SAFETY: the caller's `p` is a table row; `curbuf`/`curwin` are live.
     unsafe { get_varp_scope_from(p, opt_flags, curbuf.get(), curwin.get()) }
 }
@@ -248,7 +248,7 @@ pub unsafe fn get_varp_scope(p: *mut vimoption_T, opt_flags: c_int) -> *mut c_vo
 /// `buf` and `win` must be live.
 pub unsafe fn get_option_varp_scope_from(
     opt_idx: OptIndex,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
 ) -> *mut c_void {

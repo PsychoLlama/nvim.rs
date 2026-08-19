@@ -20,7 +20,8 @@ use crate::optionstr::free_string_option;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
 use crate::types::{
-    NUL, OptVal, OptValData, colnr_T, garray_T, regmatch_T, regprog_T, size_t, typval_T,
+    NUL, OptVal, OptValData, OptionSetFlags, colnr_T, garray_T, regmatch_T, regprog_T, size_t,
+    typval_T,
 };
 use ::libc::strcpy;
 
@@ -82,7 +83,7 @@ impl Drop for QuietCpo {
                             string: cstr_as_string(self.saved),
                         },
                     },
-                    0,
+                    OptionSetFlags::NONE,
                 );
             }
             free_string_option(self.saved);

@@ -303,6 +303,45 @@ fn bitfield_invocations(ast: &syn::File) -> HashMap<String, BitfieldAccessors> {
     out
 }
 
+/// The type names declared by `crate::flag_set!` invocations in this file.
+///
+/// The macro expands to a `#[repr(transparent)]` newtype over `c_int`, so on
+/// the C side the family *is* an `int`: a by-value parameter of the newtype
+/// and a by-value `int` have the same ABI, and the members the specs would
+/// name are plain integers. Without this, ffigen sees only a macro call, the
+/// name reaches the emitter undefined, and it goes out as an incomplete
+/// `typedef struct X X;` that no declaration can take by value.
+fn flag_set_invocations(ast: &syn::File) -> Vec<String> {
+    let mut out = Vec::new();
+    for item in &ast.items {
+        let syn::Item::Macro(m) = item else { continue };
+        if !m
+            .mac
+            .path
+            .segments
+            .last()
+            .is_some_and(|s| s.ident == "flag_set")
+        {
+            continue;
+        }
+        // `… pub struct Name; const MEMBER = …;` — the ident after the one
+        // `struct` keyword in the invocation is the family's type.
+        let mut toks = m.mac.tokens.clone().into_iter();
+        let name = loop {
+            match toks.next() {
+                Some(proc_macro2::TokenTree::Ident(id)) if id == "struct" => match toks.next() {
+                    Some(proc_macro2::TokenTree::Ident(id)) => break id.to_string(),
+                    _ => panic!("flag_set!: `struct` is not followed by a name"),
+                },
+                Some(_) => {}
+                None => panic!("flag_set!: invocation declares no `struct`"),
+            }
+        };
+        out.push(name);
+    }
+    out
+}
+
 fn named_fields(fields: &syn::FieldsNamed, bits: Option<&BitfieldAccessors>) -> Vec<Field> {
     fields
         .named
@@ -378,6 +417,10 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
             .insert((rel.to_string(), name.clone()), def.clone());
         world.by_name.entry(name).or_default().push(def);
     };
+    for name in flag_set_invocations(&ast) {
+        let int: syn::Type = syn::parse_quote!(::core::ffi::c_int);
+        add(world, name, Kind::Alias(Box::new(int)), None);
+    }
     for item in ast.items {
         match item {
             syn::Item::Struct(s) if s.generics.params.is_empty() => {

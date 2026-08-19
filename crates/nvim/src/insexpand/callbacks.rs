@@ -11,8 +11,7 @@
 use super::*;
 use crate::semsg_c;
 use crate::types::{
-    FAIL, IOSIZE, NUL, OK, OPT_GLOBAL, OPT_LOCAL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN,
+    FAIL, IOSIZE, NUL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
 
 /// Step over the `,` and ` ` that separate two `'complete'` entries.
@@ -66,11 +65,11 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
-        let retval = if (*args).os_flags & OPT_LOCAL as c_int != 0 {
+        let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_cfu_cb)
         } else {
             let retval = option_set_callback_func((*args).os_newval.string.data, cfu_cb.ptr());
-            if retval == OK && (*args).os_flags & OPT_GLOBAL as c_int == 0 {
+            if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 set_buflocal_cfu_callback(buf);
             }
             retval
@@ -93,11 +92,11 @@ pub unsafe fn set_buflocal_cfu_callback(buf: *mut buf_T) {
 pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
-        let retval = if (*args).os_flags & OPT_LOCAL as c_int != 0 {
+        let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_ofu_cb)
         } else {
             let retval = option_set_callback_func((*args).os_newval.string.data, ofu_cb.ptr());
-            if retval == OK && (*args).os_flags & OPT_GLOBAL as c_int == 0 {
+            if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 set_buflocal_ofu_callback(buf);
             }
             retval
@@ -172,7 +171,7 @@ pub unsafe fn set_buflocal_cpt_callbacks(buf: *mut buf_T) {
 /// than `F{func}` are counted but leave their slot empty.
 pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
     unsafe {
-        let local = (*args).os_flags & OPT_LOCAL as c_int != 0;
+        let local = (*args).os_flags.has(OptionSetFlags::LOCAL);
         if curbuf.get().is_null() {
             return FAIL;
         }
@@ -237,14 +236,14 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
 pub unsafe fn did_set_thesaurusfunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
-        let retval = if (*args).os_flags & OPT_LOCAL as c_int != 0 {
+        let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             // Buffer-local option set.
             option_set_callback_func((*buf).b_p_tsrfu, &raw mut (*buf).b_tsrfu_cb)
         } else {
             // Global option set.
             let retval = option_set_callback_func(p_tsrfu.get(), tsrfu_cb.ptr());
             // When using :set, free the local callback.
-            if (*args).os_flags & OPT_GLOBAL as c_int == 0 {
+            if !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 callback_free(&raw mut (*buf).b_tsrfu_cb);
             }
             retval

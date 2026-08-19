@@ -30,8 +30,8 @@ use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
 use crate::types::{
-    NUL, OptInt, OptVal, OptValData, String_0, buf_T, colnr_T, exarg_T, handle_T, int64_t,
-    linenr_T, lpos_T, pos_T, size_t,
+    NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T, colnr_T, exarg_T, handle_T,
+    int64_t, linenr_T, lpos_T, pos_T, size_t,
 };
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
@@ -271,7 +271,7 @@ pub(crate) unsafe fn show_sub(
     set_option_direct(
         kOptShortmess,
         static_cstr_optval(c"F"),
-        0 as c_int,
+        OptionSetFlags::NONE,
         SID_NONE,
     );
 
@@ -360,7 +360,7 @@ pub(crate) unsafe fn show_sub(
                     string: cstr_as_string(save_shm_p),
                 },
             },
-            0 as c_int,
+            OptionSetFlags::NONE,
             SID_NONE,
         );
         xfree(save_shm_p as *mut c_void);

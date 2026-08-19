@@ -22,7 +22,7 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{FAIL, NUL, OPT_GLOBAL, OPT_LOCAL, linenr_T, optset_T};
+use crate::types::{FAIL, NUL, OptionSetFlags, linenr_T, optset_T};
 use crate::winfloat::win_config_float;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
@@ -136,7 +136,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     let mut s = unsafe { *varp };
     let (idx, flags) = unsafe { ((*args).os_idx, (*args).os_flags) };
     let is_stl = idx as c_int == kOptStatusline as c_int;
-    let global = flags & OPT_GLOBAL as c_int != 0 || flags & OPT_LOCAL as c_int == 0;
+    let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
     if is_stl && global && unsafe { c_int::from(*s) } == NUL {
         // SAFETY: the option's own variable, and the table's default for
         // it, which is a string.

@@ -45,8 +45,8 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, IOSIZE, NUL, OK, OPT_LOCAL, OptVal, OptValData, exarg_T, hashitem_T, idx_T, langp_T,
-    linenr_T, size_t, slang_T, wordcount_T,
+    Direction, IOSIZE, NUL, OK, OptVal, OptValData, OptionSetFlags, exarg_T, hashitem_T, idx_T,
+    langp_T, linenr_T, size_t, slang_T, wordcount_T,
 };
 use ::libc::{strcat, strcmp, strcpy, strlen};
 
@@ -109,7 +109,7 @@ pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
         if no_spell_checking(curwin.get()) {
             return;
         }
-        let spl: OptVal = get_option_value(kOptSpelllang, OPT_LOCAL as c_int);
+        let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
 
         do_cmdline_cmd(c"new".as_ptr());
 
@@ -121,9 +121,9 @@ pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
                 type_0: kOptValTypeBoolean,
                 data: OptValData { boolean: 1 },
             },
-            OPT_LOCAL as c_int,
+            OptionSetFlags::LOCAL,
         );
-        set_option_value_give_err(kOptSpelllang, spl, OPT_LOCAL as c_int);
+        set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
         optval_free(spl);
 
         if !buf_is_empty(curbuf.get()) {

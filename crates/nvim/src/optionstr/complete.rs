@@ -21,7 +21,7 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, OK, OPT_GLOBAL, OPT_LOCAL, buf_T, optset_T};
+use crate::types::{NUL, OK, OptionSetFlags, buf_T, optset_T};
 
 use super::frame::{errbuf, invalid, varp, win};
 use super::{
@@ -173,10 +173,10 @@ pub unsafe fn did_set_completeopt(args: *mut optset_T) -> *const c_char {
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     // SAFETY: the frame's buffer.
     let (value, flags) = unsafe {
-        if opt_flags & OPT_LOCAL as c_int != 0 {
+        if opt_flags.has(OptionSetFlags::LOCAL) {
             ((*buf).b_p_cot, &raw mut (*buf).b_cot_flags)
         } else {
-            if opt_flags & OPT_GLOBAL as c_int == 0 {
+            if !opt_flags.has(OptionSetFlags::GLOBAL) {
                 // A plain `:set` drops the buffer's own answer.
                 (*buf).b_cot_flags = 0 as c_uint;
             }
@@ -318,12 +318,12 @@ pub unsafe fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
     let words = opt_spo_values.ptr().cast::<*const c_char>();
     // SAFETY: a C string, the table's own word list, and each scope's mask.
     unsafe {
-        if opt_flags & OPT_LOCAL as c_int == 0
+        if !opt_flags.has(OptionSetFlags::LOCAL)
             && opt_strings_flags(value, words, spo_flags.ptr(), true) != OK
         {
             return invalid();
         }
-        if opt_flags & OPT_GLOBAL as c_int == 0
+        if !opt_flags.has(OptionSetFlags::GLOBAL)
             && opt_strings_flags(value, words, &raw mut (*(*wp).w_s).b_p_spo_flags, true) != OK
         {
             return invalid();
@@ -347,7 +347,7 @@ pub unsafe fn did_set_spellsuggest(_args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_tagcase(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
-    let local = opt_flags & OPT_LOCAL as c_int != 0;
+    let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
     let (value, flags) = unsafe {
         if local {

@@ -33,8 +33,9 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    FAIL, NUL, OK, OptIndex, OptVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    FAIL, NUL, OK, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union,
+    uint8_t, varnumber_T,
 };
 use ::libc::{strlen, strtod, toupper};
 
@@ -67,7 +68,7 @@ pub unsafe fn eval_option(arg: *mut *const c_char, rettv: *mut typval_T, evaluat
     unsafe {
         let working = **arg == b'+' as c_char; // has("+option")
         let mut opt_idx: OptIndex = kOptAleph;
-        let mut opt_flags: c_int = 0;
+        let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
 
         // Isolate the option name and find its value.
         let option_end =

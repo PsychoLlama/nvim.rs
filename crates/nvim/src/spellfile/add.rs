@@ -47,7 +47,7 @@ use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispaths
 use crate::spell::{int_wordlist, spell_enc};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    FILE, MAXPATHL, NUL, OPT_LOCAL, OptVal, OptValData, SpellAddType, buf_T, int32_t, langp_T,
+    FILE, MAXPATHL, NUL, OptVal, OptValData, OptionSetFlags, SpellAddType, buf_T, int32_t, langp_T,
     size_t, uint8_t,
 };
 use crate::undo::bufIsChanged;
@@ -387,7 +387,7 @@ unsafe fn init_spellfile() {
                     string: cstr_as_string(buf),
                 },
             },
-            OPT_LOCAL as c_int,
+            OptionSetFlags::LOCAL,
         );
         xfree(buf as *mut c_void);
     }

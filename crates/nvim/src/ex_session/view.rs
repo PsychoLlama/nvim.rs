@@ -34,7 +34,7 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, NUL, OK, OPT_LOCAL, int64_t, tabpage_T, win_T};
+use crate::types::{FAIL, NUL, OK, OptionSetFlags, int64_t, tabpage_T, win_T};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -244,7 +244,7 @@ unsafe fn put_local_options(out: SessionFile, wp: *mut win_T, opts: SessionOpts)
             // Store only the local values for a view, and for a session
             // whose 'sessionoptions' has no "options".
             let local_only = !opts.is_session() || !opts.has(kOptSsopFlagOptions);
-            makeset(out.raw(), OPT_LOCAL as c_int, local_only as c_int)
+            makeset(out.raw(), OptionSetFlags::LOCAL, local_only as c_int)
         } else if opts.has(kOptSsopFlagFolds) {
             makefoldset(out.raw())
         } else {

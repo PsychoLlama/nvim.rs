@@ -43,8 +43,8 @@ use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OPT_LOCAL, OptInt, OptScope, OptVal,
-    OptValData, OptValType, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T,
+    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OptInt, OptScope, OptVal, OptValData,
+    OptValType, OptionSetFlags, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T,
     kErrorTypeException, kErrorTypeNone, kFloatRelativeCursor, kFloatRelativeEditor,
     kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T,
     schar_T, tabpage_T, win_T,
@@ -388,7 +388,7 @@ fn set_bufhidden_wipe(buf: Buf) {
     };
     let (opt, from) = (kOptBufhidden, buf.raw().cast::<c_void>());
     // SAFETY: `buf` is the live buffer `kOptScopeBuf` names.
-    unsafe { set_option_direct_for(opt, wipe, OPT_LOCAL as c_int, 0, kOptScopeBuf, from) };
+    unsafe { set_option_direct_for(opt, wipe, OptionSetFlags::LOCAL, 0, kOptScopeBuf, from) };
 }
 
 // ---------------------------------------------------------------------------

@@ -51,9 +51,9 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
     CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMOD_BROWSE, CMOD_LOCKMARKS,
-    ExtmarkOp, FAIL, NUL, OptVal, OptValData, OptValType, String_0, UndoObjectType, VV_OLDFILES,
-    bcount_t, bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T, getf_retvalues,
-    linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
+    ExtmarkOp, FAIL, NUL, OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType,
+    VV_OLDFILES, bcount_t, bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T,
+    getf_retvalues, linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use core::ptr;
@@ -296,7 +296,7 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
                     },
                 },
             },
-            0 as ::core::ffi::c_int,
+            OptionSetFlags::NONE,
             SID_NONE,
         );
         return true_0 != 0;

@@ -26,7 +26,7 @@ use crate::main::{current_sctx, p_mls, secure};
 use crate::memline::{ml_get, ml_get_len};
 use crate::option::do_set;
 use crate::runtime::{estack_pop, estack_push};
-use crate::types::{FAIL, OK, OPT_LOCAL, OPT_MODELINE, intmax_t, linenr_T, scid_T};
+use crate::types::{FAIL, OK, OptionSetFlags, intmax_t, linenr_T, scid_T};
 use crate::version::min_vim_version;
 use crate::winlayer::Buf;
 
@@ -65,7 +65,7 @@ fn version_at(line: &[u8], off: usize) -> Option<(intmax_t, usize)> {
 }
 
 /// `do_set` over the option list at `text[off..]`, which it may write into.
-fn set_options(text: &mut [u8], off: usize, flags: c_int) -> c_int {
+fn set_options(text: &mut [u8], off: usize, flags: OptionSetFlags) -> c_int {
     let arg = text[off..].as_mut_ptr().cast::<c_char>();
     // SAFETY: a NUL-terminated option list inside a buffer this function
     // owns, which is what `do_set` parses and truncates in place.
@@ -102,8 +102,8 @@ fn at(line: &[u8], i: usize) -> u8 {
 /// Process the modelines of the current buffer -- the first and last
 /// `'modelines'` lines of it.
 ///
-/// `flags` is `OPT_WINONLY` or `OPT_NOWIN`.
-pub fn do_modelines(flags: c_int) {
+/// `flags` is `OptionSetFlags::WINONLY` or `OptionSetFlags::NOWIN`.
+pub fn do_modelines(flags: OptionSetFlags) {
     static entered: GlobalCell<c_int> = GlobalCell::new(0);
 
     if current_buf().b_p_ml == 0 {
@@ -148,7 +148,7 @@ pub fn do_modelines(flags: c_int) {
 
 /// Check one line for a mode string, and apply it. `FAIL` when an error was
 /// encountered, which stops the whole pass.
-fn chk_modeline(lnum: linenr_T, flags: c_int) -> c_int {
+fn chk_modeline(lnum: linenr_T, flags: OptionSetFlags) -> c_int {
     let line = buffer_line(lnum);
     // The NUL the slice ends on is not part of the line: `line_end` is where
     // upstream's `ml_get_len` puts it.
@@ -237,7 +237,7 @@ fn version_guard_matches(line: &[u8], s: usize) -> Option<bool> {
 ///
 /// `text` is the caller's own NUL-terminated copy, which this writes into:
 /// `\:` collapses to `:`, and every separator becomes a NUL.
-fn apply_modeline(text: &mut [u8], lnum: linenr_T, flags: c_int) -> c_int {
+fn apply_modeline(text: &mut [u8], lnum: linenr_T, flags: OptionSetFlags) -> c_int {
     let mut retval = OK;
     let mut line_end = text.len() - 1;
 
@@ -299,7 +299,7 @@ fn apply_modeline(text: &mut [u8], lnum: linenr_T, flags: c_int) -> c_int {
 
 /// One `:`-separated part of a modeline, executed with `sandbox` on and the
 /// script context pointing at the modeline.
-fn set_one(text: &mut [u8], s: usize, lnum: linenr_T, flags: c_int) -> c_int {
+fn set_one(text: &mut [u8], s: usize, lnum: linenr_T, flags: OptionSetFlags) -> c_int {
     let secure_save = secure.get();
     let save_current_sctx = current_sctx.get();
     current_sctx.with_mut(|sctx| {
@@ -310,7 +310,11 @@ fn set_one(text: &mut [u8], s: usize, lnum: linenr_T, flags: c_int) -> c_int {
     // Make sure no risky things are executed as a side effect.
     secure.set(1);
 
-    let retval = set_options(text, s, OPT_MODELINE as c_int | OPT_LOCAL as c_int | flags);
+    let retval = set_options(
+        text,
+        s,
+        OptionSetFlags::MODELINE | OptionSetFlags::LOCAL | flags,
+    );
 
     secure.set(secure_save);
     current_sctx.set(save_current_sctx);

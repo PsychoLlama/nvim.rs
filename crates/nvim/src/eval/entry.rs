@@ -44,10 +44,10 @@ use crate::options::{kOptFoldexpr, kOptFoldtext};
 use crate::os::cshim::gettext;
 use crate::runtime::sourcing_a_script;
 use crate::types::{
-    Arena, FAIL, NUL, OK, OPT_LOCAL, Object, String_0, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_ARGV, VV_EVENT, VV_LUA,
-    dict_T, evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T, kObjectTypeString, list_T,
-    object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T,
+    Arena, FAIL, NUL, OK, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FIXED, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_ARGV, VV_EVENT,
+    VV_LUA, dict_T, evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T, kObjectTypeString,
+    list_T, object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T,
     typval_vval_union, uint8_t, varnumber_T, win_T,
 };
 use ::libc::{atol, memcmp, memset, strlen};
@@ -672,7 +672,7 @@ pub unsafe fn call_func_retlist(
 pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
     unsafe {
         let saved_sctx: sctx_T = current_sctx.get();
-        let use_sandbox = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL as c_int);
+        let use_sandbox = was_set_insecurely(wp, kOptFoldexpr, OptionSetFlags::LOCAL);
         let arg = skipwhite((*wp).w_onebuf_opt.wo_fde);
         current_sctx.set((*wp).w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
         *emsg_off.ptr() += 1;
@@ -734,7 +734,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
             }
         }
 
-        let use_sandbox = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL as c_int);
+        let use_sandbox = was_set_insecurely(wp, kOptFoldtext, OptionSetFlags::LOCAL);
         let arg = (*wp).w_onebuf_opt.wo_fdt;
         let mut funccal_entry = funccal_entry_T {
             top_funccal: null_mut(),

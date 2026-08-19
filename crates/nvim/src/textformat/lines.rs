@@ -43,7 +43,7 @@ use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CMOD_LOCKMARKS, FAIL, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
-    OPT_LOCAL, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t,
+    OptionSetFlags, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t,
     varnumber_T,
 };
 use crate::ui::ui_cursor_shape;
@@ -150,7 +150,7 @@ pub unsafe fn op_formatexpr(oap: *mut oparg_T) {
 /// There must be a current buffer and window.
 pub unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_int {
     unsafe {
-        let use_sandbox = was_set_insecurely(curwin.get(), kOptFormatexpr, OPT_LOCAL as c_int);
+        let use_sandbox = was_set_insecurely(curwin.get(), kOptFormatexpr, OptionSetFlags::LOCAL);
         let save_sctx = current_sctx.get();
 
         set_vim_var_nr(VV_LNUM, lnum as varnumber_T);

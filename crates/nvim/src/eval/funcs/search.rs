@@ -32,8 +32,8 @@ use crate::search::{
 };
 use crate::semsg_c;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, NUL, OptVal, OptValData, VAR_UNKNOWN, int64_t, linenr_T, pos_T,
-    searchit_arg_T, typval_T, varnumber_T,
+    Direction, EvalFuncData, FAIL, NUL, OptVal, OptValData, OptionSetFlags, VAR_UNKNOWN, int64_t,
+    linenr_T, pos_T, searchit_arg_T, typval_T, varnumber_T,
 };
 use ::libc::strlen;
 use core::ffi::{c_char, c_int};
@@ -521,7 +521,7 @@ impl Drop for EmptyCpo {
                             string: cstr_as_string(self.0),
                         },
                     },
-                    0,
+                    OptionSetFlags::NONE,
                 );
             }
             free_string_option(self.0);

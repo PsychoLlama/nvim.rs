@@ -31,8 +31,8 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    FAIL, MAXPATHL, NUL, OK, OptIndex, colnr_T, expand_T, fuzmatch_str_T, garray_T, optexpand_T,
-    regmatch_T, size_t, uint8_t, uint32_t, vimoption_T, xp_prefix_T,
+    FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T, expand_T, fuzmatch_str_T, garray_T,
+    optexpand_T, regmatch_T, size_t, uint8_t, uint32_t, vimoption_T, xp_prefix_T,
 };
 use ::libc::{strcmp, strlen};
 
@@ -53,7 +53,7 @@ use super::{
 static IDX: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
 static NAME: GlobalCell<[c_char; 5]> = GlobalCell::new([b't' as c_char, b'_' as c_char, 0, 0, 0]);
 static START_COL: GlobalCell<c_int> = GlobalCell::new(0);
-static FLAGS: GlobalCell<c_int> = GlobalCell::new(0);
+static FLAGS: GlobalCell<OptionSetFlags> = GlobalCell::new(OptionSetFlags::NONE);
 /// Whether the operator was `+=` or `^=`, which means the current value is
 /// not a candidate to offer back.
 static APPEND: GlobalCell<bool> = GlobalCell::new(false);
@@ -114,7 +114,11 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
 ///
 /// `xp` must be the command line's expansion state and `arg` a
 /// NUL-terminated cursor into `xp->xp_line`.
-pub unsafe fn set_context_in_set_cmd(xp: *mut expand_T, arg: *mut c_char, opt_flags: c_int) {
+pub unsafe fn set_context_in_set_cmd(
+    xp: *mut expand_T,
+    arg: *mut c_char,
+    opt_flags: OptionSetFlags,
+) {
     FLAGS.set(opt_flags);
 
     // SAFETY: the caller's expansion state and command line.

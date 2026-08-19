@@ -56,7 +56,7 @@ use crate::main::{NameBuff, hl_attr_active};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
-    AlignTextPos, Array, Dict, GridView, MAXPATHL, OPT_LOCAL, Object, OptIndex, OptValType,
+    AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptValType, OptionSetFlags,
     ScreenGrid, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord,
     StlFlag, VV_LNUM, VV_RELNUM, WinSplit, WinStyle, hlf_T, linenr_T, schar_T, size_t, statuscol_T,
     stl_hlrec_t, varnumber_T, win_T,
@@ -292,7 +292,7 @@ pub(crate) struct StlJob<'a> {
     /// Which option the format came from, and in which scope. `kOptInvalid`
     /// means "no option", which is also what switches the sandbox off --
     /// `nvim_eval_statusline()` can therefore never reach it.
-    pub opt: (OptIndex, c_int),
+    pub opt: (OptIndex, OptionSetFlags),
     /// What to pad with, and how many cells there are to fill.
     pub fillchar: schar_T,
     pub maxwidth: c_int,
@@ -773,7 +773,7 @@ pub unsafe fn build_statuscol_str(
         win,
         // SAFETY: the window's own option string.
         fmt: unsafe { Fmt::copy_of(win.w_onebuf_opt.wo_stc) },
-        opt: (kOptStatuscolumn, OPT_LOCAL as c_int),
+        opt: (kOptStatuscolumn, OptionSetFlags::LOCAL),
         fillchar: 0,
         maxwidth: stcp.width,
         hl: HlDest::StatusCol,

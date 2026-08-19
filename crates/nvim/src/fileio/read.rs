@@ -16,7 +16,7 @@ use super::*;
 use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
 use crate::pos::MAXCOL;
-use crate::types::{CMOD_LOCKMARKS, FAIL, OK, OPT_LOCAL};
+use crate::types::{CMOD_LOCKMARKS, FAIL, OK, OptionSetFlags};
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {
@@ -665,7 +665,7 @@ pub unsafe fn readfile(
                         fileformat = guess.guess(w.ptr, w.size);
                         // May set 'fileformat' when editing a new file.
                         if set_options {
-                            set_fileformat(fileformat, OPT_LOCAL as c_int);
+                            set_fileformat(fileformat, OptionSetFlags::LOCAL);
                         }
                     }
 
@@ -765,7 +765,7 @@ pub unsafe fn readfile(
                             string: cstr_as_string(fenc),
                         },
                     },
-                    OPT_LOCAL as c_int,
+                    OptionSetFlags::LOCAL,
                     0 as scid_T,
                 );
             }

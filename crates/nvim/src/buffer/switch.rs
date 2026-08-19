@@ -46,7 +46,8 @@ use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
     CMD_bNext, CMD_bnext, CMD_bprevious, CMD_sbNext, CMD_sbnext, CMD_sbprevious, CMOD_CONFIRM,
-    FAIL, IOSIZE, NUL, OK, OptInt, bufref_T, cleanup_T, exarg_T, int64_t, linenr_T, size_t, win_T,
+    FAIL, IOSIZE, NUL, OK, OptInt, OptionSetFlags, bufref_T, cleanup_T, exarg_T, int64_t, linenr_T,
+    size_t, win_T,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -319,7 +320,7 @@ fn handle_swap_exists_opt(old_curbuf: Option<BufRef>) {
         recover_swapfile();
         put_message(c"\n"); // don't overwrite the last message
         cmdline_row.set(msg_row.get());
-        do_modelines(0);
+        do_modelines(OptionSetFlags::NONE);
         leave_cleanup_now(&mut cs);
     }
     swap_exists_action.set(SEA_NONE);

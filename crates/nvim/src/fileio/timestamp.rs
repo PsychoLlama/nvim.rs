@@ -679,7 +679,7 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
         }
 
         // Modelines must override settings done by autocommands.
-        do_modelines(0);
+        do_modelines(OptionSetFlags::NONE);
 
         // Restore curwin/curbuf and a few other things. Careful: autocommands
         // may have made "buf" invalid!

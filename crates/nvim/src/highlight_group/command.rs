@@ -28,7 +28,7 @@ use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::runtime::exestack;
 use crate::types::ui::kUILinegrid;
-use crate::types::{OptVal, OptValData, estack_T, kFalse, kTrue};
+use crate::types::{OptVal, OptValData, OptionSetFlags, estack_T, kFalse, kTrue};
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
@@ -675,7 +675,7 @@ impl KeyLoop {
                         }),
                     },
                 },
-                0,
+                OptionSetFlags::NONE,
             );
             reset_option_was_set(kOptBackground);
         }

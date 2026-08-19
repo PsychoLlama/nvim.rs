@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, MAXPATHL, NUL, OK, OPT_LOCAL};
+use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
 use core::ffi::{c_char, c_int};
 
 /// `:diffpatch {file}`: apply a patch to a copy of the current buffer and
@@ -238,7 +238,7 @@ unsafe fn set_diff_option(wp: *mut win_T, value: bool) {
                     boolean: value as TriState,
                 },
             },
-            OPT_LOCAL as c_int,
+            OptionSetFlags::LOCAL,
         );
         (*curbuf.get()).b_ro_locked -= 1;
         curwin.set(old_curwin);
@@ -290,7 +290,7 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
                     },
                 },
             },
-            OPT_LOCAL as c_int,
+            OptionSetFlags::LOCAL,
             0 as scid_T,
             kOptScopeWin,
             wp as *mut ::core::ffi::c_void,

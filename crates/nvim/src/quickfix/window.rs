@@ -16,7 +16,7 @@
 use super::*;
 use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
-use crate::types::{FAIL, OPT_LOCAL, kFalse};
+use crate::types::{FAIL, OptionSetFlags, kFalse};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,
@@ -283,7 +283,7 @@ fn goto_cwindow(qi: Qi, resize: bool, sz: c_int, vertsplit: bool) -> bool {
 ///
 /// Must be called with the quickfix window current.
 fn set_cwindow_options() {
-    let local = OPT_LOCAL as c_int;
+    let local = OptionSetFlags::LOCAL;
     let off = OptVal {
         type_0: kOptValTypeBoolean,
         data: OptValData { boolean: kFalse },

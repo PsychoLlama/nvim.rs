@@ -20,7 +20,7 @@
 use super::*;
 use crate::path::ExpandFlags;
 
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{FAIL, MAXPATHL, OK, OptionSetFlags};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -437,7 +437,7 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int {
                             string: cstr_as_string(spliced.rtp),
                         },
                     },
-                    0,
+                    OptionSetFlags::NONE,
                 );
                 debug_assert!(
                     !runtime_search_path_valid.get(),

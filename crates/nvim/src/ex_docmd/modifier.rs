@@ -43,8 +43,8 @@ use crate::types::{
     CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CMOD_BROWSE,
     CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
     CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
-    CMOD_UNSILENT, FAIL, NUL, OK, OptInt, OptVal, OptValData, String_0, cmdidx_T, cmdmod_T,
-    exarg_T, size_t,
+    CMOD_UNSILENT, FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T,
+    cmdmod_T, exarg_T, size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{atoi, memset, strlen};
@@ -458,7 +458,12 @@ pub unsafe fn apply_cmdmod(cmod: *mut cmdmod_T) {
         }
         if cm.cmod_flags & CMOD_NOAUTOCMD as c_int != 0 && cm.cmod_save_ei.is_null() {
             cm.cmod_save_ei = xstrdup(p_ei.get());
-            set_option_direct(kOptEventignore, eventignore_all(), 0, SID_NONE);
+            set_option_direct(
+                kOptEventignore,
+                eventignore_all(),
+                OptionSetFlags::NONE,
+                SID_NONE,
+            );
         }
     }
 }
@@ -497,7 +502,7 @@ pub unsafe fn undo_cmdmod(cmod: *mut cmdmod_T) {
                         string: cstr_as_string(cm.cmod_save_ei),
                     },
                 },
-                0,
+                OptionSetFlags::NONE,
                 SID_NONE,
             );
             free_string_option(cm.cmod_save_ei);

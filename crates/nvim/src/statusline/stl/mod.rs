@@ -643,7 +643,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
     outlen: size_t,
     fmt: *mut c_char,
     opt_idx: OptIndex,
-    opt_scope: c_int,
+    opt_scope: OptionSetFlags,
     fillchar: schar_T,
     maxwidth: c_int,
     hltab: *mut *mut stl_hlrec_t,

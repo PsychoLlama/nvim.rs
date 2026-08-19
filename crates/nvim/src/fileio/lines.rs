@@ -10,7 +10,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{FAIL, OPT_LOCAL};
+use crate::types::{FAIL, OptionSetFlags};
 
 /// What a pass of line splitting decided.
 pub(crate) enum Split {
@@ -176,7 +176,7 @@ unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
                             {
                                 st.fileformat = EOL_UNIX;
                                 if st.set_options {
-                                    set_fileformat(EOL_UNIX, OPT_LOCAL as c_int);
+                                    set_fileformat(EOL_UNIX, OptionSetFlags::LOCAL);
                                 }
                                 return Split::RetryUnix;
                             }

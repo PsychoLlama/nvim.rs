@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::api_set_error;
@@ -17,8 +17,8 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Error, FAIL, OptIndex, OptScope, OptVal, OptValData, aco_save_T, buf_T, kErrorTypeException,
-    kErrorTypeNone, kFalse, scid_T, switchwin_T, win_T,
+    Error, FAIL, OptIndex, OptScope, OptVal, OptValData, OptionSetFlags, aco_save_T, buf_T,
+    kErrorTypeException, kErrorTypeNone, kFalse, scid_T, switchwin_T, win_T,
 };
 use crate::window::win_find_tabpage;
 
@@ -41,7 +41,7 @@ use super::{
 pub unsafe fn set_option_direct_for(
     opt_idx: OptIndex,
     value: OptVal,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     set_sid: scid_T,
     scope: OptScope,
     from: *mut c_void,
@@ -160,7 +160,7 @@ impl OptionContext {
 /// error slot.
 pub unsafe fn get_option_value_for(
     opt_idx: OptIndex,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     scope: OptScope,
     from: *mut c_void,
     err: *mut Error,
@@ -194,7 +194,7 @@ pub unsafe fn set_option_value_for(
     name: *const c_char,
     opt_idx: OptIndex,
     value: OptVal,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     scope: OptScope,
     from: *mut c_void,
     err: *mut Error,

@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::{FAIL, OK, OptionSetFlags};
 
 /// The [`EVENT_NAMES`] row an event number names.
 ///
@@ -186,7 +186,7 @@ unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
                     string: cstr_as_string(value),
                 },
             },
-            0,
+            OptionSetFlags::NONE,
             SID_NONE,
         );
     }

@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{CMOD_NOSWAPFILE, FAIL, kErrorTypeNone};
+use crate::types::{CMOD_NOSWAPFILE, FAIL, OptionSetFlags, kErrorTypeNone};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> handle_T {
@@ -426,7 +426,12 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
                 cmdpreview_buf.is_null()
             } {
                 // Failed to create the preview buffer, so disable the preview.
-                set_option_direct(kOptInccommand, static_optval(c"nosplit"), 0, SID_NONE);
+                set_option_direct(
+                    kOptInccommand,
+                    static_optval(c"nosplit"),
+                    OptionSetFlags::NONE,
+                    SID_NONE,
+                );
                 icm_split = false;
             }
             // Set up the preview namespace if it is not already set.

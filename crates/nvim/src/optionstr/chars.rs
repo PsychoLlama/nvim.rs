@@ -42,8 +42,8 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, NUL, OPT_GLOBAL, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T, schar_T,
-    size_t, tabpage_T, win_T,
+    CharsOption, NUL, OptionSetFlags, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T,
+    schar_T, size_t, tabpage_T, win_T,
 };
 
 use super::{
@@ -631,7 +631,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
     win: *mut win_T,
     val: *mut c_char,
     what: CharsOption,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     errbuf: *mut c_char,
     errbuflen: size_t,
 ) -> *const c_char {
@@ -645,7 +645,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
         }
     };
     let local_is_empty = unsafe { c_int::from(**local_ptr) } == NUL;
-    let for_this_window = local_is_empty || opt_flags & OPT_GLOBAL as c_int == 0;
+    let for_this_window = local_is_empty || !opt_flags.has(OptionSetFlags::GLOBAL);
 
     // SAFETY: the caller's window and value.
     let errmsg = unsafe { set_chars_option(win, val, what, for_this_window, errbuf, errbuflen) };
@@ -653,7 +653,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
         return errmsg;
     }
 
-    if opt_flags & OPT_GLOBAL as c_int == 0 {
+    if !opt_flags.has(OptionSetFlags::GLOBAL) {
         // SAFETY: the window's own option variable.
         unsafe { clear_string_option(local_ptr) };
     }

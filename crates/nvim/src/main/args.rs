@@ -50,8 +50,9 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    FAIL, IOSIZE, MAXPATHL, NUL, OK, OptInt, OptVal, OptValData, VV_PROGNAME, VV_PROGPATH,
-    VV_SWAPCOMMAND, aentry_T, kFalse, kTrue, linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
+    FAIL, IOSIZE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags,
+    VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T, kFalse, kTrue, linenr_T, ptrdiff_t, scid_T,
+    sctx_T, size_t,
 };
 use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
 
@@ -102,6 +103,12 @@ fn boolean_opt(value: bool) -> OptVal {
     }
 }
 
+/// Set an option from a command-line switch. A switch names no scope, so it
+/// sets the local and global halves together -- upstream's bare `0`.
+fn set_opt(idx: OptIndex, value: OptVal) {
+    set_option_value_give_err(idx, value, OptionSetFlags::NONE);
+}
+
 /// Turn 'shadafile' off unless the user already named one.
 ///
 /// `-es`, `-Es` and `-l` all do this: a batch process has no business
@@ -110,7 +117,7 @@ unsafe fn suppress_shada() {
     // SAFETY: reads and writes one option.
     unsafe {
         if p_shadafile.get().is_null() || *p_shadafile.get() as c_int == NUL {
-            set_option_value_give_err(kOptShadafile, string_opt(c"NONE".as_ptr()), 0);
+            set_opt(kOptShadafile, string_opt(c"NONE".as_ptr()));
         }
     }
 }
@@ -300,7 +307,7 @@ impl Scan {
             } else if self.tail_starts_with(c"clean") {
                 (*self.parmp).use_vimrc = c"NONE".as_ptr() as *mut c_char;
                 (*self.parmp).clean = true;
-                set_option_value_give_err(kOptShadafile, string_opt(c"NONE".as_ptr()), 0);
+                set_opt(kOptShadafile, string_opt(c"NONE".as_ptr()));
             } else if self.tail_starts_with(c"luamod-dev") {
                 nlua_disable_preload.set(true);
             } else if self.has_tail() {
@@ -341,11 +348,11 @@ impl Scan {
                     }
                     return want;
                 }
-                b'A' => set_option_value_give_err(kOptArabic, boolean_opt(true), 0),
+                b'A' => set_opt(kOptArabic, boolean_opt(true)),
                 b'b' => {
                     // Before the file names are expanded: on Windows this is
                     // what decides whether a shortcut is edited or followed.
-                    set_options_bin((*curbuf.get()).b_p_bin, 1, 0);
+                    set_options_bin((*curbuf.get()).b_p_bin, 1, OptionSetFlags::NONE);
                     (*curbuf.get()).b_p_bin = 1;
                 }
                 b'D' => (*self.parmp).use_debug_break_level = DEBUG_BREAK_ALL,
@@ -363,8 +370,8 @@ impl Scan {
                     os_exit(0);
                 }
                 b'H' => {
-                    set_option_value_give_err(kOptKeymap, string_opt(c"hebrew".as_ptr()), 0);
-                    set_option_value_give_err(kOptRightleft, boolean_opt(true), 0);
+                    set_opt(kOptKeymap, string_opt(c"hebrew".as_ptr()));
+                    set_opt(kOptRightleft, boolean_opt(true));
                 }
                 b'M' | b'm' => {
                     // `-M` is `-m` plus 'nomodifiable'.
@@ -440,7 +447,7 @@ impl Scan {
                     if self.has_tail() {
                         // `-V{N}{file}`: whatever follows the digits is
                         // 'verbosefile', and it uses up the whole word.
-                        set_option_value_give_err(kOptVerbosefile, string_opt(self.tail()), 0);
+                        set_opt(kOptVerbosefile, string_opt(self.tail()));
                         self.argv_idx = strlen(self.arg()) as c_int;
                     }
                 }
@@ -449,7 +456,7 @@ impl Scan {
                     // a file to record the keystrokes into.
                     if ascii_isdigit(*self.tail() as c_int) {
                         let n = get_number_arg(self.arg(), &raw mut self.argv_idx, DEFAULT_WINDOW);
-                        set_option_value_give_err(kOptWindow, number_opt(n as OptInt), 0);
+                        set_opt(kOptWindow, number_opt(n as OptInt));
                     } else {
                         return true;
                     }
@@ -533,7 +540,7 @@ impl Scan {
                     // `--startuptime <file>` was handled before the scan.
                 }
                 b'q' => (*self.parmp).use_ef = self.arg(),
-                b'i' => set_option_value_give_err(kOptShadafile, string_opt(self.arg()), 0),
+                b'i' => set_opt(kOptShadafile, string_opt(self.arg())),
                 b'l' => {
                     // `-l {script}`: a batch Lua run. Everything after the
                     // script name belongs to the script, not to us.
@@ -568,7 +575,7 @@ impl Scan {
                     if c == b'w' && ascii_isdigit(*self.arg() as c_int) {
                         self.argv_idx = 0;
                         let n = get_number_arg(self.arg(), &raw mut self.argv_idx, DEFAULT_WINDOW);
-                        set_option_value_give_err(kOptWindow, number_opt(n as OptInt), 0);
+                        set_opt(kOptWindow, number_opt(n as OptInt));
                         self.argv_idx = -1;
                         return;
                     }

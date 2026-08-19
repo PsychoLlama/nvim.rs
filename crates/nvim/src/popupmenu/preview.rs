@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{OK, OPT_LOCAL, kFalse, kTrue};
+use crate::types::{OK, OptionSetFlags, kFalse, kTrue};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;
@@ -381,7 +381,7 @@ unsafe fn pum_show_info(
                         (kOptBufhidden, static_optval(c"wipe")),
                         (kOptDiff, bool_optval(false)),
                     ] {
-                        set_option_value_give_err(option, value, OPT_LOCAL as c_int);
+                        set_option_value_give_err(option, value, OptionSetFlags::LOCAL);
                     }
                 }
             }

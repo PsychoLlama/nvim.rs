@@ -53,8 +53,8 @@ use crate::path::fix_fname;
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_saveas, CMD_wqall, CMD_xall, CMOD_CONFIRM, CMOD_KEEPALT, MAXPATHL, NUL, OK, buf_T,
-    bufref_T, exarg_T, int32_t, int64_t, linenr_T,
+    CMD_saveas, CMD_wqall, CMD_xall, CMOD_CONFIRM, CMOD_KEEPALT, MAXPATHL, NUL, OK, OptionSetFlags,
+    buf_T, bufref_T, exarg_T, int32_t, int64_t, linenr_T,
 };
 use crate::undo::{bufIsChanged, curbufIsChanged};
 use crate::window::check_can_set_curbuf_forceit;
@@ -493,7 +493,7 @@ unsafe fn saveas_exchange_names(alt_buf: *mut buf_T) -> Option<*mut c_char> {
                     ptr::null_mut(),
                 );
             }
-            do_modelines(0);
+            do_modelines(OptionSetFlags::NONE);
         }
         // Autocommands may have changed buffer names, esp. when 'autochdir'
         // is set.

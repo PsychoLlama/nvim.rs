@@ -917,7 +917,7 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
                         string: cstr_as_string(tabs.ts_str),
                     },
                 },
-                OPT_LOCAL as c_int,
+                OptionSetFlags::LOCAL,
                 0,
             );
             (*buf).b_p_vts_array = tabs.vts;

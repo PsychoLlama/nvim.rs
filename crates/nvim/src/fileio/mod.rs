@@ -81,8 +81,8 @@ use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OPT_LOCAL, OptInt, OptVal, OptValData,
-    OptValType, aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t,
+    CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValData, OptValType,
+    OptionSetFlags, aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t,
     int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t,
     time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
@@ -320,7 +320,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
                     ptr::null_mut(),
                 );
             }
-            do_modelines(0);
+            do_modelines(OptionSetFlags::NONE);
         }
         OK
     }
@@ -640,9 +640,12 @@ pub unsafe fn set_file_options(set_options: bool, eap: *mut exarg_T) {
         // Set the default 'fileformat'.
         if set_options {
             if !eap.is_null() && (*eap).force_ff != 0 {
-                set_fileformat(get_fileformat_force(curbuf.get(), eap), OPT_LOCAL as c_int);
+                set_fileformat(
+                    get_fileformat_force(curbuf.get(), eap),
+                    OptionSetFlags::LOCAL,
+                );
             } else if *p_ffs.get() != 0 {
-                set_fileformat(default_fileformat(), OPT_LOCAL as c_int);
+                set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
             }
         }
 
@@ -650,7 +653,7 @@ pub unsafe fn set_file_options(set_options: bool, eap: *mut exarg_T) {
         if !eap.is_null() && (*eap).force_bin != 0 {
             let oldval = (*curbuf.get()).b_p_bin;
             (*curbuf.get()).b_p_bin = ((*eap).force_bin == FORCE_BIN) as c_int;
-            set_options_bin(oldval, (*curbuf.get()).b_p_bin, OPT_LOCAL as c_int);
+            set_options_bin(oldval, (*curbuf.get()).b_p_bin, OptionSetFlags::LOCAL);
         }
     }
 }
@@ -670,7 +673,7 @@ pub unsafe fn set_forced_fenc(eap: *mut exarg_T) {
                     string: cstr_as_string(fenc),
                 },
             },
-            OPT_LOCAL as c_int,
+            OptionSetFlags::LOCAL,
             0 as scid_T,
         );
         xfree(fenc.cast());

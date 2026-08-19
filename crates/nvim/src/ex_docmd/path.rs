@@ -36,9 +36,9 @@ use crate::path::pathcmp;
 use crate::strings::vim_strchr;
 use crate::types::{
     BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdScope, FAIL, MAXPATHL, NUL,
-    OK, OPT_GLOBAL, OPT_LOCAL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
-    list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
+    OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T,
+    exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T,
+    listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
 use ::libc::strcmp;
 
@@ -183,12 +183,12 @@ pub(crate) unsafe fn findfunc_find_file(
 pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf as *mut buf_T;
-        let retval = if (*args).os_flags & OPT_LOCAL as c_int != 0 {
+        let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func((*buf).b_p_ffu, &raw mut (*buf).b_ffu_cb)
         } else {
             let r = option_set_callback_func(p_ffu.get(), ffu_cb.ptr());
             // Setting it globally without `:setglobal` clears the local one.
-            if (*args).os_flags & OPT_GLOBAL as c_int == 0 {
+            if !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 callback_free(&raw mut (*buf).b_ffu_cb);
             }
             r

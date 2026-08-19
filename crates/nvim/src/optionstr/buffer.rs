@@ -44,8 +44,8 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, FAIL, NUL, OK, OPT_GLOBAL, OPT_LOCAL, OptInt, OptVal, OptValData, String_0,
-    buf_T, colnr_T, fmark_T, fmarkv_T, linenr_T, optset_T, pos_T, win_T,
+    AdditionalData, FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T,
+    colnr_T, fmark_T, fmarkv_T, linenr_T, optset_T, pos_T, win_T,
 };
 use crate::window::global_stl_height;
 use ::libc::strcmp;
@@ -83,13 +83,13 @@ pub unsafe fn did_set_backspace(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
-    let local = opt_flags & OPT_LOCAL as c_int != 0;
+    let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
     let (value, flags) = unsafe {
         if local {
             ((*buf).b_p_bkc, &raw mut (*buf).b_bkc_flags)
         } else {
-            if opt_flags & OPT_GLOBAL as c_int == 0 {
+            if !opt_flags.has(OptionSetFlags::GLOBAL) {
                 // A plain `:set` drops the buffer's own answer.
                 (*buf).b_bkc_flags = 0 as c_uint;
             }
@@ -211,7 +211,7 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
                         },
                     },
                 },
-                OPT_LOCAL as c_int,
+                OptionSetFlags::LOCAL,
                 SID_NONE,
             );
             let prompt: *mut fmark_T = &raw mut (*buf).b_prompt_start;
@@ -328,7 +328,7 @@ pub unsafe fn did_set_cpoptions(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_diffanchors(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame.
-    let local = unsafe { (*args).os_flags } & OPT_LOCAL as c_int != 0;
+    let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
     // SAFETY: re-reads the option's own value.
     if unsafe { diffanchors_changed(local) } == FAIL {
         return invalid();
@@ -364,14 +364,14 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
     };
     // SAFETY: the option table's scope plumbing, with this buffer.
     let gvarp = unsafe {
-        get_option_varp_scope_from(idx, OPT_GLOBAL as c_int, buf, ptr::null_mut::<win_T>())
+        get_option_varp_scope_from(idx, OptionSetFlags::GLOBAL, buf, ptr::null_mut::<win_T>())
     }
     .cast::<*mut c_char>();
 
     if gvarp == p_fenc.ptr() {
         // SAFETY: the frame's buffer and C string value.
         unsafe {
-            if (*buf).b_p_ma == 0 && opt_flags != OPT_GLOBAL as c_int {
+            if (*buf).b_p_ma == 0 && opt_flags != OptionSetFlags::GLOBAL {
                 return e_modifiable.as_ptr();
             }
             // 'fileencoding' is one encoding, not a list.
@@ -415,7 +415,7 @@ pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame and buffer.
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     // Changing a buffer's line endings changes its text.
-    if unsafe { (*buf).b_p_ma } == 0 && opt_flags & OPT_GLOBAL as c_int == 0 {
+    if unsafe { (*buf).b_p_ma } == 0 && !opt_flags.has(OptionSetFlags::GLOBAL) {
         return e_modifiable.as_ptr();
     }
     let errmsg = unsafe { did_set_str_generic(args) };
@@ -611,7 +611,7 @@ pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
                 (*buf).b_p_imsearch = B_IMODE_USE_INSERT as OptInt;
             }
         }
-        if opt_flags & OPT_LOCAL as c_int == 0 {
+        if !opt_flags.has(OptionSetFlags::LOCAL) {
             set_iminsert_global(buf);
             set_imsearch_global(buf);
         }

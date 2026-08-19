@@ -6,7 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_char;
 use core::ptr;
 
 use crate::api::private::helpers::{arena_dict, cstr_as_string};
@@ -14,8 +14,8 @@ use crate::api::private::validate::api_err_invalid;
 use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
-    Arena, Dict, Error, Integer, KeyValuePair, OPT_GLOBAL, OPT_LOCAL, Object, OptIndex, String_0,
-    buf_T, int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    Arena, Dict, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, String_0, buf_T,
+    int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
     key_value_pair, object, object_data, scid_T, sctx_T, size_t, vimoption_T, win_T,
 };
 
@@ -79,7 +79,7 @@ fn int_value(n: Integer) -> Object {
 /// `name` must be a valid string; `buf`, `win` and `arena` must be live.
 pub unsafe fn get_vimoption(
     name: String_0,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
     arena: *mut Arena,
@@ -113,8 +113,13 @@ pub unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
         let mut retval = arena_dict(arena, kOptCount as size_t);
         for opt_idx in kOptAleph..kOptCount {
             let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-            let opt_dict =
-                vimoption2dict(opt, OPT_GLOBAL as c_int, curbuf.get(), curwin.get(), arena);
+            let opt_dict = vimoption2dict(
+                opt,
+                OptionSetFlags::GLOBAL,
+                curbuf.get(),
+                curwin.get(),
+                arena,
+            );
             *retval.items.add(retval.size) = key_value_pair {
                 key: cstr_as_string((*opt).fullname),
                 value: object {
@@ -136,17 +141,17 @@ pub unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
 /// # Safety
 ///
 /// `opt` must point into the option table; `buf` and `win` must be live
-/// unless `opt_flags` is exactly `OPT_GLOBAL`.
+/// unless `opt_flags` is exactly `OptionSetFlags::GLOBAL`.
 unsafe fn last_set(
     opt: *mut vimoption_T,
     opt_idx: OptIndex,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
 ) -> sctx_T {
     // SAFETY: the caller's pointers are live for the scopes reached below.
     unsafe {
-        if opt_flags == OPT_GLOBAL as c_int {
+        if opt_flags == OptionSetFlags::GLOBAL {
             return (*opt).script_ctx;
         }
         let mut script_ctx = sctx_T {
@@ -162,7 +167,7 @@ unsafe fn last_set(
             script_ctx =
                 (*win).w_onebuf_opt.wo_script_ctx[(*opt).scope_idx[kOptScopeWin as usize] as usize];
         }
-        if opt_flags != OPT_LOCAL as c_int && script_ctx.sc_sid == 0 {
+        if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
             script_ctx = (*opt).script_ctx;
         }
         script_ctx
@@ -177,7 +182,7 @@ unsafe fn last_set(
 /// live.
 pub(crate) unsafe fn vimoption2dict(
     opt: *mut vimoption_T,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
     arena: *mut Arena,

@@ -19,7 +19,7 @@ use crate::file_search::Name;
 use crate::regexp::RE_MAGIC;
 use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
-    CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE, FAIL, MAXPATHL, NUL, OK, OPT_NOWIN,
+    CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE, FAIL, MAXPATHL, NUL, OK, OptionSetFlags,
 };
 use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -580,7 +580,7 @@ unsafe fn keep_or_drop_dummy(
         let mut aco = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, buf);
         apply_autocmds(EVENT_FILETYPE, (*buf).b_p_ft, (*buf).b_fname, true, buf);
-        do_modelines(OPT_NOWIN as c_int);
+        do_modelines(OptionSetFlags::NOWIN);
         aucmd_restbuf(&raw mut aco);
     }
 }

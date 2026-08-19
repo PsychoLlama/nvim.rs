@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
-use crate::types::OPT_LOCAL;
+use crate::types::OptionSetFlags;
 
 pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
     unsafe {
@@ -185,7 +185,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                             },
                         },
                     },
-                    OPT_LOCAL as ::core::ffi::c_int,
+                    OptionSetFlags::LOCAL,
                     0 as scid_T,
                     kOptScopeBuf,
                     buf as *mut ::core::ffi::c_void,
@@ -202,7 +202,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                             },
                         },
                     },
-                    OPT_LOCAL as ::core::ffi::c_int,
+                    OptionSetFlags::LOCAL,
                     0 as scid_T,
                     kOptScopeBuf,
                     buf as *mut ::core::ffi::c_void,

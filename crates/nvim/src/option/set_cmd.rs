@@ -35,10 +35,9 @@ use crate::options::{kOptAleph, kOptFoldmethod, kOptInvalid, kOptWrap, options};
 use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OPT_GLOBAL, OPT_LOCAL,
-    OPT_MODELINE, OPT_NOWIN, OPT_ONECOLUMN, OPT_WINONLY, OptIndex, OptInt, OptVal, OptValData,
-    TriState, exarg_T, kFalse, kNone, kTrue, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T,
-    vimoption_T, win_T,
+    CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OptIndex, OptInt, OptVal,
+    OptValData, OptionSetFlags, TriState, exarg_T, kFalse, kNone, kTrue, scid_T, size_t, uint8_t,
+    uint32_t, uvarnumber_T, vimoption_T, win_T,
 };
 use ::libc::strlen;
 
@@ -77,15 +76,15 @@ pub unsafe fn ex_set(eap: *mut exarg_T) {
     // SAFETY: the caller's argument block.
     unsafe {
         let mut flags = match (*eap).cmdidx as CMD_index {
-            CMD_setlocal => OPT_LOCAL,
-            CMD_setglobal => OPT_GLOBAL,
-            _ => 0,
+            CMD_setlocal => OptionSetFlags::LOCAL,
+            CMD_setglobal => OptionSetFlags::GLOBAL,
+            _ => OptionSetFlags::NONE,
         };
         // `:set!` lists one option per line.
         if (*eap).forceit != 0 {
-            flags |= OPT_ONECOLUMN;
+            flags |= OptionSetFlags::ONECOLUMN;
         }
-        do_set((*eap).arg, flags as c_int);
+        do_set((*eap).arg, flags);
     }
 }
 
@@ -139,7 +138,7 @@ unsafe fn get_option_prefix(argp: &mut *mut c_char) -> Prefix {
 unsafe fn validate_opt_idx(
     win: *mut win_T,
     opt_idx: OptIndex,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     flags: uint32_t,
     prefix: Prefix,
     errmsg: &mut *const c_char,
@@ -149,13 +148,13 @@ unsafe fn validate_opt_idx(
         return FAIL;
     }
     // A `:set` sweeping over windows or buffers only wants its own kind.
-    if opt_flags & OPT_WINONLY as c_int != 0 && !option_is_window_local(opt_idx) {
+    if opt_flags.has(OptionSetFlags::WINONLY) && !option_is_window_local(opt_idx) {
         return FAIL;
     }
-    if opt_flags & OPT_NOWIN as c_int != 0 && option_is_window_local(opt_idx) {
+    if opt_flags.has(OptionSetFlags::NOWIN) && option_is_window_local(opt_idx) {
         return FAIL;
     }
-    if opt_flags & OPT_MODELINE as c_int != 0 {
+    if opt_flags.has(OptionSetFlags::MODELINE) {
         if flags & kOptFlagSecure as uint32_t != 0 {
             *errmsg = E_NOT_ALLOWED_IN_MODELINE.as_ptr();
             return FAIL;
@@ -263,7 +262,7 @@ pub unsafe fn find_option_end(arg: *const c_char, opt_idxp: *mut OptIndex) -> *c
 #[allow(clippy::too_many_arguments)]
 unsafe fn get_option_newval(
     opt_idx: OptIndex,
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     prefix: Prefix,
     argp: &mut *mut c_char,
     nextchar: c_int,
@@ -286,7 +285,7 @@ unsafe fn get_option_newval(
         // Setting the local value of a global-local option amends whatever
         // it is currently reading through, which may be the global value.
         let oldval_is_global =
-            option_is_global_local(opt_idx) && opt_flags & OPT_LOCAL as c_int != 0;
+            option_is_global_local(opt_idx) && opt_flags.has(OptionSetFlags::LOCAL);
         let oldval = optval_from_varp(
             opt_idx,
             if oldval_is_global {
@@ -296,19 +295,19 @@ unsafe fn get_option_newval(
             },
         );
 
-        // `:set opt&`. Deliberately `OPT_GLOBAL` rather than `opt_flags`, so
+        // `:set opt&`. Deliberately `OptionSetFlags::GLOBAL` rather than `opt_flags`, so
         // that a `:setlocal opt&` on a global-local option gets the real
         // default rather than the unset marker.
         if nextchar == '&' as c_int {
-            return optval_copy(get_option_default(opt_idx, OPT_GLOBAL as c_int));
+            return optval_copy(get_option_default(opt_idx, OptionSetFlags::GLOBAL));
         }
         // `:set opt<` resets to the global value; `:setlocal opt<` copies it
         // into the local one.
         if nextchar == '<' as c_int {
-            if option_is_global_local(opt_idx) && opt_flags & OPT_LOCAL as c_int == 0 {
+            if option_is_global_local(opt_idx) && !opt_flags.has(OptionSetFlags::LOCAL) {
                 unset_option_local_value(opt_idx);
             }
-            return get_option_value(opt_idx, OPT_GLOBAL as c_int);
+            return get_option_value(opt_idx, OptionSetFlags::GLOBAL);
         }
 
         match oldval.type_0 {
@@ -440,7 +439,7 @@ unsafe fn take_number(
 /// `*argp` must be NUL-terminated and `errbuf` writable for `errbuflen`
 /// bytes.
 unsafe fn do_one_set_option(
-    opt_flags: c_int,
+    opt_flags: OptionSetFlags,
     argp: &mut *mut c_char,
     did_show: &mut bool,
     errbuf: *mut c_char,
@@ -570,7 +569,12 @@ unsafe fn do_one_set_option(
 /// # Safety
 ///
 /// `varp` must be the option's variable in the scope `opt_flags` names.
-unsafe fn show_one(opt_idx: OptIndex, opt_flags: c_int, varp: *mut c_void, did_show: &mut bool) {
+unsafe fn show_one(
+    opt_idx: OptIndex,
+    opt_flags: OptionSetFlags,
+    varp: *mut c_void,
+    did_show: &mut bool,
+) {
     let opt = get_option(opt_idx);
     // SAFETY: `curwin`/`curbuf` are live and the option table is a plain
     // array.
@@ -610,7 +614,7 @@ unsafe fn show_one(opt_idx: OptIndex, opt_flags: c_int, varp: *mut c_void, did_s
 /// # Safety
 ///
 /// `arg` must be NUL-terminated.
-pub unsafe fn do_set(arg: *mut c_char, opt_flags: c_int) -> c_int {
+pub unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_int {
     let mut did_show = false;
     let mut arg = arg;
 
@@ -625,7 +629,7 @@ pub unsafe fn do_set(arg: *mut c_char, opt_flags: c_int) -> c_int {
             // in a modeline.
             let is_all = strncmp(arg, c"all".as_ptr(), 3) == 0
                 && !(*arg.add(3) as u8).is_ascii_alphabetic()
-                && opt_flags & OPT_MODELINE as c_int == 0;
+                && !opt_flags.has(OptionSetFlags::MODELINE);
             if is_all {
                 arg = arg.add(3);
                 if *arg as c_int == '&' as c_int {

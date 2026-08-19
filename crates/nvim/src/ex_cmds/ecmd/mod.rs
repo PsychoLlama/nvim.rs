@@ -67,8 +67,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    NUL, OK, OPT_WINONLY, OptInt, String_0, VV_SWAPCOMMAND, bufref_T, exarg_T, linenr_T, ptrdiff_t,
-    time_t, win_T,
+    NUL, OK, OptInt, OptionSetFlags, String_0, VV_SWAPCOMMAND, bufref_T, exarg_T, linenr_T,
+    ptrdiff_t, time_t, win_T,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -685,7 +685,7 @@ unsafe fn enter_new_buffer(
         // by the user.
         // SAFETY: `curbuf` is live.
         unsafe {
-            do_modelines(OPT_WINONLY as c_int);
+            do_modelines(OptionSetFlags::WINONLY);
             apply_autocmds_retval(
                 EVENT_BUFENTER,
                 ptr::null_mut(),

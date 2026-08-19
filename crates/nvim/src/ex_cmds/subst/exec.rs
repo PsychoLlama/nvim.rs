@@ -55,8 +55,8 @@ use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, NUL, OptInt, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
-    lpos_T, pos_T, proftime_T, regmmatch_T, size_t,
+    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, NUL, OptInt, OptionSetFlags, colnr_T, exarg_T, handle_T,
+    int64_t, linenr_T, lpos_T, pos_T, proftime_T, regmmatch_T, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
@@ -721,7 +721,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         set_option_direct(
             kOptInccommand,
             static_cstr_optval(c""),
-            0 as c_int,
+            OptionSetFlags::NONE,
             SID_NONE,
         );
         return 0 as c_int;

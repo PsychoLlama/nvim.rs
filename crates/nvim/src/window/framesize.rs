@@ -16,7 +16,7 @@ use super::*;
 use crate::main::{Rows, curwin, p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
-use crate::types::{OptInt, OptVal, OptValData, frame_T};
+use crate::types::{OptInt, OptVal, OptValData, OptionSetFlags, frame_T};
 use crate::winlayer::{Frame, Win};
 
 // ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ pub(crate) fn new_height(
                     type_0: kOptValTypeNumber,
                     data: OptValData { number: new_ch },
                 },
-                0 as ::core::ffi::c_int,
+                OptionSetFlags::NONE,
             );
             min_set_ch.set(save_ch);
         }

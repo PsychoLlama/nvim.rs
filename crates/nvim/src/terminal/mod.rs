@@ -67,8 +67,8 @@ use crate::options::kOptBuftype;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, OPT_LOCAL,
-    Object, OptVal, OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermColor,
+    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, Object, OptVal,
+    OptValData, OptValType, OptionSetFlags, RgbValue, Terminal, TerminalOptions, VTermColor,
     VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T,
     buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil,
     kObjectTypeString, linenr_T, pos_T, ptr_t, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
@@ -387,7 +387,7 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
                 string: static_cstring(c"terminal"),
             },
         },
-        OPT_LOCAL as c_int,
+        OptionSetFlags::LOCAL,
     );
     buf.b_locked -= 1;
 

@@ -24,7 +24,7 @@ use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
     win_opt,
 };
-use crate::types::MAXPATHL;
+use crate::types::{MAXPATHL, OptionSetFlags};
 use crate::winlayer::Win;
 
 /// Everything `nvim_eval_statusline()` needs to have settled before it can
@@ -105,7 +105,7 @@ pub unsafe fn nvim_eval_statusline(
         // unlike the drawing side this needs no private copy.
         // SAFETY: a checked API string.
         fmt: unsafe { Fmt::borrowed(str.data) },
-        opt: (kOptInvalid, 0),
+        opt: (kOptInvalid, OptionSetFlags::NONE),
         fillchar: ctx.fillchar,
         maxwidth: ctx.maxwidth,
         hl: if opts.highlights {

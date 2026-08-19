@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::smsg_c;
-use crate::types::{FAIL, OK, OPT_NOWIN};
+use crate::types::{FAIL, OK, OptionSetFlags};
 
 /// A `multiqueue` event's argument vector with nothing in it.
 const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
@@ -115,9 +115,9 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
                     // Don't set window-local options when the window we are
                     // in belongs to another buffer.
                     do_modelines(if is_aucmd_win(curwin.get()) {
-                        OPT_NOWIN as ::core::ffi::c_int
+                        OptionSetFlags::NOWIN
                     } else {
-                        0
+                        OptionSetFlags::NONE
                     });
                 }
                 aucmd_restbuf(&raw mut aco);
@@ -134,7 +134,7 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
         if retval == OK {
             do_doautocmd(arg, false, &raw mut did_aucmd);
             if call_do_modelines && did_aucmd {
-                do_modelines(0);
+                do_modelines(OptionSetFlags::NONE);
             }
         }
     }

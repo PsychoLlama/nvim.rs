@@ -30,8 +30,8 @@ use crate::path::{FullName_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
     BS_NOSTOP, BS_START, Callback, Callback_data, FAIL, NUL, OK, OptIndex, OptVal, OptValData,
-    VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t, vimoption_T,
-    win_T,
+    OptionSetFlags, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t,
+    vimoption_T, win_T,
 };
 use ::libc::{strcmp, strlen};
 
@@ -368,7 +368,7 @@ pub fn default_fileformat() -> c_int {
 }
 
 /// Set 'fileformat' to `eol_style` and redraw what shows it.
-pub fn set_fileformat(eol_style: c_int, opt_flags: c_int) {
+pub fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
     let name = match eol_style {
         EOL_UNIX => Some(c"unix"),
         EOL_MAC => Some(c"mac"),

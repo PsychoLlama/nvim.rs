@@ -18,9 +18,9 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    Arena, Dict, Error, FAIL, KeyDict_option, KeyValuePair, OK, OPT_GLOBAL, OPT_LOCAL, Object,
-    OptIndex, OptScope, OptVal, OptValData, OptValType, String_0, TryState, aco_save_T, bln_values,
-    buf_T, bufref_T, except_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    Arena, Dict, Error, FAIL, KeyDict_option, KeyValuePair, OK, Object, OptIndex, OptScope, OptVal,
+    OptValData, OptValType, OptionSetFlags, String_0, TryState, aco_save_T, bln_values, buf_T,
+    bufref_T, except_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
     linenr_T, msglist_T, sctx_T, size_t, uint64_t, win_T,
 };
 use crate::window::close_windows;
@@ -46,7 +46,7 @@ unsafe fn validate_option_value_args(
     mut opts: *mut KeyDict_option,
     mut name: *mut ::core::ffi::c_char,
     mut opt_idxp: *mut OptIndex,
-    mut opt_flags: *mut ::core::ffi::c_int,
+    mut opt_flags: *mut OptionSetFlags,
     mut scope: *mut OptScope,
     mut from: *mut *mut ::core::ffi::c_void,
     mut filetype: *mut *mut ::core::ffi::c_char,
@@ -54,9 +54,9 @@ unsafe fn validate_option_value_args(
 ) -> ::core::ffi::c_int {
     if has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__scope) {
         if strcmp((*opts).scope.data, c"local".as_ptr()) == 0 {
-            *opt_flags = OPT_LOCAL as ::core::ffi::c_int;
+            *opt_flags = OptionSetFlags::LOCAL;
         } else if strcmp((*opts).scope.data, c"global".as_ptr()) == 0 {
-            *opt_flags = OPT_GLOBAL as ::core::ffi::c_int;
+            *opt_flags = OptionSetFlags::GLOBAL;
         } else if true {
             api_err_exp(
                 err,
@@ -80,7 +80,7 @@ unsafe fn validate_option_value_args(
     }
     if has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__buf) {
         if has_key((*opts).is_set__option_, 3 as ::core::ffi::c_int)
-            && *opt_flags == OPT_GLOBAL as ::core::ffi::c_int
+            && *opt_flags == OptionSetFlags::GLOBAL
         {
             api_set_error(
                 err,
@@ -90,7 +90,7 @@ unsafe fn validate_option_value_args(
             );
             return 0 as ::core::ffi::c_int;
         }
-        *opt_flags = OPT_LOCAL as ::core::ffi::c_int;
+        *opt_flags = OptionSetFlags::LOCAL;
         *scope = kOptScopeBuf;
         *from = find_buffer_by_handle((*opts).buf, err) as *mut ::core::ffi::c_void;
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -221,7 +221,7 @@ unsafe fn do_ft_buf(
                 },
             },
         },
-        OPT_LOCAL as ::core::ffi::c_int,
+        OptionSetFlags::LOCAL,
         SID_NONE,
     );
     set_option_direct(
@@ -236,7 +236,7 @@ unsafe fn do_ft_buf(
                 },
             },
         },
-        OPT_LOCAL as ::core::ffi::c_int,
+        OptionSetFlags::LOCAL,
         SID_NONE,
     );
     debug_assert!(
@@ -305,7 +305,7 @@ pub unsafe fn nvim_get_option_value(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     let mut opt_idx: OptIndex = kOptAleph;
-    let mut opt_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
     let mut scope: OptScope = kOptScopeGlobal;
     let mut from: *mut ::core::ffi::c_void = NULL;
     let mut filetype: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -364,7 +364,7 @@ pub unsafe fn nvim_set_option_value(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     let mut opt_idx: OptIndex = kOptAleph;
-    let mut opt_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
     let mut scope: OptScope = kOptScopeGlobal;
     let mut to: *mut ::core::ffi::c_void = NULL;
     if validate_option_value_args(
@@ -381,10 +381,10 @@ pub unsafe fn nvim_set_option_value(
         return ().reported(error);
     }
     if scope as ::core::ffi::c_uint == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
-        && opt_flags == 0 as ::core::ffi::c_int
+        && opt_flags.is_empty()
     {
         if option_has_scope(opt_idx, kOptScopeGlobal) {
-            opt_flags = OPT_LOCAL as ::core::ffi::c_int;
+            opt_flags = OptionSetFlags::LOCAL;
         }
     }
     let Some(optval) = object_as_optval(value) else {
@@ -412,7 +412,7 @@ pub unsafe fn nvim_get_option_info2(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     let mut opt_idx: OptIndex = kOptAleph;
-    let mut opt_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
     let mut scope: OptScope = kOptScopeGlobal;
     let mut from: *mut ::core::ffi::c_void = NULL;
     if validate_option_value_args(

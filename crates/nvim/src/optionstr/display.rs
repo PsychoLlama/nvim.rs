@@ -34,7 +34,7 @@ use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Error, FAIL, FloatAnchor, NUL, OK, OPT_LOCAL, OptInt, VirtText, WinConfig, buf_T, colnr_T,
+    Error, FAIL, FloatAnchor, NUL, OK, OptInt, OptionSetFlags, VirtText, WinConfig, buf_T, colnr_T,
     kErrorTypeNone, kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::window::check_colorcolumn;
@@ -428,7 +428,7 @@ pub unsafe fn did_set_signcolumn(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
     let wp = unsafe { win(args) };
     // SAFETY: the caller's frame and window.
-    let local = unsafe { (*args).os_flags } & OPT_LOCAL as c_int != 0;
+    let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
     let (value, flags) = unsafe {
         if local {
             (

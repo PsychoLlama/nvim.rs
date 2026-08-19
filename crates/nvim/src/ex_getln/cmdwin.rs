@@ -9,8 +9,7 @@
 
 use super::*;
 use crate::keycodes::Ctrl_C;
-use crate::types::{CMOD_NOSWAPFILE, FAIL, NUL, OK, OPT_LOCAL};
-use core::ffi::c_int;
+use crate::types::{CMOD_NOSWAPFILE, FAIL, NUL, OK, OptionSetFlags};
 
 /// True when the text must not be changed and we cannot switch to another
 /// window or buffer — editing the command line, and the like.
@@ -217,7 +216,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
         // The command-line buffer has bufhidden=wipe, unlike a true
         // "scratch" buffer.
-        set_option_value_give_err(kOptBufhidden, static_optval(c"wipe"), OPT_LOCAL as c_int);
+        set_option_value_give_err(kOptBufhidden, static_optval(c"wipe"), OptionSetFlags::LOCAL);
         (*curbuf.get()).b_p_ma = true_0;
         (*curwin.get()).w_onebuf_opt.wo_fen = false_0;
         (*curwin.get()).w_onebuf_opt.wo_rl = cmdmsg_rl.get() as ::core::ffi::c_int;
@@ -245,7 +244,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
                     true,
                 );
             }
-            set_option_value_give_err(kOptFiletype, static_optval(c"vim"), OPT_LOCAL as c_int);
+            set_option_value_give_err(kOptFiletype, static_optval(c"vim"), OptionSetFlags::LOCAL);
         }
         (*curbuf.get()).b_ro_locked -= 1;
 

@@ -48,8 +48,8 @@ use crate::runtime::runtimepath_default;
 use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, OptVal, OptValData, PATHSEPSTR, String_0,
-    garray_T, kFalse, kTrue, size_t, tabpage_T, uint32_t, vimoption_T,
+    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, PATHSEPSTR, String_0, garray_T,
+    kFalse, kTrue, size_t, tabpage_T, uint32_t, vimoption_T,
 };
 use crate::window::{last_status, win_comp_scroll};
 use ::libc::{getuid, strlen};
@@ -348,7 +348,7 @@ pub fn set_init_1(clean_arg: bool) {
             set_string_default(kOptPackpath, rtp, false);
         }
 
-        set_options_default(0);
+        set_options_default(OptionSetFlags::NONE);
 
         (*curbuf.get()).b_p_initialized = true;
         // The four global-local options the first buffer starts unset.
@@ -367,11 +367,11 @@ pub fn set_init_1(clean_arg: bool) {
         set_init_expand_env();
 
         if os_env_exists(c"NVIM_NOTTYFAST".as_ptr(), false) {
-            set_option_value_give_err(kOptTtyfast, boolean(false), 0);
+            set_option_value_give_err(kOptTtyfast, boolean(false), OptionSetFlags::NONE);
         }
         save_file_ff(curbuf.get());
         if os_env_exists(c"MLTERM".as_ptr(), false) {
-            set_option_value_give_err(kOptTermbidi, boolean(true), 0);
+            set_option_value_give_err(kOptTermbidi, boolean(true), OptionSetFlags::NONE);
         }
 
         didset_options2();
@@ -384,14 +384,14 @@ pub fn set_init_1(clean_arg: bool) {
 
 /// The default `:set opt&` would install: the table's, with the environment
 /// expanded, or the unset value for a `:setlocal` on a global-local option.
-pub fn get_option_default(opt_idx: OptIndex, opt_flags: c_int) -> OptVal {
+pub fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     // Running as root, 'modeline' defaults off: a modeline is arbitrary
     // code from whoever wrote the file.
     // SAFETY: `getuid` and the option table.
     if opt_idx == kOptModeline && unsafe { getuid() } == ROOT_UID as _ {
         return boolean(false);
     }
-    if opt_flags & OPT_LOCAL as c_int != 0 && option_is_global_local(opt_idx) {
+    if opt_flags.has(OptionSetFlags::LOCAL) && option_is_global_local(opt_idx) {
         return get_option_unset_value(opt_idx);
     }
     // SAFETY: the option table is a plain array, and the string arm is only
@@ -436,8 +436,8 @@ pub(crate) fn change_option_default(opt_idx: OptIndex, value: OptVal) {
 
 /// Put an option back to its default, and clear the insecure mark with it —
 /// a default cannot have come from a modeline.
-fn set_option_default(opt_idx: OptIndex, opt_flags: c_int) {
-    let both = opt_flags & (OPT_LOCAL | OPT_GLOBAL) as c_int == 0;
+fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
+    let both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
     let def_val = get_option_default(opt_idx, opt_flags);
     // SAFETY: `current_sctx`, `curwin` and the option table are the
     // editor's own.
@@ -450,7 +450,7 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: c_int) {
         }
         *insecure_flag(curwin.get(), opt_idx, opt_flags) &= !(kOptFlagInsecure as uint32_t);
         if both {
-            *insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as c_int) &=
+            *insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL) &=
                 !(kOptFlagInsecure as uint32_t);
         }
     }
@@ -458,7 +458,7 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: c_int) {
 
 /// Put every option back to its default. `kOptFlagNoDefault` names the ones
 /// that have already been given a computed value and must keep it.
-pub(crate) fn set_options_default(opt_flags: c_int) {
+pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
     // SAFETY: the option table and the window lists are the editor's own.
     unsafe {
         for opt_idx in all_options() {
@@ -566,7 +566,7 @@ pub fn set_init_2(_headless: bool) {
         // 'scroll' is half the window height, so it could not be defaulted
         // before there was a window.
         if !was_set(kOptScroll) {
-            set_option_default(kOptScroll, OPT_LOCAL as c_int);
+            set_option_default(kOptScroll, OptionSetFlags::LOCAL);
         }
         comp_col();
     }
@@ -620,12 +620,12 @@ pub fn set_init_3() {
         if is_csh || named(&POSIX_LIKE) {
             if do_sp {
                 let sp = borrowed(if is_csh { c"|& tee" } else { c"2>&1| tee" });
-                set_option_direct(kOptShellpipe, sp, 0, SID_NONE);
+                set_option_direct(kOptShellpipe, sp, OptionSetFlags::NONE, SID_NONE);
                 change_option_default(kOptShellpipe, optval_copy(sp));
             }
             if do_srr {
                 let srr = borrowed(if is_csh { c">&" } else { c">%s 2>&1" });
-                set_option_direct(kOptShellredir, srr, 0, SID_NONE);
+                set_option_direct(kOptShellredir, srr, OptionSetFlags::NONE, SID_NONE);
                 change_option_default(kOptShellredir, optval_copy(srr));
             }
         }
@@ -635,7 +635,7 @@ pub fn set_init_3() {
         // from, so it takes the first of 'fileformats' — but only if the
         // user gave that option a value; otherwise its own default stands.
         if buf_is_empty(curbuf.get()) && was_set(kOptFileformats) {
-            set_fileformat(default_fileformat(), OPT_LOCAL as c_int);
+            set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
         }
     }
     set_title_defaults();

@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
-use crate::types::{OPT_GLOBAL, OPT_LOCAL};
+use crate::types::OptionSetFlags;
 
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
@@ -17,7 +17,7 @@ pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<
     unsafe {
         return get_vimoption(
             name,
-            OPT_GLOBAL as ::core::ffi::c_int,
+            OptionSetFlags::GLOBAL,
             curbuf.get(),
             curwin.get(),
             arena,
@@ -156,9 +156,9 @@ unsafe fn get_option_from(
                 if scope as ::core::ffi::c_uint
                     == kOptScopeGlobal as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    OPT_GLOBAL as ::core::ffi::c_int
+                    OptionSetFlags::GLOBAL
                 } else {
-                    OPT_LOCAL as ::core::ffi::c_int
+                    OptionSetFlags::LOCAL
                 },
                 scope,
                 from,
@@ -209,17 +209,17 @@ unsafe fn set_option_to(
             );
             return;
         };
-        let opt_flags: ::core::ffi::c_int = if scope as ::core::ffi::c_uint
+        let opt_flags: OptionSetFlags = if scope as ::core::ffi::c_uint
             == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
             && !option_has_scope(opt_idx, kOptScopeGlobal)
         {
-            0 as ::core::ffi::c_int
+            OptionSetFlags::NONE
         } else if scope as ::core::ffi::c_uint
             == kOptScopeGlobal as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            OPT_GLOBAL as ::core::ffi::c_int
+            OptionSetFlags::GLOBAL
         } else {
-            OPT_LOCAL as ::core::ffi::c_int
+            OptionSetFlags::LOCAL
         };
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
         set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);

@@ -55,9 +55,9 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    NUL, OPT_GLOBAL, OPT_LOCAL, OptIndex, OptInt, OptVal, OptValData, String_0, TriState,
-    VV_WARNINGMSG, buf_T, colnr_T, event_T, kFalse, linenr_T, optset_T, ptrdiff_t, size_t,
-    tabpage_T, uint8_t, win_T,
+    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, TriState, VV_WARNINGMSG,
+    buf_T, colnr_T, event_T, kFalse, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t,
+    win_T,
 };
 use crate::undo::{bufIsChanged, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
@@ -88,7 +88,7 @@ struct Frame {
     /// The variable that already holds the new value.
     varp: *mut c_void,
     idx: OptIndex,
-    flags: c_int,
+    flags: OptionSetFlags,
     old: OptValData,
     new: OptValData,
     /// The window the set is happening in.
@@ -171,7 +171,7 @@ pub unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
             set_vim_var_string(VV_WARNINGMSG, gettext(warning.as_ptr()), -1 as ptrdiff_t);
         }
         p_deco.set(1);
-        set_option_value(kOptKeymap, cstr_optval(c"arabic"), OPT_LOCAL as c_int)
+        set_option_value(kOptKeymap, cstr_optval(c"arabic"), OptionSetFlags::LOCAL)
     }
 }
 
@@ -531,7 +531,7 @@ pub unsafe fn did_set_readonly(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the buffer it names is live.
     unsafe {
         let f = Frame::read(args);
-        if (*f.buf).b_p_ro == 0 && f.flags & OPT_LOCAL as c_int == 0 {
+        if (*f.buf).b_p_ro == 0 && !f.flags.has(OptionSetFlags::LOCAL) {
             readonlymode.set(false);
         }
         if (*f.buf).b_p_ro != 0 {
@@ -680,7 +680,7 @@ pub unsafe fn did_set_undofile(args: *mut optset_T) -> *const c_char {
         for bp in buffers() {
             // A `:setlocal` only reaches its own buffer; `:set` and
             // `:setglobal` reach all of them.
-            let reaches = bp == f.buf || f.flags & OPT_GLOBAL as c_int != 0 || f.flags == 0;
+            let reaches = bp == f.buf || f.flags.has(OptionSetFlags::GLOBAL) || f.flags.is_empty();
             if reaches && !bufIsChanged(bp) && !(*bp).b_ml.ml_mfp.is_null() {
                 u_compute_hash(bp, hash.as_mut_ptr());
                 u_read_undo(ptr::null_mut(), hash.as_mut_ptr(), (*bp).b_fname);

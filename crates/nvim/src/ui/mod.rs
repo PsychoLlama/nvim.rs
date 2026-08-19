@@ -72,7 +72,7 @@ use crate::types::ui::{
 };
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Integer, KeyValuePair, LineFlags, Object, OptVal,
-    OptValData, RemoteUI, ScreenGrid, String_0, UIExtension, handle_T,
+    OptValData, OptionSetFlags, RemoteUI, ScreenGrid, String_0, UIExtension, handle_T,
 };
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
@@ -265,7 +265,7 @@ pub unsafe fn ui_refresh() {
                         number: had_message as _,
                     },
                 },
-                0,
+                OptionSetFlags::NONE,
             );
             let mut tp = first_tabpage.get();
             while !tp.is_null() {

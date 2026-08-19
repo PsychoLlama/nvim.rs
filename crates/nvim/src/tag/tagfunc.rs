@@ -10,8 +10,8 @@
 use super::*;
 use crate::hashtab::hash_removed;
 use crate::types::{
-    FAIL, OK, OPT_GLOBAL, OPT_LOCAL, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, kSpecialVarNull,
+    FAIL, OK, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -47,11 +47,11 @@ pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
     unsafe {
         let buf = (*args).os_buf.cast::<buf_T>();
         let value = (*args).os_newval.string.data;
-        let retval = if (*args).os_flags & OPT_LOCAL as c_int != 0 {
+        let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func(value, &raw mut (*buf).b_tfu_cb)
         } else {
             let retval = option_set_callback_func(value, tfu_cb.ptr());
-            if retval == OK && (*args).os_flags & OPT_GLOBAL as c_int == 0 {
+            if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 // `:set` without a scope sets the buffer-local copy too.
                 set_buflocal_tfu_callback(buf);
             }

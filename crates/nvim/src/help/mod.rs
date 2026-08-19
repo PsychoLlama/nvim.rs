@@ -51,9 +51,9 @@ use crate::pos::MAXCOL;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, OPT_LOCAL, Object,
-    OptInt, OptVal, OptValData, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString,
-    linenr_T, size_t, win_T,
+    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt,
+    OptVal, OptValData, OptionSetFlags, exarg_T, file_comparison, kErrorTypeNone,
+    kObjectTypeString, linenr_T, size_t, win_T,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::{semsg_c, smsg_c};
@@ -704,14 +704,14 @@ pub unsafe fn prepare_help_buffer() {
     // SAFETY: `curbuf`/`curwin` are the editor's current buffer and window.
     unsafe {
         (*curbuf.get()).b_help = true;
-        set_option_direct(kOptBuftype, cstr_optval(c"help"), OPT_LOCAL as c_int, 0);
+        set_option_direct(kOptBuftype, cstr_optval(c"help"), OptionSetFlags::LOCAL, 0);
 
         // Accept every ASCII character as a keyword character except ' ',
         // '*', '"' and '|', plus the latin1 word characters translated help
         // files use. Only set it when needed: `buf_init_chartab` is work.
         let isk = c"!-~,^*,^|,^\",192-255";
         if strcmp((*curbuf.get()).b_p_isk, isk.as_ptr()) != 0 {
-            set_option_direct(kOptIskeyword, cstr_optval(isk), OPT_LOCAL as c_int, 0);
+            set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
             check_buf_options(curbuf.get());
             buf_init_chartab(curbuf.get(), false);
         }
@@ -720,7 +720,7 @@ pub unsafe fn prepare_help_buffer() {
         set_option_direct(
             kOptFoldmethod,
             cstr_optval(c"manual"),
-            OPT_LOCAL as c_int,
+            OptionSetFlags::LOCAL,
             0,
         );
 

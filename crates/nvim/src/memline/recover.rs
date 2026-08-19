@@ -17,7 +17,7 @@ use core::ffi::{c_char, c_int, c_long, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
-use crate::types::{FAIL, MAXPATHL, NUL, OK, OPT_LOCAL};
+use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
 
 /// Try to recover `curbuf` from its swap file.
 ///
@@ -310,7 +310,7 @@ pub unsafe fn ml_recover(checkext: bool) {
 
             // What the swap file recorded wins over what the file suggests.
             if b0_ff != 0 {
-                set_fileformat(b0_ff - 1, OPT_LOCAL as c_int);
+                set_fileformat(b0_ff - 1, OptionSetFlags::LOCAL);
             }
             if !b0_fenc.is_null() {
                 set_option_value_give_err(
@@ -321,7 +321,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                             string: cstr_as_string(b0_fenc),
                         },
                     },
-                    OPT_LOCAL as c_int,
+                    OptionSetFlags::LOCAL,
                 );
                 xfree(b0_fenc.cast());
             }
