@@ -3,6 +3,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::r#move::WinValid;
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
@@ -659,7 +660,7 @@ pub struct window_S {
     pub w_border_adj: [::core::ffi::c_int; 4],
     pub w_height_outer: ::core::ffi::c_int,
     pub w_width_outer: ::core::ffi::c_int,
-    pub w_valid: ::core::ffi::c_int,
+    pub w_valid: WinValid,
     pub w_valid_cursor: pos_T,
     pub w_valid_leftcol: colnr_T,
     pub w_valid_skipcol: colnr_T,

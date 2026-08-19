@@ -28,6 +28,7 @@ use crate::main::{
     cmdwin_type, cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_floatonly, firstbuf, firstwin,
     lastwin, mode_displayed, p_confirm, p_write, restart_edit, stop_insert_mode,
 };
+use crate::r#move::WinValid;
 use crate::state::MODE_INSERT;
 use crate::types::{CMD_SIZE, CmdModFlags, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
 use crate::winlayer::tabs;
@@ -105,7 +106,7 @@ pub(crate) fn init_empty(wp: Win) {
     wp.w_topline = 1;
     wp.w_topfill = 0;
     wp.w_botline = 2;
-    wp.w_valid = 0;
+    wp.w_valid = WinValid::NONE;
     wp.w_s = &raw mut wp.buffer().b_s;
 }
 

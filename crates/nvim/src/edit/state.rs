@@ -26,6 +26,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::keycodes::{K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE, K_NOP};
+use crate::r#move::WinValid;
 use crate::types::{FAIL, NUL, OK};
 
 /// Set Insert mode up, run the state loop until it really ends, and tear it
@@ -108,7 +109,9 @@ unsafe fn insert_enter(s: *mut InsertState) {
         // The cursor needs positioning again when it is on a TAB, and when
         // the line carries inline virtual text.
         if gchar_cursor() == TAB || buf_meta_total(curbuf.get(), kMTMetaInline) > 0 {
-            (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+            (*curwin.get())
+                .w_valid
+                .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
         }
         if (*curbuf.get()).b_p_iminsert == B_IMODE_LMAP as OptInt {
             (*State.ptr()) |= MODE_LANGMAP;

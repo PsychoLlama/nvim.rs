@@ -120,11 +120,6 @@ pub const MOD_MASK_3CLICK: c_int = 0x40;
 pub const MOD_MASK_4CLICK: c_int = 0x60;
 pub const MOD_MASK_MULTI_CLICK: c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
 
-const VALID_WROW: c_int = 0x1;
-const VALID_CROW: c_int = 0x10;
-const VALID_BOTLINE: c_int = 0x20;
-const VALID_BOTLINE_AP: c_int = 0x40;
-const VALID_TOPLINE: c_int = 0x80;
 const FR_LEAF: c_int = 0;
 const FR_ROW: c_int = 1;
 /// The `'mouse'` flag a drag needs before it may start Visual mode.

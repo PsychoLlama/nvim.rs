@@ -40,7 +40,7 @@ use crate::main::{
     e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, last_chdir_reason, msg_silent,
     need_fileinfo, p_acd, starting,
 };
-use crate::r#move::scroll_cursor_halfway;
+use crate::r#move::{WinValid, scroll_cursor_halfway};
 use crate::option::buf_copy_options;
 use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
@@ -377,7 +377,7 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
     win.w_topline_was_set = false_0 as c_char;
 
     // mark cursor position as being invalid
-    win.w_valid = 0;
+    win.w_valid = WinValid::NONE;
 
     // Make sure the buffer is loaded.
     if buf.b_ml.ml_mfp.is_null() {

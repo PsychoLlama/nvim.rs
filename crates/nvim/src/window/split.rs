@@ -28,6 +28,7 @@ use crate::main::{
 use crate::mark::copy_jumplist;
 use crate::memory::{xcalloc, xstrdup};
 use crate::message::msg_clr_eos_force;
+use crate::r#move::WinValid;
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
@@ -772,7 +773,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_s = &raw mut buf.b_s;
     buf.b_nwindows += 1;
     newp.w_cursor = oldp.w_cursor;
-    newp.w_valid = 0;
+    newp.w_valid = WinValid::NONE;
     newp.w_curswant = oldp.w_curswant;
     newp.w_set_curswant = oldp.w_set_curswant;
     newp.w_topline = oldp.w_topline;

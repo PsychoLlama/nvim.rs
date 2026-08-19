@@ -16,6 +16,7 @@
 use super::*;
 use crate::decoration::kVPosWinCol;
 use crate::keycodes::Ctrl_V;
+use crate::r#move::WinValid;
 use crate::pos::MAXCOL;
 
 /// A row index no window can reach, used as "this area is empty".
@@ -696,7 +697,7 @@ unsafe fn plan_visual_area(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) {
         // No need to update lines above the top of the window.
         from = from.max((*wp).w_topline);
         // If `w_botline` is known, restrict to what is visible.
-        if (*wp).w_valid & VALID_BOTLINE != 0 {
+        if (*wp).w_valid.has(WinValid::BOTLINE) {
             from = from.min((*wp).w_botline - 1);
             to = to.min((*wp).w_botline - 1);
         }
@@ -938,11 +939,11 @@ unsafe fn finish_botline(
         // `dollar_vcol >= 0` means the cursor line is showing a `$` for a change
         // command and was not fully drawn, so its height is not known here.
         if dollar_vcol.get() == -1 || wp != curwin.get() {
-            (*wp).w_valid |= VALID_BOTLINE;
+            (*wp).w_valid |= WinValid::BOTLINE;
             (*wp).w_viewport_invalid = true;
             if wp == curwin.get() && (*wp).w_botline != old_botline && !RECURSIVE.get() {
                 RECURSIVE.set(true);
-                (*curwin.get()).w_valid &= !VALID_TOPLINE;
+                (*curwin.get()).w_valid.clear(WinValid::TOPLINE);
                 update_topline(curwin.get()); // may invalidate w_botline again
                 // A new redraw, either from a moved topline or a reset skipcol.
                 if must_redraw.get() != 0 {

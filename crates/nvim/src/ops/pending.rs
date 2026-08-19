@@ -32,6 +32,7 @@ use core::ffi::{c_int, c_void};
 
 use super::*;
 use crate::keycodes::{K_COMMAND, K_LUA};
+use crate::r#move::WinValid;
 use crate::types::{NUL, OK};
 
 /// The Visual area a `.` replays: its mode and size, not its position.
@@ -392,7 +393,7 @@ unsafe fn order_region(oap: *mut oparg_T) {
             (*curwin.get()).w_cursor = (*oap).start;
             // `w_virtcol` was updated for the old position and is not
             // recomputed automatically when the cursor goes back.
-            (*curwin.get()).w_valid &= !VALID_VIRTCOL;
+            (*curwin.get()).w_valid.clear(WinValid::VIRTCOL);
         } else {
             if !VIsual_active.get() && (*oap).motion_type == kMTLineWise {
                 if hasFolding(

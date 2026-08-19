@@ -148,9 +148,10 @@ impl Win {
             || self.w_skipcol != old_skipcol
             || self.w_topfill != old_topfill
         {
-            self.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
+            self.w_valid
+                .clear(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
         }
-        self.w_valid |= VALID_TOPLINE;
+        self.w_valid |= WinValid::TOPLINE;
         self.w_viewport_invalid = true;
     }
 }
@@ -218,7 +219,7 @@ impl Win {
                 || self.w_skipcol != old_skipcol
                 || self.w_skipcol != 0
             {
-                self.w_valid &= !(VALID_WROW | VALID_CROW);
+                self.w_valid.clear(WinValid::WROW | WinValid::CROW);
                 if self.w_skipcol != old_skipcol {
                     self.redraw_later(UPD_NOT_VALID);
                 } else {
@@ -252,7 +253,7 @@ impl Win {
             self.w_empty_rows = old_empty_rows;
             self.w_valid = old_valid;
         }
-        self.w_valid |= VALID_TOPLINE;
+        self.w_valid |= WinValid::TOPLINE;
         self.w_viewport_invalid = true;
 
         // Make sure the cursor is still visible after `zb` adjusted `w_skipcol`.
@@ -291,7 +292,7 @@ impl Win {
         }
 
         self.set_empty_rows(used);
-        self.w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
+        self.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
     }
 
     /// Walk outwards from the cursor line until enough context is found, and
@@ -576,8 +577,10 @@ impl Win {
             self.w_botfill = false;
         }
         self.check_topfill(false);
-        self.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
-        self.w_valid |= VALID_TOPLINE;
+        self.w_valid = self
+            .w_valid
+            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
+        self.w_valid |= WinValid::TOPLINE;
     }
 }
 
@@ -667,15 +670,19 @@ impl Win {
         } else {
             if cursor_lnum < topline && self.w_topline > 1 {
                 self.w_cursor.lnum = topline;
-                self.w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW);
+                self.w_valid = self
+                    .w_valid
+                    .without(WinValid::WROW | WinValid::WCOL | WinValid::CHEIGHT | WinValid::CROW);
             }
             if cursor_lnum > botline && self.w_botline <= self.buffer().line_count() {
                 self.w_cursor.lnum = botline;
-                self.w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW);
+                self.w_valid = self
+                    .w_valid
+                    .without(WinValid::WROW | WinValid::WCOL | WinValid::CHEIGHT | WinValid::CROW);
             }
         }
         self.check_cursor_moved();
-        self.w_valid |= VALID_TOPLINE;
+        self.w_valid |= WinValid::TOPLINE;
         self.w_viewport_invalid = true;
     }
 }

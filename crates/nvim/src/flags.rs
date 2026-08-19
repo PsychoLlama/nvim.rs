@@ -33,7 +33,8 @@
 ///
 /// The generated type has `NONE`, the named members, `bits`/`from_bits` for
 /// the boundaries where a raw `c_int` is unavoidable, `has` (any of the
-/// asked-for bits are set), `without`, `is_empty`, and `|`/`|=`.
+/// asked-for bits are set), `has_all` (all of them), `without`/`clear`,
+/// `is_empty`, and `|`/`|=`.
 #[macro_export]
 macro_rules! flag_set {
     (
@@ -77,6 +78,15 @@ macro_rules! flag_set {
                 self.0 & flags.0 != 0
             }
 
+            /// Whether *every* one of `flags`' bits is set — the C
+            /// `(opts & (FOO | BAR)) == (FOO | BAR)` test, which is a
+            /// different question from [`has`](Self::has) and reads the
+            /// same until you look twice.
+            #[inline]
+            pub const fn has_all(self, flags: Self) -> bool {
+                self.0 & flags.0 == flags.0
+            }
+
             /// Both sets of flags — `|`, in a `const` context, where the
             /// operator trait cannot be called.
             #[inline]
@@ -89,6 +99,14 @@ macro_rules! flag_set {
             #[inline]
             pub const fn when(self, cond: bool) -> Self {
                 if cond { self } else { Self::NONE }
+            }
+
+            /// Drop `flags` in place: C's `opts &= ~FOO`. The `|=`
+            /// counterpart, and the reason the field's own name need not
+            /// appear twice.
+            #[inline]
+            pub const fn clear(&mut self, flags: Self) {
+                self.0 &= !flags.0;
             }
 
             /// Every flag of `self` that is not in `flags`: C's `& ~FOO`.

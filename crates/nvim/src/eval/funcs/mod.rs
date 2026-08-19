@@ -174,7 +174,6 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
         .wrapping_mul(8_usize)
         .wrapping_sub(1_usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {

@@ -35,6 +35,7 @@ use crate::main::{getout, got_int, p_cpo, readonlymode, v_dying};
 use crate::memfile::MfDirty;
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_open};
 use crate::memory::xrealloc;
+use crate::r#move::WinValid;
 use crate::option::set_option_value_give_err;
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
@@ -337,7 +338,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     buf.b_modified_was_set = false;
 
     // mark cursor position as being invalid
-    cur_win().w_valid = 0;
+    cur_win().w_valid = WinValid::NONE;
 
     // A buffer without an actual file should not use the buffer name to read
     // a file.
@@ -440,7 +441,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
 
     // need to set w_topline, unless some autocommand already did that.
     let mut win = cur_win();
-    if win.w_valid & VALID_TOPLINE == 0 {
+    if !win.w_valid.has(WinValid::TOPLINE) {
         win.w_topline = 1 as linenr_T;
         win.w_topfill = 0;
     }

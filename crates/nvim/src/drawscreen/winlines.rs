@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::decoration::SIGN_WIDTH;
+use crate::r#move::WinValid;
 
 /// What the previous line of the walk was.
 ///
@@ -641,7 +642,7 @@ unsafe fn restart_for_statuscol(wp: *mut win_T) {
     unsafe {
         (*wp).w_redr_statuscol = false;
         (*wp).w_lines_valid = 0;
-        (*wp).w_valid &= !VALID_WCOL;
+        (*wp).w_valid.clear(WinValid::WCOL);
         decor_redraw_reset(wp, decor_state.ptr());
         decor_providers_invoke_win(wp);
     }

@@ -2,7 +2,6 @@
 //! `getpos()`/`setpos()` and the character-search state.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::VALID_VIRTCOL;
 use super::args::{Args, frame};
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
@@ -18,7 +17,7 @@ use crate::mark::setmark_pos;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
 use crate::message::emsg;
-use crate::r#move::update_curswant;
+use crate::r#move::{WinValid, update_curswant};
 use crate::os::cshim::gettext;
 use crate::plines::{getvvcol, win_chartabsize};
 use crate::pos::MAXCOL;
@@ -403,7 +402,7 @@ unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
             (*cur).w_set_curswant = saved_set_curswant;
             (*cur).w_curswant = saved_curswant;
             (*cur).w_virtcol = saved_virtcol;
-            (*cur).w_valid &= !VALID_VIRTCOL;
+            (*cur).w_valid.clear(WinValid::VIRTCOL);
         }
     }
 }

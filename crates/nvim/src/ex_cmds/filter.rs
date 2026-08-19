@@ -325,7 +325,7 @@ unsafe fn do_filter(
     // Temporarily disable lockmarks since that's needed to propagate changed
     // regions of the buffer for foldUpdate(), linecount, etc.
     let save_cmod_flags = cmdmod.with(|mods| mods.cmod_flags);
-    cmdmod.with_mut(|mods| mods.cmod_flags = mods.cmod_flags.without(CmdModFlags::LOCKMARKS));
+    cmdmod.with_mut(|mods| mods.cmod_flags.clear(CmdModFlags::LOCKMARKS));
 
     let mut linecount = line2 - line1 + 1;
     // SAFETY: `curwin` is the live current window and `line1` a line of it.

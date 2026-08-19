@@ -400,7 +400,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
                 let s: *mut ::core::ffi::c_char = expand_env_save(p as *mut ::core::ffi::c_char);
                 (*eap).arg = s;
                 (*eap).cmdidx = CMD_edit;
-                cmdmod.with_mut(|m| m.cmod_flags = m.cmod_flags.without(CmdModFlags::BROWSE));
+                cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
                 do_exedit(eap, ::core::ptr::null_mut::<win_T>());
                 xfree(s as *mut ::core::ffi::c_void);
             }

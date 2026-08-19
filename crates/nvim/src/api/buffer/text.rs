@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
+use crate::r#move::WinValid;
 use crate::types::NUL;
 
 pub unsafe fn nvim_buf_set_text(
@@ -432,7 +433,7 @@ pub(crate) unsafe fn fix_cursor(
             }
             check_cursor_col(win);
             changed_cline_bef_curs(win);
-            (*win).w_valid &= !VALID_BOTLINE_AP;
+            (*win).w_valid.clear(WinValid::BOTLINE_AP);
             update_topline(win);
         } else {
             invalidate_botline_win(win);

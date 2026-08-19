@@ -79,22 +79,29 @@ pub struct lineoff_T {
     pub height: c_int,
 }
 
-/// `w_wrow` is right.
-pub const VALID_WROW: c_int = 0x1;
-/// `w_wcol` is right.
-pub const VALID_WCOL: c_int = 0x2;
-/// `w_virtcol` is right.
-pub const VALID_VIRTCOL: c_int = 0x4;
-/// `w_cline_height` and `w_cline_folded` are right.
-pub const VALID_CHEIGHT: c_int = 0x8;
-/// `w_cline_row` is right.
-pub const VALID_CROW: c_int = 0x10;
-/// `w_botline` is right.
-pub const VALID_BOTLINE: c_int = 0x20;
-/// `w_botline` is at worst approximately right.
-pub const VALID_BOTLINE_AP: c_int = 0x40;
-/// `w_topline` shows the cursor with 'scrolloff' context.
-pub const VALID_TOPLINE: c_int = 0x80;
+crate::flag_set! {
+    /// Which of a window's cached cursor and scroll positions are still
+    /// right -- upstream's `VALID_*`, the bits `win_T::w_valid` carries.
+    /// A field whose bit is clear must be recomputed before it is read.
+    pub struct WinValid;
+
+    /// `w_wrow` is right.
+    const WROW = 0x1;
+    /// `w_wcol` is right.
+    const WCOL = 0x2;
+    /// `w_virtcol` is right.
+    const VIRTCOL = 0x4;
+    /// `w_cline_height` and `w_cline_folded` are right.
+    const CHEIGHT = 0x8;
+    /// `w_cline_row` is right.
+    const CROW = 0x10;
+    /// `w_botline` is right.
+    const BOTLINE = 0x20;
+    /// `w_botline` is at worst approximately right.
+    const BOTLINE_AP = 0x40;
+    /// `w_topline` shows the cursor with 'scrolloff' context.
+    const TOPLINE = 0x80;
+}
 
 pub const true_0: c_int = 1;
 pub const false_0: c_int = 0;
@@ -347,7 +354,7 @@ pub unsafe fn plines_correct_topline(
 fn comp_botline(mut win: Win) {
     win.check_cursor_moved();
     // If `w_cline_row` is valid start there, otherwise at the top line.
-    let (mut lnum, mut done) = if win.w_valid & VALID_CROW != 0 {
+    let (mut lnum, mut done) = if win.w_valid.has(WinValid::CROW) {
         (win.w_cursor.lnum, win.w_cline_row)
     } else {
         (win.w_topline, 0)
@@ -359,7 +366,7 @@ fn comp_botline(mut win: Win) {
             win.w_cline_height = n;
             win.w_cline_folded = folded;
             redraw_for_cursorline(win);
-            win.w_valid |= VALID_CROW | VALID_CHEIGHT;
+            win.w_valid |= WinValid::CROW | WinValid::CHEIGHT;
         }
         if done + n > win.w_view_height {
             break;
@@ -369,7 +376,7 @@ fn comp_botline(mut win: Win) {
     }
     // `w_botline` is the line just below the window.
     win.w_botline = lnum;
-    win.w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
+    win.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
     win.w_viewport_invalid = true;
     win.set_empty_rows(done);
     win.check_anchored_floats();
@@ -378,7 +385,7 @@ fn comp_botline(mut win: Win) {
 /// Redraw when `w_cline_row` changed and 'relativenumber' or 'cursorline' is
 /// set, or when concealing is on and 'concealcursor' is not active.
 fn redraw_for_cursorline(win: Win) {
-    if win.w_valid & VALID_CROW != 0 {
+    if win.w_valid.has(WinValid::CROW) {
         return;
     }
     if win.w_onebuf_opt.wo_rnu != 0 || win.cursorline_standout() {
@@ -396,7 +403,7 @@ fn redraw_for_cursorcolumn(win: Win) {
     if win.is_current() && win.w_onebuf_opt.wo_cole > 0 && win.conceal_cursor_line() {
         win.redraw_cursor_line();
     }
-    if win.w_valid & VALID_VIRTCOL != 0 {
+    if win.w_valid.has(WinValid::VIRTCOL) {
         return;
     }
     if win.w_onebuf_opt.wo_cuc != 0 {
@@ -423,7 +430,7 @@ pub unsafe fn set_valid_virtcol(wp: *mut win_T, vcol: colnr_T) {
     let mut win = unsafe { Win::new(wp) };
     win.w_virtcol = vcol;
     redraw_for_cursorcolumn(win);
-    win.w_valid |= VALID_VIRTCOL;
+    win.w_valid |= WinValid::VIRTCOL;
 }
 
 /// [`Win::marker_overlap`], for the callers still holding a raw window.
@@ -504,15 +511,21 @@ pub unsafe fn changed_line_abv_curs_win(wp: *mut win_T) {
 impl Win {
     /// Forget everything that depends on the cursor line's screen height.
     fn invalidate_above_cursor(mut self) {
-        self.w_valid &=
-            !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE);
+        self.w_valid.clear(
+            WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::VIRTCOL
+                | WinValid::CROW
+                | WinValid::CHEIGHT
+                | WinValid::TOPLINE,
+        );
     }
 }
 
 impl Win {
     /// Make sure `w_botline` is right.
     pub(super) fn validate_botline(self) {
-        if self.w_valid & VALID_BOTLINE == 0 {
+        if !self.w_valid.has(WinValid::BOTLINE) {
             comp_botline(self);
         }
     }
@@ -521,7 +534,7 @@ impl Win {
     pub(super) fn validate_cursor(self) {
         self.check_cursor_lnum();
         self.check_cursor_moved();
-        if self.w_valid & (VALID_WCOL | VALID_WROW) != VALID_WCOL | VALID_WROW {
+        if !self.w_valid.has_all(WinValid::WCOL | WinValid::WROW) {
             self.curs_columns(true);
         }
     }
@@ -529,12 +542,12 @@ impl Win {
     /// Make sure `w_virtcol` is right.
     pub(super) fn validate_virtcol(mut self) {
         self.check_cursor_moved();
-        if self.w_valid & VALID_VIRTCOL != 0 {
+        if self.w_valid.has(WinValid::VIRTCOL) {
             return;
         }
         self.w_virtcol = self.virtual_cursor_vcol(self.cursor());
         redraw_for_cursorcolumn(self);
-        self.w_valid |= VALID_VIRTCOL;
+        self.w_valid |= WinValid::VIRTCOL;
     }
 }
 
@@ -559,7 +572,9 @@ pub unsafe fn invalidate_botline_win(wp: *mut win_T) {
 impl Win {
     /// Mark `w_botline` invalid, because the buffer changed.
     pub(super) fn invalidate_botline(mut self) {
-        self.w_valid &= !(VALID_BOTLINE | VALID_BOTLINE_AP);
+        self.w_valid = self
+            .w_valid
+            .without(WinValid::BOTLINE | WinValid::BOTLINE_AP);
     }
 }
 
@@ -570,7 +585,7 @@ impl Win {
 pub unsafe fn approximate_botline_win(wp: *mut win_T) {
     // SAFETY: the caller's promise.
     let mut win = unsafe { Win::new(wp) };
-    win.w_valid &= !VALID_BOTLINE;
+    win.w_valid.clear(WinValid::BOTLINE);
 }
 
 /// Whether `w_wrow` and `w_wcol` are both right.
@@ -581,7 +596,7 @@ pub unsafe fn cursor_valid(wp: *mut win_T) -> c_int {
     // SAFETY: the caller's promise.
     let win = unsafe { Win::new(wp) };
     win.check_cursor_moved();
-    (win.w_valid & (VALID_WROW | VALID_WCOL) == VALID_WROW | VALID_WCOL) as c_int
+    win.w_valid.has_all(WinValid::WROW | WinValid::WCOL) as c_int
 }
 
 /// Make sure `w_wrow` and `w_wcol` are right. `w_topline` must already be --
@@ -649,7 +664,7 @@ fn curs_rows(mut win: Win) {
     }
 
     win.check_cursor_moved();
-    if win.w_valid & VALID_CHEIGHT == 0 {
+    if !win.w_valid.has(WinValid::CHEIGHT) {
         // The remembered entry is unusable when it names another line or was
         // marked stale.
         let stale = i < win.w_lines_valid && {
@@ -671,7 +686,7 @@ fn curs_rows(mut win: Win) {
         }
     }
     redraw_for_cursorline(win);
-    win.w_valid |= VALID_CROW | VALID_CHEIGHT;
+    win.w_valid |= WinValid::CROW | WinValid::CHEIGHT;
 }
 
 /// Make sure `w_virtcol` is right, and nothing else.
@@ -696,13 +711,13 @@ impl Win {
     /// Make sure `w_cline_height` is right, and nothing else.
     pub(super) fn validate_cheight(mut self) {
         self.check_cursor_moved();
-        if self.w_valid & VALID_CHEIGHT != 0 {
+        if self.w_valid.has(WinValid::CHEIGHT) {
             return;
         }
         let (height, _, folded) = self.plines_full(self.w_cursor.lnum, true, true);
         self.w_cline_height = height;
         self.w_cline_folded = folded;
-        self.w_valid |= VALID_CHEIGHT;
+        self.w_valid |= WinValid::CHEIGHT;
     }
 }
 
@@ -714,7 +729,7 @@ pub unsafe fn validate_cursor_col(wp: *mut win_T) {
     // SAFETY: the caller's promise.
     let mut win = unsafe { Win::new(wp) };
     win.validate_virtcol();
-    if win.w_valid & VALID_WCOL != 0 {
+    if win.w_valid.has(WinValid::WCOL) {
         return;
     }
     let off = win.col_off();
@@ -726,7 +741,7 @@ pub unsafe fn validate_cursor_col(wp: *mut win_T) {
         win.w_onebuf_opt.wo_wrap != 0,
         win.w_leftcol,
     );
-    win.w_valid |= VALID_WCOL;
+    win.w_valid |= WinValid::WCOL;
 }
 
 /// Columns of a window that are not text: the 'number'/'statuscolumn'

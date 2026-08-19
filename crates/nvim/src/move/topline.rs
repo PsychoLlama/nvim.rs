@@ -99,7 +99,7 @@ fn update_topline_win(mut win: Win) {
     }
 
     win.check_cursor_moved();
-    if win.w_valid & VALID_TOPLINE != 0 {
+    if win.w_valid.has(WinValid::TOPLINE) {
         return;
     }
 
@@ -122,7 +122,7 @@ fn update_topline_win(mut win: Win) {
         win.w_topline = 1;
         win.w_botline = 2;
         win.w_skipcol = 0;
-        win.w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
+        win.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
         win.w_viewport_invalid = true;
         win.w_scbind_pos = 1;
     } else if check_topline(win) {
@@ -161,7 +161,7 @@ fn update_topline_win(mut win: Win) {
     // redraw; when it was only approximated a redraw may still be needed in
     // a few cases, but recomputing it for every small change costs more.
     if check_botline {
-        if win.w_valid & VALID_BOTLINE_AP == 0 {
+        if !win.w_valid.has(WinValid::BOTLINE_AP) {
             win.validate_botline();
         }
         if win.w_botline <= win.buffer().line_count() {
@@ -191,7 +191,7 @@ fn update_topline_win(mut win: Win) {
         }
     }
 
-    win.w_valid |= VALID_TOPLINE;
+    win.w_valid |= WinValid::TOPLINE;
     win.w_viewport_invalid = true;
     win.check_anchored_floats();
 
@@ -382,15 +382,23 @@ impl Win {
     pub(super) fn changed_window_setting(mut self) {
         self.w_lines_valid = 0;
         self.invalidate_above_cursor();
-        self.w_valid &= !(VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
+        self.w_valid = self
+            .w_valid
+            .without(WinValid::BOTLINE | WinValid::BOTLINE_AP | WinValid::TOPLINE);
         self.redraw_later(UPD_NOT_VALID);
     }
 }
 
 fn check_cursor_moved_win(mut win: Win) {
     if win.w_cursor.lnum != win.w_valid_cursor.lnum {
-        win.w_valid &=
-            !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CHEIGHT | VALID_CROW | VALID_TOPLINE);
+        win.w_valid.clear(
+            WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::VIRTCOL
+                | WinValid::CHEIGHT
+                | WinValid::CROW
+                | WinValid::TOPLINE,
+        );
         // Concealed-line visibility toggled.
         if win.is_current()
             && win.w_valid_cursor.lnum > 0
@@ -406,13 +414,15 @@ fn check_cursor_moved_win(mut win: Win) {
         win.w_valid_skipcol = win.w_skipcol;
         win.w_viewport_invalid = true;
     } else if win.w_skipcol != win.w_valid_skipcol {
-        win.w_valid &= !(VALID_WROW
-            | VALID_WCOL
-            | VALID_VIRTCOL
-            | VALID_CHEIGHT
-            | VALID_CROW
-            | VALID_BOTLINE
-            | VALID_BOTLINE_AP);
+        win.w_valid.clear(
+            WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::VIRTCOL
+                | WinValid::CHEIGHT
+                | WinValid::CROW
+                | WinValid::BOTLINE
+                | WinValid::BOTLINE_AP,
+        );
         win.w_valid_cursor = win.w_cursor;
         win.w_valid_leftcol = win.w_leftcol;
         win.w_valid_skipcol = win.w_skipcol;
@@ -420,7 +430,9 @@ fn check_cursor_moved_win(mut win: Win) {
         || win.w_leftcol != win.w_valid_leftcol
         || win.w_cursor.coladd != win.w_valid_cursor.coladd
     {
-        win.w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+        win.w_valid = win
+            .w_valid
+            .without(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
         win.w_valid_cursor.col = win.w_cursor.col;
         win.w_valid_leftcol = win.w_leftcol;
         win.w_valid_cursor.coladd = win.w_cursor.coladd;
@@ -487,7 +499,9 @@ pub unsafe fn set_topline(wp: *mut win_T, lnum: linenr_T) {
         // The filler lines are kept when the top line did not change.
         win.w_topfill = 0;
     }
-    win.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_TOPLINE);
-    // Not VALID_TOPLINE: 'scrolloff' still has to be checked.
+    win.w_valid = win
+        .w_valid
+        .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::TOPLINE);
+    // Not WinValid::TOPLINE: 'scrolloff' still has to be checked.
     win.redraw_later(UPD_VALID);
 }

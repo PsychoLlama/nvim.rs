@@ -107,11 +107,6 @@ pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const VALID_CHEIGHT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const VALID_CROW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 /// Draw one buffer line, and answer the window row after it.
 ///
 /// The work is in two halves: [`prepare_line`] decides everything that is

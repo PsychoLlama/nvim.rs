@@ -94,7 +94,13 @@ impl Win {
         let reached = self.coladvance(self.w_curswant);
         // `validate_virtcol()` marked various things valid; moving the cursor
         // has just invalidated them again.
-        self.w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
+        self.w_valid.clear(
+            WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::CHEIGHT
+                | WinValid::CROW
+                | WinValid::VIRTCOL,
+        );
         if reached || self.w_skipcol == 0 || self.w_cursor.lnum >= self.buffer().line_count() {
             return;
         }
@@ -105,7 +111,7 @@ impl Win {
             self.w_cursor.col = 0;
             self.w_cursor.coladd = 0;
             self.w_curswant = 0;
-            self.w_valid &= !VALID_VIRTCOL;
+            self.w_valid.clear(WinValid::VIRTCOL);
         }
     }
 }
@@ -140,7 +146,7 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: linenr_T) {
         // otherwise the screen jumps back at the end of the file.
         win.cursor_correct();
         win.check_cursor_moved();
-        win.w_valid |= VALID_TOPLINE;
+        win.w_valid |= WinValid::TOPLINE;
 
         // If we ended up back where we were, at least move the cursor, or we
         // get stuck at one position. Don't move it up when the first line of
@@ -163,7 +169,7 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: linenr_T) {
                 }
             }
             win.check_cursor_moved();
-            win.w_valid |= VALID_TOPLINE;
+            win.w_valid |= WinValid::TOPLINE;
         }
     }
 
@@ -294,7 +300,13 @@ impl Win {
                 self.w_cursor.lnum = lnum - 1;
                 wrow -= self.plines(lnum, true);
             }
-            self.w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
+            self.w_valid.clear(
+                WinValid::WROW
+                    | WinValid::WCOL
+                    | WinValid::CHEIGHT
+                    | WinValid::CROW
+                    | WinValid::VIRTCOL,
+            );
             moved = true;
         }
         if moved {
@@ -393,10 +405,18 @@ impl Win {
         // Make sure `w_topline` is at the first of a sequence of folded lines.
         self.w_topline = self.fold_first(self.w_topline).unwrap_or(self.w_topline);
 
-        self.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE);
+        self.w_valid = self
+            .w_valid
+            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE);
         if self.w_cursor.lnum < self.w_topline {
             self.w_cursor.lnum = self.w_topline;
-            self.w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
+            self.w_valid.clear(
+                WinValid::WROW
+                    | WinValid::WCOL
+                    | WinValid::CHEIGHT
+                    | WinValid::CROW
+                    | WinValid::VIRTCOL,
+            );
             self.coladvance(self.w_curswant);
         }
 
@@ -545,7 +565,9 @@ pub unsafe fn scrolldown_clamp() {
         win.w_topline = win.fold_first(win.w_topline).unwrap_or(win.w_topline);
         // Approximate `w_botline`.
         win.w_botline -= 1;
-        win.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE);
+        win.w_valid = win
+            .w_valid
+            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE);
     }
 }
 
@@ -580,7 +602,9 @@ pub unsafe fn scrollup_clamp() {
         }
         // Approximate `w_botline`.
         win.w_botline += 1;
-        win.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE);
+        win.w_valid = win
+            .w_valid
+            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE);
     }
 }
 

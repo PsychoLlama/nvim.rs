@@ -32,7 +32,7 @@ use crate::main::{
 use crate::mark::setmark;
 use crate::message::msg_grid_validate;
 use crate::r#move::{
-    changed_line_abv_curs_win, curs_columns, invalidate_botline_win, set_topline,
+    WinValid, changed_line_abv_curs_win, curs_columns, invalidate_botline_win, set_topline,
     validate_botline_win, win_col_off, win_col_off2,
 };
 use crate::option::get_scrolloff_value;
@@ -170,9 +170,9 @@ pub(crate) fn fix_scroll(resize: bool) {
                 wp.w_fraction = FRACTION_MULT;
                 to_fraction(wp, wp.w_prev_height);
                 wp.w_cursor = cursor;
-                wp.w_valid &= !VALID_WCOL;
+                wp.w_valid.clear(WinValid::WCOL);
             } else if wp.is_current() {
-                wp.w_valid &= !VALID_CROW;
+                wp.w_valid.clear(WinValid::CROW);
             }
             invalidate_botline(wp);
             validate_botline(wp);

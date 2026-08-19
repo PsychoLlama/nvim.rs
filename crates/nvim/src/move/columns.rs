@@ -61,7 +61,7 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     // First make sure `w_topline` is valid (the cursor may have moved).
     win.update_topline();
     // Then that `w_cline_row` is.
-    if win.w_valid & VALID_CROW == 0 {
+    if !win.w_valid.has(WinValid::CROW) {
         curs_rows(win);
     }
 
@@ -213,7 +213,7 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     // from thinking otherwise.
     win.w_valid_leftcol = win.w_leftcol;
     win.w_valid_skipcol = win.w_skipcol;
-    win.w_valid |= VALID_WCOL | VALID_WROW | VALID_VIRTCOL;
+    win.w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
 }
 
 /// The screen position of the character at `pos` in window `wp`. The answers

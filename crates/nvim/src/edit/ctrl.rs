@@ -23,6 +23,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::r#move::WinValid;
 use crate::types::{FAIL, NUL};
 
 /// The three CTRL-G commands that are spelled with a letter.
@@ -331,7 +332,9 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
                 }
             } else {
                 (*curwin.get()).w_cursor.col -= 1;
-                (*curwin.get()).w_valid &= !(VALID_WCOL | VALID_VIRTCOL);
+                (*curwin.get())
+                    .w_valid
+                    .clear(WinValid::WCOL | WinValid::VIRTCOL);
                 // Correct the cursor for a multi-byte character.
                 mb_adjust_cursor();
             }
@@ -342,7 +345,9 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
         // The cursor needs positioning again when it is on a TAB, and when
         // the line carries inline virtual text.
         if gchar_cursor() == TAB || buf_meta_total(curbuf.get(), kMTMetaInline) > 0 {
-            (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+            (*curwin.get())
+                .w_valid
+                .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
         }
 
         setmouse();

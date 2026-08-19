@@ -186,7 +186,7 @@ pub(crate) unsafe fn expand_shellcmd(
                     flags |= ExpandFlags::DIR;
                 } else {
                     // Do not match directories inside a $PATH item.
-                    flags = flags.without(ExpandFlags::DIR);
+                    flags.clear(ExpandFlags::DIR);
                 }
 
                 seplen = if after_pathsep(s, e) == 0 {

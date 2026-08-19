@@ -269,9 +269,6 @@ pub const REPLACE_STACK_EMPTY: ReplaceStack = ReplaceStack {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
-pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

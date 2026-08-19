@@ -36,6 +36,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::r#move::WinValid;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
@@ -597,7 +598,7 @@ impl Cells {
             }
             (*wp).w_wrow = wlv.row;
             self.did_cursor_col = true;
-            (*wp).w_valid |= VALID_WCOL | VALID_WROW | VALID_VIRTCOL;
+            (*wp).w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
         }
     }
 

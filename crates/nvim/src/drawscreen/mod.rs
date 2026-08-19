@@ -139,9 +139,6 @@ pub const SHOWCMD_COLS: ::core::ffi::c_int = 10;
 /// The narrowest screen the editor will lay windows out on.
 pub const MIN_COLUMNS: ::core::ffi::c_int = 12;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const VALID_BOTLINE: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
-pub const VALID_TOPLINE: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

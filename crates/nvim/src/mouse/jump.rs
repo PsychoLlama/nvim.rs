@@ -28,6 +28,7 @@ use crate::main::{
     VIsual, VIsual_active, VIsual_reselect, cmdwin_type, cmdwin_win, mouse_col, mouse_dragging,
     mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, p_smd, redraw_cmdline,
 };
+use crate::r#move::WinValid;
 use crate::normal::{end_visual_mode, may_start_select};
 use crate::types::pos_T;
 
@@ -395,7 +396,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
         // When dragging the mouse, while the text has been scrolled up as far
         // as it goes, moving the mouse in the top line should scroll the text
         // down (done later when recomputing w_topline).
-        win.w_valid &= !VALID_TOPLINE;
+        win.w_valid.clear(WinValid::TOPLINE);
     }
 
     None
@@ -426,7 +427,9 @@ fn scroll_back(mut win: Win, row: c_int) {
         }
     }
     win.check_topfill(false);
-    win.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
+    win.w_valid = win
+        .w_valid
+        .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
     win.redraw_later(UPD_VALID);
 }
 
@@ -461,7 +464,9 @@ fn scroll_forward(mut win: Win, row: c_int) {
     }
     win.check_topfill(false);
     win.redraw_later(UPD_VALID);
-    win.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
+    win.w_valid = win
+        .w_valid
+        .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
 }
 
 /// C's `foldclick:` tail, which both paths above fall into: read the fold

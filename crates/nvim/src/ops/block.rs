@@ -32,6 +32,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::r#move::WinValid;
 use crate::types::NUL;
 
 /// Insert `s` into every line of the block below the first, before the block
@@ -218,7 +219,9 @@ pub unsafe fn reset_lbr() -> bool {
         }
         (*curwin.get()).w_onebuf_opt.wo_lbr = false_0;
         // Changing 'linebreak' may require w_virtcol to be recomputed.
-        (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+        (*curwin.get())
+            .w_valid
+            .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
         true
     }
 }
@@ -233,7 +236,9 @@ pub unsafe fn restore_lbr(lbr_saved: bool) {
             return;
         }
         (*curwin.get()).w_onebuf_opt.wo_lbr = true_0;
-        (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+        (*curwin.get())
+            .w_valid
+            .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
     }
 }
 

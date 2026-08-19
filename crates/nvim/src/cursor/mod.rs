@@ -38,7 +38,7 @@ use crate::main::{State, VIsual, VIsual_active, curwin, p_sel, restart_edit};
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{dec, inc, ml_get_len, ml_replace};
 use crate::memory::xmallocz;
-use crate::r#move::{changed_cline_bef_curs, set_valid_virtcol};
+use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::option::get_ve_flags;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsize};
@@ -51,7 +51,6 @@ use crate::types::{
 use crate::winlayer::{Buf, Line, Pos, Win};
 
 const TAB: c_int = 9;
-const VALID_VIRTCOL: c_int = 0x4;
 
 // ---------------------------------------------------------------------------
 // The window layer, as this module uses it
@@ -101,7 +100,7 @@ impl Win {
 
     #[inline(always)]
     fn invalidate_virtcol(mut self) {
-        self.w_valid &= !VALID_VIRTCOL;
+        self.w_valid.clear(WinValid::VIRTCOL);
     }
 
     #[inline(always)]

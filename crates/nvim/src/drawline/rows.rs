@@ -13,6 +13,7 @@
 use super::*;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
 use crate::grid::{SLF_INC_VCOL, SLF_WRAP};
+use crate::r#move::WinValid;
 use crate::types::NUL;
 
 impl Cells {
@@ -421,7 +422,7 @@ impl Cells {
                 (*curwin.get()).w_cline_row = wlv.startrow;
                 (*curwin.get()).w_cline_height = wlv.row - wlv.startrow;
                 (*curwin.get()).w_cline_folded = self.has_fold;
-                (*curwin.get()).w_valid |= VALID_CHEIGHT | VALID_CROW;
+                (*curwin.get()).w_valid |= WinValid::CHEIGHT | WinValid::CROW;
             }
         }
     }

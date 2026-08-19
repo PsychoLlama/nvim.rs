@@ -32,11 +32,12 @@ use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
 use crate::memory::xfree;
 use crate::message::emsg;
+use crate::r#move::WinValid;
 use crate::normal::{
     CA_COMMAND_BUSY, CAR, DEL, ESC, FO_OPEN_COMS, ML_DEL_MESSAGE, ML_EMPTY, NL, OPENLINE_DO_COM,
-    REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig, checkclearop,
-    checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo, prep_redo_cmd,
-    true_0, v_swap_corners, v_visop,
+    REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, checkclearop, checkclearopq,
+    clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo, prep_redo_cmd, true_0,
+    v_swap_corners, v_visop,
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
@@ -481,7 +482,7 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
         if opened {
             if win_cursorline_standout(win) {
                 // The cursor line moved, so its highlight has to be redrawn.
-                (*win).w_valid &= !VALID_CROW;
+                (*win).w_valid.clear(WinValid::CROW);
             }
             invoke_edit(cap, false_0, (*cap).cmdchar, true_0);
         }

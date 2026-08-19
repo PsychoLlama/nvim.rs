@@ -19,10 +19,10 @@ use crate::memline::goto_byte;
 use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::{
-    MOD_MASK_CTRL, VALID_WCOL, adjust_for_sel, check_text_locked, checkclearop, checkclearopq,
-    clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise, nv_Replace, nv_addsub, nv_edit,
-    nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark,
-    nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
+    MOD_MASK_CTRL, adjust_for_sel, check_text_locked, checkclearop, checkclearopq, clearopbeep,
+    false_0, invoke_edit, kMTCharWise, kMTLineWise, nv_Replace, nv_addsub, nv_edit, nv_gd,
+    nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put,
+    nv_screengo, nv_visual, nv_vreplace, true_0,
 };
 use crate::ops::cursor_pos_info;
 use crate::plines::{getvvcol, linetabsize};
@@ -41,8 +41,8 @@ use crate::keycodes::{
     K_X2RELEASE,
 };
 use crate::r#move::{
-    adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight, validate_virtcol,
-    win_col_off, win_col_off2,
+    WinValid, adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight,
+    validate_virtcol, win_col_off, win_col_off2,
 };
 use crate::pos::MAXCOL;
 
@@ -102,7 +102,7 @@ pub unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
         coladvance(win, i);
         if to_first_non_blank {
             while ascii_iswhite(gchar_cursor()) && oneright() == OK {}
-            (*win).w_valid &= !VALID_WCOL;
+            (*win).w_valid.clear(WinValid::WCOL);
         }
         (*win).w_set_curswant = true_0;
         // Inside a closed fold the wanted column is the one that was asked
@@ -202,7 +202,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
         }
         if to_last_non_blank {
             while ascii_iswhite_or_nul(gchar_cursor()) && oneleft() == OK {}
-            (*win).w_valid &= !VALID_WCOL;
+            (*win).w_valid.clear(WinValid::WCOL);
         }
     }
 }

@@ -183,11 +183,6 @@ pub struct redo_VIsual_T {
     pub rv_arg: ::core::ffi::c_int,
 }
 
-/// `w_valid` bits invalidated whenever a column is measured differently.
-pub const VALID_WROW: ::core::ffi::c_int = 0x1;
-pub const VALID_WCOL: ::core::ffi::c_int = 0x2;
-pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4;
-
 /// `b_ml.ml_flags`: the buffer is one empty line.
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1;
 

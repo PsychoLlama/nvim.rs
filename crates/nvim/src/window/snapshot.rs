@@ -24,6 +24,7 @@ use crate::eval::window::win_has_winnr;
 use crate::main::{curbuf, e_invarg, empty_string_option, lastwin};
 use crate::memory::{xcalloc, xmalloc};
 use crate::message::msg_ui_flush;
+use crate::r#move::WinValid;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
 use crate::types::{Integer, NUL, OptInt, frame_T, handle_T, linenr_T, tabpage_T, win_T};
@@ -93,7 +94,7 @@ pub fn reset_lnums() {
             wp.w_topline = wp.w_save_cursor.w_topline_save as linenr_T;
         }
         if wp.w_save_cursor.w_topline_save as linenr_T > wp.buffer().line_count() {
-            wp.w_valid &= !VALID_TOPLINE;
+            wp.w_valid.clear(WinValid::TOPLINE);
         }
     }
 }

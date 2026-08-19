@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
+use crate::r#move::WinValid;
 use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL};
 use crate::types::{MAXPATHL, NUL, VV_VIRTNUM};
 
@@ -613,7 +614,7 @@ impl WinLineVars {
                         return;
                     }
                     (*stcp).width += addwidth;
-                    (*wp).w_valid &= !VALID_WCOL;
+                    (*wp).w_valid.clear(WinValid::WCOL);
                 }
             }
 
