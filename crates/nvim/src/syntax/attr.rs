@@ -41,7 +41,7 @@ pub unsafe fn get_syntax_attr(col: colnr_T, can_spell: *mut bool, keep_state: bo
             clear_current_state();
             current_id.set(0);
             current_trans_id.set(0);
-            current_flags.set(0);
+            current_flags.set(SynFlags::NONE);
             current_seqnr.set(0);
             return 0;
         }
@@ -219,10 +219,10 @@ pub(crate) unsafe fn syn_current_attr(
                 // white space and "skipwhite" was given.
                 if !found_match {
                     let line = syn_getcurline();
-                    let white = current_next_flags.get() & HL_SKIPWHITE != 0
+                    let white = current_next_flags.get().has(SynFlags::SKIPWHITE)
                         && ascii_iswhite(*line.offset(current_col.get() as isize) as c_int);
                     let empty =
-                        current_next_flags.get() & HL_SKIPEMPTY != 0 && *line as c_int == NUL;
+                        current_next_flags.get().has(SynFlags::SKIPEMPTY) && *line as c_int == NUL;
                     if white || empty {
                         break;
                     }
@@ -270,7 +270,9 @@ pub(crate) unsafe fn syn_current_attr(
 
         // A nextgroup ends at end of line, unless "skipnl" or "skipempty".
         if !current_next_list.get().is_null()
-            && current_next_flags.get() & (HL_SKIPNL | HL_SKIPEMPTY) == 0
+            && !current_next_flags
+                .get()
+                .has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
         {
             let line = syn_getcurline();
             if *line.offset(current_col.get() as isize) as c_int != NUL
@@ -331,11 +333,13 @@ unsafe fn try_keyword(cur_si: *mut stateitem_T) -> Option<*mut stateitem_T> {
         next_seqnr.set(next_seqnr.get() + 1);
         (*si).si_cchar = kw.cchar;
         if state_len() > 1 {
-            (*si).si_flags |= (*state_at(state_len() - 2)).si_flags & HL_CONCEAL;
+            (*si).si_flags |= (*state_at(state_len() - 2))
+                .si_flags
+                .masked(SynFlags::CONCEAL);
         }
         (*si).si_id = kw.id;
         (*si).si_trans_id = kw.id;
-        if kw.flags & HL_TRANSP != 0 {
+        if kw.flags.has(SynFlags::TRANSP) {
             // Transparent: take the attributes of the item around it.
             if state_len() < 2 {
                 (*si).si_attr = 0;
@@ -444,12 +448,12 @@ unsafe fn scan_patterns(
             *cur_extmatch = re_extmatch_out.get();
             re_extmatch_out.set(::core::ptr::null_mut());
 
-            let mut flags = 0;
+            let mut flags = SynFlags::NONE;
             let mut eoe_pos = lpos_T { lnum: 0, col: 0 };
             let mut end_idx = 0;
             let mut hl_endpos = lpos_T { lnum: 0, col: 0 };
 
-            if (*spp).sp_type as c_int == SPTYPE_START && (*spp).sp_flags & HL_ONELINE != 0 {
+            if (*spp).sp_type as c_int == SPTYPE_START && (*spp).sp_flags.has(SynFlags::ONELINE) {
                 // A "oneline" must end in this line too. Look for the end after
                 // the start match, and set every resulting position at once.
                 let end = find_endpos(idx, endpos, *cur_extmatch);
@@ -517,7 +521,7 @@ unsafe fn pattern_admitted(
         if (*spp).sp_syncing != syncing {
             return false;
         }
-        if !displaying && (*spp).sp_flags & HL_DISPLAY != 0 {
+        if !displaying && (*spp).sp_flags.has(SynFlags::DISPLAY) {
             return false;
         }
         let ty = (*spp).sp_type as c_int;
@@ -530,11 +534,11 @@ unsafe fn pattern_admitted(
                 ::core::ptr::null_mut(),
                 current_next_list.get(),
                 &raw mut (*spp).sp_syn,
-                0,
+                SynFlags::NONE,
             )
         } else if cur_si.is_null() {
             // At the top level, anything that is not `contained`.
-            (*spp).sp_flags & HL_CONTAINED == 0
+            !(*spp).sp_flags.has(SynFlags::CONTAINED)
         } else {
             // Inside an item, only what its `contains=` names.
             in_id_list(
@@ -556,7 +560,7 @@ unsafe fn pick_current_attr(cur_si: *mut stateitem_T) -> *mut stateitem_T {
         current_attr.set(0);
         current_id.set(0);
         current_trans_id.set(0);
-        current_flags.set(0);
+        current_flags.set(SynFlags::NONE);
         current_seqnr.set(0);
         if cur_si.is_null() {
             return ::core::ptr::null_mut();
@@ -610,7 +614,7 @@ unsafe fn item_can_spell(sip: *mut stateitem_T) -> bool {
                 return (*block).b_syn_spell != SYNSPL_NOTOP;
             }
             sps.id = (*block).b_nospell_cluster_id as int16_t;
-            return !in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0);
+            return !in_id_list(sip, (*sip).si_cont_list, &raw mut sps, SynFlags::NONE);
         }
         // The @Spell cluster is defined: spell check in items carrying it, but
         // not when @NoSpell is there too. At the top level only spell check
@@ -619,10 +623,10 @@ unsafe fn item_can_spell(sip: *mut stateitem_T) -> bool {
             return (*block).b_syn_spell == SYNSPL_TOP;
         }
         sps.id = (*block).b_spell_cluster_id as int16_t;
-        let mut can = in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0);
+        let mut can = in_id_list(sip, (*sip).si_cont_list, &raw mut sps, SynFlags::NONE);
         if (*block).b_nospell_cluster_id != 0 {
             sps.id = (*block).b_nospell_cluster_id as int16_t;
-            if in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0) {
+            if in_id_list(sip, (*sip).si_cont_list, &raw mut sps, SynFlags::NONE) {
                 can = false;
             }
         }

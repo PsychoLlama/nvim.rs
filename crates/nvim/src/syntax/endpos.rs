@@ -34,7 +34,7 @@ pub(crate) struct RegionEnd {
     pub(crate) end_idx: c_int,
     /// The flags of the END pattern that matched. `None` when none did; the
     /// caller keeps whatever flags it already had.
-    pub(crate) flags: Option<c_int>,
+    pub(crate) flags: Option<SynFlags>,
 }
 
 impl RegionEnd {
@@ -519,7 +519,7 @@ pub(crate) struct KeywordMatch {
     /// Column of the character after the keyword.
     pub(crate) endcol: c_int,
     /// The keyword's `HL_*` flags.
-    pub(crate) flags: c_int,
+    pub(crate) flags: SynFlags,
     /// Its `nextgroup=` list.
     pub(crate) next_list: *mut int16_t,
     /// Its `cchar=` conceal substitution character.
@@ -605,10 +605,10 @@ unsafe fn match_keyword(
                     ::core::ptr::null_mut(),
                     current_next_list.get(),
                     &raw mut (*kp).k_syn,
-                    0,
+                    SynFlags::NONE,
                 )
             } else if cur_si.is_null() {
-                (*kp).flags & HL_CONTAINED == 0
+                !(*kp).flags.has(SynFlags::CONTAINED)
             } else {
                 in_id_list(
                     cur_si,

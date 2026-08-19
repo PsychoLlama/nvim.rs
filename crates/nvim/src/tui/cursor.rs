@@ -11,7 +11,7 @@
 
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_entry};
 use crate::global_cell::GlobalCell;
-use crate::highlight::HL_INVERSE;
+use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_WRN, logmsg_c};
 use crate::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::tui::terminfo::caps::{
@@ -151,7 +151,7 @@ fn apply_color(tui: &mut TUIData, entry: &cursorentry_T) {
     if tui.want_invisible {
         return;
     }
-    if aep.rgb_ae_attr & HL_INVERSE != 0 {
+    if aep.rgb_ae_attr.has(HlAttrFlags::INVERSE) {
         // The terminal's own inverse video is the cursor; any colour we set
         // would fight it.
         terminfo_out(tui, kTerm_reset_cursor_color);

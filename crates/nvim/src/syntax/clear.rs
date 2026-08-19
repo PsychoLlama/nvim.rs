@@ -106,7 +106,7 @@ unsafe fn syntax_sync_clear() {
 pub(crate) unsafe fn syn_remove_pattern(block: *mut synblock_T, idx: c_int) {
     unsafe {
         let spp = block_pattern(block, idx);
-        if (*spp).sp_flags & HL_FOLD != 0 {
+        if (*spp).sp_flags.has(SynFlags::FOLD) {
             (*block).b_syn_folditems -= 1;
         }
         syn_clear_pattern(block, idx);

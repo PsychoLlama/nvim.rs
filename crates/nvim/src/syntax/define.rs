@@ -20,12 +20,12 @@ use crate::types::{ExArgt, FAIL, NUL};
 ///
 /// Sets the contained flag, and if the item is not already contained adds it to
 /// the top-level cluster the `:syntax include` named, if any.
-pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut c_int) {
+pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
     unsafe {
-        if *flags & HL_CONTAINED != 0 || (*cur_syn_block()).b_syn_topgrp == 0 {
+        if flags.has(SynFlags::CONTAINED) || (*cur_syn_block()).b_syn_topgrp == 0 {
             return;
         }
-        *flags |= HL_CONTAINED | HL_INCLUDED_TOPLEVEL;
+        *flags |= SynFlags::CONTAINED | SynFlags::INCLUDED_TOPLEVEL;
         if (*cur_syn_block()).b_syn_topgrp >= SYNID_CLUSTER {
             // Allocated, because `syn_combine_list` consumes it.
             let mut grp_list = xmalloc(2 * ::core::mem::size_of::<int16_t>()) as *mut int16_t;
@@ -136,7 +136,7 @@ unsafe fn empty_synpat() -> synpat_T {
 /// accept a `contains=` list.
 fn item_opt(sync_idx: *mut c_int) -> syn_opt_arg_T {
     syn_opt_arg_T {
-        flags: 0,
+        flags: SynFlags::NONE,
         keyword: false,
         sync_idx,
         has_cont_list: true,
@@ -186,8 +186,8 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
         init_syn_patterns();
         let mut item = empty_synpat();
         rest = get_syn_pattern(rest, &mut item);
-        if vim_regcomp_had_eol() != 0 && opt.flags & HL_EXCLUDENL == 0 {
-            opt.flags |= HL_HAS_EOL;
+        if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
+            opt.flags |= SynFlags::HAS_EOL;
         }
         rest = get_syn_options(rest, &mut opt, &mut conceal_char, (*eap).skip);
 
@@ -222,10 +222,10 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
                     (*spp).sp_next_list = opt.next_list;
 
                     // Remember that we found a match to sync on.
-                    if opt.flags & (HL_SYNC_HERE | HL_SYNC_THERE) != 0 {
+                    if opt.flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
                         (*cur_syn_block()).b_syn_sync_flags |= SF_MATCH;
                     }
-                    if opt.flags & HL_FOLD != 0 {
+                    if opt.flags.has(SynFlags::FOLD) {
                         (*cur_syn_block()).b_syn_folditems += 1;
                     }
 
@@ -359,8 +359,11 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
             let mut pat = empty_synpat();
             rest = get_syn_pattern(rest, &mut pat);
             reg_do_extmatch.set(0);
-            if item == ITEM_END && vim_regcomp_had_eol() != 0 && out.opt.flags & HL_EXCLUDENL == 0 {
-                pat.sp_flags |= HL_HAS_EOL;
+            if item == ITEM_END
+                && vim_regcomp_had_eol() != 0
+                && !out.opt.flags.has(SynFlags::EXCLUDENL)
+            {
+                pat.sp_flags |= SynFlags::HAS_EOL;
             }
             out.pats[item as usize].insert(0, RegionPat { pat, matchgroup_id });
         }
@@ -476,7 +479,7 @@ unsafe fn store_region(args: &RegionArgs, syn_id: c_int, syncing: bool) {
                 }
                 (*patterns).ga_len += 1;
                 idx += 1;
-                if args.opt.flags & HL_FOLD != 0 {
+                if args.opt.flags.has(SynFlags::FOLD) {
                     (*cur_syn_block()).b_syn_folditems += 1;
                 }
             }

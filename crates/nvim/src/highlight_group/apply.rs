@@ -10,7 +10,7 @@ use core::ffi::c_int;
 
 use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
-use crate::highlight::{HL_DEFAULT, hl_get_syn_attr};
+use crate::highlight::{HlAttrFlags, hl_get_syn_attr};
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, need_highlight_changed, normal_bg,
@@ -41,7 +41,7 @@ fn has_key(dict: &KeyDict_highlight, bit: c_int) -> bool {
 /// # Safety
 /// Redraws and emits UI events; main thread only.
 pub unsafe fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, link_id: c_int) {
-    let is_default = attrs.rgb_ae_attr & HL_DEFAULT != 0;
+    let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
 
     // Return if "default" was used and the group already has settings.
     if is_default && hl_has_settings(id, true) && !dict.force {
@@ -69,7 +69,7 @@ pub unsafe fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
                 entry.link = 0;
             }
 
-            entry.gui = attrs.rgb_ae_attr & !HL_DEFAULT;
+            entry.gui = attrs.rgb_ae_attr.without(HlAttrFlags::DEFAULT);
             entry.rgb_fg = attrs.rgb_fg_color;
             entry.rgb_bg = attrs.rgb_bg_color;
             entry.rgb_sp = attrs.rgb_sp_color;
@@ -140,10 +140,10 @@ pub unsafe fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
                 }
             }
 
-            entry.cterm = attrs.cterm_ae_attr & !HL_DEFAULT;
+            entry.cterm = attrs.cterm_ae_attr.without(HlAttrFlags::DEFAULT);
             entry.cterm_bg = c_int::from(attrs.cterm_bg_color);
             entry.cterm_fg = c_int::from(attrs.cterm_fg_color);
-            entry.cterm_bold = entry.cterm & super::HL_BOLD != 0;
+            entry.cterm_bold = entry.cterm.has(HlAttrFlags::BOLD);
 
             if attrs.hl_blend != -1 {
                 entry.blend = attrs.hl_blend;

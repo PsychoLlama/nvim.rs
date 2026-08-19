@@ -52,11 +52,7 @@ use crate::eval::typval::{tv_dict_add_nr, tv_dict_set_keys_readonly};
 use crate::eval::vars::get_globvar_dict;
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
-use crate::highlight::{
-    HL_BG_INDEXED, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_FG_INDEXED, HL_INVERSE, HL_ITALIC,
-    HL_OVERLINE, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDOUBLE, HL_UNDERLINE, hl_combine_attr,
-    hl_get_term_attr,
-};
+use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;
 use crate::main::{State, buffer_handles, exiting};
 use crate::map::mh_get_int;
@@ -769,12 +765,12 @@ fn color_index(color: &VTermColor) -> int16_t {
 
 /// The highlight bit for a cell's underline style. vterm names more styles
 /// than the editor draws, so anything else becomes a plain underline.
-fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> c_int {
+fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> HlAttrFlags {
     match attrs.underline() {
-        0 => 0,
-        2 => HL_UNDERDOUBLE,
-        3 => HL_UNDERCURL,
-        _ => HL_UNDERLINE,
+        0 => HlAttrFlags::NONE,
+        2 => HlAttrFlags::UNDERDOUBLE,
+        3 => HlAttrFlags::UNDERCURL,
+        _ => HlAttrFlags::UNDERLINE,
     }
 }
 
@@ -835,24 +831,24 @@ pub unsafe fn terminal_get_line_attributes(
         let attrs = cell.attrs;
         let mut hl_attrs = get_underline_hl_flag(attrs);
         for (set, bit) in [
-            (attrs.bold() != 0, HL_BOLD),
-            (attrs.dim() != 0, HL_DIM),
-            (attrs.blink() != 0, HL_BLINK),
-            (attrs.conceal() != 0, HL_CONCEALED),
-            (attrs.overline() != 0, HL_OVERLINE),
-            (attrs.italic() != 0, HL_ITALIC),
-            (attrs.reverse() != 0, HL_INVERSE),
-            (attrs.strike() != 0, HL_STRIKETHROUGH),
-            (fg_indexed && !fg_set, HL_FG_INDEXED),
-            (bg_indexed && !bg_set, HL_BG_INDEXED),
+            (attrs.bold() != 0, HlAttrFlags::BOLD),
+            (attrs.dim() != 0, HlAttrFlags::DIM),
+            (attrs.blink() != 0, HlAttrFlags::BLINK),
+            (attrs.conceal() != 0, HlAttrFlags::CONCEALED),
+            (attrs.overline() != 0, HlAttrFlags::OVERLINE),
+            (attrs.italic() != 0, HlAttrFlags::ITALIC),
+            (attrs.reverse() != 0, HlAttrFlags::INVERSE),
+            (attrs.strike() != 0, HlAttrFlags::STRIKETHROUGH),
+            (fg_indexed && !fg_set, HlAttrFlags::FG_INDEXED),
+            (bg_indexed && !bg_set, HlAttrFlags::BG_INDEXED),
         ] {
             if set {
-                hl_attrs |= bit as c_int;
+                hl_attrs |= bit;
             }
         }
 
         let mut attr_id = 0;
-        if hl_attrs != 0 || !fg_default || !bg_default {
+        if !hl_attrs.is_empty() || !fg_default || !bg_default {
             let resolved = HlAttrs {
                 rgb_ae_attr: hl_attrs,
                 cterm_ae_attr: hl_attrs,

@@ -385,7 +385,7 @@ impl Cells {
             // No concealing past the end of the line: it would interfere with
             // the line highlighting.
             self.syntax_flags = if self.cell_char == 0 {
-                0
+                SynFlags::NONE
             } else {
                 get_syntax_info(&raw mut self.syntax_seqnr)
             };

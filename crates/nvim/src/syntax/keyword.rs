@@ -116,7 +116,7 @@ struct KeywordDef {
     /// The syntax group the keywords belong to.
     id: c_int,
     /// `HL_*` flags from the options.
-    flags: c_int,
+    flags: SynFlags,
     /// `containedin=`, copied per keyword.
     cont_in_list: *mut int16_t,
     /// `nextgroup=`, copied per keyword.
@@ -244,7 +244,7 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
                 // it can only shrink, so the argument's length is enough.
                 let keyword_copy = xmalloc(strlen(rest) + 1) as *mut c_char;
                 let mut opt = syn_opt_arg_T {
-                    flags: 0,
+                    flags: SynFlags::NONE,
                     keyword: true,
                     sync_idx: ::core::ptr::null_mut(),
                     has_cont_list: false,

@@ -66,7 +66,7 @@ use crate::state::{MODE_INSERT, virtual_active};
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
 use crate::strings::vim_strchr;
 use crate::syntax::{
-    HL_CONCEAL, get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
+    SynFlags, get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
 };
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::{

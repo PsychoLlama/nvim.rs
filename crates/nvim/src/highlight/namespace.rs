@@ -22,13 +22,14 @@
 //! then the global one.
 
 use super::{
-    HL_DEFAULT, HL_GLOBAL, HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend,
-    hl_combine_attr, hl_get_syn_attr, kHlUI, syn_attr2entry,
+    HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
+    hl_get_syn_attr, kHlUI, syn_attr2entry,
 };
 use crate::api::private::dispatch::KeyDict_highlight_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
+use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
     set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
@@ -151,7 +152,7 @@ pub unsafe fn ns_hl_def(
             ns_id,
             syn_id: hl_id,
         };
-        let is_default = attrs.rgb_ae_attr & HL_DEFAULT != 0;
+        let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
         if is_default && NS_HLS.with(|hls| hls.contains_key(&key)) {
             return;
         }
@@ -172,7 +173,7 @@ pub unsafe fn ns_hl_def(
             // another provider and move the list.
             version: provider_field(ns_id, |p| p.hl_valid),
             is_default,
-            link_global: attrs.rgb_ae_attr & HL_GLOBAL != 0,
+            link_global: attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL),
         };
         NS_HLS.with_mut(|hls| hls.insert(key, item));
         provider_field(ns_id, |p| p.hl_cached = false);
@@ -276,8 +277,8 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             // The callback and `hl_get_syn_attr` both pump, so the provider
             // is resolved again rather than read through a stale pointer.
             item.version = provider_field(ns_id, |p| p.hl_valid) - c_int::from(provisional);
-            item.is_default = attrs.rgb_ae_attr & HL_DEFAULT != 0;
-            item.link_global = attrs.rgb_ae_attr & HL_GLOBAL != 0;
+            item.is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
+            item.link_global = attrs.rgb_ae_attr.has(HlAttrFlags::GLOBAL);
             NS_HLS.with_mut(|hls| hls.insert(key, item));
             valid = true;
         }

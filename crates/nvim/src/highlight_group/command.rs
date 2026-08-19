@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::highlight::HlAttrFlags;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -32,7 +33,7 @@ use crate::types::{OptVal, OptValData, OptionSetFlags, estack_T, kFalse, kTrue};
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
-    ATTR_NAMES, HL_BOLD, HL_UNDERLINE_MASK, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
+    ATTR_NAMES, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
     e_group_has_settings_highlight_link_ignored, e_highlight_group_name_not_found_str,
     e_missing_argument_str, e_missing_equal_sign_str_2, e_unexpected_equal_sign_str, group,
     highlight_attr_set_all, highlight_clear, highlight_list_one, highlight_num_groups,
@@ -507,7 +508,7 @@ impl KeyLoop {
     /// # Safety
     /// See [`do_highlight`].
     unsafe fn set_attrs(&mut self, key: &[u8], arg: &[u8]) -> bool {
-        let mut attr = 0;
+        let mut attr = HlAttrFlags::NONE;
         let mut off = 0;
         while off < arg.len() {
             // Reverse order, as upstream: the longer names have to be tried
@@ -523,9 +524,9 @@ impl KeyLoop {
                 self.error = true;
                 return false;
             };
-            if flag & HL_UNDERLINE_MASK != 0 {
+            if flag.has(HlAttrFlags::UNDERLINE_MASK) {
                 // The underline styles share a field.
-                attr &= !HL_UNDERLINE_MASK;
+                attr.clear(HlAttrFlags::UNDERLINE_MASK);
             }
             attr |= flag;
             off += name.count_bytes();
@@ -575,7 +576,7 @@ impl KeyLoop {
             // there to reach a light colour.
             if foreground && group(self.id).cterm_bold {
                 with_group(self.id, |entry| {
-                    entry.cterm &= !HL_BOLD;
+                    entry.cterm.clear(HlAttrFlags::BOLD);
                     entry.cterm_bold = false;
                 });
             }
@@ -614,11 +615,11 @@ impl KeyLoop {
                 // terminals (e.g. "linux") only have that way.
                 if bold == kTrue {
                     with_group(self.id, |entry| {
-                        entry.cterm |= HL_BOLD;
+                        entry.cterm |= HlAttrFlags::BOLD;
                         entry.cterm_bold = true;
                     });
                 } else if bold == kFalse {
-                    with_group(self.id, |entry| entry.cterm &= !HL_BOLD);
+                    with_group(self.id, |entry| entry.cterm.clear(HlAttrFlags::BOLD));
                 }
                 color
             };

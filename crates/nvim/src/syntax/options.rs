@@ -60,11 +60,11 @@ struct SynFlag {
     name: &'static CStr,
     arg: OptArg,
     /// The `HL_*` a bare flag word sets; 0 for the ones that take a value.
-    flags: c_int,
+    flags: SynFlags,
 }
 
 /// A `const fn` constructor keeps each entry on one line under rustfmt.
-const fn flag(name: &'static CStr, arg: OptArg, flags: c_int) -> SynFlag {
+const fn flag(name: &'static CStr, arg: OptArg, flags: SynFlags) -> SynFlag {
     SynFlag { name, arg, flags }
 }
 
@@ -76,25 +76,25 @@ const fn flag(name: &'static CStr, arg: OptArg, flags: c_int) -> SynFlag {
 /// separated by the "followed by white space, `=` or the end of the command"
 /// test below — but the order is kept as documentation of that fact.
 static FLAG_TAB: [SynFlag; 19] = [
-    flag(c"contained", OptArg::Flag, HL_CONTAINED),
-    flag(c"oneline", OptArg::Flag, HL_ONELINE),
-    flag(c"keepend", OptArg::Flag, HL_KEEPEND),
-    flag(c"extend", OptArg::Flag, HL_EXTEND),
-    flag(c"excludenl", OptArg::Flag, HL_EXCLUDENL),
-    flag(c"transparent", OptArg::Flag, HL_TRANSP),
-    flag(c"skipnl", OptArg::Flag, HL_SKIPNL),
-    flag(c"skipwhite", OptArg::Flag, HL_SKIPWHITE),
-    flag(c"skipempty", OptArg::Flag, HL_SKIPEMPTY),
-    flag(c"grouphere", OptArg::Flag, HL_SYNC_HERE),
-    flag(c"groupthere", OptArg::Flag, HL_SYNC_THERE),
-    flag(c"display", OptArg::Flag, HL_DISPLAY),
-    flag(c"fold", OptArg::Flag, HL_FOLD),
-    flag(c"conceal", OptArg::Flag, HL_CONCEAL),
-    flag(c"concealends", OptArg::Flag, HL_CONCEALENDS),
-    flag(c"cchar", OptArg::Cchar, 0),
-    flag(c"contains", OptArg::Contains, 0),
-    flag(c"containedin", OptArg::ContainedIn, 0),
-    flag(c"nextgroup", OptArg::NextGroup, 0),
+    flag(c"contained", OptArg::Flag, SynFlags::CONTAINED),
+    flag(c"oneline", OptArg::Flag, SynFlags::ONELINE),
+    flag(c"keepend", OptArg::Flag, SynFlags::KEEPEND),
+    flag(c"extend", OptArg::Flag, SynFlags::EXTEND),
+    flag(c"excludenl", OptArg::Flag, SynFlags::EXCLUDENL),
+    flag(c"transparent", OptArg::Flag, SynFlags::TRANSP),
+    flag(c"skipnl", OptArg::Flag, SynFlags::SKIPNL),
+    flag(c"skipwhite", OptArg::Flag, SynFlags::SKIPWHITE),
+    flag(c"skipempty", OptArg::Flag, SynFlags::SKIPEMPTY),
+    flag(c"grouphere", OptArg::Flag, SynFlags::SYNC_HERE),
+    flag(c"groupthere", OptArg::Flag, SynFlags::SYNC_THERE),
+    flag(c"display", OptArg::Flag, SynFlags::DISPLAY),
+    flag(c"fold", OptArg::Flag, SynFlags::FOLD),
+    flag(c"conceal", OptArg::Flag, SynFlags::CONCEAL),
+    flag(c"concealends", OptArg::Flag, SynFlags::CONCEALENDS),
+    flag(c"cchar", OptArg::Cchar, SynFlags::NONE),
+    flag(c"contains", OptArg::Contains, SynFlags::NONE),
+    flag(c"containedin", OptArg::ContainedIn, SynFlags::NONE),
+    flag(c"nextgroup", OptArg::NextGroup, SynFlags::NONE),
 ];
 
 /// Could `c` start an option word? A cheap reject, because this runs for every
@@ -141,7 +141,11 @@ unsafe fn flag_matches(arg: *const c_char, f: &SynFlag) -> bool {
 unsafe fn find_flag(arg: *const c_char, keyword: bool) -> Option<&'static SynFlag> {
     unsafe {
         let f = FLAG_TAB.iter().rev().find(|f| flag_matches(arg, f))?;
-        if keyword && (f.flags == HL_DISPLAY || f.flags == HL_FOLD || f.flags == HL_EXTEND) {
+        if keyword
+            && (f.flags == SynFlags::DISPLAY
+                || f.flags == SynFlags::FOLD
+                || f.flags == SynFlags::EXTEND)
+        {
             return None;
         }
         Some(f)
@@ -165,7 +169,7 @@ pub(crate) unsafe fn get_syn_options(
             return ::core::ptr::null_mut(); // already detected error
         }
         if (*cur_syn_block()).b_syn_conceal != 0 {
-            opt.flags |= HL_CONCEAL;
+            opt.flags |= SynFlags::CONCEAL;
         }
 
         while starts_option(*arg as u8) {
@@ -206,12 +210,12 @@ pub(crate) unsafe fn get_syn_options(
                 OptArg::Flag => {
                     opt.flags |= f.flags;
                     arg = skipwhite(arg.add(f.name.count_bytes()));
-                    if f.flags == HL_SYNC_HERE || f.flags == HL_SYNC_THERE {
+                    if f.flags == SynFlags::SYNC_HERE || f.flags == SynFlags::SYNC_THERE {
                         arg = sync_group_arg(arg, opt);
                         if arg.is_null() {
                             return ::core::ptr::null_mut();
                         }
-                    } else if f.flags == HL_FOLD && foldmethodIsSyntax(curwin.get()) {
+                    } else if f.flags == SynFlags::FOLD && foldmethodIsSyntax(curwin.get()) {
                         foldUpdateAll(curwin.get()); // Need to update folds later.
                     }
                 }
@@ -525,17 +529,19 @@ pub(crate) unsafe fn in_id_list(
     cur_si: *mut stateitem_T,
     list: *mut int16_t,
     ssp: *mut sp_syn,
-    flags: c_int,
+    flags: SynFlags,
 ) -> bool {
     unsafe {
         // If `ssp` has a `containedin` list and `cur_si` is in it, it is
         // admitted whatever `list` says.
-        if !cur_si.is_null() && !(*ssp).cont_in_list.is_null() && (*cur_si).si_flags & HL_MATCH == 0
+        if !cur_si.is_null()
+            && !(*ssp).cont_in_list.is_null()
+            && !(*cur_si).si_flags.has(SynFlags::MATCH)
         {
             // Ignore transparent items without a contains argument, double
             // checking that we don't go back past the first one.
             let mut si = cur_si;
-            while (*si).si_flags & HL_TRANS_CONT != 0 && si > state_at(0) {
+            while (*si).si_flags.has(SynFlags::TRANS_CONT) && si > state_at(0) {
                 si = si.offset(-1);
             }
             // si_idx is -1 for keywords, which never contain anything.
@@ -563,7 +569,7 @@ pub(crate) unsafe fn in_id_list(
 unsafe fn id_list_has(
     mut list: *mut int16_t,
     ssp: *mut sp_syn,
-    flags: c_int,
+    flags: SynFlags,
     depth: c_int,
 ) -> bool {
     unsafe {
@@ -573,13 +579,13 @@ unsafe fn id_list_has(
         // ID_LIST_ALL means a transparent item that is not inside anything:
         // only not-contained groups are admitted.
         if list == ID_LIST_ALL {
-            return flags & HL_CONTAINED == 0;
+            return !flags.has(SynFlags::CONTAINED);
         }
 
         // Is this top-level (i.e. not `contained`) in the file it was declared
-        // in? For an included file that is not the same as HL_CONTAINED, which
+        // in? For an included file that is not the same as SynFlags::CONTAINED, which
         // is set unconditionally there.
-        let toplevel = flags & HL_CONTAINED == 0 || flags & HL_INCLUDED_TOPLEVEL != 0;
+        let toplevel = !flags.has(SynFlags::CONTAINED) || flags.has(SynFlags::INCLUDED_TOPLEVEL);
 
         // A leading ALLBUT/TOP/CONTAINED inverts the answer, and requires the
         // group to be at the same `:syntax include` level as the list.

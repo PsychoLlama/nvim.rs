@@ -43,7 +43,7 @@ macro_rules! flag_set {
         $( $(#[$cmeta:meta])* const $MEMBER:ident = $value:expr; )+
     ) => {
         $(#[$meta])*
-        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(transparent)]
         $vis struct $Name(::core::ffi::c_int);
 

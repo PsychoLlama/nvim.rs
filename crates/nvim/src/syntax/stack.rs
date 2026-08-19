@@ -453,7 +453,7 @@ pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
                 (*si).si_seqnr = (*b).bs_seqnr;
                 (*si).si_cchar = (*b).bs_cchar;
                 (*si).si_extmatch = ref_extmatch((*b).bs_extmatch);
-                if keepend_level.get() < 0 && (*si).si_flags & HL_KEEPEND != 0 {
+                if keepend_level.get() < 0 && (*si).si_flags.has(SynFlags::KEEPEND) {
                     keepend_level.set(i);
                 }
                 (*si).si_ends = false_0;

@@ -15,15 +15,11 @@
 //! false`" has to be told from "the caller said nothing" — which is what the
 //! keyset's `is_set__highlight_` mask is for.
 
-use super::{
-    HL_ALTFONT, HL_BG_INDEXED, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DEFAULT, HL_DIM, HL_FG_INDEXED,
-    HL_GLOBAL, HL_INVERSE, HL_ITALIC, HL_NOCOMBINE, HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH,
-    HL_UNDERCURL, HL_UNDERDASHED, HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK,
-    HLATTRS_INIT, attr_entry_count, syn_attr2entry,
-};
+use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
 use crate::api::private::dispatch::KeyDict_highlight_cterm_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, api_set_error, arena_dict};
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::types::builders::static_cstring;
 use crate::types::{
@@ -187,50 +183,50 @@ pub unsafe fn hlattrs2dict(
 ///
 /// # Safety
 /// As [`put`].
-unsafe fn put_flags(hl: &mut Dict, mask: int32_t) {
+unsafe fn put_flags(hl: &mut Dict, mask: HlAttrFlags) {
     // SAFETY: the caller's storage, sized for every key below.
     unsafe {
-        let flag = |bit: c_int| mask & bit != 0;
-        if flag(HL_INVERSE) {
+        let flag = |bit: HlAttrFlags| mask.has(bit);
+        if flag(HlAttrFlags::INVERSE) {
             put(hl, c"reverse", Object::boolean(true));
         }
-        if flag(HL_BOLD) {
+        if flag(HlAttrFlags::BOLD) {
             put(hl, c"bold", Object::boolean(true));
         }
-        if flag(HL_ITALIC) {
+        if flag(HlAttrFlags::ITALIC) {
             put(hl, c"italic", Object::boolean(true));
         }
         // The underline styles share one field, so at most one is reported.
-        match mask & HL_UNDERLINE_MASK {
-            HL_UNDERLINE => put(hl, c"underline", Object::boolean(true)),
-            HL_UNDERCURL => put(hl, c"undercurl", Object::boolean(true)),
-            HL_UNDERDOUBLE => put(hl, c"underdouble", Object::boolean(true)),
-            HL_UNDERDOTTED => put(hl, c"underdotted", Object::boolean(true)),
-            HL_UNDERDASHED => put(hl, c"underdashed", Object::boolean(true)),
+        match mask.masked(HlAttrFlags::UNDERLINE_MASK) {
+            HlAttrFlags::UNDERLINE => put(hl, c"underline", Object::boolean(true)),
+            HlAttrFlags::UNDERCURL => put(hl, c"undercurl", Object::boolean(true)),
+            HlAttrFlags::UNDERDOUBLE => put(hl, c"underdouble", Object::boolean(true)),
+            HlAttrFlags::UNDERDOTTED => put(hl, c"underdotted", Object::boolean(true)),
+            HlAttrFlags::UNDERDASHED => put(hl, c"underdashed", Object::boolean(true)),
             _ => {}
         }
-        if flag(HL_STANDOUT) {
+        if flag(HlAttrFlags::STANDOUT) {
             put(hl, c"standout", Object::boolean(true));
         }
-        if flag(HL_STRIKETHROUGH) {
+        if flag(HlAttrFlags::STRIKETHROUGH) {
             put(hl, c"strikethrough", Object::boolean(true));
         }
-        if flag(HL_ALTFONT) {
+        if flag(HlAttrFlags::ALTFONT) {
             put(hl, c"altfont", Object::boolean(true));
         }
-        if flag(HL_DIM) {
+        if flag(HlAttrFlags::DIM) {
             put(hl, c"dim", Object::boolean(true));
         }
-        if flag(HL_BLINK) {
+        if flag(HlAttrFlags::BLINK) {
             put(hl, c"blink", Object::boolean(true));
         }
-        if flag(HL_CONCEALED) {
+        if flag(HlAttrFlags::CONCEALED) {
             put(hl, c"conceal", Object::boolean(true));
         }
-        if flag(HL_OVERLINE) {
+        if flag(HlAttrFlags::OVERLINE) {
             put(hl, c"overline", Object::boolean(true));
         }
-        if flag(HL_NOCOMBINE) {
+        if flag(HlAttrFlags::NOCOMBINE) {
             put(hl, c"nocombine", Object::boolean(true));
         }
     }
@@ -240,7 +236,13 @@ unsafe fn put_flags(hl: &mut Dict, mask: int32_t) {
 ///
 /// # Safety
 /// As [`put`].
-unsafe fn put_colors(hl: &mut Dict, ae: HlAttrs, mask: int32_t, use_rgb: bool, short_keys: bool) {
+unsafe fn put_colors(
+    hl: &mut Dict,
+    ae: HlAttrs,
+    mask: HlAttrFlags,
+    use_rgb: bool,
+    short_keys: bool,
+) {
     // SAFETY: the caller's storage, sized for every key below.
     unsafe {
         if use_rgb {
@@ -256,10 +258,10 @@ unsafe fn put_colors(hl: &mut Dict, ae: HlAttrs, mask: int32_t, use_rgb: bool, s
                 let key = if short_keys { c"sp" } else { c"special" };
                 put(hl, key, Object::integer(Integer::from(ae.rgb_sp_color)));
             }
-            if mask & HL_FG_INDEXED != 0 {
+            if mask.has(HlAttrFlags::FG_INDEXED) {
                 put(hl, c"fg_indexed", Object::boolean(true));
             }
-            if mask & HL_BG_INDEXED != 0 {
+            if mask.has(HlAttrFlags::BG_INDEXED) {
                 put(hl, c"bg_indexed", Object::boolean(true));
             }
         } else {
@@ -299,31 +301,32 @@ unsafe fn put_colors(hl: &mut Dict, ae: HlAttrs, mask: int32_t, use_rgb: bool, s
 /// Upstream's `CHECK_FLAG_WITH_KEY`: set `flag` when the key is on, clear it
 /// when the key is off *and* currently reads as exactly `flag`.
 ///
-/// The underline styles share the three bits of [`HL_UNDERLINE_MASK`], so
-/// setting one of them displaces the others and clearing one clears the
-/// field — which is why the bits cleared are not always the bits set.
-fn apply_flag(mask: &mut int32_t, on: bool, flag: int32_t) {
-    let field = if flag & HL_UNDERLINE_MASK != 0 {
-        HL_UNDERLINE_MASK
+/// The underline styles share the three bits of
+/// [`HlAttrFlags::UNDERLINE_MASK`], so setting one of them displaces the
+/// others and clearing one clears the field — which is why the bits cleared
+/// are not always the bits set.
+fn apply_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
+    let field = if flag.has(HlAttrFlags::UNDERLINE_MASK) {
+        HlAttrFlags::UNDERLINE_MASK
     } else {
         flag
     };
     if on {
-        *mask = (*mask & !field) | flag;
-    } else if *mask & field == flag {
-        *mask &= !field;
+        *mask = mask.without(field) | flag;
+    } else if mask.masked(field) == flag {
+        mask.clear(field);
     }
 }
 
 /// Upstream's `CHECK_FLAG`, for the `cterm` sub-dict: it has no "was it
 /// given" mask, so an absent key is simply false and only the set direction
 /// is meaningful.
-fn set_flag(mask: &mut int32_t, on: bool, flag: int32_t) {
+fn set_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
     if !on {
         return;
     }
-    if flag & HL_UNDERLINE_MASK != 0 {
-        *mask &= !HL_UNDERLINE_MASK;
+    if flag.has(HlAttrFlags::UNDERLINE_MASK) {
+        mask.clear(HlAttrFlags::UNDERLINE_MASK);
     }
     *mask |= flag;
 }
@@ -360,11 +363,11 @@ pub unsafe fn dict2hlattrs(
     let mut ctermfg = base.map_or(-1, |b| unbias(b.cterm_fg_color));
     let mut ctermbg = base.map_or(-1, |b| unbias(b.cterm_bg_color));
     let mut blend = base.map_or(-1, |b| b.hl_blend);
-    let mut mask = base.map_or(0, |b| b.rgb_ae_attr);
-    let mut cterm_mask = base.map_or(0, |b| b.cterm_ae_attr);
+    let mut mask = base.map_or(HlAttrFlags::NONE, |b| b.rgb_ae_attr);
+    let mut cterm_mask = base.map_or(HlAttrFlags::NONE, |b| b.cterm_ae_attr);
     let mut cterm_mask_provided = false;
 
-    let mut flag = |set: bool, on: bool, bit: int32_t, mask: &mut int32_t| {
+    let mut flag = |set: bool, on: bool, bit: HlAttrFlags, mask: &mut HlAttrFlags| {
         if set {
             apply_flag(mask, on, bit);
         }
@@ -372,17 +375,27 @@ pub unsafe fn dict2hlattrs(
     flag(
         is_set(dict, key::REVERSE),
         dict.reverse,
-        HL_INVERSE,
+        HlAttrFlags::INVERSE,
         &mut mask,
     );
-    flag(is_set(dict, key::BOLD), dict.bold, HL_BOLD, &mut mask);
-    flag(is_set(dict, key::ITALIC), dict.italic, HL_ITALIC, &mut mask);
+    flag(
+        is_set(dict, key::BOLD),
+        dict.bold,
+        HlAttrFlags::BOLD,
+        &mut mask,
+    );
+    flag(
+        is_set(dict, key::ITALIC),
+        dict.italic,
+        HlAttrFlags::ITALIC,
+        &mut mask,
+    );
     let underlines = [
-        (key::UNDERLINE, dict.underline, HL_UNDERLINE),
-        (key::UNDERCURL, dict.undercurl, HL_UNDERCURL),
-        (key::UNDERDOUBLE, dict.underdouble, HL_UNDERDOUBLE),
-        (key::UNDERDOTTED, dict.underdotted, HL_UNDERDOTTED),
-        (key::UNDERDASHED, dict.underdashed, HL_UNDERDASHED),
+        (key::UNDERLINE, dict.underline, HlAttrFlags::UNDERLINE),
+        (key::UNDERCURL, dict.undercurl, HlAttrFlags::UNDERCURL),
+        (key::UNDERDOUBLE, dict.underdouble, HlAttrFlags::UNDERDOUBLE),
+        (key::UNDERDOTTED, dict.underdotted, HlAttrFlags::UNDERDOTTED),
+        (key::UNDERDASHED, dict.underdashed, HlAttrFlags::UNDERDASHED),
     ];
     for (opt, on, bit) in underlines {
         flag(is_set(dict, opt), on, bit, &mut mask);
@@ -390,44 +403,59 @@ pub unsafe fn dict2hlattrs(
     flag(
         is_set(dict, key::STANDOUT),
         dict.standout,
-        HL_STANDOUT,
+        HlAttrFlags::STANDOUT,
         &mut mask,
     );
     let strike = is_set(dict, key::STRIKETHROUGH);
-    flag(strike, dict.strikethrough, HL_STRIKETHROUGH, &mut mask);
+    flag(
+        strike,
+        dict.strikethrough,
+        HlAttrFlags::STRIKETHROUGH,
+        &mut mask,
+    );
     flag(
         is_set(dict, key::ALTFONT),
         dict.altfont,
-        HL_ALTFONT,
+        HlAttrFlags::ALTFONT,
         &mut mask,
     );
-    flag(is_set(dict, key::DIM), dict.dim, HL_DIM, &mut mask);
-    flag(is_set(dict, key::BLINK), dict.blink, HL_BLINK, &mut mask);
+    flag(
+        is_set(dict, key::DIM),
+        dict.dim,
+        HlAttrFlags::DIM,
+        &mut mask,
+    );
+    flag(
+        is_set(dict, key::BLINK),
+        dict.blink,
+        HlAttrFlags::BLINK,
+        &mut mask,
+    );
     flag(
         is_set(dict, key::CONCEAL),
         dict.conceal,
-        HL_CONCEALED,
+        HlAttrFlags::CONCEALED,
         &mut mask,
     );
     flag(
         is_set(dict, key::OVERLINE),
         dict.overline,
-        HL_OVERLINE,
+        HlAttrFlags::OVERLINE,
         &mut mask,
     );
     // Only a gui definition can say which colours came from the palette.
     if use_rgb {
         let indexed = is_set(dict, key::FG_INDEXED);
-        flag(indexed, dict.fg_indexed, HL_FG_INDEXED, &mut mask);
+        flag(indexed, dict.fg_indexed, HlAttrFlags::FG_INDEXED, &mut mask);
         let indexed = is_set(dict, key::BG_INDEXED);
-        flag(indexed, dict.bg_indexed, HL_BG_INDEXED, &mut mask);
+        flag(indexed, dict.bg_indexed, HlAttrFlags::BG_INDEXED, &mut mask);
     }
     let nocombine = is_set(dict, key::NOCOMBINE);
-    flag(nocombine, dict.nocombine, HL_NOCOMBINE, &mut mask);
+    flag(nocombine, dict.nocombine, HlAttrFlags::NOCOMBINE, &mut mask);
     flag(
         is_set(dict, key::DEFAULT),
         dict.default_,
-        HL_DEFAULT,
+        HlAttrFlags::DEFAULT,
         &mut mask,
     );
 
@@ -479,7 +507,7 @@ pub unsafe fn dict2hlattrs(
             };
             if global {
                 *link_id = dict.link_global as c_int;
-                mask |= HL_GLOBAL;
+                mask |= HlAttrFlags::GLOBAL;
             } else {
                 *link_id = dict.link as c_int;
             }
@@ -498,24 +526,24 @@ pub unsafe fn dict2hlattrs(
                 return HLATTRS_INIT;
             }
             cterm_mask_provided = true;
-            cterm_mask = 0;
+            cterm_mask = HlAttrFlags::NONE;
             let bits = [
-                (cterm.reverse, HL_INVERSE),
-                (cterm.bold, HL_BOLD),
-                (cterm.italic, HL_ITALIC),
-                (cterm.underline, HL_UNDERLINE),
-                (cterm.undercurl, HL_UNDERCURL),
-                (cterm.underdouble, HL_UNDERDOUBLE),
-                (cterm.underdotted, HL_UNDERDOTTED),
-                (cterm.underdashed, HL_UNDERDASHED),
-                (cterm.standout, HL_STANDOUT),
-                (cterm.strikethrough, HL_STRIKETHROUGH),
-                (cterm.altfont, HL_ALTFONT),
-                (cterm.dim, HL_DIM),
-                (cterm.blink, HL_BLINK),
-                (cterm.conceal, HL_CONCEALED),
-                (cterm.overline, HL_OVERLINE),
-                (cterm.nocombine, HL_NOCOMBINE),
+                (cterm.reverse, HlAttrFlags::INVERSE),
+                (cterm.bold, HlAttrFlags::BOLD),
+                (cterm.italic, HlAttrFlags::ITALIC),
+                (cterm.underline, HlAttrFlags::UNDERLINE),
+                (cterm.undercurl, HlAttrFlags::UNDERCURL),
+                (cterm.underdouble, HlAttrFlags::UNDERDOUBLE),
+                (cterm.underdotted, HlAttrFlags::UNDERDOTTED),
+                (cterm.underdashed, HlAttrFlags::UNDERDASHED),
+                (cterm.standout, HlAttrFlags::STANDOUT),
+                (cterm.strikethrough, HlAttrFlags::STRIKETHROUGH),
+                (cterm.altfont, HlAttrFlags::ALTFONT),
+                (cterm.dim, HlAttrFlags::DIM),
+                (cterm.blink, HlAttrFlags::BLINK),
+                (cterm.conceal, HlAttrFlags::CONCEALED),
+                (cterm.overline, HlAttrFlags::OVERLINE),
+                (cterm.nocombine, HlAttrFlags::NOCOMBINE),
             ];
             for (on, bit) in bits {
                 set_flag(&mut cterm_mask, on, bit);

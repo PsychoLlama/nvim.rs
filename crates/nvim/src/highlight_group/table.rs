@@ -25,14 +25,14 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::vim_isprintc;
 use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::global_cell::GlobalCell;
-use crate::highlight::{HLATTRS_INIT, hl_get_syn_attr, ns_get_hl};
+use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_hl};
 use crate::main::{
     curwin, e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, normal_bg,
     normal_fg,
 };
 use crate::message::{emsg, msg_source};
 use crate::os::cshim::gettext;
-use crate::types::{HlAttrs, NS, RgbValue, int16_t, int32_t, sctx_T, size_t};
+use crate::types::{HlAttrs, NS, RgbValue, int16_t, sctx_T, size_t};
 use crate::ui::ui_mode_info_set;
 
 use super::{HLF_W, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, kColorIdxNone};
@@ -62,8 +62,8 @@ pub struct HlGroup {
     pub deflink_sctx: sctx_T,
     /// Where the group was last set.
     pub script_ctx: sctx_T,
-    /// `cterm=` attributes, a combination of `HL_*`.
-    pub cterm: c_int,
+    /// `cterm=` attributes.
+    pub cterm: HlAttrFlags,
     /// `ctermfg=` colour number plus one, 0 for unset.
     pub cterm_fg: c_int,
     /// `ctermbg=` colour number plus one, 0 for unset.
@@ -71,8 +71,8 @@ pub struct HlGroup {
     /// `bold` was set to reach a light colour on an 8-colour terminal, so a
     /// later `ctermfg=` has to take it away again.
     pub cterm_bold: bool,
-    /// `gui=` attributes, a combination of `HL_*`.
-    pub gui: c_int,
+    /// `gui=` attributes.
+    pub gui: HlAttrFlags,
     /// `guifg=`, `guibg=`, `guisp=`.
     pub rgb_fg: RgbValue,
     pub rgb_bg: RgbValue,
@@ -110,11 +110,11 @@ impl HlGroup {
         set: 0,
         deflink_sctx: ZERO_SCTX,
         script_ctx: ZERO_SCTX,
-        cterm: 0,
+        cterm: HlAttrFlags::NONE,
         cterm_fg: 0,
         cterm_bg: 0,
         cterm_bold: false,
-        gui: 0,
+        gui: HlAttrFlags::NONE,
         rgb_fg: 0,
         rgb_bg: 0,
         rgb_sp: 0,
@@ -225,11 +225,11 @@ pub(crate) fn highlight_clear(id: c_int) {
             link: deflink,
             script_ctx: group.deflink_sctx,
             attr: 0,
-            cterm: 0,
+            cterm: HlAttrFlags::NONE,
             cterm_bold: false,
             cterm_fg: 0,
             cterm_bg: 0,
-            gui: 0,
+            gui: HlAttrFlags::NONE,
             rgb_fg: -1,
             rgb_bg: -1,
             rgb_sp: -1,
@@ -254,10 +254,10 @@ pub(crate) unsafe fn set_hl_attr(id: c_int) {
     let at_en = GROUPS.with(|table| {
         let group = &table.entries[id as usize - 1];
         HlAttrs {
-            cterm_ae_attr: group.cterm as int32_t,
+            cterm_ae_attr: group.cterm,
             cterm_fg_color: group.cterm_fg as int16_t,
             cterm_bg_color: group.cterm_bg as int16_t,
-            rgb_ae_attr: group.gui as int32_t,
+            rgb_ae_attr: group.gui,
             rgb_fg_color: if group.rgb_fg_idx != kColorIdxNone {
                 group.rgb_fg
             } else {

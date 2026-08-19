@@ -285,8 +285,8 @@ pub(crate) struct Cells {
     pub(super) decor_conceal: ::core::ffi::c_int,
     /// `'hlsearch'` says the match ends on the last column of the row.
     pub(super) on_last_col: bool,
-    /// `HL_CONCEAL` and friends for the syntax item under the cell.
-    pub(super) syntax_flags: ::core::ffi::c_int,
+    /// `SynFlags::CONCEAL` and friends for the syntax item under the cell.
+    pub(super) syntax_flags: SynFlags,
     /// Sequence number of that item, so a run of one item conceals once.
     pub(super) syntax_seqnr: ::core::ffi::c_int,
     /// The one the last concealed cell belonged to.
@@ -393,7 +393,7 @@ impl Cells {
             match_conc: 0,
             decor_conceal: 0,
             on_last_col: false,
-            syntax_flags: 0,
+            syntax_flags: SynFlags::NONE,
             syntax_seqnr: 0,
             prev_syntax_id: 0,
             is_concealing: false,

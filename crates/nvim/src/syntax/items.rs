@@ -56,12 +56,14 @@ pub(crate) unsafe fn push_next_match() -> *mut stateitem_T {
         (*cur_si).si_cchar = (*spp).sp_cchar;
         if state_len() > 1 {
             // A concealed item conceals what it contains.
-            (*cur_si).si_flags |= (*state_at(state_len() - 2)).si_flags & HL_CONCEAL;
+            (*cur_si).si_flags |= (*state_at(state_len() - 2))
+                .si_flags
+                .masked(SynFlags::CONCEAL);
         }
         (*cur_si).si_next_list = (*spp).sp_next_list;
         (*cur_si).si_extmatch = ref_extmatch(next_match_extmatch.get());
 
-        if (*spp).sp_type as c_int == SPTYPE_START && (*spp).sp_flags & HL_ONELINE == 0 {
+        if (*spp).sp_type as c_int == SPTYPE_START && !(*spp).sp_flags.has(SynFlags::ONELINE) {
             // A start-skip-end that may cross lines: work out how much of it
             // is in this line.
             update_si_end(cur_si, next_match_m_endpos.get().col, true);
@@ -74,13 +76,15 @@ pub(crate) unsafe fn push_next_match() -> *mut stateitem_T {
             (*cur_si).si_eoe_pos = next_match_eoe_pos.get();
             (*cur_si).si_end_idx = next_match_end_idx.get();
         }
-        if keepend_level.get() < 0 && (*cur_si).si_flags & HL_KEEPEND != 0 {
+        if keepend_level.get() < 0 && (*cur_si).si_flags.has(SynFlags::KEEPEND) {
             keepend_level.set(state_len() - 1);
         }
         check_keepend();
         update_si_attr(state_len() - 1);
 
-        let save_flags = (*cur_si).si_flags & (HL_CONCEAL | HL_CONCEALENDS);
+        let save_flags = (*cur_si)
+            .si_flags
+            .masked(SynFlags::CONCEAL | SynFlags::CONCEALENDS);
 
         // If the start pattern has a `matchgroup=` of its own, push a second
         // item for it, ending where the start match ends.
@@ -94,10 +98,10 @@ pub(crate) unsafe fn push_next_match() -> *mut stateitem_T {
             (*cur_si).si_h_endpos = next_match_eos_pos.get();
             (*cur_si).si_ends = true_0;
             (*cur_si).si_end_idx = 0;
-            (*cur_si).si_flags = HL_MATCH | save_flags;
+            (*cur_si).si_flags = SynFlags::MATCH | save_flags;
             (*cur_si).si_seqnr = take_seqnr();
-            if (*cur_si).si_flags & HL_CONCEALENDS != 0 {
-                (*cur_si).si_flags |= HL_CONCEAL;
+            if (*cur_si).si_flags.has(SynFlags::CONCEALENDS) {
+                (*cur_si).si_flags |= SynFlags::CONCEAL;
             }
             (*cur_si).si_next_list = ::core::ptr::null_mut();
             check_keepend();
@@ -145,10 +149,10 @@ pub(crate) unsafe fn check_state_ends() {
                 (*cur_si).si_end_idx = 0;
                 (*cur_si).si_m_endpos = (*cur_si).si_eoe_pos;
                 (*cur_si).si_h_endpos = (*cur_si).si_eoe_pos;
-                (*cur_si).si_flags |= HL_MATCH;
+                (*cur_si).si_flags |= SynFlags::MATCH;
                 (*cur_si).si_seqnr = take_seqnr();
-                if (*cur_si).si_flags & HL_CONCEALENDS != 0 {
-                    (*cur_si).si_flags |= HL_CONCEAL;
+                if (*cur_si).si_flags.has(SynFlags::CONCEALENDS) {
+                    (*cur_si).si_flags |= SynFlags::CONCEAL;
                 }
                 update_si_attr(state_len() - 1);
 
@@ -164,7 +168,9 @@ pub(crate) unsafe fn check_state_ends() {
             // at end of line and it has neither "skipnl" nor "skipempty".
             current_next_list.set((*cur_si).si_next_list);
             current_next_flags.set((*cur_si).si_flags);
-            if current_next_flags.get() & (HL_SKIPNL | HL_SKIPEMPTY) == 0
+            if !current_next_flags
+                .get()
+                .has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
                 && *syn_getcurline().offset(current_col.get() as isize) as c_int == NUL
             {
                 current_next_list.set(::core::ptr::null_mut());
@@ -172,7 +178,7 @@ pub(crate) unsafe fn check_state_ends() {
 
             // When the ended item has "extend", another item with "keepend"
             // now needs to check for its end.
-            let had_extend = (*cur_si).si_flags & HL_EXTEND != 0;
+            let had_extend = (*cur_si).si_flags.has(SynFlags::EXTEND);
 
             pop_current_state();
             if state_len() <= 0 {
@@ -191,14 +197,14 @@ pub(crate) unsafe fn check_state_ends() {
             // end of the line, stop here and let the region continue. Not when
             // "keepend" is used for the contained item, not when we are away
             // from the end of the line (the end could be `end="x$"me=e-1`), and
-            // not when "excludenl" is used (HL_HAS_EOL will not be set).
+            // not when "excludenl" is used (SynFlags::HAS_EOL will not be set).
             if (*cur_si).si_idx >= 0
                 && (*syn_pattern((*cur_si).si_idx)).sp_type as c_int == SPTYPE_START
-                && (*cur_si).si_flags & (HL_MATCH | HL_KEEPEND) == 0
+                && !(*cur_si).si_flags.has(SynFlags::MATCH | SynFlags::KEEPEND)
             {
                 update_si_end(cur_si, current_col.get(), true);
                 check_keepend();
-                if current_next_flags.get() & HL_HAS_EOL != 0
+                if current_next_flags.get().has(SynFlags::HAS_EOL)
                     && keepend_level.get() < 0
                     && *syn_getcurline().offset(current_col.get() as isize) as c_int == NUL
                 {
@@ -218,7 +224,7 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
             return; // a keyword; should not happen
         }
         let spp = syn_pattern((*sip).si_idx);
-        let is_match = (*sip).si_flags & HL_MATCH != 0;
+        let is_match = (*sip).si_flags.has(SynFlags::MATCH);
 
         (*sip).si_id = if is_match {
             (*spp).sp_syn_match_id as c_int
@@ -236,7 +242,7 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
         // A transparent item takes its attributes from the item around it, and
         // its containment too when it has none of its own. Not for the
         // matchgroup of a start or end pattern.
-        if (*spp).sp_flags & HL_TRANSP == 0 || is_match {
+        if !(*spp).sp_flags.has(SynFlags::TRANSP) || is_match {
             return;
         }
         if idx == 0 {
@@ -250,7 +256,7 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
             (*sip).si_attr = (*outer).si_attr;
             (*sip).si_trans_id = (*outer).si_trans_id;
             if (*sip).si_cont_list.is_null() {
-                (*sip).si_flags |= HL_TRANS_CONT;
+                (*sip).si_flags |= SynFlags::TRANS_CONT;
                 (*sip).si_cont_list = (*outer).si_cont_list;
             }
         }
@@ -272,7 +278,7 @@ pub(crate) unsafe fn check_keepend() {
         // every "keepend" works normally.
         let mut i = state_len() - 1;
         while i > keepend_level.get() {
-            if (*state_at(i)).si_flags & HL_EXTEND != 0 {
+            if (*state_at(i)).si_flags.has(SynFlags::EXTEND) {
                 break;
             }
             i -= 1;
@@ -288,7 +294,7 @@ pub(crate) unsafe fn check_keepend() {
                 limit_pos_zero(&mut (*sip).si_eoe_pos, maxpos);
                 (*sip).si_ends = true_0;
             }
-            if (*sip).si_ends != 0 && (*sip).si_flags & HL_KEEPEND != 0 {
+            if (*sip).si_ends != 0 && (*sip).si_flags.has(SynFlags::KEEPEND) {
                 if maxpos.lnum == 0 || pos_after(maxpos, (*sip).si_m_endpos) {
                     maxpos = (*sip).si_m_endpos;
                 }
@@ -334,7 +340,10 @@ pub(crate) unsafe fn update_si_end(sip: *mut stateitem_T, startcol: c_int, force
 
         if end.m_endpos.lnum == 0 {
             // No end pattern matched.
-            if (*syn_pattern((*sip).si_idx)).sp_flags & HL_ONELINE != 0 {
+            if (*syn_pattern((*sip).si_idx))
+                .sp_flags
+                .has(SynFlags::ONELINE)
+            {
                 // A "oneline" never continues in the next line.
                 (*sip).si_ends = true_0;
                 (*sip).si_m_endpos.lnum = current_lnum.get();

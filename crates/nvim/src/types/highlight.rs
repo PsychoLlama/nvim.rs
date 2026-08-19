@@ -3,6 +3,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::highlight::HlAttrFlags;
 
 #[derive(Copy, Clone)]
 pub struct ColorItem {
@@ -19,8 +20,8 @@ pub struct ColorKey {
 }
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct HlAttrs {
-    pub rgb_ae_attr: int32_t,
-    pub cterm_ae_attr: int32_t,
+    pub rgb_ae_attr: HlAttrFlags,
+    pub cterm_ae_attr: HlAttrFlags,
     pub rgb_fg_color: RgbValue,
     pub rgb_bg_color: RgbValue,
     pub rgb_sp_color: RgbValue,

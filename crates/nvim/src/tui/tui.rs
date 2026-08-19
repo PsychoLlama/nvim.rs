@@ -32,6 +32,7 @@ use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
 use crate::event::stream::stream_set_blocking;
+use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg_c};
 use crate::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_status};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
@@ -83,8 +84,8 @@ const DFLT_ROWS: c_int = 24;
 
 /// The first entry in the highlight table: the editor's default highlight.
 pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {
-    rgb_ae_attr: 0,
-    cterm_ae_attr: 0,
+    rgb_ae_attr: HlAttrFlags::NONE,
+    cterm_ae_attr: HlAttrFlags::NONE,
     rgb_fg_color: -1,
     rgb_bg_color: -1,
     rgb_sp_color: -1,

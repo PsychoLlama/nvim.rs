@@ -132,7 +132,7 @@ pub struct keyentry {
     pub ke_next: *mut keyentry_T,
     pub k_syn: sp_syn,
     pub next_list: *mut int16_t,
-    pub flags: ::core::ffi::c_int,
+    pub flags: SynFlags,
     pub k_char: ::core::ffi::c_int,
     pub keyword: [::core::ffi::c_char; 0],
 }
@@ -158,7 +158,7 @@ pub struct stateitem_T {
     pub si_end_idx: ::core::ffi::c_int,
     pub si_ends: ::core::ffi::c_int,
     pub si_attr: ::core::ffi::c_int,
-    pub si_flags: ::core::ffi::c_int,
+    pub si_flags: SynFlags,
     pub si_seqnr: ::core::ffi::c_int,
     pub si_cchar: ::core::ffi::c_int,
     pub si_cont_list: *mut int16_t,
@@ -172,7 +172,7 @@ pub struct synpat_T {
     pub sp_syn_match_id: int16_t,
     pub sp_off_flags: int16_t,
     pub sp_offsets: [::core::ffi::c_int; 7],
-    pub sp_flags: ::core::ffi::c_int,
+    pub sp_flags: SynFlags,
     pub sp_cchar: ::core::ffi::c_int,
     pub sp_ic: ::core::ffi::c_int,
     pub sp_sync_idx: ::core::ffi::c_int,
@@ -193,7 +193,7 @@ pub struct syn_cluster_T {
 }
 #[derive(Copy, Clone)]
 pub struct syn_opt_arg_T {
-    pub flags: ::core::ffi::c_int,
+    pub flags: SynFlags,
     pub keyword: bool,
     pub sync_idx: *mut ::core::ffi::c_int,
     pub has_cont_list: bool,
@@ -256,7 +256,7 @@ static current_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// Syntax id of the current character, after transparency.
 static current_trans_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// `HL_*` flags of the current character.
-static current_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static current_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
 /// Sequence number of the item the current character belongs to, which is what
 /// tells two runs of the same group apart.
 static current_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -338,7 +338,7 @@ static next_match_m_endpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 
 static next_match_h_startpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
 static next_match_h_endpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
 static next_match_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static next_match_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static next_match_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
 static next_match_eos_pos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
 static next_match_eoe_pos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
 static next_match_end_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -369,7 +369,7 @@ static current_state: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE
 /// The `nextgroup=` list in effect, or NULL.
 static current_next_list: GlobalCell<*mut int16_t> = GlobalCell::new(::core::ptr::null_mut());
 /// The `skipwhite`/`skipnl`/`skipempty` flags that came with it.
-static current_next_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static current_next_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
 /// `display_tick` when the current line was parsed, which is how a `display`
 /// item knows it is being drawn rather than scanned.
 static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

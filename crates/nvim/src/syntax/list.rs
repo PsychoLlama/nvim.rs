@@ -154,31 +154,31 @@ unsafe fn syn_match_msg() {
 }
 
 /// The item flags that are printed after the patterns.
-const ITEM_FLAG_NAMES: [(c_int, &CStr); 10] = [
-    (HL_DISPLAY, c"display"),
-    (HL_CONTAINED, c"contained"),
-    (HL_ONELINE, c"oneline"),
-    (HL_KEEPEND, c"keepend"),
-    (HL_EXTEND, c"extend"),
-    (HL_EXCLUDENL, c"excludenl"),
-    (HL_TRANSP, c"transparent"),
-    (HL_FOLD, c"fold"),
-    (HL_CONCEAL, c"conceal"),
-    (HL_CONCEALENDS, c"concealends"),
+const ITEM_FLAG_NAMES: [(SynFlags, &CStr); 10] = [
+    (SynFlags::DISPLAY, c"display"),
+    (SynFlags::CONTAINED, c"contained"),
+    (SynFlags::ONELINE, c"oneline"),
+    (SynFlags::KEEPEND, c"keepend"),
+    (SynFlags::EXTEND, c"extend"),
+    (SynFlags::EXCLUDENL, c"excludenl"),
+    (SynFlags::TRANSP, c"transparent"),
+    (SynFlags::FOLD, c"fold"),
+    (SynFlags::CONCEAL, c"conceal"),
+    (SynFlags::CONCEALENDS, c"concealends"),
 ];
 
 /// The flags that are printed after a `nextgroup=` list.
-const NEXTGROUP_FLAG_NAMES: [(c_int, &CStr); 3] = [
-    (HL_SKIPWHITE, c"skipwhite"),
-    (HL_SKIPNL, c"skipnl"),
-    (HL_SKIPEMPTY, c"skipempty"),
+const NEXTGROUP_FLAG_NAMES: [(SynFlags, &CStr); 3] = [
+    (SynFlags::SKIPWHITE, c"skipwhite"),
+    (SynFlags::SKIPNL, c"skipnl"),
+    (SynFlags::SKIPEMPTY, c"skipempty"),
 ];
 
 /// Print the names of every flag of `names` that `flags` has.
-unsafe fn syn_list_flags(names: &[(c_int, &CStr)], flags: c_int, hl_id: c_int) {
+unsafe fn syn_list_flags(names: &[(SynFlags, &CStr)], flags: SynFlags, hl_id: c_int) {
     unsafe {
         for (flag, name) in names {
-            if flags & flag != 0 {
+            if flags.has(*flag) {
                 msg_puts_hl(name.as_ptr(), hl_id, false);
                 msg_putchar(' ' as c_int);
             }
@@ -224,7 +224,10 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
                 put_id_list(c"nextgroup", (*spp).sp_next_list, LIST_HL);
                 syn_list_flags(&NEXTGROUP_FLAG_NAMES, (*spp).sp_flags, LIST_HL);
             }
-            if (*spp).sp_flags & (HL_SYNC_HERE | HL_SYNC_THERE) != 0 {
+            if (*spp)
+                .sp_flags
+                .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
+            {
                 put_sync_group(spp);
             }
             idx += 1;
@@ -296,7 +299,7 @@ unsafe fn put_item_patterns(mut idx: c_int) -> c_int {
 /// Print `grouphere`/`groupthere` and the region item it names.
 unsafe fn put_sync_group(spp: *const synpat_T) {
     unsafe {
-        if (*spp).sp_flags & HL_SYNC_HERE != 0 {
+        if (*spp).sp_flags.has(SynFlags::SYNC_HERE) {
             msg_puts_hl(c"grouphere".as_ptr(), LIST_HL, false);
         } else {
             msg_puts_hl(c"groupthere".as_ptr(), LIST_HL, false);
@@ -458,10 +461,10 @@ unsafe fn put_pattern_offsets(spp: *const synpat_T) {
 /// sharing their options prints them once.
 #[derive(PartialEq)]
 struct KeywordOpts {
-    contained: c_int,
-    skipnl: c_int,
-    skipwhite: c_int,
-    skipempty: c_int,
+    contained: SynFlags,
+    skipnl: SynFlags,
+    skipwhite: SynFlags,
+    skipempty: SynFlags,
     cont_in_list: *const int16_t,
     next_list: *const int16_t,
 }
@@ -470,10 +473,10 @@ impl KeywordOpts {
     /// Nothing printed yet, which is also what a new header resets to.
     const fn none() -> Self {
         KeywordOpts {
-            contained: 0,
-            skipnl: 0,
-            skipwhite: 0,
-            skipempty: 0,
+            contained: SynFlags::NONE,
+            skipnl: SynFlags::NONE,
+            skipwhite: SynFlags::NONE,
+            skipempty: SynFlags::NONE,
             cont_in_list: ::core::ptr::null(),
             next_list: ::core::ptr::null(),
         }
@@ -483,10 +486,10 @@ impl KeywordOpts {
     unsafe fn of(kp: *const keyentry_T) -> Self {
         unsafe {
             KeywordOpts {
-                contained: (*kp).flags & HL_CONTAINED,
-                skipnl: (*kp).flags & HL_SKIPNL,
-                skipwhite: (*kp).flags & HL_SKIPWHITE,
-                skipempty: (*kp).flags & HL_SKIPEMPTY,
+                contained: (*kp).flags.masked(SynFlags::CONTAINED),
+                skipnl: (*kp).flags.masked(SynFlags::SKIPNL),
+                skipwhite: (*kp).flags.masked(SynFlags::SKIPWHITE),
+                skipempty: (*kp).flags.masked(SynFlags::SKIPEMPTY),
                 cont_in_list: (*kp).k_syn.cont_in_list,
                 next_list: (*kp).next_list,
             }
@@ -565,17 +568,17 @@ unsafe fn put_keyword(
             prev.next_list = opts.next_list;
             // The three skip flags are only meaningful with a `nextgroup=`,
             // and upstream only ever prints them here.
-            if opts.skipnl != 0 {
+            if opts.skipnl != SynFlags::NONE {
                 msg_puts_hl(c"skipnl".as_ptr(), LIST_HL, false);
                 msg_putchar(' ' as c_int);
                 prev.skipnl = opts.skipnl;
             }
-            if opts.skipwhite != 0 {
+            if opts.skipwhite != SynFlags::NONE {
                 msg_puts_hl(c"skipwhite".as_ptr(), LIST_HL, false);
                 msg_putchar(' ' as c_int);
                 prev.skipwhite = opts.skipwhite;
             }
-            if opts.skipempty != 0 {
+            if opts.skipempty != SynFlags::NONE {
                 msg_puts_hl(c"skipempty".as_ptr(), LIST_HL, false);
                 msg_putchar(' ' as c_int);
                 prev.skipempty = opts.skipempty;

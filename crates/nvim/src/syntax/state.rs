@@ -280,7 +280,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
                     && (*syn_pattern((*cur_si).si_idx)).sp_type as c_int == SPTYPE_MATCH
                     && (*cur_si).si_m_endpos.lnum < current_lnum.get()
                 {
-                    (*cur_si).si_flags |= HL_MATCHCONT;
+                    (*cur_si).si_flags |= SynFlags::MATCHCONT;
                     (*cur_si).si_m_endpos = lpos_T { lnum: 0, col: 0 };
                     (*cur_si).si_h_endpos = (*cur_si).si_m_endpos;
                     (*cur_si).si_ends = true_0;
@@ -296,7 +296,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
         let mut i = state_len() - 1;
         if keepend_level.get() >= 0 {
             while i > keepend_level.get() {
-                if (*state_at(i)).si_flags & HL_EXTEND != 0 {
+                if (*state_at(i)).si_flags.has(SynFlags::EXTEND) {
                     break;
                 }
                 i -= 1;
@@ -307,7 +307,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
         while i < state_len() {
             let cur_si = state_at(i);
             let innermost = i == state_len() - 1;
-            if (*cur_si).si_flags & HL_KEEPEND != 0
+            if (*cur_si).si_flags.has(SynFlags::KEEPEND)
                 || (seen_keepend && !startofline)
                 || (innermost && startofline)
             {
@@ -315,10 +315,10 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
                 (*cur_si).si_h_startpos.col = 0;
                 (*cur_si).si_h_startpos.lnum = current_lnum.get();
 
-                if (*cur_si).si_flags & HL_MATCHCONT == 0 {
+                if !(*cur_si).si_flags.has(SynFlags::MATCHCONT) {
                     update_si_end(cur_si, current_col.get(), !startofline);
                 }
-                if !startofline && (*cur_si).si_flags & HL_KEEPEND != 0 {
+                if !startofline && (*cur_si).si_flags.has(SynFlags::KEEPEND) {
                     seen_keepend = true;
                 }
             }
@@ -409,8 +409,9 @@ pub(crate) unsafe fn syn_finish_line(syncing: bool) -> bool {
                 // Check for a match with a sync item.
                 let cur_si = state_top();
                 if (*cur_si).si_idx >= 0
-                    && (*syn_pattern((*cur_si).si_idx)).sp_flags & (HL_SYNC_HERE | HL_SYNC_THERE)
-                        != 0
+                    && (*syn_pattern((*cur_si).si_idx))
+                        .sp_flags
+                        .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
                 {
                     return true;
                 }

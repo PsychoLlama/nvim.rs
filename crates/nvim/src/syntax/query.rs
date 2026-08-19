@@ -197,7 +197,7 @@ pub unsafe fn syn_get_id(
 
 /// Extra information about the current syntax item: answers its flags and
 /// stores its sequence number. Must be called right after [`get_syntax_attr`].
-pub unsafe fn get_syntax_info(seqnrp: *mut c_int) -> c_int {
+pub unsafe fn get_syntax_info(seqnrp: *mut c_int) -> SynFlags {
     unsafe {
         *seqnrp = current_seqnr.get();
         current_flags.get()
@@ -231,7 +231,7 @@ unsafe fn syn_cur_foldlevel() -> c_int {
     unsafe {
         let mut level = 0;
         for i in 0..state_len() {
-            if (*state_at(i)).si_flags & HL_FOLD != 0 {
+            if (*state_at(i)).si_flags.has(SynFlags::FOLD) {
                 level += 1;
             }
         }

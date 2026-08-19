@@ -16,16 +16,14 @@
 //!
 //! Everything here works in forced colours: the cell arithmetic needs real
 //! numbers, so an unset colour is resolved to `Normal`'s and failing that to
-//! the black/white implied by `'background'`. That is also where `HL_INVERSE`
+//! the black/white implied by `'background'`. That is also where `HlAttrFlags::INVERSE`
 //! is applied and dropped — the terminal would otherwise invert the *blended*
 //! colours, which is not what the unblended cell would have looked like.
 
 use super::cache::AttrCache;
-use super::{
-    HL_BG_INDEXED, HL_FG_INDEXED, HL_INVERSE, HL_UNDERLINE_MASK, get_attr_entry, kHlBlend,
-    kHlBlendThrough, syn_attr2entry, update_window_hl,
-};
+use super::{get_attr_entry, kHlBlend, kHlBlendThrough, syn_attr2entry, update_window_hl};
 use crate::global_cell::GlobalCell;
+use crate::highlight::HlAttrFlags;
 use crate::highlight_group::highlight_changed;
 use crate::main::{curwin, normal_bg, normal_fg, normal_sp, p_bg};
 use crate::types::{HlAttrs, HlEntry, RgbValue, int16_t};
@@ -130,7 +128,7 @@ fn blend_through(ratio: c_int, back: HlAttrs, back_raw: HlAttrs, front: HlAttrs)
     // Blend the special colour only where the cell below asked for one;
     // otherwise it is cleared rather than mixed towards the default red.
     blended.rgb_sp_color =
-        if blended.rgb_ae_attr & HL_UNDERLINE_MASK != 0 && back_raw.rgb_sp_color != -1 {
+        if blended.rgb_ae_attr.has(HlAttrFlags::UNDERLINE_MASK) && back_raw.rgb_sp_color != -1 {
             rgb_blend(ratio, back.rgb_sp_color, front.rgb_bg_color)
         } else {
             -1
@@ -138,7 +136,9 @@ fn blend_through(ratio: c_int, back: HlAttrs, back_raw: HlAttrs, front: HlAttrs)
     blended.cterm_bg_color = front.cterm_bg_color;
     blended.cterm_fg_color = cterm_blend(ratio, back.cterm_fg_color, front.cterm_bg_color);
     // Both colours are now mixtures, so neither is a palette index.
-    blended.rgb_ae_attr &= !(HL_FG_INDEXED | HL_BG_INDEXED);
+    blended
+        .rgb_ae_attr
+        .clear(HlAttrFlags::FG_INDEXED | HlAttrFlags::BG_INDEXED);
     blended
 }
 
@@ -147,12 +147,14 @@ fn blend_through(ratio: c_int, back: HlAttrs, back_raw: HlAttrs, front: HlAttrs)
 fn blend_over(ratio: c_int, back: HlAttrs, front: HlAttrs) -> HlAttrs {
     let mut blended = front;
     blended.rgb_fg_color = rgb_blend(ratio / 2, back.rgb_fg_color, front.rgb_fg_color);
-    blended.rgb_sp_color = if blended.rgb_ae_attr & HL_UNDERLINE_MASK != 0 {
+    blended.rgb_sp_color = if blended.rgb_ae_attr.has(HlAttrFlags::UNDERLINE_MASK) {
         rgb_blend(ratio / 2, back.rgb_bg_color, front.rgb_sp_color)
     } else {
         -1
     };
-    blended.rgb_ae_attr &= !(HL_FG_INDEXED | HL_BG_INDEXED);
+    blended
+        .rgb_ae_attr
+        .clear(HlAttrFlags::FG_INDEXED | HlAttrFlags::BG_INDEXED);
     blended
 }
 
@@ -189,9 +191,9 @@ unsafe fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     }
     // Apply inversion here rather than leaving it to the terminal: what is
     // blended has to be the colours the cell would really have shown.
-    if attrs.rgb_ae_attr & HL_INVERSE != 0 {
+    if attrs.rgb_ae_attr.has(HlAttrFlags::INVERSE) {
         core::mem::swap(&mut attrs.rgb_bg_color, &mut attrs.rgb_fg_color);
-        attrs.rgb_ae_attr &= !HL_INVERSE;
+        attrs.rgb_ae_attr.clear(HlAttrFlags::INVERSE);
     }
     attrs
 }

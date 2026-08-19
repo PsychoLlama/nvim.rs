@@ -11,7 +11,7 @@ use core::ffi::{CStr, c_char, c_int};
 use crate::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
 use crate::global_cell::GlobalCell;
 use crate::highlight::dict::put;
-use crate::highlight::{HL_DEFAULT, HLATTRS_DICT_SIZE, hlattrs2dict, ns_get_hl, syn_attr2entry};
+use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::types::{
     Arena, Dict, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone,
     kErrorTypeValidation, size_t,
@@ -19,10 +19,9 @@ use crate::types::{
 use crate::ui::ui_rgb_attached;
 
 use super::{
-    HL_UNDERLINE_MASK, HexBuf, KEYSET_OPTIDX_get_highlight__create,
-    KEYSET_OPTIDX_get_highlight__id, KEYSET_OPTIDX_get_highlight__link,
-    KEYSET_OPTIDX_get_highlight__name, coloridx_to_name, group, highlight_num_groups,
-    syn_check_group, syn_get_final_id, syn_name2id_len,
+    HexBuf, KEYSET_OPTIDX_get_highlight__create, KEYSET_OPTIDX_get_highlight__id,
+    KEYSET_OPTIDX_get_highlight__link, KEYSET_OPTIDX_get_highlight__name, coloridx_to_name, group,
+    highlight_num_groups, syn_check_group, syn_get_final_id, syn_name2id_len,
 };
 
 /// The empty dict every "nothing to say" path answers.
@@ -79,7 +78,7 @@ unsafe fn hlgroup2dict(hl: &mut Dict, ns_id: NS, hl_id: c_int, arena: *mut Arena
     // SAFETY: the arena hands out `HLATTRS_DICT_SIZE + 1` writable entries.
     unsafe {
         *hl = arena_dict(arena, HLATTRS_DICT_SIZE + 1);
-        if attr.rgb_ae_attr & HL_DEFAULT != 0 {
+        if attr.rgb_ae_attr.has(HlAttrFlags::DEFAULT) {
             put(hl, c"default", Object::boolean(true));
         }
         if link > 0 {
@@ -180,7 +179,7 @@ pub unsafe fn ns_get_hl_defs(
 /// it, NULL if not.
 ///
 /// `modec` is `'g'` for `gui=` and anything else for `cterm=`.
-pub fn highlight_has_attr(id: c_int, flag: c_int, modec: c_int) -> *const c_char {
+pub fn highlight_has_attr(id: c_int, flag: HlAttrFlags, modec: c_int) -> *const c_char {
     if id <= 0 || id > highlight_num_groups() {
         return core::ptr::null();
     }
@@ -192,10 +191,10 @@ pub fn highlight_has_attr(id: c_int, flag: c_int, modec: c_int) -> *const c_char
     };
     // The underline styles share a field, so the answer is an equality test
     // rather than a mask test.
-    let has = if flag & HL_UNDERLINE_MASK != 0 {
-        attr & HL_UNDERLINE_MASK == flag
+    let has = if flag.has(HlAttrFlags::UNDERLINE_MASK) {
+        attr.masked(HlAttrFlags::UNDERLINE_MASK) == flag
     } else {
-        attr & flag != 0
+        attr.has(flag)
     };
     if has {
         c"1".as_ptr()

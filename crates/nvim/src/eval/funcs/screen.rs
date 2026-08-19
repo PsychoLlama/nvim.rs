@@ -11,11 +11,7 @@ use crate::eval::typval::{
 use crate::grid::{
     MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
 };
-use crate::highlight::{
-    HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_INVERSE, HL_ITALIC, HL_NOCOMBINE, HL_OVERLINE,
-    HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED, HL_UNDERDOTTED, HL_UNDERDOUBLE,
-    HL_UNDERLINE,
-};
+use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{
     get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
     syn_get_final_id, syn_name2id,
@@ -25,9 +21,7 @@ use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_len;
 use crate::memory::xstrdup;
 use crate::message::msg_scroll_flush;
-use crate::syntax::{
-    HL_CONCEAL, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char,
-};
+use crate::syntax::{SynFlags, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char};
 use crate::types::{
     EvalFuncData, NUL, ScreenGrid, VAR_STRING, colnr_T, kListLenMayKnow, schar_T, typval_T,
     varnumber_T,
@@ -222,7 +216,7 @@ enum Attr {
     /// The group's own name.
     Name,
     /// Whether one attribute bit is set.
-    Bit(c_int),
+    Bit(HlAttrFlags),
 }
 
 /// Resolve `{what}`.
@@ -239,33 +233,33 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
     Some(match at(0) {
         b'b' => match at(1) {
             b'g' => Attr::Color,
-            b'l' => Attr::Bit(HL_BLINK),
-            _ => Attr::Bit(HL_BOLD),
+            b'l' => Attr::Bit(HlAttrFlags::BLINK),
+            _ => Attr::Bit(HlAttrFlags::BOLD),
         },
-        b'c' => Attr::Bit(HL_CONCEALED),
-        b'd' => Attr::Bit(HL_DIM),
-        b'o' => Attr::Bit(HL_OVERLINE),
+        b'c' => Attr::Bit(HlAttrFlags::CONCEALED),
+        b'd' => Attr::Bit(HlAttrFlags::DIM),
+        b'o' => Attr::Bit(HlAttrFlags::OVERLINE),
         b'f' => Attr::Color,
-        b'i' if at(1) == b'n' => Attr::Bit(HL_INVERSE),
-        b'i' => Attr::Bit(HL_ITALIC),
-        b'n' if at(1) == b'o' => Attr::Bit(HL_NOCOMBINE),
+        b'i' if at(1) == b'n' => Attr::Bit(HlAttrFlags::INVERSE),
+        b'i' => Attr::Bit(HlAttrFlags::ITALIC),
+        b'n' if at(1) == b'o' => Attr::Bit(HlAttrFlags::NOCOMBINE),
         b'n' => Attr::Name,
-        b'r' => Attr::Bit(HL_INVERSE),
+        b'r' => Attr::Bit(HlAttrFlags::INVERSE),
         b's' => match at(1) {
             b'p' => Attr::Color,
-            b't' if at(2) == b'r' => Attr::Bit(HL_STRIKETHROUGH),
-            _ => Attr::Bit(HL_STANDOUT),
+            b't' if at(2) == b'r' => Attr::Bit(HlAttrFlags::STRIKETHROUGH),
+            _ => Attr::Bit(HlAttrFlags::STANDOUT),
         },
         // `ul` is the underline *colour*; every other `u` spelling is one
         // of the five underline styles, and those are only told apart from
         // the sixth byte on — which is why the length guard comes first.
         b'u' if what.len() < 9 => Attr::Color,
         b'u' => match (at(5), at(6), at(7)) {
-            (b'l', _, _) => Attr::Bit(HL_UNDERLINE),
-            (c, _, _) if c != b'd' => Attr::Bit(HL_UNDERCURL),
-            (_, c, _) if c != b'o' => Attr::Bit(HL_UNDERDASHED),
-            (_, _, b'u') => Attr::Bit(HL_UNDERDOUBLE),
-            _ => Attr::Bit(HL_UNDERDOTTED),
+            (b'l', _, _) => Attr::Bit(HlAttrFlags::UNDERLINE),
+            (c, _, _) if c != b'd' => Attr::Bit(HlAttrFlags::UNDERCURL),
+            (_, c, _) if c != b'o' => Attr::Bit(HlAttrFlags::UNDERDASHED),
+            (_, _, b'u') => Attr::Bit(HlAttrFlags::UNDERDOUBLE),
+            _ => Attr::Bit(HlAttrFlags::UNDERDOTTED),
         },
         _ => return None,
     })
@@ -350,7 +344,7 @@ pub unsafe fn f_synIDtrans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.
 pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut syntax_flags = 0;
+    let mut syntax_flags = SynFlags::NONE;
     let mut matchid = 0;
     let mut text = [0 as c_char; NUMBUFLEN];
     // SAFETY: the frame is live; `curbuf`/`curwin` are live for the whole
@@ -375,7 +369,7 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
             // reports on the position it last looked at.
             syn_get_id(curwin.get(), lnum, col, false_0, ptr::null_mut(), false_0);
             syntax_flags = get_syntax_info(&raw mut matchid);
-            if syntax_flags & HL_CONCEAL != 0 && (*curwin.get()).w_onebuf_opt.wo_cole < 3 {
+            if syntax_flags.has(SynFlags::CONCEAL) && (*curwin.get()).w_onebuf_opt.wo_cole < 3 {
                 let mut cchar = schar_from_char(syn_get_sub_char());
                 // At 'conceallevel' 1 a group with no `cchar` falls back to
                 // 'listchars' "conceal", and to a space if that is unset.
@@ -394,7 +388,7 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         let list = tv_list_alloc_ret(rettv, 3);
         tv_list_append_number(
             list,
-            (syntax_flags & HL_CONCEAL != 0) as c_int as varnumber_T,
+            (syntax_flags.has(SynFlags::CONCEAL)) as c_int as varnumber_T,
         );
         tv_list_append_string(list, text.as_ptr(), -1);
         tv_list_append_number(list, matchid as varnumber_T);

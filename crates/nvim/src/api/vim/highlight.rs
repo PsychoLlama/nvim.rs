@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, dict_put_str, has_key};
+use crate::highlight::HlAttrFlags;
 
 pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
     unsafe {
@@ -58,8 +59,8 @@ pub unsafe fn nvim_set_hl(
             && (*val).update as ::core::ffi::c_int != 0;
         let mut base: Option<&HlAttrs> = None;
         let mut base_attrs: HlAttrs = HlAttrs {
-            rgb_ae_attr: 0,
-            cterm_ae_attr: 0,
+            rgb_ae_attr: HlAttrFlags::NONE,
+            cterm_ae_attr: HlAttrFlags::NONE,
             rgb_fg_color: 0,
             rgb_bg_color: 0,
             rgb_sp_color: 0,

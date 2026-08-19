@@ -73,33 +73,45 @@ pub use namespace::{
     update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
 };
 
-/// The attribute bits an `HlAttrs`' `rgb_ae_attr`/`cterm_ae_attr` carry.
-///
-/// The sign bit stays clear: a negative attribute value is an invalid one.
-pub type HlAttrFlags = c_int;
-pub const HL_INVERSE: HlAttrFlags = 0x01;
-pub const HL_BOLD: HlAttrFlags = 0x02;
-pub const HL_ITALIC: HlAttrFlags = 0x04;
-/// The three bits the underline styles share: at most one style at a time.
-pub const HL_UNDERLINE_MASK: HlAttrFlags = 0x38;
-pub const HL_UNDERLINE: HlAttrFlags = 0x08;
-pub const HL_UNDERCURL: HlAttrFlags = 0x10;
-pub const HL_UNDERDOUBLE: HlAttrFlags = 0x18;
-pub const HL_UNDERDOTTED: HlAttrFlags = 0x20;
-pub const HL_UNDERDASHED: HlAttrFlags = 0x28;
-pub const HL_STANDOUT: HlAttrFlags = 0x40;
-pub const HL_STRIKETHROUGH: HlAttrFlags = 0x80;
-pub const HL_ALTFONT: HlAttrFlags = 0x100;
-pub const HL_DIM: HlAttrFlags = 0x200;
-pub const HL_NOCOMBINE: HlAttrFlags = 0x400;
-pub const HL_BG_INDEXED: HlAttrFlags = 0x800;
-pub const HL_FG_INDEXED: HlAttrFlags = 0x1000;
-pub const HL_DEFAULT: HlAttrFlags = 0x2000;
-pub const HL_GLOBAL: HlAttrFlags = 0x4000;
-pub const HL_BLINK: HlAttrFlags = 0x8000;
-/// The SGR attribute, unrelated to the `HL_CONCEAL` syntax flag.
-pub const HL_CONCEALED: HlAttrFlags = 0x1_0000;
-pub const HL_OVERLINE: HlAttrFlags = 0x2_0000;
+crate::flag_set! {
+    /// The attribute bits an `HlAttrs`' `rgb_ae_attr`/`cterm_ae_attr` carry.
+    ///
+    /// The sign bit stays clear: a negative attribute value is an invalid
+    /// one.
+    ///
+    /// **Five of these are not bits.** The underline styles share the three
+    /// bits of [`UNDERLINE_MASK`](Self::UNDERLINE_MASK) and are an
+    /// enumeration inside a flag word: `UNDERDOUBLE` is `UNDERLINE |
+    /// UNDERCURL`, so [`has`](Self::has) answers *yes* for a style that is
+    /// not set. Ask with `masked(UNDERLINE_MASK) == …`, which is what every
+    /// site here does.
+    pub struct HlAttrFlags;
+
+    const INVERSE = 0x01;
+    const BOLD = 0x02;
+    const ITALIC = 0x04;
+    /// The three bits the underline styles share: at most one style at a
+    /// time.
+    const UNDERLINE_MASK = 0x38;
+    const UNDERLINE = 0x08;
+    const UNDERCURL = 0x10;
+    const UNDERDOUBLE = 0x18;
+    const UNDERDOTTED = 0x20;
+    const UNDERDASHED = 0x28;
+    const STANDOUT = 0x40;
+    const STRIKETHROUGH = 0x80;
+    const ALTFONT = 0x100;
+    const DIM = 0x200;
+    const NOCOMBINE = 0x400;
+    const BG_INDEXED = 0x800;
+    const FG_INDEXED = 0x1000;
+    const DEFAULT = 0x2000;
+    const GLOBAL = 0x4000;
+    const BLINK = 0x8000;
+    /// The SGR attribute, unrelated to `SynFlags::CONCEAL`.
+    const CONCEALED = 0x1_0000;
+    const OVERLINE = 0x2_0000;
+}
 
 // The `HLF_*` builtin-group indices this family names. The full list lives
 // with `hlf_names`; these are the ones the code here singles out.
@@ -117,8 +129,8 @@ pub(crate) const kHlInvalid: HlKind = 7;
 /// An attribute set with nothing set. -1 is "unset" for an RGB colour and 0
 /// for a cterm one, which is why the two halves do not look alike.
 pub const HLATTRS_INIT: HlAttrs = HlAttrs {
-    rgb_ae_attr: 0,
-    cterm_ae_attr: 0,
+    rgb_ae_attr: HlAttrFlags::NONE,
+    cterm_ae_attr: HlAttrFlags::NONE,
     rgb_fg_color: -1,
     rgb_bg_color: -1,
     rgb_sp_color: -1,
@@ -372,8 +384,8 @@ pub unsafe fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int
         || at_en.rgb_fg_color != -1
         || at_en.rgb_bg_color != -1
         || at_en.rgb_sp_color != -1
-        || at_en.cterm_ae_attr != 0
-        || at_en.rgb_ae_attr != 0
+        || at_en.cterm_ae_attr != HlAttrFlags::NONE
+        || at_en.rgb_ae_attr != HlAttrFlags::NONE
         || ns_id != 0;
     if !anything_set {
         return 0;
@@ -404,14 +416,14 @@ pub unsafe fn hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
     unsafe { get_attr_entry(entry) }
 }
 
-/// The id for plain `HL_UNDERLINE`, which is what a URL is drawn with.
+/// The id for plain `HlAttrFlags::UNDERLINE`, which is what a URL is drawn with.
 ///
 /// # Safety
 /// As [`get_attr_entry`].
 pub unsafe fn hl_get_underline() -> c_int {
     let mut attrs = HLATTRS_INIT;
-    attrs.cterm_ae_attr = HL_UNDERLINE;
-    attrs.rgb_ae_attr = HL_UNDERLINE;
+    attrs.cterm_ae_attr = HlAttrFlags::UNDERLINE;
+    attrs.rgb_ae_attr = HlAttrFlags::UNDERLINE;
     // SAFETY: the caller's editor state.
     unsafe {
         get_attr_entry(HlEntry {
@@ -504,11 +516,13 @@ pub unsafe fn clear_hl_tables(reinit: bool) {
 ///
 /// The underline styles share a field, so a style in `prim_ae` replaces the
 /// one in `char_ae` rather than or-ing with it; everything else is a union.
-fn hl_combine_ae(char_ae: i32, prim_ae: i32) -> i32 {
-    let char_ul = char_ae & HL_UNDERLINE_MASK;
-    let prim_ul = prim_ae & HL_UNDERLINE_MASK;
-    let new_ul = if prim_ul != 0 { prim_ul } else { char_ul };
-    (char_ae & !HL_UNDERLINE_MASK) | (prim_ae & !HL_UNDERLINE_MASK) | new_ul
+fn hl_combine_ae(char_ae: HlAttrFlags, prim_ae: HlAttrFlags) -> HlAttrFlags {
+    let char_ul = char_ae.masked(HlAttrFlags::UNDERLINE_MASK);
+    let prim_ul = prim_ae.masked(HlAttrFlags::UNDERLINE_MASK);
+    let new_ul = if prim_ul.is_empty() { char_ul } else { prim_ul };
+    char_ae.without(HlAttrFlags::UNDERLINE_MASK)
+        | prim_ae.without(HlAttrFlags::UNDERLINE_MASK)
+        | new_ul
 }
 
 /// The id for `char_attr` overlaid with `prim_attr`.
@@ -539,12 +553,12 @@ pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
 
         // Start from the low-priority set and override below.
         let mut new_en = char_aep;
-        new_en.cterm_ae_attr = if prim_aep.cterm_ae_attr & HL_NOCOMBINE != 0 {
+        new_en.cterm_ae_attr = if prim_aep.cterm_ae_attr.has(HlAttrFlags::NOCOMBINE) {
             prim_aep.cterm_ae_attr
         } else {
             hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr)
         };
-        new_en.rgb_ae_attr = if prim_aep.rgb_ae_attr & HL_NOCOMBINE != 0 {
+        new_en.rgb_ae_attr = if prim_aep.rgb_ae_attr.has(HlAttrFlags::NOCOMBINE) {
             prim_aep.rgb_ae_attr
         } else {
             hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr)
@@ -553,24 +567,26 @@ pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
         // Taking a colour from `prim_aep` takes its "this is a palette index"
         // bit with it, which is why each of these clears the flag unless the
         // overriding set had it too.
-        let inherit = |mask: &mut i32, flag: i32| {
-            *mask &= !flag | (prim_aep.rgb_ae_attr & flag);
+        let inherit = |mask: &mut HlAttrFlags, flag: HlAttrFlags| {
+            if !prim_aep.rgb_ae_attr.has(flag) {
+                mask.clear(flag);
+            }
         };
         if prim_aep.cterm_fg_color > 0 {
             new_en.cterm_fg_color = prim_aep.cterm_fg_color;
-            inherit(&mut new_en.rgb_ae_attr, HL_FG_INDEXED);
+            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::FG_INDEXED);
         }
         if prim_aep.cterm_bg_color > 0 {
             new_en.cterm_bg_color = prim_aep.cterm_bg_color;
-            inherit(&mut new_en.rgb_ae_attr, HL_BG_INDEXED);
+            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::BG_INDEXED);
         }
         if prim_aep.rgb_fg_color >= 0 {
             new_en.rgb_fg_color = prim_aep.rgb_fg_color;
-            inherit(&mut new_en.rgb_ae_attr, HL_FG_INDEXED);
+            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::FG_INDEXED);
         }
         if prim_aep.rgb_bg_color >= 0 {
             new_en.rgb_bg_color = prim_aep.rgb_bg_color;
-            inherit(&mut new_en.rgb_ae_attr, HL_BG_INDEXED);
+            inherit(&mut new_en.rgb_ae_attr, HlAttrFlags::BG_INDEXED);
         }
         if prim_aep.rgb_sp_color >= 0 {
             new_en.rgb_sp_color = prim_aep.rgb_sp_color;
@@ -762,8 +778,17 @@ mod tests {
 
     #[test]
     fn combining_underline_styles_replaces_rather_than_ors() {
-        assert_eq!(hl_combine_ae(HL_UNDERLINE, HL_UNDERCURL), HL_UNDERCURL);
-        assert_eq!(hl_combine_ae(HL_UNDERCURL, 0), HL_UNDERCURL);
-        assert_eq!(hl_combine_ae(HL_BOLD, HL_ITALIC), HL_BOLD | HL_ITALIC);
+        assert_eq!(
+            hl_combine_ae(HlAttrFlags::UNDERLINE, HlAttrFlags::UNDERCURL),
+            HlAttrFlags::UNDERCURL
+        );
+        assert_eq!(
+            hl_combine_ae(HlAttrFlags::UNDERCURL, HlAttrFlags::NONE),
+            HlAttrFlags::UNDERCURL
+        );
+        assert_eq!(
+            hl_combine_ae(HlAttrFlags::BOLD, HlAttrFlags::ITALIC),
+            HlAttrFlags::BOLD | HlAttrFlags::ITALIC
+        );
     }
 }

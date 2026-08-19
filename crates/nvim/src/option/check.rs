@@ -21,7 +21,7 @@ use crate::drawscreen::{
 };
 use crate::ex_getln::{check_opt_wim, did_set_cedit};
 use crate::global_cell::GlobalCell;
-use crate::highlight::{HL_GLOBAL, ns_hl_def};
+use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::tabstop_set;
 use crate::main::{
@@ -40,8 +40,8 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, OptionSetFlags, buf_T, int32_t, optset_T,
-    size_t, uint8_t, uint32_t, vimoption_T, win_T,
+    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, OptionSetFlags, buf_T, optset_T, size_t,
+    uint8_t, uint32_t, vimoption_T, win_T,
 };
 
 use super::{
@@ -374,7 +374,7 @@ pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
 
             if !wp.is_null() {
                 let mut attrs: HlAttrs = HLATTRS_INIT;
-                attrs.rgb_ae_attr = (attrs.rgb_ae_attr as c_int | HL_GLOBAL) as int32_t;
+                attrs.rgb_ae_attr |= HlAttrFlags::GLOBAL;
                 ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None);
             }
             p = if *comma != 0 {

@@ -34,6 +34,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
+use crate::highlight::HlAttrFlags;
 use crate::main::empty_string_option;
 use crate::optionstr::set_chars_option;
 use crate::types::{
@@ -160,8 +161,8 @@ pub const TAB: c_int = '\t' as c_int;
 pub const CTRL_F_STR: &::core::ffi::CStr = c"\x06";
 pub const FORCE_BIN: c_int = 1 as c_int;
 pub const HLATTRS_INIT: HlAttrs = HlAttrs {
-    rgb_ae_attr: 0 as int32_t,
-    cterm_ae_attr: 0 as int32_t,
+    rgb_ae_attr: HlAttrFlags::NONE,
+    cterm_ae_attr: HlAttrFlags::NONE,
     rgb_fg_color: -1 as RgbValue,
     rgb_bg_color: -1 as RgbValue,
     rgb_sp_color: -1 as RgbValue,

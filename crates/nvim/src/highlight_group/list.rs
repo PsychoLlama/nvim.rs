@@ -11,6 +11,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use crate::charset::{skiptowhite, skipwhite, vim_strsize};
 use crate::eval::last_set_msg;
+use crate::highlight::HlAttrFlags;
 use crate::main::{
     Columns, got_int, include_default, include_link, include_none, msg_col, msg_silent, p_verbose,
 };
@@ -23,15 +24,15 @@ use crate::types::ui::kUIMessages;
 use crate::ui::{ui_flush, ui_has};
 
 use super::{
-    ATTR_NAMES, EXPAND_HIGHLIGHT, EXPAND_NOTHING, HL_UNDERLINE_MASK, HLF_D, HexBuf,
-    coloridx_to_name, group, highlight_num_groups,
+    ATTR_NAMES, EXPAND_HIGHLIGHT, EXPAND_NOTHING, HLF_D, HexBuf, coloridx_to_name, group,
+    highlight_num_groups,
 };
 
 /// One value in `:highlight`'s `key=value` output for a group.
 enum ListValue<'a> {
-    /// A set of `HL_*` bits, spelled as the comma-separated names
+    /// A set of attribute bits, spelled as the comma-separated names
     /// `cterm=`/`gui=` would take. An empty set prints nothing.
-    Attrs(c_int),
+    Attrs(HlAttrFlags),
     /// A colour number plus one, so that 0 means "not set" and prints
     /// nothing.
     Number(c_int),
@@ -50,7 +51,7 @@ impl<'a> ListValue<'a> {
             ListValue::Text(text) => text,
             ListValue::Number(0) => None,
             ListValue::Number(value) => Some(buf.number(value - 1)),
-            ListValue::Attrs(0) => None,
+            ListValue::Attrs(bits) if bits.is_empty() => None,
             ListValue::Attrs(bits) => Some(buf.attrs(bits)),
         }
     }
@@ -97,18 +98,18 @@ impl ValueBuf {
     /// The underline styles share a field, so one of those only prints when
     /// it is exactly the style set; every other bit is a plain test, and is
     /// cleared as it prints so that `inverse` does not follow `reverse`.
-    fn attrs(&mut self, mut bits: c_int) -> &CStr {
+    fn attrs(&mut self, mut bits: HlAttrFlags) -> &CStr {
         self.len = 0;
         self.bytes[0] = 0;
         for &(name, flag) in &ATTR_NAMES {
-            if flag == 0 {
+            if flag.is_empty() {
                 break;
             }
-            let underline = flag & HL_UNDERLINE_MASK != 0;
+            let underline = flag.has(HlAttrFlags::UNDERLINE_MASK);
             let hit = if underline {
-                bits & HL_UNDERLINE_MASK == flag
+                bits.masked(HlAttrFlags::UNDERLINE_MASK) == flag
             } else {
-                bits & flag != 0
+                bits.has(flag)
             };
             if !hit {
                 continue;
@@ -118,7 +119,7 @@ impl ValueBuf {
             }
             self.push(name);
             if !underline {
-                bits &= !flag;
+                bits.clear(flag);
             }
         }
         self.finish()

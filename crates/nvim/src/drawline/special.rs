@@ -531,7 +531,7 @@ impl Cells {
                 && (wp != curwin.get()
                     || wlv.lnum != (*wp).w_cursor.lnum
                     || conceal_cursor_line(wp))
-                && (self.syntax_flags & HL_CONCEAL as ::core::ffi::c_int != 0
+                && (self.syntax_flags.has(SynFlags::CONCEAL)
                     || self.has_match_conc > 0
                     || self.decor_conceal > 0)
                 // 'concealcursor' does not name "v", so the Visual area shows
@@ -544,7 +544,7 @@ impl Cells {
                 return;
             }
 
-            let syntax_conceal = self.syntax_flags & HL_CONCEAL as ::core::ffi::c_int != 0;
+            let syntax_conceal = self.syntax_flags.has(SynFlags::CONCEAL);
             wlv.char_attr = self.conceal_attr;
 
             // The first character of a concealed run shows the stand-in; the

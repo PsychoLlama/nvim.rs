@@ -14,11 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
-use crate::highlight::{
-    HL_ALTFONT, HL_BG_INDEXED, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_FG_INDEXED, HL_INVERSE,
-    HL_ITALIC, HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED,
-    HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK,
-};
+use crate::highlight::HlAttrFlags;
 use crate::map::mh_put_cstr_t;
 use crate::memory::xstrdup;
 use crate::tui::output::{out, out_cstr, out_fmt, terminfo_out, terminfo_print_nums};
@@ -34,13 +30,13 @@ use crate::tui::tui::DEFAULT_ATTRS;
 use crate::types::{Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, TUIData, cstr_t, int32_t};
 use core::ffi::{CStr, c_char, c_int};
 
-/// The underline style parameter each `HL_UNDER*` bit asks the terminal for,
+/// The underline style parameter each `UNDER*` bit asks the terminal for,
 /// in the order the sequences are emitted.
-const UNDERLINE_STYLES: [(c_int, c_int); 4] = [
-    (HL_UNDERCURL, 3),
-    (HL_UNDERDOUBLE, 2),
-    (HL_UNDERDOTTED, 4),
-    (HL_UNDERDASHED, 5),
+const UNDERLINE_STYLES: [(HlAttrFlags, c_int); 4] = [
+    (HlAttrFlags::UNDERCURL, 3),
+    (HlAttrFlags::UNDERDOUBLE, 2),
+    (HlAttrFlags::UNDERDOTTED, 4),
+    (HlAttrFlags::UNDERDASHED, 5),
 ];
 
 /// The id base OSC 8 hyperlinks are numbered from, so that two runs of the
@@ -148,13 +144,14 @@ pub(crate) fn attrs_differ(tui: &TUIData, id1: c_int, id2: c_int, rgb: bool) -> 
         a1.cterm_fg_color != a2.cterm_fg_color
             || a1.cterm_bg_color != a2.cterm_bg_color
             || a1.cterm_ae_attr != a2.cterm_ae_attr
-            || (a1.cterm_ae_attr & HL_UNDERLINE_MASK != 0 && a1.rgb_sp_color != a2.rgb_sp_color)
+            || (a1.cterm_ae_attr.has(HlAttrFlags::UNDERLINE_MASK)
+                && a1.rgb_sp_color != a2.rgb_sp_color)
     }
 }
 
 /// The attribute bits `attr_id` asks for, from the half of its definition
 /// this terminal is being painted in.
-fn ae_attr(tui: &TUIData, attrs: HlAttrs) -> c_int {
+fn ae_attr(tui: &TUIData, attrs: HlAttrs) -> HlAttrFlags {
     if tui.rgb {
         attrs.rgb_ae_attr
     } else {
@@ -172,22 +169,30 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
 
     let attrs = attr(tui, attr_id);
     let attr = ae_attr(tui, attrs);
-    let has = |bit: c_int| attr & bit != 0;
-    let (bold, italic, reverse) = (has(HL_BOLD), has(HL_ITALIC), has(HL_INVERSE));
-    let (standout, strikethrough) = (has(HL_STANDOUT), has(HL_STRIKETHROUGH));
-    let (altfont, dim, blink) = (has(HL_ALTFONT), has(HL_DIM), has(HL_BLINK));
-    let (conceal, overline) = (has(HL_CONCEALED), has(HL_OVERLINE));
+    let has = |bit: HlAttrFlags| attr.has(bit);
+    let (bold, italic, reverse) = (
+        has(HlAttrFlags::BOLD),
+        has(HlAttrFlags::ITALIC),
+        has(HlAttrFlags::INVERSE),
+    );
+    let (standout, strikethrough) = (has(HlAttrFlags::STANDOUT), has(HlAttrFlags::STRIKETHROUGH));
+    let (altfont, dim, blink) = (
+        has(HlAttrFlags::ALTFONT),
+        has(HlAttrFlags::DIM),
+        has(HlAttrFlags::BLINK),
+    );
+    let (conceal, overline) = (has(HlAttrFlags::CONCEALED), has(HlAttrFlags::OVERLINE));
 
     // Terminals that can style an underline get the exact style asked for;
     // the rest get a plain underline for any of them.
     let styled_underline = !tui.ti.defs[kTerm_set_underline_style as usize].is_null();
-    let underline_bits = attr & HL_UNDERLINE_MASK;
+    let underline_bits = attr.masked(HlAttrFlags::UNDERLINE_MASK);
     let underline = if styled_underline {
-        underline_bits == HL_UNDERLINE
+        underline_bits == HlAttrFlags::UNDERLINE
     } else {
-        underline_bits != 0
+        !underline_bits.is_empty()
     };
-    let style_of = |bit: c_int| styled_underline && underline_bits == bit;
+    let style_of = |bit: HlAttrFlags| styled_underline && underline_bits == bit;
     let any_underline = underline || UNDERLINE_STYLES.iter().any(|&(bit, _)| style_of(bit));
 
     if !tui.ti.defs[kTerm_set_attributes as usize].is_null() {
@@ -301,14 +306,14 @@ enum ColorRole {
 /// the editor last sent. `HL_*_INDEXED` marks a colour that is a palette
 /// index even under `'termguicolors'`, which is why the RGB path can still
 /// fall through to the indexed one.
-fn set_color(tui: &mut TUIData, role: ColorRole, attrs: HlAttrs, attr: c_int) -> c_int {
+fn set_color(tui: &mut TUIData, role: ColorRole, attrs: HlAttrs, attr: HlAttrFlags) -> c_int {
     let foreground = role == ColorRole::Foreground;
     let indexed_bit = if foreground {
-        HL_FG_INDEXED
+        HlAttrFlags::FG_INDEXED
     } else {
-        HL_BG_INDEXED
+        HlAttrFlags::BG_INDEXED
     };
-    if tui.rgb && attr & indexed_bit as c_int == 0 {
+    if tui.rgb && !attr.has(indexed_bit) {
         let (want, fallback) = if foreground {
             (attrs.rgb_fg_color, tui.clear_attrs.rgb_fg_color)
         } else {

@@ -128,7 +128,7 @@ unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: linenr_T) {
 /// Where a `:syntax sync match` matched, and what it said to do there.
 struct SyncPoint {
     /// The sync item's flags -- `grouphere` or `groupthere`.
-    flags: c_int,
+    flags: SynFlags,
     /// The pattern index of the group to push, or negative for none.
     match_idx: c_int,
     /// Where the match itself began.
@@ -190,7 +190,7 @@ unsafe fn sync_by_match(start_lnum: linenr_T, last_valid: *mut synstate_T) {
                 push_current_state(found.match_idx);
                 update_si_attr(state_len() - 1);
             }
-            if found.flags & HL_SYNC_HERE != 0 {
+            if found.flags.has(SynFlags::SYNC_HERE) {
                 // "grouphere": continue from the sync point match to the end of
                 // that line, and start parsing at the next one.
                 current_lnum.set(found.m_endpos.lnum);
@@ -249,7 +249,7 @@ unsafe fn scan_for_sync_point(
                     break;
                 }
                 let (flags, match_idx) = if (*cur_si).si_idx < 0 {
-                    (0, KEYWORD_IDX) // cannot happen?
+                    (SynFlags::NONE, KEYWORD_IDX) // cannot happen?
                 } else {
                     let spp = syn_pattern((*cur_si).si_idx);
                     ((*spp).sp_flags, (*spp).sp_sync_idx)
@@ -290,7 +290,7 @@ unsafe fn scan_for_sync_point(
         // A sync point whose item has no flags names nothing to sync on, which
         // upstream spells as `if (found_flags)` -- the zero case falls through
         // to the next line back.
-        found.filter(|f| f.flags != 0)
+        found.filter(|f| f.flags != SynFlags::NONE)
     }
 }
 

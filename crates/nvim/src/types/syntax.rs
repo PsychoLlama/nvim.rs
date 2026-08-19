@@ -3,12 +3,13 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::syntax::SynFlags;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct bufstate_T {
     pub bs_idx: ::core::ffi::c_int,
-    pub bs_flags: ::core::ffi::c_int,
+    pub bs_flags: SynFlags,
     pub bs_seqnr: ::core::ffi::c_int,
     pub bs_cchar: ::core::ffi::c_int,
     pub bs_extmatch: *mut reg_extmatch_T,
@@ -18,7 +19,7 @@ pub struct syn_state {
     pub sst_next: *mut synstate_T,
     pub sst_lnum: linenr_T,
     pub sst_union: syn_state_sst_union,
-    pub sst_next_flags: ::core::ffi::c_int,
+    pub sst_next_flags: SynFlags,
     pub sst_stacksize: ::core::ffi::c_int,
     pub sst_next_list: *mut int16_t,
     pub sst_tick: disptick_T,

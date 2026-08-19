@@ -4,11 +4,7 @@ use core::ffi::{CStr, c_int, c_uint};
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::decoration_provider::decor_provider_invalidate_hl;
-use crate::highlight::{
-    HL_ALTFONT, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_INVERSE, HL_ITALIC, HL_NOCOMBINE,
-    HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED, HL_UNDERDOTTED,
-    HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK, hl_get_ui_attr, syn_attr2entry,
-};
+use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::main::{
     clear_cmdline, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, msg_grid,
     need_highlight_changed,
@@ -80,28 +76,28 @@ pub(crate) const e_unexpected_equal_sign_str: &CStr = c"E415: Unexpected equal s
 pub(crate) const e_missing_equal_sign_str_2: &CStr = c"E416: Missing equal sign: %s";
 pub(crate) const e_missing_argument_str: &CStr = c"E417: Missing argument: %s";
 
-/// The names `term=`/`cterm=`/`gui=` accept, and the `HL_*` bit each one
+/// The names `term=`/`cterm=`/`gui=` accept, and the attribute bit each one
 /// means. `reverse` and `inverse` are the same bit; the `NONE` sentinel ends
 /// the list, and is what makes an unrecognised name an error.
-pub(crate) static ATTR_NAMES: [(&CStr, c_int); 18] = [
-    (c"bold", HL_BOLD),
-    (c"standout", HL_STANDOUT),
-    (c"underline", HL_UNDERLINE),
-    (c"undercurl", HL_UNDERCURL),
-    (c"underdouble", HL_UNDERDOUBLE),
-    (c"underdotted", HL_UNDERDOTTED),
-    (c"underdashed", HL_UNDERDASHED),
-    (c"italic", HL_ITALIC),
-    (c"reverse", HL_INVERSE),
-    (c"inverse", HL_INVERSE),
-    (c"strikethrough", HL_STRIKETHROUGH),
-    (c"altfont", HL_ALTFONT),
-    (c"dim", HL_DIM),
-    (c"blink", HL_BLINK),
-    (c"conceal", HL_CONCEALED),
-    (c"overline", HL_OVERLINE),
-    (c"nocombine", HL_NOCOMBINE),
-    (c"NONE", 0),
+pub(crate) static ATTR_NAMES: [(&CStr, HlAttrFlags); 18] = [
+    (c"bold", HlAttrFlags::BOLD),
+    (c"standout", HlAttrFlags::STANDOUT),
+    (c"underline", HlAttrFlags::UNDERLINE),
+    (c"undercurl", HlAttrFlags::UNDERCURL),
+    (c"underdouble", HlAttrFlags::UNDERDOUBLE),
+    (c"underdotted", HlAttrFlags::UNDERDOTTED),
+    (c"underdashed", HlAttrFlags::UNDERDASHED),
+    (c"italic", HlAttrFlags::ITALIC),
+    (c"reverse", HlAttrFlags::INVERSE),
+    (c"inverse", HlAttrFlags::INVERSE),
+    (c"strikethrough", HlAttrFlags::STRIKETHROUGH),
+    (c"altfont", HlAttrFlags::ALTFONT),
+    (c"dim", HlAttrFlags::DIM),
+    (c"blink", HlAttrFlags::BLINK),
+    (c"conceal", HlAttrFlags::CONCEALED),
+    (c"overline", HlAttrFlags::OVERLINE),
+    (c"nocombine", HlAttrFlags::NOCOMBINE),
+    (c"NONE", HlAttrFlags::NONE),
 ];
 /// Applies the difference between `User{i+1}` and `StatusLine` to
 /// `StatusLineNC`, in scratch entry `hlcnt + i`, and answers the attribute
@@ -126,7 +122,12 @@ unsafe fn combine_stl_hlt(
         let scratch = hlcnt + i + 1;
         let mut combined = if id_alt == 0 {
             // No `StatusLineNC` of its own: start from the resolved attribute.
-            let attr = highlight_attr.with(|attrs| attrs[hlf as usize]);
+            // Upstream puts the resolved attribute *id* into the two
+            // attribute-*bit* fields here (`sg_cterm`/`sg_gui`), which is not
+            // a set of attribute bits at all. The arm is unreachable --
+            // `id_alt` is `HLF_SNC`'s final id, and a builtin group always
+            // has one -- so this is carried as written rather than fixed.
+            let attr = HlAttrFlags::from_bits(highlight_attr.with(|attrs| attrs[hlf as usize]));
             HlGroup {
                 cterm: attr,
                 gui: attr,
@@ -139,14 +140,19 @@ unsafe fn combine_stl_hlt(
         let stl = group(id_s);
 
         combined.link = 0;
-        combined.cterm ^= user.cterm ^ stl.cterm;
+        // "the difference between User{i} and StatusLine, applied to
+        // StatusLineNC" -- an exclusive-or over the whole word, which is not
+        // a set operation, so it goes through the bits.
+        combined.cterm =
+            HlAttrFlags::from_bits(combined.cterm.bits() ^ user.cterm.bits() ^ stl.cterm.bits());
         if user.cterm_fg != stl.cterm_fg {
             combined.cterm_fg = user.cterm_fg;
         }
         if user.cterm_bg != stl.cterm_bg {
             combined.cterm_bg = user.cterm_bg;
         }
-        combined.gui ^= user.gui ^ stl.gui;
+        combined.gui =
+            HlAttrFlags::from_bits(combined.gui.bits() ^ user.gui.bits() ^ stl.gui.bits());
         if user.rgb_fg != stl.rgb_fg {
             combined.rgb_fg = user.rgb_fg;
         }
