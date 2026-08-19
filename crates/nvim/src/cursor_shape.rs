@@ -301,7 +301,9 @@ pub unsafe fn parse_shape_opt(what: c_int) -> *const c_char {
         }
         // SAFETY: `bytes` is the string `opt` points at.
         if let Err(msg) = unsafe { parse_parts(opt, bytes, what, round == 2, &mut found_ve) } {
-            return msg;
+            // The option layer takes the message as a bare pointer; that is
+            // the only reason one is handed back rather than reported here.
+            return msg.as_ptr();
         }
     }
 
@@ -337,8 +339,8 @@ unsafe fn parse_parts(
     what: c_int,
     apply: bool,
     found_ve: &mut bool,
-) -> Result<(), *const c_char> {
-    let e_illegal_mode: *const c_char = c"E546: Illegal mode".as_ptr();
+) -> Result<(), &'static CStr> {
+    let e_illegal_mode: &CStr = c"E546: Illegal mode";
     // The mode currently being described, and the cursor into the attribute
     // list; both outlive one iteration, exactly as upstream's do.
     let mut idx = 0usize;
@@ -348,11 +350,11 @@ unsafe fn parse_parts(
     let mut modep = 0usize;
     while modep < bytes.len() {
         let Some(colonp) = find(bytes, modep, b':') else {
-            return Err(c"E545: Missing colon".as_ptr());
+            return Err(c"E545: Missing colon");
         };
         let commap = find(bytes, modep, b',');
         if commap.is_some_and(|comma| comma < colonp) {
-            return Err(c"E545: Missing colon".as_ptr());
+            return Err(c"E545: Missing colon");
         }
         if colonp == modep {
             return Err(e_illegal_mode);
@@ -422,7 +424,7 @@ unsafe fn parse_parts(
                     // The ones with a number argument.
                     p += len;
                     if !bytes.get(p).is_some_and(u8::is_ascii_digit) {
-                        return Err(E_DIGIT_EXPECTED.as_ptr());
+                        return Err(E_DIGIT_EXPECTED);
                     }
                     // SAFETY: `p` indexes inside the string `opt` points at.
                     let (n, next) = unsafe { digits_at(opt, p) };
@@ -431,7 +433,7 @@ unsafe fn parse_parts(
                         // "ver"/"hor". Note there is no upper bound: hor101
                         // and ver999 are accepted as written.
                         if n == 0 {
-                            return Err(c"E549: Illegal percentage".as_ptr());
+                            return Err(c"E549: Illegal percentage");
                         }
                         if apply {
                             let vertical = (first as u8).eq_ignore_ascii_case(&b'v');

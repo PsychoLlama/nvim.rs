@@ -132,6 +132,20 @@ pub(crate) unsafe fn color_expr_cmdline(
     }
 }
 
+/// Which of upstream's two labels `color_cmdline`'s body leaves by.
+///
+/// Not a `Result`: neither answer carries anything, and "the callback had
+/// nothing to colour" is not an error — it takes the same exit as a full set
+/// of chunks.
+enum Label {
+    /// `color_cmdline_end`: keep whatever chunks were pushed.
+    End,
+    /// `color_cmdline_error`: the callback failed or answered something
+    /// unusable, and every arm that reaches here has already printed why.
+    /// The chunks are thrown away and the line redrawn.
+    Error,
+}
+
 /// Colour the command line, through the user's callback where there is one.
 ///
 /// `colored_ccline` is also the cache: when its `prompt_id` and `cmdbuff`
@@ -208,14 +222,12 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
         let mut err_errmsg = e_intern2.as_ptr();
         let mut dgc_ret = true;
 
-        // The C's two labels: `Ok` leaves at `color_cmdline_end`, `Err` at
-        // `color_cmdline_error` (which then falls into `color_cmdline_end`).
-        let outcome: Result<(), ()> = 'body: {
+        let outcome = 'body: {
             if (*colored_ccline).prompt_id != prev_prompt_id.get() {
                 prev_prompt_errors.set(0);
                 prev_prompt_id.set((*colored_ccline).prompt_id);
             } else if prev_prompt_errors.get() >= MAX_CB_ERRORS {
-                break 'body Ok(());
+                break 'body Label::End;
             }
 
             if (*colored_ccline).highlight_callback.type_0 != kCallbackNone {
@@ -241,11 +253,11 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                 color_expr_cmdline(colored_ccline, ccline_colors);
             }
             if err.type_0 != kErrorTypeNone || !dgc_ret {
-                break 'body Err(());
+                break 'body Label::Error;
             }
 
             if color_cb.type_0 == kCallbackNone {
-                break 'body Ok(());
+                break 'body Label::End;
             }
             if *(*colored_ccline)
                 .cmdbuff
@@ -284,17 +296,17 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
             try_leave(&raw mut tstate, &raw mut err);
 
             if err.type_0 != kErrorTypeNone || !cbcall_ret {
-                break 'body Err(());
+                break 'body Label::Error;
             }
             if tv.v_type != VAR_LIST {
                 print_errmsg!(
                     c"%s".as_ptr(),
                     gettext(c"E5400: Callback should return list".as_ptr())
                 );
-                break 'body Err(());
+                break 'body Label::Error;
             }
             if tv.vval.v_list.is_null() {
-                break 'body Ok(());
+                break 'body Label::End;
             }
 
             let mut prev_end: varnumber_T = 0;
@@ -303,7 +315,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
             while !li.is_null() {
                 if (*li).li_tv.v_type != VAR_LIST {
                     print_errmsg!(gettext(c"E5401: List item %i is not a List".as_ptr()), i);
-                    break 'body Err(());
+                    break 'body Label::Error;
                 }
                 let l: *const list_T = (*li).li_tv.vval.v_list;
                 if tv_list_len(l) != 3 {
@@ -312,13 +324,13 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                         i,
                         tv_list_len(l)
                     );
-                    break 'body Err(());
+                    break 'body Label::Error;
                 }
 
                 let mut error = false;
                 let start = tv_get_number_chk(&raw mut (*tv_list_first(l)).li_tv, &raw mut error);
                 if error {
-                    break 'body Err(());
+                    break 'body Label::Error;
                 } else if !(prev_end <= start && start < (*colored_ccline).cmdlen as varnumber_T) {
                     print_errmsg!(
                         gettext(c"E5403: Chunk %i start %ld not in range [%ld, %i)".as_ptr()),
@@ -327,7 +339,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                         prev_end,
                         (*colored_ccline).cmdlen
                     );
-                    break 'body Err(());
+                    break 'body Label::Error;
                 } else if utf8len_tab_zero
                     [*(*colored_ccline).cmdbuff.offset(start as isize) as uint8_t as usize]
                     == 0
@@ -337,7 +349,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                         i,
                         start
                     );
-                    break 'body Err(());
+                    break 'body Label::Error;
                 }
 
                 if start != prev_end {
@@ -356,7 +368,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                     &raw mut error,
                 );
                 if error {
-                    break 'body Err(());
+                    break 'body Label::Error;
                 } else if !(start < end && end <= (*colored_ccline).cmdlen as varnumber_T) {
                     print_errmsg!(
                         gettext(c"E5404: Chunk %i end %ld not in range (%ld, %i]".as_ptr()),
@@ -365,7 +377,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                         start,
                         (*colored_ccline).cmdlen
                     );
-                    break 'body Err(());
+                    break 'body Label::Error;
                 } else if end < (*colored_ccline).cmdlen as varnumber_T
                     && utf8len_tab_zero
                         [*(*colored_ccline).cmdbuff.offset(end as isize) as uint8_t as usize]
@@ -376,13 +388,13 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                         i,
                         end
                     );
-                    break 'body Err(());
+                    break 'body Label::Error;
                 }
 
                 prev_end = end;
                 let group = tv_get_string_chk(&raw mut (*tv_list_last(l)).li_tv);
                 if group.is_null() {
-                    break 'body Err(());
+                    break 'body Label::Error;
                 }
                 push_chunk(
                     &raw mut (*ccline_colors).colors,
@@ -407,11 +419,11 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                 );
             }
             prev_prompt_errors.set(0);
-            Ok(())
+            Label::End
         };
 
         // color_cmdline_error:
-        if outcome.is_err() {
+        if matches!(outcome, Label::Error) {
             if err.type_0 != kErrorTypeNone {
                 print_errmsg!(gettext(err_errmsg), err.msg);
                 api_clear_error(&raw mut err);

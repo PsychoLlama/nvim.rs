@@ -484,12 +484,42 @@ pub unsafe fn channel_close(id: uint64_t, part: ChannelPart, error: *mut *const 
     // SAFETY: the caller's promise.
     match unsafe { close_channel_part(id, part) } {
         Ok(()) => true,
-        Err(msg) => {
+        Err(why) => {
             if !error.is_null() {
                 // SAFETY: the caller's writable out-parameter.
-                unsafe { *error = msg };
+                unsafe { *error = why.message() };
             }
             false
+        }
+    }
+}
+
+/// Why a channel, or a part of one, could not be closed.
+///
+/// The three reasons are exactly the three shared `e_*` strings the C wrote
+/// through its `char **error` out-parameter, which is why they are an enum
+/// and not the message pointer that out-parameter carried: the reason a
+/// close was refused is a fact about the channel, and turning it into text
+/// is [`channel_close`]'s job at the edge, once.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum CloseError {
+    /// No channel has that id (and it is not one that has already gone).
+    NoSuchChannel,
+    /// The channel has no such stream — a socket or internal channel asked
+    /// for one half, a stderr channel asked for anything else.
+    NoSuchStream,
+    /// An RPC channel's stdin and stdout carry the protocol and cannot be
+    /// closed on their own.
+    RpcStream,
+}
+
+impl CloseError {
+    /// The shared message string this reports as.
+    fn message(self) -> *const c_char {
+        match self {
+            CloseError::NoSuchChannel => message(&e_invchan),
+            CloseError::NoSuchStream => message(&e_invstream),
+            CloseError::RpcStream => message(&e_invstreamrpc),
         }
     }
 }
@@ -498,7 +528,7 @@ pub unsafe fn channel_close(id: uint64_t, part: ChannelPart, error: *mut *const 
 ///
 /// # Safety
 /// Called from the main thread with the registry live.
-unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), *const c_char> {
+unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
     // SAFETY: the caller's promise; the answer is used before the next turn.
     let chan = unsafe { find_channel(id) };
     if chan.is_null() {
@@ -507,7 +537,7 @@ unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), *con
         return if id < next_chan_id.get() {
             Ok(())
         } else {
-            Err(message(&e_invchan))
+            Err(CloseError::NoSuchChannel)
         };
     }
     // SAFETY: a live registry entry.
@@ -519,10 +549,10 @@ unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), *con
             // SAFETY: an RPC channel's protocol state is live while it is.
             unsafe { rpc_close(chan) };
         } else if part == kChannelPartRpc {
-            return Err(message(&e_invstream));
+            return Err(CloseError::NoSuchStream);
         }
     } else if (part == kChannelPartStdin || part == kChannelPartStdout) && is_rpc {
-        return Err(message(&e_invstreamrpc));
+        return Err(CloseError::RpcStream);
     }
 
     // SAFETY: `chan` is live and each arm touches only the transport its
@@ -531,7 +561,7 @@ unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), *con
         match streamtype {
             kChannelStreamSocket => {
                 if !close_main {
-                    return Err(message(&e_invstream));
+                    return Err(CloseError::NoSuchStream);
                 }
                 rstream_may_close(&raw mut (*chan).stream.socket);
             }
@@ -540,7 +570,7 @@ unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), *con
             kChannelStreamStderr => close_stderr(chan, part)?,
             kChannelStreamInternal => {
                 if !close_main {
-                    return Err(message(&e_invstream));
+                    return Err(CloseError::NoSuchStream);
                 }
                 close_internal(chan);
             }
@@ -581,10 +611,10 @@ unsafe fn close_stdio_parts(
     chan: *mut Channel,
     part: ChannelPart,
     close_main: bool,
-) -> Result<(), *const c_char> {
+) -> Result<(), CloseError> {
     // This process's stderr belongs to the stderr channel, not here.
     if part == kChannelPartStderr {
-        return Err(message(&e_invstream));
+        return Err(CloseError::NoSuchStream);
     }
     // SAFETY: the caller's live stdio channel.
     unsafe {
@@ -602,9 +632,9 @@ unsafe fn close_stdio_parts(
 ///
 /// # Safety
 /// `chan` is the live stderr channel.
-unsafe fn close_stderr(chan: *mut Channel, part: ChannelPart) -> Result<(), *const c_char> {
+unsafe fn close_stderr(chan: *mut Channel, part: ChannelPart) -> Result<(), CloseError> {
     if part != kChannelPartAll && part != kChannelPartStderr {
-        return Err(message(&e_invstream));
+        return Err(CloseError::NoSuchStream);
     }
     // SAFETY: the caller's live stderr channel, whose transport is one flag.
     unsafe {

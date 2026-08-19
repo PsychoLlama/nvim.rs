@@ -24,6 +24,15 @@ use crate::memory::{xcalloc, xfree, xrealloc, xstrchrnul};
 use crate::os::cshim::gettext;
 use crate::types::{VAR_UNKNOWN, size_t, typval_T};
 
+/// The format string cannot be used, and the `E15xx` saying why has already
+/// been reported.
+///
+/// The positional pre-pass either types every `%N$` in the format or gives up
+/// on the whole format; there is no partial answer to carry, which is why
+/// this is a unit struct rather than the `Result<(), ()>` it replaces.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct BadFormat;
+
 const E_CANNOT_MIX: &CStr = c"E1500: Cannot mix positional and non-positional arguments: %s";
 const E_FMT_ARG_UNUSED: &CStr = c"E1501: format argument %d unused in $-style format: %s";
 const E_FIELD_WIDTH_REUSED: &CStr =
@@ -154,11 +163,11 @@ unsafe fn adjust_types(
     arg: c_int,
     num_posarg: &mut c_int,
     spec: *const c_char,
-) -> Result<(), ()> {
+) -> Result<(), BadFormat> {
     unsafe {
         if arg <= 0 {
             semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), spec);
-            return Err(());
+            return Err(BadFormat);
         }
 
         if ap_types.is_null() || *num_posarg < arg {
@@ -192,7 +201,7 @@ unsafe fn adjust_types(
                         format_typename(seen),
                         format_typename(spec),
                     );
-                    return Err(());
+                    return Err(BadFormat);
                 }
             } else if format_typeof(spec) != format_typeof(seen) {
                 semsg_c!(
@@ -201,7 +210,7 @@ unsafe fn adjust_types(
                     format_typename(spec),
                     format_typename(seen),
                 );
-                return Err(());
+                return Err(BadFormat);
             }
         }
 
@@ -264,7 +273,7 @@ pub(crate) unsafe fn parse_fmt_types(
     num_posarg: &mut c_int,
     fmt: *const c_char,
     tvs: *mut typval_T,
-) -> Result<(), ()> {
+) -> Result<(), BadFormat> {
     if fmt.is_null() {
         return Ok(());
     }
@@ -283,7 +292,10 @@ unsafe fn scan_fmt_types(
     num_posarg: &mut c_int,
     fmt: *const c_char,
     tvs: *mut typval_T,
-) -> Result<(), ()> {
+) -> Result<(), BadFormat> {
+    // Whether the arguments are typvals, which is what says an out-of-range
+    // width is worth reporting rather than ignoring.
+    let typed = !tvs.is_null();
     unsafe {
         // A format may address its arguments positionally (`%2$s`) or in
         // order, never both.
@@ -295,14 +307,14 @@ unsafe fn scan_fmt_types(
             () => {
                 if any_pos && any_arg {
                     semsg_c!(gettext(E_CANNOT_MIX.as_ptr()), fmt);
-                    return Err(());
+                    return Err(BadFormat);
                 }
             };
         }
         macro_rules! invalid_specifier {
             () => {{
                 semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), fmt);
-                return Err(());
+                return Err(BadFormat);
             }};
         }
 
@@ -326,7 +338,7 @@ unsafe fn scan_fmt_types(
                 if *p as u8 == b'0' {
                     invalid_specifier!(); // a '0' flag before the position
                 }
-                let uj = get_unsigned_int(pstart, &mut p, !tvs.is_null()).ok_or(())?;
+                let uj = get_unsigned_int(pstart, &mut p, typed).ok_or(BadFormat)?;
                 pos_arg = uj as c_int;
                 any_pos = true;
                 check_pos_arg!();
@@ -345,7 +357,7 @@ unsafe fn scan_fmt_types(
             if *arg as u8 == b'*' {
                 p = p.add(1);
                 if ascii_isdigit(*p as c_int) {
-                    let uj = get_unsigned_int(arg.add(1), &mut p, !tvs.is_null()).ok_or(())?;
+                    let uj = get_unsigned_int(arg.add(1), &mut p, typed).ok_or(BadFormat)?;
                     if *p as u8 != b'$' {
                         invalid_specifier!();
                     }
@@ -361,7 +373,7 @@ unsafe fn scan_fmt_types(
                 // A literal width. Read it only to reject a `$` after it:
                 // that would be a position in a place one cannot appear.
                 let digstart = p;
-                get_unsigned_int(digstart, &mut p, !tvs.is_null()).ok_or(())?;
+                get_unsigned_int(digstart, &mut p, typed).ok_or(BadFormat)?;
                 if *p as u8 == b'$' {
                     invalid_specifier!();
                 }
@@ -373,7 +385,7 @@ unsafe fn scan_fmt_types(
                 if *arg as u8 == b'*' {
                     p = p.add(1);
                     if ascii_isdigit(*p as c_int) {
-                        let uj = get_unsigned_int(arg.add(1), &mut p, !tvs.is_null()).ok_or(())?;
+                        let uj = get_unsigned_int(arg.add(1), &mut p, typed).ok_or(BadFormat)?;
                         if *p as u8 != b'$' {
                             invalid_specifier!();
                         }
@@ -387,7 +399,7 @@ unsafe fn scan_fmt_types(
                     }
                 } else if ascii_isdigit(*p as c_int) {
                     let digstart = p;
-                    get_unsigned_int(digstart, &mut p, !tvs.is_null()).ok_or(())?;
+                    get_unsigned_int(digstart, &mut p, typed).ok_or(BadFormat)?;
                     if *p as u8 == b'$' {
                         invalid_specifier!();
                     }
@@ -423,7 +435,7 @@ unsafe fn scan_fmt_types(
             } else if pos_arg != -1 {
                 // A position on something that is not a conversion.
                 semsg_c!(gettext(E_CANNOT_MIX.as_ptr()), fmt);
-                return Err(());
+                return Err(BadFormat);
             }
 
             if *p != 0 {
@@ -436,11 +448,11 @@ unsafe fn scan_fmt_types(
         for arg_idx in 0..*num_posarg {
             if (*(*ap_types).offset(arg_idx as isize)).is_null() {
                 semsg_c!(gettext(E_FMT_ARG_UNUSED.as_ptr()), arg_idx + 1, fmt);
-                return Err(());
+                return Err(BadFormat);
             }
             if !tvs.is_null() && (*tvs.offset(arg_idx as isize)).v_type == VAR_UNKNOWN {
                 semsg_c!(gettext(E_POS_OUT_OF_BOUNDS.as_ptr()), arg_idx + 1, fmt);
-                return Err(());
+                return Err(BadFormat);
             }
         }
         Ok(())

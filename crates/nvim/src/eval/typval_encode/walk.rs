@@ -7,7 +7,9 @@
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use super::{ConvFrame, ConvPath, ConvStack, ConvType, Flow, Frame, PartialStage, TypvalSink};
+use super::{
+    ConvFrame, ConvPath, ConvStack, ConvType, Flow, Frame, PartialStage, Refused, TypvalSink,
+};
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::{
     tv_blob_len, tv_dict_find, tv_dict_hi2di, tv_dict_item_key, tv_list_copyid, tv_list_first,
@@ -32,7 +34,7 @@ macro_rules! item_hook {
         match $e {
             Flow::Go => {}
             Flow::Stop => return Ok(()),
-            Flow::Fail => return Err(()),
+            Flow::Fail => return Err(Refused),
         }
     };
 }
@@ -44,7 +46,7 @@ macro_rules! walk_hook {
         match $e {
             Flow::Go => {}
             Flow::Stop => continue,
-            Flow::Fail => return Err(()),
+            Flow::Fail => return Err(Refused),
         }
     };
 }
@@ -125,7 +127,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
     tv: *mut typval_T,
     copyid: c_int,
     objname: *const c_char,
-) -> Result<(), ()> {
+) -> Result<(), Refused> {
     unsafe {
         sink.check_before();
         match (*tv).v_type {
@@ -258,7 +260,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
             }
             VAR_UNKNOWN => {
                 internal_error(S::CONVERT_FN_NAME.as_ptr());
-                return Err(());
+                return Err(Refused);
             }
             _ => {}
         }
@@ -278,7 +280,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     tv: *mut typval_T,
     copyid: c_int,
     objname: *const c_char,
-) -> Result<Option<Flow>, ()> {
+) -> Result<Option<Flow>, Refused> {
     unsafe {
         let dict = (*tv).vval.v_dict;
         if (*dict).dv_hashtab.ht_used != 2 {
@@ -509,7 +511,7 @@ unsafe fn walk<S: TypvalSink>(
     sink: &mut S,
     top_tv: *mut typval_T,
     objname: *const c_char,
-) -> Result<(), ()> {
+) -> Result<(), Refused> {
     unsafe {
         let copyid = get_copyID();
         let mut stack = ConvStack::new();

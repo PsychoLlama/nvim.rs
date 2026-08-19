@@ -33,6 +33,15 @@ use crate::types::{
 mod walk;
 pub(crate) use self::walk::encode_typval;
 
+/// The encode was abandoned.
+///
+/// Only a sink refuses — with `Flow::Fail`, having reported which value it
+/// could not represent — or the walk meets a `VAR_UNKNOWN`, which is an
+/// internal error and reports itself. Nothing is left to hand back, which is
+/// why this is a unit struct and not the `Result<(), ()>` it replaces.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct Refused;
+
 /// What a hook tells the walk to do next.
 ///
 /// Upstream's hooks say this by falling through, by `goto`ing the
