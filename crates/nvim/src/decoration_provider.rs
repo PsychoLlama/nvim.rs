@@ -27,10 +27,11 @@ use crate::api::private::helpers::{
 };
 use crate::decoration::{decor_check_to_be_deleted, decor_range_count};
 use crate::global_cell::GlobalCell;
+use crate::guard::Lock;
 use crate::highlight::hl_check_ns;
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref};
-use crate::main::{decor_state, display_tick, ns_hl_active, textlock};
+use crate::main::{decor_state, display_tick, ns_hl_active};
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline_c;
 use crate::types::builders::ArrayBuf;
@@ -150,7 +151,7 @@ unsafe fn decor_provider_invoke(
         let mut err = ERROR_INIT;
         let want_list = res.is_some();
 
-        *textlock.ptr() += 1;
+        let locked = Lock::text();
         let ret = nlua_call_ref(
             callback,
             name,
@@ -159,7 +160,7 @@ unsafe fn decor_provider_invoke(
             ptr::null_mut(),
             &raw mut err,
         );
-        *textlock.ptr() -= 1;
+        drop(locked);
 
         if err.type_0 == kErrorTypeNone {
             with_provider(idx, |p| p.error_count = 0);

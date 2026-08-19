@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Lock;
 use crate::types::{
     FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
 };
@@ -302,7 +303,7 @@ unsafe fn call_qftf_func(
             vval: typval_vval_union { v_number: 0 },
         };
         let mut answer = ptr::null_mut::<list_T>();
-        (*textlock.ptr()) += 1;
+        let locked = Lock::text();
         if callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) {
             if rettv.v_type == VAR_LIST {
                 answer = rettv.vval.v_list;
@@ -310,7 +311,7 @@ unsafe fn call_qftf_func(
             }
             tv_clear(&raw mut rettv);
         }
-        (*textlock.ptr()) -= 1;
+        drop(locked);
         tv_dict_unref(dict);
 
         RECURSIVE.set(false);

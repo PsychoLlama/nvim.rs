@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Lock;
 use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
 use crate::types::{CpoFlag, FAIL, OK};
@@ -821,7 +822,7 @@ impl Pattern {
         unsafe {
             let save_secure = secure.get();
             secure.set(1);
-            *sandbox.ptr() += 1;
+            let _sandboxed = Lock::sandbox();
 
             // Start the command in line 1.
             (*curwin.get()).w_cursor = pos_T {
@@ -837,7 +838,6 @@ impl Pattern {
                 wait_return(1);
             }
             secure.set(save_secure);
-            *sandbox.ptr() -= 1;
         }
     }
 }

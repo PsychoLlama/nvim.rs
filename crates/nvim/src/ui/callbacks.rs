@@ -20,9 +20,10 @@ use crate::api::extmark::describe_ns;
 use crate::api::private::helpers::api_clear_error;
 use crate::api::ui::remote_ui_event;
 use crate::global_cell::GlobalCell;
+use crate::guard::Allow;
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
-use crate::main::{expr_map_lock, textlock, ui_event_ns_id};
+use crate::main::ui_event_ns_id;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::types::{
     Arena, Array, Error, LuaRef, LuaRetMode, NS, kErrorTypeNone, kObjectTypeBoolean,
@@ -173,10 +174,8 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
     // A handler is arbitrary Lua and may legitimately want to move the
     // cursor or set a variable, which the locks held while redrawing would
     // forbid. Upstream lifts them for the duration and puts them back.
-    let save_expr_map_lock = expr_map_lock.get();
-    let save_textlock = textlock.get();
-    expr_map_lock.set(0);
-    textlock.set(0);
+    let _unlocked_expr_map = Allow::expr_map();
+    let _unlocked_text = Allow::text_changes();
 
     // Snapshot the namespaces rather than iterating the live list: a
     // handler can register or unregister handlers, including its own.
@@ -221,8 +220,6 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         unsafe { api_clear_error(&raw mut err) };
     }
 
-    expr_map_lock.set(save_expr_map_lock);
-    textlock.set(save_textlock);
     handled
 }
 

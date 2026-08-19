@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_docmd::cmdmod_has;
+use crate::guard::Lock;
 use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -421,7 +422,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
         tv_dict_set_keys_readonly(dict);
 
         // The buffer must not change under the yank that is still in flight.
-        *textlock.ptr() += 1;
+        let locked = Lock::text();
         apply_autocmds(
             EVENT_TEXTYANKPOST,
             ::core::ptr::null_mut(),
@@ -429,7 +430,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
             false,
             curbuf.get(),
         );
-        *textlock.ptr() -= 1;
+        drop(locked);
 
         restore_v_event(dict, &raw mut save_v_event);
         recursive.set(false);

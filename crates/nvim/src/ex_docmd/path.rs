@@ -6,6 +6,7 @@
 //! is what keeps the three in step after any of them changes.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Lock;
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -22,7 +23,7 @@ use crate::fileio::shorten_fnames;
 use crate::main::{
     KeyTyped, NameBuff, curbuf, current_sctx, curtab, curwin, e_cant_find_file_str_in_path,
     e_failed, e_invalid_return_type_from_findfunc, e_invarg, e_no_more_file_str_found_in_path,
-    globaldir, last_chdir_reason, p_cdh, p_ffu, p_verbose, textlock,
+    globaldir, last_chdir_reason, p_cdh, p_ffu, p_verbose,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, msg};
@@ -70,7 +71,7 @@ pub(crate) unsafe fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) 
         args[2].v_type = VAR_UNKNOWN;
         args[2].v_lock = VAR_UNLOCKED;
 
-        *textlock.ptr() += 1;
+        let locked = Lock::text();
         // Errors are reported against the script that *set* the option, not
         // against whatever is running now.
         let ctx = get_option_sctx(kOptFindfunc);
@@ -82,7 +83,7 @@ pub(crate) unsafe fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) 
         rettv.v_type = VAR_UNKNOWN;
         let called = callback_call(cb, 2, &raw mut args as *mut typval_T, &raw mut rettv);
         current_sctx.set(saved_sctx);
-        *textlock.ptr() -= 1;
+        drop(locked);
 
         let mut retlist: *mut list_T = ptr::null_mut();
         if called as c_int == OK {

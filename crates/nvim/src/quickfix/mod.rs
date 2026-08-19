@@ -69,7 +69,7 @@ use crate::main::{
     empty_string_option, fdo_flags, first_tabpage, firstwin, got_int, lastwin, msg_col, msg_didout,
     msg_nowait, msg_scroll, msg_scrolled, must_redraw, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc,
     p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc, p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, prevwin,
-    restart_edit, swb_flags, textlock,
+    restart_edit, swb_flags,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};

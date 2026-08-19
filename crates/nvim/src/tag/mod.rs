@@ -31,7 +31,7 @@ use crate::main::{
     e_listreq, emsg_off, fdo_flags, g_do_tagpreview, g_tag_at_cursor, got_int, jop_flags,
     keep_help_flag, magic_overruled, msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent,
     no_hlsearch, p_enc, p_hf, p_hlg, p_ic, p_scs, p_sft, p_tags, p_tbs, p_tgst, p_tl, p_tr,
-    p_verbose, p_ws, postponed_split, postponed_split_flags, sandbox, secure, swb_flags, tc_flags,
+    p_verbose, p_ws, postponed_split, postponed_split_flags, secure, swb_flags, tc_flags,
     vim_ignored,
 };
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};

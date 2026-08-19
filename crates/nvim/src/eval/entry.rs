@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::{Lock, Suppress};
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -35,8 +36,7 @@ use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
 use crate::hashtab::hash_init;
 use crate::main::{
-    EVALARG_EVALUATE, called_emsg, current_sctx, curwin, did_emsg, e_invexpr2, emsg_off, emsg_skip,
-    sandbox, textlock,
+    EVALARG_EVALUATE, called_emsg, current_sctx, curwin, did_emsg, e_invexpr2, emsg_skip,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::was_set_insecurely;
@@ -496,15 +496,9 @@ pub unsafe fn eval_to_string_safe(
             next: null_mut(),
         };
         save_funccal(&raw mut funccal_entry);
-        if use_sandbox {
-            *sandbox.ptr() += 1;
-        }
-        *textlock.ptr() += 1;
+        let _sandboxed = use_sandbox.then(Lock::sandbox);
+        let _locked = Lock::text();
         let retval = eval_to_string(arg, false, use_simple_function);
-        if use_sandbox {
-            *sandbox.ptr() -= 1;
-        }
-        *textlock.ptr() -= 1;
         restore_funccal();
         retval
     }
@@ -519,7 +513,7 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> va
     unsafe {
         let mut rettv = UNSET_TV;
         let mut p = skipwhite(expr);
-        *emsg_off.ptr() += 1;
+        let _no_emsg = Suppress::emsg();
         let mut r = NOTDONE;
         if use_simple_function {
             // Note it is handed the *unskipped* expression, unlike `eval1`.
@@ -535,7 +529,6 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> va
             tv_clear(&raw mut rettv);
             n
         };
-        *emsg_off.ptr() -= 1;
         retval
     }
 }
@@ -675,38 +668,33 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
         let use_sandbox = was_set_insecurely(wp, kOptFoldexpr, OptionSetFlags::LOCAL);
         let arg = skipwhite((*wp).w_onebuf_opt.wo_fde);
         current_sctx.set((*wp).w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
-        *emsg_off.ptr() += 1;
-        if use_sandbox {
-            *sandbox.ptr() += 1;
-        }
-        *textlock.ptr() += 1;
-        *cp = NUL;
+        let retval: varnumber_T = {
+            let _no_emsg = Suppress::emsg();
+            let _sandboxed = use_sandbox.then(Lock::sandbox);
+            let _locked = Lock::text();
+            *cp = NUL;
 
-        let mut tv = UNSET_TV;
-        let mut retval: varnumber_T = 0;
-        if eval0_simple_funccal(arg, &raw mut tv, null_mut(), EVALARG_EVALUATE.ptr()) != FAIL {
-            if tv.v_type == VAR_NUMBER {
-                retval = tv.vval.v_number;
-            } else if tv.v_type != VAR_STRING || tv.vval.v_string.is_null() {
-                retval = 0;
-            } else {
-                let mut s = tv.vval.v_string;
-                // A leading non-digit that is not a minus sign is the fold
-                // marker; the rest is the level.
-                if *s as c_int != NUL && !ascii_isdigit(*s as c_int) && *s != b'-' as c_char {
-                    *cp = *s as u8 as c_int;
-                    s = s.add(1);
+            let mut tv = UNSET_TV;
+            let mut retval: varnumber_T = 0;
+            if eval0_simple_funccal(arg, &raw mut tv, null_mut(), EVALARG_EVALUATE.ptr()) != FAIL {
+                if tv.v_type == VAR_NUMBER {
+                    retval = tv.vval.v_number;
+                } else if tv.v_type != VAR_STRING || tv.vval.v_string.is_null() {
+                    retval = 0;
+                } else {
+                    let mut s = tv.vval.v_string;
+                    // A leading non-digit that is not a minus sign is the
+                    // fold marker; the rest is the level.
+                    if *s as c_int != NUL && !ascii_isdigit(*s as c_int) && *s != b'-' as c_char {
+                        *cp = *s as u8 as c_int;
+                        s = s.add(1);
+                    }
+                    retval = atol(s) as varnumber_T;
                 }
-                retval = atol(s) as varnumber_T;
+                tv_clear(&raw mut tv);
             }
-            tv_clear(&raw mut tv);
-        }
-
-        *emsg_off.ptr() -= 1;
-        if use_sandbox {
-            *sandbox.ptr() -= 1;
-        }
-        *textlock.ptr() -= 1;
+            retval
+        };
         clear_evalarg(EVALARG_EVALUATE.ptr(), null_mut());
         current_sctx.set(saved_sctx);
         retval as c_int
@@ -738,10 +726,8 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
             next: null_mut(),
         };
         save_funccal(&raw mut funccal_entry);
-        if use_sandbox {
-            *sandbox.ptr() += 1;
-        }
-        *textlock.ptr() += 1;
+        let _sandboxed = use_sandbox.then(Lock::sandbox);
+        let _locked = Lock::text();
 
         let mut tv = UNSET_TV;
         let retval =
@@ -763,10 +749,6 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
             };
 
         clear_evalarg(EVALARG_EVALUATE.ptr(), null_mut());
-        if use_sandbox {
-            *sandbox.ptr() -= 1;
-        }
-        *textlock.ptr() -= 1;
         restore_funccal();
         retval
     }

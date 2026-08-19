@@ -57,6 +57,7 @@ pub mod garray;
 pub mod getchar;
 pub mod global_cell;
 pub mod grid;
+pub mod guard;
 pub mod hashtab;
 pub mod help;
 pub mod highlight;

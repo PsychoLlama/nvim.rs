@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::semsg_c;
 use crate::types::{
@@ -294,9 +295,9 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         args[1].vval.v_string = c"".as_ptr().cast_mut();
 
         let pos = (*curwin.get()).w_cursor;
-        (*textlock.ptr()) += 1;
+        let locked = Lock::text();
         let col = callback_call_retnr(cb, 2, args.as_mut_ptr()) as colnr_T;
-        (*textlock.ptr()) -= 1;
+        drop(locked);
 
         State.set(save_State);
         (*curwin.get()).w_cursor = pos; // restore the cursor position

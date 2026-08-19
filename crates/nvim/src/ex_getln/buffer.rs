@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Lock;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
 use crate::types::{ExpandContext, NUL};
 use core::ops::{Deref, DerefMut};
@@ -288,9 +289,10 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
     // evaluating an expression.
     let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
     let mut allocated: bool = false;
-    textlock.set(textlock.get() + 1);
-    let got_special = special_reg(regname, &raw mut arg, &raw mut allocated);
-    textlock.set(textlock.get() - 1);
+    let got_special = {
+        let _locked = Lock::text();
+        special_reg(regname, &raw mut arg, &raw mut allocated)
+    };
 
     if !got_special {
         // SAFETY: a register name the check above accepted.

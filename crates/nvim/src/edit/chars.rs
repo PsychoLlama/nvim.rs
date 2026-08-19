@@ -27,6 +27,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::guard::Lock;
 use crate::types::{FoFlag, MB_MAXCHAR, NUL};
 
 /// Upstream's `ISSPECIAL`: a character that needs processing other than the
@@ -326,7 +327,7 @@ pub(crate) unsafe fn do_insert_char_pre(c: c_int) -> *mut c_char {
         let buflen = utf_char2bytes(c, buf.as_mut_ptr()) as size_t;
         buf[buflen] = NUL as c_char;
 
-        (*textlock.ptr()) += 1;
+        let locked = Lock::text();
         set_vim_var_string(Vv::Char, buf.as_mut_ptr(), buflen as ptrdiff_t);
 
         let mut res = ::core::ptr::null_mut();
@@ -337,7 +338,7 @@ pub(crate) unsafe fn do_insert_char_pre(c: c_int) -> *mut c_char {
         }
 
         set_vim_var_string(Vv::Char, ::core::ptr::null(), -1);
-        (*textlock.ptr()) -= 1;
+        drop(locked);
         State.set(save_state);
         res
     }

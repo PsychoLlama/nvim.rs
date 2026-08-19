@@ -28,9 +28,10 @@ use core::{ptr, slice};
 use crate::api::buffer::buf_collect_lines;
 use crate::api::private::helpers::arena_array;
 use crate::buffer::buf_get_changedtick;
+use crate::guard::Lock;
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref};
-use crate::main::{cmdpreview, curbuf, textlock};
+use crate::main::{cmdpreview, curbuf};
 use crate::memline::ml_flush_deleted_bytes;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -189,9 +190,10 @@ fn send_event(channel_id: uint64_t, name: &'static CStr, args: Array) -> bool {
 fn textlock_wrap<R>(f: impl FnOnce() -> R) -> R {
     // SAFETY: `curwin` is set from startup to exit.
     let save_cursor = unsafe { Win::current() }.w_cursor;
-    textlock.set(textlock.get() + 1);
-    let result = f();
-    textlock.set(textlock.get() - 1);
+    let result = {
+        let _locked = Lock::text();
+        f()
+    };
     // SAFETY: `curwin` is set from startup to exit.
     let mut win = unsafe { Win::current() };
     win.w_cursor = save_cursor;

@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_docmd::DoCmdOpts;
+use crate::guard::{Lock, Suppress};
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
@@ -25,12 +26,11 @@ use crate::types::{FAIL, OK};
 /// `body` writes messages and nothing else.
 unsafe fn verbose_report(body: impl FnOnce()) {
     unsafe {
-        *no_wait_return.ptr() += 1;
+        let _no_prompt = Suppress::wait_return();
         verbose_enter_scroll();
         body();
         msg_puts(c"\n".as_ptr());
         verbose_leave_scroll();
-        *no_wait_return.ptr() -= 1;
     }
 }
 
@@ -273,13 +273,9 @@ pub unsafe fn call_user_func(
         }
 
         // Don't redraw while executing the function.
-        *RedrawingDisabled.ptr() += 1;
+        let redraw_off = Suppress::redraw();
 
-        let mut using_sandbox = false;
-        if (*fp).uf_flags & FC_SANDBOX != 0 {
-            using_sandbox = true;
-            *sandbox.ptr() += 1;
-        }
+        let sandboxed = ((*fp).uf_flags & FC_SANDBOX != 0).then(Lock::sandbox);
 
         estack_push_ufunc(fp, 1);
         if p_verbose.get() >= 12 {
@@ -300,9 +296,10 @@ pub unsafe fn call_user_func(
                             msg_outnum((*tv).vval.v_number as c_int);
                         } else {
                             // Do not want errors such as E724 here.
-                            *emsg_off.ptr() += 1;
-                            let tofree = encode_tv2string(tv, ptr::null_mut());
-                            *emsg_off.ptr() -= 1;
+                            let tofree = {
+                                let _no_emsg = Suppress::emsg();
+                                encode_tv2string(tv, ptr::null_mut())
+                            };
                             if !tofree.is_null() {
                                 let mut buf: [c_char; MSG_BUF_LEN as usize] =
                                     [0; MSG_BUF_LEN as usize];
@@ -376,7 +373,7 @@ pub unsafe fn call_user_func(
         // Invoke functions added with `:defer`.
         handle_defer_one(current_funccal.get());
 
-        *RedrawingDisabled.ptr() -= 1;
+        drop(redraw_off);
 
         // When the function was aborted because of an error, return -1.
         if (did_emsg.get() != 0 && (*fp).uf_flags & FC_ABORT != 0) || (*rettv).v_type == VAR_UNKNOWN
@@ -416,9 +413,10 @@ pub unsafe fn call_user_func(
                     );
                 } else {
                     // Do not want errors such as E724 here.
-                    *emsg_off.ptr() += 1;
-                    let tofree = encode_tv2string((*fc).fc_rettv, ptr::null_mut());
-                    *emsg_off.ptr() -= 1;
+                    let tofree = {
+                        let _no_emsg = Suppress::emsg();
+                        encode_tv2string((*fc).fc_rettv, ptr::null_mut())
+                    };
                     let mut s = tofree;
                     if !s.is_null() {
                         let mut buf: [c_char; MSG_BUF_LEN as usize] = [0; MSG_BUF_LEN as usize];
@@ -438,9 +436,7 @@ pub unsafe fn call_user_func(
         if do_profiling_yes {
             script_prof_restore(wait_start);
         }
-        if using_sandbox {
-            *sandbox.ptr() -= 1;
-        }
+        drop(sandboxed);
 
         if p_verbose.get() >= 12 && !(*sourcing_entry()).es_name.is_null() {
             verbose_report(|| {

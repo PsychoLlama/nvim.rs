@@ -12,10 +12,10 @@ use crate::eval::eval_to_number;
 use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::handle_did_throw;
+use crate::guard::Lock;
 use crate::indent_c::{cindent_on, do_c_expr_indent};
 use crate::main::{
-    State, current_sctx, did_ai, did_throw, p_debug, p_lispwords, p_paste, sandbox, textlock,
-    trylevel,
+    State, current_sctx, did_ai, did_throw, p_debug, p_lispwords, p_paste, trylevel,
 };
 use crate::mbyte::{utf_ptr2CharInfo, utf_ptr2StrCharInfo, utfc_next};
 use crate::memory::{xfree, xstrdup};
@@ -47,24 +47,20 @@ pub unsafe fn get_expr_indent() -> c_int {
     // SAFETY: as above.
     unsafe { set_vim_var_nr(Vv::Lnum, save_pos.lnum as varnumber_T) };
 
-    if use_sandbox {
-        sandbox.set(sandbox.get() + 1);
-    }
-    textlock.set(textlock.get() + 1);
-    // SAFETY: as above.
-    current_sctx.set(unsafe { (*buf).b_p_script_ctx[kBufOptIndentexpr as usize] });
-    // SAFETY: as above. The expression is evaluated from a copy, because
-    // 'indentexpr' can be changed while it is running.
-    let mut indent = unsafe {
-        let inde_copy = xstrdup((*buf).b_p_inde);
-        let answer = eval_to_number(inde_copy, true) as c_int;
-        xfree(inde_copy.cast());
-        answer
+    let mut indent = {
+        let _sandboxed = use_sandbox.then(Lock::sandbox);
+        let _locked = Lock::text();
+        // SAFETY: as above.
+        current_sctx.set(unsafe { (*buf).b_p_script_ctx[kBufOptIndentexpr as usize] });
+        // SAFETY: as above. The expression is evaluated from a copy, because
+        // 'indentexpr' can be changed while it is running.
+        unsafe {
+            let inde_copy = xstrdup((*buf).b_p_inde);
+            let answer = eval_to_number(inde_copy, true) as c_int;
+            xfree(inde_copy.cast());
+            answer
+        }
     };
-    if use_sandbox {
-        sandbox.set(sandbox.get() - 1);
-    }
-    textlock.set(textlock.get() - 1);
     current_sctx.set(save_sctx);
 
     // Restore the cursor so that 'indentexpr' does not have to. Pretend to

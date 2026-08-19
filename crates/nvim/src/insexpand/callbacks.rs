@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Lock;
 use crate::semsg_c;
 use crate::types::{
     FAIL, IOSIZE, NUL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
@@ -369,7 +370,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
         // Lock the text to avoid weird things from happening.  Also disallow
         // switching to another window: it should not be needed and may end up
         // in Insert mode in another buffer.
-        (*textlock.ptr()) += 1;
+        let locked = Lock::text();
         if callback_call(cb, 2, args.as_mut_ptr(), &raw mut rettv) {
             match rettv.v_type {
                 VAR_LIST => matchlist = rettv.vval.v_list,
@@ -379,7 +380,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
                 _ => tv_clear(&raw mut rettv),
             }
         }
-        (*textlock.ptr()) -= 1;
+        drop(locked);
 
         (*curwin.get()).w_cursor = pos; // restore the cursor position
         check_cursor(curwin.get()); // make sure the position is valid, just in case

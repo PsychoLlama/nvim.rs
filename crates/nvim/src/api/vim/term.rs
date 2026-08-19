@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, has_key};
+use crate::guard::Lock;
 
 pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Result<Integer, Error> {
     let mut slot = ERROR_INIT;
@@ -148,7 +149,7 @@ unsafe fn term_write(
                 size,
             )),
         );
-        (*textlock.ptr()) += 1;
+        let _locked = Lock::text();
         nlua_call_ref(
             cb,
             c"input".as_ptr(),
@@ -157,7 +158,6 @@ unsafe fn term_write(
             ::core::ptr::null_mut::<Arena>(),
             ::core::ptr::null_mut::<Error>(),
         );
-        (*textlock.ptr()) -= 1;
     }
 }
 

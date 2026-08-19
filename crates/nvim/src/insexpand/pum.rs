@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Lock;
 use crate::types::{IOSIZE, NUL, ShmFlag};
 
 /// The highlight attribute for the inserted-but-not-accepted text at
@@ -111,7 +112,7 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
         tv_dict_set_keys_readonly(v_event);
 
         recursive.set(true);
-        textlock.set(textlock.get() + 1);
+        let locked = Lock::text();
         apply_autocmds(
             EVENT_COMPLETECHANGED,
             ptr::null_mut(),
@@ -119,7 +120,7 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
             false,
             curbuf.get(),
         );
-        textlock.set(textlock.get() - 1);
+        drop(locked);
         recursive.set(false);
 
         restore_v_event(v_event, &raw mut save_v_event);

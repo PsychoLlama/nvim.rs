@@ -10,6 +10,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::ex_docmd::DoCmdOpts;
+use crate::guard::{Keys, Lock};
 use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
     Ctrl_Y, Ctrl_Z,
@@ -46,11 +47,10 @@ const fn wildmenu_gesture(c: ::core::ffi::c_int) -> Option<WildMode> {
 unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
     unsafe {
         let cc = ccline.ptr();
-        (*no_mapping.ptr()) += 1;
-        (*allow_keys.ptr()) += 1;
-        (*s).c = plain_vgetc();
-        (*no_mapping.ptr()) -= 1;
-        (*allow_keys.ptr()) -= 1;
+        (*s).c = {
+            let _raw = Keys::unmapped_with_codes();
+            plain_vgetc()
+        };
 
         // CTRL-\ e doesn't work when obtaining an expression, unless it is
         // in a mapping.
@@ -82,9 +82,10 @@ unsafe fn command_line_handle_ctrl_bsl(s: *mut CommandLineState) -> CtrlBsl {
         if (*s).c == '=' as ::core::ffi::c_int {
             // Evaluate the expression. "textlock" avoids nasty things like
             // going to another buffer.
-            (*textlock.ptr()) += 1;
-            let p = get_expr_line();
-            (*textlock.ptr()) -= 1;
+            let p = {
+                let _locked = Lock::text();
+                get_expr_line()
+            };
 
             if !p.is_null() {
                 let len = strlen(p) as ::core::ffi::c_int;

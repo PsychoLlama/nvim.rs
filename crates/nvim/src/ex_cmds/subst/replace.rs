@@ -23,7 +23,8 @@ use crate::ex_cmds::{
 };
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
-use crate::main::{curbuf, curwin, sandbox, sub_nsubs, textlock};
+use crate::guard::Lock;
+use crate::main::{curbuf, curwin, sub_nsubs};
 use crate::mark::mark_adjust;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_replace};
@@ -151,13 +152,15 @@ pub(super) unsafe fn build_replacement(
     st.lnum_start = st.lnum; // save the start lnum
     // SAFETY: the current buffer is live.
     let save_ma = unsafe { (*curbuf.get()).b_p_ma };
-    let save_sandbox = sandbox.get();
-    if subflags.with(|flags| flags.do_count) {
+    let counting = subflags.with(|flags| flags.do_count);
+    if counting {
         // Prevent a function from accidentally changing the buffer.
         // SAFETY: as above.
         unsafe { (*curbuf.get()).b_p_ma = 0 };
-        sandbox.set(sandbox.get() + 1);
     }
+    // Held to the end of the function: the only path that reaches here with
+    // `counting` set is the early return below.
+    let _sandboxed = counting.then(Lock::sandbox);
     // Save the flags for recursion: they can change for e.g.
     // ":s/^/\=execute("s#^##gn")".
     let subflags_save = subflags.get();
@@ -165,20 +168,21 @@ pub(super) unsafe fn build_replacement(
     // Disallow changing text or switching window in an expression, and get
     // the length of the substitution part including the NUL.  When it fails
     // sublen is zero.
-    textlock.set(textlock.get() + 1);
-    // SAFETY: the match and the copied line are live; with a null
-    // destination and length 0 this only measures.
-    st.sublen = unsafe {
-        vim_regsub_multi(
-            &raw mut st.regmatch,
-            st.sub_firstlnum - st.regmatch.startpos[0].lnum,
-            st.sub,
-            st.sub_firstline,
-            0 as c_int,
-            regsub_flags(),
-        )
+    st.sublen = {
+        let _locked = Lock::text();
+        // SAFETY: the match and the copied line are live; with a null
+        // destination and length 0 this only measures.
+        unsafe {
+            vim_regsub_multi(
+                &raw mut st.regmatch,
+                st.sub_firstlnum - st.regmatch.startpos[0].lnum,
+                st.sub,
+                st.sub_firstline,
+                0 as c_int,
+                regsub_flags(),
+            )
+        }
     };
-    textlock.set(textlock.get() - 1);
 
     // If getting the substitute string caused an error, don't do the
     // replacement.  Don't keep flags set by a recursive call.
@@ -187,7 +191,6 @@ pub(super) unsafe fn build_replacement(
     if st.sublen == 0 as c_int || aborting() || subflags.with(|flags| flags.do_count) {
         // SAFETY: the current buffer is live.
         unsafe { (*curbuf.get()).b_p_ma = save_ma };
-        sandbox.set(save_sandbox);
         return;
     }
 
@@ -234,19 +237,20 @@ pub(super) unsafe fn build_replacement(
     let start_col = unsafe { new_end.offset_from(st.new_start) } as c_int;
     current_match.start.col = start_col as colnr_T;
 
-    textlock.set(textlock.get() + 1);
-    // SAFETY: `new_end` has room for `sublen` bytes, as just computed.
-    unsafe {
-        vim_regsub_multi(
-            &raw mut st.regmatch,
-            st.sub_firstlnum - st.regmatch.startpos[0].lnum,
-            st.sub,
-            new_end,
-            st.sublen,
-            REGSUB_COPY as c_int | regsub_flags(),
-        )
-    };
-    textlock.set(textlock.get() - 1);
+    {
+        let _locked = Lock::text();
+        // SAFETY: `new_end` has room for `sublen` bytes, as just computed.
+        unsafe {
+            vim_regsub_multi(
+                &raw mut st.regmatch,
+                st.sub_firstlnum - st.regmatch.startpos[0].lnum,
+                st.sub,
+                new_end,
+                st.sublen,
+                REGSUB_COPY as c_int | regsub_flags(),
+            )
+        };
+    }
     sub_nsubs.set(sub_nsubs.get() + 1);
     st.did_sub = true;
 

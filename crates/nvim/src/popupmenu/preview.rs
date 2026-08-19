@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Allow;
 use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
 use crate::types::{OK, OptionSetFlags};
@@ -118,7 +119,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
 
         let mut arena = ARENA_EMPTY;
         // Setting the lines is the editor's own doing, not a plugin's.
-        let original_textlock = textlock.replace(0);
+        let unlocked = Allow::text_changes();
         let set = nvim_buf_set_lines(
             0,
             (*buf).handle as Buffer,
@@ -128,7 +129,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
             replacement,
             &raw mut arena,
         );
-        textlock.set(original_textlock);
+        drop(unlocked);
         if let Err(mut err) = set {
             emsg(err.msg);
             api_clear_error(&raw mut err);

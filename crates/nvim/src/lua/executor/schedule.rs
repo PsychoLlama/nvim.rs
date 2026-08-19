@@ -19,6 +19,7 @@ use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
 use crate::getchar::vgetc;
+use crate::guard::Allow;
 use crate::lua::executor::nlua_unref_global;
 use crate::lua::ffi::{
     LUA_MULTRET, LUA_TFUNCTION, LUA_TNIL, lua_error, lua_gettop, lua_insert, lua_pop,
@@ -26,9 +27,7 @@ use crate::lua::ffi::{
     lua_settop, lua_toboolean, lua_type, luaL_checkinteger, luaL_checknumber, luaL_error,
     luaL_getmetafield,
 };
-use crate::main::{
-    e_fast_api_disabled, expr_map_lock, got_int, main_loop, textlock, ui_event_ns_id,
-};
+use crate::main::{e_fast_api_disabled, got_int, main_loop, ui_event_ns_id};
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::types::{
@@ -61,18 +60,15 @@ unsafe extern "C" fn nlua_schedule_event(argv: *mut *mut c_void) {
         nlua_pushref(lstate, cb);
         nlua_unref_global(lstate, cb);
 
-        let save_expr_map_lock = expr_map_lock.get();
-        let save_textlock = textlock.get();
-        if ns_id > 0 {
-            expr_map_lock.set(0);
-            textlock.set(0);
-        }
+        // A UI-event callback is arbitrary Lua and may legitimately want
+        // to move the cursor or set a variable, so the locks come off for
+        // it. They go back either way: the callback ran unsupervised.
+        let _unlocked_expr_map = Allow::expr_map_when(ns_id > 0);
+        let _unlocked_text = Allow::text_changes_when(ns_id > 0);
         if nlua_pcall(lstate, 0, 0) != 0 {
             nlua_error(lstate, gettext(c"vim.schedule callback: %.*s".as_ptr()));
             ui_remove_cb(ns_id, true);
         }
-        expr_map_lock.set(save_expr_map_lock);
-        textlock.set(save_textlock);
     }
 }
 
