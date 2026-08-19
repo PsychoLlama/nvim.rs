@@ -23,6 +23,7 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
+use crate::types::FAIL;
 
 mod block;
 mod lines;

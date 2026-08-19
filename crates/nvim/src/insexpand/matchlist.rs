@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::VAR_FIXED;
+use crate::types::{FAIL, OK, VAR_FIXED};
 
 /// Free the four `cptext` strings a caller handed to [`ins_compl_add`].
 #[inline]

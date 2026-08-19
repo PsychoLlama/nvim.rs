@@ -10,6 +10,7 @@
 use super::*;
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
+use crate::types::{FAIL, OK};
 use core::ffi::c_int;
 use core::ptr;
 

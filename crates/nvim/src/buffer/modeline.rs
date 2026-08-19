@@ -26,7 +26,7 @@ use crate::main::{current_sctx, p_mls, secure};
 use crate::memline::{ml_get, ml_get_len};
 use crate::option::do_set;
 use crate::runtime::{estack_pop, estack_push};
-use crate::types::{intmax_t, linenr_T, scid_T};
+use crate::types::{FAIL, OK, intmax_t, linenr_T, scid_T};
 use crate::version::min_vim_version;
 use crate::winlayer::Buf;
 

@@ -64,7 +64,7 @@ use crate::os::fs::{
 };
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::FullName_save;
-use crate::types::{FileInfo, blocknr_T, buf_T, off_T};
+use crate::types::{FAIL, FileInfo, OK, blocknr_T, buf_T, off_T};
 use ::libc::{__errno_location, close, lseek, strerror};
 
 /// Whether a memfile has blocks that are not on disk, and whether they may
@@ -100,9 +100,6 @@ pub const MEMFILE_PAGE_SIZE: c_uint = 4096;
 /// A device block size outside this range is not believed.
 pub const MIN_SWAP_PAGE_SIZE: u64 = 1048;
 pub const MAX_SWAP_PAGE_SIZE: u64 = 50000;
-
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 
 const O_RDWR: c_int = 0o2;
 const O_CREAT: c_int = 0o100;

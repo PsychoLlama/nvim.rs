@@ -19,9 +19,9 @@ use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
 use crate::normal::{
-    BL_FIX, BL_WHITE, CAR, FAIL, FIND_IDENT, INT_MAX, OK, SPELL_ADD_BAD, SPELL_ADD_GOOD,
-    checkclearop, clearopbeep, false_0, find_ident_under_cursor, get_visual_text, nv_operator,
-    nv_put, read_command_char, true_0,
+    BL_FIX, BL_WHITE, CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop,
+    clearopbeep, false_0, find_ident_under_cursor, get_visual_text, nv_operator, nv_put,
+    read_command_char, true_0,
 };
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
@@ -31,7 +31,7 @@ use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::strings::vim_strchr;
 use crate::types::{
-    OP_FOLD, OP_NOP, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
+    FAIL, OK, OP_FOLD, OP_NOP, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
 };
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};

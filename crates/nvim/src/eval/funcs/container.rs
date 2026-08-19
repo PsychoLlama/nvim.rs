@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{FAIL, NUL, TV_TRANSLATE};
+use super::{NUL, TV_TRANSLATE};
 use crate::eval::typval::{
     tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
@@ -23,7 +23,7 @@ use crate::message::{emsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::{
-    BoolVarValue, EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    BoolVarValue, EvalFuncData, FAIL, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
     VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL,
     VAR_TYPE_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_KEY, VV_VAL, blob_T, kBoolVarTrue,

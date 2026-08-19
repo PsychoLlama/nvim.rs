@@ -15,7 +15,7 @@ use super::{cursor, postfix};
 use crate::main::rc_did_emsg;
 use crate::mbyte::utf_char2len;
 use crate::regexp::{
-    CLASS_NONE, FAIL, INT_MAX, MAGIC_OFF, NFA_ADD_NL, NFA_CLASS_ALNUM, NFA_CLASS_ALPHA,
+    CLASS_NONE, INT_MAX, MAGIC_OFF, NFA_ADD_NL, NFA_CLASS_ALNUM, NFA_CLASS_ALPHA,
     NFA_CLASS_BACKSPACE, NFA_CLASS_BLANK, NFA_CLASS_CNTRL, NFA_CLASS_DIGIT, NFA_CLASS_ESCAPE,
     NFA_CLASS_FNAME, NFA_CLASS_GRAPH, NFA_CLASS_IDENT, NFA_CLASS_KEYWORD, NFA_CLASS_LOWER,
     NFA_CLASS_PRINT, NFA_CLASS_PUNCT, NFA_CLASS_RETURN, NFA_CLASS_SPACE, NFA_CLASS_TAB,
@@ -30,6 +30,7 @@ use super::cursor::{
     advance_grapheme, byte_at, char_at, grapheme_len, recognize_char_class, take_cursor_bracketed,
     take_cursor_char_class,
 };
+use crate::types::FAIL;
 
 /// The `NFA_CLASS_*` opcodes indexed by the `CLASS_*` value
 /// [`take_cursor_char_class`] returns. The two enumerations were written in

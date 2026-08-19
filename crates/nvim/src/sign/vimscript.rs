@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{FAIL, OK, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.

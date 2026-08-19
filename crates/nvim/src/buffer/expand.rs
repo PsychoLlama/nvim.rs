@@ -23,7 +23,7 @@ use crate::main::{buffer_handles, curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{buf_T, colnr_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
+use crate::types::{FAIL, OK, buf_T, colnr_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
 use crate::winlayer::{Buf, Win, buffers};
 use ::libc::qsort;
 

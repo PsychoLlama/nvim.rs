@@ -22,6 +22,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Handle a CTRL-V or CTRL-Q typed in Insert mode.
 ///

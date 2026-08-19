@@ -31,19 +31,19 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    OptIndex, colnr_T, expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t,
-    uint8_t, uint32_t, vimoption_T, xp_prefix_T,
+    FAIL, OK, OptIndex, colnr_T, expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T,
+    size_t, uint8_t, uint32_t, vimoption_T, xp_prefix_T,
 };
 use ::libc::{strcmp, strlen};
 
 use super::{
     EXPAND_BOOL_SETTINGS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_FILETYPE, EXPAND_KEYMAP,
     EXPAND_NOTHING, EXPAND_OLD_SETTING, EXPAND_OWNSYNTAX, EXPAND_SETTING_SUBTRACT, EXPAND_SETTINGS,
-    EXPAND_STRING_SETTING, EXPAND_UNSUCCESSFUL, FAIL, FUZZY_SCORE_NONE, MAXPATHL, NUL, OK,
-    XP_BS_COMMA, XP_BS_ONE, XP_BS_THREE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len,
-    get_option, get_option_varp_scope_from, get_varp_scope, is_option_hidden, kOptFlagColon,
-    kOptFlagComma, kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber,
-    option_has_type, option_value2string, option_var,
+    EXPAND_STRING_SETTING, EXPAND_UNSUCCESSFUL, FUZZY_SCORE_NONE, MAXPATHL, NUL, XP_BS_COMMA,
+    XP_BS_ONE, XP_BS_THREE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
+    get_option_varp_scope_from, get_varp_scope, is_option_hidden, kOptFlagColon, kOptFlagComma,
+    kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
+    option_value2string, option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.

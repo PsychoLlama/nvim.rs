@@ -11,6 +11,7 @@ use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
+use crate::types::FAIL;
 
 /// The ids of a cluster list, which is a NUL-terminated `int16_t` array.
 ///

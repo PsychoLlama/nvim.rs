@@ -21,6 +21,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::{FAIL, OK};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 /// Has the host's iconv been proved to work?

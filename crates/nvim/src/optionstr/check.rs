@@ -35,10 +35,10 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{buf_T, size_t, uint32_t, win_T};
+use crate::types::{FAIL, OK, buf_T, size_t, uint32_t, win_T};
 
 use super::{
-    FAIL, NUL, OK, SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
+    NUL, SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
     e_unclosed_expression_sequence, opt_strings_flags,
 };
 use crate::decoration::SCL_NUM;

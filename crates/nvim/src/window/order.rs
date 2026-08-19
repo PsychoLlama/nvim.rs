@@ -25,7 +25,7 @@ use crate::main::{
 };
 use crate::message::{emsg, iemsg};
 use crate::normal::reset_VIsual_and_resel;
-use crate::types::{OptInt, frame_T, win_T};
+use crate::types::{FAIL, OK, OptInt, frame_T, win_T};
 use crate::winlayer::{Frame, Win, frames};
 
 pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {

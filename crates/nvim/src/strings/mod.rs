@@ -24,10 +24,6 @@ pub use self::charindex::*;
 pub use self::escape::*;
 pub use self::eval::*;
 pub use self::printf::*;
-/// `FAIL`, as every transpiled module spells it. The whole tree carries a
-/// copy next to the code that reads one; consolidating them is a family of
-/// its own, not this slice's.
-pub const FAIL: c_int = 0;
 
 /// Was this optional builtin argument given?
 ///

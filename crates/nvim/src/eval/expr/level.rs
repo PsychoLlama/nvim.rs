@@ -28,11 +28,10 @@ use crate::eval::userfunc::{
 use crate::eval::vars::{check_vars, eval_variable, get_vim_var_partial};
 use crate::eval::{
     _ISalnum, EVAL_EVALUATE, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT,
-    EXPR_MATCH, EXPR_NEQUAL, EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, FAIL,
-    FUNCEXE_INIT, NOTDONE, NUL, OK, e_expression_too_recursive_str, eval_dict, eval_env_var,
-    eval_interp_string, eval_list, eval_lit_dict, eval_lit_string, eval_number, eval_option,
-    eval_string, get_name_len, handle_subscript, kGRegExprSrc, skip_luafunc_name, to_name_end,
-    typval_compare,
+    EXPR_MATCH, EXPR_NEQUAL, EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, FUNCEXE_INIT,
+    NOTDONE, NUL, e_expression_too_recursive_str, eval_dict, eval_env_var, eval_interp_string,
+    eval_list, eval_lit_dict, eval_lit_string, eval_number, eval_option, eval_string, get_name_len,
+    handle_subscript, kGRegExprSrc, skip_luafunc_name, to_name_end, typval_compare,
 };
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::ex_eval::aborting;
@@ -43,10 +42,10 @@ use crate::message::emsg;
 use crate::os::cshim::{__ctype_b_loc, gettext, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
-    VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, dictitem_T, evalarg_T, exarg_T, exprtype_T, float_T,
-    funcexe_T, kBoolVarFalse, kBoolVarTrue, partial_T, size_t, typval_T, typval_vval_union,
-    varnumber_T,
+    FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, dictitem_T, evalarg_T, exarg_T, exprtype_T,
+    float_T, funcexe_T, kBoolVarFalse, kBoolVarTrue, partial_T, size_t, typval_T,
+    typval_vval_union, varnumber_T,
 };
 
 /// A freshly declared typval, which is what every level starts a second

@@ -62,8 +62,6 @@ pub const LSIZE: c_uint = 512;
 pub const B_IMODE_USE_INSERT: c_int = -1;
 pub const B_IMODE_NONE: c_int = 0;
 pub const B_IMODE_LMAP: c_int = 1;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 /// The only value nvim accepts for 'highlight': Vim's highlight-group
 /// mapping is not implemented, so the option can only be left alone.

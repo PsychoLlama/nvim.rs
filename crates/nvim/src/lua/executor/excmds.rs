@@ -28,7 +28,8 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CMD_equal, FileDescriptor, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t, typval_T,
+    CMD_equal, FAIL, FileDescriptor, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t,
+    typval_T,
 };
 use crate::undo::u_save;
 use ::libc::{memcpy, strlen};
@@ -42,9 +43,6 @@ const PRINT_WRAPPER: &CStr = c"vim._print(true, %s)";
 
 /// How much [`nlua_exec_file`] reads from stdin at a time.
 const STDIN_CHUNK: size_t = 64;
-
-/// `u_save` failed.
-const FAIL: c_int = 0;
 
 /// `:lua {chunk}`, `:lua ={expr}` and `:={expr}`.
 ///

@@ -17,6 +17,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Set the last inserted text to the single character `c`.
 ///

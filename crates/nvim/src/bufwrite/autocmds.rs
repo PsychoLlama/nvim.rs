@@ -15,7 +15,7 @@
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
-use crate::types::{CMOD_LOCKMARKS, event_T};
+use crate::types::{CMOD_LOCKMARKS, FAIL, OK, event_T};
 
 use super::*;
 

@@ -14,6 +14,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// One call recorded by `:defer`, to be made when the function returns.
 #[derive(Copy, Clone)]

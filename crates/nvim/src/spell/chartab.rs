@@ -30,10 +30,10 @@ use crate::mbyte::{
 };
 use crate::memory::xstrlcpy;
 use crate::strings::vim_strchr;
-use crate::types::{MB_MAXBYTES, spelltab_T, uint8_t, win_T};
+use crate::types::{MB_MAXBYTES, OK, spelltab_T, uint8_t, win_T};
 use ::libc::strcpy;
 
-use super::{FAIL, MAXWLEN, NUL, OK, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
+use super::{FAIL, MAXWLEN, NUL, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
 
 /// Fill `sp` with the ASCII answers: digits and letters are word
 /// characters, `A`-`Z` are upper case, and everything else maps to itself.

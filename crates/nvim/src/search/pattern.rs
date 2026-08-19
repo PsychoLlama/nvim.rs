@@ -14,7 +14,7 @@
 use super::*;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
-use crate::types::{CMOD_KEEPPATTERNS, VV_SEARCHFORWARD};
+use crate::types::{CMOD_KEEPPATTERNS, FAIL, OK, VV_SEARCHFORWARD};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

@@ -72,7 +72,7 @@ use crate::spellsuggest::soundalike::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::strings::vim_strchr;
-use crate::types::{FILE, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
+use crate::types::{FAIL, FILE, OK, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
 use ::libc::{atoi, fclose, strcasecmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
@@ -91,10 +91,6 @@ pub const TAB: c_int = '\t' as c_int;
 /// The longest path, which is also the size of the scratch buffer one
 /// `'spellsuggest'` item is copied into.
 const MAXPATHL: usize = 4096;
-
-/// `spell_check_sps`'s two answers, as the option code expects them.
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 
 // Word flags. These live beside each word in the tree, except for
 // `WF_MIXCAP`, which only ever appears in `su_badflags`.

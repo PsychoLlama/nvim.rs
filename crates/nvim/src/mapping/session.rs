@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
+use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_char, c_int};
 
 /// The command-name prefix letters that reproduce each mode set a `:map`

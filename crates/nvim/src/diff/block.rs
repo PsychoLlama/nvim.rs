@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::{FAIL, OK};
 use core::ffi::c_int;
 use std::ffi::CStr;
 

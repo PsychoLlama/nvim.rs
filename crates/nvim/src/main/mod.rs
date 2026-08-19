@@ -163,8 +163,6 @@ pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) const SESSION_FILE: [c_char; 12] = c_bytes(b"Session.vim\0");
-pub(crate) const OK: c_int = 1 as c_int;
-pub(crate) const FAIL: c_int = 0 as c_int;
 pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
     set: Set_String {
         h: MapHash {

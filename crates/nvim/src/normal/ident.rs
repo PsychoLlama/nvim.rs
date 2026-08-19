@@ -30,8 +30,8 @@ use crate::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::message::{emsg, messaging};
 use crate::normal::{
     BL_FIX, BL_SOL, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD,
-    HIST_SEARCH, NUL, OK, POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked,
-    checkclearopq, clearop, clearopbeep, false_0, get_visual_text, normal_search, true_0,
+    HIST_SEARCH, NUL, POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked, checkclearopq,
+    clearop, clearopbeep, false_0, get_visual_text, normal_search, true_0,
 };
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
@@ -45,7 +45,7 @@ use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
 use crate::types::{
-    OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t, win_T,
+    OK, OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t, win_T,
 };
 use crate::undo::curbufIsChanged;
 use crate::window::check_can_set_curbuf_disabled;

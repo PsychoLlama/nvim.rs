@@ -52,8 +52,8 @@ use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 use crate::types::{
-    CMOD_LOCKMARKS, FileInfo, aco_save_T, buf_T, bufref_T, exarg_T, iconv_t, int64_t, linenr_T,
-    off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
+    CMOD_LOCKMARKS, FAIL, FileInfo, OK, aco_save_T, buf_T, bufref_T, exarg_T, iconv_t, int64_t,
+    linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
@@ -248,8 +248,6 @@ pub const BF_READERR: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const BF_WRITE_MASK: ::core::ffi::c_int = BF_NOTEDITED + BF_NEW + BF_READERR;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
 pub const SMALLBUFSIZE: usize = 256;

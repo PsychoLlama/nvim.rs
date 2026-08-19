@@ -32,7 +32,7 @@ use crate::message::internal_error;
 use crate::normal::reset_VIsual_and_resel;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{CMD_SIZE, CMD_close, Integer, frame_T, size_t};
+use crate::types::{CMD_SIZE, CMD_close, FAIL, Integer, OK, frame_T, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::tabs;

@@ -25,6 +25,7 @@ use std::ffi::CStr;
 use crate::bufwrite::translate;
 
 use super::*;
+use crate::types::FAIL;
 
 /// The iconv descriptor value that means "no iconv".
 pub(crate) fn no_iconv() -> iconv_t {

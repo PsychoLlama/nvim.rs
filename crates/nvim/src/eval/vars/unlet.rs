@@ -12,6 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// `:unlet`.
 ///

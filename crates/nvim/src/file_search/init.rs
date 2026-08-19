@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::FAIL;
 use ::libc::strtol;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};

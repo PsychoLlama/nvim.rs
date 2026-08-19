@@ -18,7 +18,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use crate::types::builders::static_cstring;
 
 use super::*;
-use crate::types::{VAR_BLOB, VAR_TYPE_BLOB};
+use crate::types::{FAIL, VAR_BLOB, VAR_TYPE_BLOB};
 
 /// Room the packer keeps free, so that a handful of small tokens can be
 /// written without checking after each one.

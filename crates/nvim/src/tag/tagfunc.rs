@@ -10,7 +10,7 @@
 use super::*;
 use crate::hashtab::hash_removed;
 use crate::types::{
-    VAR_DICT, VAR_FIXED, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    FAIL, OK, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
     kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int};

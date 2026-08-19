@@ -18,6 +18,7 @@ use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Insert the NUL-terminated string `p` at the cursor.
 ///

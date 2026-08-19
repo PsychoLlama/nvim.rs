@@ -15,6 +15,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
 /// and terminated with a newline.

@@ -23,8 +23,7 @@ use crate::ex_cmds2::{autowrite_all, check_changed, check_changed_any, dialog_ch
 use crate::ex_docmd::argopt::{check_more, get_tabpage_arg};
 use crate::ex_docmd::source::not_exiting;
 use crate::ex_docmd::{
-    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, EXIT_FAILURE, FAIL,
-    NUL, OK,
+    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, EXIT_FAILURE, NUL,
 };
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::getchar::beep_flush;
@@ -37,8 +36,8 @@ use crate::message::{emsg, msg};
 use crate::os::cshim::{gettext, snprintf};
 use crate::types::{
     CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
-    CMD_wq, CMOD_CONFIRM, Integer, VV_EXITREASON, buf_T, bufref_T, exarg_T, linenr_T, ptrdiff_t,
-    tabpage_T, win_T,
+    CMD_wq, CMOD_CONFIRM, FAIL, Integer, OK, VV_EXITREASON, buf_T, bufref_T, exarg_T, linenr_T,
+    ptrdiff_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{bufIsChanged, curbufIsChanged};

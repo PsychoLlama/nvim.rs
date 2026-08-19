@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::{FAIL, OK};
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
 const CALLBACK_INIT: Callback = Callback {

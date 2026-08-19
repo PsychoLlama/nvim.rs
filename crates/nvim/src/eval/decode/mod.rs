@@ -41,9 +41,6 @@ pub(crate) const kMPInteger: MessagePackType = 2;
 pub(crate) const kMPMap: MessagePackType = 6;
 pub(crate) const kMPExt: MessagePackType = 7;
 
-pub(crate) const OK: c_int = 1;
-pub(crate) const FAIL: c_int = 0;
-
 /// Build `{_TYPE: v:msgpack_types.<type>, _VAL: val}` into `rettv`.
 ///
 /// `val` is moved into the `_VAL` key — the caller must not clear it — and

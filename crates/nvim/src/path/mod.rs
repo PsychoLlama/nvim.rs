@@ -46,7 +46,8 @@ use crate::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::types::{
-    Directory, FileComparison, FileID, FileInfo, file_comparison, garray_T, regmatch_T, size_t,
+    Directory, FAIL, FileComparison, FileID, FileInfo, OK, file_comparison, garray_T, regmatch_T,
+    size_t,
 };
 use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen};
 
@@ -123,8 +124,6 @@ pub const MAXPATHL: c_int = 4096;
 pub const NUL: c_int = 0;
 pub const PATHSEP: c_int = '/' as c_int;
 pub const PATHSEPSTR: [c_char; 2] = [b'/' as c_char, 0];
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const MAXSUFLEN: c_int = 30;
 pub const ENV_SEPCHAR: c_int = ':' as c_int;
 

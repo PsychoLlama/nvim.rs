@@ -69,8 +69,6 @@ use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
 use ::libc::{strcmp, strlen};
 pub const NUL: c_int = '\0' as c_int;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const ML_DEL_MESSAGE: c_uint = 1;
 use crate::undo::{bufIsChanged, u_clearallandblockfree, u_save, u_savesub, u_sync};

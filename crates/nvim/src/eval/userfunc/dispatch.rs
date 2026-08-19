@@ -12,6 +12,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// An argument array for one call: `MAX_FUNC_ARGS` values plus the slot a
 /// `base->Method()` base is put in front of them.

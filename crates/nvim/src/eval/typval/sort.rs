@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::{FAIL, OK};
 
 /// Compare two list items by the ordering `sortinfo` selected: numeric, float,
 /// or a string comparison of their `string()` forms.

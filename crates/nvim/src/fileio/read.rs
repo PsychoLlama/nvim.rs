@@ -16,7 +16,7 @@ use super::*;
 use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
 use crate::pos::MAXCOL;
-use crate::types::CMOD_LOCKMARKS;
+use crate::types::{CMOD_LOCKMARKS, FAIL, OK};
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {

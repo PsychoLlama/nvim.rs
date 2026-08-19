@@ -31,7 +31,7 @@ use crate::message::msg_clr_eos_force;
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{Integer, OptInt, frame_T, qf_info_T, win_T};
+use crate::types::{FAIL, Integer, OK, OptInt, frame_T, qf_info_T, win_T};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;

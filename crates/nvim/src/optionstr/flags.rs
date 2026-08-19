@@ -24,9 +24,9 @@ use crate::main::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
 use crate::strings::vim_strchr;
-use crate::types::{OptIndex, optset_T, size_t};
+use crate::types::{FAIL, OK, OptIndex, optset_T, size_t};
 
-use super::{FAIL, OK, illegal_char};
+use super::illegal_char;
 
 /// The accepted words for an option: the null-pointer-terminated array the
 /// generated table carries, and how many words are in it.

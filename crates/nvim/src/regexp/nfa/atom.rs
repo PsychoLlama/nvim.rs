@@ -18,10 +18,11 @@ use super::parse::nfa_reg;
 use super::{cursor, postfix};
 use crate::main::rc_did_emsg;
 use crate::regexp::{
-    FAIL, NFA_ADD_NL, NFA_BOL, NFA_BOW, NFA_EOL, NFA_EOW, NFA_NEWL, NL, NUL, OK, REG_PAREN,
-    RF_HASNL, Rex, getchr, had_eol, magic, prev_at_start, reg_string, regflags, unmagic,
+    NFA_ADD_NL, NFA_BOL, NFA_BOW, NFA_EOL, NFA_EOW, NFA_NEWL, NL, NUL, REG_PAREN, RF_HASNL, Rex,
+    getchr, had_eol, magic, prev_at_start, reg_string, regflags, unmagic,
 };
 use crate::semsg;
+use crate::types::{FAIL, OK};
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');

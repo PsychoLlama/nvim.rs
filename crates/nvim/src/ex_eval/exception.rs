@@ -37,7 +37,7 @@
 
 use super::flag::{
     CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,
-    CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER, FAIL, IOSIZE, NUL, OK,
+    CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER, IOSIZE, NUL,
 };
 use super::{cause_abort, iobuff, message};
 use crate::ascii::ascii_isdigit;
@@ -58,7 +58,7 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::smsg_c;
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::types::{
-    VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T, except_type_T,
+    FAIL, OK, VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T, except_type_T,
     exception_state_T, int64_t, list_T, msglist_T, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy, strlen};

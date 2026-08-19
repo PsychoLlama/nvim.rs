@@ -21,11 +21,11 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
-use crate::types::{buf_T, optset_T};
+use crate::types::{OK, buf_T, optset_T};
 
 use super::frame::{errbuf, invalid, varp, win};
 use super::{
-    CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, NUL, OK, OPT_GLOBAL, OPT_LOCAL, free_string_option,
+    CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, NUL, OPT_GLOBAL, OPT_LOCAL, free_string_option,
     illegal_char, illegal_char_after_chr, opt_strings_flags,
 };
 

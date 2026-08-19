@@ -23,7 +23,7 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    FAIL, NFA_TOO_EXPENSIVE, NSUBEXP, NUL, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex,
+    NFA_TOO_EXPENSIVE, NSUBEXP, NUL, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex,
     cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi, make_extmatch,
     nfa_re_flags, nfa_regengine, nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit,
     nfa_timed_out, nstate, re_has_z, reg_getline, regflags, regnpar, regsubs_T, state_ptr,
@@ -31,7 +31,7 @@ use crate::regexp::{
 };
 use crate::strings::xstrnsave;
 use crate::types::{
-    buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    FAIL, buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
     regprog_T, uint8_t, win_T,
 };
 

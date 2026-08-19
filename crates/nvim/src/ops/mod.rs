@@ -197,9 +197,6 @@ pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4;
 /// `b_ml.ml_flags`: the buffer is one empty line.
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1;
 
-pub const OK: ::core::ffi::c_int = 1;
-pub const FAIL: ::core::ffi::c_int = 0;
-
 /// `get_fileformat`: lines end with CR LF, so a line break is two bytes.
 pub const EOL_DOS: ::core::ffi::c_int = 1;
 

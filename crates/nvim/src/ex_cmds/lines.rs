@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CMOD_LOCKMARKS, FAIL, ML_DEL_MESSAGE, OK, kExtmarkNOOP, kExtmarkUndo};
+use super::{CMOD_LOCKMARKS, FAIL, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
@@ -25,7 +25,7 @@ use crate::message::{emsg, msgmore};
 use crate::os::cshim::{gettext, ngettext};
 use crate::smsg_c;
 use crate::strings::xstrnsave;
-use crate::types::{OptInt, bcount_t, int64_t, linenr_T, size_t};
+use crate::types::{OK, OptInt, bcount_t, int64_t, linenr_T, size_t};
 use crate::undo::u_save;
 use crate::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};

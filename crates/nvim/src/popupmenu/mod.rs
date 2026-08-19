@@ -107,7 +107,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const OK: c_int = 1;
 pub const NL: c_int = '\n' as c_int;
 pub const CAR: c_int = '\r' as c_int;
 pub const ESC: c_int = '\u{1b}' as c_int;

@@ -35,10 +35,10 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Boolean, Error, Float, Integer, ScreenGrid, TryState, WinConfig, WinStyle, Window, buf_T,
-    colnr_T, int64_t, kErrorTypeException, kErrorTypeNone, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, linenr_T, pos_T, size_t,
-    switchwin_T, win_T,
+    Boolean, Error, FAIL, Float, Integer, OK, ScreenGrid, TryState, WinConfig, WinStyle, Window,
+    buf_T, colnr_T, int64_t, kErrorTypeException, kErrorTypeNone, kFloatAnchorEast,
+    kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
+    linenr_T, pos_T, size_t, switchwin_T, win_T,
 };
 use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,

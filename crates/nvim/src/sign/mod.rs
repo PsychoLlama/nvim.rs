@@ -68,9 +68,9 @@ use crate::os::cshim::{gettext, snprintf, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText,
-    Error, EvalFuncData, Integer, MTKey, MarkTree, MarkTreeIter, NS, SignItem, buf_T, dict_T,
-    dictitem_T, exarg_T, expand_T, int64_t, linenr_T, list_T, listitem_T, ptrdiff_t, schar_T,
-    sign_T, size_t, typval_T, uint16_t, uint32_t, varnumber_T,
+    Error, EvalFuncData, FAIL, Integer, MTKey, MarkTree, MarkTreeIter, NS, OK, SignItem, buf_T,
+    dict_T, dictitem_T, exarg_T, expand_T, int64_t, linenr_T, list_T, listitem_T, ptrdiff_t,
+    schar_T, sign_T, size_t, typval_T, uint16_t, uint32_t, varnumber_T,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, windows};
@@ -95,8 +95,6 @@ pub const BL_WHITE: c_int = 1;
 /// `:sign place` / `sign_place()` call names one.
 pub const SIGN_DEF_PRIO: c_int = 10;
 
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const NUL: c_int = '\0' as c_int;
 pub const MSG_BUF_LEN: c_int = 480;
 

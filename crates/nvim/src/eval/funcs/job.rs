@@ -3,8 +3,8 @@
 
 use super::args::frame;
 use super::{
-    C2Rust_Unnamed_16, C2Rust_Unnamed_22, FAIL, GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, f_environ,
-    false_0, kChannelPartRpc, kChannelStreamProc, kProcTypePty,
+    C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, f_environ, false_0,
+    kChannelPartRpc, kChannelStreamProc, kProcTypePty,
 };
 use crate::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
 use crate::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
@@ -46,7 +46,7 @@ use crate::semsg_c;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, Integer,
+    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, Integer,
     VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER, buf_T,
     dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
     typval_vval_union, uint16_t, uint64_t, varnumber_T,

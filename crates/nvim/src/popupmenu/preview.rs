@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{kErrorTypeNone, kFalse, kTrue};
+use crate::types::{OK, kErrorTypeNone, kFalse, kTrue};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;

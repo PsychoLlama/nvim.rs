@@ -9,7 +9,9 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{
+    FAIL, OK, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 

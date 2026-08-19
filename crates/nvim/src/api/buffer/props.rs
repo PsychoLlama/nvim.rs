@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 pub unsafe extern "C" fn nvim_buf_get_var(
     mut buf: Buffer,

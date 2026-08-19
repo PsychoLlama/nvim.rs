@@ -16,7 +16,7 @@ use crate::memory::xmemrchr;
 use crate::os::fs::os_isdir;
 use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};
 use crate::strings::vim_strchr;
-use crate::types::{VV_PROGPATH, buf_T};
+use crate::types::{OK, VV_PROGPATH, buf_T};
 
 /// The directory a runtime lives in, under `$VIM`.
 const RUNTIME_DIRNAME: &CStr = c"runtime";

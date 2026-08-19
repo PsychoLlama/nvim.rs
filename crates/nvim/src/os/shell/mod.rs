@@ -85,8 +85,6 @@ crate::flag_set! {
     const HIDE_MESS = 64;
 }
 
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 const PROF_YES: c_int = 1;
 const MAXPATHL: usize = 4096;
 const SEEK_SET: c_int = 0;

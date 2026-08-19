@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// The [`EVENT_NAMES`] row an event number names.
 ///

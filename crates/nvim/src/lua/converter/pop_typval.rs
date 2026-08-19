@@ -32,7 +32,7 @@ use crate::memory::xstrdup;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
+    FAIL, LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
     VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t, typval_T,
     typval_vval_union, varnumber_T,
@@ -46,9 +46,6 @@ const E5100_MIXED_KEYS: &CStr = c"E5100: Cannot convert given Lua table: table s
                                  either only integer keys or only string keys";
 /// Refused for a Lua value with no Vimscript image at all.
 const E5101_BAD_TYPE: &CStr = c"E5101: Cannot convert given Lua type";
-
-/// What `tv_dict_add` answers for a key that is already there.
-const FAIL: c_int = 0;
 
 /// One suspended container in the walk.
 #[derive(Copy, Clone)]

@@ -11,7 +11,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::semsg_c;
-use crate::types::{VAR_STRING, VAR_UNKNOWN};
+use crate::types::{FAIL, OK, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

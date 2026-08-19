@@ -64,8 +64,6 @@ use ::libc::{memset, strcmp, strtol};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{mem, ptr};
 pub const NUL: c_int = '\0' as c_int;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const MAXPATHL: c_int = 4096;
 pub const FR_LEAF: c_int = 0;
 pub const FR_ROW: c_int = 1;

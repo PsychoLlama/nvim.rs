@@ -17,6 +17,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Evaluate `'charconvert'` to convert `fname_from` into `fname_to`.
 ///

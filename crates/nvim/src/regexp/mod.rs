@@ -704,8 +704,6 @@ static nfa_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
     regexec_multi: Some(nfa_regexec_multi),
 });
 static regexp_engine: GlobalCell<c_int> = GlobalCell::new(0);
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const CPO_LITERAL: c_int = 'l' as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;

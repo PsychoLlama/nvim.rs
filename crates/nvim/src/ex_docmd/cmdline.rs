@@ -31,8 +31,8 @@ use crate::ex_docmd::source::{
 use crate::ex_docmd::{
     CSF_ACTIVE, CSF_FINALLY, CSF_FOR, CSF_TRY, CSF_WHILE, CSL_HAD_CONT, CSL_HAD_ENDLOOP,
     CSL_HAD_FINA, CSL_HAD_LOOP, CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, DOCMD_EXCRESET,
-    DOCMD_KEEPLINE, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, FAIL, OK, PROF_YES,
-    dbg_stuff, loop_cookie, wcmd_T,
+    DOCMD_KEEPLINE, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, PROF_YES, dbg_stuff,
+    loop_cookie, wcmd_T,
 };
 use crate::ex_eval::{
     aborting, cleanup_conditionals, do_errthrow, do_intthrow, has_loop_cmd, report_make_pending,
@@ -57,7 +57,8 @@ use crate::runtime::{
 };
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    LineGetter, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T, size_t,
+    FAIL, LineGetter, OK, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T,
+    size_t,
 };
 use crate::ui::ui_has;
 use ::libc::{memset, strlen};

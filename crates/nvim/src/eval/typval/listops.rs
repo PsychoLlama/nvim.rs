@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::{FAIL, OK};
 
 /// Link `ni` into `l` in front of `item`, or at the tail when `item` is NULL.
 #[unsafe(no_mangle)]

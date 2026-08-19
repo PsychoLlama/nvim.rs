@@ -2,7 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{ARENA_BLOCK_SIZE, FAIL, MPACK_EOF, MPACK_ERROR, MPACK_OK, OK};
+use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
 use crate::api::private::helpers::api_free_string;
 use crate::eval::decode::{
     json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
@@ -21,8 +21,8 @@ use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::os::cshim::{gettext, memmove};
 use crate::types::{
-    EvalFuncData, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T,
-    kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
+    EvalFuncData, FAIL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    blob_T, kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
 };
 use crate::{semsg, semsg_c};
 use ::libc::strlen;

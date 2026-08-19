@@ -14,7 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BL_FIX, BL_WHITE, CPO_REMMARK, FAIL, NUL, OK, READ_FILTER, buf_autocmd, check_secure, false_0,
+    BL_FIX, BL_WHITE, CPO_REMMARK, FAIL, NUL, READ_FILTER, buf_autocmd, check_secure, false_0,
     kExtmarkNOOP, true_0,
 };
 use crate::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
@@ -54,7 +54,7 @@ use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
-use crate::types::{CMOD_KEEPMARKS, CMOD_LOCKMARKS, OptInt, buf_T, exarg_T, linenr_T};
+use crate::types::{CMOD_KEEPMARKS, CMOD_LOCKMARKS, OK, OptInt, buf_T, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{bufIsChanged, u_save};
 use core::ffi::{CStr, c_char, c_int};

@@ -43,8 +43,8 @@ use crate::path::{
 };
 use crate::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    BoolVarValue, CdCause, CdScope, FileID, cmdarg_T, event_T, linenr_T, ptrdiff_t, save_v_event_T,
-    size_t,
+    BoolVarValue, CdCause, CdScope, FileID, OK, cmdarg_T, event_T, linenr_T, ptrdiff_t,
+    save_v_event_T, size_t,
 };
 use ::libc::{abort, strcpy, strlen};
 use core::ffi::{c_char, c_int, c_void};
@@ -89,8 +89,6 @@ const LITERAL_DIR: ExpandFlags = ExpandFlags::DIR
     .or(ExpandFlags::SILENT)
     .or(ExpandFlags::NOTWILD);
 
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 /// `'cpoptions'` flag: a `'tags'` entry starting with `"./"` is relative to
 /// the current directory rather than to the current file.
 pub const CPO_DOTTAG: c_int = 'd' as c_int;

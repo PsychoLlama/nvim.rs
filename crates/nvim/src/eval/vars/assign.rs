@@ -13,6 +13,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// The compound assignment operators, as they appear before the `=`.
 const OPERATORS: &CStr = c"+-*/%.";

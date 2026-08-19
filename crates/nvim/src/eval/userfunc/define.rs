@@ -14,6 +14,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Whether the function table changed under a listing, which means the
 /// `ufunc_T` the caller is holding may be gone.  Reports E454 when it did.

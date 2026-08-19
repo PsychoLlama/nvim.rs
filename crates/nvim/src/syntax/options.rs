@@ -14,6 +14,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
+use crate::types::{FAIL, OK};
 
 /// Split off a `:syntax` command's group-name argument.
 ///

@@ -20,6 +20,7 @@ use crate::bufwrite::translate;
 use crate::memfile::mf_fname;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// The file, open and ready to read.
 pub(crate) struct Opened {

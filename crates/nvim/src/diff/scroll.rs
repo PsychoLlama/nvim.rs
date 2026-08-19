@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::{FAIL, OK};
 use core::ffi::c_int;
 
 /// The first block of the adjacent run containing `topline`, and the first

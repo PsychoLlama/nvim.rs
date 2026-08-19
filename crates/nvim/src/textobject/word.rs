@@ -25,7 +25,7 @@ use crate::r#move::adjust_skipcol;
 use crate::normal::unadjust_for_sel;
 use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{linenr_T, oparg_T, pos_T};
+use crate::types::{FAIL, OK, linenr_T, oparg_T, pos_T};
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///

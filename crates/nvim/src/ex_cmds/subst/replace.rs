@@ -19,7 +19,7 @@ use super::exec::{Sub, SubArgs, save_undo_once};
 use super::{sub_grow_buf, subflags};
 use crate::change::{appended_lines, changed_bytes, deleted_lines};
 use crate::ex_cmds::{
-    CAR, LineData, NUL, OK, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
+    CAR, LineData, NUL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
 };
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
@@ -32,7 +32,7 @@ use crate::option::magic_isset;
 use crate::os::cshim::memmove;
 use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
-use crate::types::{bcount_t, colnr_T, linenr_T, lpos_T, size_t};
+use crate::types::{OK, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use ::libc::{strcat, strlen};
 use core::ffi::{c_char, c_int, c_void};

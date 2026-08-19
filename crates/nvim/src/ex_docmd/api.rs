@@ -34,7 +34,7 @@ use crate::ex_docmd::scan::{
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::{
     ADDR_LINES, ADDR_NONE, EX_BANG, EX_BUFNAME, EX_BUFUNL, EX_CMDWIN, EX_DFLALL, EX_LOCK_OK,
-    EX_MODIFY, EX_RANGE, EX_TRLBAR, EX_WHOLEFOLD, EX_XFILE, FAIL, IOSIZE, NUL, OK, cmdnames,
+    EX_MODIFY, EX_RANGE, EX_TRLBAR, EX_WHOLEFOLD, EX_XFILE, IOSIZE, NUL, cmdnames,
     e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_pressedreturn,
 };
 use crate::ex_getln::{
@@ -51,8 +51,8 @@ use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout, CMD_checktime, CMD_edit, CMD_file,
-    CMD_iput, CMD_put, CMD_read, CMD_try, CmdParseInfo, cmdmod_T, cstack_T, exarg_T, linenr_T,
-    pos_T, size_t, uint32_t,
+    CMD_iput, CMD_put, CMD_read, CMD_try, CmdParseInfo, FAIL, OK, cmdmod_T, cstack_T, exarg_T,
+    linenr_T, pos_T, size_t, uint32_t,
 };
 use crate::usercmd::do_ucmd;
 use ::libc::{memset, strlen};

@@ -25,6 +25,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::keycodes::{K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE};
+use crate::types::FAIL;
 
 /// `<Space>`, which is only a command when CTRL is held (`i_CTRL-@`'s
 /// spelling on some terminals).

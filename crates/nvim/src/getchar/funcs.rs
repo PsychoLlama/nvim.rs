@@ -9,7 +9,7 @@
 use super::*;
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
 use crate::semsg_c;
-use crate::types::{VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{FAIL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

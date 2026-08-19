@@ -44,8 +44,8 @@ use crate::message::emsg;
 use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
-    slang_T, smt_T, spelltab_T, uint8_t, win_T,
+    FAIL, colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T,
+    size_t, slang_T, smt_T, spelltab_T, uint8_t, win_T,
 };
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy, strlen};
@@ -171,8 +171,6 @@ pub const CHAR_DIGIT: CharType = 2;
 pub const MAXPATHL: c_int = 4096;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const IOSIZE: c_int = 1025;
 
 /// The longest `SYLLABLE` item.

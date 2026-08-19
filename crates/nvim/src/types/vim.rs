@@ -3,6 +3,12 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
+/// The `int` return convention almost every editor function still speaks:
+/// `OK` on success, `FAIL` on failure. `vim_defs.h`'s, one copy for the tree.
+pub const OK: ::core::ffi::c_int = 1;
+/// The failing half of the [`OK`] convention.
+pub const FAIL: ::core::ffi::c_int = 0;
+
 pub type CdCause = ::core::ffi::c_int;
 pub type CdScope = ::core::ffi::c_int;
 /// Which scope a `:cd` applies to (`getcwd()`/`haslocaldir()` report it).

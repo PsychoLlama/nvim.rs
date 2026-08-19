@@ -99,8 +99,6 @@ use flag::*;
 
 pub const NUL: c_int = 0;
 pub const ML_EMPTY: c_int = 0x1;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 
 /// `flag` when `cond`, and no bits otherwise — the `cond ? FLAG : 0` the
 /// flag arguments of `buflist_add`, `check_changed` and `do_ecmd` are

@@ -21,12 +21,8 @@ use crate::lua::ffi::{
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::os::cshim::gettext;
 use crate::types::{
-    Arena, expand_T, garray_T, kErrorTypeNone, kObjectTypeString, ptrdiff_t, size_t,
+    Arena, FAIL, OK, expand_T, garray_T, kErrorTypeNone, kObjectTypeString, ptrdiff_t, size_t,
 };
-
-/// `nlua_expand_pat`'s two answers.
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 
 /// How many matches the result garray grows by at a time.
 const EXPAND_GROWSIZE: c_int = 80;

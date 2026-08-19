@@ -29,6 +29,7 @@ use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
+use crate::types::FAIL;
 
 /// Case of the hex digits last seen, so that `0xAB` increments to `0xAC` and
 /// `0xab` to `0xac`.

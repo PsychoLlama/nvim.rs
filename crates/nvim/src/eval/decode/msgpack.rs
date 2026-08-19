@@ -19,7 +19,7 @@ use core::mem::MaybeUninit;
 use core::ptr;
 
 use super::{
-    FAIL, create_special_dict, decode_create_map_special_dict, decode_string, kMPExt, kMPInteger,
+    create_special_dict, decode_create_map_special_dict, decode_string, kMPExt, kMPInteger,
 };
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
@@ -38,9 +38,10 @@ use crate::mpack::mpack_core::{
 };
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
-    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T,
-    mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
+    FAIL, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    list_T, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    varnumber_T,
 };
 use ::libc::{abort, memcpy, strlen};
 

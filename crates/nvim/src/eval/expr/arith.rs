@@ -14,14 +14,14 @@ use crate::eval::typval::{
     tv_blob_alloc, tv_blob_len, tv_blob_set_ret, tv_clear, tv_get_number_chk, tv_get_string_buf,
     tv_get_string_buf_chk, tv_list_concat,
 };
-use crate::eval::{FAIL, INT_MAX, VARNUMBER_MAX, VARNUMBER_MIN};
+use crate::eval::{INT_MAX, VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::garray::ga_grow;
 use crate::memory::xrealloc;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
 use crate::types::{
-    VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, float_T, typval_T,
+    FAIL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, float_T, typval_T,
     typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;

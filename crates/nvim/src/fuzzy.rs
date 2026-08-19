@@ -49,9 +49,9 @@ use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{
-    Callback, Callback_data, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow, kListLenUnknown,
-    linenr_T, list_T, listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
+    Callback, Callback_data, EvalFuncData, FAIL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow,
+    kListLenUnknown, linenr_T, list_T, listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// The most characters of a pattern or a candidate that are looked at, and
@@ -59,8 +59,6 @@ use crate::types::{
 pub const FUZZY_MATCH_MAX_LEN: usize = 1024;
 /// The score of a candidate the pattern does not match at all.
 pub const FUZZY_SCORE_NONE: c_int = c_int::MIN;
-
-const FAIL: c_int = 0;
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.
 const TV_UNKNOWN: typval_T = typval_T {

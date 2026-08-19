@@ -77,8 +77,6 @@ const SIN_CHANGED: c_uint = 1;
 const SIN_INSERT: c_uint = 2;
 const SIN_UNDO: c_uint = 4;
 const SIN_NOMARK: c_uint = 8;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const FO_Q_COMS: c_int = 'q' as c_int;
 pub const IOSIZE: c_int = 1024 + 1;
 

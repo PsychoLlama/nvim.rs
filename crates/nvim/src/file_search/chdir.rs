@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
+use crate::types::{FAIL, OK, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CStr;

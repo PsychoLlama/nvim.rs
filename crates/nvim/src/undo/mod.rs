@@ -122,8 +122,6 @@ pub struct bufinfo_T {
     pub bi_buf: *mut buf_T,
     pub bi_fp: *mut FILE,
 }
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const IOSIZE: c_int = 1024 + 1;
 pub const CPO_UNDO: c_int = 'u' as c_int;
 pub const NO_LOCAL_UNDOLEVEL: c_int = -123456;

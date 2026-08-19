@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

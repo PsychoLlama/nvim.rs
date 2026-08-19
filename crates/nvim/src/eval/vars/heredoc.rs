@@ -11,6 +11,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::FAIL;
 
 /// The comment character a marker line may carry after it.
 const COMMENT_CHAR: c_char = b'"' as c_char;

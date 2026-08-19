@@ -37,7 +37,7 @@ use crate::os::fs::{os_dirname, os_realpath};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::strings::striequal;
-use crate::types::{expand_T, int64_t, size_t};
+use crate::types::{OK, expand_T, int64_t, size_t};
 use ::libc::{getpid, strcasecmp, strcmp, strcpy, strlen, strpbrk, uname, utsname};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -47,7 +47,6 @@ use core::ptr;
 
 const MAXPATHL: usize = 4096;
 const IOSIZE: usize = 1024 + 1;
-const OK: c_int = 1;
 /// How much of a name `get_env_name` copies into `xp_buf`.
 const EXPAND_BUF_LEN: size_t = 256;
 /// `$PATH`'s separator, and it as a string.

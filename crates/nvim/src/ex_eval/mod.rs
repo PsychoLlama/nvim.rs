@@ -64,8 +64,8 @@ use crate::main::{
 use crate::memory::xfree;
 use crate::semsg_c;
 use crate::types::{
-    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, VAR_UNKNOWN, VAR_UNLOCKED, cstack_T, eslist_T,
-    evalarg_T, exarg_T, typval_T, typval_vval_union,
+    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, OK, VAR_UNKNOWN, VAR_UNLOCKED, cstack_T,
+    eslist_T, evalarg_T, exarg_T, typval_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -145,8 +145,6 @@ pub(crate) mod flag {
     pub const ESTACK_NONE: estack_arg_T = 0;
     pub const IOSIZE: usize = 1024 + 1;
     pub const NUL: c_char = 0;
-    pub const OK: c_int = 1;
-    pub const FAIL: c_int = 0;
 
     use core::ffi::c_char;
 }
@@ -224,7 +222,7 @@ pub fn update_force_abort() {
 /// long as the error message has not been shown and so has not itself caused
 /// the abort.
 pub fn should_abort(retcode: c_int) -> bool {
-    (retcode == flag::FAIL && trylevel.get() != 0 && emsg_silent.get() == 0) || aborting()
+    (retcode == FAIL && trylevel.get() != 0 && emsg_silent.get() == 0) || aborting()
 }
 
 /// Whether a function with the "abort" flag should not count as ended on an
@@ -255,7 +253,7 @@ pub unsafe fn ex_eval(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         fill_evalarg_from_eap(&raw mut evalarg, eap, (*eap).skip != 0);
-        if eval0((*eap).arg, &raw mut tv, eap, &raw mut evalarg) == flag::OK {
+        if eval0((*eap).arg, &raw mut tv, eap, &raw mut evalarg) == OK {
             tv_clear(&raw mut tv);
         }
         clear_evalarg(&raw mut evalarg, eap);

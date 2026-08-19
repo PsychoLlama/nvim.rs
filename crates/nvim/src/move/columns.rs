@@ -25,7 +25,8 @@ use crate::mouse::vcol2col;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::{
-    EvalFuncData, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T, win_T,
+    EvalFuncData, FAIL, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T,
+    win_T,
 };
 use crate::winlayer::{Pos, Win};
 

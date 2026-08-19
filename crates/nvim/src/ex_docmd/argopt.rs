@@ -15,8 +15,8 @@ use crate::ex_docmd::scan::skip_cmd_arg;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FAIL, FORCE_BIN, FORCE_NOBIN, NUL, OK, VIM_QUESTION,
-    VIM_YES, dollar_command, quitmore,
+    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, NUL, VIM_QUESTION, VIM_YES,
+    dollar_command, quitmore,
 };
 use crate::main::{
     arg_had_last, cmdmod, curbuf, curtab, curwin, e_invarg2, e_invargval, e_invrange, e_isadir2,
@@ -31,8 +31,8 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 use crate::strings::vim_snprintf;
 use crate::types::regexp::regmatch_T;
 use crate::types::{
-    CMD_tabmove, CMD_tabnext, CMOD_CONFIRM, CompleteListItemGetter, FILE, exarg_T, expand_T,
-    int32_t, intmax_t, size_t, uint8_t,
+    CMD_tabmove, CMD_tabnext, CMOD_CONFIRM, CompleteListItemGetter, FAIL, FILE, OK, exarg_T,
+    expand_T, int32_t, intmax_t, size_t, uint8_t,
 };
 use crate::window::{only_one_window, tabpage_index, valid_tabpage};
 use ::libc::{strcasecmp, strcmp};

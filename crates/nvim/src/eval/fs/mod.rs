@@ -50,8 +50,8 @@ use crate::os::fs::{
 use crate::path::vim_ispathsep;
 use crate::strings::concat_str;
 use crate::types::{
-    Direction, EvalFuncData, FileInfo, VAR_NUMBER, VAR_STRING, int32_t, list_T, ptrdiff_t, size_t,
-    ssize_t, typval_T, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T, xp_prefix_T,
+    Direction, EvalFuncData, FAIL, FileInfo, VAR_NUMBER, VAR_STRING, int32_t, list_T, ptrdiff_t,
+    size_t, ssize_t, typval_T, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T, xp_prefix_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
@@ -97,8 +97,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static e_error_while_writing_str: [::core::ffi::c_char; 29] =

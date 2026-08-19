@@ -20,9 +20,9 @@ use crate::eval::typval::{
 };
 use crate::eval::userfunc::make_partial;
 use crate::eval::{
-    EVAL_EVALUATE, FAIL, OK, VARNUMBER_MAX, call_func_rettv, check_luafunc_name,
-    e_cannot_index_a_funcref, e_cannot_index_special_variable, e_cannot_slice_dictionary,
-    e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1, tv_is_luafunc,
+    EVAL_EVALUATE, VARNUMBER_MAX, call_func_rettv, check_luafunc_name, e_cannot_index_a_funcref,
+    e_cannot_index_special_variable, e_cannot_slice_dictionary, e_missbrac, eval_isdictc,
+    eval_lambda, eval_method, eval1, tv_is_luafunc,
 };
 use crate::ex_eval::aborting;
 use crate::main::{e_dictkey, e_dictkey_len, e_using_float_as_string};
@@ -31,9 +31,9 @@ use crate::memory::xmemdupz;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T,
-    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
+    EvalFuncData, FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T,
+    dictitem_T, evalarg_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
 

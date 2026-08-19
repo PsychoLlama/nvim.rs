@@ -37,9 +37,9 @@ use crate::os::cshim::{gettext, strstr};
 use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
-    BoolVarValue, EvalFuncData, FILE, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_UNKNOWN, VV_EXCEPTION,
-    VV_TESTING, VarType, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse, kBoolVarTrue,
-    ptrdiff_t, size_t, typval_T, varnumber_T,
+    BoolVarValue, EvalFuncData, FAIL, FILE, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_UNKNOWN,
+    VV_EXCEPTION, VV_TESTING, VarType, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse,
+    kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 use ::libc::{fclose, fgetc, strcmp};
 
@@ -64,8 +64,6 @@ const NUMBUFLEN: usize = 65;
 /// The capacity of `IObuff`, which is the width `assert_equalfile()`'s verdict
 /// is formatted to.
 const IOSIZE: size_t = 1025;
-/// `FAIL`, as the `tv_check_for_*` helpers answer it.
-const FAIL: c_int = 0;
 /// `os_fopen` mode: read, binary.
 const READBIN: &CStr = c"rb";
 

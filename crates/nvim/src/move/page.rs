@@ -30,7 +30,9 @@ use crate::mbyte::mb_adjust_cursor;
 use crate::normal::{nv_g_home_m_cmd, nv_screengo};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
-use crate::types::{Direction, OptInt, cmdarg_T, colnr_T, linenr_T, oparg_T, pos_T, win_T};
+use crate::types::{
+    Direction, FAIL, OK, OptInt, cmdarg_T, colnr_T, linenr_T, oparg_T, pos_T, win_T,
+};
 use crate::winlayer::{Buf, Win};
 
 /// A command with nothing set, as C's `cmdarg_T ca = { 0 }` leaves it.

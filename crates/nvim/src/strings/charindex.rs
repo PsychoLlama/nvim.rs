@@ -18,7 +18,7 @@
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use super::{FAIL, given, strict_bool_arg};
+use super::{given, strict_bool_arg};
 use crate::eval::typval::{
     tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
     tv_check_for_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk, tv_get_string,
@@ -26,7 +26,7 @@ use crate::eval::typval::{
 };
 use crate::mbyte::{mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::memory::xmemdupz;
-use crate::types::{EvalFuncData, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
+use crate::types::{EvalFuncData, FAIL, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
 use ::libc::strlen;
 
 /// The character-length function a `countcc`/`comp` flag selects: with

@@ -4,8 +4,7 @@
 
 use super::args::{Args, frame};
 use super::{
-    FAIL, NUL, OK, YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise,
-    kMTUnknown,
+    NUL, YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
 };
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
@@ -26,8 +25,8 @@ use crate::register::{
 use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    BoolVarValue, EvalFuncData, MotionType, VAR_DICT, VAR_LIST, VAR_STRING, VV_REG, colnr_T,
-    dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
+    BoolVarValue, EvalFuncData, FAIL, MotionType, OK, VAR_DICT, VAR_LIST, VAR_STRING, VV_REG,
+    colnr_T, dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
 };
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};

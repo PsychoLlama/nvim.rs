@@ -19,7 +19,7 @@ use crate::eval::typval::{tv_clear, tv_dict_unref};
 use crate::eval::userfunc::{func_ptr_unref, func_unref, get_func_tv, get_lambda_tv};
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
-    EVAL_EVALUATE, FAIL, FUNCEXE_INIT, NUL, OK, e_cannot_use_partial_here, e_empty_function_name,
+    EVAL_EVALUATE, FUNCEXE_INIT, NUL, e_cannot_use_partial_here, e_empty_function_name,
     e_nowhitespace, eval_func, eval7, get_name_len, is_luafunc, skip_luafunc_name,
 };
 use crate::main::{curwin, e_invexpr2, e_missingparen, e_not_callable_type_str, e_trailing_arg};
@@ -28,8 +28,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, dict_T, evalarg_T, funcexe_T,
-    partial_T, size_t, typval_T, typval_vval_union,
+    FAIL, OK, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, dict_T, evalarg_T,
+    funcexe_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 use ::libc::strlen;
 

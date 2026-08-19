@@ -17,13 +17,13 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Error, OptIndex, OptScope, OptVal, OptValData, aco_save_T, buf_T, kErrorTypeException,
+    Error, FAIL, OptIndex, OptScope, OptVal, OptValData, aco_save_T, buf_T, kErrorTypeException,
     kErrorTypeNone, kFalse, scid_T, switchwin_T, win_T,
 };
 use crate::window::win_find_tabpage;
 
 use super::{
-    FAIL, get_option_value, kOptScopeBuf, kOptScopeWin, kOptValTypeNil, set_option_direct,
+    get_option_value, kOptScopeBuf, kOptScopeWin, kOptValTypeNil, set_option_direct,
     set_option_value_handle_tty,
 };
 

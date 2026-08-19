@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

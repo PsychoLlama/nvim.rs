@@ -16,13 +16,10 @@ use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
 use crate::os::env::os_getenv_noalloc;
-use crate::types::{expand_T, garray_T, size_t, uv_uid_t};
+use crate::types::{FAIL, OK, expand_T, garray_T, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
-
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 
 /// How well a name matches the known user names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

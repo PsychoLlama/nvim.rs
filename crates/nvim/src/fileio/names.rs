@@ -18,6 +18,7 @@ use crate::path::tail_index;
 
 use super::*;
 use crate::regexp::RE_MAGIC;
+use crate::types::{FAIL, OK};
 
 /// `S_IFLNK`: the file type bits of a symbolic link.
 const S_IFLNK: u64 = 0o120000;

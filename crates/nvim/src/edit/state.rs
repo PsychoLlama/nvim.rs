@@ -26,6 +26,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::keycodes::{K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE, K_NOP};
+use crate::types::{FAIL, OK};
 
 /// Set Insert mode up, run the state loop until it really ends, and tear it
 /// down again.

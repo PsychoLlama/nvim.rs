@@ -22,8 +22,8 @@ use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    ADDR_TABS, BF_DUMMY, FAIL, NUL, OK, SID_NONE, cmdnames, e_invrange, ex_func_T,
-    ex_pressedreturn, exmode_plus, getexline,
+    ADDR_TABS, BF_DUMMY, NUL, SID_NONE, cmdnames, e_invrange, ex_func_T, ex_pressedreturn,
+    exmode_plus, getexline,
 };
 use crate::main::{
     curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col,
@@ -43,7 +43,8 @@ use crate::types::{
     CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CMOD_BROWSE,
     CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
     CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
-    CMOD_UNSILENT, OptInt, OptVal, OptValData, String_0, cmdidx_T, cmdmod_T, exarg_T, size_t,
+    CMOD_UNSILENT, FAIL, OK, OptInt, OptVal, OptValData, String_0, cmdidx_T, cmdmod_T, exarg_T,
+    size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{atoi, memset, strlen};

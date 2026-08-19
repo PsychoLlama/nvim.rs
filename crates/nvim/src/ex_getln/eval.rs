@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::keycodes::KE_WILD;
-use crate::types::{VAR_STRING, VAR_UNKNOWN};
+use crate::types::{FAIL, VAR_STRING, VAR_UNKNOWN};
 
 /// The command line being edited, whether or not it holds any text.
 ///

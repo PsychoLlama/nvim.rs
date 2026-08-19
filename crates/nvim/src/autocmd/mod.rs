@@ -386,8 +386,6 @@ unsafe fn map_get_int_String(
         };
     }
 }
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
 /// byte array upstream, because c2rust has no `CStr`; nothing writes it.
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";

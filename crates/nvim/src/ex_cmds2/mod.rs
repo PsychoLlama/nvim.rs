@@ -76,8 +76,8 @@ use crate::path::vim_FullName;
 use crate::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::semsg_c;
 use crate::types::{
-    CMD_first, CMD_sfirst, CMOD_CONFIRM, VV_SWAPCOMMAND, aentry_T, buf_T, bufref_T, exarg_T,
-    linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
+    CMD_first, CMD_sfirst, CMOD_CONFIRM, FAIL, OK, VV_SWAPCOMMAND, aentry_T, buf_T, bufref_T,
+    exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::undo::bufIsChanged;
 use crate::window::goto_tabpage_win;
@@ -88,7 +88,7 @@ use core::ptr;
 
 use flag::{
     CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
-    DOBUF_UNLOAD, DOCMD_VERBOSE, FAIL, MAXPATHL, ML_EMPTY, NUL, OK, VIM_QUESTION,
+    DOBUF_UNLOAD, DOCMD_VERBOSE, MAXPATHL, ML_EMPTY, NUL, VIM_QUESTION,
 };
 
 pub use listdo::ex_listdo;
@@ -128,8 +128,6 @@ mod flag {
 
     pub const MAXPATHL: usize = 4096;
     pub const NUL: c_char = 0;
-    pub const OK: c_int = 1;
-    pub const FAIL: c_int = 0;
 
     use core::ffi::c_char;
 }

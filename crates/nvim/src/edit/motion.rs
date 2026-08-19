@@ -22,6 +22,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::keycodes::{K_C_END, K_C_HOME};
+use crate::types::OK;
 
 /// If 'keymodel' contains `startsel`, turn `c` into the start of a
 /// Select-mode selection and stuff it back for Normal mode to handle.

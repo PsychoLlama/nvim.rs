@@ -20,8 +20,8 @@ use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
     CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FAIL, FNAME_MESS, ML_EMPTY, NUL, OK,
-    ex_pressedreturn, kDirectionNotSet,
+    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FNAME_MESS, ML_EMPTY, NUL, ex_pressedreturn,
+    kDirectionNotSet,
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -50,7 +50,7 @@ use crate::types::ui::kUICmdline;
 use crate::types::{
     CMD_badd, CMD_balt, CMD_edit, CMD_enew, CMD_new, CMD_rshada, CMD_rviminfo, CMD_split,
     CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
-    cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T,
+    FAIL, OK, cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbufIsChanged, u_compute_hash, u_read_undo, u_save, u_savedel, u_write_undo};

@@ -61,8 +61,6 @@ pub use self::vimscript::*;
 use crate::regexp::re_multiline;
 
 pub const NUL: c_int = '\0' as c_int;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 /// The `'cpoptions'` flag that makes a search continue at the end of the
 /// previous match rather than one character past its start.
 pub const CPO_SEARCH: c_int = 'c' as c_int;

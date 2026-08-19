@@ -29,7 +29,7 @@ use crate::main::{
     stop_insert_mode,
 };
 use crate::state::MODE_INSERT;
-use crate::types::{CMD_SIZE, CMOD_CONFIRM, Error, buf_T, colnr_T, linenr_T};
+use crate::types::{CMD_SIZE, CMOD_CONFIRM, Error, FAIL, buf_T, colnr_T, linenr_T};
 use crate::winlayer::tabs;
 
 pub unsafe fn entering_window(win: *mut win_T) {

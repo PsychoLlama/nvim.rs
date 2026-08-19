@@ -17,6 +17,7 @@
 use core::ffi::c_int;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Move the cursor to the start of the current line.
 ///

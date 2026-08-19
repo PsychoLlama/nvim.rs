@@ -100,8 +100,6 @@ pub use self::walk::*;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
 pub const NL: c_int = '\n' as c_int;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 /// `IObuff`'s size: what `show_utf8` formats into.
 pub const IOSIZE: c_int = 1024 + 1;
 /// `setlocale`'s category for character classification.

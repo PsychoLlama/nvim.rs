@@ -20,7 +20,7 @@ use crate::cursor::coladvance;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::edit::{cursor_down, cursor_up};
 use crate::pos::MAXCOL;
-use crate::types::{colnr_T, int64_t, linenr_T, win_T};
+use crate::types::{FAIL, colnr_T, int64_t, linenr_T, win_T};
 
 impl Win {
     /// Put the cursor at virtual column `wcol`, or as close as the line

@@ -17,14 +17,14 @@ use super::state::RegStack;
 use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::regexp::{
-    BEHIND, BRANCH, FAIL, NOBEHIND, NOMATCH, NUL, OK, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH,
-    RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT,
-    RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN,
-    Rex, SUBPAT, backpos, behind_pos, brace_count, reg_breakcheck, reg_endzp, reg_endzpos,
-    reg_getline, reg_getline_len, reg_restore, reg_save, reg_save_equal, reg_startzp,
-    reg_startzpos, restore_subexpr,
+    BEHIND, BRANCH, NOBEHIND, NOMATCH, NUL, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH,
+    RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE,
+    RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SUBPAT,
+    backpos, behind_pos, brace_count, reg_breakcheck, reg_endzp, reg_endzpos, reg_getline,
+    reg_getline_len, reg_restore, reg_save, reg_save_equal, reg_startzp, reg_startzpos,
+    restore_subexpr,
 };
-use crate::types::{colnr_T, uint8_t};
+use crate::types::{FAIL, OK, colnr_T, uint8_t};
 use ::libc::strlen;
 
 /// Pop frames until one of them has something new to try, or the stack runs

@@ -49,8 +49,6 @@ use crate::types::{kFalse, kNone, kTrue};
 use level::foldUpdateIEMS;
 use open_close::check_closed;
 
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
 pub const VIRTTEXT_EMPTY: VirtText = VirtText {

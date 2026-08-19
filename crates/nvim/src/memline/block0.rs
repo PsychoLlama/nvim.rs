@@ -15,6 +15,7 @@
 use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Why a swap file yielded no block zero.
 pub(crate) enum NoBlock {

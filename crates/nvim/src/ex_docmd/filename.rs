@@ -22,8 +22,8 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::{
-    ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EX_NOSPC, EXPAND_FILES, FAIL, FIND_EVAL,
-    FIND_IDENT, FIND_STRING, FNAME_HYP, FNAME_MESS, MAXPATHL, NUL, OK, VALID_HEAD, VALID_PATH,
+    ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EX_NOSPC, EXPAND_FILES, FIND_EVAL,
+    FIND_IDENT, FIND_STRING, FNAME_HYP, FNAME_MESS, MAXPATHL, NUL, VALID_HEAD, VALID_PATH,
     dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
@@ -46,7 +46,7 @@ use crate::runtime::estack_sfile;
 use crate::strings::{strrep, vim_strchr, vim_strsave_escaped};
 use crate::types::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
-    VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t, uint8_t, uint32_t,
+    FAIL, OK, VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t, uint8_t, uint32_t,
 };
 use ::libc::{strcat, strcmp, strcpy, strlen, strpbrk, strrchr};
 

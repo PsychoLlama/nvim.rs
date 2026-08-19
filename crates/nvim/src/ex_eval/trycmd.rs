@@ -42,7 +42,7 @@ use super::exception::{
 use super::flag::{
     CSF_ACTIVE, CSF_CAUGHT, CSF_FINALLY, CSF_FOR, CSF_SILENT, CSF_THROWN, CSF_TRUE, CSF_TRY,
     CSF_WHILE, CSL_HAD_FINA, CSTACK_LEN, CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH,
-    CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN, CSTP_THROW, ET_USER, FAIL, NUL, THROW_ON_ERROR,
+    CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN, CSTP_THROW, ET_USER, NUL, THROW_ON_ERROR,
 };
 use super::{
     aborting, check_skip, cleanup_conditionals, discard_pending_return, ex_break, ex_continue,
@@ -65,7 +65,7 @@ use crate::regexp::{
 };
 use crate::runtime::do_finish;
 use crate::semsg_c;
-use crate::types::{cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
+use crate::types::{FAIL, cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

@@ -15,7 +15,7 @@ use crate::eval::typval::{
     callback_free, callback_put, tv_clear, tv_dict_add, tv_dict_add_nr, tv_dict_alloc,
     tv_dict_item_alloc, tv_list_alloc_ret, tv_list_append_dict,
 };
-use crate::eval::{FAIL, MH_TOMBSTONE, callback_call, last_timer_id, timers};
+use crate::eval::{MH_TOMBSTONE, callback_call, last_timer_id, timers};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new_child};
 use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
@@ -26,7 +26,7 @@ use crate::main::{called_emsg, did_emsg, did_throw, main_loop};
 use crate::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::memory::{xfree, xmalloc};
 use crate::types::{
-    Callback, Map_uint64_t_ptr_t, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, dict_T,
+    Callback, FAIL, Map_uint64_t_ptr_t, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, dict_T,
     dictitem_T, int64_t, list_T, ptr_t, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union,
     uint32_t, uint64_t, varnumber_T,
 };

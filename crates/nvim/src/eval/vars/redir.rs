@@ -12,6 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Append the message in `gap` to `v:errors`, which the `assert_*` builtins
 /// report through.

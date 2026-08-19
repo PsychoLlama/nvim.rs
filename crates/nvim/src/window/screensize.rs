@@ -35,8 +35,8 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    OptInt, VAR_NUMBER, VAR_UNLOCKED, buf_T, bufref_T, dict_T, garray_T, linenr_T, list_T,
-    ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    FAIL, OK, OptInt, VAR_NUMBER, VAR_UNLOCKED, buf_T, bufref_T, dict_T, garray_T, linenr_T,
+    list_T, ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};

@@ -178,8 +178,6 @@ pub const FLUSH_MINIMAL: flush_buffers_T = 0;
 /// a newline separates buttons.
 pub const DLG_HOTKEY_CHAR: c_uint = 38;
 pub const DLG_BUTTON_SEP: c_uint = 10;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const BELL: ::core::ffi::c_int = '\u{7}' as ::core::ffi::c_int;
 pub const BS: ::core::ffi::c_int = 8;

@@ -45,8 +45,8 @@ use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    ListReaderState, MessagePackType, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING, VAR_UNLOCKED,
-    garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    FAIL, ListReaderState, MessagePackType, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
+    VAR_UNLOCKED, garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use ::libc::{abort, strlen};
 
@@ -59,8 +59,6 @@ mod text;
 use self::text::{encode_vim_to_echo, encode_vim_to_string};
 
 pub const kMPString: MessagePackType = 4;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const NOTDONE: c_int = 2;
 pub const IOSIZE: c_int = 1024 + 1;
 

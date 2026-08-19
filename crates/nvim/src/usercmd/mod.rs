@@ -70,8 +70,8 @@ use crate::runtime::sourcing_lnum;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{
-    CMD_USER, CMD_USER_BUF, LuaRef, cmd_addr_T, exarg_T, expand_T, garray_T, int64_t, size_t,
-    ucmd_T, uint32_t,
+    CMD_USER, CMD_USER_BUF, FAIL, LuaRef, OK, cmd_addr_T, exarg_T, expand_T, garray_T, int64_t,
+    size_t, ucmd_T, uint32_t,
 };
 use crate::window::prevwin_curwin;
 use ::libc::strlen;
@@ -110,8 +110,6 @@ pub const DOCMD_NOWAIT: u32 = 2;
 pub const DOCMD_VERBOSE: u32 = 1;
 pub const UC_BUFFER: c_int = 1;
 pub const LUA_NOREF: c_int = -2;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const NUL: c_char = 0;
 pub const EX_RANGE: u32 = 0x1;
 pub const EX_BANG: u32 = 0x2;

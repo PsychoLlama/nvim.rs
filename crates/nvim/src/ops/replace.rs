@@ -18,6 +18,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Overwrite the single byte at `lp` with `c`.
 ///

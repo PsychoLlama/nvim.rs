@@ -18,6 +18,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::Put;
 use crate::register::*;
+use crate::types::FAIL;
 
 impl Put {
     /// Splice `count` copies of the register's single line into the buffer at

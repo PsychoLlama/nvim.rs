@@ -11,14 +11,14 @@
 //! would be unsound.
 
 use crate::eval::typval::{
-    FAIL, OK, tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
+    tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
 };
 use crate::eval::{grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
 use crate::os::cshim::memmove;
 use crate::strings::concat_str;
 use crate::types::{
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
+    FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
     VAR_STRING, VAR_UNKNOWN, blob_T, float_T, listitem_T, typval_T, uint8_t, varnumber_T,
 };
 use ::libc::abort;

@@ -17,8 +17,8 @@ use crate::lua::executor::{get_global_lstate, nlua_pcall};
 use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::main::args::execute_env;
 use crate::main::{
-    DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, FAIL, LUA_GLOBALSINDEX, OK, PATHSEP, SID_CARG,
-    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, curwin, e_cannot_read_from_str_2,
+    DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, PATHSEP, SID_CARG, SID_CMDARG,
+    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, curwin, e_cannot_read_from_str_2,
     e_conflicting_configs, exmode_active, kEqualFiles, kXDGConfigDirs, mparm_T, msg_scroll, p_exrc,
     silent_mode, time_msg_at,
 };
@@ -30,7 +30,7 @@ use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_
 use crate::path::path_full_compare;
 use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
-use crate::types::{lua_State, qf_info_T, scid_T, size_t};
+use crate::types::{FAIL, OK, lua_State, qf_info_T, scid_T, size_t};
 use ::libc::{fprintf, memcpy, strlen};
 
 /// Run the `--cmd` commands, which come before any config.

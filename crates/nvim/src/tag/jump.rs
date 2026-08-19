@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::search::SEARCH_KEEP;
+use crate::types::{FAIL, OK};
 use crate::window::WSP_VERT;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;

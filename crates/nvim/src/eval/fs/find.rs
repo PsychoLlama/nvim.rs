@@ -27,7 +27,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    Args, EXPAND_FILES, FAIL, FINDFILE_DIR, FINDFILE_FILE, OK, RetList, XP_PREFIX_NONE, frame,
+    Args, EXPAND_FILES, FAIL, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame,
     kDirectionNotSet, nr_arg, numbuf, ret_string, str_arg, str_arg_buf,
 };
 use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts, globpath};
@@ -40,8 +40,8 @@ use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::main::{curbuf, p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
-    EvalFuncData, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VV_VAL, expand_T, garray_T, kListLenUnknown,
-    pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
+    EvalFuncData, OK, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VV_VAL, expand_T, garray_T,
+    kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};

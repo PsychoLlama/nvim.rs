@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{FAIL, NUL, OK, VALID_VIRTCOL};
+use super::{NUL, VALID_VIRTCOL};
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
@@ -29,8 +29,8 @@ use crate::search::{
 use crate::semsg_c;
 use crate::state::virtual_active;
 use crate::types::{
-    Direction, EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T, list_T, pos_T,
-    tabpage_T, typval_T, varnumber_T, win_T,
+    Direction, EvalFuncData, FAIL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T, list_T,
+    pos_T, tabpage_T, typval_T, varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

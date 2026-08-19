@@ -28,7 +28,7 @@ use super::{
     BF_CHECK_RO, BF_NEVERLOADED, BF_NOTEDITED, BFA_KEEP_UNDO, BL_FIX, BL_SOL, BL_WHITE, CCGD_AW,
     CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOCMD_VERBOSE, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT,
     ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP, FAIL,
-    KEYMAP_INIT, NUL, OK, OPT_WINONLY, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
+    KEYMAP_INIT, NUL, OPT_WINONLY, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
     SHM_FILEINFO, SHM_OVERALL, false_0, true_0,
 };
 use crate::arglist::check_arg_idx;
@@ -67,7 +67,7 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    OptInt, String_0, VV_SWAPCOMMAND, bufref_T, exarg_T, linenr_T, ptrdiff_t, time_t, win_T,
+    OK, OptInt, String_0, VV_SWAPCOMMAND, bufref_T, exarg_T, linenr_T, ptrdiff_t, time_t, win_T,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};

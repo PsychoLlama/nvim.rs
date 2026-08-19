@@ -20,6 +20,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// A zeroed `sctx_T`; `getnextac` fills `patcmd.script_ctx` in from the
 /// autocommand it is about to run.

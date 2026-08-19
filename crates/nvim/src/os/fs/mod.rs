@@ -40,8 +40,8 @@ use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg_c;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    FILE, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_file, uv_fs_t,
-    uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
+    FAIL, FILE, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_file,
+    uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
 };
 use crate::ui::ui_call_chdir;
 use ::libc::{__errno_location, abort, dup, fcntl, fdopen, read, readv, strerror, write};
@@ -90,8 +90,6 @@ const S_IFDIR: u64 = 0o40000;
 const S_IFBLK: u64 = 0o60000;
 
 const PATHSEP: c_char = b'/' as c_char;
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 /// `$PATH`'s entry separator.
 const ENV_SEPCHAR: u8 = b':';
 /// The buffer [`os_mkdtemp`] fills, sized by its callers.

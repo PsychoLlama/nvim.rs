@@ -14,7 +14,7 @@ use crate::path::ExpandFlags;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::types::{ArrayBuf, kErrorTypeNone, static_cstring};
+use crate::types::{ArrayBuf, FAIL, OK, kErrorTypeNone, static_cstring};
 
 /// Expand a file or directory pattern.
 ///

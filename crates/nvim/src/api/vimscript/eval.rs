@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::types::{FAIL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

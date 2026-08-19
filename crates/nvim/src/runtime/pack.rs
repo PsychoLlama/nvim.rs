@@ -20,6 +20,7 @@
 use super::*;
 use crate::path::ExpandFlags;
 
+use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

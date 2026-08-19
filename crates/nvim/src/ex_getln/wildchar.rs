@@ -11,6 +11,7 @@ use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::keycodes::Ctrl_Z;
 use crate::options::OptWimFlags;
+use crate::types::{FAIL, OK};
 
 /// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
 ///

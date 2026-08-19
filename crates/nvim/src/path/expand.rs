@@ -15,6 +15,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::os::shell::ShellOpts;
+use crate::types::{FAIL, OK};
 
 /// Whether a `gen_expand_wildcards` is already running. The pieces it calls
 /// can come back round to it — `expand_env` falls back on `ExpandOne` — and

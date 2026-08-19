@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::{FAIL, OK};
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
 pub(crate) unsafe fn tv_blob2items(argvars: *mut typval_T, rettv: *mut typval_T) {

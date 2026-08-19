@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::VV_FNAME;
+use crate::types::{FAIL, VV_FNAME};
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
 use std::ffi::CStr;

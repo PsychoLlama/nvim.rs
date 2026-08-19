@@ -42,8 +42,8 @@ use crate::statusline::stl_clear_click_defs;
 use crate::terminal::terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{
-    Integer, OptInt, StlClickDefinition, Window, colnr_T, linenr_T, scid_T, size_t, tabpage_T,
-    win_T,
+    FAIL, Integer, OK, OptInt, StlClickDefinition, Window, colnr_T, linenr_T, scid_T, size_t,
+    tabpage_T, win_T,
 };
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
 use crate::winfloat::{win_border_height, win_border_width, win_float_anchor_laststatus};

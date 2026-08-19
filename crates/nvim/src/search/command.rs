@@ -19,7 +19,7 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
-use crate::types::CMOD_KEEPPATTERNS;
+use crate::types::{CMOD_KEEPPATTERNS, FAIL};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

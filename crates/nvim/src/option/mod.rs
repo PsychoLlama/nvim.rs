@@ -177,8 +177,6 @@ pub const NULL_STRING: String_0 = String_0 {
     data: ::core::ptr::null_mut::<c_char>(),
     size: 0 as size_t,
 };
-pub const OK: c_int = 1 as c_int;
-pub const FAIL: c_int = 0 as c_int;
 pub const NUL: c_int = '\0' as c_int;
 pub const TAB: c_int = '\t' as c_int;
 pub const CTRL_F_STR: &::core::ffi::CStr = c"\x06";

@@ -10,6 +10,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::types::FAIL;
 
 /// What a pass of line splitting decided.
 pub(crate) enum Split {

@@ -13,7 +13,7 @@ use super::*;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg_c;
-use crate::types::{VAR_LIST, VAR_UNKNOWN};
+use crate::types::{FAIL, VAR_LIST, VAR_UNKNOWN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

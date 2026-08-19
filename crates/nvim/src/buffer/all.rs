@@ -26,8 +26,8 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{
-    CMD_sunhide, CMD_unhide, OptInt, buf_T, bufref_T, cleanup_T, exarg_T, except_T, linenr_T,
-    tabpage_T, win_T,
+    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, buf_T, bufref_T, cleanup_T, exarg_T, except_T,
+    linenr_T, tabpage_T, win_T,
 };
 use crate::undo::bufIsChanged;
 use crate::window::{

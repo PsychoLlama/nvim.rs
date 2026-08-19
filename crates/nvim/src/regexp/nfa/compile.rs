@@ -15,14 +15,14 @@ use super::postfix;
 use crate::mbyte::{utf_char2bytes, utf_char2len};
 use crate::memory::xmalloc;
 use crate::regexp::{
-    CLASS_AF, CLASS_AZ, CLASS_af, CLASS_az, CLASS_not, CLASS_o7, CLASS_o9, CLASS_underscore, FAIL,
+    CLASS_AF, CLASS_AZ, CLASS_af, CLASS_az, CLASS_not, CLASS_o7, CLASS_o9, CLASS_underscore,
     NFA_ADD_NL, NFA_ALPHA, NFA_BOF, NFA_BOL, NFA_BOW, NFA_CURSOR, NFA_DIGIT, NFA_EOW, NFA_HEAD,
     NFA_HEX, NFA_LOWER_IC, NFA_MATCH, NFA_MCLOSE, NFA_MOPEN, NFA_MOPEN9, NFA_NALPHA, NFA_NDIGIT,
     NFA_NHEAD, NFA_NHEX, NFA_NLOWER_IC, NFA_NOCTAL, NFA_NOPEN, NFA_NUPPER_IC, NFA_NWORD, NFA_OCTAL,
     NFA_SPLIT, NFA_UPPER_IC, NFA_VISUAL, NFA_WORD, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART,
     NUL, Rex, istate, nfa_state_T, nstate, regcomp_start, wants_nfa,
 };
-use crate::types::uint8_t;
+use crate::types::{FAIL, uint8_t};
 use ::libc::strlen;
 
 /// Reset the compile-time state and reserve the postfix program.

@@ -37,7 +37,8 @@ use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::strtoimax;
 use crate::path::path_has_wildcard;
 use crate::types::{
-    buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T, varnumber_T,
+    FAIL, OK, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T,
+    varnumber_T,
 };
 use ::libc::{__errno_location, abort, strlen};
 
@@ -78,8 +79,6 @@ const TAB: c_int = 9;
 const NL: c_int = 10;
 const EOL_MAC: c_int = 2;
 const ERANGE: c_int = 34;
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 
 static chartab_initialized: GlobalCell<bool> = GlobalCell::new(false);
 static g_chartab: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);

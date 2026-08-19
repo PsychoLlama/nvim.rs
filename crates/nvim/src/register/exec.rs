@@ -18,6 +18,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Put the allocated string `p` in register `regname` as a single charwise
 /// line, appending for an uppercase name.

@@ -14,11 +14,11 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    CLASS_NONE, E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR, FAIL, MAGIC_ALL, MAGIC_NONE,
-    MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, NOT_MULTI, OK, REGEXP_ABBR,
-    REGEXP_INRANGE, at_start, backslash_abbr, curchr, magic_T, nextchr, parse_state_T,
-    prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic,
-    regnpar, regparse, take_bracketed, take_char_class, toggle_magic, unmagic,
+    CLASS_NONE, E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
+    MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, NOT_MULTI, REGEXP_ABBR, REGEXP_INRANGE, at_start,
+    backslash_abbr, curchr, magic_T, nextchr, parse_state_T, prev_at_start, prevchr, prevchr_len,
+    prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic, regnpar, regparse, take_bracketed,
+    take_char_class, toggle_magic, unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int, hex2nr};
@@ -27,6 +27,7 @@ use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::os::cshim::{gettext, memmove};
 use crate::strings::xstrnsave;
+use crate::types::{FAIL, OK};
 use crate::{semsg, semsg_c};
 use ::libc::strlen;
 

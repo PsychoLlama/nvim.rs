@@ -25,6 +25,7 @@
 use core::ffi::c_int;
 
 use super::*;
+use crate::types::FAIL;
 
 /// Which backwards-delete key is running.
 ///

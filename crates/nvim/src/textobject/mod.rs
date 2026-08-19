@@ -44,8 +44,6 @@ pub const kMTCharWise: MotionType = 0;
 pub const FM_FORWARD: c_uint = 2;
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const NUL: c_int = '\0' as c_int;
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 /// 'cpoptions' `J`: a sentence ends at `.` `!` `?` followed by *two* spaces.
 pub const CPO_ENDOFSENT: c_int = 'J' as c_int;
 /// 'cpoptions' `M`: a `\` before a bracket does not make it escaped.

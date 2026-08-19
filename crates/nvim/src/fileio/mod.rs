@@ -81,10 +81,10 @@ use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData, OptValType, aco_save_T,
-    bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t, linenr_T, off_T,
-    pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t, uint64_t, uintmax_t,
-    uv_gid_t, uv_uid_t,
+    CheckItem, Directory, FAIL, FILE, FileInfo, OK, OptInt, OptVal, OptValData, OptValType,
+    aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t,
+    linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t,
+    uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -176,8 +176,6 @@ pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const BF_NEW_W: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E812: Autocommands changed buffer or buffer name".as_ptr());

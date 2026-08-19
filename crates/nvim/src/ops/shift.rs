@@ -20,6 +20,7 @@
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
+use crate::types::FAIL;
 
 /// `<` and `>` over the operator's region.
 ///

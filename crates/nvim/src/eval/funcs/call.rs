@@ -4,8 +4,8 @@
 
 use super::args::{Args, frame};
 use super::{
-    AUTOLOAD_CHAR, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, FAIL, MAX_FUNC_ARGS,
-    NUL, OK, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
+    AUTOLOAD_CHAR, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, MAX_FUNC_ARGS, NUL,
+    TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
 };
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
@@ -42,8 +42,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarType,
-    funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
+    EvalFuncData, FAIL, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
+    VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
 };
 use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};

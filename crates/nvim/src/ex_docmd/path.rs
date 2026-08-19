@@ -16,8 +16,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::eval::{callback_call, get_copyID, set_ref_in_callback};
 use crate::ex_docmd::{
-    CPO_NOSYMLINKS, FAIL, MAXPATHL, NUL, OK, OPT_GLOBAL, OPT_LOCAL, ffu_cb, kCdCauseManual,
-    prev_dir,
+    CPO_NOSYMLINKS, MAXPATHL, NUL, OPT_GLOBAL, OPT_LOCAL, ffu_cb, kCdCauseManual, prev_dir,
 };
 use crate::ex_getln::allbuf_locked;
 use crate::file_search::{do_autocmd_dirchanged, vim_chdir};
@@ -38,10 +37,10 @@ use crate::os::fs::os_dirname;
 use crate::path::pathcmp;
 use crate::strings::vim_strchr;
 use crate::types::{
-    BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdScope, OptInt, VAR_BOOL,
-    VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue,
-    kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t,
-    typval_T,
+    BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdScope, FAIL, OK, OptInt,
+    VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, exarg_T, kBoolVarFalse,
+    kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T, listitem_T, optset_T,
+    sctx_T, size_t, typval_T,
 };
 use ::libc::strcmp;
 

@@ -14,6 +14,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use super::*;
 use crate::regexp::RE_MAGIC;
 use crate::runtime::DIP_ALL;
+use crate::types::FAIL;
 
 /// Adjust an item's flags when it is declared in a `:syntax include`d file.
 ///

@@ -98,8 +98,6 @@ pub const VALID_BOTLINE_AP: c_int = 0x40;
 /// `w_topline` shows the cursor with 'scrolloff' context.
 pub const VALID_TOPLINE: c_int = 0x80;
 
-pub const OK: c_int = 1;
-pub const FAIL: c_int = 0;
 pub const true_0: c_int = 1;
 pub const false_0: c_int = 0;
 

@@ -17,9 +17,9 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrdup};
 use crate::runtime::{DIP_OPT, DIP_START, source_runtime_vim_lua};
-use crate::types::RgbValue;
+use crate::types::{OK, RgbValue};
 
-use super::{OK, do_highlight};
+use super::do_highlight;
 
 /// The groups whose definition does not depend on `'background'`.
 static HIGHLIGHT_INIT_BOTH: [&CStr; 174] = [

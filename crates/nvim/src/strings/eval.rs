@@ -13,7 +13,7 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use super::{FAIL, given, strcase_save, strict_bool_arg, xstrnsave};
+use super::{given, strcase_save, strict_bool_arg, xstrnsave};
 use crate::charset::{
     STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT, STR2NR_QUOTE, skipwhite,
     transstr, vim_str2nr,
@@ -33,8 +33,8 @@ use crate::message::emsg;
 use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
-    EvalFuncData, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T, uint8_t,
-    varnumber_T,
+    EvalFuncData, FAIL, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T,
+    uint8_t, varnumber_T,
 };
 use ::libc::strlen;
 

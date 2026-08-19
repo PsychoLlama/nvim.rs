@@ -32,6 +32,7 @@ use core::ffi::{c_int, c_void};
 
 use super::*;
 use crate::keycodes::{K_COMMAND, K_LUA};
+use crate::types::OK;
 
 /// The Visual area a `.` replays: its mode and size, not its position.
 ///

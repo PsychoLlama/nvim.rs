@@ -70,8 +70,8 @@ use crate::path::{add_pathsep, vim_FullName, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg_c;
 use crate::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FILE, VV_THIS_SESSION, aentry_T, buf_T,
-    exarg_T, garray_T, size_t, win_T,
+    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, OK, VV_THIS_SESSION, aentry_T,
+    buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -96,8 +96,6 @@ mod flag {
     /// `makeset`: skip 'runtimepath' and 'packpath'.
     pub const OPT_SKIPRTP: c_uint = 128;
 
-    pub const OK: c_int = 1;
-    pub const FAIL: c_int = 0;
     pub const NUL: c_char = 0;
     pub const MAXPATHL: c_int = 4096;
 
@@ -106,7 +104,7 @@ mod flag {
     pub const FR_COL: c_char = 2;
 }
 
-use flag::{DOSO_NONE, FAIL, MAXPATHL, NUL, OK, OPT_GLOBAL, OPT_SKIPRTP, VSE_NONE};
+use flag::{DOSO_NONE, MAXPATHL, NUL, OPT_GLOBAL, OPT_SKIPRTP, VSE_NONE};
 
 /// The default file name of each command that has one.
 const SESSION_FILE: &CStr = c"Session.vim";

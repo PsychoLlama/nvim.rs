@@ -47,7 +47,7 @@ use crate::search::find_pattern_in_path;
 use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{WinConfig, exarg_T, int64_t, linenr_T, oparg_T, size_t};
+use crate::types::{FAIL, OK, WinConfig, exarg_T, int64_t, linenr_T, oparg_T, size_t};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 

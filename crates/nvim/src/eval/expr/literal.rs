@@ -19,7 +19,7 @@ use crate::charset::{hex2nr, skipdigits, vim_str2nr};
 use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret, tv_clear};
 use crate::eval::vars::{eval_one_expr_in_str, optval_as_tv};
 use crate::eval::{
-    BS, CAR, ESC, FAIL, FF, FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, NL, NUL, OK, STR2NR_ALL, TAB,
+    BS, CAR, ESC, FF, FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, NL, NUL, STR2NR_ALL, TAB,
     find_option_var_end, get_env_len, kOptValTypeNil,
 };
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
@@ -33,8 +33,8 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    OptIndex, OptVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T,
-    float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    FAIL, OK, OptIndex, OptVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
 use ::libc::{strlen, strtod, toupper};
 

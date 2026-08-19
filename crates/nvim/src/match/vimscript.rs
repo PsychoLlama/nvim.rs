@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{MB_MAXCHAR, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{FAIL, MB_MAXCHAR, OK, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
 /// How many `posN` keys a saved position match can carry.
 ///

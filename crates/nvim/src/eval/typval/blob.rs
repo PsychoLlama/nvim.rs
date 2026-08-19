@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::semsg_c;
+use crate::types::{FAIL, OK};
 
 /// Allocate an empty blob.  The caller owns the reference count.
 pub unsafe fn tv_blob_alloc() -> *mut blob_T {

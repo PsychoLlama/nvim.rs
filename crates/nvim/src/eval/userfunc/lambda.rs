@@ -14,6 +14,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// Give `fp` the funccall that is running as its scope, so that the locals it
 /// closed over stay alive for as long as it does.

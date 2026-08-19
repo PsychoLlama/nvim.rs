@@ -19,7 +19,7 @@ use crate::mbyte::{
 use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, FAIL, NFA_ANY, NFA_ANY_COMPOSING,
+    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, NFA_ANY, NFA_ANY_COMPOSING,
     NFA_BACKREF1, NFA_BOF, NFA_BOL, NFA_BOW, NFA_CLASS_ALNUM, NFA_CLASS_ALPHA, NFA_CLASS_BACKSPACE,
     NFA_CLASS_BLANK, NFA_CLASS_CNTRL, NFA_CLASS_DIGIT, NFA_CLASS_ESCAPE, NFA_CLASS_FNAME,
     NFA_CLASS_GRAPH, NFA_CLASS_IDENT, NFA_CLASS_KEYWORD, NFA_CLASS_LOWER, NFA_CLASS_PRINT,
@@ -29,12 +29,12 @@ use crate::regexp::{
     NFA_MCLOSE, NFA_MOPEN, NFA_NCLOSE, NFA_NEWL, NFA_NOPEN, NFA_SPLIT, NFA_START_INVISIBLE,
     NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
     NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_PATTERN, NFA_TOO_EXPENSIVE, NFA_VCOL,
-    NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZCLOSE9, NFA_ZREF9, OK, RA_MATCH, Rex,
-    cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, nfa_endp,
-    nfa_ll_index, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out,
-    reg_getline, reg_getline_len, reg_iswordc, regsub_T, regsubs_T, save_se_T,
+    NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZCLOSE9, NFA_ZREF9, RA_MATCH, Rex, cleanup_subexpr,
+    cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, nfa_endp, nfa_ll_index, nfa_match,
+    nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out, reg_getline,
+    reg_getline_len, reg_iswordc, regsub_T, regsubs_T, save_se_T,
 };
-use crate::types::{colnr_T, uint8_t};
+use crate::types::{FAIL, OK, colnr_T, uint8_t};
 use ::libc::strlen;
 
 /// Is `c` a member of the `[:name:]` class `cls` stands for?

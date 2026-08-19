@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::mbyte::MAX_SCHAR_SIZE;
+use crate::types::{FAIL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

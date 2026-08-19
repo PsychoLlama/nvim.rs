@@ -17,13 +17,12 @@
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::eval::decode::FAIL;
 use crate::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,
 };
 use crate::os::cshim::gettext;
-use crate::types::{VAR_LIST, VAR_STRING, list_T, typval_T};
+use crate::types::{FAIL, VAR_LIST, VAR_STRING, list_T, typval_T};
 use ::libc::abort;
 
 const E474_COMMA_BEFORE_LIST_ITEM: &CStr = c"E474: Expected comma before list item: %s";

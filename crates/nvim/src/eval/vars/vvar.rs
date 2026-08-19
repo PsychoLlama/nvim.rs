@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::OK;
 
 /// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the
 /// `v:` dictionary if it is one of the two that are not normally there.

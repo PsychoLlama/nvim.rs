@@ -39,7 +39,7 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, buf_T,
+    BoolVarValue, EvalFuncData, FAIL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, buf_T,
     exarg_T, garray_T, int16_t, list_T, typval_T, varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -48,7 +48,6 @@ use std::ffi::CString;
 const NUL: c_int = 0;
 const ESC: c_int = 27;
 const CTRL_H: c_int = 8;
-const FAIL: c_int = 0;
 
 const K_BOOL_VAR_FALSE: BoolVarValue = 0;
 const K_BOOL_VAR_TRUE: BoolVarValue = 1;

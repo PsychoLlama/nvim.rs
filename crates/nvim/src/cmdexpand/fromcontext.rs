@@ -11,6 +11,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
+use crate::types::{FAIL, OK};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;

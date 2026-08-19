@@ -47,9 +47,9 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::semsg_c;
 use crate::types::{
-    AdditionalData, Callback, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T, event_T,
-    fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, ptr_t, regprog_T, size_t,
-    uint64_t,
+    AdditionalData, Callback, FAIL, FileID, OK, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
+    event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, ptr_t, regprog_T,
+    size_t, uint64_t,
 };
 use crate::undo::curbufIsChanged;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};

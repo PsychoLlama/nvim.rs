@@ -13,6 +13,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::types::{FAIL, OK};
 
 /// The buffer [`cat_prefix_varname`] hands its answer back in, and its size.
 ///

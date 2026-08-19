@@ -155,8 +155,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const ML_EMPTY: c_int = 0x1 as c_int;
-pub const OK: c_int = 1 as c_int;
-pub const FAIL: c_int = 0 as c_int;
 pub const NUL: c_int = '\0' as c_int;
 pub const TAB: c_int = 9;
 pub const NL: c_int = '\n' as c_int;

@@ -45,10 +45,10 @@ use crate::eval::vars::{
     var_check_lock, var_check_ro, var_wrong_func_name,
 };
 use crate::eval::{
-    FAIL, FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, NUL,
-    OK, TV_CSTRING, e_cannot_slice_dictionary, e_dot_can_only_be_used_on_dictionary_str,
-    e_missbrac, eval_isnamec, eval_isnamec1, eval1, find_name_end, glv_status_T,
-    make_expanded_name, tv_init, tv_is_luafunc,
+    FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, NUL,
+    TV_CSTRING, e_cannot_slice_dictionary, e_dot_can_only_be_used_on_dictionary_str, e_missbrac,
+    eval_isnamec, eval_isnamec1, eval1, find_name_end, glv_status_T, make_expanded_name, tv_init,
+    tv_is_luafunc,
 };
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
@@ -62,9 +62,9 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, dict_T,
-    dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, uint8_t, varnumber_T,
+    FAIL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
+    VarLockStatus, dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t,
+    size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
 use ::libc::{memset, strlen};
 

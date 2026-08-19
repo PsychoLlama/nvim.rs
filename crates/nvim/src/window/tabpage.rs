@@ -43,7 +43,7 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
-    CMD_tabnew, OptInt, OptVal, OptValData, VAR_SCOPE, buf_T, handle_T, int64_t, ptr_t,
+    CMD_tabnew, FAIL, OK, OptInt, OptVal, OptValData, VAR_SCOPE, buf_T, handle_T, int64_t, ptr_t,
     switchwin_T, tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};

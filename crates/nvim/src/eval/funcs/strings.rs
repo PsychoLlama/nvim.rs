@@ -4,7 +4,7 @@
 
 use super::args::{Args, frame};
 use super::wrappers::non_zero_arg;
-use super::{FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, VSE_NONE};
+use super::{GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, VSE_NONE};
 use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::{
@@ -36,8 +36,9 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    CONV_NONE, EvalFuncData, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T, hlf_T,
-    kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T, vimconv_T,
+    CONV_NONE, EvalFuncData, FAIL, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T,
+    hlf_T, kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T,
+    vimconv_T,
 };
 use ::libc::{mktime, strftime, strlen, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};

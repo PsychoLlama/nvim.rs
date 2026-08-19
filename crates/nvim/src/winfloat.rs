@@ -43,10 +43,11 @@ use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Buffer, Error, FloatAnchor, OptInt, OptScope, OptVal, OptValData, OptValType,
-    String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T, kErrorTypeException,
-    kErrorTypeNone, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
-    kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T, schar_T, tabpage_T, win_T,
+    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OptInt, OptScope, OptVal, OptValData,
+    OptValType, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T,
+    kErrorTypeException, kErrorTypeNone, kFloatRelativeCursor, kFloatRelativeEditor,
+    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T,
+    schar_T, tabpage_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -68,7 +69,6 @@ const kOptValTypeString: OptValType = 2;
 const kOptScopeBuf: OptScope = 2;
 const OPT_LOCAL: c_int = 2;
 const STATUS_HEIGHT: c_int = 1;
-const FAIL: c_int = 0;
 
 /// An unset title/footer, and an error slot holding no error.
 const NO_VIRT_TEXT: VirtText = VirtText {

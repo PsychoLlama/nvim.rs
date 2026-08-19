@@ -14,15 +14,13 @@ use core::{ptr, slice};
 use crate::memory::{xcalloc, xfree};
 use crate::os::cshim::gettext;
 
-use crate::types::{hash_T, hashitem_T, hashtab_T};
+use crate::types::{FAIL, OK, hash_T, hashitem_T, hashtab_T};
 
 /// The array a table starts with, inline in the struct. Growing past it moves
 /// to the heap; shrinking back to this size moves back in.
 pub const HT_INIT_SIZE: usize = 16;
 
 const PERTURB_SHIFT: u32 = 5;
-const OK: c_int = 1;
-const FAIL: c_int = 0;
 
 const EMPTY_ITEM: hashitem_T = hashitem_T {
     hi_hash: 0,

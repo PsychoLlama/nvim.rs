@@ -17,6 +17,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 
+use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 

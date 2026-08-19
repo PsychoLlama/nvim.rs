@@ -27,7 +27,7 @@ use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::scan::check_nextcmd;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::tags::ex_findpat;
-use crate::ex_docmd::{FAIL, FNAME_MESS, IOSIZE, NUL};
+use crate::ex_docmd::{FNAME_MESS, IOSIZE, NUL};
 use crate::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
@@ -48,7 +48,7 @@ use crate::strings::vim_snprintf;
 use crate::types::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
     CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
-    exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
+    FAIL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::undo::bufIsChanged;
 use crate::window::{

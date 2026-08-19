@@ -18,7 +18,7 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    Arena, Dict, Error, KeyDict_option, KeyValuePair, Object, OptIndex, OptScope, OptVal,
+    Arena, Dict, Error, FAIL, KeyDict_option, KeyValuePair, OK, Object, OptIndex, OptScope, OptVal,
     OptValData, OptValType, String_0, TryState, aco_save_T, bln_values, buf_T, bufref_T, except_T,
     int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeNil, linenr_T,
     msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
@@ -44,8 +44,6 @@ pub const KV_INITIAL_VALUE: Dict = Dict {
     items: ::core::ptr::null_mut::<KeyValuePair>(),
 };
 pub const ARRAY_DICT_INIT: Dict = KV_INITIAL_VALUE;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe fn validate_option_value_args(
     mut opts: *mut KeyDict_option,
     mut name: *mut ::core::ffi::c_char,

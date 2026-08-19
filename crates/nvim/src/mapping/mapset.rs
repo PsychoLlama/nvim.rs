@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{FAIL, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

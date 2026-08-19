@@ -207,8 +207,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const DB_COUNT: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static diff_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static diff_need_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const DIFF_FILLER: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

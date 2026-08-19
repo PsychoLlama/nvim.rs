@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::FAIL;
 use core::ffi::c_int;
 use std::ffi::CStr;
 

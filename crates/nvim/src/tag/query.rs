@@ -10,6 +10,7 @@
 use super::*;
 use crate::pos::MAXCOL;
 use crate::smsg_c;
+use crate::types::{FAIL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

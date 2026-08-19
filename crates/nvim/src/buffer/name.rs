@@ -25,7 +25,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_fileid, os_fileid_equal};
 use crate::path::{fix_fname, path_fnamecmp};
-use crate::types::{CMOD_KEEPALT, FileID, buf_T, linenr_T, win_T};
+use crate::types::{CMOD_KEEPALT, FAIL, FileID, OK, buf_T, linenr_T, win_T};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 // ---------------------------------------------------------------------------

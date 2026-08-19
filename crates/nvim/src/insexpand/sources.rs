@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::path::ExpandFlags;
+use crate::types::{FAIL, OK};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.

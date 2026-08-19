@@ -19,17 +19,17 @@ use crate::memline::goto_byte;
 use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::{
-    MOD_MASK_CTRL, NUL, OK, VALID_WCOL, adjust_for_sel, check_text_locked, checkclearop,
-    checkclearopq, clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise, nv_Replace,
-    nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join,
-    nv_operator, nv_pcmark, nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
+    MOD_MASK_CTRL, NUL, VALID_WCOL, adjust_for_sel, check_text_locked, checkclearop, checkclearopq,
+    clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise, nv_Replace, nv_addsub, nv_edit,
+    nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark,
+    nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
 };
 use crate::ops::cursor_pos_info;
 use crate::plines::{getvvcol, linetabsize};
 use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T};
+use crate::types::{OK, OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;

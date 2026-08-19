@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::has_key;
-use crate::types::{kObjectTypeLuaRef, kObjectTypeString};
+use crate::types::{FAIL, kObjectTypeLuaRef, kObjectTypeString};
 
 pub unsafe extern "C" fn nvim_create_autocmd(
     mut channel_id: uint64_t,
