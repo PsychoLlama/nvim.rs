@@ -43,8 +43,24 @@ nvim-mainthread = { path = "../mainthread" }
 unsafe_op_in_unsafe_fn = "allow"
 
 # `just lint` runs clippy with correctness at its deny default; suspicious/
-# complexity/perf warn and burn down through the ratchet (metrics/clippy.json).
-# style stays off for transpiled code — it becomes meaningful per-module as
-# rewrites land (pedantic and the other opt-in groups are already allow).
+# complexity/perf/style warn and burn down through the ratchet
+# (metrics/clippy.json). The opt-in groups (pedantic, restriction, nursery,
+# cargo) stay at their allow default.
+#
+# `style` was allowed tree-wide until phase 19 turned it on: 3 256 findings,
+# of which 855 were real and are now zero. Two members stay off, for reasons
+# that do not retire with a rewrite:
 [lints.clippy]
-style = "allow"
+# 2 380 findings, and 2 380 `# Safety` sections is not a slice, it is a phase.
+# The debt is real, so it is not simply forgotten: scripts/ratchet.py counts it
+# per file under `missing_safety_doc` and holds it shrink-only, which is where
+# it belongs — it is documentation debt that retires as modules are rewritten,
+# not a lint a module can be clean of today. Allowed here so `just lint` still
+# reports the findings a change is answerable for.
+missing_safety_doc = "allow"
+# `tui/tui.rs`, `vterm/vterm.rs`, `tui/termkey/termkey.rs`,
+# `viml/parser/parser.rs` and `types/types.rs` are ports of upstream's
+# `tui/tui.c`, `vterm/vterm.c`, `tui/termkey/termkey.c`,
+# `viml/parser/parser.c` and `types_defs.h`. The repeated name is the mapping
+# back to the C, which is worth more than the nesting costs.
+module_inception = "allow"

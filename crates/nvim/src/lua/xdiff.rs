@@ -177,18 +177,9 @@ unsafe extern "C" fn write_string(
         let size: ::core::ffi::c_int = (*mb.offset(i as isize)).size;
         let mut total: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while total < size {
-            let tocopy: ::core::ffi::c_int = if size - total
-                < (if 8192 as ::core::ffi::c_int > 16384 as ::core::ffi::c_int {
-                    8192 as ::core::ffi::c_int
-                } else {
-                    8192 as ::core::ffi::c_int
-                }) {
-                size - total
-            } else if 8192 as ::core::ffi::c_int > 16384 as ::core::ffi::c_int {
-                8192 as ::core::ffi::c_int
-            } else {
-                8192 as ::core::ffi::c_int
-            };
+            // `MIN(size - total, LUAL_BUFFERSIZE)`; c2rust inlined the
+            // constant's own `BUFSIZ > 16384` arms into both sides.
+            let tocopy: ::core::ffi::c_int = (size - total).min(LUAL_BUFFERSIZE);
             let mut p: *mut ::core::ffi::c_char = luaL_prepbuffer(buf);
             if p.is_null() {
                 return -1 as ::core::ffi::c_int;

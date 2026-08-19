@@ -432,9 +432,14 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
         let range = cmd.range;
         ea.addr_count = range.size as c_int;
         for i in 0..range.size {
-            // SAFETY: `i` is in bounds; the union arm is chosen by `type_0`.
+            // SAFETY: `i` is in bounds.
             let bound = unsafe { *range.items.add(i) };
-            let bound = (bound.type_0 == kObjectTypeInteger).then(|| unsafe { bound.data.integer });
+            let bound = match bound.type_0 {
+                // SAFETY: the tag says which union arm is live. The read has to
+                // stay inside the arm: `then_some` would perform it eagerly.
+                kObjectTypeInteger => Some(unsafe { bound.data.integer }),
+                _ => None,
+            };
             if bound.is_none_or(|n| n < 0) {
                 err_expected(err, c"range element", c"non-negative Integer", ptr::null());
                 return false;

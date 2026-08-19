@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn concatenation_is_the_only_non_arithmetic_operator() {
-        for op in [b'+', b'-', b'*', b'/', b'%'] {
+        for op in *b"+-*/%" {
             assert!(is_arithmetic(op));
         }
         assert!(!is_arithmetic(b'.'));

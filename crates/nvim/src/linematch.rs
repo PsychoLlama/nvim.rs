@@ -166,10 +166,8 @@ fn count_matched_chars(lines: &[Option<&[u8]>], iwhite: bool) -> c_int {
 pub fn block_from_lnum(block: &[u8], lnum: linenr_T) -> Option<&[u8]> {
     let mut rest = block;
     for _ in 1..lnum {
-        match rest.iter().position(|&b| b == b'\n') {
-            Some(end) => rest = &rest[end + 1..],
-            None => return None,
-        }
+        let end = rest.iter().position(|&b| b == b'\n')?;
+        rest = &rest[end + 1..];
     }
     Some(rest)
 }

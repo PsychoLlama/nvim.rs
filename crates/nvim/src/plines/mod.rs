@@ -464,7 +464,7 @@ unsafe fn add_inline_virt_text(
                 }
             }
         }
-        walk.next_filter(virt_row + 1, 0, &INLINE_FILTER);
+        walk.step_filter(virt_row + 1, 0, &INLINE_FILTER);
     }
     size
 }

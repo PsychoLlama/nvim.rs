@@ -143,9 +143,9 @@ pub(crate) unsafe fn get_function_body(
                         || (is_heredoc && skipwhite(theline) == theline)
                         || strncmp(theline, heredoc_trimmed, heredoc_trimmedlen) == 0
                     {
-                        p = if heredoc_trimmed.is_null() {
-                            theline
-                        } else if is_heredoc && skipwhite(theline) == theline {
+                        p = if heredoc_trimmed.is_null()
+                            || (is_heredoc && skipwhite(theline) == theline)
+                        {
                             theline
                         } else {
                             theline.add(heredoc_trimmedlen)

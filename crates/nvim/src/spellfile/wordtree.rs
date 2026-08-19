@@ -387,17 +387,13 @@ pub unsafe fn tree_add_word(
             // Insert a node when there is no matching one here. Word ends
             // never merge in the prefix or sound-fold trees, and only merge
             // elsewhere when the flags and affix id match too.
-            let need_new = if node.is_null() {
-                true
-            } else if (*node).wn_byte as c_int != *word.offset(i) as uint8_t as c_int {
-                true
-            } else {
-                *word.offset(i) as c_int == NUL
+            let need_new = node.is_null()
+                || (*node).wn_byte as c_int != *word.offset(i) as uint8_t as c_int
+                || (*word.offset(i) as c_int == NUL
                     && (flags < 0
                         || spin.si_sugtree != 0
                         || (*node).wn_flags as c_int != flags & WN_MASK
-                        || (*node).wn_affixID as c_int != affixID)
-            };
+                        || (*node).wn_affixID as c_int != affixID));
             if need_new && !insert_before(spin, &mut node, prev, *word.offset(i)) {
                 return FAIL;
             }

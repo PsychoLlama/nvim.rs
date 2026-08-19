@@ -34,7 +34,7 @@ use crate::types::{NUL, uint8_t};
 pub(crate) enum Collection {
     Node(*mut uint8_t),
     /// No closing `]`: the `[` is an ordinary character.
-    NotACollection,
+    Literal,
     /// Already reported.
     Failed,
 }
@@ -54,7 +54,7 @@ pub(crate) fn collection(rex: Rex, flagp: &mut c_int, extra: c_int) -> Collectio
             rc_did_emsg.set(true);
             return Collection::Failed;
         }
-        return Collection::NotACollection;
+        return Collection::Literal;
     }
 
     let negated = pat_byte(0) == b'^';

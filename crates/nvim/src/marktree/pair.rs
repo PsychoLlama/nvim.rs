@@ -99,9 +99,7 @@ pub unsafe fn marktree_intersect_pair(
                 break;
             }
             true
-        } else if itr.lvl > lvl {
-            true
-        } else if iat(itr, lvl, 1) < iat(end_itr, lvl, 1) {
+        } else if itr.lvl > lvl || iat(itr, lvl, 1) < iat(end_itr, lvl, 1) {
             true
         } else {
             lvl += 1;

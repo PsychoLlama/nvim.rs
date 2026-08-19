@@ -68,7 +68,7 @@ pub(crate) enum Collection {
     /// Emitted.
     Done,
     /// No closing `]`: the `[` is an ordinary character.
-    NotACollection,
+    Literal,
     /// Already reported.
     Failed,
 }
@@ -93,7 +93,7 @@ pub(crate) fn collection(mut extra: c_int, atom_start: *mut c_char) -> Collectio
             rc_did_emsg.set(true);
             return Collection::Failed;
         }
-        return Collection::NotACollection;
+        return Collection::Literal;
     }
 
     // `[0-9]` and its kin are really `\d` and can be one state instead of

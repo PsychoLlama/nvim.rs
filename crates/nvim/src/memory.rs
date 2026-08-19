@@ -425,20 +425,17 @@ pub unsafe fn mergesort_list(
             let mut merged: *mut c_void = ptr::null_mut();
             let mut merged_tail: *mut c_void = ptr::null_mut();
             while !left.is_null() || !right.is_null() {
-                let chosen;
-                if left.is_null() {
-                    chosen = right;
-                    right = get_next(right);
-                } else if right.is_null() {
-                    chosen = left;
+                // The left run wins a tie, which is what makes the sort
+                // stable. `compare` only sees two live elements.
+                let chosen = if !left.is_null() && (right.is_null() || compare(left, right) <= 0) {
+                    let taken = left;
                     left = get_next(left);
-                } else if compare(left, right) <= 0 {
-                    chosen = left;
-                    left = get_next(left);
+                    taken
                 } else {
-                    chosen = right;
+                    let taken = right;
                     right = get_next(right);
-                }
+                    taken
+                };
                 if !merged_tail.is_null() {
                     set_next(merged_tail, chosen);
                     set_prev(chosen, merged_tail);

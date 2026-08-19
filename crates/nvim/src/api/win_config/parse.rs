@@ -503,15 +503,14 @@ pub(crate) unsafe fn parse_win_config(
                         parse_bordertext((*config).title, kBorderTextTitle, fconfig, err);
                         if (*err).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
+                            || !parse_bordertext_pos(
+                                wp,
+                                (*config).title_pos,
+                                kBorderTextTitle,
+                                fconfig,
+                                err,
+                            )
                         {
-                            break '_fail;
-                        } else if !parse_bordertext_pos(
-                            wp,
-                            (*config).title_pos,
-                            kBorderTextTitle,
-                            fconfig,
-                            err,
-                        ) {
                             break '_fail;
                         }
                     } else if has_key((*config).is_set__win_config_, 22 as ::core::ffi::c_int) {
@@ -529,15 +528,14 @@ pub(crate) unsafe fn parse_win_config(
                         parse_bordertext((*config).footer, kBorderTextFooter, fconfig, err);
                         if (*err).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
+                            || !parse_bordertext_pos(
+                                wp,
+                                (*config).footer_pos,
+                                kBorderTextFooter,
+                                fconfig,
+                                err,
+                            )
                         {
-                            break '_fail;
-                        } else if !parse_bordertext_pos(
-                            wp,
-                            (*config).footer_pos,
-                            kBorderTextFooter,
-                            fconfig,
-                            err,
-                        ) {
                             break '_fail;
                         }
                     } else if has_key((*config).is_set__win_config_, 23 as ::core::ffi::c_int) {

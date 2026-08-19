@@ -663,11 +663,10 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
         if (*s).idx < 0 {
             clearopbeep(&raw mut (*s).oa);
             (*s).command_finished = true;
-        } else if (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_NCW != 0
-            && check_text_or_curbuf_locked(&raw mut (*s).oa)
+        } else if ((*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_NCW != 0
+            && check_text_or_curbuf_locked(&raw mut (*s).oa))
+            || (VIsual_active.get() && normal_handle_special_visual_command(s))
         {
-            (*s).command_finished = true;
-        } else if VIsual_active.get() && normal_handle_special_visual_command(s) {
             (*s).command_finished = true;
         } else {
             if (*curwin.get()).w_onebuf_opt.wo_rl != 0

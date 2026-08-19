@@ -177,8 +177,9 @@ impl<'a> Cursor<'a> {
         unsafe { marktree_itr_current(itr) }
     }
 
-    /// Step to the next mark.
-    pub fn next(&mut self) -> bool {
+    /// Step to the next mark. Not `Iterator::next` — a cursor answers
+    /// "is there one" and leaves the mark itself to [`current`](Self::current).
+    pub fn step(&mut self) -> bool {
         let (tree, itr) = self.parts();
         // SAFETY: a live tree with the iterator positioned in it.
         unsafe { marktree_itr_next(tree, itr) }
@@ -186,7 +187,7 @@ impl<'a> Cursor<'a> {
 
     /// Step to the next mark `filter` wants, giving up at (`stop_row`,
     /// `stop_col`).
-    pub fn next_filter(
+    pub fn step_filter(
         &mut self,
         stop_row: c_int,
         stop_col: c_int,
@@ -239,12 +240,12 @@ impl<'c, 'a> Iterator for Marks<'c, 'a> {
         }
         let mark = self.cursor.current();
         self.done = match self.step {
-            Step::All => !self.cursor.next(),
+            Step::All => !self.cursor.step(),
             Step::Filtered {
                 stop_row,
                 stop_col,
                 filter,
-            } => !self.cursor.next_filter(stop_row, stop_col, filter),
+            } => !self.cursor.step_filter(stop_row, stop_col, filter),
         };
         Some(mark)
     }

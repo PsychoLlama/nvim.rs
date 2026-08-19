@@ -191,7 +191,7 @@ pub fn schedule_termrequest(mut term: Term) {
 /// `frag.str` must point at `frag.len()` readable bytes, as vterm's
 /// contract for a fragment callback promises.
 unsafe fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
-    if frag.str.is_null() || frag.len() == 0 {
+    if frag.str.is_null() || frag.is_empty() {
         return &[];
     }
     unsafe { ::core::slice::from_raw_parts(frag.str.cast::<u8>(), frag.len()) }
@@ -262,7 +262,7 @@ pub unsafe extern "C" fn on_osc(
     // SAFETY: vterm hands back the terminal registered alongside this
     // fallback table.
     let term = unsafe { Term::new(user.cast()) };
-    if frag.str.is_null() || frag.len() == 0 {
+    if frag.str.is_null() || frag.is_empty() {
         return 0;
     }
     // OSC 8 is handled here whether or not anyone is listening.
@@ -311,7 +311,7 @@ pub unsafe extern "C" fn on_dcs(
 pub unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_void) -> c_int {
     // SAFETY: as in `on_osc`.
     let term = unsafe { Term::new(user.cast()) };
-    if frag.str.is_null() || frag.len() == 0 {
+    if frag.str.is_null() || frag.is_empty() {
         return 0;
     }
     if !listening() {

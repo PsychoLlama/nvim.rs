@@ -20,15 +20,15 @@ const CHAR_TO_INDEX: [u8; 256] = {
 
 pub fn encode(src: &[u8]) -> String {
     let mut dest = Vec::with_capacity(src.len().div_ceil(3) * 4);
-    let mut chunks = src.chunks_exact(3);
-    for chunk in &mut chunks {
+    let (chunks, remainder) = src.as_chunks::<3>();
+    for chunk in chunks {
         let bits = (chunk[0] as u32) << 16 | (chunk[1] as u32) << 8 | chunk[2] as u32;
         dest.push(ALPHABET[(bits >> 18) as usize]);
         dest.push(ALPHABET[(bits >> 12 & 0x3f) as usize]);
         dest.push(ALPHABET[(bits >> 6 & 0x3f) as usize]);
         dest.push(ALPHABET[(bits & 0x3f) as usize]);
     }
-    match *chunks.remainder() {
+    match *remainder {
         [a] => {
             dest.push(ALPHABET[(a >> 2) as usize]);
             dest.push(ALPHABET[((a & 0x3) << 4) as usize]);

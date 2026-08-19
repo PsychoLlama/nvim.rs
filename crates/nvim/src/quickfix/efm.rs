@@ -5,7 +5,7 @@
 //! a note of which submatch each `%` conversion captures; `parse.rs` then
 //! runs those patterns over the lines being read.
 //!
-//! [`Format::to_regpat`] is the translator. `%f`, `%l`, `%m` and the rest
+//! [`Format::compile_regpat`] is the translator. `%f`, `%l`, `%m` and the rest
 //! become capture groups built from the [`FMT_PAT`] table, `%*` takes a
 //! scanf conversion, a prefix such as `%E` or `%D` is recorded rather than
 //! matched, and every other character is copied with the regexp atoms
@@ -156,8 +156,8 @@ impl Efm {
             let part = rest.to_bytes_with_nul();
             let len = option_part_len(part);
             let mut fmt = Format::new();
-            let pat = fmt.to_regpat(part, len)?;
-            // SAFETY: `to_regpat` NUL-terminates what it builds.
+            let pat = fmt.compile_regpat(part, len)?;
+            // SAFETY: `compile_regpat` NUL-terminates what it builds.
             fmt.prog = unsafe { vim_regcomp(pat.as_ptr().cast(), RE_MAGIC + RE_STRING) };
             if fmt.prog.is_null() {
                 return None;
@@ -225,7 +225,7 @@ impl Format {
     /// terminating NUL, which is included; `len` is the part's own length.
     /// Several of the reads below look one byte past `len` — at the comma,
     /// or at the NUL — which is why the slice is not trimmed.
-    fn to_regpat(&mut self, part: &[u8], len: usize) -> Option<Vec<u8>> {
+    fn compile_regpat(&mut self, part: &[u8], len: usize) -> Option<Vec<u8>> {
         let mut pat = Vec::with_capacity(len * 4 + 32);
         pat.push(b'^');
         let mut round = 0;

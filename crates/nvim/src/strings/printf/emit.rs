@@ -135,7 +135,7 @@ struct Args<'f> {
 }
 
 impl<'f> Args<'f> {
-    fn from_typvals(&self) -> bool {
+    fn reads_typvals(&self) -> bool {
         !self.tvs.is_null()
     }
 
@@ -155,7 +155,7 @@ impl<'f> Args<'f> {
 
     unsafe fn next_string(&mut self, tofree: &mut *mut c_char) -> *const c_char {
         unsafe {
-            if self.from_typvals() {
+            if self.reads_typvals() {
                 tv_str(self.tvs, &mut self.arg_idx, tofree)
             } else {
                 self.position();
@@ -166,7 +166,7 @@ impl<'f> Args<'f> {
 
     unsafe fn next_pointer(&mut self) -> *const c_void {
         unsafe {
-            if self.from_typvals() {
+            if self.reads_typvals() {
                 tv_ptr(self.tvs, &mut self.arg_idx)
             } else {
                 self.position();
@@ -177,7 +177,7 @@ impl<'f> Args<'f> {
 
     unsafe fn next_float(&mut self) -> c_double {
         unsafe {
-            if self.from_typvals() {
+            if self.reads_typvals() {
                 tv_float(self.tvs, &mut self.arg_idx)
             } else {
                 self.position();
@@ -196,7 +196,7 @@ impl<'f> Args<'f> {
 /// the same 64-bit field.
 macro_rules! next_number {
     ($args:expr, $ty:ty) => {
-        if $args.from_typvals() {
+        if $args.reads_typvals() {
             tv_nr($args.tvs, &mut $args.arg_idx) as $ty
         } else {
             $args.position();
@@ -252,12 +252,12 @@ unsafe fn star_argument(
     unsafe {
         // `*N$` addresses the width argument positionally.
         if ascii_isdigit(**p as c_int) {
-            args.arg_idx = get_unsigned_int(digstart, p, args.from_typvals()).ok_or(())? as c_int;
+            args.arg_idx = get_unsigned_int(digstart, p, args.reads_typvals()).ok_or(())? as c_int;
             *p = p.add(1); // step over the '$'
         }
         let mut j = next_number!(args, c_int);
         if j > MAX_ALLOWED_STRING_WIDTH {
-            if args.from_typvals() {
+            if args.reads_typvals() {
                 format_overflow_error(digstart);
                 return Err(());
             }

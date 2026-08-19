@@ -562,12 +562,13 @@ mod tests {
         let mut e = Entry::new();
         // Values first ("\x1b[s"), then a name per capability, booleans
         // before strings (Tc, Ns, RGB, Se).
-        let mut ext = Ext::default();
-        ext.bools = vec![1, 0];
-        ext.val_offs = vec![0, 0xffff];
-        ext.name_offs = vec![0, 3, 6, 10];
-        ext.table = b"\x1b[s\0Tc\0Ns\0RGB\0Se\0".to_vec();
-        e.ext = Some(ext);
+        e.ext = Some(Ext {
+            bools: vec![1, 0],
+            val_offs: vec![0, 0xffff],
+            name_offs: vec![0, 3, 6, 10],
+            table: b"\x1b[s\0Tc\0Ns\0RGB\0Se\0".to_vec(),
+            ..Ext::default()
+        });
 
         let t = from_mem(&e.build()).unwrap();
         let set: Vec<_> = t.ext_bool_names().map(|n| n.to_bytes().to_vec()).collect();
@@ -590,20 +591,22 @@ mod tests {
         // Two value offsets pointing at the same string overlap, which the
         // tiling check rejects.
         let mut e = Entry::new();
-        let mut ext = Ext::default();
-        ext.val_offs = vec![0, 0];
-        ext.name_offs = vec![4, 6];
-        ext.table = b"\x1bX\0\0a\0b\0".to_vec();
-        e.ext = Some(ext);
+        e.ext = Some(Ext {
+            val_offs: vec![0, 0],
+            name_offs: vec![4, 6],
+            table: b"\x1bX\0\0a\0b\0".to_vec(),
+            ..Ext::default()
+        });
         assert!(from_mem(&e.build()).is_none());
 
         // A name offset out of range is likewise fatal.
         let mut e = Entry::new();
-        let mut ext = Ext::default();
-        ext.name_offs = vec![9];
-        ext.table = b"a\0".to_vec();
-        ext.bools = vec![1];
-        e.ext = Some(ext);
+        e.ext = Some(Ext {
+            name_offs: vec![9],
+            table: b"a\0".to_vec(),
+            bools: vec![1],
+            ..Ext::default()
+        });
         assert!(from_mem(&e.build()).is_none());
     }
 

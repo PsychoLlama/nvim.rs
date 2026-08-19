@@ -432,10 +432,10 @@ impl LineSetup {
             if linestatus >= 0 {
                 return;
             }
-            if linestatus != -1 {
-                wlv.diff_hlf = HLF_ADD; // added line
-            } else if diff_find_change(wp, wlv.lnum, &raw mut self.line_changes) {
-                wlv.diff_hlf = HLF_ADD; // added line
+            // An added line, either because the status says so or because
+            // the change scan found nothing to narrow it to.
+            if linestatus != -1 || diff_find_change(wp, wlv.lnum, &raw mut self.line_changes) {
+                wlv.diff_hlf = HLF_ADD;
             } else if self.line_changes.num_changes > 0 {
                 let added = diff_change_parse(
                     &raw mut self.line_changes,

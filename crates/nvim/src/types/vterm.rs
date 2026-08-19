@@ -586,6 +586,13 @@ crate::bitfield_accessors! {
         31..=31 => final_0, set_final_0: bool;
     }
 }
+impl VTermStringFragment {
+    /// Whether the fragment carries no bytes. The companion `len_without_is_empty`
+    /// asks for; `len` above is a 30-bit C field, but the pair reads the same.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
 pub type VTermTerminator = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]

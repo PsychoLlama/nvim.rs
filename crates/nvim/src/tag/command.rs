@@ -327,12 +327,12 @@ impl DoTag {
             match self.kind as c_uint {
                 DT_POP => return self.pop_older(),
                 DT_TAG | DT_LTAG => {
-                    if !self.to_newer() {
+                    if !self.go_newer() {
                         return false;
                     }
                     self.new_tag = true;
                 }
-                _ => self.to_other_match(),
+                _ => self.go_other_match(),
             }
             true
         }
@@ -414,7 +414,7 @@ impl DoTag {
     ///
     /// # Safety
     /// The globals must be live.
-    unsafe fn to_newer(&mut self) -> bool {
+    unsafe fn go_newer(&mut self) -> bool {
         // SAFETY: the caller's promise.
         unsafe {
             if g_do_tagpreview.get() != 0 {
@@ -447,7 +447,7 @@ impl DoTag {
     ///
     /// # Safety
     /// The globals must be live.
-    unsafe fn to_other_match(&mut self) {
+    unsafe fn go_other_match(&mut self) {
         // SAFETY: the caller's promise.
         unsafe {
             // Where to go back to if the selection is cancelled.

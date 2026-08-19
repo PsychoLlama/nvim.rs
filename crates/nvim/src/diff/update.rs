@@ -331,8 +331,8 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 // shift it down to where the segment really begins.
                 let mut dp = (*tp).tp_first_diff;
                 while !dp.is_null() {
-                    for idx in 0..DB_COUNT as usize {
-                        let anchor = anchors[idx][anchor_i - 1];
+                    for (idx, row) in anchors.iter().enumerate() {
+                        let anchor = row[anchor_i - 1];
                         if anchor > 0 {
                             (*dp).df_lnum[idx] += anchor - 1;
                         }

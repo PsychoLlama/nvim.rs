@@ -122,7 +122,7 @@ pub unsafe fn decor_find_virttext(
         {
             return vt.raw();
         }
-        walk.next();
+        walk.step();
     }
 }
 
@@ -176,7 +176,7 @@ pub unsafe fn decor_conceal_line(wp: *mut win_T, row: c_int, check_cursor: bool)
         if mt_conceal_lines(mark) && ns_in_win(mark.ns, wp) {
             return true;
         }
-        walk.next_filter(row + 1, 0, &CONCEAL_FILTER);
+        walk.step_filter(row + 1, 0, &CONCEAL_FILTER);
     }
 
     wp.providers_conceal_line(row)
@@ -260,7 +260,7 @@ pub unsafe fn decor_virt_lines(
             }
         }
 
-        if !walk.next_filter(end_row, 0, &LINES_FILTER) {
+        if !walk.step_filter(end_row, 0, &LINES_FILTER) {
             return virt_lines;
         }
     }

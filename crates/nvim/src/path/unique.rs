@@ -223,7 +223,7 @@ pub(crate) unsafe fn uniquefy_paths(
         let mut in_curdir: Vec<Option<Vec<u8>>> = vec![None; entries];
         let mut sort_again = false;
 
-        for i in 0..entries {
+        for (i, slot) in in_curdir.iter_mut().enumerate() {
             if got_int.get() {
                 break;
             }
@@ -232,7 +232,7 @@ pub(crate) unsafe fn uniquefy_paths(
             let dir_end = gettail_dir(path).offset_from(path) as usize;
             if path_fnamencmp(curdir.as_ptr(), path, dir_end as size_t) == 0 && curdir[dir_end] == 0
             {
-                in_curdir[i] = Some(CStr::from_ptr(path).to_bytes_with_nul().to_vec());
+                *slot = Some(CStr::from_ptr(path).to_bytes_with_nul().to_vec());
             }
 
             // Shorten the name while keeping it unique.
@@ -289,11 +289,11 @@ pub(crate) unsafe fn uniquefy_paths(
         // The names in the current directory can lose it entirely — unless
         // that leaves something another entry also ends with, in which case
         // they keep a leading "./".
-        for i in 0..entries {
+        for (i, slot) in in_curdir.iter_mut().enumerate() {
             if got_int.get() {
                 break;
             }
-            let Some(path) = in_curdir[i].as_mut() else {
+            let Some(path) = slot.as_mut() else {
                 continue;
             };
             let path = path.as_mut_ptr().cast::<c_char>();

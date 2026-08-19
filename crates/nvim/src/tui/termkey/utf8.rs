@@ -30,10 +30,10 @@ pub enum Decoded {
 pub fn encoded_len(codepoint: c_int) -> usize {
     match codepoint {
         ..0x80 => 1,
-        ..0x800 => 2,
-        ..0x10000 => 3,
-        ..0x200000 => 4,
-        ..0x4000000 => 5,
+        0x80..0x800 => 2,
+        0x800..0x10000 => 3,
+        0x10000..0x200000 => 4,
+        0x200000..0x4000000 => 5,
         _ => 6,
     }
 }
@@ -68,12 +68,12 @@ pub fn decode(bytes: &[u8]) -> Decoded {
             };
         }
         // A continuation byte with nothing to continue.
-        ..0xc0 => return invalid(1),
-        ..0xe0 => (2, (lead & 0x1f) as c_int),
-        ..0xf0 => (3, (lead & 0x0f) as c_int),
-        ..0xf8 => (4, (lead & 0x07) as c_int),
-        ..0xfc => (5, (lead & 0x03) as c_int),
-        ..0xfe => (6, (lead & 0x01) as c_int),
+        0x80..0xc0 => return invalid(1),
+        0xc0..0xe0 => (2, (lead & 0x1f) as c_int),
+        0xe0..0xf0 => (3, (lead & 0x0f) as c_int),
+        0xf0..0xf8 => (4, (lead & 0x07) as c_int),
+        0xf8..0xfc => (5, (lead & 0x03) as c_int),
+        0xfc..0xfe => (6, (lead & 0x01) as c_int),
         _ => return invalid(1),
     };
     for (i, &byte) in bytes.iter().enumerate().take(len).skip(1) {

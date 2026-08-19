@@ -457,8 +457,8 @@ pub(crate) unsafe fn qf_id2nr(qi: *const qf_info_T, qfid: ::core::ffi::c_uint) -
     // SAFETY: as above; the borrow is dropped before the caller can touch
     // the stack again.
     let lists = unsafe { &(*qi).qf_lists };
-    for idx in 0..count {
-        if lists[idx].qf_id == qfid {
+    for (idx, list) in lists[..count].iter().enumerate() {
+        if list.qf_id == qfid {
             return idx as c_int;
         }
     }

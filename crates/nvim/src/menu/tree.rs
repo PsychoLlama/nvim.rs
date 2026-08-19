@@ -214,7 +214,7 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
         None => {
             let commands = dict_alloc();
             dict_add_dict(dict, c"mappings".to_bytes(), commands);
-            for bit in 0..MENU_MODES {
+            for (bit, mode) in MODE_CHARS.iter().enumerate() {
                 if menu.modes & modes & (1 << bit) == 0 {
                     continue;
                 }
@@ -243,7 +243,7 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
                     varnumber_T::from(menu.noremap[bit] & REMAP_SCRIPT != 0),
                 );
                 // One byte of the mode letters, so `tl` files under `t`.
-                dict_add_dict(commands, &MODE_CHARS[bit].to_bytes()[..1], mapping);
+                dict_add_dict(commands, &mode.to_bytes()[..1], mapping);
             }
         }
         Some(children) => {
@@ -372,7 +372,7 @@ fn show_menus_recursive(menu: Option<Menu>, modes: c_int, depth: c_int) {
 
     let leaf = menu.filter(|node| node.children().is_none());
     if let Some(node) = leaf {
-        for bit in 0..MENU_MODES {
+        for (bit, &mode) in MODE_CHARS.iter().enumerate() {
             if node.modes & modes & (1 << bit) == 0 {
                 continue;
             }
@@ -383,7 +383,7 @@ fn show_menus_recursive(menu: Option<Menu>, modes: c_int, depth: c_int) {
             for _ in 0..depth + 2 {
                 put(c"  ");
             }
-            put(MODE_CHARS[bit]);
+            put(mode);
             put_char(match node.noremap[bit] {
                 REMAP_NONE => b'*',
                 REMAP_SCRIPT => b'&',

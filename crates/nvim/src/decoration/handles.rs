@@ -212,8 +212,13 @@ impl Sh {
     /// Every sign/highlight item of `decor`, in chain order. Empty for an
     /// inline decoration, which has no store entry at all.
     pub fn chain(decor: DecorInline) -> impl Iterator<Item = Self> {
-        // SAFETY: `ext` says the union holds the `ext` branch.
-        let first = decor.ext.then(|| unsafe { decor.data.ext.sh_idx });
+        let first = if decor.ext {
+            // SAFETY: `ext` says the union holds the `ext` branch. The read has
+            // to stay inside the branch: `then_some` would perform it eagerly.
+            Some(unsafe { decor.data.ext.sh_idx })
+        } else {
+            None
+        };
         let head = first.filter(|idx| *idx != DECOR_ID_INVALID).map(Self::at);
         iter::successors(head, |sh| sh.next_item())
     }

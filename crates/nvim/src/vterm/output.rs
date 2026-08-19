@@ -100,9 +100,9 @@ impl EscapeSeq {
         }
         let (lead, trailing) = match codepoint {
             ..0x800 => (0xc0, 1),
-            ..0x10000 => (0xe0, 2),
-            ..0x20_0000 => (0xf0, 3),
-            ..0x400_0000 => (0xf8, 4),
+            0x800..0x10000 => (0xe0, 2),
+            0x1_0000..0x20_0000 => (0xf0, 3),
+            0x20_0000..0x400_0000 => (0xf8, 4),
             _ => (0xfc, 5),
         };
         let cp = codepoint as u32;

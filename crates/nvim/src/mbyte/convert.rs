@@ -572,6 +572,6 @@ mod tests {
     #[test]
     fn latin9_encodes_the_euro() {
         assert_eq!(latin9_to_utf8(&[0xa4]), "€".as_bytes());
-        assert_eq!(latin9_to_utf8(&[b'a']), b"a");
+        assert_eq!(latin9_to_utf8(b"a"), b"a");
     }
 }

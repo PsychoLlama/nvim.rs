@@ -272,15 +272,11 @@ impl VTermState {
             if downward > 0 {
                 let shift = downward as usize;
                 lines.copy_within(start + shift..start + shift + height, start);
-                for row in (rect.end_row - downward) as usize..rect.end_row as usize {
-                    lines[row] = BLANK_LINE;
-                }
+                lines[(rect.end_row - downward) as usize..rect.end_row as usize].fill(BLANK_LINE);
             } else {
                 let shift = (-downward) as usize;
                 lines.copy_within(start..start + height, start + shift);
-                for row in start..start + shift {
-                    lines[row] = BLANK_LINE;
-                }
+                lines[start..start + shift].fill(BLANK_LINE);
             }
         }
 

@@ -64,11 +64,10 @@ impl Sha256 {
             self.process(&block);
             input = &input[fill..];
         }
-        let mut blocks = input.chunks_exact(BLOCK_SIZE);
-        for block in &mut blocks {
-            self.process(block.try_into().expect("exact chunk"));
+        let (blocks, rest) = input.as_chunks::<BLOCK_SIZE>();
+        for block in blocks {
+            self.process(block);
         }
-        let rest = blocks.remainder();
         self.buffer[..rest.len()].copy_from_slice(rest);
     }
 
@@ -84,16 +83,16 @@ impl Sha256 {
         self.update(&PADDING[..padn]);
         self.update(&bit_len.to_be_bytes());
         let mut digest = [0; SHA256_SUM_SIZE];
-        for (bytes, word) in digest.chunks_exact_mut(4).zip(self.state) {
-            bytes.copy_from_slice(&word.to_be_bytes());
+        for (bytes, word) in digest.as_chunks_mut::<4>().0.iter_mut().zip(self.state) {
+            *bytes = word.to_be_bytes();
         }
         digest
     }
 
     fn process(&mut self, block: &[u8; BLOCK_SIZE]) {
         let mut w = [0u32; 64];
-        for (word, bytes) in w.iter_mut().zip(block.chunks_exact(4)) {
-            *word = u32::from_be_bytes(bytes.try_into().expect("exact chunk"));
+        for (word, bytes) in w.iter_mut().zip(block.as_chunks::<4>().0) {
+            *word = u32::from_be_bytes(*bytes);
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);

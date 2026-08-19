@@ -52,6 +52,30 @@ unmeasured, as they were when they lived at the repo root):
               whose ABI is only apigen's recognition convention. The last class
               retires as `api/` converts to `Result<T, Error>`; the rest retire
               as their C callers do.
+  missing_safety_doc
+              `unsafe fn`s whose doc comment has no `# Safety` section — the
+              obligation the signature announces but nobody wrote down. It
+              stands in for `clippy::missing_safety_doc`, which is *allowed*
+              in Cargo.toml (2 380 findings when phase 19 switched the style
+              tier on; that is a phase of work, not a slice, and it retires as
+              modules are rewritten rather than by a sweep of stub sections).
+              The lint could not be ratcheted where it was: clippy reports it
+              at the crate lint level, so a site-level or module-level
+              `#[allow]` cannot scope it, and leaving it warning would bury
+              `just lint`'s ~20 real findings under 2 380.
+
+              Counted here instead, from the source, which also makes it
+              *broader* than the lint in the one direction that helps:
+              clippy only asks exported functions, this asks every `unsafe fn`
+              the tree defines or declares, because a private one's caller has
+              the same obligation to discharge. Declarations inside an
+              `unsafe extern` block are not counted (their obligation is the C
+              library's) and neither is an `unsafe fn` *type*. The section is
+              recognised as a `# Safety` heading in the run of `///` lines
+              immediately above the item, attributes skipped — which is the
+              shape rustfmt keeps and the shape every rewritten module already
+              uses.
+
   cell_ptr    raw escape-hatch accesses to global editor state:
               GlobalCell/SharedCell `.ptr()` and `.as_raw()`. The cells
               themselves are the safe replacement for c2rust's mutable
@@ -84,6 +108,38 @@ plus two whole-tree metrics:
                     "safe module" a compiler-enforced status instead of a
                     grep result — and the count of files still lacking it
                     may only fall. New files are expected to be born safe.
+
+  files_without_deny_casts  the number of source files that have not adopted
+                    the cast lints. `as` is the transpile's universal
+                    conversion — ~21k of them, ~5k infallible widenings that
+                    `From` answers and a long tail of narrowings that need
+                    `TryFrom` and an error — and clippy's cast family
+                    (`cast_lossless`, `cast_possible_truncation`,
+                    `cast_possible_wrap`, `cast_sign_loss`, `ptr_as_ptr`) is
+                    pedantic, i.e. allowed by default. Turning it on tree-wide
+                    is a big-bang sweep nobody can review; the migration adopts
+                    it per module, as the roadmap's phase 19 item 6 asks.
+
+                    So the same inverted trick as the two attributes above: a
+                    module that has finished its casts writes
+
+                        #![deny(
+                            clippy::cast_lossless,
+                            clippy::cast_possible_truncation,
+                            clippy::cast_possible_wrap,
+                            clippy::cast_sign_loss,
+                            clippy::ptr_as_ptr
+                        )]
+
+                    and the count of files *not* carrying it may only fall.
+                    The needle is `clippy::cast_lossless` inside a `deny(...)`,
+                    spanning newlines so rustfmt may wrap the list: that lint
+                    is the one the `From` vocabulary answers, so it is the
+                    family's marker. Naming the rest is the house convention,
+                    not something the ratchet can check — as with
+                    `forbid(unsafe_code)`, the attribute is a claim the
+                    compiler then enforces, and the ratchet only counts who
+                    has made it.
 
   files_without_deny_unsafe_op  the number of source files carrying neither
                     #![forbid(unsafe_code)] nor
@@ -163,6 +219,16 @@ COUNTED_RE = {
 }
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
+# A module's claim to have finished its casts. `.` spans newlines so the list
+# may be wrapped; `clippy::cast_lossless` is the family's marker (see above).
+DENY_CASTS = re.compile(r"#!\[deny\([^\]]*\bclippy::cast_lossless\b", re.DOTALL)
+# A `# Safety` heading in a doc comment. Any heading level, any case, because
+# what is being counted is whether the obligation is written down.
+SAFETY_HEADING = re.compile(r"^\s*///\s*#+\s*safety\b", re.IGNORECASE)
+DOC_LINE = re.compile(r"^\s*///")
+
+# Metrics computed from the source rather than counted with a needle.
+DERIVED = ("unsafe_lines", "missing_safety_doc")
 
 IDENT = re.compile(r"[A-Za-z0-9_]")
 IDENT_AT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -322,13 +388,69 @@ def unsafe_lines(masked, deny):
     return len(covered & code_lines)
 
 
+def has_safety_doc(lines, at):
+    """Whether a `# Safety` heading sits in the doc comment above line `at`.
+
+    Attribute lines are skipped: they sit between the doc comment and the item.
+    A doc comment hidden behind an attribute rustfmt wrapped over several lines
+    would read as absent, which over-counts — the direction that keeps the
+    ratchet honest.
+    """
+    i = at - 1
+    while i >= 0 and lines[i].lstrip().startswith("#"):
+        i -= 1
+    while i >= 0 and DOC_LINE.match(lines[i]):
+        if SAFETY_HEADING.match(lines[i]):
+            return True
+        i -= 1
+    return False
+
+
+def missing_safety_doc(text, masked):
+    """`unsafe fn`s whose doc comment has no `# Safety` section.
+
+    Walks the same `unsafe` keyword occurrences `unsafe_lines` does and keeps
+    the ones that introduce a *function* — a definition or a bodyless
+    declaration, never a function-pointer type and never a declaration inside
+    an `unsafe extern` block, whose obligation is the C library's.
+    """
+    lines = text.splitlines()
+    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
+    missing = 0
+    skip_until = 0
+    for match in UNSAFE_WORD.finditer(masked):
+        if match.start() < skip_until:
+            continue
+        at = WHITESPACE.match(masked, match.end()).end()
+        word = IDENT_AT.match(masked, at)
+        keyword = word.group(0) if word else ""
+        if keyword == "extern":
+            after = WHITESPACE.match(masked, word.end()).end()
+            follows = IDENT_AT.match(masked, after)
+            if after < len(masked) and masked[after] == "{":
+                skip_until = matching_brace(masked, after)
+                continue
+            if not (follows and follows.group(0) == "fn"):
+                continue
+            word = follows  # `unsafe extern "C" fn ...`
+        elif keyword != "fn":
+            continue  # `unsafe {`, `unsafe impl`, `unsafe(no_mangle)`, ...
+        named = WHITESPACE.match(masked, word.end()).end()
+        if named < len(masked) and masked[named] == "(":
+            continue  # an `unsafe fn(..)` *type*; it has no docs to carry
+        missing += not has_safety_doc(lines, bisect_right(starts, match.start()) - 1)
+    return missing
+
+
 def measure():
     """(repo-relative file -> {metric: count} with zeros included,
     number of files not carrying the forbid attribute,
-    number of files carrying neither forbid nor the unsafe-op deny)."""
+    number of files carrying neither forbid nor the unsafe-op deny,
+    number of files not carrying the cast deny)."""
     stats = {}
     without_forbid = 0
     without_deny = 0
+    without_casts = 0
     for path in sorted(
         [*ROOT.glob("crates/*/src/**/*.rs"), *ROOT.glob("crates/*/*.rs")]
     ):
@@ -342,11 +464,13 @@ def measure():
             (name, len(rx.findall(masked))) for name, rx in COUNTED_RE.items()
         )
         counts["unsafe_lines"] = unsafe_lines(masked, DENY_UNSAFE_OP in masked)
+        counts["missing_safety_doc"] = missing_safety_doc(text, masked)
         counts["lines"] = len(text.splitlines())
         stats[str(path.relative_to(ROOT))] = counts
         without_forbid += FORBID not in masked
         without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
-    return stats, without_forbid, without_deny
+        without_casts += DENY_CASTS.search(masked) is None
+    return stats, without_forbid, without_deny, without_casts
 
 
 def internal_exports():
@@ -358,7 +482,7 @@ def internal_exports():
     )
 
 
-def render(stats, internal, without_forbid, without_deny):
+def render(stats, internal, without_forbid, without_deny, without_casts):
     """The baseline document: only metrics with ratchet room are recorded
     (nonzero counts, over-cap line counts), so files that are already clean
     and under the cap don't churn the file as they're edited."""
@@ -379,12 +503,13 @@ def render(stats, internal, without_forbid, without_deny):
         f'  "internal_exports": {internal},\n'
         f'  "files_without_forbid_unsafe": {without_forbid},\n'
         f'  "files_without_deny_unsafe_op": {without_deny},\n'
+        f'  "files_without_deny_casts": {without_casts},\n'
         f'  "files": {{\n{body}\n  }}\n'
         "}\n"
     )
 
 
-def violations(stats, internal, without_forbid, without_deny, baseline):
+def violations(stats, internal, without_forbid, without_deny, without_casts, baseline):
     """Every metric that grew past the committed baseline."""
     found = []
     base_internal = baseline["internal_exports"]
@@ -399,8 +524,11 @@ def violations(stats, internal, without_forbid, without_deny, baseline):
         found.append(
             f"files without {FORBID} or {DENY_UNSAFE_OP}: {base_deny} -> {without_deny}"
         )
+    base_casts = baseline.get("files_without_deny_casts", without_casts)
+    if without_casts > base_casts:
+        found.append(f"files without the cast deny: {base_casts} -> {without_casts}")
     base_files = baseline["files"]
-    counted = (*COUNTED, *COUNTED_RE, "unsafe_lines")
+    counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     for file in sorted(stats.keys() | base_files.keys()):
         cur = stats.get(file, {**dict.fromkeys(counted, 0), "lines": 0})
         base = base_files.get(file, {})
@@ -414,8 +542,8 @@ def violations(stats, internal, without_forbid, without_deny, baseline):
     return found
 
 
-def summary(stats, internal, without_forbid, without_deny):
-    counted = (*COUNTED, *COUNTED_RE, "unsafe_lines")
+def summary(stats, internal, without_forbid, without_deny, without_casts):
+    counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
     parts = [f"{n} {name}" for name, n in totals.items()]
@@ -424,6 +552,7 @@ def summary(stats, internal, without_forbid, without_deny):
         f"{internal} internal exports",
         f"{without_forbid} files without forbid(unsafe_code)",
         f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
+        f"{without_casts} files without the cast deny",
     ]
     return ", ".join(parts)
 
@@ -480,6 +609,42 @@ SELF_TEST_EXTERN_ABI = [
     # Prose about one costs nothing.
     ('/// An extern "C" fn f() would.\nfn f() {}\n', 0),
 ]
+# (source, expected missing_safety_doc). Reads the raw text as well as the
+# masked copy, since the heading it looks for lives in a comment.
+SELF_TEST_SAFETY_DOC = [
+    ("unsafe fn f() {}\n", 1),
+    ("/// # Safety\n/// Anything.\nunsafe fn f() {}\n", 0),
+    ("/// # safety\nunsafe fn f() {}\n", 0),
+    ("/// ## Safety\nunsafe fn f() {}\n", 0),
+    # The section has to be this item's, not the one above it.
+    ("/// # Safety\nunsafe fn f() {}\nunsafe fn g() {}\n", 1),
+    # A blank line between ends the doc comment, so the heading is not f's.
+    ("/// # Safety\n\nunsafe fn f() {}\n", 1),
+    # Attributes sit between the comment and the item.
+    ('/// # Safety\n#[unsafe(no_mangle)]\npub unsafe extern "C" fn f() {}\n', 0),
+    # A trait's declaration carries the obligation too.
+    ("trait T {\n    unsafe fn f();\n}\n", 1),
+    # ... but a C library's does not.
+    ('unsafe extern "C" {\n    unsafe fn f(x: u8);\n}\n', 0),
+    ('unsafe extern "C" {\n    fn f(x: u8);\n}\n', 0),
+    # Neither a function-pointer type nor a promise is a function.
+    ('type F = unsafe extern "C" fn(u8);\n', 0),
+    ("unsafe impl Sync for X {}\n", 0),
+    ("fn f() {\n    unsafe {\n        g();\n    }\n}\n", 0),
+    # Prose about one costs nothing.
+    ("/// An unsafe fn f would.\nfn f() {}\n", 0),
+]
+# (source, whether the file counts as having adopted the cast lints)
+SELF_TEST_DENY_CASTS = [
+    ("#![deny(clippy::cast_lossless)]\n", True),
+    (
+        "#![deny(\n    clippy::cast_lossless,\n    clippy::ptr_as_ptr\n)]\n",
+        True,
+    ),
+    ("#![deny(clippy::ptr_as_ptr)]\n", False),
+    # Prose about the attribute does not switch it on.
+    ("//! Adopt `#![deny(clippy::cast_lossless)]` here one day.\n", False),
+]
 SELF_TEST_DENY = [
     # With the deny, a body's own blocks state its unsafe surface.
     ("unsafe fn f() {\n    g();\n}\n", 0),
@@ -494,6 +659,14 @@ def self_test():
     for source, expected in SELF_TEST_DENY:
         got = unsafe_lines(mask(source), True)
         assert got == expected, f"unsafe_lines={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_SAFETY_DOC:
+        got = missing_safety_doc(source, mask(source))
+        assert got == expected, (
+            f"missing_safety_doc={got}, want {expected}, for {source!r}"
+        )
+    for source, expected in SELF_TEST_DENY_CASTS:
+        got = DENY_CASTS.search(mask(source)) is not None
+        assert got == expected, f"cast deny={got}, want {expected}, for {source!r}"
     needle = COUNTED_RE["extern_abi"]
     for source, expected in SELF_TEST_EXTERN_ABI:
         got = len(needle.findall(mask(source)))
@@ -506,9 +679,9 @@ def main():
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     self_test()
-    stats, without_forbid, without_deny = measure()
+    stats, without_forbid, without_deny, without_casts = measure()
     internal = internal_exports()
-    content = render(stats, internal, without_forbid, without_deny)
+    content = render(stats, internal, without_forbid, without_deny, without_casts)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -517,7 +690,12 @@ def main():
                 f"ratchet: {BASELINE.relative_to(ROOT)} is missing; run `just refresh`"
             )
         if grew := violations(
-            stats, internal, without_forbid, without_deny, json.loads(committed)
+            stats,
+            internal,
+            without_forbid,
+            without_deny,
+            without_casts,
+            json.loads(committed),
         ):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
@@ -534,7 +712,12 @@ def main():
 
     if committed is not None and "--allow-growth" not in args:
         if grew := violations(
-            stats, internal, without_forbid, without_deny, json.loads(committed)
+            stats,
+            internal,
+            without_forbid,
+            without_deny,
+            without_casts,
+            json.loads(committed),
         ):
             print("\n".join(grew), file=sys.stderr)
             sys.exit(
@@ -544,7 +727,7 @@ def main():
     BASELINE.write_text(content)
     print(
         f"wrote {BASELINE.relative_to(ROOT)}: "
-        f"{summary(stats, internal, without_forbid, without_deny)}"
+        f"{summary(stats, internal, without_forbid, without_deny, without_casts)}"
     )
 
 

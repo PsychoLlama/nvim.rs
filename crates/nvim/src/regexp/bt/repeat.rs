@@ -279,9 +279,9 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                                 break 'bytes;
                             }
                             scan = scan.add(len as usize);
-                        } else if RI_FLAGS[*scan as usize] as c_int & mask == testval {
-                            scan = scan.add(1);
-                        } else if literal_newline(scan) {
+                        } else if RI_FLAGS[*scan as usize] as c_int & mask == testval
+                            || literal_newline(scan)
+                        {
                             scan = scan.add(1);
                         } else {
                             break 'bytes;

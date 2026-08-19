@@ -9,6 +9,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Turned clippy's `style` group on across the whole editor and fixed the
+  850 findings it reported -- redundant returns, duplicated branches,
+  hand-rolled range checks and the like -- so that new code is held to it
+  from here on. Nothing observable changed.
 - Rebuilt the generator behind the API surface: the machine-written RPC and
   Lua wrappers around every `nvim_*` function are emitted as ordinary Rust
   with scoped cleanup instead of goto-shaped jumps, and the generator now

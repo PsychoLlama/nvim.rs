@@ -162,29 +162,31 @@ const FLAG_RULES: &[(&[&CStr], FlagField)] = &[
     (&[c"COMPOUNDPERMITFLAG"], FlagField::CompPermit),
 ];
 
-/// A keyword whose argument is a number, and where it is kept.
+/// A keyword whose argument is a number, and where it is kept. Every one of
+/// them is a `COMPOUND*` keyword, so the variants name only the tail:
+/// `COMPOUNDWORDMAX`, `COMPOUNDMIN`, `COMPOUNDSYLMAX`.
 #[derive(Copy, Clone)]
 enum NumField {
-    CompMax,
-    CompMinLen,
-    CompSylMax,
+    WordMax,
+    Min,
+    SylMax,
 }
 
 /// Keywords taking a number, with the complaint for a bad one.
 const NUMBER_RULES: &[(&CStr, NumField, &CStr)] = &[
     (
         c"COMPOUNDWORDMAX",
-        NumField::CompMax,
+        NumField::WordMax,
         c"Wrong COMPOUNDWORDMAX value in %s line %d: %s",
     ),
     (
         c"COMPOUNDMIN",
-        NumField::CompMinLen,
+        NumField::Min,
         c"Wrong COMPOUNDMIN value in %s line %d: %s",
     ),
     (
         c"COMPOUNDSYLMAX",
-        NumField::CompSylMax,
+        NumField::SylMax,
         c"Wrong COMPOUNDSYLMAX value in %s line %d: %s",
     ),
 ];
@@ -533,9 +535,9 @@ unsafe fn handle_line(
                 continue;
             }
             let slot = match field {
-                NumField::CompMax => &mut st.compmax,
-                NumField::CompMinLen => &mut st.compminlen,
-                NumField::CompSylMax => &mut st.compsylmax,
+                NumField::WordMax => &mut st.compmax,
+                NumField::Min => &mut st.compminlen,
+                NumField::SylMax => &mut st.compsylmax,
             };
             if *slot != 0 {
                 break;

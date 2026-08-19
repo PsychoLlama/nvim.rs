@@ -102,9 +102,7 @@ pub unsafe fn ui_add_cb(ns_id: u32, cb: LuaRef, ext_widgets: *mut bool) {
 /// up and it is only dropped once it passes [`MAX_ERRORS`].
 pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     let removed = registered.with_mut(|handlers| {
-        let Some(index) = handlers.iter().position(|h| h.ns_id == ns_id) else {
-            return None;
-        };
+        let index = handlers.iter().position(|h| h.ns_id == ns_id)?;
         if checkerr {
             handlers[index].errors += 1;
             if handlers[index].errors <= MAX_ERRORS {
@@ -134,8 +132,8 @@ pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
 fn update_ext() {
     let mut ext = [false; 10];
     registered.with(|handlers| {
-        for widget in 0..kUILinegrid as usize {
-            ext[widget] = handlers.iter().any(|h| h.ext_widgets[widget]);
+        for (widget, slot) in ext[..kUILinegrid as usize].iter_mut().enumerate() {
+            *slot = handlers.iter().any(|h| h.ext_widgets[widget]);
         }
     });
     ui_cb_ext.set(ext);

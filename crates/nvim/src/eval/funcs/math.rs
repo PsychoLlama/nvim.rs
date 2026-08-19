@@ -220,8 +220,12 @@ pub unsafe fn f_isnan(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// a Number nor reports an error — `isinf`/`isnan` answer for every type.
 fn as_float(args: Args<'_>, i: usize) -> Option<float_T> {
     let tv = args.get(i);
-    // SAFETY: the tag says the union holds a float.
-    (tv.v_type == VAR_FLOAT).then(|| unsafe { tv.vval.v_float })
+    match tv.v_type {
+        // SAFETY: the tag says the union holds a float. The read has to stay
+        // inside the arm: `then_some` would perform it eagerly.
+        VAR_FLOAT => Some(unsafe { tv.vval.v_float }),
+        _ => None,
+    }
 }
 
 /// Draw 32 bits of entropy for the generator's seed. Falls back to the

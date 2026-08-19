@@ -96,13 +96,12 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
         // A fully transparent background stays transparent, so that the
         // terminal's own background keeps showing. At ratio 100 the front
         // contributes nothing, so the back's transparency alone decides.
-        blended.rgb_bg_color = if ratio == 100 && back_raw.rgb_bg_color == -1 {
-            -1
-        } else if back_raw.rgb_bg_color == -1 && front_raw.rgb_bg_color == -1 {
-            -1
-        } else {
-            rgb_blend(ratio, back.rgb_bg_color, front.rgb_bg_color)
-        };
+        blended.rgb_bg_color =
+            if back_raw.rgb_bg_color == -1 && (ratio == 100 || front_raw.rgb_bg_color == -1) {
+                -1
+            } else {
+                rgb_blend(ratio, back.rgb_bg_color, front.rgb_bg_color)
+            };
         // The blend property was consumed producing this set.
         blended.hl_blend = -1;
 

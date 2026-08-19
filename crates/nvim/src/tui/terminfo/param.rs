@@ -64,6 +64,11 @@ impl<'a> Out<'a> {
         self.pos
     }
 
+    /// Whether nothing has been written yet.
+    pub fn is_empty(&self) -> bool {
+        self.pos == 0
+    }
+
     fn room(&self) -> usize {
         self.buf.len() - self.pos
     }

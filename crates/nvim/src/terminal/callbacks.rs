@@ -69,7 +69,7 @@ pub static SELECTION_CALLBACKS: VTermSelectionCallbacks = VTermSelectionCallback
 /// `frag.str` must point at `frag.len()` readable bytes, which is vterm's
 /// contract for a fragment callback.
 unsafe fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
-    if frag.str.is_null() || frag.len() == 0 {
+    if frag.str.is_null() || frag.is_empty() {
         return &[];
     }
     unsafe { ::core::slice::from_raw_parts(frag.str.cast::<u8>(), frag.len()) }

@@ -150,6 +150,6 @@ fn bracketed(extra: c_int, atom_start: *mut c_char, c: c_int) -> Parsed {
     match collection(extra, atom_start) {
         Collection::Done => Ok(()),
         Collection::Failed => Err(Rejected),
-        Collection::NotACollection => literal(c, atom_start),
+        Collection::Literal => literal(c, atom_start),
     }
 }

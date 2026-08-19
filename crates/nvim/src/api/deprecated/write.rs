@@ -123,16 +123,11 @@ unsafe fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) 
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else if '\n' as ::core::ffi::c_int == NUL {
-                // `kv_push`, whose growth step c2rust expanded inline.
-                Kvec::new(
-                    &mut (*line_buf).size,
-                    &mut (*line_buf).capacity,
-                    &mut (*line_buf).items,
-                )
-                .push('\n' as ::core::ffi::c_char);
             } else {
-                // `kv_push`, whose growth step c2rust expanded inline.
+                // `kv_push`, whose growth step c2rust expanded inline. The C
+                // spelled the byte `NL`, which the macro tested against `NUL`
+                // before pushing; c2rust kept both arms of a comparison of two
+                // constants that can never be equal.
                 Kvec::new(
                     &mut (*line_buf).size,
                     &mut (*line_buf).capacity,

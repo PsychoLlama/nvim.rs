@@ -71,6 +71,48 @@ pub fn set_bits(storage: &mut [u8], lo: u32, hi: u32, bits: u64) {
     }
 }
 
+/// Generate `name()`/`set_name()` accessors for bit ranges of one `[u8; N]`
+/// storage field:
+///
+/// ```ignore
+/// crate::bitfield_accessors! {
+///     impl VTermGlyphInfo.protected_cell_dwl_dhl {
+///         0..=0 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
+///         1..=1 => dwl, set_dwl: ::core::ffi::c_uint;
+///         2..=3 => dhl, set_dhl: ::core::ffi::c_uint;
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! bitfield_accessors {
+    (
+        impl $Struct:ident . $storage:ident {
+            $( $lo:literal ..= $hi:literal => $getter:ident, $setter:ident : $Ty:ty; )+
+        }
+    ) => {
+        impl $Struct {
+            $(
+                #[inline]
+                pub fn $getter(&self) -> $Ty {
+                    <$Ty as $crate::bitfield::FieldValue>::from_bits(
+                        $crate::bitfield::get_bits(&self.$storage, $lo, $hi),
+                    )
+                }
+
+                #[inline]
+                pub fn $setter(&mut self, value: $Ty) {
+                    $crate::bitfield::set_bits(
+                        &mut self.$storage,
+                        $lo,
+                        $hi,
+                        <$Ty as $crate::bitfield::FieldValue>::to_bits(value),
+                    );
+                }
+            )+
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,46 +164,4 @@ mod tests {
         set_bits(&mut storage, 1, 3, bool::to_bits(false));
         assert!(!bool::from_bits(get_bits(&storage, 1, 3)));
     }
-}
-
-/// Generate `name()`/`set_name()` accessors for bit ranges of one `[u8; N]`
-/// storage field:
-///
-/// ```ignore
-/// crate::bitfield_accessors! {
-///     impl VTermGlyphInfo.protected_cell_dwl_dhl {
-///         0..=0 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
-///         1..=1 => dwl, set_dwl: ::core::ffi::c_uint;
-///         2..=3 => dhl, set_dhl: ::core::ffi::c_uint;
-///     }
-/// }
-/// ```
-#[macro_export]
-macro_rules! bitfield_accessors {
-    (
-        impl $Struct:ident . $storage:ident {
-            $( $lo:literal ..= $hi:literal => $getter:ident, $setter:ident : $Ty:ty; )+
-        }
-    ) => {
-        impl $Struct {
-            $(
-                #[inline]
-                pub fn $getter(&self) -> $Ty {
-                    <$Ty as $crate::bitfield::FieldValue>::from_bits(
-                        $crate::bitfield::get_bits(&self.$storage, $lo, $hi),
-                    )
-                }
-
-                #[inline]
-                pub fn $setter(&mut self, value: $Ty) {
-                    $crate::bitfield::set_bits(
-                        &mut self.$storage,
-                        $lo,
-                        $hi,
-                        <$Ty as $crate::bitfield::FieldValue>::to_bits(value),
-                    );
-                }
-            )+
-        }
-    };
 }

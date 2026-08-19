@@ -178,7 +178,7 @@ fn row_signs(buf: Buf, wp: Win, row: c_int) -> Vec<SignItem> {
             let sh = decor_find_sign(mt_decor(mark));
             signs.push(SignItem { sh, id: mark.id });
         }
-        walk.next_filter(row + 1, 0, &SIGN_FILTER);
+        walk.step_filter(row + 1, 0, &SIGN_FILTER);
     }
     signs
 }
@@ -353,7 +353,7 @@ fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, half: 
                 count[(i - row1) as usize] += 1;
             }
         }
-        walk.next_filter(row2 + 1, 0, &SIGNTEXT_FILTER);
+        walk.step_filter(row2 + 1, 0, &SIGNTEXT_FILTER);
     }
 
     for &rowcount in &count {

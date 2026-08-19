@@ -185,7 +185,7 @@ unsafe fn refine_inline_word(
                 // a gap is only worth swallowing next to a substantial change.
                 let next = (*dp).df_next;
                 let mut changed: i64 = 0;
-                for i in 0..DB_COUNT as usize {
+                for (i, map) in linemap.iter().enumerate() {
                     if (*curtab.get()).tp_diffbuf[i].is_null() {
                         continue;
                     }
@@ -193,7 +193,7 @@ unsafe fn refine_inline_word(
                         for k in 0..(*block).df_count[i] {
                             let at = (*block).df_lnum[i] + k - 1;
                             if let Ok(at) = usize::try_from(at)
-                                && let Some(e) = linemap[i].get(at)
+                                && let Some(e) = map.get(at)
                             {
                                 changed += e.num_bytes as i64;
                             }
@@ -346,12 +346,11 @@ fn change_for(new_diff: &diff_T, linemap: &LineMap) -> diffline_change_T {
         dc_start_lnum_off: [0; 8],
         dc_end_lnum_off: [0; 8],
     };
-    for i in 0..DB_COUNT as usize {
+    for (i, map) in linemap.iter().enumerate() {
         // Never negative; the test is for safety only.
         if new_diff.df_lnum[i] <= 0 {
             continue;
         }
-        let map = &linemap[i];
         let start = (new_diff.df_lnum[i] - 1) as usize; // zero-indexed
         let end = start + new_diff.df_count[i] as usize;
         match map.get(start) {
@@ -423,7 +422,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
         let mut file1_idx = usize::MAX;
 
         'done: {
-            for i in 0..DB_COUNT as usize {
+            for (i, map) in linemap.iter_mut().enumerate() {
                 dio.dio_diff.dout_ga.ga_len = 0;
                 let buf = (*tp).tp_diffbuf[i];
                 if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
@@ -452,7 +451,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
                         chartab,
                         diff_flags.get() & DIFF_INLINE_WORD != 0,
                         out,
-                        &mut linemap[i],
+                        map,
                     );
                 }
                 if first {

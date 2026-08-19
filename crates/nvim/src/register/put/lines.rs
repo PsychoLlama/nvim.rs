@@ -208,10 +208,12 @@ impl Put {
             let old_pos = (*curwin.get()).w_cursor;
             (*curwin.get()).w_cursor.lnum = lnum;
             let ptr = ml_get(lnum);
-            let indent = if c_int::from(*ptr) == '#' as c_int && preprocs_left() {
-                0 // leave `#` lines at the start of the line
-            } else if c_int::from(*ptr) == NUL {
-                0 // ignore empty lines
+            // A `#` line stays at the start of the line, and an empty line
+            // has no indent to keep.
+            let indent = if (c_int::from(*ptr) == '#' as c_int && preprocs_left())
+                || c_int::from(*ptr) == NUL
+            {
+                0
             } else if state.first {
                 state.diff = state.orig_indent - get_indent();
                 state.first = false;

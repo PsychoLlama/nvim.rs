@@ -185,6 +185,6 @@ fn bracketed(rex: Rex, flagp: &mut c_int, extra: c_int, c: c_int) -> *mut uint8_
     match collection(rex, flagp, extra) {
         Collection::Node(node) => node,
         Collection::Failed => core::ptr::null_mut(),
-        Collection::NotACollection => literal_run(flagp, c),
+        Collection::Literal => literal_run(flagp, c),
     }
 }

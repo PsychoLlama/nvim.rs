@@ -45,9 +45,9 @@ unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
         let mut line_numbers = [0 as linenr_T; DB_COUNT as usize];
         let mut outputmap = [0usize; DB_COUNT as usize];
         let mut ndiffs = 0;
-        for i in 0..DB_COUNT as usize {
+        for (i, lnum) in line_numbers.iter_mut().enumerate() {
             if !(*tp).tp_diffbuf[i].is_null() {
-                line_numbers[i] = (*dp).df_lnum[i];
+                *lnum = (*dp).df_lnum[i];
                 (*dp).df_count[i] = 0;
                 outputmap[ndiffs] = i;
                 ndiffs += 1;
@@ -58,9 +58,9 @@ unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
             if at != 0 && decisions[at - 1] != decision {
                 cur = diff_alloc_new(tp, cur, (*cur).df_next);
                 (*cur).is_linematched = true;
-                for i in 0..DB_COUNT as usize {
+                for (i, &lnum) in line_numbers.iter().enumerate() {
                     if !(*tp).tp_diffbuf[i].is_null() {
-                        (*cur).df_lnum[i] = line_numbers[i];
+                        (*cur).df_lnum[i] = lnum;
                         (*cur).df_count[i] = 0;
                     }
                 }

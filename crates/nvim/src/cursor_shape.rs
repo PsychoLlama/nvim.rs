@@ -537,9 +537,7 @@ pub unsafe fn cursor_get_mode_idx() -> ShapeIdx {
         SHAPE_IDX_SM
     } else if state == MODE_TERMINAL {
         SHAPE_IDX_TERM
-    } else if state & VREPLACE_FLAG != 0 {
-        SHAPE_IDX_R
-    } else if state & REPLACE_FLAG != 0 {
+    } else if state & (VREPLACE_FLAG | REPLACE_FLAG) != 0 {
         SHAPE_IDX_R
     } else if state & MODE_INSERT != 0 {
         SHAPE_IDX_I

@@ -55,6 +55,12 @@ pub struct List<T> {
     len: usize,
 }
 
+impl<T> Default for List<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> List<T> {
     pub const fn new() -> Self {
         List {

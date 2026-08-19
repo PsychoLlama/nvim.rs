@@ -156,9 +156,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
                     0 as ::core::ffi::c_int
                 }),
         );
-        if buf.is_null() {
-            unblock_autocmds();
-        } else if ml_open(buf) == 0 as ::core::ffi::c_int {
+        if buf.is_null() || ml_open(buf) == 0 as ::core::ffi::c_int {
             unblock_autocmds();
         } else {
             (*buf).b_last_changedtick = buf_get_changedtick(buf);

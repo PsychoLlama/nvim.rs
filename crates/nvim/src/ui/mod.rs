@@ -227,8 +227,8 @@ pub unsafe fn ui_refresh() {
         let ui = unsafe { &*ui };
         width = width.min(ui.width);
         height = height.min(ui.height);
-        for widget in 0..kUIExtCount as usize {
-            ext_widgets[widget] &= ui.ui_ext[widget] || inclusive;
+        for (widget, enabled) in ext_widgets[..kUIExtCount as usize].iter_mut().enumerate() {
+            *enabled &= ui.ui_ext[widget] || inclusive;
         }
     }
 
@@ -237,8 +237,8 @@ pub unsafe fn ui_refresh() {
     pending_cursor_update.set(true);
 
     let had_message = ui_has(kUIMessages);
-    for widget in 0..kUIExtCount as usize {
-        let enabled = ext_widgets[widget] || ui_cb_ext.with(|cb| cb[widget]);
+    for (widget, &wanted) in ext_widgets[..kUIExtCount as usize].iter().enumerate() {
+        let enabled = wanted || ui_cb_ext.with(|cb| cb[widget]);
         ui_ext.with_mut(|widgets| widgets[widget] = enabled);
         // The widgets past `ext_linegrid` describe how a UI wants the
         // screen expressed rather than who draws what, and are not options

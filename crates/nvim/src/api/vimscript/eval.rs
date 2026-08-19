@@ -98,8 +98,8 @@ unsafe fn call_function_with(
         }
         // MAX_FUNC_ARGS + 1: `call_func` reads one past the last argument.
         let mut vim_args: [typval_T; 21] = [TV_INITIAL_VALUE; 21];
-        for i in 0..args.size {
-            object_to_vim(*args.items.add(i), &raw mut vim_args[i], err);
+        for (i, slot) in vim_args[..args.size].iter_mut().enumerate() {
+            object_to_vim(*args.items.add(i), slot, err);
         }
 
         let mut rv = Object::NIL;

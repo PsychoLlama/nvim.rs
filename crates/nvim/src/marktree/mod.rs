@@ -396,11 +396,8 @@ pub unsafe extern "C" fn marktree_del_itr(
         p.update_child_meta(lnode.parent_index(), |m| meta_sub(m, &meta_inc));
         lnode = p;
     }
-    for m in 0..META_COUNT {
-        debug_assert!(
-            b.meta_root[m] >= meta_inc[m],
-            "b->meta_root[m] >= meta_inc[m]"
-        );
+    for (m, &inc) in meta_inc.iter().enumerate() {
+        debug_assert!(b.meta_root[m] >= inc, "b->meta_root[m] >= meta_inc[m]");
     }
     meta_sub(&mut b.meta_root, &meta_inc);
 

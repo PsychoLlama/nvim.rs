@@ -209,6 +209,7 @@ pub unsafe fn mark_get_motion(
 /// 2. Different behavior depending on editor state (visual mode).
 /// 3. Not saved in shada.
 /// 4. Re-ordered when defined in reverse.
+///
 /// `buf` — Buffer to get the mark from.
 /// `name` — Mark name '<' or '>'.
 ///

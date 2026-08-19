@@ -146,6 +146,12 @@ pub struct Staging {
     len: usize,
 }
 
+impl Default for Staging {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Staging {
     pub fn new() -> Self {
         // A `[0; BUF_SIZE]` literal would be built on the stack and then
