@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -18,7 +19,7 @@ use crate::ex_eval::aborting;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::highlight_group::{HLF_E, syn_name2id};
 use crate::main::{
-    called_emsg, did_emsg, e_invexpr2, emsg_skip, force_abort, got_int, line_msg, msg_didout,
+    called_emsg, did_emsg, e_invexpr2, force_abort, got_int, line_msg, msg_didout,
     msg_ext_skip_verbose, need_clr_eos,
 };
 use crate::memory::xfree;
@@ -83,9 +84,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
 
         let mut evalarg = UNSET_EVALARG;
         fill_evalarg_from_eap(&raw mut evalarg, eap, (*eap).skip != 0);
-        if (*eap).skip != 0 {
-            *emsg_skip.ptr() += 1;
-        }
+        let _skipping = ((*eap).skip != 0).then(Suppress::emsg_skip);
 
         while !ends_args(*arg) && !got_int.get() {
             // The flag is set across the evaluation only: an expression
@@ -139,7 +138,6 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
         msg_ext_set_append(false);
 
         if (*eap).skip != 0 {
-            *emsg_skip.ptr() -= 1;
             return;
         }
         if ui_has(kUIMessages) && ends_args(*(*eap).arg) {
@@ -181,9 +179,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
         let mut ga = UNSET_GA;
         ga_init(&raw mut ga, 1, 80);
 
-        if (*eap).skip != 0 {
-            *emsg_skip.ptr() += 1;
-        }
+        let _skipping = ((*eap).skip != 0).then(Suppress::emsg_skip);
         while !ends_args(*arg) {
             ret = eval1_emsg(&raw mut arg, &raw mut rettv, eap);
             if ret == FAIL {
@@ -248,9 +244,6 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
         }
 
         ga_clear(&raw mut ga);
-        if (*eap).skip != 0 {
-            *emsg_skip.ptr() -= 1;
-        }
         (*eap).nextcmd = check_nextcmd(arg);
     }
 }

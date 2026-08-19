@@ -17,6 +17,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::guard::Suppress;
 use crate::types::{FAIL, OK};
 
 /// Evaluate `'charconvert'` to convert `fname_from` into `fname_to`.
@@ -125,9 +126,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
         let mut save_val = TV_INITIAL_VALUE;
         prepare_vimvar(Vv::Val, &raw mut save_val);
         set_vim_var_string(Vv::Val, badword, -1);
-        if p_verbose.get() == 0 {
-            (*emsg_off.ptr()) += 1;
-        }
+        let no_emsg = (p_verbose.get() == 0).then(Suppress::emsg);
         if let Some(ctx) = get_option_sctx(kOptSpellsuggest).as_ref() {
             current_sctx.set(*ctx);
         }
@@ -148,9 +147,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
             }
         }
 
-        if p_verbose.get() == 0 {
-            (*emsg_off.ptr()) -= 1;
-        }
+        drop(no_emsg);
         tv_clear(get_vim_var_tv(Vv::Val));
         restore_vimvar(Vv::Val, &raw mut save_val);
         current_sctx.set(saved_sctx);

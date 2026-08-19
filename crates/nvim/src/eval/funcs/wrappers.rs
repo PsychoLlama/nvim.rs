@@ -22,9 +22,10 @@ use crate::eval::vars::{cat_prefix_varname, get_user_var_name};
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
+use crate::guard::Suppress;
 use crate::main::{
     IObuff, curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg,
-    empty_string_option, emsg_off, lastbuf, p_cpo, p_magic,
+    empty_string_option, lastbuf, p_cpo, p_magic,
 };
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
@@ -435,15 +436,13 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
 /// # Safety
 /// `tv` is a live typval.
 pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
-    // SAFETY: the caller's obligation; the `emsg_off` bracket is balanced.
+    // SAFETY: the caller's obligation.
     unsafe {
         if !tv_check_str_or_nr(tv) {
             return ptr::null_mut();
         }
-        *emsg_off.ptr() += 1;
-        let buf = tv_get_buf(tv, 0);
-        *emsg_off.ptr() -= 1;
-        buf
+        let _no_emsg = Suppress::emsg();
+        tv_get_buf(tv, 0)
     }
 }
 
@@ -452,12 +451,12 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
 /// # Safety
 /// `arg` is a live typval.
 pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
-    // SAFETY: the caller's obligation; the `emsg_off` bracket is balanced,
-    // which is what makes E158 the *only* message this can produce.
+    // SAFETY: the caller's obligation. The guard is what makes E158 the
+    // *only* message this can produce.
     unsafe {
-        *emsg_off.ptr() += 1;
+        let no_emsg = Suppress::emsg();
         let buf = tv_get_buf(arg, 0);
-        *emsg_off.ptr() -= 1;
+        drop(no_emsg);
         if buf.is_null() {
             semsg_c!(
                 gettext(c"E158: Invalid buffer name: %s".as_ptr()),

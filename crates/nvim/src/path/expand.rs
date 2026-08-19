@@ -14,6 +14,7 @@ use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
 use super::*;
+use crate::guard::Suppress;
 use crate::os::shell::ShellOpts;
 use crate::types::{FAIL, MAXPATHL, OK};
 
@@ -479,7 +480,7 @@ pub unsafe fn expand_wildcards_eval(
         let mut star_follows = false;
 
         if is_cur_alt_file || *exp_pat == b'<' as c_char {
-            *emsg_off.ptr() += 1;
+            let no_emsg = Suppress::emsg();
             eval_pat = eval_vars(
                 exp_pat,
                 exp_pat,
@@ -489,7 +490,7 @@ pub unsafe fn expand_wildcards_eval(
                 core::ptr::null_mut(),
                 true,
             );
-            *emsg_off.ptr() -= 1;
+            drop(no_emsg);
             if !eval_pat.is_null() {
                 let rest = exp_pat.add(usedlen as usize);
                 star_follows = strcmp(rest, c"*".as_ptr()) == 0;

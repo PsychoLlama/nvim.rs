@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::guard::Suppress;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::types::{CmdModFlags, FAIL, NUL, OK, Vv};
@@ -579,7 +580,7 @@ pub unsafe fn last_pat_prog(regmatch: *mut regmmatch_T) {
             return;
         }
         // So it doesn't beep if the pattern is bad.
-        (*emsg_off.ptr()) += 1;
+        let _no_emsg = Suppress::emsg();
         search_regcomp(
             c"".as_ptr() as *mut c_char,
             0,
@@ -589,7 +590,6 @@ pub unsafe fn last_pat_prog(regmatch: *mut regmmatch_T) {
             SEARCH_KEEP as c_int,
             regmatch,
         );
-        (*emsg_off.ptr()) -= 1;
     }
 }
 

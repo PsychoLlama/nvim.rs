@@ -35,9 +35,7 @@ use crate::eval::{
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
 use crate::hashtab::hash_init;
-use crate::main::{
-    EVALARG_EVALUATE, called_emsg, current_sctx, curwin, did_emsg, e_invexpr2, emsg_skip,
-};
+use crate::main::{EVALARG_EVALUATE, called_emsg, current_sctx, curwin, did_emsg, e_invexpr2};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext};
@@ -161,9 +159,7 @@ pub unsafe fn eval_to_bool(
         let mut retval = false;
         let mut evalarg = UNSET_EVALARG;
         fill_evalarg_from_eap(&raw mut evalarg, eap, skip);
-        if skip {
-            *emsg_skip.ptr() += 1;
-        }
+        let skipping = skip.then(Suppress::emsg_skip);
         let r = if use_simple_function {
             eval0_simple_funccal(arg, &raw mut tv, eap, &raw mut evalarg)
         } else {
@@ -178,9 +174,7 @@ pub unsafe fn eval_to_bool(
                 tv_clear(&raw mut tv);
             }
         }
-        if skip {
-            *emsg_skip.ptr() -= 1;
-        }
+        drop(skipping);
         clear_evalarg(&raw mut evalarg, eap);
         retval
     }
@@ -362,9 +356,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: boo
         let mut tv = UNSET_TV;
         let mut evalarg = UNSET_EVALARG;
         fill_evalarg_from_eap(&raw mut evalarg, eap, skip);
-        if skip {
-            *emsg_skip.ptr() += 1;
-        }
+        let skipping = skip.then(Suppress::emsg_skip);
         let retval = if eval0(arg, &raw mut tv, eap, &raw mut evalarg) == FAIL || skip {
             null_mut()
         } else {
@@ -372,9 +364,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: boo
             tv_clear(&raw mut tv);
             s
         };
-        if skip {
-            *emsg_skip.ptr() -= 1;
-        }
+        drop(skipping);
         clear_evalarg(&raw mut evalarg, eap);
         retval
     }

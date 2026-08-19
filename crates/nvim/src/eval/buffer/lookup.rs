@@ -1,4 +1,5 @@
 use super::*;
+use crate::guard::Suppress;
 use crate::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// Find a buffer by number or exact name.
@@ -86,10 +87,8 @@ pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         }
         // The lookup itself must not report "no such buffer": a second
         // argument asks for the buffer to be created instead.
-        (*emsg_off.ptr()) += 1;
-        let found = tv_get_buf(argvars.offset(0), 0);
-        (*emsg_off.ptr()) -= 1;
-        found
+        let _no_emsg = Suppress::emsg();
+        tv_get_buf(argvars.offset(0), 0)
     };
     let mut name: *const c_char = ptr::null();
     if buf.is_null()

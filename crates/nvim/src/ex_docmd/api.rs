@@ -39,9 +39,10 @@ use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
 };
 use crate::fold::hasFolding;
+use crate::guard::Suppress;
 use crate::main::{
     IObuff, cmdmod, cmdwin_type, curbuf, curwin, e_cmdwin, e_command_too_recursive, e_modifiable,
-    e_nobang, e_norange, emsg_silent, emsg_skip, global_busy,
+    e_nobang, e_norange, emsg_silent, global_busy,
 };
 use crate::memory::xstrlcpy;
 use crate::message::emsg;
@@ -174,9 +175,9 @@ pub unsafe fn parse_cmdline(
                     && *arg as c_int != '\n' as c_int
                 {
                     let start = arg;
-                    *emsg_skip.ptr() += 1;
+                    let skipping = Suppress::emsg_skip();
                     skip_expr(&raw mut arg, ptr::null_mut());
-                    *emsg_skip.ptr() -= 1;
+                    drop(skipping);
                     // Nothing an expression parser recognises: step over one
                     // byte, or this loop never ends.
                     if arg == start {

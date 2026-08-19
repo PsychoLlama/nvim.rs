@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -316,10 +317,8 @@ pub unsafe fn ex_syntax(eap: *mut exarg_T) {
         }
         let subcmd_name = xstrnsave(arg, subcmd_end.offset_from(arg) as size_t);
 
-        if (*eap).skip != 0 {
-            // Skip the error messages of every subcommand too.
-            emsg_skip.set(emsg_skip.get() + 1);
-        }
+        // Skip the error messages of every subcommand too.
+        let _skipping = ((*eap).skip != 0).then(Suppress::emsg_skip);
         match SUBCOMMANDS
             .iter()
             .find(|sub| strcmp(subcmd_name, sub.name.as_ptr()) == 0)
@@ -336,9 +335,6 @@ pub unsafe fn ex_syntax(eap: *mut exarg_T) {
             }
         }
         xfree(subcmd_name as *mut c_void);
-        if (*eap).skip != 0 {
-            emsg_skip.set(emsg_skip.get() - 1);
-        }
     }
 }
 

@@ -5,7 +5,8 @@ use crate::charset::{ptr2cells, skipwhite, transstr, vim_isprintc};
 use crate::eval::eval_foldtext;
 use crate::eval::vars::{set_vim_var_nr, set_vim_var_string};
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, current_sctx, curwin, did_emsg, emsg_off};
+use crate::guard::Suppress;
+use crate::main::{curbuf, current_sctx, curwin, did_emsg};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
 use crate::os::cshim::{memmove, ngettext, strncmp, strstr};
@@ -76,7 +77,7 @@ pub unsafe fn get_foldtext(
             curwin.set(wp);
             curbuf.set((*wp).w_buffer);
             current_sctx.set((*wp).w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as c_int as usize]);
-            (*emsg_off.ptr()) += 1;
+            let no_emsg = Suppress::emsg();
             let mut obj: Object = eval_foldtext(wp);
             if obj.type_0 as c_uint == kObjectTypeArray as c_int as c_uint {
                 let mut err: Error = Error {
@@ -97,7 +98,7 @@ pub unsafe fn get_foldtext(
                 };
             }
             api_free_object(obj);
-            (*emsg_off.ptr()) -= 1;
+            drop(no_emsg);
             if text.is_null() || did_emsg.get() != 0 {
                 got_fdt_error.set(true);
             }

@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal,
     ExpandContext, NUL,
@@ -633,7 +634,7 @@ pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
     unsafe {
         let ccline: *mut CmdlineInfo = get_cmdline_info();
 
-        (*emsg_off.ptr()) += 1;
+        let no_emsg = Suppress::emsg();
         let mut skiplen = 0;
         let mut dummy = 0;
         let mut patlen = 0;
@@ -643,7 +644,7 @@ pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
             &raw mut skiplen,
             &raw mut patlen,
         );
-        (*emsg_off.ptr()) -= 1;
+        drop(no_emsg);
 
         // Check if cursor is within search pattern.
         if !retval || (*ccline).cmdpos <= skiplen || (*ccline).cmdpos > skiplen + patlen {

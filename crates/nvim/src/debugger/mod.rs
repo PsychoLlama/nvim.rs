@@ -38,12 +38,13 @@ use crate::fileio::file_pat_to_reg_pat;
 use crate::garray::{ga_clear, ga_grow};
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
+use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
     NameBuff, RedrawingDisabled, Rows, State, cmd_silent, cmdline_row, curbuf, curwin,
     debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick, did_emsg,
-    emsg_off, emsg_silent, ex_nesting_level, ex_normal_busy, got_int, ignore_script, lines_left,
-    msg_row, msg_scroll, msg_silent, need_wait_return, no_wait_return, redir_off,
+    emsg_silent, ex_nesting_level, ex_normal_busy, got_int, ignore_script, lines_left, msg_row,
+    msg_scroll, msg_silent, need_wait_return, no_wait_return, redir_off,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{msg, msg_starthere};
@@ -302,11 +303,9 @@ pub fn dbg_breakpoint(name: *mut c_char, lnum: linenr_T) {
 /// # Safety
 /// `bp` must point at a live entry whose `dbg_name` is the expression.
 unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut typval_T {
-    emsg_off.set(emsg_off.get() + 1);
+    let _no_emsg = Suppress::emsg();
     // SAFETY: caller contract.
-    let tv = unsafe { eval_expr((*bp).dbg_name, ptr::null_mut()) };
-    emsg_off.set(emsg_off.get() - 1);
-    tv
+    unsafe { eval_expr((*bp).dbg_name, ptr::null_mut()) }
 }
 
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into the

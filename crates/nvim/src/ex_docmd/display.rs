@@ -2,6 +2,7 @@
 //! redrawing, `:redir`, highlighting and the digraph table.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -19,9 +20,9 @@ use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
-    RedrawingDisabled, State, VIsual_active, cmdpreview, curwin, e_invarg2, emsg_off, msg_col,
-    msg_didout, need_maketitle, need_wait_return, no_hlsearch, p_hls, p_lz, redir_fd, redir_off,
-    redir_reg, redir_vname, redraw_cmdline,
+    RedrawingDisabled, State, VIsual_active, cmdpreview, curwin, e_invarg2, msg_col, msg_didout,
+    need_maketitle, need_wait_return, no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg,
+    redir_vname, redraw_cmdline,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{msg, msg_ext_set_kind};
@@ -50,9 +51,9 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
         // The variable may not exist, which is not an error here: an
         // unnamed scheme reports `default`.
         let expr = xstrdup(c"g:colors_name".as_ptr());
-        *emsg_off.ptr() += 1;
+        let no_emsg = Suppress::emsg();
         let name = eval_to_string(expr, false, false);
-        *emsg_off.ptr() -= 1;
+        drop(no_emsg);
         xfree(expr as *mut c_void);
 
         msg_ext_set_kind(c"list_cmd".as_ptr());

@@ -10,7 +10,8 @@ use crate::eval::typval::{
     tv_list_append_string,
 };
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
-use crate::main::{curbuf, curwin, emsg_off, vim_ignored};
+use crate::guard::Suppress;
+use crate::main::{curbuf, curwin, vim_ignored};
 use crate::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
 use crate::os::cshim::gettext;
 use crate::semsg_c;
@@ -59,10 +60,8 @@ pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             // reports; the result is thrown away and the argument is
             // resolved as a buffer instead.
             vim_ignored.set(tv_get_number(args.ptr(0)) as c_int);
-            *emsg_off.ptr() += 1;
-            let buf = tv_get_buf(args.ptr(0), 0);
-            *emsg_off.ptr() -= 1;
-            buf
+            let _no_emsg = Suppress::emsg();
+            tv_get_buf(args.ptr(0), 0)
         };
         if buf.is_null() {
             return;

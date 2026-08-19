@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 use crate::types::{CmdModFlags, ExArgt, FAIL, OptionSetFlags, kErrorTypeNone};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
@@ -374,14 +375,14 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         'end: {
             // Block errors while parsing the command line, and don't update
             // v:errmsg.
-            emsg_off.set(emsg_off.get() + 1);
+            let no_emsg = Suppress::emsg();
             let parsed = parse_cmdline(
                 &raw mut cmdline,
                 &raw mut ea,
                 &raw mut cmdinfo,
                 &raw mut errormsg,
             );
-            emsg_off.set(emsg_off.get() - 1);
+            drop(no_emsg);
             if !parsed {
                 break 'end;
             }

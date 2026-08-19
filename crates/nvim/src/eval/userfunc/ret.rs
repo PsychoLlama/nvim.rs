@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -50,9 +51,7 @@ pub unsafe fn ex_return(eap: *mut exarg_T) {
         let mut evalarg = EVALARG_INIT;
         evalarg.eval_flags = if (*eap).skip != 0 { 0 } else { EVAL_EVALUATE };
 
-        if (*eap).skip != 0 {
-            *emsg_skip.ptr() += 1;
-        }
+        let skipping = ((*eap).skip != 0).then(Suppress::emsg_skip);
 
         (*eap).nextcmd = ptr::null_mut();
         if *arg != NUL as c_char
@@ -84,9 +83,7 @@ pub unsafe fn ex_return(eap: *mut exarg_T) {
             (*eap).nextcmd = check_nextcmd(arg);
         }
 
-        if (*eap).skip != 0 {
-            *emsg_skip.ptr() -= 1;
-        }
+        drop(skipping);
         clear_evalarg(&raw mut evalarg, eap);
     }
 }
@@ -360,11 +357,11 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
             // Trailing arguments are still evaluated, so that errors in them
             // are reported -- but nothing is called.
             let mut rettv = TV_INITIAL_VALUE;
-            *emsg_skip.ptr() += 1;
+            let skipping = Suppress::emsg_skip();
             if eval0((*eap).arg, &raw mut rettv, eap, &raw mut evalarg) != FAIL {
                 tv_clear(&raw mut rettv);
             }
-            *emsg_skip.ptr() -= 1;
+            drop(skipping);
             clear_evalarg(&raw mut evalarg, eap);
             return;
         }

@@ -55,7 +55,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{mem, ptr};
 
 use crate::main::{
-    VIsual_active, cmdwin_buf, curbuf, curtab, curwin, did_emsg, emsg_off, firstbuf, firstwin,
+    VIsual_active, cmdwin_buf, curbuf, curtab, curwin, did_emsg, firstbuf, firstwin,
     swap_exists_action, u_sync_once,
 };
 use crate::memline::{

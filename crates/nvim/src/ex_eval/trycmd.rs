@@ -53,10 +53,10 @@ use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_to_string_skip;
 use crate::eval::userfunc::do_return;
 use crate::ex_docmd::{ends_excmd, find_nextcmd};
+use crate::guard::Suppress;
 use crate::main::{
     current_exception, did_emsg, did_throw, e_argreq, e_invarg2, e_trailing_arg,
-    empty_string_option, emsg_off, emsg_silent, force_abort, got_int, msg_list, need_rethrow,
-    p_cpo,
+    empty_string_option, emsg_silent, force_abort, got_int, msg_list, need_rethrow, p_cpo,
 };
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, internal_error};
@@ -322,12 +322,12 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
         p_cpo.set(empty_string_option.ptr().cast());
         // Errors here would invalidate the current exception.
         // Disable error messages: one here would invalidate the exception.
-        emsg_off.set(emsg_off.get() + 1);
+        let no_emsg = Suppress::emsg();
         let mut regmatch = regmatch_T {
             regprog: vim_regcomp(pat, RE_MAGIC + RE_STRING),
             ..regmatch_T::default()
         };
-        emsg_off.set(emsg_off.get() - 1);
+        drop(no_emsg);
         if !end.is_null() {
             *end = save_char;
         }

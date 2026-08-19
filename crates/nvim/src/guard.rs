@@ -120,6 +120,13 @@ pub struct RawKeys {
     _allow_keys: Bump,
 }
 
+/// `emsg_off` and `msg_silent` together: "run this and tell me nothing".
+#[must_use = "the counters are released as soon as the guard is dropped"]
+pub struct Quiet {
+    _emsg: Bump,
+    _messages: Bump,
+}
+
 /// Guards that turn some part of the editor's output off for a scope.
 pub struct Suppress;
 
@@ -159,6 +166,23 @@ impl Suppress {
     /// `RedrawingDisabled` — the screen is not updated while this is held.
     pub fn redraw() -> Bump {
         Bump::new(&RedrawingDisabled)
+    }
+
+    /// `emsg_off = 1` — errors off for the scope, restoring the level that
+    /// was in effect rather than decrementing it. The one site spelled this
+    /// way compiles a user's tag pattern, where an error raised by a
+    /// *nested* evaluation must not survive the scope either.
+    pub fn emsg_outright() -> Saved {
+        Saved::new(&emsg_off, 1)
+    }
+
+    /// [`Suppress::emsg`] + [`Suppress::messages`]: the recurring "compile
+    /// and run this pattern, and say nothing whatever it does" pair.
+    pub fn output() -> Quiet {
+        Quiet {
+            _emsg: Self::emsg(),
+            _messages: Self::messages(),
+        }
     }
 }
 
@@ -245,12 +269,6 @@ impl Allow {
             _no_mapping: Bump::by(&no_mapping, -1),
             _allow_keys: Bump::by(&allow_keys, -1),
         }
-    }
-
-    /// `emsg_off = 1` — error display off for the scope, restoring
-    /// whatever nesting level was in effect rather than decrementing.
-    pub fn no_emsg() -> Saved {
-        Saved::new(&emsg_off, 1)
     }
 }
 

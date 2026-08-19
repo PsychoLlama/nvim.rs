@@ -10,6 +10,7 @@
 
 use super::*;
 
+use crate::guard::Suppress;
 use crate::types::{ExpandContext, FAIL, NUL, OK};
 use core::ffi::CStr;
 
@@ -289,16 +290,13 @@ pub(crate) unsafe fn do_incsearch_highlighting(
             return false;
         }
 
-        emsg_off.set(emsg_off.get() + 1);
-        let retval = parse_pattern_and_range(
+        let _no_emsg = Suppress::emsg();
+        parse_pattern_and_range(
             &raw mut (*is_state).search_start,
             search_delim,
             skiplen,
             patlen,
-        );
-        emsg_off.set(emsg_off.get() - 1);
-
-        retval
+        )
     }
 }
 
@@ -383,7 +381,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
             };
             *(*cc).cmdbuff.offset((skiplen + patlen) as isize) = NUL as ::core::ffi::c_char;
             // So it doesn't beep on a bad expression.
-            emsg_off.set(emsg_off.get() + 1);
+            let no_emsg = Suppress::emsg();
             found = do_search(
                 ::core::ptr::null_mut::<oparg_T>(),
                 if firstc == ':' as ::core::ffi::c_int {
@@ -398,7 +396,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
                 search_flags,
                 &raw mut sia,
             );
-            emsg_off.set(emsg_off.get() - 1);
+            drop(no_emsg);
             *(*cc).cmdbuff.offset((skiplen + patlen) as isize) = next_char;
 
             if (*curwin.get()).w_cursor.lnum < search_first_line.get()
@@ -690,7 +688,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
             search_flags += SEARCH_KEEP;
         }
 
-        emsg_off.set(emsg_off.get() + 1);
+        let no_emsg = Suppress::emsg();
         let save = *pat.offset(patlen as isize);
         *pat.offset(patlen as isize) = NUL as ::core::ffi::c_char;
         let found = searchit(
@@ -706,7 +704,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
             RE_SEARCH as ::core::ffi::c_int,
             ::core::ptr::null_mut::<searchit_arg_T>(),
         );
-        emsg_off.set(emsg_off.get() - 1);
+        drop(no_emsg);
         *pat.offset(patlen as isize) = save;
         if bslsh {
             *pat.offset((patlen - 1) as isize) = '\\' as ::core::ffi::c_char;

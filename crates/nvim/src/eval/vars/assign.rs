@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -108,9 +109,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
         }
         expr = skipwhite(expr);
 
-        if (*eap).skip != 0 {
-            (*emsg_skip.ptr()) += 1;
-        }
+        let skipping = ((*eap).skip != 0).then(Suppress::emsg_skip);
         let mut evalarg = evalarg_T {
             eval_flags: 0,
             eval_getline: None,
@@ -119,9 +118,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
         };
         fill_evalarg_from_eap(&raw mut evalarg, eap, (*eap).skip != 0);
         let eval_res = eval0(expr, &raw mut rettv, eap, &raw mut evalarg);
-        if (*eap).skip != 0 {
-            (*emsg_skip.ptr()) -= 1;
-        }
+        drop(skipping);
         clear_evalarg(&raw mut evalarg, eap);
 
         if (*eap).skip == 0 && eval_res != FAIL {

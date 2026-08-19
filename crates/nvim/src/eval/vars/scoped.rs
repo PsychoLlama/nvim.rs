@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -46,7 +47,7 @@ unsafe fn get_var_from(
         let mut done = false;
         let do_change_curbuf = !buf.is_null() && htname == b'b' as c_int;
 
-        (*emsg_off.ptr()) += 1;
+        let _no_emsg = Suppress::emsg();
         (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = ptr::null_mut();
 
@@ -109,7 +110,6 @@ unsafe fn get_var_from(
         if !done && (*deftv).v_type != VAR_UNKNOWN {
             tv_copy(deftv, rettv);
         }
-        (*emsg_off.ptr()) -= 1;
     }
 }
 

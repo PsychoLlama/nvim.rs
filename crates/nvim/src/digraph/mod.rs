@@ -23,12 +23,10 @@ use crate::ex_getln::putcmdline;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::getchar::plain_vgetc;
 use crate::global_cell::GlobalCell;
-use crate::guard::Keys;
+use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::K_BS;
-use crate::main::{
-    Columns, cmdline_star, curbuf, curwin, emsg_skip, got_int, msg_col, p_cpo, p_dg, p_enc,
-};
+use crate::main::{Columns, cmdline_star, curbuf, curwin, got_int, msg_col, p_cpo, p_dg, p_enc};
 use crate::mapping::do_map;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
 use crate::memory::{xfree, xmemdupz};
@@ -924,12 +922,12 @@ pub unsafe fn keymap_str(wp: *mut win_T) -> Option<CString> {
     // Evaluate b:keymap_name in wp's buffer.
     curbuf.set(buf);
     curwin.set(wp);
-    emsg_skip.set(emsg_skip.get() + 1);
+    let skipping = Suppress::emsg_skip();
     let mut expr = *b"b:keymap_name\0";
     // SAFETY: `expr` is NUL-terminated and outlives the call; the result is
     // an owned heap string or null.
     let s = unsafe { eval_to_string(expr.as_mut_ptr() as *mut c_char, false, false) };
-    emsg_skip.set(emsg_skip.get() - 1);
+    drop(skipping);
     curbuf.set(old_curbuf);
     curwin.set(old_curwin);
     // SAFETY: `s` is null or NUL-terminated, and 'keymap' is an option

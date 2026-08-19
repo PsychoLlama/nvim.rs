@@ -47,8 +47,8 @@ use crate::main::{
     debug_backtrace_level, debug_tick, did_emsg, did_throw, do_profiling, e_dictkey, e_invarg2,
     e_invexpr2, e_invrange, e_missingparen, e_not_callable_type_str, e_str_not_inside_function,
     e_toofewarg, e_toomanyarg, e_trailing_arg, e_unknown_function_str, e_usingsid, emsg_severe,
-    emsg_skip, ex_nesting_level, got_int, lines_left, msg_row, msg_scroll, need_wait_return, p_ic,
-    p_mfd, p_verbose, sandbox, trylevel, want_garbage_collect,
+    ex_nesting_level, got_int, lines_left, msg_row, msg_scroll, need_wait_return, p_ic, p_mfd,
+    p_verbose, sandbox, trylevel, want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{

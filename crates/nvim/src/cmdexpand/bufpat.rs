@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 use crate::types::{FAIL, NUL, OK};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
@@ -126,11 +127,9 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
             rm_ic: false,
         };
 
-        (*emsg_off.ptr()) += 1;
-        (*msg_silent.ptr()) += 1;
+        let quiet = Suppress::output();
         regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-        (*emsg_off.ptr()) -= 1;
-        (*msg_silent.ptr()) -= 1;
+        drop(quiet);
 
         if regmatch.regprog.is_null() {
             return false;
@@ -140,11 +139,9 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
             regmatch.rm_ic = !pat_has_uppercase(pat);
         }
 
-        (*emsg_off.ptr()) += 1;
-        (*msg_silent.ptr()) += 1;
+        let quiet = Suppress::output();
         let result = vim_regexec_nl(&raw mut regmatch, str, 0);
-        (*emsg_off.ptr()) -= 1;
-        (*msg_silent.ptr()) -= 1;
+        drop(quiet);
 
         vim_regfree(regmatch.regprog);
         result
@@ -254,8 +251,7 @@ pub(crate) unsafe fn expand_pattern_in_buf(
         // collected so far are thrown away.
         let completed = 'search: {
             loop {
-                (*emsg_off.ptr()) += 1;
-                (*msg_silent.ptr()) += 1;
+                let quiet = Suppress::output();
                 let found_new_match = searchit(
                     ptr::null_mut(),
                     curbuf.get(),
@@ -269,8 +265,7 @@ pub(crate) unsafe fn expand_pattern_in_buf(
                     RE_LAST,
                     ptr::null_mut(),
                 );
-                (*msg_silent.ptr()) -= 1;
-                (*emsg_off.ptr()) -= 1;
+                drop(quiet);
 
                 if found_new_match == FAIL {
                     break;

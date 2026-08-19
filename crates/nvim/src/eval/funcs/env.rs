@@ -16,7 +16,8 @@ use crate::eval::typval::{
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{eval_vars, expand_filename};
-use crate::main::{e_invarg2, emsg_off, p_verbose, p_wic};
+use crate::guard::Suppress;
+use crate::main::{e_invarg2, p_verbose, p_wic};
 use crate::memfile::mf_fname;
 use crate::memline::{recover_names, swapfile_dict};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
@@ -115,9 +116,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             // A `%`/`#`/`<` item is resolved by the Ex-command machinery,
             // whose own errors are suppressed unless 'verbose' is set.
             let quiet = p_verbose.get() == 0 as OptInt;
-            if quiet {
-                *emsg_off.ptr() += 1;
-            }
+            let no_emsg = quiet.then(Suppress::emsg);
             let mut len: usize = 0;
             let mut errormsg: *const c_char = ptr::null();
             let result = eval_vars(
@@ -129,9 +128,8 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 ptr::null_mut(),
                 false,
             );
-            if quiet {
-                *emsg_off.ptr() -= 1;
-            } else if !errormsg.is_null() {
+            drop(no_emsg);
+            if !quiet && !errormsg.is_null() {
                 emsg(errormsg);
             }
             if rettv.v_type == VAR_LIST {
@@ -207,18 +205,13 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         eap.addr_type = CmdAddr::Lines;
         eap.argt = ExArgt::NOSPC;
         let mut errormsg: *const c_char = ptr::null();
-        if quiet {
-            *emsg_off.ptr() += 1;
-        }
+        let _no_emsg = quiet.then(Suppress::emsg);
         if expand_filename(&raw mut eap, &raw mut cmdstr, &raw mut errormsg) == FAIL
             && !quiet
             && !errormsg.is_null()
             && *errormsg as c_int != NUL
         {
             emsg(errormsg);
-        }
-        if quiet {
-            *emsg_off.ptr() -= 1;
         }
         rettv.vval.v_string = cmdstr;
     }

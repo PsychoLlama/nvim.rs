@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Suppress;
 use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
@@ -501,9 +502,9 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
                 // Complete spelling suggestions.
                 LOWER_S | Ctrl_S => {
                     ctrl_x_mode.set(CTRL_X_SPELL);
-                    emsg_off.set(emsg_off.get() + 1); // avoid E756 twice
+                    let no_emsg = Suppress::emsg(); // avoid E756 twice
                     spell_back_to_badword();
-                    emsg_off.set(emsg_off.get() - 1);
+                    drop(no_emsg);
                     break 'chord;
                 }
                 // Complete tag names.

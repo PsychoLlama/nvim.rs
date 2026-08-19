@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::file_search::Name;
+use crate::guard::Suppress;
 use crate::options::{
     kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
 };
@@ -770,10 +771,9 @@ pub unsafe fn find_tags(
 
         // A pattern that does not compile is the caller's problem, not a
         // message from here.
-        let save_emsg_off = emsg_off.get();
-        emsg_off.set(1);
+        let no_emsg = Suppress::emsg_outright();
         st.orgpat.prepare(has_re);
-        emsg_off.set(save_emsg_off);
+        drop(no_emsg);
 
         let mut retval = FAIL;
         if !(has_re && st.orgpat.regmatch.regprog.is_null()) {

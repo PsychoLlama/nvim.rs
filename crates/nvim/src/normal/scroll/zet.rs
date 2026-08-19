@@ -14,7 +14,8 @@ use crate::fold::{
     foldOpenCursor, foldmethodIsDiff, foldmethodIsManual, foldmethodIsMarker, getDeepestNesting,
     hasFolding, newFoldLevel, openFold, openFoldRecurse,
 };
-use crate::main::{VIsual_active, curbuf, curwin, emsg_off, finish_op, firstwin};
+use crate::guard::Suppress;
+use crate::main::{VIsual_active, curbuf, curwin, finish_op, firstwin};
 use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
@@ -135,7 +136,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
             let pos = (*curwin.get()).w_cursor;
             // The search is only being used to find where the bad word
             // starts; its "no more misspellings" message is not wanted.
-            (*emsg_off.ptr()) += 1;
+            let no_emsg = Suppress::emsg();
             len = spell_move_to(
                 curwin.get(),
                 FORWARD as c_int,
@@ -143,7 +144,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
                 true,
                 ptr::null_mut(),
             );
-            (*emsg_off.ptr()) -= 1;
+            drop(no_emsg);
             // Only if it found one at or before the cursor, i.e. the one the
             // cursor is inside rather than the next one.
             if len != 0 && (*curwin.get()).w_cursor.col <= pos.col {

@@ -24,7 +24,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{ex_let_vars, skip_var_list};
 use crate::eval::{EVAL_EVALUATE, e_string_list_or_blob_required, eval0, forinfo_T};
-use crate::main::emsg_skip;
+use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
@@ -78,9 +78,7 @@ pub unsafe fn eval_for_line(
             return fi as *mut c_void;
         }
 
-        if skip {
-            *emsg_skip.ptr() += 1;
-        }
+        let _skipping = skip.then(Suppress::emsg_skip);
         let expr = skipwhite(expr.add(2));
         let mut tv = UNSET_TV;
         if eval0(expr as *mut c_char, &raw mut tv, eap, evalarg) == OK {
@@ -128,9 +126,6 @@ pub unsafe fn eval_for_line(
                     }
                 }
             }
-        }
-        if skip {
-            *emsg_skip.ptr() -= 1;
         }
         fi as *mut c_void
     }

@@ -60,9 +60,10 @@ use crate::ex_cmds::{check_overwrite, set_swapcommand};
 use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
+use crate::guard::Suppress;
 use crate::highlight_group::HLF_W;
 use crate::main::{
-    cmdline_row, cmdmod, curbuf, curtab, curwin, emsg_off, exiting, firstbuf, msg_col, msg_didany,
+    cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, firstbuf, msg_col, msg_didany,
     msg_didout, msg_row, no_check_timestamps, no_wait_return, p_aw, p_awa, p_confirm, p_write,
     vgetc_busy,
 };
@@ -876,9 +877,8 @@ pub unsafe fn ex_drop(eap: *mut exarg_T) {
         // since then the buffer is not lost.
         let mut split = false;
         if !buf_hide(curbuf.get()) {
-            emsg_off.set(emsg_off.get() + 1);
+            let _no_emsg = Suppress::emsg();
             split = check_changed(curbuf.get(), CCGD_AW | CCGD_EXCMD);
-            emsg_off.set(emsg_off.get() - 1);
         }
 
         // Fake a ":sfirst" or ":first" to edit the first argument.
