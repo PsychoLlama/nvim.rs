@@ -100,9 +100,9 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, CharsizeArg, CmdModFlags, ExtmarkOp, GRegFlags, MotionType, NUL,
     PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
-    PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VAR_FIXED, bcount_t, block_def,
-    cmd_addr_T, colnr_T, exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse,
-    kBoolVarTrue, linenr_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, yankreg_T,
+    PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VAR_FIXED, bcount_t, block_def, colnr_T,
+    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T,
+    oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, yankreg_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
@@ -130,7 +130,6 @@ pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const ADDR_LINES: cmd_addr_T = 0;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;

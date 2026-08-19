@@ -11,7 +11,7 @@ pub struct ucmd_T {
     pub uc_rep: *mut ::core::ffi::c_char,
     pub uc_def: int64_t,
     pub uc_compl: ::core::ffi::c_int,
-    pub uc_addr_type: cmd_addr_T,
+    pub uc_addr_type: CmdAddr,
     pub uc_script_ctx: sctx_T,
     pub uc_compl_arg: *mut ::core::ffi::c_char,
     pub uc_compl_luaref: LuaRef,

@@ -104,8 +104,8 @@ use crate::syntax::{
 use crate::tag::expand_tags;
 use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    Arena, Array, CmdlineInfo, CompleteListItemGetter, Direction, Error, EvalFuncData, LuaRetMode,
-    Object, OptInt, buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
+    Arena, Array, CmdAddr, CmdlineInfo, CompleteListItemGetter, Direction, Error, EvalFuncData,
+    LuaRetMode, Object, OptInt, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
     fuzmatch_str_T, garray_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T,
     listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, scriptitem_T, size_t, ssize_t, typval_T,
     typval_vval_union, varnumber_T, xp_prefix_T,
@@ -217,7 +217,6 @@ pub const EXPAND_COMMANDS: C2Rust_Unnamed_14 = 1;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_14 = 0;
 pub const EXPAND_OK: C2Rust_Unnamed_14 = -1;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_14 = -2;
-pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
 /// Not a `WILD_*` at all — `buffer.h`'s, and `ExpandBufnames` reads it out

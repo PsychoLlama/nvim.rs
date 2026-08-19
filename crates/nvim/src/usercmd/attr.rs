@@ -19,9 +19,8 @@
 
 use super::complete::{COMMAND_COMPLETE, command_complete_name};
 use super::{
-    ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
-    ADDR_QUICKFIX, ADDR_TABS, ADDR_WINDOWS, EXPAND_BUFFERS, EXPAND_DIRECTORIES, EXPAND_FILES,
-    EXPAND_SHELLCMDLINE, EXPAND_USER_DEFINED, EXPAND_USER_LIST, FAIL, OK, UC_BUFFER,
+    EXPAND_BUFFERS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_SHELLCMDLINE, EXPAND_USER_DEFINED,
+    EXPAND_USER_LIST, FAIL, OK, UC_BUFFER,
 };
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int;
@@ -29,19 +28,19 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
-use crate::types::{ExArgt, NUL, cmd_addr_T, size_t};
+use crate::types::{CmdAddr, ExArgt, NUL, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::slice;
 
 /// The address types `-addr=` names, and the short forms `:command` lists
 /// them under.
 ///
-/// Upstream terminates the table with an `ADDR_NONE` row and walks until it
+/// Upstream terminates the table with an `CmdAddr::NoRange` row and walks until it
 /// meets it; the sentinel is also what [`super::complete::
 /// get_user_cmd_addr_type`] answers null for, ending completion. Here the
 /// end of the slice is that sentinel.
 pub(super) struct AddrType {
-    pub(super) expand: cmd_addr_T,
+    pub(super) expand: CmdAddr,
     pub(super) name: &'static CStr,
     pub(super) shortname: &'static CStr,
 }
@@ -49,24 +48,24 @@ pub(super) struct AddrType {
 /// Must stay alphabetical by `name`: it is offered for completion in order.
 #[rustfmt::skip]
 pub(super) static ADDR_TYPES: [AddrType; 8] = [
-    AddrType { expand: ADDR_ARGUMENTS,      name: c"arguments",      shortname: c"arg" },
-    AddrType { expand: ADDR_LINES,          name: c"lines",          shortname: c"line" },
-    AddrType { expand: ADDR_LOADED_BUFFERS, name: c"loaded_buffers", shortname: c"load" },
-    AddrType { expand: ADDR_TABS,           name: c"tabs",           shortname: c"tab" },
-    AddrType { expand: ADDR_BUFFERS,        name: c"buffers",        shortname: c"buf" },
-    AddrType { expand: ADDR_WINDOWS,        name: c"windows",        shortname: c"win" },
-    AddrType { expand: ADDR_QUICKFIX,       name: c"quickfix",       shortname: c"qf" },
-    AddrType { expand: ADDR_OTHER,          name: c"other",          shortname: c"?" },
+    AddrType { expand: CmdAddr::Arguments,      name: c"arguments",      shortname: c"arg" },
+    AddrType { expand: CmdAddr::Lines,          name: c"lines",          shortname: c"line" },
+    AddrType { expand: CmdAddr::LoadedBuffers, name: c"loaded_buffers", shortname: c"load" },
+    AddrType { expand: CmdAddr::Tabs,           name: c"tabs",           shortname: c"tab" },
+    AddrType { expand: CmdAddr::Buffers,        name: c"buffers",        shortname: c"buf" },
+    AddrType { expand: CmdAddr::Windows,        name: c"windows",        shortname: c"win" },
+    AddrType { expand: CmdAddr::Quickfix,       name: c"quickfix",       shortname: c"qf" },
+    AddrType { expand: CmdAddr::Other,          name: c"other",          shortname: c"?" },
 ];
 
 /// The row whose `expand` is `addr_type`, if it is one that has a name.
 ///
-/// `ADDR_LINES` is deliberately excluded: it is the default, and neither
+/// `CmdAddr::Lines` is deliberately excluded: it is the default, and neither
 /// `:command`'s listing nor `nvim_get_commands()` names a default.
-pub(super) fn named_addr_type(addr_type: cmd_addr_T) -> Option<&'static AddrType> {
+pub(super) fn named_addr_type(addr_type: CmdAddr) -> Option<&'static AddrType> {
     ADDR_TYPES
         .iter()
-        .find(|row| row.expand != ADDR_LINES && row.expand == addr_type)
+        .find(|row| row.expand != CmdAddr::Lines && row.expand == addr_type)
 }
 
 /// C's `STRNICMP(attr, name, len) == 0` over `attr`'s `len` bytes.
@@ -89,7 +88,7 @@ fn abbreviates(attr: &[u8], name: &str) -> bool {
 pub unsafe fn parse_addr_type_arg(
     value: *mut c_char,
     vallen: c_int,
-    addr_type_arg: *mut cmd_addr_T,
+    addr_type_arg: *mut CmdAddr,
 ) -> c_int {
     // SAFETY: caller contract.
     let typed = unsafe { slice::from_raw_parts(value.cast::<u8>(), vallen as usize) };
@@ -190,7 +189,7 @@ pub(super) struct Attributes<'a> {
     pub(super) flags: &'a mut c_int,
     pub(super) complp: &'a mut c_int,
     pub(super) compl_arg: &'a mut *mut c_char,
-    pub(super) addr_type_arg: &'a mut cmd_addr_T,
+    pub(super) addr_type_arg: &'a mut CmdAddr,
 }
 
 /// What went wrong with an attribute, as the message still to report.
@@ -282,7 +281,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
             } {
                 FAIL => Err(Bad::Reported),
                 _ => {
-                    if *into.addr_type_arg != ADDR_LINES {
+                    if *into.addr_type_arg != CmdAddr::Lines {
                         *into.argt |= ExArgt::ZEROR;
                     }
                     Ok(())
@@ -355,7 +354,7 @@ fn scan_range(
     value: Option<&[u8]>,
     argt: &mut ExArgt,
     def: &mut c_int,
-    addr_type_arg: &mut cmd_addr_T,
+    addr_type_arg: &mut CmdAddr,
 ) -> Result<(), Bad> {
     *argt |= ExArgt::RANGE;
     match value {
@@ -376,8 +375,8 @@ fn scan_range(
         None => {}
     }
     // The default for -range is to count buffer lines.
-    if *addr_type_arg == ADDR_NONE {
-        *addr_type_arg = ADDR_LINES;
+    if *addr_type_arg == CmdAddr::NoRange {
+        *addr_type_arg = CmdAddr::Lines;
     }
     Ok(())
 }
@@ -387,12 +386,12 @@ fn scan_count(
     value: Option<&[u8]>,
     argt: &mut ExArgt,
     def: &mut c_int,
-    addr_type_arg: &mut cmd_addr_T,
+    addr_type_arg: &mut CmdAddr,
 ) -> Result<(), Bad> {
     *argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
     // The default for -count is to count anything.
-    if *addr_type_arg == ADDR_NONE {
-        *addr_type_arg = ADDR_OTHER;
+    if *addr_type_arg == CmdAddr::NoRange {
+        *addr_type_arg = CmdAddr::Other;
     }
     if let Some(v) = value {
         if *def >= 0 {

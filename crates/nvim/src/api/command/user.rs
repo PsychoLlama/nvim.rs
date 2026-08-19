@@ -114,7 +114,7 @@ pub unsafe fn create_user_command(
         let mut force: bool = false;
         let mut argt = ExArgt::NONE;
         let mut def: int64_t = -1 as int64_t;
-        let mut addr_type_arg: cmd_addr_T = ADDR_NONE;
+        let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
         let mut context: ::core::ffi::c_int = EXPAND_NOTHING as ::core::ffi::c_int;
         let mut compl_arg: *mut ::core::ffi::c_char =
             ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -234,7 +234,7 @@ pub unsafe fn create_user_command(
                     {
                         if (*opts).range.data.boolean {
                             argt |= ExArgt::RANGE;
-                            addr_type_arg = ADDR_LINES;
+                            addr_type_arg = CmdAddr::Lines;
                         }
                     } else if (*opts).range.type_0 as ::core::ffi::c_uint
                         == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -259,14 +259,14 @@ pub unsafe fn create_user_command(
                             break '_err;
                         } else {
                             argt |= ExArgt::RANGE | ExArgt::DFLALL;
-                            addr_type_arg = ADDR_LINES;
+                            addr_type_arg = CmdAddr::Lines;
                         }
                     } else if (*opts).range.type_0 as ::core::ffi::c_uint
                         == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         argt |= ExArgt::RANGE | ExArgt::ZEROR;
                         def = (*opts).range.data.integer as int64_t;
-                        addr_type_arg = ADDR_LINES;
+                        addr_type_arg = CmdAddr::Lines;
                     } else if has_key(
                         (*opts).is_set__user_command_,
                         KEYSET_OPTIDX_user_command__range,
@@ -287,14 +287,14 @@ pub unsafe fn create_user_command(
                     {
                         if (*opts).count.data.boolean {
                             argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
-                            addr_type_arg = ADDR_OTHER;
+                            addr_type_arg = CmdAddr::Other;
                             def = 0 as int64_t;
                         }
                     } else if (*opts).count.type_0 as ::core::ffi::c_uint
                         == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
-                        addr_type_arg = ADDR_OTHER;
+                        addr_type_arg = CmdAddr::Other;
                         def = (*opts).count.data.integer as int64_t;
                     } else if has_key(
                         (*opts).is_set__user_command_,
@@ -343,7 +343,7 @@ pub unsafe fn create_user_command(
                         } else {
                             argt |= ExArgt::RANGE;
                             if addr_type_arg as ::core::ffi::c_uint
-                                != ADDR_LINES as ::core::ffi::c_int as ::core::ffi::c_uint
+                                != CmdAddr::Lines as ::core::ffi::c_uint
                             {
                                 argt |= ExArgt::ZEROR;
                             }

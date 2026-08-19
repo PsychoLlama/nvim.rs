@@ -29,11 +29,11 @@ use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::strings::kv_do_printf;
 use crate::types::{
-    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_iput, CMD_put, CmdModFlags,
-    CmdParseInfo, Dict, Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic,
+    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_iput, CMD_put, CmdAddr,
+    CmdModFlags, CmdParseInfo, Dict, Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic,
     KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
     KeyDict_get_commands, KeyDict_user_command, KeyValuePair, LuaRef, Object, String_0,
-    StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,
+    StringBuilder, TryState, buf_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeString,
     kObjectTypeTabpage, kObjectTypeWindow, linenr_T, sctx_T, size_t, ucmd_T, uint8_t, uint64_t,
@@ -55,15 +55,6 @@ pub use self::cmd::*;
 pub(crate) use self::cmdline::*;
 pub use self::parse::*;
 pub use self::user::*;
-pub const ADDR_NONE: cmd_addr_T = 11;
-pub const ADDR_OTHER: cmd_addr_T = 10;
-pub const ADDR_TABS: cmd_addr_T = 5;
-pub const ADDR_BUFFERS: cmd_addr_T = 4;
-pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
-pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
-pub const ADDR_WINDOWS: cmd_addr_T = 1;
-pub const ADDR_QUICKFIX: cmd_addr_T = 8;
-pub const ADDR_LINES: cmd_addr_T = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const NUMBUFLEN: C2Rust_Unnamed_15 = 65;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_16 = 0;

@@ -226,6 +226,44 @@ fn repr_of(attrs: &[syn::Attribute]) -> (bool, Option<u64>) {
     (is_c, align)
 }
 
+/// The integer type a `#[repr(<int>)]` enum is, if it has such a `repr`.
+///
+/// A C enumeration that c2rust rendered as `type X = c_uint;` plus a run of
+/// `const`s becomes a real Rust `enum` as the port converts each family. On
+/// the C side it is still the integer it always was, so it emits as an alias
+/// -- exactly as a `flag_set!` newtype does. The variants are deliberately
+/// *not* emitted as constants: no unit spec reads one, and an implicit
+/// discriminant would have to be evaluated to know its value.
+fn enum_repr(attrs: &[syn::Attribute]) -> Option<syn::Type> {
+    for attr in attrs {
+        if !attr.path().is_ident("repr") {
+            continue;
+        }
+        let mut found = None;
+        let _ = attr.parse_nested_meta(|meta| {
+            let Some(name) = meta.path.get_ident().map(|i| i.to_string()) else {
+                return Ok(());
+            };
+            found = match name.as_str() {
+                "u8" => Some(syn::parse_quote!(u8)),
+                "u16" => Some(syn::parse_quote!(u16)),
+                "u32" | "C" => Some(syn::parse_quote!(::core::ffi::c_uint)),
+                "u64" => Some(syn::parse_quote!(u64)),
+                "i8" => Some(syn::parse_quote!(i8)),
+                "i16" => Some(syn::parse_quote!(i16)),
+                "i32" => Some(syn::parse_quote!(::core::ffi::c_int)),
+                "i64" => Some(syn::parse_quote!(i64)),
+                _ => found.take(),
+            };
+            Ok(())
+        });
+        if found.is_some() {
+            return found;
+        }
+    }
+    None
+}
+
 /// One parsed `crate::bitfield_accessors!` invocation: the crate stores C
 /// bitfields as `[u8; N]` arrays and generates `name()`/`set_name()` methods
 /// over them with this macro (src/bitfield.rs). The invocation is the
@@ -477,6 +515,11 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
                         Kind::Union(named_fields(&u.fields, None)),
                         align,
                     );
+                }
+            }
+            syn::Item::Enum(e) if e.generics.params.is_empty() => {
+                if let Some(int) = enum_repr(&e.attrs) {
+                    add(world, e.ident.to_string(), Kind::Alias(Box::new(int)), None);
                 }
             }
             syn::Item::Type(t) if t.generics.params.is_empty() => {

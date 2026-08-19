@@ -352,7 +352,7 @@
     "crates/nvim/src/ex_cmds/write.rs": {"unsafe_lines": 372},
     "crates/nvim/src/ex_cmds2/listdo.rs": {"unsafe_lines": 228},
     "crates/nvim/src/ex_cmds2/mod.rs": {"unsafe_lines": 414},
-    "crates/nvim/src/ex_docmd/address.rs": {"cell_ptr": 1, "unsafe_lines": 742},
+    "crates/nvim/src/ex_docmd/address.rs": {"cell_ptr": 1, "unsafe_lines": 720},
     "crates/nvim/src/ex_docmd/api.rs": {"cell_ptr": 13, "unsafe_lines": 264},
     "crates/nvim/src/ex_docmd/argopt.rs": {"cell_ptr": 1, "unsafe_lines": 335},
     "crates/nvim/src/ex_docmd/childproc.rs": {"cell_ptr": 3, "unsafe_lines": 111},

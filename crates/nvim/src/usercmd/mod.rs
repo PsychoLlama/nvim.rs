@@ -70,7 +70,7 @@ use crate::runtime::sourcing_lnum;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{
-    CMD_USER, CMD_USER_BUF, ExArgt, FAIL, LuaRef, OK, cmd_addr_T, exarg_T, expand_T, garray_T,
+    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, FAIL, LuaRef, OK, exarg_T, expand_T, garray_T,
     int64_t, size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
@@ -96,15 +96,6 @@ pub const EXPAND_FILES: c_int = 2;
 pub const EXPAND_COMMANDS: c_int = 1;
 pub const EXPAND_NOTHING: c_int = 0;
 pub const EXPAND_UNSUCCESSFUL: c_int = -2;
-pub const ADDR_NONE: cmd_addr_T = 11;
-pub const ADDR_OTHER: cmd_addr_T = 10;
-pub const ADDR_QUICKFIX: cmd_addr_T = 8;
-pub const ADDR_TABS: cmd_addr_T = 5;
-pub const ADDR_BUFFERS: cmd_addr_T = 4;
-pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
-pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
-pub const ADDR_WINDOWS: cmd_addr_T = 1;
-pub const ADDR_LINES: cmd_addr_T = 0;
 pub const UC_BUFFER: c_int = 1;
 pub const LUA_NOREF: c_int = -2;
 
@@ -351,7 +342,7 @@ pub unsafe fn uc_add_command(
     compl_arg: *mut c_char,
     compl_luaref: LuaRef,
     preview_luaref: LuaRef,
-    addr_type: cmd_addr_T,
+    addr_type: CmdAddr,
     luaref: LuaRef,
     force: bool,
 ) -> c_int {
@@ -511,7 +502,7 @@ pub unsafe fn ex_command(eap: *mut exarg_T) {
     let mut flags: c_int = 0;
     let mut context: c_int = EXPAND_NOTHING;
     let mut compl_arg: *mut c_char = ptr::null_mut();
-    let mut addr_type_arg: cmd_addr_T = ADDR_NONE;
+    let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
 
     // SAFETY: caller contract.
     let (arg, forceit) = unsafe { ((*eap).arg, (*eap).forceit != 0) };

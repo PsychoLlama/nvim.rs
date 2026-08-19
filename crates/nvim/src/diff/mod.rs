@@ -90,10 +90,10 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::{
-    CMD_append, CMD_diffget, CMD_diffput, CMD_split, CmdModFlags, EvalFuncData, ExtmarkOp, FILE,
-    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, buf_T,
-    bufref_T, cmd_addr_T, colnr_T, diff_T, diffblock_S, diffline_S, diffline_T, diffline_change_T,
-    exarg_T, garray_T, hlf_T, linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint64_t,
+    CMD_append, CMD_diffget, CMD_diffput, CMD_split, CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp,
+    FILE, FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, buf_T,
+    bufref_T, colnr_T, diff_T, diffblock_S, diffline_S, diffline_T, diffline_change_T, exarg_T,
+    garray_T, hlf_T, linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint64_t,
     varnumber_T, win_T, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
@@ -145,7 +145,6 @@ pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const ADDR_LINES: cmd_addr_T = 0;
 /// An empty growable array, the shape c2rust writes out at every site.
 pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0,

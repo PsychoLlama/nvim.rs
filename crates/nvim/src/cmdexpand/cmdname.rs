@@ -353,7 +353,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
     unsafe {
         let mut ea = exarg_T {
             cmdidx: CMD_append,
-            addr_type: ADDR_LINES,
+            addr_type: CmdAddr::Lines,
             ..core::mem::zeroed()
         };
         let mut context: c_int = EXPAND_NOTHING;

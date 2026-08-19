@@ -23,7 +23,7 @@ use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    ADDR_TABS, SID_NONE, cmdnames, e_invrange, ex_func_T, ex_pressedreturn, exmode_plus, getexline,
+    SID_NONE, cmdnames, e_invrange, ex_func_T, ex_pressedreturn, exmode_plus, getexline,
 };
 use crate::main::{
     cmdmod, curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col,
@@ -40,8 +40,9 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CmdModFlags, FAIL, NUL,
-    OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T, cmdmod_T, exarg_T, size_t,
+    CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CmdAddr, CmdModFlags,
+    FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T, cmdmod_T,
+    exarg_T, size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{atoi, memset, strlen};
@@ -313,7 +314,7 @@ pub unsafe fn parse_command_modifiers(
                             let tabnr = get_address(
                                 eap,
                                 &raw mut ea.cmd,
-                                ADDR_TABS,
+                                CmdAddr::Tabs,
                                 ea.skip != 0,
                                 skip_only,
                                 0,

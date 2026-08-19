@@ -15,16 +15,14 @@ use crate::charset::skipwhite;
 use crate::eval::typval::tv_get_string;
 use crate::ex_docmd::address::skip_range;
 use crate::ex_docmd::modifier::{CMDMODS, shared_prefix};
-use crate::ex_docmd::{
-    ADDR_LINES, EXFLAG_LIST, EXFLAG_PRINT, cmdidxs1, cmdidxs2, cmdnames, command_count,
-};
+use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_PRINT, cmdidxs1, cmdidxs2, cmdnames, command_count};
 use crate::main::getout;
 use crate::memory::xstrdup;
 use crate::message::iemsg;
 use crate::os::cshim::{gettext, strncmp};
 use crate::types::{
-    CMD_Next, CMD_SIZE, CMD_append, CMD_bang, CMD_k, CMD_match, CMD_substitute, EvalFuncData,
-    ExArgt, NUL, VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T,
+    CMD_Next, CMD_SIZE, CMD_append, CMD_bang, CMD_k, CMD_match, CMD_substitute, CmdAddr,
+    EvalFuncData, ExArgt, NUL, VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T,
 };
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 
@@ -299,7 +297,7 @@ pub unsafe fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 fn blank_exarg() -> exarg_T {
     let mut ea: exarg_T = unsafe { core::mem::zeroed() };
     ea.cmdidx = CMD_append;
-    ea.addr_type = ADDR_LINES;
+    ea.addr_type = CmdAddr::Lines;
     ea.flags = 0;
     ea
 }

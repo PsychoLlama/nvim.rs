@@ -12,7 +12,7 @@
 //! and unwinds the command modifiers. That is what the `'doend` block is.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, getnextac, has_event};
@@ -37,9 +37,9 @@ use crate::ex_docmd::scan::{
 use crate::ex_docmd::source::{ex_errmsg, getline_cookie, getline_equal};
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    ADDR_LINES, ADDR_OTHER, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DoCmdOpts, PROF_YES,
-    cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T,
-    exmode_plus, quitmore,
+    CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DoCmdOpts, PROF_YES, cmdnames,
+    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, exmode_plus,
+    quitmore,
 };
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
@@ -70,14 +70,14 @@ use crate::types::{
     CMD_pyx, CMD_read, CMD_return, CMD_rightbelow, CMD_rshift, CMD_ruby, CMD_silent, CMD_smagic,
     CMD_snomagic, CMD_substitute, CMD_syntax, CMD_tab, CMD_tcl, CMD_terminal, CMD_throw, CMD_tilde,
     CMD_topleft, CMD_try, CMD_unlet, CMD_unlockvar, CMD_update, CMD_verbose, CMD_vertical,
-    CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, ExArgt, FAIL, IOSIZE, LineGetter, NUL, cmdidx_T,
-    cmdmod_T, cstack_T, exarg_T, size_t, uint8_t,
+    CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, CmdAddr, ExArgt, FAIL, IOSIZE, LineGetter, NUL,
+    cmdidx_T, cmdmod_T, cstack_T, exarg_T, size_t, uint8_t,
 };
 use ::libc::{strcpy, strlen};
 
 /// A zeroed `exarg_T` with the empty range the parsers start from.
 ///
-/// `CMD_append` and `ADDR_LINES` are both zero, so the only fields the C's
+/// `CMD_append` and `CmdAddr::Lines` are both zero, so the only fields the C's
 /// `(exarg_T){ .line1 = 1, .line2 = 1 }` sets to anything else are the two
 /// line numbers.
 pub(crate) fn fresh_exarg() -> exarg_T {
@@ -395,8 +395,8 @@ pub(crate) unsafe fn do_one_cmd(
                 }
             }
 
-            // `ADDR_OTHER` counts from 1 rather than from the cursor.
-            if ea.addr_type as c_uint == ADDR_OTHER as c_uint && ea.addr_count == 0 {
+            // `CmdAddr::Other` counts from 1 rather than from the cursor.
+            if ea.addr_type == CmdAddr::Other && ea.addr_count == 0 {
                 ea.line2 = 1;
             }
 
@@ -406,7 +406,7 @@ pub(crate) unsafe fn do_one_cmd(
             // line at its end.
             if (ea.argt.has(ExArgt::WHOLEFOLD) || ea.addr_count >= 2)
                 && global_busy.get() == 0
-                && ea.addr_type as c_uint == ADDR_LINES as c_uint
+                && ea.addr_type == CmdAddr::Lines
             {
                 hasFolding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
                 hasFolding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);

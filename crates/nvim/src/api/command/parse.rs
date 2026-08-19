@@ -103,17 +103,17 @@ unsafe fn command_name(ea: &exarg_T, cmd: *const ucmd_T) -> *const c_char {
 }
 
 /// How the command's range is counted, as the `addr` field's string.
-fn addr_type_name(addr_type: cmd_addr_T) -> &'static CStr {
+fn addr_type_name(addr_type: CmdAddr) -> &'static CStr {
     match addr_type {
-        ADDR_LINES => c"line",
-        ADDR_ARGUMENTS => c"arg",
-        ADDR_BUFFERS => c"buf",
-        ADDR_LOADED_BUFFERS => c"load",
-        ADDR_WINDOWS => c"win",
-        ADDR_TABS => c"tab",
-        ADDR_QUICKFIX => c"qf",
-        ADDR_NONE => c"none",
-        // ADDR_OTHER and ADDR_UNSIGNED have no name of their own.
+        CmdAddr::Lines => c"line",
+        CmdAddr::Arguments => c"arg",
+        CmdAddr::Buffers => c"buf",
+        CmdAddr::LoadedBuffers => c"load",
+        CmdAddr::Windows => c"win",
+        CmdAddr::Tabs => c"tab",
+        CmdAddr::Quickfix => c"qf",
+        CmdAddr::NoRange => c"none",
+        // CmdAddr::Other and CmdAddr::Unsigned have no name of their own.
         _ => c"?",
     }
 }

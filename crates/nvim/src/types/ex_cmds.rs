@@ -32,7 +32,47 @@ pub struct SubReplacementString {
     pub timestamp: Timestamp,
     pub additional_data: *mut AdditionalData,
 }
-pub type cmd_addr_T = ::core::ffi::c_uint;
+/// What an Ex command's range counts -- upstream's `ADDR_*`, the value
+/// `exarg_T::addr_type`, `CommandDefinition::cmd_addr_type` and
+/// `ucmd_T::uc_addr_type` carry.
+///
+/// A range is `1,5` whatever it addresses; this is what those numbers *are*.
+/// `:1,5delete` is line numbers, `:1,5bdelete` buffer numbers and `:1,5close`
+/// window numbers, and the address parser reads `.`, `$` and `'m` differently
+/// for each. c2rust gave the family a bare `c_uint`, so every one of the ~70
+/// `match` sites over it needed a catch-all arm for values that cannot exist.
+///
+/// `#[repr(u32)]` with the upstream discriminants: `exarg_T` and `ucmd_T` are
+/// `repr(C)`, and the discriminants are what `ex_cmds.lua` and the
+/// `nvim_parse_cmd` API answer with.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u32)]
+pub enum CmdAddr {
+    /// Buffer lines -- the default, and what `:1,5d` means.
+    Lines = 0,
+    /// Window numbers, as `:1,5close` counts them.
+    Windows = 1,
+    /// Argument-list indices.
+    Arguments = 2,
+    /// Buffer numbers, loaded buffers only.
+    LoadedBuffers = 3,
+    /// Buffer numbers, listed or not.
+    Buffers = 4,
+    /// Tab-page numbers.
+    Tabs = 5,
+    /// Tab pages counted from the current one (`:tabmove`).
+    TabsRelative = 6,
+    /// Quickfix entries, valid ones only.
+    QuickfixValid = 7,
+    /// Quickfix entry numbers.
+    Quickfix = 8,
+    /// A plain non-negative number the command reads itself.
+    Unsigned = 9,
+    /// Something only the command knows how to count.
+    Other = 10,
+    /// The command takes no range at all.
+    NoRange = 11,
+}
 
 crate::flag_set! {
     /// What syntax an Ex command accepts -- upstream's `EX_*`, the bits
@@ -166,7 +206,7 @@ pub struct exarg {
     pub addr_count: ::core::ffi::c_int,
     pub line1: linenr_T,
     pub line2: linenr_T,
-    pub addr_type: cmd_addr_T,
+    pub addr_type: CmdAddr,
     pub flags: ::core::ffi::c_int,
     pub do_ecmd_cmd: *mut ::core::ffi::c_char,
     pub do_ecmd_lnum: linenr_T,
@@ -207,7 +247,7 @@ impl Default for exarg {
             addr_count: 0,
             line1: 0,
             line2: 0,
-            addr_type: 0,
+            addr_type: CmdAddr::Lines,
             flags: 0,
             do_ecmd_cmd: ::core::ptr::null_mut(),
             do_ecmd_lnum: 0,

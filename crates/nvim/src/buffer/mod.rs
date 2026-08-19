@@ -65,8 +65,8 @@ use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, CdCause, ExtmarkOp, Map_int_ptr_t, MarkAdjustMode, MarkTree, MetaIndex,
     OptValType, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
-    cmd_addr_T, dobuf_action_values, dobuf_start_values, etype_T, event_T, exarg_T, getf_values,
-    linenr_T, ptr_t, uint32_t, varnumber_T,
+    dobuf_action_values, dobuf_start_values, etype_T, event_T, exarg_T, getf_values, linenr_T,
+    ptr_t, uint32_t, varnumber_T,
 };
 use crate::undo::bufIsChanged;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -122,7 +122,6 @@ pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMarkAdjustTerm: MarkAdjustMode = 2;
 pub const kMarkAdjustApi: MarkAdjustMode = 1;
 pub const kMarkAdjustNormal: MarkAdjustMode = 0;
-pub const ADDR_LINES: cmd_addr_T = 0;
 pub const GETF_SWITCH: getf_values = 4;
 pub const GETF_ALT: getf_values = 2;
 pub const GETF_SETMARK: getf_values = 1;

@@ -112,7 +112,7 @@ pub unsafe fn parse_pattern_and_range(
             line1: 1,
             line2: 1,
             cmd: (*ccline.ptr()).cmdbuff,
-            addr_type: ADDR_LINES,
+            addr_type: CmdAddr::Lines,
             ..EXARG_T_INIT
         };
 

@@ -59,9 +59,9 @@ use crate::os::cshim::gettext;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, CMD_tabnew, CdCause, Direction, Error, Map_int_ptr_t, MapHash, MotionType,
-    OptInt, OptValType, Set_uint32_t, WinSplit, WinStyle, aucmdwin_T, bln_values, buf_T,
-    cmd_addr_T, cmdidx_T, dobuf_action_values, dobuf_start_values, event_T, getf_values, handle_T,
-    kErrorTypeException, kErrorTypeNone, ptr_t, size_t, tabpage_T, uint32_t, win_T,
+    OptInt, OptValType, Set_uint32_t, WinSplit, WinStyle, aucmdwin_T, bln_values, buf_T, cmdidx_T,
+    dobuf_action_values, dobuf_start_values, event_T, getf_values, handle_T, kErrorTypeException,
+    kErrorTypeNone, ptr_t, size_t, tabpage_T, uint32_t, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -120,18 +120,6 @@ pub const kWinOptFoldtext: C2Rust_Unnamed_16 = 22;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
-pub const ADDR_NONE: cmd_addr_T = 11;
-pub const ADDR_OTHER: cmd_addr_T = 10;
-pub const ADDR_UNSIGNED: cmd_addr_T = 9;
-pub const ADDR_QUICKFIX: cmd_addr_T = 8;
-pub const ADDR_QUICKFIX_VALID: cmd_addr_T = 7;
-pub const ADDR_TABS_RELATIVE: cmd_addr_T = 6;
-pub const ADDR_TABS: cmd_addr_T = 5;
-pub const ADDR_BUFFERS: cmd_addr_T = 4;
-pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
-pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
-pub const ADDR_WINDOWS: cmd_addr_T = 1;
-pub const ADDR_LINES: cmd_addr_T = 0;
 #[derive(Copy, Clone)]
 pub struct C2Rust_Unnamed_20 {
     pub size: size_t,

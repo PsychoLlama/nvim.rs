@@ -5,7 +5,7 @@ use crate::main::c_bytes;
 use crate::memory::ARENA_EMPTY;
 use crate::types::{
     Array, Callback_data as C2Rust_Unnamed_22, ChannelPart, ChannelStreamType, Context, GRegFlags,
-    LuaRetMode, MotionType, Object, ProcType, String_0, XDGVarType, cmd_addr_T, garray_T,
+    LuaRetMode, MotionType, Object, ProcType, String_0, XDGVarType, garray_T,
     object_data as C2Rust_Unnamed_16, size_t, uint64_t,
 };
 
@@ -82,7 +82,6 @@ pub type C2Rust_Unnamed_38 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_38 = 2;
 pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
 pub const NSUBEXP: C2Rust_Unnamed_39 = 10;
-pub const ADDR_LINES: cmd_addr_T = 0;
 pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kChannelPartRpc: ChannelPart = 3;

@@ -39,7 +39,7 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
             addr_count: 0,
             line1: 0,
             line2: 0,
-            addr_type: ADDR_LINES,
+            addr_type: CmdAddr::Lines,
             flags: 0,
             do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             do_ecmd_lnum: 0,

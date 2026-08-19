@@ -37,7 +37,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
 use crate::types::{ExArgt, FieldHashfn, NUL};
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 const EMPTY_STRING: String_0 = String_0 {
@@ -473,7 +473,7 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
             // SAFETY: as above.
             ea.line2 = unsafe { get_cmd_default_range(ea) };
             ea.line1 = ea.line2;
-            if ea.addr_type as c_uint == ADDR_OTHER as c_uint {
+            if ea.addr_type == CmdAddr::Other {
                 ea.line2 = 1;
             }
         }

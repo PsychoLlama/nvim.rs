@@ -69,10 +69,10 @@ use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::{
-    Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, Direction, ExArgt,
-    LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, cmd_addr_T,
-    dobuf_action_values, dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T,
-    handle_T, linenr_T, optmagic_T, uint8_t, uint16_t,
+    Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, CmdAddr, Direction, ExArgt,
+    LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, dobuf_action_values,
+    dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T,
+    optmagic_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -154,18 +154,6 @@ pub const CSL_HAD_FINA: C2Rust_Unnamed_37 = 8;
 pub const CSL_HAD_CONT: C2Rust_Unnamed_37 = 4;
 pub const CSL_HAD_ENDLOOP: C2Rust_Unnamed_37 = 2;
 pub const CSL_HAD_LOOP: C2Rust_Unnamed_37 = 1;
-pub const ADDR_NONE: cmd_addr_T = 11;
-pub const ADDR_OTHER: cmd_addr_T = 10;
-pub const ADDR_UNSIGNED: cmd_addr_T = 9;
-pub const ADDR_QUICKFIX: cmd_addr_T = 8;
-pub const ADDR_QUICKFIX_VALID: cmd_addr_T = 7;
-pub const ADDR_TABS_RELATIVE: cmd_addr_T = 6;
-pub const ADDR_TABS: cmd_addr_T = 5;
-pub const ADDR_BUFFERS: cmd_addr_T = 4;
-pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
-pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
-pub const ADDR_WINDOWS: cmd_addr_T = 1;
-pub const ADDR_LINES: cmd_addr_T = 0;
 /// A command handler. Plain `unsafe fn`, not `extern "C"`: nothing
 /// outside this crate calls the table.
 pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;
@@ -177,7 +165,7 @@ pub struct CommandDefinition {
     pub cmd_func: ex_func_T,
     pub cmd_preview_func: ex_preview_func_T,
     pub cmd_argt: ExArgt,
-    pub cmd_addr_type: cmd_addr_T,
+    pub cmd_addr_type: CmdAddr,
 }
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;

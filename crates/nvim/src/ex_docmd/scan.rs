@@ -8,7 +8,7 @@
 //! is both cheaper and more honest than stating it forty times.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
@@ -16,9 +16,7 @@ use crate::charset::{getdigits_int32, skipdigits, skipwhite};
 use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::onecmd::shift_cmd_args;
-use crate::ex_docmd::{
-    ADDR_LINES, CPO_BAR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount,
-};
+use crate::ex_docmd::{CPO_BAR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount};
 use crate::keycodes::Ctrl_V;
 use crate::main::{curbuf, p_cpo};
 use crate::mbyte::utfc_ptr2len;
@@ -31,8 +29,8 @@ use crate::types::ex_cmds::exarg_T;
 use crate::types::pos::linenr_T;
 use crate::types::{
     CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep, CMD_lvimgrepadd, CMD_put,
-    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, ExArgt, FAIL,
-    NUL, OK, size_t,
+    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, CmdAddr,
+    ExArgt, FAIL, NUL, OK, size_t,
 };
 use ::libc::strlen;
 
@@ -96,7 +94,7 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
 pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: linenr_T, validate: bool) {
     unsafe {
         let ea = &mut *eap;
-        if ea.addr_type as c_uint != ADDR_LINES as c_uint {
+        if ea.addr_type != CmdAddr::Lines {
             ea.line2 = count;
             if ea.addr_count == 0 {
                 ea.addr_count = 1;

@@ -9,7 +9,7 @@
 //! with `do_one_cmd`.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::ascii::ascii_iswhite;
@@ -33,8 +33,7 @@ use crate::ex_docmd::scan::{
 };
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::{
-    ADDR_LINES, ADDR_NONE, cmdnames, e_ambiguous_use_of_user_defined_command,
-    e_not_an_editor_command, ex_pressedreturn,
+    cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_pressedreturn,
 };
 use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
@@ -50,8 +49,8 @@ use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout, CMD_checktime, CMD_edit, CMD_file,
-    CMD_iput, CMD_put, CMD_read, CMD_try, CmdParseInfo, ExArgt, FAIL, IOSIZE, NUL, OK, cmdmod_T,
-    cstack_T, exarg_T, linenr_T, pos_T, size_t,
+    CMD_iput, CMD_put, CMD_read, CMD_try, CmdAddr, CmdParseInfo, ExArgt, FAIL, IOSIZE, NUL, OK,
+    cmdmod_T, cstack_T, exarg_T, linenr_T, pos_T, size_t,
 };
 use crate::usercmd::do_ucmd;
 use ::libc::{memset, strlen};
@@ -124,7 +123,7 @@ pub unsafe fn parse_cmdline(
                     ea.argt = ExArgt::RANGE;
                 } else {
                     ea.argt = ExArgt::NONE;
-                    ea.addr_type = ADDR_NONE;
+                    ea.addr_type = CmdAddr::NoRange;
                 }
                 retval = true;
                 break 'end;
@@ -394,7 +393,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
             // line at its end.
             if (ea.argt.has(ExArgt::WHOLEFOLD) || ea.addr_count >= 2)
                 && global_busy.get() == 0
-                && ea.addr_type as c_uint == ADDR_LINES as c_uint
+                && ea.addr_type == CmdAddr::Lines
             {
                 hasFolding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
                 hasFolding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
