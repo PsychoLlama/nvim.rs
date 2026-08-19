@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{MB_MAXBYTES, NUL};
+use crate::types::{ExpandContext, MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -136,10 +136,9 @@ pub(crate) unsafe fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
 /// tags and in search pattern completion matches.
 pub(crate) unsafe fn skip_wildmenu_char(xp: *mut expand_T, s: *mut c_char) -> c_int {
     unsafe {
-        if (rem_backslash(s)
-            && (*xp).xp_context != EXPAND_HELP
-            && (*xp).xp_context != EXPAND_PATTERN_IN_BUF)
-            || (((*xp).xp_context == EXPAND_MENUS || (*xp).xp_context == EXPAND_MENUNAMES)
+        let ctx = (*xp).xp_context;
+        if (rem_backslash(s) && ctx != ExpandContext::Help && ctx != ExpandContext::PatternInBuf)
+            || ((ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames)
                 && (*s as c_int == '\t' as c_int
                     || (*s as c_int == '\\' as c_int && *s.add(1) as c_int != NUL)))
         {
@@ -163,7 +162,8 @@ pub(crate) unsafe fn skip_wildmenu_char(xp: *mut expand_T, s: *mut c_char) -> c_
 /// The length of an item as it will be shown in the status line.
 pub(crate) unsafe fn wildmenu_match_len(xp: *mut expand_T, s: *mut c_char) -> c_int {
     unsafe {
-        let emenu = (*xp).xp_context == EXPAND_MENUS || (*xp).xp_context == EXPAND_MENUNAMES;
+        let ctx = (*xp).xp_context;
+        let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
 
         // Check for menu separators - replace with '|'.
         if emenu && menu_is_separator(s) {
@@ -299,7 +299,8 @@ pub(crate) unsafe fn redraw_wildmenu(
 
             let mut s = show_match(i);
             // Check for menu separators - replace with '|'.
-            let emenu = (*xp).xp_context == EXPAND_MENUS || (*xp).xp_context == EXPAND_MENUNAMES;
+            let ctx = (*xp).xp_context;
+            let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
             if emenu && menu_is_separator(s) {
                 strcpy(buf.offset(len as isize), transchar('|' as c_int));
                 l = strlen(buf.offset(len as isize)) as c_int;

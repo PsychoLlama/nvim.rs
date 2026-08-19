@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
-use crate::types::NUL;
+use crate::types::{ExpandContext, NUL};
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
 /// puts back on the way out. The prompt has to be *visible*, so silence and
@@ -260,7 +260,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
                 '>' as c_int,
                 ptr::null(),
                 0,
-                EXPAND_NOTHING,
+                ExpandContext::Nothing,
                 ptr::null(),
                 Callback {
                     data: Callback_data {

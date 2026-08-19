@@ -130,8 +130,6 @@ pub use self::search::*;
 pub use self::source::*;
 
 pub const kMHExisting: MHPutStatus = 0;
-/// `xp_context`: the completion this command line wants.
-pub const EXPAND_RUNTIME: ::core::ffi::c_int = 51;
 pub const kOptValTypeString: OptValType = 2;
 /// `:finish` as a pending control-flow reason, for `report_make_pending`.
 pub const CSTP_FINISH: ::core::ffi::c_int = 32;

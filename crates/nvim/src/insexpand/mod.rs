@@ -114,11 +114,11 @@ use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction,
-    EvalFuncData, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VAR_UNLOCKED,
-    VV_COMPLETED_ITEM, buf_T, colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T,
-    hashtab_T, linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T,
-    sctx_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T,
-    xp_prefix_T,
+    EvalFuncData, ExpandContext, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN,
+    VAR_UNLOCKED, VV_COMPLETED_ITEM, buf_T, colnr_T, dict_T, expand_T, extmark_undo_vec_t,
+    garray_T, hashitem_T, hashtab_T, linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T,
+    regmatch_T, save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t,
+    varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -152,11 +152,6 @@ pub use self::keys::*;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub const EXPAND_LUA: C2Rust_Unnamed_16 = 63;
-pub const EXPAND_FILES: C2Rust_Unnamed_16 = 2;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_16 = 0;
-pub const EXPAND_OK: C2Rust_Unnamed_16 = -1;
-pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_16 = -2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
 pub const OPENLINE_FORCE_INDENT: C2Rust_Unnamed_17 = 64;
@@ -446,7 +441,7 @@ static compl_orig_extmarks: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXT
 static compl_cont_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
     xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_context: 0,
+    xp_context: ExpandContext::Nothing,
     xp_pattern_len: 0,
     xp_prefix: XP_PREFIX_NONE,
     xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),

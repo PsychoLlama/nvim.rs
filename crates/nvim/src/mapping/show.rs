@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
-use crate::types::{CMD_map, CMD_unmap, FAIL, NUL, OK};
+use crate::types::{CMD_map, CMD_unmap, ExpandContext, FAIL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -192,7 +192,7 @@ pub unsafe fn set_context_in_map_cmd(
 ) -> *mut c_char {
     unsafe {
         if forceit && cmdidx != CMD_map && cmdidx != CMD_unmap {
-            (*xp).xp_context = EXPAND_NOTHING as c_int;
+            (*xp).xp_context = ExpandContext::Nothing;
             return ptr::null_mut();
         }
 
@@ -206,7 +206,7 @@ pub unsafe fn set_context_in_map_cmd(
             EXPAND_MAPMODES.set(modes);
         }
         EXPAND_ISABBREV.set(isabbrev);
-        (*xp).xp_context = EXPAND_MAPPINGS as c_int;
+        (*xp).xp_context = ExpandContext::Mappings;
         EXPAND_BUFFER.set(false);
 
         // Skip the map arguments; only `<buffer>` changes what is offered.

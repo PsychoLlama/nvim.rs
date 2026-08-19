@@ -85,9 +85,6 @@ mod flag {
     pub const ECMD_SET_HELP: c_uint = 2;
     pub const ECMD_LASTL: c_int = 0;
 
-    /// `ExpandOne` context and flags.
-    pub const EXPAND_DIRECTORIES: c_int = 3;
-
     /// `path_full_compare`'s "same file" answer.
     pub const kEqualFiles: file_comparison = 1;
     /// `nlua_exec` return modes.

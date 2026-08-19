@@ -24,12 +24,11 @@ use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::input_get;
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, Callback_data, IOSIZE, MultiQueue, NUL};
+use crate::types::{Callback, Callback_data, ExpandContext, IOSIZE, MultiQueue, NUL};
 use crate::ui::{ui_flush, ui_has};
 use ::libc::atoi;
 use core::ffi::{c_char, c_int, c_void};
 
-const EXPAND_NOTHING: c_int = 0;
 const ESC: c_int = 0x1b;
 /// The unset callback, as `CALLBACK_NONE`.
 const CALLBACK_NONE: Callback = Callback {
@@ -255,7 +254,7 @@ pub unsafe fn prompt_for_input(
             -1,
             prompt,
             hl_id,
-            EXPAND_NOTHING,
+            ExpandContext::Nothing,
             core::ptr::null(),
             CALLBACK_NONE,
             one_key,

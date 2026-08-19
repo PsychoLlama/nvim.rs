@@ -75,7 +75,6 @@ pub use self::write::*;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
-pub const EXPAND_FILES: C2Rust_Unnamed_14 = 2;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const VALID_PATH: C2Rust_Unnamed_17 = 1;

@@ -10,7 +10,7 @@ pub struct ucmd_T {
     pub uc_argt: ExArgt,
     pub uc_rep: *mut ::core::ffi::c_char,
     pub uc_def: int64_t,
-    pub uc_compl: ::core::ffi::c_int,
+    pub uc_compl: ExpandContext,
     pub uc_addr_type: CmdAddr,
     pub uc_script_ctx: sctx_T,
     pub uc_compl_arg: *mut ::core::ffi::c_char,

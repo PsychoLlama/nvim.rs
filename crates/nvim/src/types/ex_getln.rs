@@ -37,7 +37,7 @@ pub struct cmdline_info {
     pub hl_id: ::core::ffi::c_int,
     pub overstrike: ::core::ffi::c_int,
     pub xpc: *mut expand_T,
-    pub xp_context: ::core::ffi::c_int,
+    pub xp_context: ExpandContext,
     pub xp_arg: *mut ::core::ffi::c_char,
     pub input_fn: ::core::ffi::c_int,
     pub cmdbuff_replaced: bool,

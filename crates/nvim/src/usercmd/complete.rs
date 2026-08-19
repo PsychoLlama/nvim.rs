@@ -22,18 +22,16 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::attr::ADDR_TYPES;
-use super::{
-    EXPAND_COMMANDS, EXPAND_MAPPINGS, EXPAND_MENUS, EXPAND_NOTHING, EXPAND_USER_ADDR_TYPE,
-    EXPAND_USER_CMD_FLAGS, EXPAND_USER_COMMANDS, EXPAND_USER_COMPLETE, EXPAND_USER_DEFINED,
-    EXPAND_USER_LIST, EXPAND_USER_LUA, EXPAND_USER_NARGS, Scope, ucmd_list, ucmd_name,
-};
+use super::{Scope, ucmd_list, ucmd_name};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::mapping::set_context_in_map_cmd;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
 use crate::os::cshim::snprintf;
-use crate::types::{CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, ExArgt, NUL, expand_T};
+use crate::types::{
+    CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, ExArgt, ExpandContext, NUL, expand_T,
+};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -72,8 +70,8 @@ pub(super) static COMMAND_COMPLETE: [Option<&CStr>; 64] = [
 ];
 
 /// The name completion context `arg` is known by, if it has one.
-pub(super) fn command_complete_name(arg: c_int) -> Option<&'static CStr> {
-    usize::try_from(arg)
+pub(super) fn command_complete_name(arg: ExpandContext) -> Option<&'static CStr> {
+    usize::try_from(arg as c_int)
         .ok()
         .and_then(|arg| COMMAND_COMPLETE.get(arg).copied())
         .flatten()
@@ -111,7 +109,7 @@ pub unsafe fn set_context_in_user_cmd(xp: *mut expand_T, arg_in: *const c_char) 
                 .position(|&b| b == b'=')
             else {
                 // No "=" yet, so complete attribute names.
-                set_context(xp, EXPAND_USER_CMD_FLAGS, arg);
+                set_context(xp, ExpandContext::UserCmdFlags, arg);
                 return ptr::null();
             };
             // `-complete=`, `-nargs=` and `-addr=` have values worth
@@ -119,11 +117,11 @@ pub unsafe fn set_context_in_user_cmd(xp: *mut expand_T, arg_in: *const c_char) 
             let name = &CStr::from_ptr(arg).to_bytes()[..eq];
             let value = arg.add(eq + 1);
             if abbreviates(name, "complete") {
-                set_context(xp, EXPAND_USER_COMPLETE, value);
+                set_context(xp, ExpandContext::UserComplete, value);
             } else if abbreviates(name, "nargs") {
-                set_context(xp, EXPAND_USER_NARGS, value);
+                set_context(xp, ExpandContext::UserNargs, value);
             } else if abbreviates(name, "addr") {
-                set_context(xp, EXPAND_USER_ADDR_TYPE, value);
+                set_context(xp, ExpandContext::UserAddrType, value);
             }
             return ptr::null();
         }
@@ -131,7 +129,7 @@ pub unsafe fn set_context_in_user_cmd(xp: *mut expand_T, arg_in: *const c_char) 
         // Then the name of the command being defined.
         let p = skiptowhite(arg);
         if *p == NUL as c_char {
-            set_context(xp, EXPAND_USER_COMMANDS, arg);
+            set_context(xp, ExpandContext::UserCommands, arg);
             return ptr::null();
         }
         // And finally an ordinary command, which the caller parses.
@@ -141,7 +139,7 @@ pub unsafe fn set_context_in_user_cmd(xp: *mut expand_T, arg_in: *const c_char) 
 
 /// # Safety
 /// `xp` must be writable and `pattern` must outlive it.
-unsafe fn set_context(xp: *mut expand_T, context: c_int, pattern: *const c_char) {
+unsafe fn set_context(xp: *mut expand_T, context: ExpandContext, pattern: *const c_char) {
     // SAFETY: caller contract.
     unsafe {
         (*xp).xp_context = context;
@@ -158,11 +156,11 @@ pub unsafe fn set_context_in_user_cmdarg(
     cmd: *const c_char,
     arg: *const c_char,
     argt: ExArgt,
-    context: c_int,
+    context: ExpandContext,
     xp: *mut expand_T,
     forceit: bool,
 ) -> *const c_char {
-    if context == EXPAND_NOTHING {
+    if context == ExpandContext::Nothing {
         return ptr::null();
     }
     if argt.has(ExArgt::XFILE) {
@@ -171,13 +169,13 @@ pub unsafe fn set_context_in_user_cmdarg(
     }
     // SAFETY: caller contract.
     unsafe {
-        if context == EXPAND_MENUS {
+        if context == ExpandContext::Menus {
             return set_context_in_menu_cmd(xp, cmd, arg.cast_mut(), forceit);
         }
-        if context == EXPAND_COMMANDS {
+        if context == ExpandContext::Commands {
             return arg;
         }
-        if context == EXPAND_MAPPINGS {
+        if context == ExpandContext::Mappings {
             return set_context_in_map_cmd(
                 xp,
                 c"map".as_ptr().cast_mut(),
@@ -309,8 +307,11 @@ pub fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if idx >= COMMAND_COMPLETE.len() as c_int {
         return ptr::null_mut();
     }
-    match command_complete_name(idx) {
-        Some(name) if idx != EXPAND_USER_LUA => name.as_ptr().cast_mut(),
+    match ExpandContext::try_from(idx)
+        .ok()
+        .and_then(command_complete_name)
+    {
+        Some(name) if idx != ExpandContext::UserLua as c_int => name.as_ptr().cast_mut(),
         _ => c"".as_ptr().cast_mut(),
     }
 }
@@ -324,11 +325,15 @@ pub fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// # Safety
 /// `compl_arg` must be NUL-terminated when `expand` is one of the two
 /// custom types.
-pub unsafe fn cmdcomplete_type_to_str(expand: c_int, compl_arg: *const c_char) -> *mut c_char {
-    let Some(name) = command_complete_name(expand).filter(|_| expand != EXPAND_USER_LUA) else {
+pub unsafe fn cmdcomplete_type_to_str(
+    expand: ExpandContext,
+    compl_arg: *const c_char,
+) -> *mut c_char {
+    let Some(name) = command_complete_name(expand).filter(|_| expand != ExpandContext::UserLua)
+    else {
         return ptr::null_mut();
     };
-    if expand != EXPAND_USER_LIST && expand != EXPAND_USER_DEFINED {
+    if expand != ExpandContext::UserList && expand != ExpandContext::UserDefined {
         // SAFETY: `name` is a literal.
         return unsafe { xstrdup(name.as_ptr()) };
     }
@@ -341,21 +346,22 @@ pub unsafe fn cmdcomplete_type_to_str(expand: c_int, compl_arg: *const c_char) -
     }
 }
 
-/// The `EXPAND_*` context `complete_str` names, or `EXPAND_NOTHING`.
+/// The `EXPAND_*` context `complete_str` names, or `ExpandContext::Nothing`.
 ///
 /// # Safety
 /// `complete_str` must be NUL-terminated.
-pub unsafe fn cmdcomplete_str_to_type(complete_str: *const c_char) -> c_int {
+pub unsafe fn cmdcomplete_str_to_type(complete_str: *const c_char) -> ExpandContext {
     // SAFETY: caller contract.
     let typed = unsafe { CStr::from_ptr(complete_str).to_bytes() };
     if typed.starts_with(b"custom,") {
-        return EXPAND_USER_DEFINED;
+        return ExpandContext::UserDefined;
     }
     if typed.starts_with(b"customlist,") {
-        return EXPAND_USER_LIST;
+        return ExpandContext::UserList;
     }
     COMMAND_COMPLETE
         .iter()
         .position(|name| name.is_some_and(|name| name.to_bytes() == typed))
-        .map_or(EXPAND_NOTHING, |i| i as c_int)
+        .and_then(|i| ExpandContext::try_from(i as c_int).ok())
+        .unwrap_or(ExpandContext::Nothing)
 }

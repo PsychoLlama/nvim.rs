@@ -4,8 +4,8 @@
 
 use super::args::frame;
 use super::{
-    ENV_SEPCHAR, EXPAND_FILES, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs,
-    kXDGDataHome, kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
+    ENV_SEPCHAR, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome,
+    kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
 use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts};
 use crate::eval::typval::{
@@ -31,9 +31,9 @@ use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
 use crate::semsg_c;
 use crate::types::{
-    CMD_USER, CmdAddr, EvalFuncData, ExArgt, FAIL, NUL, OK, OptInt, VAR_DICT, VAR_LIST,
-    VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow,
-    kListLenUnknown, kSpecialVarNull, list_T, typval_T, varnumber_T,
+    CMD_USER, CmdAddr, EvalFuncData, ExArgt, ExpandContext, FAIL, NUL, OK, OptInt, VAR_DICT,
+    VAR_LIST, VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse,
+    kListLenShouldKnow, kListLenUnknown, kSpecialVarNull, list_T, typval_T, varnumber_T,
 };
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -154,7 +154,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         }
         let mut xpc: expand_T = core::mem::zeroed();
         ExpandInit(&raw mut xpc);
-        xpc.xp_context = EXPAND_FILES as c_int;
+        xpc.xp_context = ExpandContext::Files;
         if p_wic.get() != 0 {
             options |= WildOpts::ICASE;
         }

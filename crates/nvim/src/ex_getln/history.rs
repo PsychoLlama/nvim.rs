@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::keycodes::Ctrl_N;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{ExpandContext, FAIL, NUL, OK};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.
@@ -92,7 +92,7 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
         let mut hist_sep = NUL;
 
         dealloc_cmdbuff();
-        (*s).xpc.xp_context = EXPAND_NOTHING;
+        (*s).xpc.xp_context = ExpandContext::Nothing;
         if (*s).hiscnt == get_hislen() {
             p = (*s).lookfor; // back to the old one
             plen = (*s).lookforlen;

@@ -11,7 +11,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::semsg_c;
-use crate::types::{FAIL, OK, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{ExpandContext, FAIL, OK, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -80,11 +80,11 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 
             xpc.xp_context = cmdcomplete_str_to_type(type_0);
             match xpc.xp_context {
-                EXPAND_NOTHING => {
+                ExpandContext::Nothing => {
                     semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
                     return;
                 }
-                EXPAND_USER_DEFINED => {
+                ExpandContext::UserDefined => {
                     // Must be "custom,funcname" pattern.
                     if strncmp(type_0, c"custom,".as_ptr(), 7) != 0 {
                         semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
@@ -92,7 +92,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
                     }
                     xpc.xp_arg = type_0.add(7) as *mut c_char;
                 }
-                EXPAND_USER_LIST => {
+                ExpandContext::UserList => {
                     // Must be "customlist,funcname" pattern.
                     if strncmp(type_0, c"customlist,".as_ptr(), 11) != 0 {
                         semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
@@ -102,20 +102,20 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
                 }
                 // The four generators below move `xp_pattern` forward inside
                 // the string, so the length has to follow it.
-                EXPAND_MENUS => {
+                ExpandContext::Menus => {
                     set_context_in_menu_cmd(&raw mut xpc, c"menu".as_ptr(), xpc.xp_pattern, false);
                     xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
                 }
-                EXPAND_SIGN => {
+                ExpandContext::Sign => {
                     set_context_in_sign_cmd(&raw mut xpc, xpc.xp_pattern);
                     xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
                 }
-                EXPAND_RUNTIME => {
+                ExpandContext::Runtime => {
                     set_context_in_runtime_cmd(&raw mut xpc, xpc.xp_pattern);
                     xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
                 }
-                EXPAND_SHELLCMDLINE => {
-                    let mut context = EXPAND_SHELLCMDLINE;
+                ExpandContext::ShellCmdLine => {
+                    let mut context = ExpandContext::ShellCmdLine;
                     set_context_for_wildcard_arg(
                         ptr::null_mut(),
                         xpc.xp_pattern,
@@ -125,12 +125,12 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
                     );
                     xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;
                 }
-                EXPAND_FILETYPECMD => filetype_expand_what.set(EXP_FILETYPECMD_ALL),
+                ExpandContext::FiletypeCmd => filetype_expand_what.set(FiletypeWhat::All),
                 _ => {}
             }
         }
 
-        if xpc.xp_context == EXPAND_LUA {
+        if xpc.xp_context == ExpandContext::Lua {
             xpc.xp_col = strlen(xpc.xp_line) as c_int;
             nlua_expand_pat(&raw mut xpc);
             xpc.xp_pattern_len -= xpc.xp_pattern.offset_from(pattern_start) as size_t;

@@ -18,17 +18,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::complete::{COMMAND_COMPLETE, command_complete_name};
-use super::{
-    EXPAND_BUFFERS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_SHELLCMDLINE, EXPAND_USER_DEFINED,
-    EXPAND_USER_LIST, FAIL, OK, UC_BUFFER,
-};
+use super::{FAIL, OK, UC_BUFFER};
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
-use crate::types::{CmdAddr, ExArgt, NUL, size_t};
+use crate::types::{CmdAddr, ExArgt, ExpandContext, NUL, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::slice;
 
@@ -128,7 +125,7 @@ pub unsafe fn parse_addr_type_arg(
 pub unsafe fn parse_compl_arg(
     value: *const c_char,
     vallen: c_int,
-    complp: &mut c_int,
+    complp: &mut ExpandContext,
     argt: &mut ExArgt,
     compl_arg: &mut *mut c_char,
 ) -> c_int {
@@ -141,6 +138,7 @@ pub unsafe fn parse_compl_arg(
     };
 
     let found = (0..COMMAND_COMPLETE.len() as c_int)
+        .filter_map(|i| ExpandContext::try_from(i).ok())
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
         // SAFETY: caller contract.
@@ -150,16 +148,16 @@ pub unsafe fn parse_compl_arg(
         return FAIL;
     };
     *complp = expand;
-    if expand == EXPAND_BUFFERS {
+    if expand == ExpandContext::Buffers {
         *argt |= ExArgt::BUFNAME;
-    } else if expand == EXPAND_DIRECTORIES
-        || expand == EXPAND_FILES
-        || expand == EXPAND_SHELLCMDLINE
+    } else if expand == ExpandContext::Directories
+        || expand == ExpandContext::Files
+        || expand == ExpandContext::ShellCmdLine
     {
         *argt |= ExArgt::XFILE;
     }
 
-    let custom = expand == EXPAND_USER_DEFINED || expand == EXPAND_USER_LIST;
+    let custom = expand == ExpandContext::UserDefined || expand == ExpandContext::UserList;
     // SAFETY: both messages are literals.
     unsafe {
         if !custom && arg.is_some() {
@@ -187,7 +185,7 @@ pub(super) struct Attributes<'a> {
     pub(super) argt: &'a mut ExArgt,
     pub(super) def: &'a mut c_int,
     pub(super) flags: &'a mut c_int,
-    pub(super) complp: &'a mut c_int,
+    pub(super) complp: &'a mut ExpandContext,
     pub(super) compl_arg: &'a mut *mut c_char,
     pub(super) addr_type_arg: &'a mut CmdAddr,
 }

@@ -36,12 +36,14 @@ use crate::path::{ExpandFlags, FreeWild, add_pathsep, gen_expand_wildcards, path
 use crate::runtime::{RuntimeOpts, do_in_path};
 use crate::semsg_c;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
-use crate::types::{FAIL, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t};
+use crate::types::{
+    ExpandContext, FAIL, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
+};
 use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::flag::{EXPAND_DIRECTORIES, kEqualFiles};
+use super::flag::kEqualFiles;
 
 /// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
 /// out at each site: written that way, the five calls below each wrap onto
@@ -81,7 +83,7 @@ pub unsafe fn ex_helptags(eap: *mut exarg_T) {
 
         let mut xpc: expand_T = core::mem::zeroed();
         ExpandInit(&raw mut xpc);
-        xpc.xp_context = EXPAND_DIRECTORIES;
+        xpc.xp_context = ExpandContext::Directories;
         let dirname = ExpandOne(
             &raw mut xpc,
             (*eap).arg,

@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::keycodes::KE_WILD;
-use crate::types::{FAIL, NUL, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{ExpandContext, FAIL, NUL, VAR_STRING, VAR_UNKNOWN};
 
 /// The command line being edited, whether or not it holds any text.
 ///
@@ -89,15 +89,15 @@ pub(crate) unsafe fn get_cmdline_str() -> *mut ::core::ffi::c_char {
 /// The completion state of the current command line, computed on demand:
 /// the `expand_T` and the context it resolved to.
 ///
-/// When nothing has asked yet the context is `EXPAND_NOTHING`, so
+/// When nothing has asked yet the context is `ExpandContext::Nothing`, so
 /// `set_expand_context` runs and the field is then put *back* to
-/// `EXPAND_NOTHING` — the real completion has to recompute it at the wildcard
+/// `ExpandContext::Nothing` — the real completion has to recompute it at the wildcard
 /// key.  Hence the context is returned rather than left to the caller to
 /// re-read: after the restore the field no longer holds it.
 ///
 /// `None` means there is nothing to report: no command line, an obscured one
-/// (`inputsecret()`), or `EXPAND_UNSUCCESSFUL`.
-unsafe fn cmdline_completion_state() -> Option<(*mut expand_T, ::core::ffi::c_int)> {
+/// (`inputsecret()`), or `ExpandContext::Unsuccessful`.
+unsafe fn cmdline_completion_state() -> Option<(*mut expand_T, ExpandContext)> {
     unsafe {
         if cmdline_star.get() > 0 {
             return None;
@@ -108,12 +108,12 @@ unsafe fn cmdline_completion_state() -> Option<(*mut expand_T, ::core::ffi::c_in
         }
         let xpc = (*p).xpc;
         let mut xp_context = (*xpc).xp_context;
-        if xp_context == EXPAND_NOTHING {
+        if xp_context == ExpandContext::Nothing {
             set_expand_context(xpc);
             xp_context = (*xpc).xp_context;
-            (*xpc).xp_context = EXPAND_NOTHING;
+            (*xpc).xp_context = ExpandContext::Nothing;
         }
-        if xp_context == EXPAND_UNSUCCESSFUL {
+        if xp_context == ExpandContext::Unsuccessful {
             return None;
         }
         Some((xpc, xp_context))

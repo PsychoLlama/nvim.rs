@@ -83,12 +83,6 @@ pub use self::complete::*;
 mod vimscript;
 pub use self::vimscript::*;
 
-pub const EXPAND_SIGN: c_int = 34;
-pub const EXPAND_HIGHLIGHT: c_int = 13;
-pub const EXPAND_BUFFERS: c_int = 9;
-pub const EXPAND_FILES: c_int = 2;
-pub const EXPAND_NOTHING: c_int = 0;
-
 /// The priority a placement gets when neither the definition nor the
 /// `:sign place` / `sign_place()` call names one.
 pub const SIGN_DEF_PRIO: c_int = 10;

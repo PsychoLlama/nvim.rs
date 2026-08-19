@@ -19,14 +19,11 @@ use crate::message::{
     message_filtered, msg_advance, msg_clr_eos, msg_outtrans, msg_putchar, msg_puts_hl,
 };
 use crate::os::time::os_delay;
-use crate::types::expand_T;
 use crate::types::ui::kUIMessages;
+use crate::types::{ExpandContext, expand_T};
 use crate::ui::{ui_flush, ui_has};
 
-use super::{
-    ATTR_NAMES, EXPAND_HIGHLIGHT, EXPAND_NOTHING, HLF_D, HexBuf, coloridx_to_name, group,
-    highlight_num_groups,
-};
+use super::{ATTR_NAMES, HLF_D, HexBuf, coloridx_to_name, group, highlight_num_groups};
 
 /// One value in `:highlight`'s `key=value` output for a group.
 enum ListValue<'a> {
@@ -328,7 +325,7 @@ pub unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char
     // SAFETY: the caller's expansion state and command line.
     unsafe {
         // Default: expand group names.
-        (*xp).xp_context = EXPAND_HIGHLIGHT;
+        (*xp).xp_context = ExpandContext::Highlight;
         (*xp).xp_pattern = arg.cast_mut();
         include_link.set(2);
         include_default.set(1);
@@ -374,7 +371,7 @@ pub unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char
         }
         if *p != 0 {
             // Past the group name(s).
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
         }
     }
 }

@@ -11,7 +11,8 @@
 use super::*;
 use crate::drawscreen::windows_in_curtab;
 use crate::types::{
-    BackslashEscape, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue, kErrorTypeNone,
+    BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
+    kErrorTypeNone,
 };
 
 /// An all-zero [`CommandLineState`]: the fields C's designated initialiser
@@ -211,7 +212,7 @@ pub(crate) unsafe fn command_line_enter(
                 redrawcmdprompt(); // draw the prompt or the indent
                 (*cc).cmdspos = cmd_startcol();
             }
-            (*s).xpc.xp_context = EXPAND_NOTHING;
+            (*s).xpc.xp_context = ExpandContext::Nothing;
             (*s).xpc.xp_backslash = BackslashEscape::NONE;
             (*s).xpc.xp_shell = false;
 
@@ -605,7 +606,7 @@ pub unsafe fn getcmdline_prompt(
     firstc: ::core::ffi::c_int,
     prompt: *const ::core::ffi::c_char,
     hl_id: ::core::ffi::c_int,
-    xp_context: ::core::ffi::c_int,
+    xp_context: ExpandContext,
     xp_arg: *const ::core::ffi::c_char,
     highlight_callback: Callback,
     one_key: bool,

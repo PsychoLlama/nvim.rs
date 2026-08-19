@@ -31,19 +31,17 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    BackslashEscape, FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T, expand_T,
-    fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint8_t, uint32_t, vimoption_T,
-    xp_prefix_T,
+    BackslashEscape, ExpandContext, FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T,
+    expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint8_t, uint32_t,
+    vimoption_T, xp_prefix_T,
 };
 use ::libc::{strcmp, strlen};
 
 use super::{
-    EXPAND_BOOL_SETTINGS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_FILETYPE, EXPAND_KEYMAP,
-    EXPAND_NOTHING, EXPAND_OLD_SETTING, EXPAND_OWNSYNTAX, EXPAND_SETTING_SUBTRACT, EXPAND_SETTINGS,
-    EXPAND_STRING_SETTING, EXPAND_UNSUCCESSFUL, FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO,
-    find_option, find_option_len, get_option, get_option_varp_scope_from, get_varp_scope,
-    is_option_hidden, kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList,
-    kOptValTypeBoolean, kOptValTypeNumber, option_has_type, option_value2string, option_var,
+    FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
+    get_option_varp_scope_from, get_varp_scope, is_option_hidden, kOptFlagColon, kOptFlagComma,
+    kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
+    option_value2string, option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
@@ -123,7 +121,7 @@ pub unsafe fn set_context_in_set_cmd(
 
     // SAFETY: the caller's expansion state and command line.
     unsafe {
-        (*xp).xp_context = EXPAND_SETTINGS;
+        (*xp).xp_context = ExpandContext::Settings;
         if *arg == NUL as c_char {
             (*xp).xp_pattern = arg;
             return;
@@ -159,7 +157,7 @@ pub unsafe fn set_context_in_set_cmd(
         ] {
             let len = spelling.count_bytes();
             if strncmp(p, spelling.as_ptr(), len) == 0 {
-                (*xp).xp_context = EXPAND_BOOL_SETTINGS;
+                (*xp).xp_context = ExpandContext::BoolSettings;
                 (*xp).xp_prefix = prefix;
                 p = p.add(len);
                 break;
@@ -185,9 +183,9 @@ pub unsafe fn set_context_in_set_cmd(
             nextchar = '=' as c_char;
         }
         if (nextchar as c_int != '=' as c_int && nextchar as c_int != ':' as c_int)
-            || (*xp).xp_context == EXPAND_BOOL_SETTINGS
+            || (*xp).xp_context == ExpandContext::BoolSettings
         {
-            (*xp).xp_context = EXPAND_UNSUCCESSFUL;
+            (*xp).xp_context = ExpandContext::Unsuccessful;
             return;
         }
 
@@ -199,9 +197,9 @@ pub unsafe fn set_context_in_set_cmd(
         // Three options reuse another command's completion wholesale.
         let var = option_var(get_option(opt_idx));
         for (cell, context) in [
-            (p_syn.ptr().cast::<c_void>(), EXPAND_OWNSYNTAX),
-            (p_ft.ptr().cast::<c_void>(), EXPAND_FILETYPE),
-            (p_keymap.ptr().cast::<c_void>(), EXPAND_KEYMAP),
+            (p_syn.ptr().cast::<c_void>(), ExpandContext::Ownsyntax),
+            (p_ft.ptr().cast::<c_void>(), ExpandContext::Filetype),
+            (p_keymap.ptr().cast::<c_void>(), ExpandContext::Keymap),
         ] {
             if var == cell {
                 (*xp).xp_context = context;
@@ -210,17 +208,17 @@ pub unsafe fn set_context_in_set_cmd(
         }
 
         if subtract {
-            (*xp).xp_context = EXPAND_SETTING_SUBTRACT;
+            (*xp).xp_context = ExpandContext::SettingSubtract;
             return;
         } else if IDX.get() != kOptInvalid
             && (*options.ptr())[IDX.get() as usize].opt_expand_cb.is_some()
         {
-            (*xp).xp_context = EXPAND_STRING_SETTING;
+            (*xp).xp_context = ExpandContext::StringSetting;
         } else if *(*xp).xp_pattern == NUL as c_char {
-            (*xp).xp_context = EXPAND_OLD_SETTING;
+            (*xp).xp_context = ExpandContext::OldSetting;
             return;
         } else {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
         }
 
         if is_term_option || option_has_type(opt_idx, kOptValTypeNumber) {
@@ -244,7 +242,7 @@ pub unsafe fn set_context_in_set_cmd(
             if strncmp((*xp).xp_pattern, c"file:".as_ptr(), 5) == 0 {
                 (*xp).xp_pattern = (*xp).xp_pattern.add(5);
             } else if (*options.ptr())[IDX.get() as usize].opt_expand_cb.is_some() {
-                (*xp).xp_context = EXPAND_STRING_SETTING;
+                (*xp).xp_context = ExpandContext::StringSetting;
             }
         }
     }
@@ -295,7 +293,7 @@ unsafe fn take_option_name(
             }
             let key = get_special_key_code(arg.add(1));
             if key == 0 {
-                (*xp).xp_context = EXPAND_NOTHING;
+                (*xp).xp_context = ExpandContext::Nothing;
                 return None;
             }
             *p = p.add(1);
@@ -336,12 +334,12 @@ unsafe fn take_option_name(
         let nextchar = **p;
         let opt_idx = find_option_len(arg, p.offset_from(arg) as size_t);
         if opt_idx == kOptInvalid || is_option_hidden(opt_idx) {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
             return None;
         }
         // A boolean takes no value, so there is nothing after the name.
         if option_has_type(opt_idx, kOptValTypeBoolean) {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
             return None;
         }
         Some((
@@ -378,9 +376,9 @@ unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t
             || var == p_cdpath.ptr().cast::<c_char>()
             || var == p_tags.ptr().cast::<c_char>();
         (*xp).xp_context = if directories.contains(&var) {
-            EXPAND_DIRECTORIES
+            ExpandContext::Directories
         } else {
-            EXPAND_FILES
+            ExpandContext::Files
         };
         (*xp).xp_backslash = if three {
             BackslashEscape::THREE
@@ -497,7 +495,7 @@ pub unsafe fn ExpandSettings(
     unsafe {
         let ic = (*regmatch).rm_ic;
         let fuzzy = can_fuzzy && cmdline_fuzzy_complete(fuzzystr);
-        let booleans_only = (*xp).xp_context == EXPAND_BOOL_SETTINGS;
+        let booleans_only = (*xp).xp_context == ExpandContext::BoolSettings;
 
         for pass in 0..2 {
             let counting = pass == 0;

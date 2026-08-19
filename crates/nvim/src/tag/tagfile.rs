@@ -13,7 +13,7 @@ use crate::cmdexpand::{WildMode, WildOpts};
 use crate::file_search::Name;
 use crate::path::tail_index;
 use crate::runtime::RuntimeOpts;
-use crate::types::MAXPATHL;
+use crate::types::{ExpandContext, MAXPATHL};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -311,7 +311,7 @@ pub(crate) unsafe fn expand_tag_fname(
         if expand && path_has_wildcard(fname) && vim_strchr(fname, '`' as c_int).is_null() {
             let mut xpc: expand_T = core::mem::zeroed();
             ExpandInit(&raw mut xpc);
-            xpc.xp_context = EXPAND_FILES as c_int;
+            xpc.xp_context = ExpandContext::Files;
             expanded = ExpandOne(
                 &raw mut xpc,
                 fname,

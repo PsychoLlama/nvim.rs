@@ -11,7 +11,7 @@ use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::keycodes::Ctrl_Z;
 use crate::options::OptWimFlags;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{ExpandContext, FAIL, NUL, OK};
 
 /// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
 ///
@@ -101,7 +101,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                     WildOpts::NONE,
                     WildMode::Free,
                 );
-                (*s).xpc.xp_context = EXPAND_NOTHING;
+                (*s).xpc.xp_context = ExpandContext::Nothing;
                 return KeyOutcome::Changed;
             }
 
@@ -146,7 +146,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                     (*s).did_wild_list = true;
                 }
             } else if (*s).xpc.xp_numfiles == -1 {
-                (*s).xpc.xp_context = EXPAND_NOTHING;
+                (*s).xpc.xp_context = ExpandContext::Nothing;
             }
         }
 

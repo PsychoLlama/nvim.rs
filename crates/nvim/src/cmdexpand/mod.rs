@@ -150,73 +150,6 @@ pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
-pub const EXPAND_LSP: C2Rust_Unnamed_14 = 64;
-pub const EXPAND_LUA: C2Rust_Unnamed_14 = 63;
-pub const EXPAND_CHECKHEALTH: C2Rust_Unnamed_14 = 62;
-pub const EXPAND_RETAB: C2Rust_Unnamed_14 = 61;
-pub const EXPAND_PATTERN_IN_BUF: C2Rust_Unnamed_14 = 60;
-pub const EXPAND_FILETYPECMD: C2Rust_Unnamed_14 = 59;
-pub const EXPAND_FINDFUNC: C2Rust_Unnamed_14 = 58;
-pub const EXPAND_SHELLCMDLINE: C2Rust_Unnamed_14 = 57;
-pub const EXPAND_DIRS_IN_CDPATH: C2Rust_Unnamed_14 = 56;
-pub const EXPAND_KEYMAP: C2Rust_Unnamed_14 = 55;
-pub const EXPAND_ARGOPT: C2Rust_Unnamed_14 = 54;
-pub const EXPAND_SETTING_SUBTRACT: C2Rust_Unnamed_14 = 53;
-pub const EXPAND_STRING_SETTING: C2Rust_Unnamed_14 = 52;
-pub const EXPAND_RUNTIME: C2Rust_Unnamed_14 = 51;
-pub const EXPAND_SCRIPTNAMES: C2Rust_Unnamed_14 = 50;
-pub const EXPAND_BREAKPOINT: C2Rust_Unnamed_14 = 49;
-pub const EXPAND_DIFF_BUFFERS: C2Rust_Unnamed_14 = 48;
-pub const EXPAND_ARGLIST: C2Rust_Unnamed_14 = 47;
-pub const EXPAND_MAPCLEAR: C2Rust_Unnamed_14 = 46;
-pub const EXPAND_MESSAGES: C2Rust_Unnamed_14 = 45;
-pub const EXPAND_PACKADD: C2Rust_Unnamed_14 = 44;
-pub const EXPAND_USER_ADDR_TYPE: C2Rust_Unnamed_14 = 43;
-pub const EXPAND_SYNTIME: C2Rust_Unnamed_14 = 42;
-pub const EXPAND_USER: C2Rust_Unnamed_14 = 41;
-pub const EXPAND_HISTORY: C2Rust_Unnamed_14 = 40;
-pub const EXPAND_LOCALES: C2Rust_Unnamed_14 = 39;
-pub const EXPAND_OWNSYNTAX: C2Rust_Unnamed_14 = 38;
-pub const EXPAND_FILES_IN_PATH: C2Rust_Unnamed_14 = 37;
-pub const EXPAND_FILETYPE: C2Rust_Unnamed_14 = 36;
-pub const EXPAND_PROFILE: C2Rust_Unnamed_14 = 35;
-pub const EXPAND_SIGN: C2Rust_Unnamed_14 = 34;
-pub const EXPAND_SHELLCMD: C2Rust_Unnamed_14 = 33;
-pub const EXPAND_USER_LUA: C2Rust_Unnamed_14 = 32;
-pub const EXPAND_USER_LIST: C2Rust_Unnamed_14 = 31;
-pub const EXPAND_USER_DEFINED: C2Rust_Unnamed_14 = 30;
-pub const EXPAND_COMPILER: C2Rust_Unnamed_14 = 29;
-pub const EXPAND_COLORS: C2Rust_Unnamed_14 = 28;
-pub const EXPAND_LANGUAGE: C2Rust_Unnamed_14 = 27;
-pub const EXPAND_ENV_VARS: C2Rust_Unnamed_14 = 26;
-pub const EXPAND_USER_COMPLETE: C2Rust_Unnamed_14 = 25;
-pub const EXPAND_USER_NARGS: C2Rust_Unnamed_14 = 24;
-pub const EXPAND_USER_CMD_FLAGS: C2Rust_Unnamed_14 = 23;
-pub const EXPAND_USER_COMMANDS: C2Rust_Unnamed_14 = 22;
-pub const EXPAND_MENUNAMES: C2Rust_Unnamed_14 = 21;
-pub const EXPAND_EXPRESSION: C2Rust_Unnamed_14 = 20;
-pub const EXPAND_USER_FUNC: C2Rust_Unnamed_14 = 19;
-pub const EXPAND_FUNCTIONS: C2Rust_Unnamed_14 = 18;
-pub const EXPAND_TAGS_LISTFILES: C2Rust_Unnamed_14 = 17;
-pub const EXPAND_MAPPINGS: C2Rust_Unnamed_14 = 16;
-pub const EXPAND_USER_VARS: C2Rust_Unnamed_14 = 15;
-pub const EXPAND_AUGROUP: C2Rust_Unnamed_14 = 14;
-pub const EXPAND_HIGHLIGHT: C2Rust_Unnamed_14 = 13;
-pub const EXPAND_SYNTAX: C2Rust_Unnamed_14 = 12;
-pub const EXPAND_MENUS: C2Rust_Unnamed_14 = 11;
-pub const EXPAND_EVENTS: C2Rust_Unnamed_14 = 10;
-pub const EXPAND_BUFFERS: C2Rust_Unnamed_14 = 9;
-pub const EXPAND_HELP: C2Rust_Unnamed_14 = 8;
-pub const EXPAND_OLD_SETTING: C2Rust_Unnamed_14 = 7;
-pub const EXPAND_TAGS: C2Rust_Unnamed_14 = 6;
-pub const EXPAND_BOOL_SETTINGS: C2Rust_Unnamed_14 = 5;
-pub const EXPAND_SETTINGS: C2Rust_Unnamed_14 = 4;
-pub const EXPAND_DIRECTORIES: C2Rust_Unnamed_14 = 3;
-pub const EXPAND_FILES: C2Rust_Unnamed_14 = 2;
-pub const EXPAND_COMMANDS: C2Rust_Unnamed_14 = 1;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_14 = 0;
-pub const EXPAND_OK: C2Rust_Unnamed_14 = -1;
-pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_14 = -2;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
 /// Not a `WILD_*` at all — `buffer.h`'s, and `ExpandBufnames` reads it out
@@ -323,17 +256,11 @@ pub const EXP_BREAKPT_DEL: C2Rust_Unnamed_20 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const EXP_PROFDEL: C2Rust_Unnamed_20 = 2;
 pub const EXP_BREAKPT_ADD: C2Rust_Unnamed_20 = 0;
-pub const EXP_FILETYPECMD_ONOFF: C2Rust_Unnamed_21 = 3;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const EXP_FILETYPECMD_INDENT: C2Rust_Unnamed_21 = 2;
-pub const EXP_FILETYPECMD_PLUGIN: C2Rust_Unnamed_21 = 1;
-pub const EXP_FILETYPECMD_ALL: C2Rust_Unnamed_21 = 0;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_25 = -2147483648;
 pub const TAG_MANY: C2Rust_Unnamed_32 = 300;
 pub const WM_SCROLLED: C2Rust_Unnamed_26 = 2;
 pub const WM_SHOWN: C2Rust_Unnamed_26 = 1;
-pub const EXPAND_FILETYPECMD_INDENT: C2Rust_Unnamed_33 = 2;
-pub const EXPAND_FILETYPECMD_PLUGIN: C2Rust_Unnamed_33 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_int;
@@ -364,6 +291,20 @@ static compl_startcol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static compl_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_orig: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static filetype_expand_what: GlobalCell<C2Rust_Unnamed_21> = GlobalCell::new(EXP_FILETYPECMD_ALL);
+/// How much of `:filetype` has already been typed, and so which of its
+/// arguments are still worth offering -- upstream's `EXP_FILETYPECMD_*`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum FiletypeWhat {
+    /// Nothing after `:filetype`.
+    All,
+    /// `indent` named; `plugin` is still on offer.
+    Plugin,
+    /// `plugin` named; `indent` is still on offer.
+    Indent,
+    /// Both named, so only `on`/`off` remain.
+    OnOff,
+}
+
+static filetype_expand_what: GlobalCell<FiletypeWhat> = GlobalCell::new(FiletypeWhat::All);
 static breakpt_expand_what: GlobalCell<C2Rust_Unnamed_20> = GlobalCell::new(EXP_BREAKPT_ADD);
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;

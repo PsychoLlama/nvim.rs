@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::ExpandContext;
 
 /// `:autocmd` with no event: list every event's autocommands.
 pub(crate) unsafe fn au_show_for_all_events(
@@ -259,7 +260,7 @@ pub unsafe fn set_context_in_autocmd(
             if group == AUGROUP_ALL {
                 autocmd_include_groups.set(true);
             }
-            (*xp).xp_context = EXPAND_EVENTS;
+            (*xp).xp_context = ExpandContext::Events;
             (*xp).xp_pattern = arg;
             return ::core::ptr::null_mut();
         }
@@ -278,9 +279,9 @@ pub unsafe fn set_context_in_autocmd(
         }
 
         (*xp).xp_context = if doautocmd {
-            EXPAND_FILES
+            ExpandContext::Files
         } else {
-            EXPAND_NOTHING
+            ExpandContext::Nothing
         };
         ::core::ptr::null_mut()
     }

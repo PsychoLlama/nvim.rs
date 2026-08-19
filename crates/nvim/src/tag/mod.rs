@@ -99,7 +99,6 @@ pub use self::stack::*;
 mod command;
 pub use self::command::*;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub const EXPAND_FILES: C2Rust_Unnamed_16 = 2;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const GETF_SETMARK: getf_values = 1;
 pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;

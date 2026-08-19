@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
-use crate::types::BackslashEscape;
+use crate::types::{BackslashEscape, ExpandContext};
 use core::ffi::{c_char, c_int, c_void};
 
 /// Is fuzzy completion supported in this cmdline completion context?
@@ -21,31 +21,31 @@ use core::ffi::{c_char, c_int, c_void};
 pub(crate) unsafe fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
     let context = unsafe { (*xp).xp_context };
     match context {
-        EXPAND_BOOL_SETTINGS
-        | EXPAND_COLORS
-        | EXPAND_COMPILER
-        | EXPAND_DIRECTORIES
-        | EXPAND_DIRS_IN_CDPATH
-        | EXPAND_FILES
-        | EXPAND_FILES_IN_PATH
-        | EXPAND_FILETYPE
-        | EXPAND_FILETYPECMD
-        | EXPAND_FINDFUNC
-        | EXPAND_HELP
-        | EXPAND_KEYMAP
-        | EXPAND_LUA
-        | EXPAND_OLD_SETTING
-        | EXPAND_STRING_SETTING
-        | EXPAND_SETTING_SUBTRACT
-        | EXPAND_OWNSYNTAX
-        | EXPAND_PACKADD
-        | EXPAND_RUNTIME
-        | EXPAND_SHELLCMD
-        | EXPAND_SHELLCMDLINE
-        | EXPAND_TAGS
-        | EXPAND_TAGS_LISTFILES
-        | EXPAND_USER_LIST
-        | EXPAND_USER_LUA => false,
+        ExpandContext::BoolSettings
+        | ExpandContext::Colors
+        | ExpandContext::Compiler
+        | ExpandContext::Directories
+        | ExpandContext::DirsInCdpath
+        | ExpandContext::Files
+        | ExpandContext::FilesInPath
+        | ExpandContext::Filetype
+        | ExpandContext::FiletypeCmd
+        | ExpandContext::Findfunc
+        | ExpandContext::Help
+        | ExpandContext::Keymap
+        | ExpandContext::Lua
+        | ExpandContext::OldSetting
+        | ExpandContext::StringSetting
+        | ExpandContext::SettingSubtract
+        | ExpandContext::Ownsyntax
+        | ExpandContext::Packadd
+        | ExpandContext::Runtime
+        | ExpandContext::ShellCmd
+        | ExpandContext::ShellCmdLine
+        | ExpandContext::Tags
+        | ExpandContext::TagsListFiles
+        | ExpandContext::UserList
+        | ExpandContext::UserLua => false,
         _ => wop_flags.get() & kOptWopFlagFuzzy != 0,
     }
 }
@@ -96,14 +96,14 @@ pub(crate) unsafe fn wildescape(
         let context = (*xp).xp_context;
         if matches!(
             context,
-            EXPAND_FILES
-                | EXPAND_FILES_IN_PATH
-                | EXPAND_SHELLCMD
-                | EXPAND_BUFFERS
-                | EXPAND_DIRECTORIES
-                | EXPAND_DIRS_IN_CDPATH
+            ExpandContext::Files
+                | ExpandContext::FilesInPath
+                | ExpandContext::ShellCmd
+                | ExpandContext::Buffers
+                | ExpandContext::Directories
+                | ExpandContext::DirsInCdpath
         ) {
-            let vse_what = if context == EXPAND_BUFFERS {
+            let vse_what = if context == ExpandContext::Buffers {
                 VSE_BUFFER
             } else {
                 VSE_NONE
@@ -148,7 +148,7 @@ pub(crate) unsafe fn wildescape(
             if *matches[0] == b'+' as c_char {
                 escape_fname(&mut matches[0]);
             }
-        } else if context == EXPAND_TAGS {
+        } else if context == ExpandContext::Tags {
             // Insert a backslash before characters in a tag name that would
             // terminate the ":tag" command.
             for slot in matches.iter_mut() {

@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P};
+use crate::types::ExpandContext;
 use core::ffi::{c_char, c_int};
 
 /// One directory level up, as it is spelled on the command line.
@@ -44,7 +45,7 @@ pub(crate) unsafe fn wildmenu_translate_key(
         }
 
         // Hitting CR after "emenu Name.": complete the submenu.
-        if (*xp).xp_context == EXPAND_MENUNAMES
+        if (*xp).xp_context == ExpandContext::Menunames
             && (*cclp).cmdpos > 1
             && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 1) as isize) == b'.' as c_char
             && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 2) as isize) != b'\\' as c_char
@@ -80,7 +81,7 @@ fn recomplete() -> c_int {
     p_wc.get() as c_int
 }
 
-/// A key pressed while the wildmenu for menu names (`EXPAND_MENUNAMES`) is up.
+/// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
 unsafe fn wildmenu_process_key_menunames(
     cclp: *mut CmdlineInfo,
     key: c_int,
@@ -126,7 +127,7 @@ unsafe fn wildmenu_process_key_menunames(
         if i > 0 {
             cmdline_del(cclp, i);
         }
-        (*xp).xp_context = EXPAND_NOTHING;
+        (*xp).xp_context = ExpandContext::Nothing;
         recomplete()
     }
 }
@@ -243,8 +244,8 @@ pub(crate) unsafe fn wildmenu_process_key(
     unsafe {
         // Special translations for 'wildmenu'.
         match (*xp).xp_context {
-            EXPAND_MENUNAMES => wildmenu_process_key_menunames(cclp, key, xp),
-            EXPAND_FILES | EXPAND_DIRECTORIES | EXPAND_SHELLCMD => {
+            ExpandContext::Menunames => wildmenu_process_key_menunames(cclp, key, xp),
+            ExpandContext::Files | ExpandContext::Directories | ExpandContext::ShellCmd => {
                 wildmenu_process_key_filenames(cclp, key, xp)
             }
             _ => key,

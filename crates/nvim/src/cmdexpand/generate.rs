@@ -14,7 +14,9 @@ use crate::path::ExpandFlags;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::types::{ArrayBuf, BackslashEscape, FAIL, MAXPATHL, OK, kErrorTypeNone, static_cstring};
+use crate::types::{
+    ArrayBuf, BackslashEscape, ExpandContext, FAIL, MAXPATHL, OK, kErrorTypeNone, static_cstring,
+};
 
 /// Expand a file or directory pattern.
 ///
@@ -79,13 +81,13 @@ pub(crate) unsafe fn expand_files_and_dirs(
             }
         }
 
-        let ret = if (*xp).xp_context == EXPAND_FINDFUNC {
+        let ret = if (*xp).xp_context == ExpandContext::Findfunc {
             expand_findfunc(pat, matches, numMatches)
         } else {
             flags = match (*xp).xp_context {
-                EXPAND_FILES => flags | ExpandFlags::FILE,
-                EXPAND_FILES_IN_PATH => flags | ExpandFlags::FILE | ExpandFlags::PATH,
-                EXPAND_DIRS_IN_CDPATH => dirs_only(flags) | ExpandFlags::CDPATH,
+                ExpandContext::Files => flags | ExpandFlags::FILE,
+                ExpandContext::FilesInPath => flags | ExpandFlags::FILE | ExpandFlags::PATH,
+                ExpandContext::DirsInCdpath => dirs_only(flags) | ExpandFlags::CDPATH,
                 _ => dirs_only(flags),
             };
             if options.has(WildOpts::ICASE) {
@@ -120,11 +122,10 @@ fn nth_option(list: &[&'static CStr], idx: c_int) -> *mut c_char {
 pub(crate) fn get_filetypecmd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     nth_option(
         match filetype_expand_what.get() {
-            EXP_FILETYPECMD_ALL => &[c"indent", c"plugin", c"on", c"off"],
-            EXP_FILETYPECMD_PLUGIN => &[c"plugin", c"on", c"off"],
-            EXP_FILETYPECMD_INDENT => &[c"indent", c"on", c"off"],
-            EXP_FILETYPECMD_ONOFF => &[c"on", c"off"],
-            _ => &[],
+            FiletypeWhat::All => &[c"indent", c"plugin", c"on", c"off"],
+            FiletypeWhat::Plugin => &[c"plugin", c"on", c"off"],
+            FiletypeWhat::Indent => &[c"indent", c"on", c"off"],
+            FiletypeWhat::OnOff => &[c"on", c"off"],
         },
         idx,
     )
@@ -273,40 +274,55 @@ pub(crate) unsafe fn get_lsp_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// The contexts whose matches come from walking a list one item at a time.
 /// Everything else has a generator of its own in
 /// [`super::fromcontext::ExpandFromContext`].
-const GENERATORS: [(c_int, ItemGetter, bool, bool); 33] = [
-    (EXPAND_COMMANDS, get_command_name, false, true),
-    (EXPAND_FILETYPECMD, get_filetypecmd_arg, true, true),
-    (EXPAND_MAPCLEAR, get_mapclear_arg, true, true),
-    (EXPAND_MESSAGES, get_messages_arg, true, true),
-    (EXPAND_HISTORY, get_history_arg, true, true),
-    (EXPAND_USER_COMMANDS, get_user_commands, false, true),
-    (EXPAND_USER_ADDR_TYPE, get_user_cmd_addr_type, false, true),
-    (EXPAND_USER_CMD_FLAGS, get_user_cmd_flags, false, true),
-    (EXPAND_USER_NARGS, get_user_cmd_nargs, false, true),
-    (EXPAND_USER_COMPLETE, get_user_cmd_complete, false, true),
-    (EXPAND_USER_VARS, get_user_var_name, false, true),
-    (EXPAND_FUNCTIONS, get_function_name, false, true),
-    (EXPAND_USER_FUNC, get_user_func_name, false, true),
-    (EXPAND_EXPRESSION, get_expr_name, false, true),
-    (EXPAND_MENUS, get_menu_name, false, true),
-    (EXPAND_MENUNAMES, get_menu_names, false, true),
-    (EXPAND_SYNTAX, get_syntax_name, true, true),
-    (EXPAND_SYNTIME, get_syntime_arg, true, true),
-    (EXPAND_HIGHLIGHT, get_highlight_name, true, false),
-    (EXPAND_EVENTS, expand_get_event_name, true, false),
-    (EXPAND_AUGROUP, expand_get_augroup_name, true, false),
-    (EXPAND_SIGN, get_sign_name, true, true),
-    (EXPAND_PROFILE, get_profile_name, true, true),
-    (EXPAND_LANGUAGE, get_lang_arg, true, false),
-    (EXPAND_LOCALES, get_locales, true, false),
-    (EXPAND_ENV_VARS, get_env_name, true, true),
-    (EXPAND_USER, get_users, true, false),
-    (EXPAND_ARGLIST, get_arglist_name, true, false),
-    (EXPAND_BREAKPOINT, get_breakadd_arg, true, true),
-    (EXPAND_SCRIPTNAMES, get_scriptnames_arg, true, false),
-    (EXPAND_RETAB, get_retab_arg, true, true),
-    (EXPAND_CHECKHEALTH, get_healthcheck_names, true, false),
-    (EXPAND_LSP, get_lsp_arg, true, false),
+const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
+    (ExpandContext::Commands, get_command_name, false, true),
+    (ExpandContext::FiletypeCmd, get_filetypecmd_arg, true, true),
+    (ExpandContext::Mapclear, get_mapclear_arg, true, true),
+    (ExpandContext::Messages, get_messages_arg, true, true),
+    (ExpandContext::History, get_history_arg, true, true),
+    (ExpandContext::UserCommands, get_user_commands, false, true),
+    (
+        ExpandContext::UserAddrType,
+        get_user_cmd_addr_type,
+        false,
+        true,
+    ),
+    (ExpandContext::UserCmdFlags, get_user_cmd_flags, false, true),
+    (ExpandContext::UserNargs, get_user_cmd_nargs, false, true),
+    (
+        ExpandContext::UserComplete,
+        get_user_cmd_complete,
+        false,
+        true,
+    ),
+    (ExpandContext::UserVars, get_user_var_name, false, true),
+    (ExpandContext::Functions, get_function_name, false, true),
+    (ExpandContext::UserFunc, get_user_func_name, false, true),
+    (ExpandContext::Expression, get_expr_name, false, true),
+    (ExpandContext::Menus, get_menu_name, false, true),
+    (ExpandContext::Menunames, get_menu_names, false, true),
+    (ExpandContext::Syntax, get_syntax_name, true, true),
+    (ExpandContext::Syntime, get_syntime_arg, true, true),
+    (ExpandContext::Highlight, get_highlight_name, true, false),
+    (ExpandContext::Events, expand_get_event_name, true, false),
+    (ExpandContext::Augroup, expand_get_augroup_name, true, false),
+    (ExpandContext::Sign, get_sign_name, true, true),
+    (ExpandContext::Profile, get_profile_name, true, true),
+    (ExpandContext::Language, get_lang_arg, true, false),
+    (ExpandContext::Locales, get_locales, true, false),
+    (ExpandContext::EnvVars, get_env_name, true, true),
+    (ExpandContext::User, get_users, true, false),
+    (ExpandContext::Arglist, get_arglist_name, true, false),
+    (ExpandContext::Breakpoint, get_breakadd_arg, true, true),
+    (ExpandContext::Scriptnames, get_scriptnames_arg, true, false),
+    (ExpandContext::Retab, get_retab_arg, true, true),
+    (
+        ExpandContext::Checkhealth,
+        get_healthcheck_names,
+        true,
+        false,
+    ),
+    (ExpandContext::Lsp, get_lsp_arg, true, false),
 ];
 
 /// Do the expansion based on `xp->xp_context` and `rmp`.

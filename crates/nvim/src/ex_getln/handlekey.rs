@@ -8,12 +8,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, is_special,
 };
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{ExpandContext, FAIL, NUL, OK};
 
 /// Handle the erase keys: backspace, delete and CTRL-W.
 ///
@@ -301,7 +301,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                     false,
                     true,
                     wim_has(0, kOptWimFlagNoselect),
-                ) == EXPAND_NOTHING
+                ) == Expanded::Nothing
                 {
                     return None; // use ^D as a normal character instead
                 }
@@ -437,7 +437,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 {
                     return None;
                 }
-                (*s).xpc.xp_context = EXPAND_NOTHING;
+                (*s).xpc.xp_context = ExpandContext::Nothing;
                 (*s).did_wild_list = false;
                 Some(command_line_changed(s))
             }

@@ -22,9 +22,8 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::{
-    ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EXPAND_FILES, FIND_EVAL, FIND_IDENT,
-    FIND_STRING, VALID_HEAD, VALID_PATH, dollar_command,
-    e_no_autocommand_buffer_number_to_substitute_for_abuf,
+    ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING,
+    VALID_HEAD, VALID_PATH, dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
@@ -46,8 +45,8 @@ use crate::runtime::estack_sfile;
 use crate::strings::{strrep, vim_strchr, vim_strsave_escaped};
 use crate::types::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
-    ExArgt, FAIL, MAXPATHL, NUL, OK, VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t,
-    uint8_t,
+    ExArgt, ExpandContext, FAIL, MAXPATHL, NUL, OK, VV_OLDFILES, exarg_T, expand_T, linenr_T,
+    size_t, ssize_t, uint8_t,
 };
 use ::libc::{strcat, strcmp, strcpy, strlen, strpbrk, strrchr};
 
@@ -241,7 +240,7 @@ pub unsafe fn expand_filename(
 
         let mut xpc: expand_T = core::mem::zeroed();
         ExpandInit(&raw mut xpc);
-        xpc.xp_context = EXPAND_FILES as c_int;
+        xpc.xp_context = ExpandContext::Files;
         let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
         if p_wic.get() != 0 {
             options |= WildOpts::ICASE;

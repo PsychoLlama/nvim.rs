@@ -42,8 +42,8 @@ use crate::types::{
     CMD_tmenu, CMD_topleft, CMD_tselect, CMD_tunmenu, CMD_unabbreviate, CMD_unlet, CMD_unmap,
     CMD_unmenu, CMD_unsilent, CMD_update, CMD_verbose, CMD_vertical, CMD_vglobal, CMD_vmap,
     CMD_vmapclear, CMD_vmenu, CMD_vnoremap, CMD_vnoremenu, CMD_vunmap, CMD_vunmenu, CMD_while,
-    CMD_windo, CMD_write, CMD_xmap, CMD_xmapclear, CMD_xnoremap, CMD_xunmap, ExArgt, FAIL, NUL,
-    OptionSetFlags,
+    CMD_windo, CMD_write, CMD_xmap, CMD_xmapclear, CMD_xnoremap, CMD_xunmap, ExArgt, ExpandContext,
+    FAIL, NUL, OptionSetFlags,
 };
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -61,27 +61,27 @@ pub(crate) unsafe fn set_context_by_cmdname(
     xp: *mut expand_T,
     mut arg: *const c_char,
     argt: ExArgt,
-    context: c_int,
+    context: ExpandContext,
     forceit: bool,
 ) -> *const c_char {
     unsafe {
         match cmdidx {
             CMD_find | CMD_sfind | CMD_tabfind => {
-                if (*xp).xp_context == EXPAND_FILES {
+                if (*xp).xp_context == ExpandContext::Files {
                     (*xp).xp_context = if *get_findfunc() as c_int != NUL {
-                        EXPAND_FINDFUNC
+                        ExpandContext::Findfunc
                     } else {
-                        EXPAND_FILES_IN_PATH
+                        ExpandContext::FilesInPath
                     };
                 }
             }
             CMD_cd | CMD_chdir | CMD_lcd | CMD_lchdir | CMD_tcd | CMD_tchdir => {
-                if (*xp).xp_context == EXPAND_FILES {
-                    (*xp).xp_context = EXPAND_DIRS_IN_CDPATH;
+                if (*xp).xp_context == ExpandContext::Files {
+                    (*xp).xp_context = ExpandContext::DirsInCdpath;
                 }
             }
             CMD_help => {
-                (*xp).xp_context = EXPAND_HELP;
+                (*xp).xp_context = ExpandContext::Help;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -103,7 +103,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
             CMD_command => return set_context_in_user_cmd(xp, arg),
 
             CMD_delcommand => {
-                (*xp).xp_context = EXPAND_USER_COMMANDS;
+                (*xp).xp_context = ExpandContext::UserCommands;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -141,15 +141,15 @@ pub(crate) unsafe fn set_context_by_cmdname(
             CMD_tag | CMD_stag | CMD_ptag | CMD_ltag | CMD_tselect | CMD_stselect
             | CMD_ptselect | CMD_tjump | CMD_stjump | CMD_ptjump => {
                 (*xp).xp_context = if wop_flags.get() & kOptWopFlagTagfile as c_uint != 0 {
-                    EXPAND_TAGS_LISTFILES
+                    ExpandContext::TagsListFiles
                 } else {
-                    EXPAND_TAGS
+                    ExpandContext::Tags
                 };
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
             CMD_augroup => {
-                (*xp).xp_context = EXPAND_AUGROUP;
+                (*xp).xp_context = ExpandContext::Augroup;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -164,7 +164,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
             CMD_unlet => return set_context_in_unlet_cmd(xp, arg),
 
             CMD_function | CMD_delfunction => {
-                (*xp).xp_context = EXPAND_USER_FUNC;
+                (*xp).xp_context = ExpandContext::UserFunc;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -182,18 +182,18 @@ pub(crate) unsafe fn set_context_by_cmdname(
                     }
                     arg = (*xp).xp_pattern.add(1);
                 }
-                (*xp).xp_context = EXPAND_BUFFERS;
+                (*xp).xp_context = ExpandContext::Buffers;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_buffer | CMD_sbuffer | CMD_pbuffer | CMD_checktime => {
-                (*xp).xp_context = EXPAND_BUFFERS;
+                (*xp).xp_context = ExpandContext::Buffers;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
             CMD_diffget | CMD_diffput => {
                 // If current buffer is in diff mode, complete buffer names
                 // which are in diff mode, and different than current buffer.
-                (*xp).xp_context = EXPAND_DIFF_BUFFERS;
+                (*xp).xp_context = ExpandContext::DiffBuffers;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -228,7 +228,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
             }
             CMD_mapclear | CMD_nmapclear | CMD_vmapclear | CMD_omapclear | CMD_imapclear
             | CMD_cmapclear | CMD_lmapclear | CMD_smapclear | CMD_xmapclear => {
-                (*xp).xp_context = EXPAND_MAPCLEAR;
+                (*xp).xp_context = ExpandContext::Mapclear;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -265,23 +265,23 @@ pub(crate) unsafe fn set_context_by_cmdname(
             }
 
             CMD_colorscheme => {
-                (*xp).xp_context = EXPAND_COLORS;
+                (*xp).xp_context = ExpandContext::Colors;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_compiler => {
-                (*xp).xp_context = EXPAND_COMPILER;
+                (*xp).xp_context = ExpandContext::Compiler;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_ownsyntax => {
-                (*xp).xp_context = EXPAND_OWNSYNTAX;
+                (*xp).xp_context = ExpandContext::Ownsyntax;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_setfiletype => {
-                (*xp).xp_context = EXPAND_FILETYPE;
+                (*xp).xp_context = ExpandContext::Filetype;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_packadd => {
-                (*xp).xp_context = EXPAND_PACKADD;
+                (*xp).xp_context = ExpandContext::Packadd;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -291,23 +291,23 @@ pub(crate) unsafe fn set_context_by_cmdname(
 
             CMD_profile => set_context_in_profile_cmd(xp, arg),
 
-            CMD_checkhealth => (*xp).xp_context = EXPAND_CHECKHEALTH,
-            CMD_lsp => (*xp).xp_context = EXPAND_LSP,
+            CMD_checkhealth => (*xp).xp_context = ExpandContext::Checkhealth,
+            CMD_lsp => (*xp).xp_context = ExpandContext::Lsp,
 
             CMD_retab => {
-                (*xp).xp_context = EXPAND_RETAB;
+                (*xp).xp_context = ExpandContext::Retab;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_messages => {
-                (*xp).xp_context = EXPAND_MESSAGES;
+                (*xp).xp_context = ExpandContext::Messages;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_history => {
-                (*xp).xp_context = EXPAND_HISTORY;
+                (*xp).xp_context = ExpandContext::History;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
             CMD_syntime => {
-                (*xp).xp_context = EXPAND_SYNTIME;
+                (*xp).xp_context = ExpandContext::Syntime;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -319,7 +319,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
                     }
                     arg = (*xp).xp_pattern.add(1);
                 }
-                (*xp).xp_context = EXPAND_ARGLIST;
+                (*xp).xp_context = ExpandContext::Arglist;
                 (*xp).xp_pattern = arg as *mut c_char;
             }
 
@@ -331,7 +331,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
 
             CMD_filetype => return set_context_in_filetype_cmd(xp, arg),
 
-            CMD_lua | CMD_equal => (*xp).xp_context = EXPAND_LUA,
+            CMD_lua | CMD_equal => (*xp).xp_context = ExpandContext::Lua,
 
             _ => {}
         }
@@ -356,14 +356,14 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
             addr_type: CmdAddr::Lines,
             ..core::mem::zeroed()
         };
-        let mut context: c_int = EXPAND_NOTHING;
+        let mut context = ExpandContext::Nothing;
         let mut forceit = false;
         let mut usefilter = false; // Filter instead of file name.
 
         ExpandInit(xp);
         (*xp).xp_pattern = buff as *mut c_char;
         (*xp).xp_line = buff as *mut c_char;
-        (*xp).xp_context = EXPAND_COMMANDS; // Default until we get past command
+        (*xp).xp_context = ExpandContext::Commands; // Default until we get past command
         ea.argt = ExArgt::NONE;
 
         // 1. skip comment lines and leading space, colons or bars
@@ -378,7 +378,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
         }
         if *cmd as c_int == '"' as c_int {
             // Ignore comment lines.
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
             return ptr::null();
         }
 
@@ -389,7 +389,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
             return ptr::null();
         }
         if *cmd as c_int == '"' as c_int {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
             return ptr::null();
         }
 
@@ -403,7 +403,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
             return ptr::null();
         }
 
-        (*xp).xp_context = EXPAND_NOTHING; // Default now that we're past command
+        (*xp).xp_context = ExpandContext::Nothing; // Default now that we're past command
 
         if *p as c_int == '!' as c_int {
             // Forced commands.
@@ -576,7 +576,7 @@ pub unsafe fn set_cmd_context(
             (*xp).xp_context = (*ccline).xp_context;
             (*xp).xp_pattern = (*ccline).cmdbuff;
             (*xp).xp_arg = (*ccline).xp_arg;
-            if (*xp).xp_context == EXPAND_SHELLCMDLINE {
+            if (*xp).xp_context == ExpandContext::ShellCmdLine {
                 let mut context = (*xp).xp_context;
                 set_context_for_wildcard_arg(
                     ptr::null_mut(),
@@ -608,27 +608,43 @@ pub unsafe fn set_cmd_context(
 /// `xp->xp_pattern` points into `str`, to where the text that is to be
 /// expanded starts.  `matchcount` and `matches` return the answer.
 ///
-/// Returns `EXPAND_UNSUCCESSFUL` when there is something illegal before the
-/// cursor, `EXPAND_NOTHING` when there is nothing to expand — the caller may
-/// then insert the key that triggered expansion literally — and `EXPAND_OK`
-/// otherwise.
+/// What an expansion attempt came to.
+///
+/// Upstream answers through the same `int` as an `xp_context` and reuses
+/// three of its names, one of which (`EXPAND_OK`) is not a context at all.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum Expanded {
+    /// The matches are in the out-parameters.
+    Ok,
+    /// Nothing to expand — the caller may insert the key that triggered the
+    /// expansion literally.
+    Nothing,
+    /// Something illegal stands before the cursor; the editor has beeped.
+    Unsuccessful,
+}
+
+/// Expand the command line `str` from context `xp`, which must have been set
+/// by [`set_cmd_context`].
+///
+/// `xp->xp_pattern` points into `str`, to where the text that is to be
+/// expanded starts.  `matchcount` and `matches` return the answer.
 pub unsafe fn expand_cmdline(
     xp: *mut expand_T,
     str: *const c_char,
     col: c_int,
     matchcount: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Expanded {
     unsafe {
         let mut options = WildOpts::ADD_SLASH | WildOpts::SILENT;
 
-        if (*xp).xp_context == EXPAND_UNSUCCESSFUL {
+        if (*xp).xp_context == ExpandContext::Unsuccessful {
             beep_flush();
-            return EXPAND_UNSUCCESSFUL; // Something illegal on command line
+            return Expanded::Unsuccessful; // Something illegal on command line
         }
-        if (*xp).xp_context == EXPAND_NOTHING {
+        if (*xp).xp_context == ExpandContext::Nothing {
             // Caller can use the character as a normal char instead.
-            return EXPAND_NOTHING;
+            return Expanded::Nothing;
         }
 
         // Add star to file name, or convert to regexp if not expanding files.
@@ -652,6 +668,6 @@ pub unsafe fn expand_cmdline(
         }
         xfree(file_str as *mut c_void);
 
-        EXPAND_OK
+        Expanded::Ok
     }
 }

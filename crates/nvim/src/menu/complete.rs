@@ -19,7 +19,7 @@ use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
-use crate::types::expand_T;
+use crate::types::{ExpandContext, expand_T};
 
 /// How much of a submenu name the generator can answer with, separator
 /// included. Upstream's `TBUFFER_LEN`.
@@ -46,17 +46,17 @@ static EXPAND_EMENU: GlobalCell<bool> = GlobalCell::new(false);
 /// What the completion machinery should do next, and where the word it is
 /// completing starts.
 struct Context {
-    xp_context: c_int,
+    xp_context: ExpandContext,
     pattern: Option<CText>,
 }
 
 impl Context {
     const NOTHING: Context = Context {
-        xp_context: EXPAND_NOTHING,
+        xp_context: ExpandContext::Nothing,
         pattern: None,
     };
     const UNSUCCESSFUL: Context = Context {
-        xp_context: EXPAND_UNSUCCESSFUL,
+        xp_context: ExpandContext::Unsuccessful,
         pattern: None,
     };
 }
@@ -172,9 +172,9 @@ fn menu_context(cmd: &CStr, arg: CText, forceit: bool) -> Context {
     EXPAND_MENU.set(menu);
     Context {
         xp_context: if whole_menus {
-            EXPAND_MENUNAMES
+            ExpandContext::Menunames
         } else {
-            EXPAND_MENUS
+            ExpandContext::Menus
         },
         pattern: Some(after_dot),
     }

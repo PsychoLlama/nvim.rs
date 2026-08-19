@@ -24,8 +24,8 @@ use crate::ex_docmd::lookup::find_ex_command;
 use crate::ex_docmd::scan::skip_colon_white;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
-    EXPAND_NOTHING, INT32_MAX, cmdnames, e_backslash, e_invrange, e_line_number_out_of_range,
-    e_no_errors, e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
+    INT32_MAX, cmdnames, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors,
+    e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
 };
 use crate::fold::hasFolding;
 use crate::main::{curbuf, curtab, curwin, firstbuf, lastbuf};
@@ -40,7 +40,8 @@ use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_s
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, CmdAddr, Direction, ExArgt,
-    FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, linenr_T, pos_T, size_t,
+    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, linenr_T, pos_T,
+    size_t,
 };
 use ::libc::strlen;
 
@@ -445,7 +446,7 @@ unsafe fn whole_range(eap: *mut exarg_T, errormsg: *mut *const c_char) -> bool {
 /// Step over a range without resolving it. Used wherever the command word
 /// has to be found before the range can mean anything — the modifier scan,
 /// completion, and `find_excmd_after_range`.
-pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut c_int) -> *mut c_char {
+pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut ExpandContext) -> *mut c_char {
     unsafe {
         let mut cmd = cmd;
         while !vim_strchr(c" \t0123456789.$%'/?-+,;\\".as_ptr(), *cmd as u8 as c_int).is_null() {
@@ -460,7 +461,7 @@ pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut c_int) -> *mut c_char {
             } else if *cmd as c_int == '\'' as c_int {
                 cmd = cmd.add(1);
                 if *cmd as c_int == NUL && !ctx.is_null() {
-                    *ctx = EXPAND_NOTHING as c_int;
+                    *ctx = ExpandContext::Nothing;
                 }
             } else if *cmd as c_int == '/' as c_int || *cmd as c_int == '?' as c_int {
                 let delim = *cmd;
@@ -473,7 +474,7 @@ pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut c_int) -> *mut c_char {
                     }
                 }
                 if *cmd as c_int == NUL && !ctx.is_null() {
-                    *ctx = EXPAND_NOTHING as c_int;
+                    *ctx = ExpandContext::Nothing;
                 }
             }
             if *cmd as c_int != NUL {

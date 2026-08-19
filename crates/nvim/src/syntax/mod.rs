@@ -116,9 +116,6 @@ pub const NSUBEXP: ::core::ffi::c_uint = 10;
 /// answer from.
 pub const EXPAND_BUF_LEN: ::core::ffi::c_uint = 256;
 // The `expand_T::xp_context` values this module sets.
-pub const EXPAND_NOTHING: ::core::ffi::c_int = 0;
-pub const EXPAND_SYNTAX: ::core::ffi::c_int = 12;
-pub const EXPAND_HIGHLIGHT: ::core::ffi::c_int = 13;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct sp_syn {

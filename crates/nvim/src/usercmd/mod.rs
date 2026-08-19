@@ -70,8 +70,8 @@ use crate::runtime::sourcing_lnum;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{
-    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, FAIL, LuaRef, OK, exarg_T, expand_T, garray_T,
-    int64_t, size_t, ucmd_T,
+    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, ExpandContext, FAIL, LuaRef, OK, exarg_T, expand_T,
+    garray_T, int64_t, size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
 use ::libc::strlen;
@@ -79,23 +79,6 @@ use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr, slice};
 
-pub const EXPAND_SHELLCMDLINE: c_int = 57;
-pub const EXPAND_USER_ADDR_TYPE: c_int = 43;
-pub const EXPAND_USER_LUA: c_int = 32;
-pub const EXPAND_USER_LIST: c_int = 31;
-pub const EXPAND_USER_DEFINED: c_int = 30;
-pub const EXPAND_USER_COMPLETE: c_int = 25;
-pub const EXPAND_USER_NARGS: c_int = 24;
-pub const EXPAND_USER_CMD_FLAGS: c_int = 23;
-pub const EXPAND_USER_COMMANDS: c_int = 22;
-pub const EXPAND_MAPPINGS: c_int = 16;
-pub const EXPAND_MENUS: c_int = 11;
-pub const EXPAND_BUFFERS: c_int = 9;
-pub const EXPAND_DIRECTORIES: c_int = 3;
-pub const EXPAND_FILES: c_int = 2;
-pub const EXPAND_COMMANDS: c_int = 1;
-pub const EXPAND_NOTHING: c_int = 0;
-pub const EXPAND_UNSUCCESSFUL: c_int = -2;
 pub const UC_BUFFER: c_int = 1;
 pub const LUA_NOREF: c_int = -2;
 
@@ -185,7 +168,7 @@ pub unsafe fn find_ucmd(
     p: *mut c_char,
     full: *mut c_int,
     xp: *mut expand_T,
-    complp: *mut c_int,
+    complp: *mut ExpandContext,
 ) -> *mut c_char {
     // SAFETY: caller contract.
     let eap = unsafe { &mut *eap };
@@ -268,7 +251,7 @@ pub unsafe fn find_ucmd(
     if amb_local {
         if !xp.is_null() {
             // SAFETY: caller contract.
-            unsafe { (*xp).xp_context = EXPAND_UNSUCCESSFUL };
+            unsafe { (*xp).xp_context = ExpandContext::Unsuccessful };
         }
         return ptr::null_mut();
     }
@@ -338,7 +321,7 @@ pub unsafe fn uc_add_command(
     argt: ExArgt,
     def: int64_t,
     flags: c_int,
-    context: c_int,
+    context: ExpandContext,
     compl_arg: *mut c_char,
     compl_luaref: LuaRef,
     preview_luaref: LuaRef,
@@ -500,7 +483,7 @@ pub unsafe fn ex_command(eap: *mut exarg_T) {
     let mut argt = ExArgt::NONE;
     let mut def: c_int = -1;
     let mut flags: c_int = 0;
-    let mut context: c_int = EXPAND_NOTHING;
+    let mut context = ExpandContext::Nothing;
     let mut compl_arg: *mut c_char = ptr::null_mut();
     let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
 
@@ -562,7 +545,7 @@ pub unsafe fn ex_command(eap: *mut exarg_T) {
         Some(c"E183: User defined commands must start with an uppercase letter")
     } else if b"Next".starts_with(name_bytes) {
         Some(c"E841: Reserved name, cannot be used for user defined command")
-    } else if context > 0 && !argt.has(ExArgt::EXTRA) {
+    } else if context != ExpandContext::Nothing && !argt.has(ExArgt::EXTRA) {
         Some(c"E1208: -complete used without allowing arguments")
     } else {
         // SAFETY: module contract; `uc_add_command` takes `compl_arg`.

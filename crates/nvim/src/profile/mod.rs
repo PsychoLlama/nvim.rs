@@ -43,8 +43,8 @@ use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
 use crate::runtime::{exestack, script_items};
 use crate::types::{
-    VV_PROFILING, estack_T, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T,
-    scriptitem_T, ufunc_T, varnumber_T,
+    ExpandContext, VV_PROFILING, estack_T, exarg_T, expand_T, funccall_T, int64_t, linenr_T,
+    proftime_T, scriptitem_T, ufunc_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -54,10 +54,6 @@ pub const PROF_NONE: c_int = 0;
 pub const PROF_YES: c_int = 1;
 pub const PROF_PAUSED: c_int = 2;
 
-const EXPAND_NOTHING: c_int = 0;
-const EXPAND_FILES: c_int = 2;
-const EXPAND_USER_FUNC: c_int = 19;
-const EXPAND_PROFILE: c_int = 35;
 /// First byte of a `<SNR>`-mangled function name.
 const NL: c_char = b'\n' as c_char;
 /// Offset of `uf_name` inside `ufunc_T`: hash keys point at the name, this
@@ -358,7 +354,7 @@ pub unsafe fn set_context_in_profile_cmd(xp: *mut expand_T, arg: *const c_char) 
     // SAFETY: the caller's context.
     let xp = unsafe { &mut *xp };
     // Default: expand subcommands.
-    xp.xp_context = EXPAND_PROFILE;
+    xp.xp_context = ExpandContext::Profile;
     xp.xp_pattern = arg as *mut c_char;
 
     // SAFETY: `arg` is NUL-terminated, so the walk stays inside it and
@@ -375,13 +371,13 @@ pub unsafe fn set_context_in_profile_cmd(xp: *mut expand_T, arg: *const c_char) 
         )
     };
     if subcmd == b"start" || subcmd == b"file" {
-        xp.xp_context = EXPAND_FILES;
+        xp.xp_context = ExpandContext::Files;
         xp.xp_pattern = rest;
     } else if subcmd == b"func" {
-        xp.xp_context = EXPAND_USER_FUNC;
+        xp.xp_context = ExpandContext::UserFunc;
         xp.xp_pattern = rest;
     } else {
-        xp.xp_context = EXPAND_NOTHING;
+        xp.xp_context = ExpandContext::Nothing;
     }
 }
 

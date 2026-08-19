@@ -79,18 +79,6 @@ pub use self::value::*;
 pub const NUMBUFLEN: c_uint = 65;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
-pub const EXPAND_KEYMAP: c_int = 55;
-pub const EXPAND_SETTING_SUBTRACT: c_int = 53;
-pub const EXPAND_STRING_SETTING: c_int = 52;
-pub const EXPAND_OWNSYNTAX: c_int = 38;
-pub const EXPAND_FILETYPE: c_int = 36;
-pub const EXPAND_OLD_SETTING: c_int = 7;
-pub const EXPAND_BOOL_SETTINGS: c_int = 5;
-pub const EXPAND_SETTINGS: c_int = 4;
-pub const EXPAND_DIRECTORIES: c_int = 3;
-pub const EXPAND_FILES: c_int = 2;
-pub const EXPAND_NOTHING: c_int = 0;
-pub const EXPAND_UNSUCCESSFUL: c_int = -2;
 /// What the generated table's `flags` column can say about an option.
 pub type OptFlags = c_uint;
 pub const kOptFlagColon: OptFlags = 33554432;

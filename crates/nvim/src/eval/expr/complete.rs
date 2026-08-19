@@ -6,14 +6,11 @@ use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::charset::{skiptowhite, skipwhite};
-use crate::eval::{
-    EXPAND_COMMANDS, EXPAND_ENV_VARS, EXPAND_EXPRESSION, EXPAND_FUNCTIONS, EXPAND_NOTHING,
-    EXPAND_SETTINGS, EXPAND_USER_VARS,
-};
+
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
 use crate::strings::vim_strchr;
-use crate::types::{CMD_call, CMD_const, CMD_let, NUL, cmdidx_T, expand_T};
+use crate::types::{CMD_call, CMD_const, CMD_let, ExpandContext, NUL, cmdidx_T, expand_T};
 use ::libc::{strlen, strpbrk};
 
 /// The characters that end the plain-name part of an expression: whatever
@@ -34,7 +31,7 @@ pub unsafe fn set_context_for_expression(
         let mut got_eq = false;
 
         if cmdidx == CMD_let || cmdidx == CMD_const {
-            (*xp).xp_context = EXPAND_USER_VARS;
+            (*xp).xp_context = ExpandContext::UserVars;
             if strpbrk(arg, BREAKS.as_ptr()).is_null() {
                 // ":let var1 var2 ...": find the last space.
                 let mut p = arg.add(strlen(arg) as usize);
@@ -55,9 +52,9 @@ pub unsafe fn set_context_for_expression(
             }
         } else {
             (*xp).xp_context = if cmdidx == CMD_call {
-                EXPAND_FUNCTIONS
+                ExpandContext::Functions
             } else {
-                EXPAND_EXPRESSION
+                ExpandContext::Expression
             };
         }
 
@@ -72,12 +69,12 @@ pub unsafe fn set_context_for_expression(
                 if c == '&' as c_int {
                     (*xp).xp_pattern = (*xp).xp_pattern.add(1);
                     (*xp).xp_context = if cmdidx != CMD_let || got_eq {
-                        EXPAND_EXPRESSION
+                        ExpandContext::Expression
                     } else {
-                        EXPAND_NOTHING
+                        ExpandContext::Nothing
                     };
                 } else if c != ' ' as c_int {
-                    (*xp).xp_context = EXPAND_SETTINGS;
+                    (*xp).xp_context = ExpandContext::Settings;
                     if (c == 'l' as c_int || c == 'g' as c_int)
                         && *(*xp).xp_pattern.add(2) == b':' as c_char
                     {
@@ -86,15 +83,15 @@ pub unsafe fn set_context_for_expression(
                 }
             } else if c == '$' as c_int {
                 // environment variable
-                (*xp).xp_context = EXPAND_ENV_VARS;
+                (*xp).xp_context = ExpandContext::EnvVars;
             } else if c == '=' as c_int {
                 got_eq = true;
-                (*xp).xp_context = EXPAND_EXPRESSION;
-            } else if c == '#' as c_int && (*xp).xp_context == EXPAND_EXPRESSION {
+                (*xp).xp_context = ExpandContext::Expression;
+            } else if c == '#' as c_int && (*xp).xp_context == ExpandContext::Expression {
                 // An autoload function or variable contains '#'.
                 break;
             } else if (c == '<' as c_int || c == '#' as c_int)
-                && (*xp).xp_context == EXPAND_FUNCTIONS
+                && (*xp).xp_context == ExpandContext::Functions
                 && vim_strchr((*xp).xp_pattern, '(' as c_int).is_null()
             {
                 // A function name can start with "<SNR>" and contain '#'.
@@ -112,7 +109,7 @@ pub unsafe fn set_context_for_expression(
                             (*xp).xp_pattern = (*xp).xp_pattern.add(1);
                         }
                     }
-                    (*xp).xp_context = EXPAND_NOTHING;
+                    (*xp).xp_context = ExpandContext::Nothing;
                 } else if c == '\'' as c_int {
                     // A literal string; `''` is like stopping and starting
                     // one, which this walk gets right by accident.
@@ -123,20 +120,20 @@ pub unsafe fn set_context_for_expression(
                             break;
                         }
                     }
-                    (*xp).xp_context = EXPAND_NOTHING;
+                    (*xp).xp_context = ExpandContext::Nothing;
                 } else if c == '|' as c_int {
                     if *(*xp).xp_pattern.add(1) == b'|' as c_char {
                         (*xp).xp_pattern = (*xp).xp_pattern.add(1);
-                        (*xp).xp_context = EXPAND_EXPRESSION;
+                        (*xp).xp_context = ExpandContext::Expression;
                     } else {
-                        (*xp).xp_context = EXPAND_COMMANDS;
+                        (*xp).xp_context = ExpandContext::Commands;
                     }
                 } else {
-                    (*xp).xp_context = EXPAND_EXPRESSION;
+                    (*xp).xp_context = ExpandContext::Expression;
                 }
             } else {
                 // Nothing that looks valid; expand as an expression anyway.
-                (*xp).xp_context = EXPAND_EXPRESSION;
+                (*xp).xp_context = ExpandContext::Expression;
             }
 
             arg = (*xp).xp_pattern;
@@ -152,7 +149,7 @@ pub unsafe fn set_context_for_expression(
         }
 
         // ":exe one two" completes "two".
-        if cmd_has_expr_args(cmdidx) && (*xp).xp_context == EXPAND_EXPRESSION {
+        if cmd_has_expr_args(cmdidx) && (*xp).xp_context == ExpandContext::Expression {
             loop {
                 let n = skiptowhite(arg);
                 if n == arg || ascii_iswhite_or_nul(*skipwhite(n) as c_int) {

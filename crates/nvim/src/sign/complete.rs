@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::ExpandContext;
 
 /// What [`get_sign_name`] should enumerate.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -113,7 +114,7 @@ pub unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
     // SAFETY: the caller's completion context and command line.
     unsafe {
         // Default: expand subcommand names.
-        (*xp).xp_context = EXPAND_SIGN;
+        (*xp).xp_context = ExpandContext::Sign;
         EXPAND_WHAT.set(Expand::Subcmd);
         (*xp).xp_pattern = arg;
 
@@ -152,7 +153,7 @@ pub unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
                 SIGNCMD_LIST | SIGNCMD_UNDEFINE => Expand::SignNames,
                 SIGNCMD_JUMP | SIGNCMD_UNPLACE => Expand::Unplace,
                 _ => {
-                    (*xp).xp_context = EXPAND_NOTHING;
+                    (*xp).xp_context = ExpandContext::Nothing;
                     Expand::Nothing
                 }
             });
@@ -165,11 +166,11 @@ pub unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
         match cmd_idx {
             SIGNCMD_DEFINE => {
                 if starts(c"texthl") || starts(c"linehl") || starts(c"culhl") || starts(c"numhl") {
-                    (*xp).xp_context = EXPAND_HIGHLIGHT;
+                    (*xp).xp_context = ExpandContext::Highlight;
                 } else if starts(c"icon") {
-                    (*xp).xp_context = EXPAND_FILES;
+                    (*xp).xp_context = ExpandContext::Files;
                 } else {
-                    (*xp).xp_context = EXPAND_NOTHING;
+                    (*xp).xp_context = ExpandContext::Nothing;
                 }
             }
             SIGNCMD_PLACE => {
@@ -178,21 +179,21 @@ pub unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
                 } else if starts(c"group") {
                     EXPAND_WHAT.set(Expand::SignGroups);
                 } else if starts(c"file") {
-                    (*xp).xp_context = EXPAND_BUFFERS;
+                    (*xp).xp_context = ExpandContext::Buffers;
                 } else {
-                    (*xp).xp_context = EXPAND_NOTHING;
+                    (*xp).xp_context = ExpandContext::Nothing;
                 }
             }
             SIGNCMD_UNPLACE | SIGNCMD_JUMP => {
                 if starts(c"group") {
                     EXPAND_WHAT.set(Expand::SignGroups);
                 } else if starts(c"file") {
-                    (*xp).xp_context = EXPAND_BUFFERS;
+                    (*xp).xp_context = ExpandContext::Buffers;
                 } else {
-                    (*xp).xp_context = EXPAND_NOTHING;
+                    (*xp).xp_context = ExpandContext::Nothing;
                 }
             }
-            _ => (*xp).xp_context = EXPAND_NOTHING,
+            _ => (*xp).xp_context = ExpandContext::Nothing,
         }
     }
 }

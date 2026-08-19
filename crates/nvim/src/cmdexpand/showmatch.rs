@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{MAXPATHL, NUL};
+use crate::types::{ExpandContext, MAXPATHL, NUL};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -41,7 +41,7 @@ pub(crate) unsafe fn showmatches_oneline(
         let mut lastlen = 999;
         let mut j = linenr;
         while j < numMatches {
-            if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
+            if (*xp).xp_context == ExpandContext::TagsListFiles {
                 msg_outtrans(*matches.offset(j as isize), HLF_D, false);
                 let p = (*matches.offset(j as isize)).add(strlen(*matches.offset(j as isize)) + 1);
                 msg_advance(maxlen + 1);
@@ -55,9 +55,9 @@ pub(crate) unsafe fn showmatches_oneline(
             }
             let isdir;
             let p;
-            if (*xp).xp_context == EXPAND_FILES
-                || (*xp).xp_context == EXPAND_SHELLCMD
-                || (*xp).xp_context == EXPAND_BUFFERS
+            if (*xp).xp_context == ExpandContext::Files
+                || (*xp).xp_context == ExpandContext::ShellCmd
+                || (*xp).xp_context == ExpandContext::Buffers
             {
                 // Highlight directories.
                 if (*xp).xp_numfiles != -1 {
@@ -109,14 +109,14 @@ pub(crate) unsafe fn showmatches_oneline(
 
 /// Display completion matches.
 ///
-/// Returns `EXPAND_NOTHING` when the character that triggered expansion should
+/// Answers `Expanded::Nothing` when the character that triggered expansion should
 /// be inserted as a normal character.
 pub unsafe fn showmatches(
     xp: *mut expand_T,
     display_wildmenu: bool,
     display_list: bool,
     noselect: bool,
-) -> c_int {
+) -> Expanded {
     unsafe {
         let ccline: *mut CmdlineInfo = get_cmdline_info();
         let mut numMatches = 0;
@@ -125,7 +125,7 @@ pub unsafe fn showmatches(
 
         if (*xp).xp_numfiles == -1 {
             set_expand_context(xp);
-            if (*xp).xp_context == EXPAND_LUA {
+            if (*xp).xp_context == ExpandContext::Lua {
                 nlua_expand_pat(xp);
             }
             let retval = expand_cmdline(
@@ -135,7 +135,7 @@ pub unsafe fn showmatches(
                 &raw mut numMatches,
                 &raw mut matches,
             );
-            if retval != EXPAND_OK {
+            if retval != Expanded::Ok {
                 return retval;
             }
             showtail = expand_showtail(xp);
@@ -150,7 +150,7 @@ pub unsafe fn showmatches(
             compl_selected.set(if noselect { -1 } else { 0 });
             pum_clear();
             cmdline_pum_display(true);
-            return EXPAND_OK;
+            return Expanded::Ok;
         }
 
         if display_list {
@@ -192,9 +192,9 @@ pub unsafe fn showmatches(
             let mut maxlen = 0;
             for i in 0..numMatches {
                 let len = if !showtail
-                    && ((*xp).xp_context == EXPAND_FILES
-                        || (*xp).xp_context == EXPAND_SHELLCMD
-                        || (*xp).xp_context == EXPAND_BUFFERS)
+                    && ((*xp).xp_context == ExpandContext::Files
+                        || (*xp).xp_context == ExpandContext::ShellCmd
+                        || (*xp).xp_context == ExpandContext::Buffers)
                 {
                     home_replace(
                         ptr::null(),
@@ -210,7 +210,7 @@ pub unsafe fn showmatches(
                 maxlen = maxlen.max(len);
             }
 
-            let lines = if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
+            let lines = if (*xp).xp_context == ExpandContext::TagsListFiles {
                 numMatches
             } else {
                 // Compute the number of columns and lines for the listing.
@@ -219,7 +219,7 @@ pub unsafe fn showmatches(
                 (numMatches + columns - 1) / columns
             };
 
-            if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
+            if (*xp).xp_context == ExpandContext::TagsListFiles {
                 msg_puts_hl(gettext(c"tagname".as_ptr()), HLF_T, false);
                 msg_clr_eos();
                 msg_advance(maxlen - 3);
@@ -244,7 +244,7 @@ pub unsafe fn showmatches(
             FreeWild(numMatches, matches);
         }
 
-        EXPAND_OK
+        Expanded::Ok
     }
 }
 
@@ -282,9 +282,9 @@ pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_
 pub(crate) unsafe fn expand_showtail(xp: *mut expand_T) -> bool {
     unsafe {
         // When not completing file names a "/" may mean something different.
-        if (*xp).xp_context != EXPAND_FILES
-            && (*xp).xp_context != EXPAND_SHELLCMD
-            && (*xp).xp_context != EXPAND_DIRECTORIES
+        if (*xp).xp_context != ExpandContext::Files
+            && (*xp).xp_context != ExpandContext::ShellCmd
+            && (*xp).xp_context != ExpandContext::Directories
         {
             return false;
         }
@@ -320,13 +320,13 @@ pub(crate) unsafe fn expand_showtail(xp: *mut expand_T) -> bool {
 ///
 /// `context` is the `EXPAND_*` the pattern came from.  The answer is never
 /// NULL.
-pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: c_int) -> *mut c_char {
+pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: ExpandContext) -> *mut c_char {
     unsafe {
-        if context != EXPAND_FILES
-            && context != EXPAND_FILES_IN_PATH
-            && context != EXPAND_SHELLCMD
-            && context != EXPAND_DIRECTORIES
-            && context != EXPAND_DIRS_IN_CDPATH
+        if context != ExpandContext::Files
+            && context != ExpandContext::FilesInPath
+            && context != ExpandContext::ShellCmd
+            && context != ExpandContext::Directories
+            && context != ExpandContext::DirsInCdpath
         {
             // Matching will be done internally (on something other than
             // files).  So we convert the file-matching-type wildcards into our
@@ -335,27 +335,28 @@ pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: c_int) -> *m
 
             // For help tags the translation is done in find_help_tags().
             // For a tag pattern starting with "/" no translation is needed.
-            if context == EXPAND_FINDFUNC
-                || context == EXPAND_HELP
-                || context == EXPAND_COLORS
-                || context == EXPAND_COMPILER
-                || context == EXPAND_OWNSYNTAX
-                || context == EXPAND_FILETYPE
-                || context == EXPAND_KEYMAP
-                || context == EXPAND_PACKADD
-                || context == EXPAND_RUNTIME
-                || ((context == EXPAND_TAGS_LISTFILES || context == EXPAND_TAGS)
+            if context == ExpandContext::Findfunc
+                || context == ExpandContext::Help
+                || context == ExpandContext::Colors
+                || context == ExpandContext::Compiler
+                || context == ExpandContext::Ownsyntax
+                || context == ExpandContext::Filetype
+                || context == ExpandContext::Keymap
+                || context == ExpandContext::Packadd
+                || context == ExpandContext::Runtime
+                || ((context == ExpandContext::TagsListFiles || context == ExpandContext::Tags)
                     && *fname as c_int == '/' as c_int)
-                || context == EXPAND_CHECKHEALTH
-                || context == EXPAND_LSP
-                || context == EXPAND_LUA
+                || context == ExpandContext::Checkhealth
+                || context == ExpandContext::Lsp
+                || context == ExpandContext::Lua
             {
                 return xstrnsave(fname, len);
             }
 
             // Custom expansion takes care of special things, and matches
             // backslashes literally.
-            let custom = context == EXPAND_USER_DEFINED || context == EXPAND_USER_LIST;
+            let custom =
+                context == ExpandContext::UserDefined || context == ExpandContext::UserList;
 
             let mut new_len = len + 2; // +2 for '^' at start, NUL at end
             for i in 0..len {
@@ -365,7 +366,7 @@ pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: c_int) -> *m
                     new_len += 1;
                 }
                 // Buffer names are like file names.  "." should be literal.
-                if context == EXPAND_BUFFERS && c == b'.' {
+                if context == ExpandContext::Buffers && c == b'.' {
                     new_len += 1;
                 }
                 if custom && c == b'\\' {
@@ -402,7 +403,7 @@ pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: c_int) -> *m
                             *retval.add(j) = '.' as c_char;
                             break 'copy;
                         }
-                        b'.' if context == EXPAND_BUFFERS => {
+                        b'.' if context == ExpandContext::Buffers => {
                             *retval.add(j) = '\\' as c_char;
                             j += 1;
                         }

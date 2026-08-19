@@ -20,7 +20,7 @@
 use super::*;
 use crate::path::ExpandFlags;
 
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{ExpandContext, FAIL, MAXPATHL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -114,7 +114,7 @@ pub unsafe fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const c_char) 
             }
             arg = skipwhite(p);
         }
-        (*xp).xp_context = EXPAND_RUNTIME;
+        (*xp).xp_context = ExpandContext::Runtime;
         (*xp).xp_pattern = arg;
     }
 }

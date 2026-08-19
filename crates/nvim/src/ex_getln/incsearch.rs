@@ -10,7 +10,7 @@
 
 use super::*;
 
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{ExpandContext, FAIL, NUL, OK};
 use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`
@@ -121,7 +121,7 @@ pub unsafe fn parse_pattern_and_range(
         parse_command_modifiers(&raw mut ea, &raw mut dummy, &raw mut dummy_cmdmod, true);
 
         // Skip over the range to find the command.
-        let cmd = skip_range(ea.cmd, ::core::ptr::null_mut::<::core::ffi::c_int>());
+        let cmd = skip_range(ea.cmd, ::core::ptr::null_mut::<ExpandContext>());
         if vim_strchr(c"sgvlu".as_ptr(), *cmd as uint8_t as ::core::ffi::c_int).is_null() {
             return false;
         }

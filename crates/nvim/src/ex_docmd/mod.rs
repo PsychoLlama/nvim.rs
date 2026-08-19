@@ -129,8 +129,6 @@ pub(crate) use self::childproc::*;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseManual: CdCause = 0;
 pub type C2Rust_Unnamed_33 = c_int;
-pub const EXPAND_FILES: C2Rust_Unnamed_33 = 2;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_33 = 0;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub const kOptValTypeString: OptValType = 2;

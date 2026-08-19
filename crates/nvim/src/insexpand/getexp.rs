@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cmdexpand::Expanded;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, IOSIZE, NUL, OK};
 
@@ -459,7 +460,7 @@ pub(crate) unsafe fn get_next_cmdline_completion() {
             pattern.size as c_int,
             &raw mut num_matches,
             &raw mut matches,
-        ) == EXPAND_OK
+        ) == Expanded::Ok
         {
             ins_compl_add_matches(num_matches, matches, 0);
         }

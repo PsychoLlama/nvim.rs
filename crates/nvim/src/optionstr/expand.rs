@@ -230,7 +230,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
     });
     ENUMERATOR.set(func);
 
-    // Not fuzzy: EXPAND_STRING_SETTING does not use fuzzy matching.
+    // Not fuzzy: ExpandContext::StringSetting does not use fuzzy matching.
     // SAFETY: the caller's frame supplies the expansion context and the
     // command line's compiled pattern.
     unsafe {

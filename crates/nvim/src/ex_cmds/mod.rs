@@ -85,7 +85,6 @@ pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const REGSUB_BACKSLASH: C2Rust_Unnamed_18 = 4;
 pub const REGSUB_MAGIC: C2Rust_Unnamed_18 = 2;

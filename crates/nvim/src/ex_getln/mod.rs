@@ -143,17 +143,18 @@ use crate::types::{
     Arena, Array, BackslashEscape, Boolean, CMD_append, Callback,
     Callback_data as C2Rust_Unnamed_5, CmdAddr, CmdModFlags, CmdParseInfo,
     CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk, CmdlineColors,
-    CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExprAST, ExprASTNodeType,
-    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData,
-    OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
-    RemapValues, Set_ptr_t, String_0, TryState, UndoObjectType, VimState, aco_save_T, buf_T,
-    bufref_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
-    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
-    hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
-    optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
-    save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
-    u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST,
+    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
+    ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
+    OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
+    ParserPosition, ParserState, RemapValues, Set_ptr_t, String_0, TryState, UndoObjectType,
+    VimState, aco_save_T, buf_T, bufref_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T,
+    dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T,
+    handle_T, hashitem_T, hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T,
+    msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T,
+    regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
+    typval_vval_union, u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
+    xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -206,8 +207,6 @@ pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_18 = 0;
-pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_18 = -2;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
@@ -495,7 +494,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     hl_id: 0,
     overstrike: 0,
     xpc: ::core::ptr::null_mut::<expand_T>(),
-    xp_context: 0,
+    xp_context: ExpandContext::Nothing,
     xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     input_fn: 0,
     cmdbuff_replaced: false,
@@ -577,7 +576,7 @@ pub(crate) const INCSEARCH_STATE_INIT: incsearch_state_T = incsearch_state_T {
 /// An all-zero [`expand_T`]; `ExpandInit` fills the fields that matter.
 pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
     xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_context: 0,
+    xp_context: ExpandContext::Nothing,
     xp_pattern_len: 0,
     xp_prefix: XP_PREFIX_NONE,
     xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),

@@ -11,7 +11,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
-use crate::types::{FAIL, OK};
+use crate::types::{ExpandContext, FAIL, OK};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -65,11 +65,11 @@ pub(crate) unsafe fn ExpandFromContext(
 
         if matches!(
             context,
-            EXPAND_FILES
-                | EXPAND_DIRECTORIES
-                | EXPAND_FILES_IN_PATH
-                | EXPAND_FINDFUNC
-                | EXPAND_DIRS_IN_CDPATH
+            ExpandContext::Files
+                | ExpandContext::Directories
+                | ExpandContext::FilesInPath
+                | ExpandContext::Findfunc
+                | ExpandContext::DirsInCdpath
         ) {
             return expand_files_and_dirs(xp, pat, matches, numMatches, flags, options);
         }
@@ -80,7 +80,7 @@ pub(crate) unsafe fn ExpandFromContext(
         // The contexts with a generator of their own.  Each `ExpandRTDir`
         // arm builds the NULL-terminated `char *[]` it wants in this frame.
         match context {
-            EXPAND_HELP => {
+            ExpandContext::Help => {
                 // With an empty argument we would get all the help tags,
                 // which is very slow.  Get matches for "help" instead.
                 let arg = if *pat == 0 {
@@ -94,19 +94,19 @@ pub(crate) unsafe fn ExpandFromContext(
                 cleanup_help_tags(*numMatches, *matches);
                 return OK;
             }
-            EXPAND_SHELLCMD => {
+            ExpandContext::ShellCmd => {
                 expand_shellcmd(pat, matches, numMatches, flags);
                 return OK;
             }
-            EXPAND_OLD_SETTING => return ExpandOldSetting(numMatches, matches),
-            EXPAND_BUFFERS => return ExpandBufnames(pat, numMatches, matches, options),
-            EXPAND_DIFF_BUFFERS => {
+            ExpandContext::OldSetting => return ExpandOldSetting(numMatches, matches),
+            ExpandContext::Buffers => return ExpandBufnames(pat, numMatches, matches, options),
+            ExpandContext::DiffBuffers => {
                 return ExpandBufnames(pat, numMatches, matches, options | BUF_DIFF_FILTER);
             }
-            EXPAND_TAGS | EXPAND_TAGS_LISTFILES => {
-                return expand_tags(context == EXPAND_TAGS, pat, numMatches, matches);
+            ExpandContext::Tags | ExpandContext::TagsListFiles => {
+                return expand_tags(context == ExpandContext::Tags, pat, numMatches, matches);
             }
-            EXPAND_COLORS => {
+            ExpandContext::Colors => {
                 let mut dirs = [c"colors".as_ptr() as *mut c_char, ptr::null_mut()];
                 return ExpandRTDir(
                     pat,
@@ -116,15 +116,15 @@ pub(crate) unsafe fn ExpandFromContext(
                     dirs.as_mut_ptr(),
                 );
             }
-            EXPAND_COMPILER => {
+            ExpandContext::Compiler => {
                 let mut dirs = [c"compiler".as_ptr() as *mut c_char, ptr::null_mut()];
                 return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
-            EXPAND_OWNSYNTAX => {
+            ExpandContext::Ownsyntax => {
                 let mut dirs = [c"syntax".as_ptr() as *mut c_char, ptr::null_mut()];
                 return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
-            EXPAND_FILETYPE => {
+            ExpandContext::Filetype => {
                 let mut dirs = [
                     c"syntax".as_ptr() as *mut c_char,
                     c"indent".as_ptr() as *mut c_char,
@@ -133,15 +133,15 @@ pub(crate) unsafe fn ExpandFromContext(
                 ];
                 return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
-            EXPAND_KEYMAP => {
+            ExpandContext::Keymap => {
                 let mut dirs = [c"keymap".as_ptr() as *mut c_char, ptr::null_mut()];
                 return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
-            EXPAND_USER_LIST => return ExpandUserList(xp, matches, numMatches),
-            EXPAND_USER_LUA => return ExpandUserLua(xp, numMatches, matches),
-            EXPAND_PACKADD => return ExpandPackAddDir(pat, numMatches, matches),
-            EXPAND_RUNTIME => return expand_runtime_cmd(pat, numMatches, matches),
-            EXPAND_PATTERN_IN_BUF => {
+            ExpandContext::UserList => return ExpandUserList(xp, matches, numMatches),
+            ExpandContext::UserLua => return ExpandUserLua(xp, numMatches, matches),
+            ExpandContext::Packadd => return ExpandPackAddDir(pat, numMatches, matches),
+            ExpandContext::Runtime => return expand_runtime_cmd(pat, numMatches, matches),
+            ExpandContext::PatternInBuf => {
                 return expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, numMatches);
             }
             _ => {}
@@ -150,15 +150,15 @@ pub(crate) unsafe fn ExpandFromContext(
         // When expanding a function name starting with s:, match the <SNR>nr_
         // prefix.
         let mut tofree = ptr::null_mut::<c_char>();
-        if context == EXPAND_USER_FUNC && strncmp(pat, c"^s:".as_ptr(), 3) == 0 {
+        if context == ExpandContext::UserFunc && strncmp(pat, c"^s:".as_ptr(), 3) == 0 {
             let len = strlen(pat) + 20;
             tofree = xmalloc(len) as *mut c_char;
             snprintf(tofree, len, c"^<SNR>\\d\\+_%s".as_ptr(), pat.add(3));
             pat = tofree;
         }
 
-        if context == EXPAND_LUA {
-            // `tofree` is still NULL here: only EXPAND_USER_FUNC sets it.
+        if context == ExpandContext::Lua {
+            // `tofree` is still NULL here: only ExpandContext::UserFunc sets it.
             return nlua_expand_get_matches(numMatches, matches);
         }
 
@@ -180,18 +180,18 @@ pub(crate) unsafe fn ExpandFromContext(
         }
 
         let ret = match context {
-            EXPAND_SETTINGS | EXPAND_BOOL_SETTINGS => {
+            ExpandContext::Settings | ExpandContext::BoolSettings => {
                 ExpandSettings(xp, &raw mut regmatch, pat, numMatches, matches, fuzzy)
             }
-            EXPAND_STRING_SETTING => {
+            ExpandContext::StringSetting => {
                 ExpandStringSetting(xp, &raw mut regmatch, numMatches, matches)
             }
-            EXPAND_SETTING_SUBTRACT => {
+            ExpandContext::SettingSubtract => {
                 ExpandSettingSubtract(xp, &raw mut regmatch, numMatches, matches)
             }
-            EXPAND_MAPPINGS => ExpandMappings(pat, &raw mut regmatch, numMatches, matches),
-            EXPAND_ARGOPT => expand_argopt(pat, xp, &raw mut regmatch, matches, numMatches),
-            EXPAND_USER_DEFINED => {
+            ExpandContext::Mappings => ExpandMappings(pat, &raw mut regmatch, numMatches, matches),
+            ExpandContext::Argopt => expand_argopt(pat, xp, &raw mut regmatch, matches, numMatches),
+            ExpandContext::UserDefined => {
                 ExpandUserDefined(pat, xp, &raw mut regmatch, matches, numMatches)
             }
             _ => ExpandOther(pat, xp, &raw mut regmatch, matches, numMatches),
@@ -311,16 +311,16 @@ pub unsafe fn ExpandGeneric(
         let sort_matches = !fuzzy
             && !matches!(
                 (*xp).xp_context,
-                EXPAND_MENUNAMES
-                    | EXPAND_STRING_SETTING
-                    | EXPAND_MENUS
-                    | EXPAND_SCRIPTNAMES
-                    | EXPAND_ARGOPT
+                ExpandContext::Menunames
+                    | ExpandContext::StringSetting
+                    | ExpandContext::Menus
+                    | ExpandContext::Scriptnames
+                    | ExpandContext::Argopt
             );
         // <SNR> functions should be sorted to the end.
         let funcsort = matches!(
             (*xp).xp_context,
-            EXPAND_EXPRESSION | EXPAND_FUNCTIONS | EXPAND_USER_FUNC
+            ExpandContext::Expression | ExpandContext::Functions | ExpandContext::UserFunc
         );
 
         if sort_matches {

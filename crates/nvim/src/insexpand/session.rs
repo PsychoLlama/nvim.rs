@@ -10,7 +10,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::semsg_c;
-use crate::types::{FAIL, IOSIZE, NUL, OK, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{ExpandContext, FAIL, IOSIZE, NUL, OK, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// The pattern, column and length for normal (CTRL-N / CTRL-P) completion.
 ///
@@ -188,7 +188,7 @@ pub(crate) unsafe fn get_filename_compl_info(
         compl_pattern.set(cstr_as_string(addstar(
             line.offset(compl_col.get() as isize),
             compl_length.get() as size_t,
-            EXPAND_FILES,
+            ExpandContext::Files,
         )));
         OK
     }
@@ -205,11 +205,11 @@ pub(crate) unsafe fn get_cmdline_compl_info(line: *mut c_char, curs_col: colnr_T
             curs_col,
             false,
         );
-        if (*compl_xp.ptr()).xp_context == EXPAND_LUA {
+        if (*compl_xp.ptr()).xp_context == ExpandContext::Lua {
             nlua_expand_pat(compl_xp.ptr());
         }
-        if (*compl_xp.ptr()).xp_context == EXPAND_UNSUCCESSFUL
-            || (*compl_xp.ptr()).xp_context == EXPAND_NOTHING
+        if (*compl_xp.ptr()).xp_context == ExpandContext::Unsuccessful
+            || (*compl_xp.ptr()).xp_context == ExpandContext::Nothing
         {
             // No completion possible: use an empty pattern to get a
             // "pattern not found" message.

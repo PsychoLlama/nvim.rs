@@ -33,10 +33,6 @@ pub use self::command::*;
 mod apply;
 pub use self::apply::*;
 
-/// `xp_context` values: what `:highlight`'s completion is expanding.
-pub const EXPAND_HIGHLIGHT: c_int = 13;
-pub const EXPAND_NOTHING: c_int = 0;
-
 /// `OptValType`, for the one option this family sets (`'background'`).
 pub const kOptValTypeString: OptValType = 2;
 

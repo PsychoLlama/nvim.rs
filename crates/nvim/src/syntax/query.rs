@@ -11,7 +11,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::NUL;
+use crate::types::{ExpandContext, NUL};
 
 /// Does this window's block define any syntax at all?
 pub unsafe fn syntax_present(win: *mut win_T) -> bool {
@@ -53,7 +53,7 @@ pub unsafe fn reset_expand_highlight() {
 /// plus `None`.
 pub unsafe fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const c_char) {
     unsafe {
-        (*xp).xp_context = EXPAND_HIGHLIGHT;
+        (*xp).xp_context = ExpandContext::Highlight;
         (*xp).xp_pattern = arg as *mut c_char;
         include_none.set(1);
     }
@@ -63,7 +63,7 @@ pub unsafe fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const c_char) {
 pub unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_char) {
     unsafe {
         // Default: expand subcommands.
-        (*xp).xp_context = EXPAND_SYNTAX;
+        (*xp).xp_context = ExpandContext::Syntax;
         EXPAND_WHAT.set(ExpandWhat::SubCmd);
         (*xp).xp_pattern = arg as *mut c_char;
         include_link.set(0);
@@ -84,7 +84,7 @@ pub unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_char) {
         let first_word_is = |name: &CStr| strncasecmp(arg, name.as_ptr(), word_len) == 0;
 
         if *skiptowhite((*xp).xp_pattern) as c_int != NUL {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
         } else if first_word_is(c"case") {
             EXPAND_WHAT.set(ExpandWhat::Case);
         } else if first_word_is(c"spell") {
@@ -96,12 +96,12 @@ pub unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_char) {
             if *p as c_int == '@' as c_int {
                 EXPAND_WHAT.set(ExpandWhat::Cluster);
             } else {
-                (*xp).xp_context = EXPAND_HIGHLIGHT;
+                (*xp).xp_context = ExpandContext::Highlight;
             }
         } else if first_word_is(c"keyword") || first_word_is(c"region") || first_word_is(c"match") {
-            (*xp).xp_context = EXPAND_HIGHLIGHT;
+            (*xp).xp_context = ExpandContext::Highlight;
         } else {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
         }
     }
 }

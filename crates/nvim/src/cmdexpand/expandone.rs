@@ -11,7 +11,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::semsg_c;
-use crate::types::{BackslashEscape, FAIL, OK};
+use crate::types::{BackslashEscape, ExpandContext, FAIL, OK};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -77,7 +77,7 @@ pub(crate) unsafe fn nextwild(
 
         if (*xp).xp_numfiles == -1 {
             pre_incsearch_pos.set((*xp).xp_pre_incsearch_pos);
-            if (*ccline).input_fn != 0 && (*ccline).xp_context == EXPAND_COMMANDS {
+            if (*ccline).input_fn != 0 && (*ccline).xp_context == ExpandContext::Commands {
                 // Expand commands typed in the input() function.
                 set_cmd_context(
                     xp,
@@ -91,7 +91,7 @@ pub(crate) unsafe fn nextwild(
                 set_expand_context(xp);
                 may_expand_pattern.set(false);
             }
-            if (*xp).xp_context == EXPAND_LUA {
+            if (*xp).xp_context == ExpandContext::Lua {
                 nlua_expand_pat(xp);
             }
             cmd_showtail.set(expand_showtail(xp));
@@ -99,12 +99,12 @@ pub(crate) unsafe fn nextwild(
 
         match (*xp).xp_context {
             // Something illegal on the command line.
-            EXPAND_UNSUCCESSFUL => {
+            ExpandContext::Unsuccessful => {
                 beep_flush();
                 return OK;
             }
             // The caller can use the character as a normal char instead.
-            EXPAND_NOTHING => return FAIL,
+            ExpandContext::Nothing => return FAIL,
             _ => {}
         }
 
@@ -116,7 +116,8 @@ pub(crate) unsafe fn nextwild(
         (*xp).xp_pattern_len = ((*ccline).cmdpos - at) as size_t;
 
         // Skip showing matches if the prefix is invalid during wildtrigger().
-        if from_wildtrigger_func && (*xp).xp_context == EXPAND_COMMANDS && (*xp).xp_pattern_len == 0
+        let context = (*xp).xp_context;
+        if from_wildtrigger_func && context == ExpandContext::Commands && (*xp).xp_pattern_len == 0
         {
             return FAIL;
         }
@@ -138,7 +139,7 @@ pub(crate) unsafe fn nextwild(
             p = ExpandOne(xp, ptr::null_mut(), ptr::null_mut(), WildOpts::NONE, mode);
         } else {
             let tmp = if cmdline_fuzzy_completion_supported(xp)
-                || (*xp).xp_context == EXPAND_PATTERN_IN_BUF
+                || (*xp).xp_context == ExpandContext::PatternInBuf
             {
                 // Don't modify the search string.
                 xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len)
@@ -214,7 +215,7 @@ pub(crate) unsafe fn nextwild(
 
         // When expanding a ":map" command and no matches are found, assume
         // the key is supposed to be inserted literally.
-        if (*xp).xp_context == EXPAND_MAPPINGS && p.is_null() {
+        if (*xp).xp_context == ExpandContext::Mappings && p.is_null() {
             return FAIL;
         }
 
@@ -371,7 +372,9 @@ unsafe fn expand_one_start(
         // `xp_numfiles ? xp_numfiles : 1` can only take the first arm here:
         // the zero case returned above.)
         let mut non_suf_match = (*xp).xp_numfiles;
-        if matches!((*xp).xp_context, EXPAND_FILES | EXPAND_DIRECTORIES) && (*xp).xp_numfiles > 1 {
+        let ctx = (*xp).xp_context;
+        let names = matches!(ctx, ExpandContext::Files | ExpandContext::Directories);
+        if names && (*xp).xp_numfiles > 1 {
             // More than one match; check the suffix.  expand_wildcards has
             // sorted the ones with a matching suffix to the front, so only
             // the first two need looking at.
@@ -412,7 +415,10 @@ unsafe fn longest_common_match(xp: *mut expand_T, options: WildOpts) -> *mut c_c
         let fold = p_fic.get() != 0
             && matches!(
                 (*xp).xp_context,
-                EXPAND_DIRECTORIES | EXPAND_FILES | EXPAND_SHELLCMD | EXPAND_BUFFERS
+                ExpandContext::Directories
+                    | ExpandContext::Files
+                    | ExpandContext::ShellCmd
+                    | ExpandContext::Buffers
             );
 
         let mut len: size_t = 0;

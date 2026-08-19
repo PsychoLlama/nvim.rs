@@ -15,9 +15,7 @@ use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
-use crate::types::{MAXPATHL, expand_T};
-
-const EXPAND_FILES: c_int = 2;
+use crate::types::{ExpandContext, MAXPATHL, expand_T};
 
 /// [`expand_env`] into a newly allocated `MAXPATHL` buffer.
 ///
@@ -154,7 +152,7 @@ unsafe fn resolve_user_dir(src: *const c_char, dst: *mut c_char, dstlen: c_int) 
             // and may fail on an old /bin/sh.
             let mut xpc: expand_T = core::mem::zeroed();
             ExpandInit(&raw mut xpc);
-            xpc.xp_context = EXPAND_FILES;
+            xpc.xp_context = ExpandContext::Files;
             var = ExpandOne(
                 &raw mut xpc,
                 dst,

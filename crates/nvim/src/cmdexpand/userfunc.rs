@@ -11,8 +11,8 @@ use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
 use crate::types::{
-    FAIL, MAXPATHL, NUL, OK, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED,
+    ExpandContext, FAIL, MAXPATHL, NUL, OK, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -297,7 +297,7 @@ pub(crate) unsafe fn call_user_expand_func(
 }
 
 /// Expand names with a function defined by the user
-/// (`EXPAND_USER_DEFINED` and `EXPAND_USER_LIST`).
+/// (`ExpandContext::UserDefined` and `ExpandContext::UserList`).
 pub(crate) unsafe fn ExpandUserDefined(
     pat: *const c_char,
     xp: *mut expand_T,
@@ -495,9 +495,9 @@ pub unsafe fn globpath(
         let mut xpc: expand_T = core::mem::zeroed();
         ExpandInit(&raw mut xpc);
         xpc.xp_context = if dirs {
-            EXPAND_DIRECTORIES
+            ExpandContext::Directories
         } else {
-            EXPAND_FILES
+            ExpandContext::Files
         };
 
         let filelen = strlen(file);

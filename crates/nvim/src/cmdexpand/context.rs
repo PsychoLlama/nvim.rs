@@ -9,7 +9,8 @@
 
 use super::*;
 use crate::types::{
-    CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal, NUL,
+    CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal,
+    ExpandContext, NUL,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -38,7 +39,7 @@ pub unsafe fn set_expand_context(xp: *mut expand_T) {
         if ((*ccline).cmdfirstc == '/' as c_int || (*ccline).cmdfirstc == '?' as c_int)
             && may_expand_pattern.get()
         {
-            (*xp).xp_context = EXPAND_PATTERN_IN_BUF;
+            (*xp).xp_context = ExpandContext::PatternInBuf;
             (*xp).xp_search_dir = if (*ccline).cmdfirstc == '/' as c_int {
                 FORWARD
             } else {
@@ -56,7 +57,7 @@ pub unsafe fn set_expand_context(xp: *mut expand_T) {
             && (*ccline).cmdfirstc != '=' as c_int
             && (*ccline).input_fn == 0
         {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
             return;
         }
 
@@ -81,7 +82,7 @@ pub(crate) unsafe fn set_cmd_index(
     cmd: *const c_char,
     eap: *mut exarg_T,
     xp: *mut expand_T,
-    complp: *mut c_int,
+    complp: *mut ExpandContext,
 ) -> *const c_char {
     unsafe {
         // Both name scans are this loop.  Two monomorphic closures rather
@@ -141,7 +142,7 @@ pub(crate) unsafe fn set_cmd_index(
             let len = p.offset_from(cmd) as size_t;
 
             if len == 0 {
-                (*xp).xp_context = EXPAND_UNSUCCESSFUL;
+                (*xp).xp_context = ExpandContext::Unsuccessful;
                 return ptr::null();
             }
 
@@ -178,7 +179,7 @@ pub(crate) unsafe fn set_cmd_index(
         }
         if (*eap).cmdidx == CMD_SIZE {
             // Not still touching the command and it was an illegal one.
-            (*xp).xp_context = EXPAND_UNSUCCESSFUL;
+            (*xp).xp_context = ExpandContext::Unsuccessful;
             return ptr::null();
         }
 
@@ -193,7 +194,7 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
     arg: *const c_char,
     usefilter: bool,
     xp: *mut expand_T,
-    complp: *mut c_int,
+    complp: *mut ExpandContext,
 ) {
     unsafe {
         let mut in_quote = false;
@@ -245,17 +246,17 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
         if !bow.is_null() && in_quote {
             (*xp).xp_pattern = bow as *mut c_char;
         }
-        (*xp).xp_context = EXPAND_FILES;
+        (*xp).xp_context = ExpandContext::Files;
 
         // For a shell command more chars need to be escaped.
         if usefilter
             || (!eap.is_null() && ((*eap).cmdidx == CMD_bang || (*eap).cmdidx == CMD_terminal))
-            || *complp == EXPAND_SHELLCMDLINE
+            || *complp == ExpandContext::ShellCmdLine
         {
             (*xp).xp_shell = true;
             // When still after the command name expand executables.
             if (*xp).xp_pattern == skipwhite(arg) {
-                (*xp).xp_context = EXPAND_SHELLCMD;
+                (*xp).xp_context = ExpandContext::ShellCmd;
             }
         }
 
@@ -269,11 +270,11 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
                 p = p.add(1);
             }
             if *p as c_int == NUL {
-                (*xp).xp_context = EXPAND_ENV_VARS;
+                (*xp).xp_context = ExpandContext::EnvVars;
                 (*xp).xp_pattern = (*xp).xp_pattern.add(1);
-                // Avoid that the assignment uses EXPAND_FILES again.
-                if *complp != EXPAND_USER_DEFINED && *complp != EXPAND_USER_LIST {
-                    *complp = EXPAND_ENV_VARS;
+                // Avoid that the assignment uses ExpandContext::Files again.
+                if *complp != ExpandContext::UserDefined && *complp != ExpandContext::UserList {
+                    *complp = ExpandContext::EnvVars;
                 }
             }
         }
@@ -291,7 +292,7 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
                 && p > user as *const c_char
                 && match_user(CStr::from_ptr(user)) != UserMatch::None
             {
-                (*xp).xp_context = EXPAND_USER;
+                (*xp).xp_context = ExpandContext::User;
                 (*xp).xp_pattern = (*xp).xp_pattern.add(1);
             }
         }
@@ -307,7 +308,7 @@ pub(crate) unsafe fn set_context_in_argopt(xp: *mut expand_T, arg: *const c_char
         } else {
             p.add(1)
         };
-        (*xp).xp_context = EXPAND_ARGOPT;
+        (*xp).xp_context = ExpandContext::Argopt;
         ptr::null()
     }
 }
@@ -324,7 +325,7 @@ pub(crate) unsafe fn set_context_in_filter_cmd(
             arg = skip_vimgrep_pat(arg as *mut c_char, ptr::null_mut(), ptr::null_mut());
         }
         if arg.is_null() || *arg as c_int == NUL {
-            (*xp).xp_context = EXPAND_NOTHING;
+            (*xp).xp_context = ExpandContext::Nothing;
             return ptr::null();
         }
         skipwhite(arg)
@@ -344,7 +345,7 @@ pub(crate) unsafe fn set_context_in_match_cmd(
             set_context_in_echohl_cmd(xp, arg);
             arg = skipwhite(skiptowhite(arg));
             if *arg as c_int != NUL {
-                (*xp).xp_context = EXPAND_NOTHING;
+                (*xp).xp_context = ExpandContext::Nothing;
                 arg = skip_regexp(
                     (arg as *mut c_char).add(1),
                     *arg as u8 as c_int,
@@ -441,7 +442,7 @@ pub(crate) unsafe fn find_cmd_after_isearch_cmd(
 
             // Check for trailing illegal characters.
             if *arg as c_int == NUL || strchr(c"|\"\n".as_ptr(), *arg as c_int).is_null() {
-                (*xp).xp_context = EXPAND_NOTHING;
+                (*xp).xp_context = ExpandContext::Nothing;
             } else {
                 return arg;
             }
@@ -465,11 +466,11 @@ pub(crate) unsafe fn set_context_in_unlet_cmd(
             arg = (*xp).xp_pattern.add(1);
         }
 
-        (*xp).xp_context = EXPAND_USER_VARS;
+        (*xp).xp_context = ExpandContext::UserVars;
         (*xp).xp_pattern = arg as *mut c_char;
 
         if *(*xp).xp_pattern as c_int == '$' as c_int {
-            (*xp).xp_context = EXPAND_ENV_VARS;
+            (*xp).xp_context = ExpandContext::EnvVars;
             (*xp).xp_pattern = (*xp).xp_pattern.add(1);
         }
 
@@ -485,7 +486,7 @@ pub(crate) unsafe fn set_context_in_lang_cmd(
     unsafe {
         let p = skiptowhite(arg);
         if *p as c_int == NUL {
-            (*xp).xp_context = EXPAND_LANGUAGE;
+            (*xp).xp_context = ExpandContext::Language;
             (*xp).xp_pattern = arg as *mut c_char;
         } else {
             let len = p.offset_from(arg) as size_t;
@@ -493,10 +494,10 @@ pub(crate) unsafe fn set_context_in_lang_cmd(
                 .iter()
                 .any(|kind| strncmp(arg, kind.as_ptr(), len) == 0);
             if named {
-                (*xp).xp_context = EXPAND_LOCALES;
+                (*xp).xp_context = ExpandContext::Locales;
                 (*xp).xp_pattern = skipwhite(p);
             } else {
-                (*xp).xp_context = EXPAND_NOTHING;
+                (*xp).xp_context = ExpandContext::Nothing;
             }
         }
 
@@ -511,7 +512,7 @@ pub(crate) unsafe fn set_context_in_breakadd_cmd(
     cmdidx: cmdidx_T,
 ) -> *const c_char {
     unsafe {
-        (*xp).xp_context = EXPAND_BREAKPOINT;
+        (*xp).xp_context = ExpandContext::Breakpoint;
         (*xp).xp_pattern = arg as *mut c_char;
 
         breakpt_expand_what.set(if cmdidx == CMD_breakadd {
@@ -537,20 +538,20 @@ pub(crate) unsafe fn set_context_in_breakadd_cmd(
             if ascii_isdigit(*p as c_int) {
                 p = skipdigits(p);
                 if *p as c_int != ' ' as c_int {
-                    (*xp).xp_context = EXPAND_NOTHING;
+                    (*xp).xp_context = ExpandContext::Nothing;
                     return ptr::null();
                 }
                 p = skipwhite(p);
             }
             (*xp).xp_context = if strncmp(c"file".as_ptr(), subcmd_start, 4) == 0 {
-                EXPAND_FILES
+                ExpandContext::Files
             } else {
-                EXPAND_USER_FUNC
+                ExpandContext::UserFunc
             };
             (*xp).xp_pattern = p as *mut c_char;
         } else if strncmp(c"expr ".as_ptr(), p, 5) == 0 {
             // :breakadd expr <expression>
-            (*xp).xp_context = EXPAND_EXPRESSION;
+            (*xp).xp_context = ExpandContext::Expression;
             (*xp).xp_pattern = skipwhite(p.add(5));
         }
 
@@ -564,7 +565,7 @@ pub(crate) unsafe fn set_context_in_scriptnames_cmd(
     arg: *const c_char,
 ) -> *const c_char {
     unsafe {
-        (*xp).xp_context = EXPAND_NOTHING;
+        (*xp).xp_context = ExpandContext::Nothing;
         (*xp).xp_pattern = ptr::null_mut();
 
         let p = skipwhite(arg);
@@ -572,7 +573,7 @@ pub(crate) unsafe fn set_context_in_scriptnames_cmd(
             return ptr::null();
         }
 
-        (*xp).xp_context = EXPAND_SCRIPTNAMES;
+        (*xp).xp_context = ExpandContext::Scriptnames;
         (*xp).xp_pattern = p;
 
         ptr::null()
@@ -585,25 +586,26 @@ pub(crate) unsafe fn set_context_in_filetype_cmd(
     arg: *const c_char,
 ) -> *const c_char {
     unsafe {
-        (*xp).xp_context = EXPAND_FILETYPECMD;
+        (*xp).xp_context = ExpandContext::FiletypeCmd;
         (*xp).xp_pattern = arg as *mut c_char;
-        filetype_expand_what.set(EXP_FILETYPECMD_ALL);
+        filetype_expand_what.set(FiletypeWhat::All);
 
         let mut p = skipwhite(arg);
         if *p as c_int == NUL {
             return ptr::null();
         }
 
-        let mut val = 0;
+        let mut saw_plugin = false;
+        let mut saw_indent = false;
 
         loop {
             if strncmp(p, c"plugin".as_ptr(), 6) == 0 {
-                val |= EXPAND_FILETYPECMD_PLUGIN;
+                saw_plugin = true;
                 p = skipwhite(p.add(6));
                 continue;
             }
             if strncmp(p, c"indent".as_ptr(), 6) == 0 {
-                val |= EXPAND_FILETYPECMD_INDENT;
+                saw_indent = true;
                 p = skipwhite(p.add(6));
                 continue;
             }
@@ -612,13 +614,12 @@ pub(crate) unsafe fn set_context_in_filetype_cmd(
 
         // Whichever half is already spelled out is the half not to offer
         // again; naming both leaves only "on"/"off".
-        if val & EXPAND_FILETYPECMD_PLUGIN != 0 && val & EXPAND_FILETYPECMD_INDENT != 0 {
-            filetype_expand_what.set(EXP_FILETYPECMD_ONOFF);
-        } else if val & EXPAND_FILETYPECMD_PLUGIN != 0 {
-            filetype_expand_what.set(EXP_FILETYPECMD_INDENT);
-        } else if val & EXPAND_FILETYPECMD_INDENT != 0 {
-            filetype_expand_what.set(EXP_FILETYPECMD_PLUGIN);
-        }
+        filetype_expand_what.set(match (saw_plugin, saw_indent) {
+            (true, true) => FiletypeWhat::OnOff,
+            (true, false) => FiletypeWhat::Indent,
+            (false, true) => FiletypeWhat::Plugin,
+            (false, false) => FiletypeWhat::All,
+        });
 
         (*xp).xp_pattern = p;
 
@@ -651,7 +652,7 @@ pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
 
         (*xp).xp_pattern = (*ccline).cmdbuff.offset(skiplen as isize);
         (*xp).xp_pattern_len = ((*ccline).cmdpos - skiplen) as size_t;
-        (*xp).xp_context = EXPAND_PATTERN_IN_BUF;
+        (*xp).xp_context = ExpandContext::PatternInBuf;
         (*xp).xp_search_dir = FORWARD;
     }
 }

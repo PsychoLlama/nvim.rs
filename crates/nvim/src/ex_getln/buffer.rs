@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
-use crate::types::NUL;
+use crate::types::{ExpandContext, NUL};
 use core::ops::{Deref, DerefMut};
 
 // ---------------------------------------------------------------------------
@@ -225,8 +225,8 @@ fn move_xp_pattern(mut cc: Cc, old: *mut ::core::ffi::c_char) {
     // SAFETY: a live completion context.
     let xpc = unsafe { &mut *cc.xpc };
     if xpc.xp_pattern.is_null()
-        || xpc.xp_context == EXPAND_NOTHING
-        || xpc.xp_context == EXPAND_UNSUCCESSFUL
+        || xpc.xp_context == ExpandContext::Nothing
+        || xpc.xp_context == ExpandContext::Unsuccessful
     {
         return;
     }

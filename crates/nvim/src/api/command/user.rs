@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::types::ExArgt;
+use crate::types::{ExArgt, ExpandContext};
 
 pub unsafe fn nvim_create_user_command(
     channel_id: uint64_t,
@@ -115,7 +115,7 @@ pub unsafe fn create_user_command(
         let mut argt = ExArgt::NONE;
         let mut def: int64_t = -1 as int64_t;
         let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
-        let mut context: ::core::ffi::c_int = EXPAND_NOTHING as ::core::ffi::c_int;
+        let mut context = ExpandContext::Nothing;
         let mut compl_arg: *mut ::core::ffi::c_char =
             ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut rep: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
@@ -373,7 +373,7 @@ pub unsafe fn create_user_command(
                         if (*opts).complete.type_0 as ::core::ffi::c_uint
                             == kObjectTypeLuaRef as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
-                            context = EXPAND_USER_LUA as ::core::ffi::c_int;
+                            context = ExpandContext::UserLua;
                             compl_luaref = (*opts).complete.data.luaref;
                             (*opts).complete.data.luaref = LUA_NOREF as LuaRef;
                         } else if (*opts).complete.type_0 as ::core::ffi::c_uint

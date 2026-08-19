@@ -14,7 +14,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, IOSIZE, NUL, OK};
+use crate::types::{ExpandContext, FAIL, IOSIZE, NUL, OK};
 
 /// Print the head of every function, or of the ones `regmatch` matches.
 ///
@@ -250,7 +250,7 @@ pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 
         let buf = IObuff.ptr() as *mut c_char;
         let mut len = cat_func_name(buf, IOSIZE as size_t, fp);
-        if (*xp).xp_context != EXPAND_USER_FUNC {
+        if (*xp).xp_context != ExpandContext::UserFunc {
             xstrlcpy(
                 buf.offset(len as isize),
                 c"(".as_ptr(),

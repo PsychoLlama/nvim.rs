@@ -79,7 +79,6 @@ pub const MAX_FUNC_ARGS: C2Rust_Unnamed_35 = 20;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;
 pub const NUMBUFLEN: C2Rust_Unnamed_37 = 65;
 pub type C2Rust_Unnamed_38 = ::core::ffi::c_int;
-pub const EXPAND_FILES: C2Rust_Unnamed_38 = 2;
 pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
 pub const NSUBEXP: C2Rust_Unnamed_39 = 10;
 pub const kChannelStreamProc: ChannelStreamType = 0;

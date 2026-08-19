@@ -119,12 +119,6 @@ pub(crate) const MENU_PLAIN_MODES: c_int =
 pub(crate) const MODE_CHARS: [&CStr; MENU_MODES] =
     [c"n", c"v", c"s", c"o", c"i", c"c", c"tl", c"t"];
 
-/// `xp_context` values this module hands the completion machinery.
-pub(crate) const EXPAND_UNSUCCESSFUL: c_int = -2;
-pub(crate) const EXPAND_NOTHING: c_int = 0;
-pub(crate) const EXPAND_MENUS: c_int = 11;
-pub(crate) const EXPAND_MENUNAMES: c_int = 21;
-
 /// `noremap` values stored per mode in a `vimmenu_T`.
 pub(crate) const REMAP_SCRIPT: c_int = -2;
 pub(crate) const REMAP_NONE: c_int = -1;

@@ -123,7 +123,6 @@ pub const DI_FLAGS_RO: u8 = 1;
 pub const MAX_FUNC_ARGS: c_int = 20;
 pub const FIXVAR_CNT: c_int = 12;
 
-pub const EXPAND_USER_FUNC: c_int = 19;
 pub const CSTP_RETURN: c_int = 24;
 
 /// `trans_function_name` flags.

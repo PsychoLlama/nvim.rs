@@ -14,7 +14,7 @@ use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
     Ctrl_Y, Ctrl_Z,
 };
-use crate::types::{NUL, OK, kErrorTypeNone};
+use crate::types::{ExpandContext, NUL, OK, kErrorTypeNone};
 
 /// What `CTRL-\` did with the key typed after it.
 enum CtrlBsl {
@@ -144,7 +144,7 @@ pub(crate) unsafe fn command_line_end_wildmenu(
         }
         (*s).did_wild_list = false;
         if p_wmnu.get() == 0 || (c != K_UP && c != K_DOWN) {
-            (*s).xpc.xp_context = EXPAND_NOTHING;
+            (*s).xpc.xp_context = ExpandContext::Nothing;
         }
         (*s).wim_index = 0;
         wildmenu_cleanup(ccline.ptr());
@@ -580,7 +580,8 @@ pub(crate) unsafe fn command_line_changed(s: *mut CommandLineState) -> ::core::f
                 // which will trigger at the next wait-for-input.
                 update_screen(); // clear the 'inccommand' preview
             }
-            if (*s).xpc.xp_context == EXPAND_NOTHING && (KeyTyped.get() || vpeekc() == NUL) {
+            if (*s).xpc.xp_context == ExpandContext::Nothing && (KeyTyped.get() || vpeekc() == NUL)
+            {
                 may_do_incsearch_highlighting((*s).firstc, (*s).count, &raw mut (*s).is_state);
             }
         }
