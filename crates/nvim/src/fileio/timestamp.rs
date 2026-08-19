@@ -17,7 +17,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::highlight_group::{HLF_E, HLF_W};
-use crate::types::{FAIL, OK, VV_FCS_CHOICE, VV_FCS_REASON, VV_WARNINGMSG};
+use crate::types::{FAIL, OK, Vv};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
 static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);
@@ -227,11 +227,11 @@ unsafe fn file_changed_shell(buf: *mut buf_T, bufref: *mut bufref_T, reason: Rea
         let name = reason.name();
         BUSY.set(true);
         set_vim_var_string(
-            VV_FCS_REASON,
+            Vv::FcsReason,
             name.as_ptr(),
             name.count_bytes() as ptrdiff_t,
         );
-        set_vim_var_string(VV_FCS_CHOICE, c"".as_ptr(), 0);
+        set_vim_var_string(Vv::FcsChoice, c"".as_ptr(), 0);
         (*allbuf_lock.ptr()) += 1;
         let handled = apply_autocmds(
             EVENT_FILECHANGEDSHELL,
@@ -251,7 +251,7 @@ unsafe fn file_changed_shell(buf: *mut buf_T, bufref: *mut bufref_T, reason: Rea
                 c"E246: FileChangedShell autocommand deleted buffer".as_ptr(),
             ));
         }
-        match CStr::from_ptr(get_vim_var_str(VV_FCS_CHOICE)).to_bytes() {
+        match CStr::from_ptr(get_vim_var_str(Vv::FcsChoice)).to_bytes() {
             b"reload" if reason != Reason::Deleted => Fcs::Reload(Reload::Text),
             b"edit" => Fcs::Reload(Reload::Detect),
             b"ask" => Fcs::Ask,
@@ -282,7 +282,7 @@ unsafe fn warn_changed(
         xfree(path.cast());
         // Set v:warningmsg here, before the unimportant and output-specific
         // `mesg2` has been appended.
-        set_vim_var_string(VV_WARNINGMSG, tbuf.as_ptr(), at as ptrdiff_t);
+        set_vim_var_string(Vv::Warningmsg, tbuf.as_ptr(), at as ptrdiff_t);
         let mut append = |sep: &CStr| {
             if !mesg2.is_empty() {
                 snprintf(

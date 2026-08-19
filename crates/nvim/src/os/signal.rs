@@ -19,8 +19,8 @@ use crate::main::{IObuff, curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
 use crate::os::cshim::snprintf;
 use crate::types::{
-    IOSIZE, SignalWatcher, VV_DYING, uv__queue, uv_handle_type, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t,
+    IOSIZE, SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
+    uv_signal_t,
 };
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -193,7 +193,7 @@ fn deadly_signal(signum: c_int) -> ! {
     // match their format strings, and IObuff is IOSIZE chars.
     unsafe {
         // Set the v:dying variable.
-        set_vim_var_nr(VV_DYING, 1);
+        set_vim_var_nr(Vv::Dying, 1);
         v_dying.set(1);
         logmsg_c!(
             LOGLVL_INF,

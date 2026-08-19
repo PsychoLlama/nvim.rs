@@ -219,7 +219,7 @@ pub unsafe fn emsg_multiline(
             }
 
             // set "v:errmsg", also when using ":silent! cmd"
-            set_vim_var_string(VV_ERRMSG, s, -1);
+            set_vim_var_string(Vv::Errmsg, s, -1);
 
             // When using ":silent! cmd" don't display the error message, but
             // do write it to the redirection and the log.
@@ -504,7 +504,7 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
         msg_hist_off.set(!hist);
 
         no_wait_return.set(no_wait_return.get() + 1);
-        set_vim_var_string(VV_WARNINGMSG, message, -1);
+        set_vim_var_string(Vv::Warningmsg, message, -1);
         xfree(keep_msg.get().cast());
         keep_msg.set(ptr::null_mut());
         keep_msg_hl_id.set(if hl { HLF_W } else { 0 });

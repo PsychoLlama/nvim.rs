@@ -26,7 +26,6 @@ use crate::pos::lt;
 use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
 use crate::strings::vim_strchr;
-use crate::types::VV_LNUM;
 use ::libc::strcmp;
 
 /// The indent 'indentexpr' answers for the cursor line, or the line's
@@ -46,7 +45,7 @@ pub unsafe fn get_expr_indent() -> c_int {
     let (save_pos, save_curswant, save_set_curswant) =
         unsafe { ((*win).w_cursor, (*win).w_curswant, (*win).w_set_curswant) };
     // SAFETY: as above.
-    unsafe { set_vim_var_nr(VV_LNUM, save_pos.lnum as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Lnum, save_pos.lnum as varnumber_T) };
 
     if use_sandbox {
         sandbox.set(sandbox.get() + 1);

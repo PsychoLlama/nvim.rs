@@ -76,9 +76,8 @@ use crate::path::vim_FullName;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg_c;
 use crate::types::{
-    CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, VV_SWAPCOMMAND, aentry_T, buf_T,
-    bufref_T, exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T,
-    win_T,
+    CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv, aentry_T, buf_T, bufref_T,
+    exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::undo::bufIsChanged;
 use crate::window::goto_tabpage_win;
@@ -866,7 +865,7 @@ pub unsafe fn ex_drop(eap: *mut exarg_T) {
                 let verbose = DoCmdOpts::VERBOSE;
                 do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), verbose);
                 if did_set_swapcommand {
-                    set_vim_var_string(VV_SWAPCOMMAND, ptr::null(), -1 as ptrdiff_t);
+                    set_vim_var_string(Vv::Swapcommand, ptr::null(), -1 as ptrdiff_t);
                 }
             }
             return;

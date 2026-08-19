@@ -84,8 +84,8 @@ use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, ExtmarkOp, GraphemeState, MarkTree, VV_WARNINGMSG, bcount_t, buf_T, colnr_T,
-    fmark_T, fmarkv_T, int64_t, linenr_T, pos_T, size_t, ssize_t, tabpage_T, win_T,
+    CmdModFlags, ExtmarkOp, GraphemeState, MarkTree, Vv, bcount_t, buf_T, colnr_T, fmark_T,
+    fmarkv_T, int64_t, linenr_T, pos_T, size_t, ssize_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};

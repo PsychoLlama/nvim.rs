@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, OptionSetFlags, VV_FNAME};
+use crate::types::{FAIL, OptionSetFlags, Vv};
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
 use std::ffi::CStr;
@@ -226,7 +226,7 @@ pub unsafe fn file_name_in_line(
 pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c_char {
     unsafe {
         let save_sctx = current_sctx.get();
-        set_vim_var_string(VV_FNAME, ptr, len as ptrdiff_t);
+        set_vim_var_string(Vv::Fname, ptr, len as ptrdiff_t);
         current_sctx.set((*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as usize]);
 
         let res = eval_to_string_safe(
@@ -235,7 +235,7 @@ pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c
             true,
         );
 
-        set_vim_var_string(VV_FNAME, ptr::null(), 0);
+        set_vim_var_string(Vv::Fname, ptr::null(), 0);
         current_sctx.set(save_sctx);
         res
     }

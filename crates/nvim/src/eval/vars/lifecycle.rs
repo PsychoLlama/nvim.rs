@@ -31,9 +31,10 @@ pub unsafe fn evalvars_init() {
             debug_assert!(strlen((*p).vv_name) <= 16);
             strcpy((&raw mut (*p).vv_di.di_key).cast(), (*p).vv_name);
 
-            (*p).vv_di.di_flags = if (*p).vv_flags as c_int & VV_RO != 0 {
+            let flags = VimVarFlags::from_bits((*p).vv_flags as c_int);
+            (*p).vv_di.di_flags = if flags.has(VimVarFlags::RO) {
                 DI_FLAGS_RO | DI_FLAGS_FIX
-            } else if (*p).vv_flags as c_int & VV_RO_SBX != 0 {
+            } else if flags.has(VimVarFlags::RO_SBX) {
                 DI_FLAGS_RO_SBX | DI_FLAGS_FIX
             } else {
                 DI_FLAGS_FIX
@@ -47,16 +48,16 @@ pub unsafe fn evalvars_init() {
                     (&raw mut (*p).vv_di.di_key).cast(),
                 );
             }
-            if (*p).vv_flags as c_int & VV_COMPAT != 0 {
+            if flags.has(VimVarFlags::COMPAT) {
                 // ... and into the scope that has no prefix at all.
                 hash_add(compat_hashtab.ptr(), (&raw mut (*p).vv_di.di_key).cast());
             }
         }
 
         let vim_version = min_vim_version();
-        set_vim_var_nr(VV_VERSION, vim_version as varnumber_T);
+        set_vim_var_nr(Vv::Version, vim_version as varnumber_T);
         set_vim_var_nr(
-            VV_VERSIONLONG,
+            Vv::Versionlong,
             (vim_version * 10000 + highest_patch()) as varnumber_T,
         );
 
@@ -81,48 +82,48 @@ pub unsafe fn evalvars_init() {
             }
         }
         (*msgpack_types_dict).dv_lock = VAR_FIXED;
-        set_vim_var_dict(VV_MSGPACK_TYPES, msgpack_types_dict);
+        set_vim_var_dict(Vv::MsgpackTypes, msgpack_types_dict);
 
-        set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
-        set_vim_var_dict(VV_EVENT, tv_dict_alloc_lock(VAR_FIXED));
-        set_vim_var_list(VV_ERRORS, tv_list_alloc(kListLenUnknown as ptrdiff_t));
-        set_vim_var_nr(VV_STDERR, CHAN_STDERR as varnumber_T);
-        set_vim_var_nr(VV_SEARCHFORWARD, 1);
-        set_vim_var_nr(VV_HLSEARCH, 1);
-        set_vim_var_nr(VV_COUNT1, 1);
-        set_vim_var_special(VV_EXITING, kSpecialVarNull);
+        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VAR_FIXED));
+        set_vim_var_dict(Vv::Event, tv_dict_alloc_lock(VAR_FIXED));
+        set_vim_var_list(Vv::Errors, tv_list_alloc(kListLenUnknown as ptrdiff_t));
+        set_vim_var_nr(Vv::Stderr, CHAN_STDERR as varnumber_T);
+        set_vim_var_nr(Vv::Searchforward, 1);
+        set_vim_var_nr(Vv::Hlsearch, 1);
+        set_vim_var_nr(Vv::Count1, 1);
+        set_vim_var_special(Vv::Exiting, kSpecialVarNull);
 
         // The `v:t_*` type codes, which `type()` answers with.
         for (idx, code) in [
-            (VV_TYPE_NUMBER, VAR_TYPE_NUMBER),
-            (VV_TYPE_STRING, VAR_TYPE_STRING),
-            (VV_TYPE_FUNC, VAR_TYPE_FUNC),
-            (VV_TYPE_LIST, VAR_TYPE_LIST),
-            (VV_TYPE_DICT, VAR_TYPE_DICT),
-            (VV_TYPE_FLOAT, VAR_TYPE_FLOAT),
-            (VV_TYPE_BOOL, VAR_TYPE_BOOL),
-            (VV_TYPE_BLOB, VAR_TYPE_BLOB),
+            (Vv::TNumber, VAR_TYPE_NUMBER),
+            (Vv::TString, VAR_TYPE_STRING),
+            (Vv::TFunc, VAR_TYPE_FUNC),
+            (Vv::TList, VAR_TYPE_LIST),
+            (Vv::TDict, VAR_TYPE_DICT),
+            (Vv::TFloat, VAR_TYPE_FLOAT),
+            (Vv::TBool, VAR_TYPE_BOOL),
+            (Vv::TBlob, VAR_TYPE_BLOB),
         ] {
             set_vim_var_nr(idx, code as varnumber_T);
         }
 
-        set_vim_var_bool(VV_FALSE, kBoolVarFalse);
-        set_vim_var_bool(VV_TRUE, kBoolVarTrue);
-        set_vim_var_special(VV_NULL, kSpecialVarNull);
-        set_vim_var_nr(VV_NUMBERMAX, VARNUMBER_MAX as varnumber_T);
-        set_vim_var_nr(VV_NUMBERMIN, VARNUMBER_MIN as varnumber_T);
+        set_vim_var_bool(Vv::False, kBoolVarFalse);
+        set_vim_var_bool(Vv::True, kBoolVarTrue);
+        set_vim_var_special(Vv::Null, kSpecialVarNull);
+        set_vim_var_nr(Vv::Numbermax, VARNUMBER_MAX as varnumber_T);
+        set_vim_var_nr(Vv::Numbermin, VARNUMBER_MIN as varnumber_T);
         set_vim_var_nr(
-            VV_NUMBERSIZE,
+            Vv::Numbersize,
             (::core::mem::size_of::<varnumber_T>() * 8) as varnumber_T,
         );
-        set_vim_var_nr(VV_MAXCOL, MAXCOL as varnumber_T);
-        set_vim_var_nr(VV_ECHOSPACE, (sc_col.get() - 1) as varnumber_T);
+        set_vim_var_nr(Vv::Maxcol, MAXCOL as varnumber_T);
+        set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as varnumber_T);
 
         let vvlua_partial = xcalloc(1, ::core::mem::size_of::<partial_T>()) as *mut partial_T;
         // The name should never be printed, but do not crash if it is.
         (*vvlua_partial).pt_name = xmallocz(0) as *mut c_char;
         (*vvlua_partial).pt_refcount += 1;
-        set_vim_var_partial(VV_LUA, vvlua_partial);
+        set_vim_var_partial(Vv::Lua, vvlua_partial);
 
         // The default for v:register is not 0 but '"'.
         set_reg_var(0);

@@ -38,8 +38,7 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FAIL, IOSIZE, LineGetter, OK, OptInt, VV_EXITREASON, garray_T, linenr_T, msglist_T, ptrdiff_t,
-    size_t,
+    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
 };
 
 /// Take the whole exception environment out of the way, and answer it.
@@ -402,6 +401,6 @@ pub unsafe fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> *mut c_char
 pub unsafe fn not_exiting(save_exiting: bool) {
     unsafe {
         exiting.set(save_exiting);
-        set_vim_var_string(VV_EXITREASON, ptr::null(), -1 as ptrdiff_t);
+        set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t);
     }
 }

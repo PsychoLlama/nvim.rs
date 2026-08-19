@@ -25,7 +25,7 @@ use crate::register::{
 use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    BoolVarValue, EvalFuncData, FAIL, MotionType, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VV_REG,
+    BoolVarValue, EvalFuncData, FAIL, MotionType, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, Vv,
     colnr_T, dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
 };
 use ::libc::strlen;
@@ -52,7 +52,7 @@ unsafe fn regname(args: Args<'_>) -> Option<c_int> {
             }
             name
         } else {
-            get_vim_var_str(VV_REG)
+            get_vim_var_str(Vv::Register)
         };
         Some(match *name {
             0 => b'"' as c_int,

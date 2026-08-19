@@ -35,10 +35,10 @@ pub unsafe fn eval_charconvert(
 ) -> c_int {
     unsafe {
         let saved_sctx = current_sctx.get();
-        set_vim_var_string(VV_CC_FROM, enc_from, -1);
-        set_vim_var_string(VV_CC_TO, enc_to, -1);
-        set_vim_var_string(VV_FNAME_IN, fname_from, -1);
-        set_vim_var_string(VV_FNAME_OUT, fname_to, -1);
+        set_vim_var_string(Vv::CharconvertFrom, enc_from, -1);
+        set_vim_var_string(Vv::CharconvertTo, enc_to, -1);
+        set_vim_var_string(Vv::FnameIn, fname_from, -1);
+        set_vim_var_string(Vv::FnameOut, fname_to, -1);
         if let Some(ctx) = get_option_sctx(kOptCharconvert).as_ref() {
             current_sctx.set(*ctx);
         }
@@ -48,10 +48,10 @@ pub unsafe fn eval_charconvert(
             err = true;
         }
 
-        set_vim_var_string(VV_CC_FROM, ptr::null(), -1);
-        set_vim_var_string(VV_CC_TO, ptr::null(), -1);
-        set_vim_var_string(VV_FNAME_IN, ptr::null(), -1);
-        set_vim_var_string(VV_FNAME_OUT, ptr::null(), -1);
+        set_vim_var_string(Vv::CharconvertFrom, ptr::null(), -1);
+        set_vim_var_string(Vv::CharconvertTo, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameIn, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameOut, ptr::null(), -1);
         current_sctx.set(saved_sctx);
 
         if err { FAIL } else { OK }
@@ -67,18 +67,18 @@ pub unsafe fn eval_charconvert(
 pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile: *const c_char) {
     unsafe {
         let saved_sctx = current_sctx.get();
-        set_vim_var_string(VV_FNAME_IN, origfile, -1);
-        set_vim_var_string(VV_FNAME_NEW, newfile, -1);
-        set_vim_var_string(VV_FNAME_OUT, outfile, -1);
+        set_vim_var_string(Vv::FnameIn, origfile, -1);
+        set_vim_var_string(Vv::FnameNew, newfile, -1);
+        set_vim_var_string(Vv::FnameOut, outfile, -1);
         if let Some(ctx) = get_option_sctx(kOptDiffexpr).as_ref() {
             current_sctx.set(*ctx);
         }
 
         tv_free(eval_expr_ext(p_dex.get(), ptr::null_mut(), true));
 
-        set_vim_var_string(VV_FNAME_IN, ptr::null(), -1);
-        set_vim_var_string(VV_FNAME_NEW, ptr::null(), -1);
-        set_vim_var_string(VV_FNAME_OUT, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameIn, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameNew, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameOut, ptr::null(), -1);
         current_sctx.set(saved_sctx);
     }
 }
@@ -91,18 +91,18 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
 pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfile: *const c_char) {
     unsafe {
         let saved_sctx = current_sctx.get();
-        set_vim_var_string(VV_FNAME_IN, origfile, -1);
-        set_vim_var_string(VV_FNAME_DIFF, difffile, -1);
-        set_vim_var_string(VV_FNAME_OUT, outfile, -1);
+        set_vim_var_string(Vv::FnameIn, origfile, -1);
+        set_vim_var_string(Vv::FnameDiff, difffile, -1);
+        set_vim_var_string(Vv::FnameOut, outfile, -1);
         if let Some(ctx) = get_option_sctx(kOptPatchexpr).as_ref() {
             current_sctx.set(*ctx);
         }
 
         tv_free(eval_expr_ext(p_pex.get(), ptr::null_mut(), true));
 
-        set_vim_var_string(VV_FNAME_IN, ptr::null(), -1);
-        set_vim_var_string(VV_FNAME_DIFF, ptr::null(), -1);
-        set_vim_var_string(VV_FNAME_OUT, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameIn, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameDiff, ptr::null(), -1);
+        set_vim_var_string(Vv::FnameOut, ptr::null(), -1);
         current_sctx.set(saved_sctx);
     }
 }
@@ -123,8 +123,8 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
         // `v:val` is the bad word; it has no type of its own, so it has to
         // be added to the `v:` dictionary and taken out again.
         let mut save_val = TV_INITIAL_VALUE;
-        prepare_vimvar(VV_VAL as c_int, &raw mut save_val);
-        set_vim_var_string(VV_VAL, badword, -1);
+        prepare_vimvar(Vv::Val, &raw mut save_val);
+        set_vim_var_string(Vv::Val, badword, -1);
         if p_verbose.get() == 0 {
             (*emsg_off.ptr()) += 1;
         }
@@ -151,8 +151,8 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
         if p_verbose.get() == 0 {
             (*emsg_off.ptr()) -= 1;
         }
-        tv_clear(get_vim_var_tv(VV_VAL));
-        restore_vimvar(VV_VAL as c_int, &raw mut save_val);
+        tv_clear(get_vim_var_tv(Vv::Val));
+        restore_vimvar(Vv::Val, &raw mut save_val);
         current_sctx.set(saved_sctx);
 
         list

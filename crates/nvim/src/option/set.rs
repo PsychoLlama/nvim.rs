@@ -46,9 +46,8 @@ use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, snprintf};
 use crate::runtime::exestack;
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptVal, OptValData, OptionSetFlags, String_0, VV_OPTION_COMMAND,
-    VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE,
-    estack_T, optset_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, vimoption_T,
+    IOSIZE, NUL, OptIndex, OptVal, OptValData, OptionSetFlags, String_0, Vv, estack_T, optset_T,
+    ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
@@ -135,7 +134,7 @@ fn apply_optionset_autocmd(
 ) {
     // SAFETY: all of these only read globals or the values handed in.
     unsafe {
-        if starting.get() != 0 || *get_vim_var_str(VV_OPTION_TYPE) != NUL as c_char {
+        if starting.get() != 0 || *get_vim_var_str(Vv::OptionType) != NUL as c_char {
             return;
         }
 
@@ -144,8 +143,8 @@ fn apply_optionset_autocmd(
         let mut oldval_l_tv = optval_as_tv(oldval_l, false);
         let mut newval_tv = optval_as_tv(newval, false);
 
-        set_vim_var_tv(VV_OPTION_OLD, &raw mut oldval_tv);
-        set_vim_var_tv(VV_OPTION_NEW, &raw mut newval_tv);
+        set_vim_var_tv(Vv::OptionOld, &raw mut oldval_tv);
+        set_vim_var_tv(Vv::OptionNew, &raw mut newval_tv);
 
         let type_str: &CStr = if opt_flags.has(OptionSetFlags::LOCAL) {
             c"local"
@@ -153,7 +152,7 @@ fn apply_optionset_autocmd(
             c"global"
         };
         set_vim_var_string(
-            VV_OPTION_TYPE,
+            Vv::OptionType,
             type_str.as_ptr(),
             type_str.count_bytes() as ptrdiff_t,
         );
@@ -163,27 +162,27 @@ fn apply_optionset_autocmd(
         // bare `:set`, and a modeline overrides whatever came before it.
         let mut command = |name: &CStr| {
             set_vim_var_string(
-                VV_OPTION_COMMAND,
+                Vv::OptionCommand,
                 name.as_ptr(),
                 name.count_bytes() as ptrdiff_t,
             );
         };
         if opt_flags.has(OptionSetFlags::LOCAL) {
             command(c"setlocal");
-            set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_tv);
+            set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_tv);
         }
         if opt_flags.has(OptionSetFlags::GLOBAL) {
             command(c"setglobal");
-            set_vim_var_tv(VV_OPTION_OLDGLOBAL, &raw mut oldval_tv);
+            set_vim_var_tv(Vv::OptionOldglobal, &raw mut oldval_tv);
         }
         if !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL) {
             command(c"set");
-            set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_l_tv);
-            set_vim_var_tv(VV_OPTION_OLDGLOBAL, &raw mut oldval_g_tv);
+            set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_l_tv);
+            set_vim_var_tv(Vv::OptionOldglobal, &raw mut oldval_g_tv);
         }
         if opt_flags.has(OptionSetFlags::MODELINE) {
             command(c"modeline");
-            set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_tv);
+            set_vim_var_tv(Vv::OptionOldlocal, &raw mut oldval_tv);
         }
 
         apply_autocmds(

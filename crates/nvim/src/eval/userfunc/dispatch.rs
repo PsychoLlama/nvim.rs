@@ -55,7 +55,7 @@ pub unsafe fn get_func_tv(
 
         if ret == OK {
             let mut i = 0;
-            if get_vim_var_nr(VV_TESTING) != 0 {
+            if get_vim_var_nr(Vv::Testing) != 0 {
                 // Prepare for calling `test_garbagecollect_now()`, which
                 // needs to know which variables are used on the call stack.
                 if (*funcargs.ptr()).ga_itemsize == 0 {

@@ -55,8 +55,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, VV_WARNINGMSG, buf_T,
-    colnr_T, event_T, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
+    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, Vv, buf_T, colnr_T,
+    event_T, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::undo::{bufIsChanged, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
@@ -167,7 +167,7 @@ pub unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
             let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
             msg_source(HLF_W);
             msg(gettext(warning.as_ptr()), HLF_W);
-            set_vim_var_string(VV_WARNINGMSG, gettext(warning.as_ptr()), -1 as ptrdiff_t);
+            set_vim_var_string(Vv::Warningmsg, gettext(warning.as_ptr()), -1 as ptrdiff_t);
         }
         p_deco.set(1);
         set_option_value(kOptKeymap, cstr_optval(c"arabic"), OptionSetFlags::LOCAL)

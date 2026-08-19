@@ -53,8 +53,7 @@ use crate::strings::{vim_snprintf, vim_strnsave_unquoted, vim_strsave_escaped_ex
 use crate::tag::tag_freematch;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    NUL, READBIN, StringBuilder, VV_SHELL_ERROR, linenr_T, proftime_T, size_t, stream_read_cb,
-    varnumber_T,
+    NUL, READBIN, StringBuilder, Vv, linenr_T, proftime_T, size_t, stream_read_cb, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use ::libc::{fclose, fopen, fread, fseek, ftell, strcmp, strcpy, strlen};
@@ -305,7 +304,7 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mu
             os_call_shell(cmd, opts, extra_shell_arg)
         };
 
-        set_vim_var_nr(VV_SHELL_ERROR, retval as varnumber_T);
+        set_vim_var_nr(Vv::ShellError, retval as varnumber_T);
         if do_profiling.get() == PROF_YES {
             prof_child_exit(wait_time);
         }

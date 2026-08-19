@@ -71,7 +71,7 @@ use crate::runtime::do_source;
 use crate::semsg_c;
 use crate::types::{
     CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK, OptionSetFlags,
-    VV_THIS_SESSION, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
+    Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -521,7 +521,7 @@ pub unsafe fn ex_mkrc(eap: *mut exarg_T) {
                 // A successful session write sets v:this_session.
                 let full = xmalloc(MAXPATHL as size_t).cast::<c_char>();
                 if vim_FullName(fname, full, MAXPATHL as size_t, false) == OK {
-                    set_vim_var_string(VV_THIS_SESSION, full, -1);
+                    set_vim_var_string(Vv::ThisSession, full, -1);
                 }
                 xfree(full.cast::<c_void>());
             }

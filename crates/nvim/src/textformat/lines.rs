@@ -43,8 +43,7 @@ use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CmdModFlags, FAIL, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
-    OptionSetFlags, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t,
-    varnumber_T,
+    OptionSetFlags, Vv, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t, varnumber_T,
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
@@ -153,8 +152,8 @@ pub unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_int {
         let use_sandbox = was_set_insecurely(curwin.get(), kOptFormatexpr, OptionSetFlags::LOCAL);
         let save_sctx = current_sctx.get();
 
-        set_vim_var_nr(VV_LNUM, lnum as varnumber_T);
-        set_vim_var_nr(VV_COUNT, count as varnumber_T);
+        set_vim_var_nr(Vv::Lnum, lnum as varnumber_T);
+        set_vim_var_nr(Vv::Count, count as varnumber_T);
         set_vim_var_char(c);
 
         // Copy it: the option can be changed while it is running.
@@ -167,7 +166,7 @@ pub unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_int {
         if use_sandbox {
             (*sandbox.ptr()) -= 1;
         }
-        set_vim_var_string(VV_CHAR, ::core::ptr::null::<c_char>(), -1 as ptrdiff_t);
+        set_vim_var_string(Vv::Char, ::core::ptr::null::<c_char>(), -1 as ptrdiff_t);
         xfree(fex as *mut ::core::ffi::c_void);
         current_sctx.set(save_sctx);
         r

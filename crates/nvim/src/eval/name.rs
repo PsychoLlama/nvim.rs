@@ -25,7 +25,7 @@ use crate::option::find_option_end;
 use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OptIndex, OptionSetFlags, VAR_PARTIAL, VV_LUA, partial_T, size_t, typval_T, uint8_t,
+    NUL, OptIndex, OptionSetFlags, VAR_PARTIAL, Vv, partial_T, size_t, typval_T, uint8_t,
 };
 use ::libc::strlen;
 
@@ -348,7 +348,7 @@ pub fn eval_isdictc(c: c_int) -> bool {
 /// # Safety
 /// `partial` must be null or valid.
 pub unsafe fn is_luafunc(partial: *mut partial_T) -> bool {
-    unsafe { partial == get_vim_var_partial(VV_LUA) }
+    unsafe { partial == get_vim_var_partial(Vv::Lua) }
 }
 
 /// Is this typval `v:lua`?

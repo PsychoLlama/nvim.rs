@@ -552,7 +552,7 @@ pub unsafe fn ins_compl_clear() {
         compl_autocomplete.set(false);
         compl_from_nonkeyword.set(false);
         compl_num_bests.set(0);
-        set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
+        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VAR_FIXED));
     }
 }
 

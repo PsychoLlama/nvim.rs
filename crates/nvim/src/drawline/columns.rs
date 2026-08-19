@@ -21,7 +21,7 @@ use super::*;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::r#move::WinValid;
 use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL};
-use crate::types::{MAXPATHL, NUL, VV_VIRTNUM};
+use crate::types::{MAXPATHL, NUL, Vv};
 
 /// The widest a `'statuscolumn'` may grow the number column to.
 ///
@@ -595,7 +595,7 @@ impl WinLineVars {
                 // with the largest line number there can be, and widen before
                 // anything is drawn.
                 (*wp).w_statuscol_line_count = (*wp).w_nrwidth_line_count;
-                set_vim_var_nr(VV_VIRTNUM, 0);
+                set_vim_var_nr(Vv::Virtnum, 0);
                 let width = build_statuscol_str(
                     wp,
                     (*wp).w_nrwidth_line_count,
@@ -618,7 +618,7 @@ impl WinLineVars {
                 }
             }
 
-            set_vim_var_nr(VV_VIRTNUM, virtnum as varnumber_T);
+            set_vim_var_nr(Vv::Virtnum, virtnum as varnumber_T);
             let width = build_statuscol_str(wp, lnum, relnum, buf.as_mut_ptr(), stcp);
             let was_reset = *(*wp).w_onebuf_opt.wo_stc == NUL as ::core::ffi::c_char;
             if was_reset || (width > (*stcp).width && (*stcp).width < MAX_STCWIDTH) {

@@ -38,8 +38,8 @@ use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
     BoolVarValue, EvalFuncData, FAIL, FILE, IOSIZE, READBIN, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
-    VAR_UNKNOWN, VV_EXCEPTION, VV_TESTING, VarType, estack_arg_T, float_T, garray_T, int64_t,
-    kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
+    VAR_UNKNOWN, VarType, Vv, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse,
+    kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 use ::libc::{fclose, fgetc, strcmp};
 
@@ -525,19 +525,19 @@ pub unsafe fn f_assert_exception(
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         let error = tv_get_string_chk(arg(argvars, 0));
-        if *get_vim_var_str(VV_EXCEPTION) == 0 {
+        if *get_vim_var_str(Vv::Exception) == 0 {
             let mut ga = prepare_assert_error();
             ga_concat_lit(&raw mut ga, c"v:exception is not set");
             report_assert_error(&raw mut ga);
             (*rettv).vval.v_number = 1;
-        } else if !error.is_null() && strstr(get_vim_var_str(VV_EXCEPTION), error).is_null() {
+        } else if !error.is_null() && strstr(get_vim_var_str(Vv::Exception), error).is_null() {
             let mut ga = prepare_assert_error();
             fill_assert_error(
                 &raw mut ga,
                 arg(argvars, 1),
                 ptr::null(),
                 arg(argvars, 0),
-                get_vim_var_tv(VV_EXCEPTION),
+                get_vim_var_tv(Vv::Exception),
                 AssertType::Other,
             );
             report_assert_error(&raw mut ga);
@@ -613,7 +613,7 @@ pub unsafe fn f_test_garbagecollect_now(
 ) {
     // SAFETY: called from the evaluator on the main thread.
     unsafe {
-        if get_vim_var_nr(VV_TESTING) == 0 {
+        if get_vim_var_nr(Vv::Testing) == 0 {
             emsg(gettext(E_TEST_GARBAGECOLLECT_NOW.as_ptr()));
         } else {
             garbage_collect(true);

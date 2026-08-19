@@ -15,7 +15,7 @@ use core::ffi::CStr;
 
 use super::*;
 use crate::keycodes::Ctrl_V;
-use crate::types::{MAXPATHL, NUL, VV_ECHOSPACE};
+use crate::types::{MAXPATHL, NUL, Vv};
 
 /// `VIsual_mode` for a linewise selection.
 const VISUAL_LINE: c_int = 'V' as c_int;
@@ -362,6 +362,6 @@ pub unsafe fn comp_col() {
         sc_col.set((Columns.get() - sc_width).max(1));
         ru_col.set((Columns.get() - ru_width).max(1));
 
-        set_vim_var_nr(VV_ECHOSPACE, (sc_col.get() - 1) as varnumber_T);
+        set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as varnumber_T);
     }
 }

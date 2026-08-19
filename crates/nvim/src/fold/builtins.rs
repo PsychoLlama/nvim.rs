@@ -15,7 +15,7 @@ use core::ptr;
 
 use super::text::*;
 use super::*;
-use crate::types::{VAR_STRING, VV_FOLDDASHES, VV_FOLDEND, VV_FOLDSTART};
+use crate::types::{VAR_STRING, Vv};
 
 /// "foldclosed()" and "foldclosedend()" functions
 pub(super) unsafe fn foldclosed_both(
@@ -80,9 +80,9 @@ pub unsafe fn f_foldtext(
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ptr::null_mut();
-    let mut foldstart: linenr_T = get_vim_var_nr(VV_FOLDSTART) as linenr_T;
-    let mut foldend: linenr_T = get_vim_var_nr(VV_FOLDEND) as linenr_T;
-    let mut dashes: *mut c_char = get_vim_var_str(VV_FOLDDASHES);
+    let mut foldstart: linenr_T = get_vim_var_nr(Vv::Foldstart) as linenr_T;
+    let mut foldend: linenr_T = get_vim_var_nr(Vv::Foldend) as linenr_T;
+    let mut dashes: *mut c_char = get_vim_var_str(Vv::Folddashes);
     if foldstart > 0 && foldend <= (*curbuf.get()).b_ml.ml_line_count {
         let mut lnum: linenr_T = 0;
         lnum = foldstart;

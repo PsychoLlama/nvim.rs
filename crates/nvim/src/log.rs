@@ -37,7 +37,7 @@ use crate::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::path_tail;
 use crate::types::{
-    FILE, UV_MUTEX_INIT, VV_SEND_SERVER, XDGVarType, int32_t, uv_loop_t, uv_mutex_t, uv_timeval64_t,
+    FILE, UV_MUTEX_INIT, Vv, XDGVarType, int32_t, uv_loop_t, uv_mutex_t, uv_timeval64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -506,7 +506,7 @@ fn regen_name(ui: bool) {
             parent_buf.as_mut_ptr(),
             parent_buf.len(),
         ));
-        let serv = path_tail(get_vim_var_str(VV_SEND_SERVER));
+        let serv = path_tail(get_vim_var_str(Vv::Servername));
         NAME.with_mut(|name| {
             let (n, len) = (name.as_mut_ptr(), name.len());
             if *parent != 0 {

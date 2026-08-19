@@ -176,10 +176,10 @@ unsafe fn set_mouse_vars() {
             winnr += 1;
             wp = (*wp).w_next;
         }
-        set_vim_var_nr(VV_MOUSE_WIN, winnr as varnumber_T);
-        set_vim_var_nr(VV_MOUSE_WINID, (*wp).handle as varnumber_T);
-        set_vim_var_nr(VV_MOUSE_LNUM, lnum as varnumber_T);
-        set_vim_var_nr(VV_MOUSE_COL, (pos.col + 1) as varnumber_T);
+        set_vim_var_nr(Vv::MouseWin, winnr as varnumber_T);
+        set_vim_var_nr(Vv::MouseWinid, (*wp).handle as varnumber_T);
+        set_vim_var_nr(Vv::MouseLnum, lnum as varnumber_T);
+        set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as varnumber_T);
     }
 }
 
@@ -217,10 +217,10 @@ pub(crate) unsafe fn getchar_common(
             ui_busy_stop();
         }
 
-        set_vim_var_nr(VV_MOUSE_WIN, 0);
-        set_vim_var_nr(VV_MOUSE_WINID, 0);
-        set_vim_var_nr(VV_MOUSE_LNUM, 0);
-        set_vim_var_nr(VV_MOUSE_COL, 0);
+        set_vim_var_nr(Vv::MouseWin, 0);
+        set_vim_var_nr(Vv::MouseWinid, 0);
+        set_vim_var_nr(Vv::MouseLnum, 0);
+        set_vim_var_nr(Vv::MouseCol, 0);
 
         if n != 0 && (!opts.allow_number || n < 0 || mod_mask.get() != 0) {
             // Render the key as a string: modifier prefix, then either the

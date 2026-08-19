@@ -14,7 +14,7 @@ use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, IOSIZE, OK, VV_SWAPCOMMAND};
+use crate::types::{FAIL, IOSIZE, OK, Vv};
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -801,12 +801,12 @@ impl DoTag {
                 name,
             );
             set_vim_var_string(
-                VV_SWAPCOMMAND,
+                Vv::Swapcommand,
                 IObuff.ptr().cast::<c_char>(),
                 len as ptrdiff_t,
             );
             let result = jumpto_tag(entry, self.forceit, true);
-            set_vim_var_string(VV_SWAPCOMMAND, ptr::null(), -1);
+            set_vim_var_string(Vv::Swapcommand, ptr::null(), -1);
 
             if result != NOTAGFILE {
                 // We may have jumped to another window; check the index is

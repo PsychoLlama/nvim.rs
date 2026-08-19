@@ -29,9 +29,7 @@ use crate::os::env::os_setenv;
 use crate::os::shell::{ShellOpts, get_cmd_output};
 use crate::path::{path_tail, path_tail_with_sep};
 use crate::profile::time_msg;
-use crate::types::{
-    MAXPATHL, VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T,
-};
+use crate::types::{MAXPATHL, Vv, exarg_T, expand_T};
 use crate::{semsg_c, smsg_c};
 use ::libc::setlocale;
 use core::ffi::{CStr, c_char, c_int};
@@ -97,10 +95,10 @@ fn get_mess_env() -> *mut c_char {
 /// `v:collate`.
 pub fn set_lang_var() {
     for (var, loc) in [
-        (VV_CTYPE, get_locale_val(LC_CTYPE)),
-        (VV_LANG, get_mess_env()),
-        (VV_LC_TIME, get_locale_val(LC_TIME)),
-        (VV_COLLATE, get_locale_val(LC_COLLATE)),
+        (Vv::Ctype, get_locale_val(LC_CTYPE)),
+        (Vv::Lang, get_mess_env()),
+        (Vv::LcTime, get_locale_val(LC_TIME)),
+        (Vv::Collate, get_locale_val(LC_COLLATE)),
     ] {
         // SAFETY: each value is libc's NUL-terminated locale name (or NULL,
         // which `set_vim_var_string` documents as clearing the variable),
@@ -131,7 +129,7 @@ pub fn init_locale() {
         // `$prefix/bin/nvim` -> `$prefix/share/locale`: drop the executable,
         // then overwrite the directory it sat in.
         let base = localepath.as_mut_ptr();
-        xstrlcpy(base, get_vim_var_str(VV_PROGPATH), MAXPATHL as usize);
+        xstrlcpy(base, get_vim_var_str(Vv::Progpath), MAXPATHL as usize);
         *path_tail_with_sep(base) = 0;
         let tail = path_tail(base);
         let used = tail.offset_from(base) as usize;

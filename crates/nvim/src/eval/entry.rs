@@ -45,9 +45,9 @@ use crate::os::cshim::gettext;
 use crate::runtime::sourcing_a_script;
 use crate::types::{
     Arena, FAIL, NUL, OK, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FIXED, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_ARGV, VV_EVENT,
-    VV_LUA, dict_T, evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T, kObjectTypeString,
-    list_T, object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, dict_T,
+    evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T, kObjectTypeString, list_T,
+    object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T,
     typval_vval_union, uint8_t, varnumber_T, win_T,
 };
 use ::libc::{atol, memcmp, memset, strlen};
@@ -86,7 +86,7 @@ const UNSET_GA: garray_T = garray_T {
 /// `sve` must be valid.
 pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T {
     unsafe {
-        let v_event = get_vim_var_dict(VV_EVENT);
+        let v_event = get_vim_var_dict(Vv::Event);
         (*sve).sve_did_save = (*v_event).dv_hashtab.ht_used > 0 as size_t;
         if (*sve).sve_did_save {
             (*sve).sve_hashtab = (*v_event).dv_hashtab;
@@ -602,7 +602,7 @@ pub unsafe fn call_vim_function(
                 if len == 0 {
                     break 'fail;
                 }
-                pt = get_vim_var_partial(VV_LUA);
+                pt = get_vim_var_partial(Vv::Lua);
             }
             (*rettv).v_type = VAR_UNKNOWN;
             let mut funcexe: funcexe_T = FUNCEXE_INIT;
@@ -787,7 +787,7 @@ pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
             tv_list_append_string(l, *argv.offset(i as isize) as *const c_char, -1 as ssize_t);
             (*tv_list_last(l)).li_tv.v_lock = VAR_FIXED;
         }
-        set_vim_var_list(VV_ARGV, l);
+        set_vim_var_list(Vv::Argv, l);
     }
 }
 

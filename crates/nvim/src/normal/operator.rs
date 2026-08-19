@@ -29,8 +29,8 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
 use crate::types::{
-    FAIL, NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK,
-    VV_OP, cmdarg_T,
+    FAIL, NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, Vv,
+    cmdarg_T,
 };
 use crate::undo::{u_redo, u_undo, u_undoline};
 use core::ffi::{c_char, c_int};
@@ -219,7 +219,7 @@ pub(crate) unsafe fn nv_operator(cap: *mut cmdarg_T) {
 pub(crate) fn set_op_var(optype: c_int) {
     if optype == OP_NOP {
         // SAFETY: a null string with length 0 clears the variable.
-        unsafe { set_vim_var_string(VV_OP, ptr::null(), 0) };
+        unsafe { set_vim_var_string(Vv::Operator, ptr::null(), 0) };
         return;
     }
     // Always two bytes and a terminator: a one-character operator has NUL as
@@ -233,7 +233,7 @@ pub(crate) fn set_op_var(optype: c_int) {
         let opchar1 = get_extra_op_char(optype);
         debug_assert!((0..=255).contains(&opchar1));
         opchars[1] = opchar1 as c_char;
-        set_vim_var_string(VV_OP, opchars.as_mut_ptr(), 2);
+        set_vim_var_string(Vv::Operator, opchars.as_mut_ptr(), 2);
     }
 }
 

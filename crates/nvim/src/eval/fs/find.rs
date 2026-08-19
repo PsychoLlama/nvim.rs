@@ -40,7 +40,7 @@ use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::main::{curbuf, p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
-    BackslashEscape, EvalFuncData, ExpandContext, OK, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VV_VAL,
+    BackslashEscape, EvalFuncData, ExpandContext, OK, VAR_LIST, VAR_STRING, VAR_UNKNOWN, Vv,
     expand_T, garray_T, kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -214,9 +214,9 @@ fn suffixes(find_what: c_int) -> *mut c_char {
 /// Set `v:val`, or clear it when `name` is NULL.
 fn set_val(name: *const c_char) {
     let len: ptrdiff_t = if name.is_null() { 0 } else { -1 };
-    // SAFETY: `VV_VAL` names a `v:` variable, and a length of -1 promises a
+    // SAFETY: `Vv::Val` names a `v:` variable, and a length of -1 promises a
     // NUL-terminated string, which every directory entry's name is.
-    unsafe { set_vim_var_string(VV_VAL, name, len) };
+    unsafe { set_vim_var_string(Vv::Val, name, len) };
 }
 
 // ---------------------------------------------------------------------
@@ -441,8 +441,8 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnum
     }
 
     let mut save_val = TV_INITIAL_VALUE;
-    // SAFETY: `VV_VAL` names a `v:` variable and `save_val` is a live local.
-    unsafe { prepare_vimvar(VV_VAL as c_int, &raw mut save_val) };
+    // SAFETY: `Vv::Val` names a `v:` variable and `save_val` is a live local.
+    unsafe { prepare_vimvar(Vv::Val, &raw mut save_val) };
     set_val(name);
 
     let mut argv = [TV_INITIAL_VALUE; 2];
@@ -469,7 +469,7 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnum
 
     set_val(ptr::null());
     // SAFETY: `save_val` came from `prepare_vimvar` for this same variable.
-    unsafe { restore_vimvar(VV_VAL as c_int, &raw mut save_val) };
+    unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
     retval
 }
 

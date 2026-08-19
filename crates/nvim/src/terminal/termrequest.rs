@@ -26,7 +26,7 @@ use crate::highlight::hl_add_url;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     Event, Object, String_0, VTermStateFallbacks, VTermStringFragment, VTermTerminator, VTermValue,
-    VV_TERMREQUEST, exarg_T, handle_T, ptrdiff_t, size_t,
+    Vv, exarg_T, handle_T, ptrdiff_t, size_t,
 };
 use crate::vterm::pen::set_pen_attr;
 use crate::winlayer::Buf;
@@ -105,7 +105,7 @@ fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
     let (data, size) = (sequence.data, sequence.size as ptrdiff_t);
     // SAFETY: `v:termrequest` takes a string of `size` readable bytes,
     // which it copies.
-    unsafe { set_vim_var_string(VV_TERMREQUEST, data, size) };
+    unsafe { set_vim_var_string(Vv::Termrequest, data, size) };
 
     // Rows evicted since the sequence arrived have shifted every buffer
     // line up by one.

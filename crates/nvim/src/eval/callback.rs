@@ -22,7 +22,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Callback, CallbackReader, Error, FAIL, NUL, OK, Object, OptInt, VAR_DICT, VAR_FUNC,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, funcexe_T,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, funcexe_T,
     ht_stack_T, kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 use ::libc::{memcmp, strlen};
@@ -133,7 +133,7 @@ pub unsafe fn callback_call(
                     if check_luafunc_name(name, false) == 0 {
                         return false;
                     }
-                    partial = get_vim_var_partial(VV_LUA);
+                    partial = get_vim_var_partial(Vv::Lua);
                 }
             }
             kCallbackPartial => {

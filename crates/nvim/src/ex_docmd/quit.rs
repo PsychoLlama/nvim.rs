@@ -37,8 +37,8 @@ use crate::message::{emsg, msg};
 use crate::os::cshim::{gettext, snprintf};
 use crate::types::{
     CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
-    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, VV_EXITREASON, buf_T, bufref_T, exarg_T, linenr_T,
-    ptrdiff_t, tabpage_T, win_T,
+    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, Vv, buf_T, bufref_T, exarg_T, linenr_T, ptrdiff_t,
+    tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{bufIsChanged, curbufIsChanged};
@@ -84,8 +84,8 @@ pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool
     unsafe {
         // `v:exitreason` is set for the autocommands to read, and cleared
         // again if the quit does not happen.
-        if *get_vim_var_str(VV_EXITREASON) as c_int == NUL {
-            set_vim_var_string(VV_EXITREASON, c"quit".as_ptr(), 4 as ptrdiff_t);
+        if *get_vim_var_str(Vv::Exitreason) as c_int == NUL {
+            set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4 as ptrdiff_t);
         }
         apply_autocmds(
             EVENT_QUITPRE,
@@ -134,7 +134,7 @@ unsafe fn quit_was_cancelled(wp: *mut win_T, buf: impl FnOnce() -> *mut buf_T) -
                 return false;
             }
         }
-        set_vim_var_string(VV_EXITREASON, ptr::null(), -1 as ptrdiff_t);
+        set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t);
         true
     }
 }

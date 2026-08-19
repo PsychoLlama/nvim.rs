@@ -5,108 +5,383 @@
 use super::*;
 
 pub type MessagePackType = ::core::ffi::c_uint;
-pub type VimVarIndex = ::core::ffi::c_uint;
-/// Index of each `v:` variable in the `vimvars` table (eval/vars/).
-pub const VV_COUNT: VimVarIndex = 0;
-pub const VV_COUNT1: VimVarIndex = 1;
-pub const VV_PREVCOUNT: VimVarIndex = 2;
-pub const VV_ERRMSG: VimVarIndex = 3;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
-pub const VV_STATUSMSG: VimVarIndex = 5;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
-pub const VV_THIS_SESSION: VimVarIndex = 7;
-pub const VV_VERSION: VimVarIndex = 8;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_TERMREQUEST: VimVarIndex = 10;
-pub const VV_TERMRESPONSE: VimVarIndex = 11;
-pub const VV_FNAME: VimVarIndex = 12;
-pub const VV_LANG: VimVarIndex = 13;
-pub const VV_LC_TIME: VimVarIndex = 14;
-pub const VV_CTYPE: VimVarIndex = 15;
-pub const VV_CC_FROM: VimVarIndex = 16;
-pub const VV_CC_TO: VimVarIndex = 17;
-pub const VV_FNAME_IN: VimVarIndex = 18;
-pub const VV_FNAME_OUT: VimVarIndex = 19;
-pub const VV_FNAME_NEW: VimVarIndex = 20;
-pub const VV_FNAME_DIFF: VimVarIndex = 21;
-pub const VV_CMDARG: VimVarIndex = 22;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_PROGNAME: VimVarIndex = 27;
-pub const VV_SEND_SERVER: VimVarIndex = 28;
-pub const VV_DYING: VimVarIndex = 29;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_THROWPOINT: VimVarIndex = 31;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_CMDBANG: VimVarIndex = 33;
-pub const VV_INSERTMODE: VimVarIndex = 34;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_PROFILING: VimVarIndex = 37;
-pub const VV_FCS_REASON: VimVarIndex = 38;
-pub const VV_FCS_CHOICE: VimVarIndex = 39;
-pub const VV_SCROLLSTART: VimVarIndex = 46;
-pub const VV_SWAPNAME: VimVarIndex = 47;
-pub const VV_SWAPCHOICE: VimVarIndex = 48;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_CHAR: VimVarIndex = 50;
-pub const VV_MOUSE_WIN: VimVarIndex = 51;
-pub const VV_MOUSE_WINID: VimVarIndex = 52;
-pub const VV_MOUSE_LNUM: VimVarIndex = 53;
-pub const VV_MOUSE_COL: VimVarIndex = 54;
-pub const VV_OP: VimVarIndex = 55;
-pub const VV_SEARCHFORWARD: VimVarIndex = 56;
-pub const VV_HLSEARCH: VimVarIndex = 57;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_COMPLETED_ITEM: VimVarIndex = 61;
-pub const VV_OPTION_NEW: VimVarIndex = 62;
-pub const VV_OPTION_OLD: VimVarIndex = 63;
-pub const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
-pub const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
-pub const VV_OPTION_COMMAND: VimVarIndex = 66;
-pub const VV_OPTION_TYPE: VimVarIndex = 67;
-pub const VV_ERRORS: VimVarIndex = 68;
-pub const VV_FALSE: VimVarIndex = 69;
-pub const VV_TRUE: VimVarIndex = 70;
-pub const VV_NULL: VimVarIndex = 71;
-pub const VV_NUMBERMAX: VimVarIndex = 72;
-pub const VV_NUMBERMIN: VimVarIndex = 73;
-pub const VV_NUMBERSIZE: VimVarIndex = 74;
-pub const VV_VIM_DID_ENTER: VimVarIndex = 75;
-pub const VV_TESTING: VimVarIndex = 76;
-pub const VV_TYPE_NUMBER: VimVarIndex = 77;
-pub const VV_TYPE_STRING: VimVarIndex = 78;
-pub const VV_TYPE_FUNC: VimVarIndex = 79;
-pub const VV_TYPE_LIST: VimVarIndex = 80;
-pub const VV_TYPE_DICT: VimVarIndex = 81;
-pub const VV_TYPE_FLOAT: VimVarIndex = 82;
-pub const VV_TYPE_BOOL: VimVarIndex = 83;
-pub const VV_TYPE_BLOB: VimVarIndex = 84;
-pub const VV_EVENT: VimVarIndex = 85;
-pub const VV_VERSIONLONG: VimVarIndex = 86;
-pub const VV_ECHOSPACE: VimVarIndex = 87;
-pub const VV_ARGF: VimVarIndex = 88;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_COLLATE: VimVarIndex = 90;
-pub const VV_EXITING: VimVarIndex = 91;
-pub const VV_MAXCOL: VimVarIndex = 92;
-pub const VV_STACKTRACE: VimVarIndex = 93;
-pub const VV_VIM_DID_INIT: VimVarIndex = 94;
-pub const VV_STDERR: VimVarIndex = 95;
-pub const VV_MSGPACK_TYPES: VimVarIndex = 96;
-pub const VV_LUA: VimVarIndex = 101;
-pub const VV_RELNUM: VimVarIndex = 102;
-pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const VV_STARTTIME: VimVarIndex = 104;
-pub const VV_EXITREASON: VimVarIndex = 105;
+/// A `v:` variable, by its slot in the `vimvars` table.
+///
+/// `Vv::Count` is `v:count`, and the variant names are the `v:` names rather
+/// than upstream's `VV_*` spellings, which drifted from them
+/// (`Vv::Servername` is `v:servername`, `Vv::Operator` is `v:operator`, `Vv::Register` is
+/// `v:register`). Eleven slots -- the `beval_*` six, `v:windowid` and the
+/// four `v:_null_*` -- had no `VV_*` constant in the port at all and are
+/// named here for the first time.
+///
+/// **The order is the table's**: `eval::vars`'s `vimvars` is indexed by this,
+/// so a variant's discriminant is its row.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u32)]
+pub enum Vv {
+    /// `v:count`
+    Count = 0,
+    /// `v:count1`
+    Count1 = 1,
+    /// `v:prevcount`
+    Prevcount = 2,
+    /// `v:errmsg`
+    Errmsg = 3,
+    /// `v:warningmsg`
+    Warningmsg = 4,
+    /// `v:statusmsg`
+    Statusmsg = 5,
+    /// `v:shell_error`
+    ShellError = 6,
+    /// `v:this_session`
+    ThisSession = 7,
+    /// `v:version`
+    Version = 8,
+    /// `v:lnum`
+    Lnum = 9,
+    /// `v:termrequest`
+    Termrequest = 10,
+    /// `v:termresponse`
+    Termresponse = 11,
+    /// `v:fname`
+    Fname = 12,
+    /// `v:lang`
+    Lang = 13,
+    /// `v:lc_time`
+    LcTime = 14,
+    /// `v:ctype`
+    Ctype = 15,
+    /// `v:charconvert_from`
+    CharconvertFrom = 16,
+    /// `v:charconvert_to`
+    CharconvertTo = 17,
+    /// `v:fname_in`
+    FnameIn = 18,
+    /// `v:fname_out`
+    FnameOut = 19,
+    /// `v:fname_new`
+    FnameNew = 20,
+    /// `v:fname_diff`
+    FnameDiff = 21,
+    /// `v:cmdarg`
+    Cmdarg = 22,
+    /// `v:foldstart`
+    Foldstart = 23,
+    /// `v:foldend`
+    Foldend = 24,
+    /// `v:folddashes`
+    Folddashes = 25,
+    /// `v:foldlevel`
+    Foldlevel = 26,
+    /// `v:progname`
+    Progname = 27,
+    /// `v:servername`
+    Servername = 28,
+    /// `v:dying`
+    Dying = 29,
+    /// `v:exception`
+    Exception = 30,
+    /// `v:throwpoint`
+    Throwpoint = 31,
+    /// `v:register`
+    Register = 32,
+    /// `v:cmdbang`
+    Cmdbang = 33,
+    /// `v:insertmode`
+    Insertmode = 34,
+    /// `v:val`
+    Val = 35,
+    /// `v:key`
+    Key = 36,
+    /// `v:profiling`
+    Profiling = 37,
+    /// `v:fcs_reason`
+    FcsReason = 38,
+    /// `v:fcs_choice`
+    FcsChoice = 39,
+    /// `v:beval_bufnr`
+    BevalBufnr = 40,
+    /// `v:beval_winnr`
+    BevalWinnr = 41,
+    /// `v:beval_winid`
+    BevalWinid = 42,
+    /// `v:beval_lnum`
+    BevalLnum = 43,
+    /// `v:beval_col`
+    BevalCol = 44,
+    /// `v:beval_text`
+    BevalText = 45,
+    /// `v:scrollstart`
+    Scrollstart = 46,
+    /// `v:swapname`
+    Swapname = 47,
+    /// `v:swapchoice`
+    Swapchoice = 48,
+    /// `v:swapcommand`
+    Swapcommand = 49,
+    /// `v:char`
+    Char = 50,
+    /// `v:mouse_win`
+    MouseWin = 51,
+    /// `v:mouse_winid`
+    MouseWinid = 52,
+    /// `v:mouse_lnum`
+    MouseLnum = 53,
+    /// `v:mouse_col`
+    MouseCol = 54,
+    /// `v:operator`
+    Operator = 55,
+    /// `v:searchforward`
+    Searchforward = 56,
+    /// `v:hlsearch`
+    Hlsearch = 57,
+    /// `v:oldfiles`
+    Oldfiles = 58,
+    /// `v:windowid`
+    Windowid = 59,
+    /// `v:progpath`
+    Progpath = 60,
+    /// `v:completed_item`
+    CompletedItem = 61,
+    /// `v:option_new`
+    OptionNew = 62,
+    /// `v:option_old`
+    OptionOld = 63,
+    /// `v:option_oldlocal`
+    OptionOldlocal = 64,
+    /// `v:option_oldglobal`
+    OptionOldglobal = 65,
+    /// `v:option_command`
+    OptionCommand = 66,
+    /// `v:option_type`
+    OptionType = 67,
+    /// `v:errors`
+    Errors = 68,
+    /// `v:false`
+    False = 69,
+    /// `v:true`
+    True = 70,
+    /// `v:null`
+    Null = 71,
+    /// `v:numbermax`
+    Numbermax = 72,
+    /// `v:numbermin`
+    Numbermin = 73,
+    /// `v:numbersize`
+    Numbersize = 74,
+    /// `v:vim_did_enter`
+    VimDidEnter = 75,
+    /// `v:testing`
+    Testing = 76,
+    /// `v:t_number`
+    TNumber = 77,
+    /// `v:t_string`
+    TString = 78,
+    /// `v:t_func`
+    TFunc = 79,
+    /// `v:t_list`
+    TList = 80,
+    /// `v:t_dict`
+    TDict = 81,
+    /// `v:t_float`
+    TFloat = 82,
+    /// `v:t_bool`
+    TBool = 83,
+    /// `v:t_blob`
+    TBlob = 84,
+    /// `v:event`
+    Event = 85,
+    /// `v:versionlong`
+    Versionlong = 86,
+    /// `v:echospace`
+    Echospace = 87,
+    /// `v:argf`
+    Argf = 88,
+    /// `v:argv`
+    Argv = 89,
+    /// `v:collate`
+    Collate = 90,
+    /// `v:exiting`
+    Exiting = 91,
+    /// `v:maxcol`
+    Maxcol = 92,
+    /// `v:stacktrace`
+    Stacktrace = 93,
+    /// `v:vim_did_init`
+    VimDidInit = 94,
+    /// `v:stderr`
+    Stderr = 95,
+    /// `v:msgpack_types`
+    MsgpackTypes = 96,
+    /// `v:_null_string`
+    NullString = 97,
+    /// `v:_null_list`
+    NullList = 98,
+    /// `v:_null_dict`
+    NullDict = 99,
+    /// `v:_null_blob`
+    NullBlob = 100,
+    /// `v:lua`
+    Lua = 101,
+    /// `v:relnum`
+    Relnum = 102,
+    /// `v:virtnum`
+    Virtnum = 103,
+    /// `v:starttime`
+    Starttime = 104,
+    /// `v:exitreason`
+    Exitreason = 105,
+}
 
-/// `vimvar.vv_flags` bits.
-pub const VV_COMPAT: ::core::ffi::c_int = 1;
-pub const VV_RO: ::core::ffi::c_int = 2;
-pub const VV_RO_SBX: ::core::ffi::c_int = 4;
+/// A number that is not a `v:` variable's slot.
+#[derive(Clone, Copy, Debug)]
+pub struct NotAVimVar;
+
+impl TryFrom<usize> for Vv {
+    type Error = NotAVimVar;
+
+    fn try_from(value: usize) -> Result<Self, NotAVimVar> {
+        // SAFETY-free: the table is dense from 0 to `COUNT`, so the cast is
+        // total over that range and rejected outside it.
+        Vv::ALL.get(value).copied().ok_or(NotAVimVar)
+    }
+}
+
+impl Vv {
+    /// How many `v:` variables there are; the length of the `vimvars` table.
+    pub const COUNT: usize = 106;
+
+    /// Every `v:` variable, in table order.
+    pub const ALL: [Vv; Self::COUNT] = ALL_VIM_VARS;
+
+    /// This variable's row in the `vimvars` table.
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+}
+
+const ALL_VIM_VARS: [Vv; Vv::COUNT] = [
+    Vv::Count,
+    Vv::Count1,
+    Vv::Prevcount,
+    Vv::Errmsg,
+    Vv::Warningmsg,
+    Vv::Statusmsg,
+    Vv::ShellError,
+    Vv::ThisSession,
+    Vv::Version,
+    Vv::Lnum,
+    Vv::Termrequest,
+    Vv::Termresponse,
+    Vv::Fname,
+    Vv::Lang,
+    Vv::LcTime,
+    Vv::Ctype,
+    Vv::CharconvertFrom,
+    Vv::CharconvertTo,
+    Vv::FnameIn,
+    Vv::FnameOut,
+    Vv::FnameNew,
+    Vv::FnameDiff,
+    Vv::Cmdarg,
+    Vv::Foldstart,
+    Vv::Foldend,
+    Vv::Folddashes,
+    Vv::Foldlevel,
+    Vv::Progname,
+    Vv::Servername,
+    Vv::Dying,
+    Vv::Exception,
+    Vv::Throwpoint,
+    Vv::Register,
+    Vv::Cmdbang,
+    Vv::Insertmode,
+    Vv::Val,
+    Vv::Key,
+    Vv::Profiling,
+    Vv::FcsReason,
+    Vv::FcsChoice,
+    Vv::BevalBufnr,
+    Vv::BevalWinnr,
+    Vv::BevalWinid,
+    Vv::BevalLnum,
+    Vv::BevalCol,
+    Vv::BevalText,
+    Vv::Scrollstart,
+    Vv::Swapname,
+    Vv::Swapchoice,
+    Vv::Swapcommand,
+    Vv::Char,
+    Vv::MouseWin,
+    Vv::MouseWinid,
+    Vv::MouseLnum,
+    Vv::MouseCol,
+    Vv::Operator,
+    Vv::Searchforward,
+    Vv::Hlsearch,
+    Vv::Oldfiles,
+    Vv::Windowid,
+    Vv::Progpath,
+    Vv::CompletedItem,
+    Vv::OptionNew,
+    Vv::OptionOld,
+    Vv::OptionOldlocal,
+    Vv::OptionOldglobal,
+    Vv::OptionCommand,
+    Vv::OptionType,
+    Vv::Errors,
+    Vv::False,
+    Vv::True,
+    Vv::Null,
+    Vv::Numbermax,
+    Vv::Numbermin,
+    Vv::Numbersize,
+    Vv::VimDidEnter,
+    Vv::Testing,
+    Vv::TNumber,
+    Vv::TString,
+    Vv::TFunc,
+    Vv::TList,
+    Vv::TDict,
+    Vv::TFloat,
+    Vv::TBool,
+    Vv::TBlob,
+    Vv::Event,
+    Vv::Versionlong,
+    Vv::Echospace,
+    Vv::Argf,
+    Vv::Argv,
+    Vv::Collate,
+    Vv::Exiting,
+    Vv::Maxcol,
+    Vv::Stacktrace,
+    Vv::VimDidInit,
+    Vv::Stderr,
+    Vv::MsgpackTypes,
+    Vv::NullString,
+    Vv::NullList,
+    Vv::NullDict,
+    Vv::NullBlob,
+    Vv::Lua,
+    Vv::Relnum,
+    Vv::Virtnum,
+    Vv::Starttime,
+    Vv::Exitreason,
+];
+
+crate::flag_set! {
+    /// What kind of `v:` variable a `vimvars` row is -- upstream's `VV_*`
+    /// *flag* bits, which share the prefix with the slot names above and are
+    /// a different family entirely.
+    pub struct VimVarFlags;
+
+    /// Also readable without the `v:` prefix, from `compat_hashtab`.
+    const COMPAT = 1;
+    /// Read-only.
+    const RO = 2;
+    /// Read-only inside a `:sandbox`.
+    const RO_SBX = 4;
+}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct evalarg_T {

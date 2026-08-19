@@ -386,7 +386,7 @@ pub unsafe fn msg_ui_flush() {
 /// The exec stack must be non-empty. See [`sourcing_top`].
 pub(crate) unsafe fn inc_msg_scrolled() {
     unsafe {
-        if *get_vim_var_str(VV_SCROLLSTART) == 0 {
+        if *get_vim_var_str(Vv::Scrollstart) == 0 {
             // v:scrollstart is empty: set it to the script/function name and
             // line number the scrolling started at.
             let mut p = String_0 {
@@ -408,7 +408,7 @@ pub(crate) unsafe fn inc_msg_scrolled() {
                 );
                 p.data = tofree;
             }
-            set_vim_var_string(VV_SCROLLSTART, p.data, p.size as ptrdiff_t);
+            set_vim_var_string(Vv::Scrollstart, p.data, p.size as ptrdiff_t);
             xfree(tofree.cast());
         }
         msg_scrolled.set(msg_scrolled.get() + 1);

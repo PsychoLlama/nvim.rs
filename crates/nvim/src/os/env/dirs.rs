@@ -16,7 +16,7 @@ use crate::memory::xmemrchr;
 use crate::os::fs::os_isdir;
 use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};
 use crate::strings::vim_strchr;
-use crate::types::{MAXPATHL, OK, VV_PROGPATH, buf_T};
+use crate::types::{MAXPATHL, OK, Vv, buf_T};
 
 /// The directory a runtime lives in, under `$VIM`.
 const RUNTIME_DIRNAME: &CStr = c"runtime";
@@ -144,7 +144,7 @@ pub unsafe fn vim_get_prefix_from_exepath(exe_name: *mut c_char) {
     // SAFETY: the caller's contract; `path_tail*` answer pointers inside the
     // buffer they are given.
     unsafe {
-        xstrlcpy(exe_name, get_vim_var_str(VV_PROGPATH), MAXPATHL as usize);
+        xstrlcpy(exe_name, get_vim_var_str(Vv::Progpath), MAXPATHL as usize);
         // Remove the trailing "nvim", then the trailing "bin/".
         *path_tail_with_sep(exe_name) = 0;
         *path_tail(exe_name) = 0;
@@ -165,7 +165,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
     // way of saying.
     unsafe {
         // `init_path()` runs before anything reaches here.
-        debug_assert!(*get_vim_var_str(VV_PROGPATH) != 0);
+        debug_assert!(*get_vim_var_str(Vv::Progpath) != 0);
 
         let kos_env_path = os_getenv(name);
         if !kos_env_path.is_null() {

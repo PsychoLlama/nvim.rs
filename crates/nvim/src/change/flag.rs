@@ -57,7 +57,7 @@ pub unsafe fn change_warning(buf: *mut buf_T, col: c_int) {
         msg_source(HLF_W);
         msg_ext_set_kind(c"wmsg".as_ptr());
         msg_puts_hl(gettext(W_READONLY), HLF_W, true);
-        set_vim_var_string(VV_WARNINGMSG, gettext(W_READONLY), -1);
+        set_vim_var_string(Vv::Warningmsg, gettext(W_READONLY), -1);
         msg_clr_eos();
         msg_end();
         if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {

@@ -26,9 +26,8 @@ use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Dict, Error, KeyValuePair, NUL, Object,
-    VV_ARGV, VV_EXITREASON, VV_PROGPATH, exarg_T, kErrorTypeNone, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeString, key_value_pair, listitem_T, object_data, ptrdiff_t, size_t,
-    uint16_t, varnumber_T,
+    Vv, exarg_T, kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeString,
+    key_value_pair, listitem_T, object_data, ptrdiff_t, size_t, uint16_t, varnumber_T,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 
@@ -95,8 +94,8 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
             msg: ptr::null_mut(),
         };
         let no_ui = ui_active() == 0;
-        let exepath = get_vim_var_str(VV_PROGPATH);
-        let argv_list = get_vim_var_list(VV_ARGV);
+        let exepath = get_vim_var_str(Vv::Progpath);
+        let argv_list = get_vim_var_list(Vv::Argv);
         let argc = tv_list_len(argv_list);
 
         // Three more than `v:argv`: `--embed`, `--headless`, and the null
@@ -270,7 +269,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                 ui_flush();
                 xfree(listen_addr as *mut c_void);
 
-                set_vim_var_string(VV_EXITREASON, c"restart".as_ptr(), 7 as ptrdiff_t);
+                set_vim_var_string(Vv::Exitreason, c"restart".as_ptr(), 7 as ptrdiff_t);
 
                 let mut quit_cmd = if (*eap).do_ecmd_cmd.is_null() {
                     c"qall".as_ptr() as *mut c_char
@@ -297,7 +296,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
 
             // Reached both on success — where `exiting` is set and this is
             // the last thing that runs — and on every failure.
-            set_vim_var_string(VV_EXITREASON, ptr::null(), -1 as ptrdiff_t);
+            set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t);
             if err.type_0 as c_int != kErrorTypeNone as c_int {
                 emsg(err.msg);
                 api_clear_error(&raw mut err);

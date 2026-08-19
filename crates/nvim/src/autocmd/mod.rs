@@ -68,10 +68,10 @@ use crate::types::{
     AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback,
     Callback_data as C2Rust_Unnamed_5, Error, Event, Integer, LuaRetMode, Map_String_int,
     Map_int_String, Map_int_ptr_t, MapHash, Object, OptVal, OptValData, OptValType, Set_String,
-    Set_int, String_0, Timestamp, VV_CMDBANG, VV_TERMRESPONSE, aco_save_T, aucmdwin_T, auto_event,
-    buf_T, buffblock_T, buffheader_T, bufref_T, estack_T, etype_T, event_T, exarg_T, expand_T,
-    funccal_entry_T, int64_t, kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, proftime_T,
-    ptr_t, save_redo_T, save_v_event_T, sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
+    Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, auto_event, buf_T, buffblock_T,
+    buffheader_T, bufref_T, estack_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T,
+    int64_t, kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, proftime_T, ptr_t, save_redo_T,
+    save_v_event_T, sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

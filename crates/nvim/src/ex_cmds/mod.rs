@@ -51,9 +51,9 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
     CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CmdModFlags, ExtmarkOp,
-    FAIL, NUL, OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType,
-    VV_OLDFILES, bcount_t, bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T,
-    getf_retvalues, linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
+    FAIL, NUL, OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv,
+    bcount_t, bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T, getf_retvalues,
+    linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use core::ptr;
@@ -341,7 +341,7 @@ pub unsafe fn skip_vimgrep_pat(
 }
 pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
     unsafe {
-        let mut l: *mut list_T = get_vim_var_list(VV_OLDFILES);
+        let mut l: *mut list_T = get_vim_var_list(Vv::Oldfiles);
         let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if l.is_null() {
             msg(gettext(c"No old files".as_ptr()), 0 as ::core::ffi::c_int);

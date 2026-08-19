@@ -326,16 +326,16 @@ pub(crate) unsafe fn do_insert_char_pre(c: c_int) -> *mut c_char {
         buf[buflen] = NUL as c_char;
 
         (*textlock.ptr()) += 1;
-        set_vim_var_string(VV_CHAR, buf.as_mut_ptr(), buflen as ptrdiff_t);
+        set_vim_var_string(Vv::Char, buf.as_mut_ptr(), buflen as ptrdiff_t);
 
         let mut res = ::core::ptr::null_mut();
         if ins_apply_autocmds(EVENT_INSERTCHARPRE) != 0
-            && strcmp(buf.as_mut_ptr(), get_vim_var_str(VV_CHAR)) != 0
+            && strcmp(buf.as_mut_ptr(), get_vim_var_str(Vv::Char)) != 0
         {
-            res = xstrdup(get_vim_var_str(VV_CHAR));
+            res = xstrdup(get_vim_var_str(Vv::Char));
         }
 
-        set_vim_var_string(VV_CHAR, ::core::ptr::null(), -1);
+        set_vim_var_string(Vv::Char, ::core::ptr::null(), -1);
         (*textlock.ptr()) -= 1;
         State.set(save_state);
         res

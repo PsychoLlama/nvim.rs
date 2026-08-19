@@ -220,8 +220,8 @@ unsafe fn trigger_insert_enter(cmdchar: c_int) {
         } else {
             c"i".as_ptr()
         };
-        set_vim_var_string(VV_INSERTMODE, mode, 1);
-        set_vim_var_string(VV_CHAR, ::core::ptr::null(), -1);
+        set_vim_var_string(Vv::Insertmode, mode, 1);
+        set_vim_var_string(Vv::Char, ::core::ptr::null(), -1);
         ins_apply_autocmds(EVENT_INSERTENTER);
 
         // Highlighting may have changed, e.g. for ModeMsg.
@@ -233,7 +233,7 @@ unsafe fn trigger_insert_enter(cmdchar: c_int) {
         // called in case the text was modified; Insert mode has not started
         // yet, so `State` is faked for it.
         if !equalpos((*curwin.get()).w_cursor, save_cursor)
-            && *get_vim_var_str(VV_CHAR) as c_int == NUL
+            && *get_vim_var_str(Vv::Char) as c_int == NUL
             && save_cursor.lnum <= (*curbuf.get()).b_ml.ml_line_count
         {
             let save_state = State.get();

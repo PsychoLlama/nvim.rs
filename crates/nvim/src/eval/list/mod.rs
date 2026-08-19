@@ -63,9 +63,8 @@ use crate::semsg_c;
 use crate::strings::reverse_text;
 use crate::types::{
     EvalFuncData, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    VV_KEY, VarLockStatus, VarType, VimVarIndex, blob_T, dict_T, dictitem_T, hashitem_T, int64_t,
-    list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
-    vimconv_T,
+    VarLockStatus, VarType, Vv, blob_T, dict_T, dictitem_T, hashitem_T, int64_t, list_T,
+    listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T, vimconv_T,
 };
 use ::libc::strlen;
 
@@ -794,21 +793,21 @@ pub(crate) fn err_not_countable(func_name: &CStr) {
 /// The value of the `v:` variable `idx`, copied out shallowly the way
 /// `filter_map_one` builds its argument vector.
 #[inline(always)]
-pub(crate) fn vim_var_value(idx: VimVarIndex) -> typval_T {
+pub(crate) fn vim_var_value(idx: Vv) -> typval_T {
     // SAFETY: `idx` names a `v:` variable, whose slot is always live.
     unsafe { *get_vim_var_tv(idx) }
 }
 
 /// Release whatever the `v:` variable `idx` holds.
 #[inline(always)]
-pub(crate) fn clear_vim_var(idx: VimVarIndex) {
+pub(crate) fn clear_vim_var(idx: Vv) {
     // SAFETY: as `vim_var_value`.
     unsafe { tv_clear(get_vim_var_tv(idx)) };
 }
 
 /// Copy `tv` into the `v:` variable `idx`.
 #[inline(always)]
-pub(crate) fn set_vim_var_tv(idx: VimVarIndex, tv: TvRef) {
+pub(crate) fn set_vim_var_tv(idx: Vv, tv: TvRef) {
     // SAFETY: as `vim_var_value`, and `tv` is a live value.
     unsafe { tv_copy(tv.0, get_vim_var_tv(idx)) };
 }
@@ -817,39 +816,39 @@ pub(crate) fn set_vim_var_tv(idx: VimVarIndex, tv: TvRef) {
 /// walk, because `set_vim_var_nr` does not set one.
 #[inline(always)]
 pub(crate) fn set_key_nr(n: varnumber_T) {
-    // SAFETY: `VV_KEY` names a `v:` variable.
-    unsafe { set_vim_var_nr(VV_KEY, n) };
+    // SAFETY: `Vv::Key` names a `v:` variable.
+    unsafe { set_vim_var_nr(Vv::Key, n) };
 }
 
 /// Set `v:key` to the NUL-terminated string `s`.
 #[inline(always)]
 pub(crate) fn set_key_string(s: *mut c_char) {
-    // SAFETY: `VV_KEY` names a `v:` variable and `s` is a dict key, which is
+    // SAFETY: `Vv::Key` names a `v:` variable and `s` is a dict key, which is
     // NUL-terminated -- what a length of -1 promises.
-    unsafe { set_vim_var_string(VV_KEY, s, -1 as ptrdiff_t) };
+    unsafe { set_vim_var_string(Vv::Key, s, -1 as ptrdiff_t) };
 }
 
 /// Declare `v:key`'s type for a walk that will set Numbers into it.
 #[inline(always)]
 pub(crate) fn set_key_type(v_type: VarType) {
-    // SAFETY: `VV_KEY` names a `v:` variable.
-    unsafe { set_vim_var_type(VV_KEY, v_type) };
+    // SAFETY: `Vv::Key` names a `v:` variable.
+    unsafe { set_vim_var_type(Vv::Key, v_type) };
 }
 
 /// Save the `v:` variable `idx` across a walk.
 #[inline(always)]
-pub(crate) fn save_vim_var(idx: VimVarIndex) -> typval_T {
+pub(crate) fn save_vim_var(idx: Vv) -> typval_T {
     let mut save = UNKNOWN_TV;
     // SAFETY: `idx` names a `v:` variable.
-    unsafe { prepare_vimvar(idx as c_int, &raw mut save) };
+    unsafe { prepare_vimvar(idx, &raw mut save) };
     save
 }
 
 /// Put back what [`save_vim_var`] took.
 #[inline(always)]
-pub(crate) fn restore_vim_var(idx: VimVarIndex, save: &mut typval_T) {
+pub(crate) fn restore_vim_var(idx: Vv, save: &mut typval_T) {
     // SAFETY: `save` came from `save_vim_var` for that same variable.
-    unsafe { restore_vimvar(idx as c_int, save) };
+    unsafe { restore_vimvar(idx, save) };
 }
 
 /// Evaluate `expr` -- a Funcref, a partial or an expression string -- with

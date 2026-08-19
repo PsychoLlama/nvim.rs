@@ -202,7 +202,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
         // causes flicker, thus we can't do that.
         changed_cline_bef_curs(curwin.get());
         // Clear v:completed_item.
-        set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
+        set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VAR_FIXED));
     }
 }
 
@@ -302,7 +302,7 @@ pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
         }
         compl_used_match.set(!(match_at_original_text(shown) || (preinsert && !insert_prefix)));
 
-        set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(shown));
+        set_vim_var_dict(Vv::CompletedItem, ins_compl_dict_alloc(shown));
         compl_hi_on_autocompl_longest.set(insert_prefix && move_cursor);
     }
 }

@@ -4,9 +4,7 @@ use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::memory::strequal;
-use crate::types::{
-    Error, Integer, Object, String_0, VV_TERMRESPONSE, kObjectTypeString, ptrdiff_t, uint64_t,
-};
+use crate::types::{Error, Integer, Object, String_0, Vv, kObjectTypeString, ptrdiff_t, uint64_t};
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
     logmsg_c!(
@@ -45,7 +43,7 @@ pub unsafe fn nvim_ui_term_event(
         }
         let termresponse: String_0 = value.data.string;
         set_vim_var_string(
-            VV_TERMRESPONSE,
+            Vv::Termresponse,
             termresponse.data,
             termresponse.size as ptrdiff_t,
         );

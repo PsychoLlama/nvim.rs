@@ -30,8 +30,8 @@ use crate::eval::list::{
 use crate::garray::Gap;
 use crate::main::{did_emsg, e_invalblob, e_string_required};
 use crate::types::{
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_LOCKED, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED,
-    VV_KEY, garray_T, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_LOCKED, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, Vv,
+    garray_T, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
 
 /// A byte-item `garray_T`, the way `ga_init(&ga, sizeof(char), 80)` leaves
@@ -82,7 +82,7 @@ pub(crate) fn filter_map_dict(
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         let ok = filter_map_one(di.tv(), expr, filtermap, &mut newtv, &mut rem);
-        clear_vim_var(VV_KEY);
+        clear_vim_var(Vv::Key);
         if !ok || did_emsg.get() != 0 {
             clear_tv(&mut newtv);
             break;

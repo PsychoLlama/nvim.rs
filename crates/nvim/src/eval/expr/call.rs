@@ -28,7 +28,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, NUL, OK, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, dict_T, evalarg_T,
+    FAIL, NUL, OK, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED, Vv, dict_T, evalarg_T,
     funcexe_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 use ::libc::strlen;
@@ -290,7 +290,7 @@ pub(crate) unsafe fn eval_method(
                 } else if !lua_funcname.is_null() {
                     if evaluate {
                         (*rettv).v_type = VAR_PARTIAL;
-                        (*rettv).vval.v_partial = get_vim_var_partial(VV_LUA);
+                        (*rettv).vval.v_partial = get_vim_var_partial(Vv::Lua);
                         (*(*rettv).vval.v_partial).pt_refcount += 1;
                     }
                     ret = call_func_rettv(

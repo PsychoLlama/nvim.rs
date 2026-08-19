@@ -413,7 +413,7 @@ pub(crate) unsafe fn ins_ctrl_() {
 pub(crate) unsafe fn ins_insert(replace_state: c_int) {
     unsafe {
         set_vim_var_string(
-            VV_INSERTMODE,
+            Vv::Insertmode,
             if State.get() & REPLACE_FLAG != 0 {
                 c"i".as_ptr()
             } else if replace_state == MODE_VREPLACE {

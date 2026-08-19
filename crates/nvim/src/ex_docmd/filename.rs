@@ -45,8 +45,8 @@ use crate::runtime::estack_sfile;
 use crate::strings::{strrep, vim_strchr, vim_strsave_escaped};
 use crate::types::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
-    ExArgt, ExpandContext, FAIL, MAXPATHL, NUL, OK, VV_OLDFILES, exarg_T, expand_T, linenr_T,
-    size_t, ssize_t, uint8_t,
+    ExArgt, ExpandContext, FAIL, MAXPATHL, NUL, OK, Vv, exarg_T, expand_T, linenr_T, size_t,
+    ssize_t, uint8_t,
 };
 use ::libc::{strcat, strcmp, strcpy, strlen, strpbrk, strrchr};
 
@@ -484,7 +484,7 @@ pub unsafe fn eval_vars(
                                 *usedlen = 1;
                                 return ptr::null_mut();
                             }
-                            result = tv_list_find_str(get_vim_var_list(VV_OLDFILES), i - 1)
+                            result = tv_list_find_str(get_vim_var_list(Vv::Oldfiles), i - 1)
                                 as *mut c_char;
                             if result.is_null() {
                                 *errormsg = c"".as_ptr();

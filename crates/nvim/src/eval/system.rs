@@ -32,9 +32,8 @@ use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
-    EvalFuncData, IOSIZE, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VV_SHELL_ERROR, buf_T, kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t,
-    typval_T, varnumber_T,
+    EvalFuncData, IOSIZE, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, Vv, buf_T,
+    kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 use ::libc::strlen;
 
@@ -173,7 +172,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
             // A command that does not exist reports -1 rather than a shell
             // exit status.
             if !executable {
-                set_vim_var_nr(VV_SHELL_ERROR, -1);
+                set_vim_var_nr(Vv::ShellError, -1);
             }
             xfree(input as *mut c_void);
             return;
@@ -205,7 +204,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
             prof_child_exit(wait_time);
         }
         xfree(input as *mut c_void);
-        set_vim_var_nr(VV_SHELL_ERROR, status as varnumber_T);
+        set_vim_var_nr(Vv::ShellError, status as varnumber_T);
 
         if res.is_null() {
             if retlist {

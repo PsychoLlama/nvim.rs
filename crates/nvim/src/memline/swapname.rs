@@ -20,7 +20,7 @@ use ::libc::{EINVAL, ENOENT};
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{CmdModFlags, FAIL, MAXPATHL, NUL, OK, VV_SWAPCHOICE, VV_SWAPNAME};
+use crate::types::{CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv};
 
 /// Rename the swap file after the buffer's file name changed.
 ///
@@ -327,8 +327,8 @@ unsafe fn attention_message(
 /// `v:swapchoice`.
 unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
     unsafe {
-        set_vim_var_string(VV_SWAPNAME, fname, -1);
-        set_vim_var_string(VV_SWAPCHOICE, core::ptr::null(), -1);
+        set_vim_var_string(Vv::Swapname, fname, -1);
+        set_vim_var_string(Vv::Swapchoice, core::ptr::null(), -1);
 
         // `<afile>` is the file being edited. Changing directory is not
         // allowed from here.
@@ -342,9 +342,9 @@ unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
         );
         *allbuf_lock.ptr() -= 1;
 
-        set_vim_var_string(VV_SWAPNAME, core::ptr::null(), -1);
+        set_vim_var_string(Vv::Swapname, core::ptr::null(), -1);
 
-        match *get_vim_var_str(VV_SWAPCHOICE) as u8 {
+        match *get_vim_var_str(Vv::Swapchoice) as u8 {
             b'o' => SEA_CHOICE_READONLY,
             b'e' => SEA_CHOICE_EDIT,
             b'r' => SEA_CHOICE_RECOVER,

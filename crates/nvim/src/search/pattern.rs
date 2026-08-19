@@ -15,7 +15,7 @@ use super::*;
 use crate::ex_docmd::cmdmod_has;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
-use crate::types::{CmdModFlags, FAIL, NUL, OK, VV_SEARCHFORWARD};
+use crate::types::{CmdModFlags, FAIL, NUL, OK, Vv};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -605,7 +605,7 @@ pub(crate) fn set_vv_searchforward() {
     // SAFETY: setting a `v:` variable to a number.
     unsafe {
         set_vim_var_nr(
-            VV_SEARCHFORWARD,
+            Vv::Searchforward,
             (spat(RE_SEARCH).off.dir as c_int == '/' as c_int) as varnumber_T,
         );
     }

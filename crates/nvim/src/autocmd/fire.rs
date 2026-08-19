@@ -441,12 +441,12 @@ pub unsafe fn apply_autocmds_group(
                 patcmd.data = data;
 
                 // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
-                let save_cmdbang = get_vim_var_nr(VV_CMDBANG);
+                let save_cmdbang = get_vim_var_nr(Vv::Cmdbang);
                 let save_cmdarg = if eap.is_null() {
                     ::core::ptr::null_mut()
                 } else {
                     let saved = set_cmdarg(eap, ::core::ptr::null_mut());
-                    set_vim_var_nr(VV_CMDBANG, (*eap).forceit as varnumber_T);
+                    set_vim_var_nr(Vv::Cmdbang, (*eap).forceit as varnumber_T);
                     saved
                 };
                 retval = true;
@@ -481,7 +481,7 @@ pub unsafe fn apply_autocmds_group(
 
                 if !eap.is_null() {
                     set_cmdarg(::core::ptr::null_mut(), save_cmdarg);
-                    set_vim_var_nr(VV_CMDBANG, save_cmdbang);
+                    set_vim_var_nr(Vv::Cmdbang, save_cmdbang);
                 }
                 // Unlink -- guarded, because a nested walk may already
                 // have taken this node off the list.
@@ -583,7 +583,7 @@ pub unsafe extern "C" fn unblock_autocmds() {
     unsafe {
         *autocmd_blocked.ptr() -= 1;
         if !is_autocmd_blocked() && termresponse_changed.get() && has_event(EVENT_TERMRESPONSE) {
-            let sequence = cstr_to_string(get_vim_var_str(VV_TERMRESPONSE));
+            let sequence = cstr_to_string(get_vim_var_str(Vv::Termresponse));
             do_termresponse_autocmd(sequence);
             api_free_string(sequence);
         }

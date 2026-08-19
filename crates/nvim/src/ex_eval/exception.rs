@@ -58,8 +58,8 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::smsg_c;
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::types::{
-    FAIL, IOSIZE, NUL, OK, VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT, cstack_T, except_T,
-    except_type_T, exception_state_T, int64_t, list_T, msglist_T, ptrdiff_t,
+    FAIL, IOSIZE, NUL, OK, Vv, cstack_T, except_T, except_type_T, exception_state_T, int64_t,
+    list_T, msglist_T, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -570,16 +570,16 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
     // SAFETY: caller contract.
     unsafe {
         if excp.is_null() {
-            set_vim_var_string(VV_EXCEPTION, ptr::null(), -1);
-            set_vim_var_string(VV_THROWPOINT, ptr::null(), -1);
-            set_vim_var_list(VV_STACKTRACE, ptr::null_mut::<list_T>());
+            set_vim_var_string(Vv::Exception, ptr::null(), -1);
+            set_vim_var_string(Vv::Throwpoint, ptr::null(), -1);
+            set_vim_var_list(Vv::Stacktrace, ptr::null_mut::<list_T>());
             return;
         }
-        set_vim_var_string(VV_EXCEPTION, (*excp).value, -1);
-        set_vim_var_list(VV_STACKTRACE, (*excp).stacktrace);
+        set_vim_var_string(Vv::Exception, (*excp).value, -1);
+        set_vim_var_list(Vv::Stacktrace, (*excp).stacktrace);
         if *(*excp).throw_name == NUL as c_char {
             // `throw_name` is unset for an exception from a typed command.
-            set_vim_var_string(VV_THROWPOINT, ptr::null(), -1);
+            set_vim_var_string(Vv::Throwpoint, ptr::null(), -1);
             return;
         }
         let len = if (*excp).throw_lnum == 0 {
@@ -598,7 +598,7 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
                 (*excp).throw_lnum as int64_t,
             )
         };
-        set_vim_var_string(VV_THROWPOINT, iobuff(), len as ptrdiff_t);
+        set_vim_var_string(Vv::Throwpoint, iobuff(), len as ptrdiff_t);
     }
 }
 

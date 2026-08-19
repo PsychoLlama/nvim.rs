@@ -28,7 +28,7 @@ use super::{
     tr, upper, vim_var, with_scratch,
 };
 use crate::decoration::SCL_NUM;
-use crate::types::{VV_LNUM, VV_RELNUM, VV_VIRTNUM};
+use crate::types::Vv;
 
 /// What carries across items while the format is walked.
 struct State {
@@ -456,16 +456,16 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
         b'l' => {
             if env.is_statuscol()
                 && (env.win.w_onebuf_opt.wo_nu != 0 || env.win.w_onebuf_opt.wo_rnu != 0)
-                && vim_var(VV_VIRTNUM) == 0
+                && vim_var(Vv::Virtnum) == 0
             {
                 if env.win.w_maxscwidth == SCL_NUM && env.number_column_has_sign() {
                     return statuscol_sign(env, s, opt, pos, text, v);
                 }
-                let relnum = vim_var(VV_RELNUM) as c_int;
+                let relnum = vim_var(Vv::Relnum) as c_int;
                 let nu = env.win.w_onebuf_opt.wo_nu != 0;
                 let rnu = env.win.w_onebuf_opt.wo_rnu != 0;
                 v.num = if !rnu || (nu && relnum == 0) {
-                    vim_var(VV_LNUM) as c_int
+                    vim_var(Vv::Lnum) as c_int
                 } else {
                     relnum
                 };

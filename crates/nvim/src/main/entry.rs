@@ -82,8 +82,7 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    Callback, Callback_data, CallbackReader, NUL, OptInt, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME,
-    VV_SWAPCOMMAND, VV_VIM_DID_ENTER, VV_VIM_DID_INIT, dict_T, int64_t, linenr_T, list_T,
+    Callback, Callback_data, CallbackReader, NUL, OptInt, Vv, dict_T, int64_t, linenr_T, list_T,
     qf_info_T, varnumber_T, win_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
@@ -150,7 +149,7 @@ pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
         estack_init();
         cmdline_init();
         eval_init();
-        set_vim_var_nr(VV_STARTTIME, os_realtime());
+        set_vim_var_nr(Vv::Starttime, os_realtime());
 
         init_path(if !argv0.get().is_null() {
             argv0.get() as *const c_char
@@ -283,7 +282,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         if use_builtin_ui && !remote_ui {
             ui_client_forward_stdin.set(!stdin_isatty.get());
             let chan = ui_client_start_server(
-                get_vim_var_str(VV_PROGPATH),
+                get_vim_var_str(Vv::Progpath),
                 params.argc as usize,
                 params.argv,
             );
@@ -409,7 +408,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             syn_maybe_enable();
         }
 
-        set_vim_var_nr(VV_VIM_DID_INIT, 1 as varnumber_T);
+        set_vim_var_nr(Vv::VimDidInit, 1 as varnumber_T);
         load_plugins();
         set_window_layout(&raw mut params);
 
@@ -439,8 +438,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             shada_read_everything(ptr::null(), false, true);
             time_msg_at(c"reading ShaDa");
         }
-        if get_vim_var_list(VV_OLDFILES).is_null() {
-            set_vim_var_list(VV_OLDFILES, tv_list_alloc(0));
+        if get_vim_var_list(Vv::Oldfiles).is_null() {
+            set_vim_var_list(Vv::Oldfiles, tv_list_alloc(0));
         }
 
         handle_quickfix(&raw mut params);
@@ -464,7 +463,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
         // The swap command has served its purpose; the ATTENTION prompts
         // from here on are the user's own doing.
-        set_vim_var_string(VV_SWAPCOMMAND, ptr::null(), -1);
+        set_vim_var_string(Vv::Swapcommand, ptr::null(), -1);
 
         if exmode_active.get() {
             (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
@@ -515,7 +514,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         no_wait_return.set(0);
         do_autochdir();
 
-        set_vim_var_nr(VV_VIM_DID_ENTER, 1 as varnumber_T);
+        set_vim_var_nr(Vv::VimDidEnter, 1 as varnumber_T);
         apply_autocmds(
             EVENT_VIMENTER,
             ptr::null_mut(),

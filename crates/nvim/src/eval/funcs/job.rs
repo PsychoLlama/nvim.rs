@@ -47,9 +47,9 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, Integer,
-    NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER,
-    buf_T, dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object,
-    typval_T, typval_vval_union, uint16_t, uint64_t, varnumber_T,
+    NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, Vv, buf_T, dict_T,
+    dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
+    typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -373,7 +373,7 @@ unsafe fn create_environment(
 
         // $NVIM points the child at this instance's server address, when
         // there is one.
-        let nvim_addr = get_vim_var_str(VV_SEND_SERVER);
+        let nvim_addr = get_vim_var_str(Vv::Servername);
         if *nvim_addr as c_int != NUL {
             let dv = tv_dict_find(env, c"NVIM".as_ptr(), 4);
             if !dv.is_null() {

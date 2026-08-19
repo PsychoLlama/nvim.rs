@@ -113,9 +113,9 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
             return cat_prefix_varname(b't' as c_int, key);
         }
         let v = vidx.get();
-        if v < (*vimvars.ptr()).len() {
+        if let Ok(vv) = Vv::try_from(v) {
             vidx.set(v + 1);
-            return cat_prefix_varname(b'v' as c_int, get_vim_var_name(v as VimVarIndex));
+            return cat_prefix_varname(b'v' as c_int, get_vim_var_name(vv));
         }
 
         xfree(varnamebuf.get().cast());

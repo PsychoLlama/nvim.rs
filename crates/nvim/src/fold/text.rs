@@ -10,10 +10,7 @@ use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
 use crate::os::cshim::{memmove, ngettext, strncmp, strstr};
 use crate::strings::vim_snprintf;
-use crate::types::{
-    VV_FOLDDASHES, VV_FOLDEND, VV_FOLDLEVEL, VV_FOLDSTART, kErrorTypeNone, kObjectTypeArray,
-    kObjectTypeNil, kObjectTypeString,
-};
+use crate::types::{Vv, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
 use ::libc::{memset, strlen};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
@@ -54,8 +51,8 @@ pub unsafe fn get_foldtext(
     }
     if *(*wp).w_onebuf_opt.wo_fdt as c_int != NUL {
         let mut dashes: [c_char; 22] = [0; 22];
-        set_vim_var_nr(VV_FOLDSTART, lnum as varnumber_T);
-        set_vim_var_nr(VV_FOLDEND, lnume as varnumber_T);
+        set_vim_var_nr(Vv::Foldstart, lnum as varnumber_T);
+        set_vim_var_nr(Vv::Foldend, lnume as varnumber_T);
         let mut level: c_int = if foldinfo.fi_level < size_of::<[c_char; 22]>() as c_int - 1 {
             foldinfo.fi_level
         } else {
@@ -68,11 +65,11 @@ pub unsafe fn get_foldtext(
         );
         dashes[level as usize] = NUL as c_char;
         set_vim_var_string(
-            VV_FOLDDASHES,
+            Vv::Folddashes,
             &raw mut dashes as *mut c_char,
             level as ptrdiff_t,
         );
-        set_vim_var_nr(VV_FOLDLEVEL, level as varnumber_T);
+        set_vim_var_nr(Vv::Foldlevel, level as varnumber_T);
         if !got_fdt_error.get() {
             let save_curwin: *mut win_T = curwin.get();
             let saved_sctx: sctx_T = current_sctx.get();
@@ -110,7 +107,7 @@ pub unsafe fn get_foldtext(
         }
         last_lnum.set(lnum);
         last_wp.set(wp);
-        set_vim_var_string(VV_FOLDDASHES, ptr::null(), -1 as ptrdiff_t);
+        set_vim_var_string(Vv::Folddashes, ptr::null(), -1 as ptrdiff_t);
         if did_emsg.get() == 0 && save_did_emsg != 0 {
             did_emsg.set(save_did_emsg);
         }

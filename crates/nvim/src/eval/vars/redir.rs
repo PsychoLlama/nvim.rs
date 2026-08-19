@@ -21,13 +21,13 @@ use crate::types::{FAIL, NUL, OK};
 /// `gap` is a byte garray holding the message.
 pub unsafe fn assert_error(gap: *mut garray_T) {
     unsafe {
-        let tv = get_vim_var_tv(VV_ERRORS);
+        let tv = get_vim_var_tv(Vv::Errors);
         if (*tv).v_type != VAR_LIST || (*tv).vval.v_list.is_null() {
             // Something replaced it; make sure `v:errors` is a List again.
-            set_vim_var_list(VV_ERRORS, tv_list_alloc(1));
+            set_vim_var_list(Vv::Errors, tv_list_alloc(1));
         }
         tv_list_append_string(
-            get_vim_var_list(VV_ERRORS),
+            get_vim_var_list(Vv::Errors),
             (*gap).ga_data as *const c_char,
             (*gap).ga_len as ssize_t,
         );

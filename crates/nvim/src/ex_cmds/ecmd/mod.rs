@@ -66,8 +66,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    NUL, OK, OptInt, OptionSetFlags, String_0, VV_SWAPCOMMAND, bufref_T, exarg_T, linenr_T,
-    ptrdiff_t, time_t, win_T,
+    NUL, OK, OptInt, OptionSetFlags, String_0, Vv, bufref_T, exarg_T, linenr_T, ptrdiff_t, time_t,
+    win_T,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -86,7 +86,7 @@ use core::ptr;
 pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: linenr_T) -> bool {
     // SAFETY: caller's contract; `v:swapcommand` is a live string variable.
     if unsafe {
-        command.is_null() && newlnum <= 0 || *get_vim_var_str(VV_SWAPCOMMAND) as c_int != NUL
+        command.is_null() && newlnum <= 0 || *get_vim_var_str(Vv::Swapcommand) as c_int != NUL
     } {
         return false;
     }
@@ -107,7 +107,7 @@ pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: linenr_T) -> bool {
         } else {
             vim_snprintf_safelen(val.data, valsize, c":%s\r".as_ptr(), command)
         };
-        set_vim_var_string(VV_SWAPCOMMAND, val.data, val.size as ptrdiff_t);
+        set_vim_var_string(Vv::Swapcommand, val.data, val.size as ptrdiff_t);
         xfree(val.data.cast());
     }
     true
@@ -486,7 +486,7 @@ pub unsafe fn do_ecmd(
     }
     if did_set_swapcommand {
         // SAFETY: main thread; a NULL clears the variable.
-        unsafe { set_vim_var_string(VV_SWAPCOMMAND, ptr::null(), -1) };
+        unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };
     }
     // SAFETY: our own allocation, or NULL.
     unsafe { xfree(free_fname.cast()) };

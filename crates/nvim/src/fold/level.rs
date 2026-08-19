@@ -17,7 +17,6 @@ use super::adjust::*;
 use super::marker::*;
 use super::*;
 use crate::pos::MAXLNUM;
-use crate::types::VV_LNUM;
 
 // The fold-level strategy is dispatched by comparing function addresses, as
 // the C code did; the helper spells the address comparison out so the intent
@@ -603,7 +602,7 @@ pub(super) unsafe fn foldlevelExpr(mut flp: *mut fline_T) {
     let mut win: *mut win_T = curwin.get();
     curwin.set((*flp).wp);
     curbuf.set((*(*flp).wp).w_buffer);
-    set_vim_var_nr(VV_LNUM, lnum as varnumber_T);
+    set_vim_var_nr(Vv::Lnum, lnum as varnumber_T);
     (*flp).start = 0;
     (*flp).had_end = (*flp).end;
     (*flp).end = MAX_LEVEL + 1;

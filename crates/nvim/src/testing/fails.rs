@@ -28,7 +28,7 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::{gettext, strstr};
 use crate::types::{
-    EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, VV_ERRMSG, list_T, typval_T,
+    EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, Vv, list_T, typval_T,
     typval_vval_union, varnumber_T,
 };
 
@@ -141,7 +141,7 @@ unsafe fn check_reported_error(argvars: *mut typval_T, tofree: &mut *mut c_char)
                     return FailsCheck::Matched;
                 }
                 // Take a copy: an error inside pattern_match() may free it.
-                actual = xstrdup(get_vim_var_str(VV_ERRMSG));
+                actual = xstrdup(get_vim_var_str(Vv::Errmsg));
                 *tofree = actual;
                 tv = &raw mut (*tv_list_last(list)).li_tv;
                 expected = tv_get_string_buf_chk(tv, buf.as_mut_ptr());
@@ -282,7 +282,7 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char) {
         xfree(emsg_assert_fails_msg.get().cast());
         emsg_assert_fails_msg.set(ptr::null_mut());
         xfree(tofree.cast());
-        set_vim_var_string(VV_ERRMSG, ptr::null(), 0);
+        set_vim_var_string(Vv::Errmsg, ptr::null(), 0);
     }
 }
 

@@ -31,7 +31,7 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{FAIL, FILE, NUL, OK, VV_HLSEARCH, exarg_T, ssize_t, uint8_t, varnumber_T};
+use crate::types::{FAIL, FILE, NUL, OK, Vv, exarg_T, ssize_t, uint8_t, varnumber_T};
 use crate::ui::ui_flush;
 use ::libc::{fclose, strcasecmp};
 
@@ -257,7 +257,7 @@ pub unsafe fn set_no_hlsearch(flag: bool) {
     unsafe {
         no_hlsearch.set(flag);
         set_vim_var_nr(
-            VV_HLSEARCH,
+            Vv::Hlsearch,
             (!no_hlsearch.get() && p_hls.get() != 0) as varnumber_T,
         );
     }

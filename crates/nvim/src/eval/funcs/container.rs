@@ -26,8 +26,8 @@ use crate::types::{
     BoolVarValue, EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
     VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL,
-    VAR_TYPE_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_KEY, VV_VAL, blob_T, kBoolVarTrue,
-    kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
+    VAR_TYPE_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, blob_T, kBoolVarTrue, kSpecialVarNull, list_T,
+    listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
@@ -497,8 +497,8 @@ pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         };
 
         let (mut save_val, mut save_key) = (NIL, NIL);
-        prepare_vimvar(VV_VAL as c_int, &raw mut save_val);
-        prepare_vimvar(VV_KEY as c_int, &raw mut save_key);
+        prepare_vimvar(Vv::Val, &raw mut save_val);
+        prepare_vimvar(Vv::Key, &raw mut save_key);
         let saved_did_emsg = did_emsg.get();
         did_emsg.set(0);
         rettv.vval.v_number = if args.ty(0) == VAR_BLOB {
@@ -506,8 +506,8 @@ pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         } else {
             indexof_list(args.get(0).vval.v_list, startidx, args.ptr(1))
         };
-        restore_vimvar(VV_KEY as c_int, &raw mut save_key);
-        restore_vimvar(VV_VAL as c_int, &raw mut save_val);
+        restore_vimvar(Vv::Key, &raw mut save_key);
+        restore_vimvar(Vv::Val, &raw mut save_val);
         // As `printf()`: an error raised before this call survives, one
         // raised inside it does not.
         did_emsg.set(did_emsg.get() | saved_did_emsg);
@@ -524,7 +524,7 @@ unsafe fn indexof_matches(expr: *mut typval_T) -> bool {
     // SAFETY: the caller's obligation; `argv` and `newtv` are locals that
     // outlive the evaluation, and `newtv` is cleared before returning.
     unsafe {
-        let mut argv = [*get_vim_var_tv(VV_KEY), *get_vim_var_tv(VV_VAL), NIL];
+        let mut argv = [*get_vim_var_tv(Vv::Key), *get_vim_var_tv(Vv::Val), NIL];
         let mut newtv = NIL;
         if eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, &raw mut newtv) == FAIL {
             return false;
@@ -549,12 +549,12 @@ unsafe fn indexof_blob(b: *mut blob_T, startidx: varnumber_T, expr: *mut typval_
         } else {
             startidx
         };
-        set_vim_var_type(VV_KEY, VAR_NUMBER);
-        set_vim_var_type(VV_VAL, VAR_NUMBER);
+        set_vim_var_type(Vv::Key, VAR_NUMBER);
+        set_vim_var_type(Vv::Val, VAR_NUMBER);
         let called_emsg_start = called_emsg.get();
         for idx in start..tv_blob_len(b) as varnumber_T {
-            set_vim_var_nr(VV_KEY, idx);
-            set_vim_var_nr(VV_VAL, tv_blob_get(b, idx as c_int) as varnumber_T);
+            set_vim_var_nr(Vv::Key, idx);
+            set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as varnumber_T);
             if indexof_matches(expr) {
                 return idx;
             }
@@ -590,13 +590,13 @@ unsafe fn indexof_list(l: *mut list_T, startidx: varnumber_T, expr: *mut typval_
                 debug_assert!(!item.is_null());
             }
         }
-        set_vim_var_type(VV_KEY, VAR_NUMBER);
+        set_vim_var_type(Vv::Key, VAR_NUMBER);
         let called_emsg_start = called_emsg.get();
         while !item.is_null() {
-            set_vim_var_nr(VV_KEY, idx);
-            tv_copy(&raw mut (*item).li_tv, get_vim_var_tv(VV_VAL));
+            set_vim_var_nr(Vv::Key, idx);
+            tv_copy(&raw mut (*item).li_tv, get_vim_var_tv(Vv::Val));
             let found = indexof_matches(expr);
-            tv_clear(get_vim_var_tv(VV_VAL));
+            tv_clear(get_vim_var_tv(Vv::Val));
             if found {
                 return idx;
             }

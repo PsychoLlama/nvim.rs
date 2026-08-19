@@ -15,7 +15,7 @@
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{VAR_UNKNOWN, VV_OLDFILES, kListLenUnknown};
+use crate::types::{VAR_UNKNOWN, Vv, kListLenUnknown};
 
 /// What a mark restored from a file starts its view at: nothing is known
 /// about where the window was scrolled to.
@@ -85,7 +85,7 @@ struct Reading {
 pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
     unsafe {
         let force = flags & kShaDaForceit as c_int != 0;
-        let mut oldfiles_list = get_vim_var_list(VV_OLDFILES);
+        let mut oldfiles_list = get_vim_var_list(Vv::Oldfiles);
         // `v:oldfiles` is only filled in while it is still empty, so that a
         // second file does not append to the first one's answer.
         let get_old_files = flags & (kShaDaGetOldfiles | kShaDaForceit) as c_int != 0
@@ -105,7 +105,7 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
         }
         if get_old_files && (oldfiles_list.is_null() || force) {
             oldfiles_list = tv_list_alloc(kListLenUnknown as ptrdiff_t);
-            set_vim_var_list(VV_OLDFILES, oldfiles_list);
+            set_vim_var_list(Vv::Oldfiles, oldfiles_list);
         }
 
         let mut state = Reading {

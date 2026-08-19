@@ -43,9 +43,9 @@ use crate::os::cshim::{__ctype_b_loc, gettext, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     FAIL, NUL, OK, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, dictitem_T, evalarg_T, exarg_T, exprtype_T,
-    float_T, funcexe_T, kBoolVarFalse, kBoolVarTrue, partial_T, size_t, typval_T,
-    typval_vval_union, varnumber_T,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, Vv, dictitem_T, evalarg_T, exarg_T, exprtype_T, float_T,
+    funcexe_T, kBoolVarFalse, kBoolVarTrue, partial_T, size_t, typval_T, typval_vval_union,
+    varnumber_T,
 };
 
 /// A freshly declared typval, which is what every level starts a second
@@ -776,7 +776,7 @@ pub(crate) unsafe fn eval7(
                     // something callable.
                     if (*rettv).v_type == VAR_UNKNOWN && strnequal(name, c"v:lua.".as_ptr(), 6) {
                         (*rettv).v_type = VAR_PARTIAL;
-                        (*rettv).vval.v_partial = get_vim_var_partial(VV_LUA);
+                        (*rettv).vval.v_partial = get_vim_var_partial(Vv::Lua);
                         (*(*rettv).vval.v_partial).pt_refcount += 1;
                     }
                     ret = OK;

@@ -30,7 +30,7 @@ use super::{
     vim_var_value,
 };
 use crate::main::did_emsg;
-use crate::types::{EvalFuncData, VAR_UNKNOWN, VV_KEY, VV_VAL, typval_T};
+use crate::types::{EvalFuncData, VAR_UNKNOWN, Vv, typval_T};
 
 // The carve of the transpiled module; see each child's docs.
 mod containers;
@@ -86,7 +86,7 @@ pub(crate) fn filter_map_one(
     newtv: &mut typval_T,
     rem: &mut bool,
 ) -> bool {
-    set_vim_var_tv(VV_VAL, tv);
+    set_vim_var_tv(Vv::Val, tv);
     newtv.v_type = VAR_UNKNOWN;
 
     let mut retval = false;
@@ -98,8 +98,8 @@ pub(crate) fn filter_map_one(
             break 'theend;
         }
         let mut argv = [UNKNOWN_TV; 3];
-        argv[0] = vim_var_value(VV_KEY);
-        argv[1] = vim_var_value(VV_VAL);
+        argv[0] = vim_var_value(Vv::Key);
+        argv[1] = vim_var_value(Vv::Val);
         if !eval_expr(expr, &mut argv, newtv) {
             break 'theend;
         }
@@ -120,7 +120,7 @@ pub(crate) fn filter_map_one(
         }
         retval = true;
     }
-    clear_vim_var(VV_VAL);
+    clear_vim_var(Vv::Val);
     retval
 }
 
@@ -148,8 +148,8 @@ fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap
         return;
     }
 
-    let mut save_val = save_vim_var(VV_VAL);
-    let mut save_key = save_vim_var(VV_KEY);
+    let mut save_val = save_vim_var(Vv::Val);
+    let mut save_key = save_vim_var(Vv::Key);
 
     // Reset did_emsg to be able to detect whether an error occurred during
     // evaluation of the expression.
@@ -167,8 +167,8 @@ fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap
         Container::Other => unreachable!("reported above"),
     }
 
-    restore_vim_var(VV_KEY, &mut save_key);
-    restore_vim_var(VV_VAL, &mut save_val);
+    restore_vim_var(Vv::Key, &mut save_key);
+    restore_vim_var(Vv::Val, &mut save_val);
 
     did_emsg.set(did_emsg.get() | save_did_emsg);
 }

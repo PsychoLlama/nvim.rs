@@ -38,9 +38,9 @@ use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, VV_SHELL_ERROR, colnr_T,
-    garray_T, kErrorTypeNone, kListLenMayKnow, kObjectTypeBoolean, tabpage_T, typval_T, uint8_t,
-    varnumber_T, win_T,
+    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv, colnr_T, garray_T,
+    kErrorTypeNone, kListLenMayKnow, kObjectTypeBoolean, tabpage_T, typval_T, uint8_t, varnumber_T,
+    win_T,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
@@ -290,7 +290,7 @@ pub unsafe fn f_has(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
             None => {
                 // The provider probes run vimscript, which sets
                 // `v:shell_error`; the caller's value goes back afterwards.
-                let saved = get_vim_var_nr(VV_SHELL_ERROR);
+                let saved = get_vim_var_nr(Vv::ShellError);
                 let answer =
                     if same_name(name, c"clipboard_working") || same_name(name, c"unnamedplus") {
                         eval_has_provider(c"clipboard".as_ptr(), true)
@@ -299,7 +299,7 @@ pub unsafe fn f_has(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
                     } else {
                         eval_has_provider(name, true)
                     };
-                set_vim_var_nr(VV_SHELL_ERROR, saved);
+                set_vim_var_nr(Vv::ShellError, saved);
                 answer
             }
         } as varnumber_T;

@@ -79,9 +79,8 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VAR_UNLOCKED, VV_LNUM, VV_VIRTNUM, VimVarIndex,
-    colnr_T, int64_t, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T,
-    typval_vval_union, varnumber_T, win_T,
+    MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VAR_UNLOCKED, Vv, colnr_T, int64_t, linenr_T,
+    schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, varnumber_T, win_T,
 };
 use crate::undo::bufIsChanged;
 use crate::winlayer::{Buf, Win};
@@ -346,7 +345,7 @@ impl Env {
     pub fn fold_glyphs(&self, fdc: c_int, text: &mut Vec<u8>) -> c_int {
         let mut glyphs = [0 as schar_T; 9];
         // The line the fold item describes is `v:lnum`, not the cursor line.
-        let lnum = vim_var(VV_LNUM) as linenr_T;
+        let lnum = vim_var(Vv::Lnum) as linenr_T;
         // SAFETY: `stcp` is non-null on every path that reaches a fold item,
         // `glyphs` is this frame's, and `fdc` is what `compute_foldcolumn`
         // just answered.
@@ -356,7 +355,7 @@ impl Env {
                 (*self.stcp).foldinfo,
                 (*self.stcp).lnum,
                 fdc,
-                vim_var(VV_VIRTNUM) < 0,
+                vim_var(Vv::Virtnum) < 0,
                 &raw mut (*self.stcp).fold_vcol as *mut colnr_T,
                 glyphs.as_mut_ptr(),
             );
@@ -387,7 +386,7 @@ impl Env {
         // SAFETY: `stcp` is non-null here, and `sattrs` holds at least
         // `w_scwidth` entries -- which is the loop bound the caller uses.
         let mut sattr = unsafe { *(*self.stcp).sattrs.add(i) };
-        if sattr.text[0] == 0 || vim_var(VV_VIRTNUM) != 0 {
+        if sattr.text[0] == 0 || vim_var(Vv::Virtnum) != 0 {
             text.extend_from_slice(b"  ");
             return None;
         }
@@ -453,8 +452,8 @@ fn take_cstring(str: *mut c_char) -> Option<Vec<u8>> {
 }
 
 /// `v:lnum`, `v:relnum` and `v:virtnum`, which `'statuscolumn'` items read.
-pub(super) fn vim_var(idx: VimVarIndex) -> varnumber_T {
-    // SAFETY: the index is one of the compile-time `VV_*` constants.
+pub(super) fn vim_var(idx: Vv) -> varnumber_T {
+    // SAFETY: the index is a compile-time [`Vv`] variant.
     unsafe { get_vim_var_nr(idx) }
 }
 

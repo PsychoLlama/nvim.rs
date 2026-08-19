@@ -5,7 +5,7 @@
 //! which are how it publishes one.  [`before_set_vvar`] is the Vimscript
 //! side of the same thing: the type enforcement `:let v:x = …` goes through.
 //!
-//! Every one of them indexes the `vimvars` table by [`VimVarIndex`], so none
+//! Every one of them indexes the `vimvars` table by [`Vv`], so none
 //! of them can fail; the table's entries are `dictitem_T`-shaped and are the
 //! same items `v:` the dictionary holds.
 
@@ -25,7 +25,7 @@ use crate::types::{NUL, OK};
 ///
 /// # Safety
 /// `idx` names a `v:` variable and `save_tv` is writable.
-pub unsafe fn prepare_vimvar(idx: c_int, save_tv: *mut typval_T) {
+pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
     unsafe {
         let vv = (vimvars.ptr() as *mut VimVar).offset(idx as isize);
         *save_tv = (*vv).vv_di.di_tv;
@@ -45,7 +45,7 @@ pub unsafe fn prepare_vimvar(idx: c_int, save_tv: *mut typval_T) {
 ///
 /// # Safety
 /// As [`prepare_vimvar`], with the `save_tv` it filled.
-pub unsafe fn restore_vimvar(idx: c_int, save_tv: *mut typval_T) {
+pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut typval_T) {
     unsafe {
         let vv = (vimvars.ptr() as *mut VimVar).offset(idx as isize);
         (*vv).vv_di.di_tv = *save_tv;
@@ -68,7 +68,7 @@ pub unsafe fn restore_vimvar(idx: c_int, save_tv: *mut typval_T) {
 ///
 /// # Safety
 /// `idx` names a `v:` variable and `tv` is a live value.
-pub unsafe fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T) {
+pub unsafe fn set_vim_var_tv(idx: Vv, tv: *mut typval_T) {
     unsafe {
         let tv_out = get_vim_var_tv(idx);
         tv_clear(tv_out);
@@ -80,7 +80,7 @@ pub unsafe fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T) {
 ///
 /// # Safety
 /// `idx` names a `v:` variable.
-pub unsafe fn get_vim_var_name(idx: VimVarIndex) -> *mut c_char {
+pub unsafe fn get_vim_var_name(idx: Vv) -> *mut c_char {
     unsafe { (*vimvars.ptr())[idx as usize].vv_name }
 }
 
@@ -88,7 +88,7 @@ pub unsafe fn get_vim_var_name(idx: VimVarIndex) -> *mut c_char {
 ///
 /// # Safety
 /// `idx` names a `v:` variable.
-pub unsafe fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T {
+pub unsafe fn get_vim_var_tv(idx: Vv) -> *mut typval_T {
     unsafe {
         &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
             .vv_di
@@ -100,7 +100,7 @@ pub unsafe fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T {
+pub unsafe fn get_vim_var_nr(idx: Vv) -> varnumber_T {
     unsafe { (*get_vim_var_tv(idx)).vval.v_number }
 }
 
@@ -108,7 +108,7 @@ pub unsafe fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T {
+pub unsafe fn get_vim_var_list(idx: Vv) -> *mut list_T {
     unsafe { (*get_vim_var_tv(idx)).vval.v_list }
 }
 
@@ -116,7 +116,7 @@ pub unsafe fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_dict(idx: VimVarIndex) -> *mut dict_T {
+pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut dict_T {
     unsafe { (*get_vim_var_tv(idx)).vval.v_dict }
 }
 
@@ -124,7 +124,7 @@ pub unsafe fn get_vim_var_dict(idx: VimVarIndex) -> *mut dict_T {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_str(idx: VimVarIndex) -> *mut c_char {
+pub unsafe fn get_vim_var_str(idx: Vv) -> *mut c_char {
     unsafe { tv_get_string(get_vim_var_tv(idx)) as *mut c_char }
 }
 
@@ -132,7 +132,7 @@ pub unsafe fn get_vim_var_str(idx: VimVarIndex) -> *mut c_char {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_partial(idx: VimVarIndex) -> *mut partial_T {
+pub unsafe fn get_vim_var_partial(idx: Vv) -> *mut partial_T {
     unsafe { (*get_vim_var_tv(idx)).vval.v_partial }
 }
 
@@ -141,7 +141,7 @@ pub unsafe fn get_vim_var_partial(idx: VimVarIndex) -> *mut partial_T {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_type(idx: VimVarIndex, type_0: VarType) {
+pub unsafe fn set_vim_var_type(idx: Vv, type_0: VarType) {
     unsafe { (*get_vim_var_tv(idx)).v_type = type_0 }
 }
 
@@ -149,7 +149,7 @@ pub unsafe fn set_vim_var_type(idx: VimVarIndex, type_0: VarType) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T) {
+pub unsafe fn set_vim_var_nr(idx: Vv, val: varnumber_T) {
     unsafe {
         let tv = get_vim_var_tv(idx);
         tv_clear(tv);
@@ -161,7 +161,7 @@ pub unsafe fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_bool(idx: VimVarIndex, val: BoolVarValue) {
+pub unsafe fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
     unsafe {
         let tv = get_vim_var_tv(idx);
         tv_clear(tv);
@@ -174,7 +174,7 @@ pub unsafe fn set_vim_var_bool(idx: VimVarIndex, val: BoolVarValue) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_special(idx: VimVarIndex, val: SpecialVarValue) {
+pub unsafe fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
     unsafe {
         let tv = get_vim_var_tv(idx);
         tv_clear(tv);
@@ -193,7 +193,7 @@ pub unsafe fn set_vim_var_char(c: c_int) {
         let mut buf = [0 as c_char; 7];
         let buflen = utf_char2bytes(c, buf.as_mut_ptr());
         buf[buflen as usize] = NUL as c_char;
-        set_vim_var_string(VV_CHAR, buf.as_ptr(), buflen as ptrdiff_t);
+        set_vim_var_string(Vv::Char, buf.as_ptr(), buflen as ptrdiff_t);
     }
 }
 
@@ -202,7 +202,7 @@ pub unsafe fn set_vim_var_char(c: c_int) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is NULL or readable for `len`.
-pub unsafe fn set_vim_var_string(idx: VimVarIndex, val: *const c_char, len: ptrdiff_t) {
+pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     unsafe {
         let tv = get_vim_var_tv(idx);
         tv_clear(tv);
@@ -221,7 +221,7 @@ pub unsafe fn set_vim_var_string(idx: VimVarIndex, val: *const c_char, len: ptrd
 ///
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is NULL or a live list.
-pub unsafe fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T) {
+pub unsafe fn set_vim_var_list(idx: Vv, val: *mut list_T) {
     unsafe {
         let tv = get_vim_var_tv(idx);
         tv_clear(tv);
@@ -238,7 +238,7 @@ pub unsafe fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is NULL or a live dictionary.
-pub unsafe fn set_vim_var_dict(idx: VimVarIndex, val: *mut dict_T) {
+pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut dict_T) {
     unsafe {
         let tv = get_vim_var_tv(idx);
         tv_clear(tv);
@@ -261,7 +261,7 @@ pub unsafe fn set_vim_var_dict(idx: VimVarIndex, val: *mut dict_T) {
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is a live partial whose reference the caller
 /// hands over.
-pub unsafe fn set_vim_var_partial(idx: VimVarIndex, val: *mut partial_T) {
+pub unsafe fn set_vim_var_partial(idx: Vv, val: *mut partial_T) {
     unsafe { (*get_vim_var_tv(idx)).vval.v_partial = val }
 }
 
@@ -279,10 +279,10 @@ pub unsafe fn set_reg_var(c: c_int) {
         // Only write when it changed, to avoid the reallocation. The test
         // is against `c`, not against the name that would be stored, so
         // `set_reg_var(0)` always rewrites -- upstream's.
-        let tv = get_vim_var_tv(VV_REG);
+        let tv = get_vim_var_tv(Vv::Register);
         if (*tv).vval.v_string.is_null() || *(*tv).vval.v_string != c as c_char {
             let buf = [regname, NUL as c_char];
-            set_vim_var_string(VV_REG, buf.as_ptr(), 1);
+            set_vim_var_string(Vv::Register, buf.as_ptr(), 1);
         }
     }
 }
@@ -296,7 +296,7 @@ pub unsafe fn set_reg_var(c: c_int) {
 /// `oldval` is NULL or a string this took out earlier.
 pub unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
     unsafe {
-        let tv = get_vim_var_tv(VV_EXCEPTION);
+        let tv = get_vim_var_tv(Vv::Exception);
         if oldval.is_null() {
             return (*tv).vval.v_string;
         }
@@ -311,7 +311,7 @@ pub unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
 /// As [`v_exception`].
 pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     unsafe {
-        let tv = get_vim_var_tv(VV_THROWPOINT);
+        let tv = get_vim_var_tv(Vv::Throwpoint);
         if oldval.is_null() {
             return (*tv).vval.v_string;
         }
@@ -336,7 +336,7 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
 /// `eap` is NULL or a live command; `oldarg` is NULL or an owned string.
 pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char {
     unsafe {
-        let tv = get_vim_var_tv(VV_CMDARG);
+        let tv = get_vim_var_tv(Vv::Cmdarg);
         let oldval = (*tv).vval.v_string;
 
         'error: {
@@ -437,10 +437,10 @@ pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char 
 pub unsafe fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
     unsafe {
         if set_prevcount {
-            (*get_vim_var_tv(VV_PREVCOUNT)).vval.v_number = get_vim_var_nr(VV_COUNT);
+            (*get_vim_var_tv(Vv::Prevcount)).vval.v_number = get_vim_var_nr(Vv::Count);
         }
-        (*get_vim_var_tv(VV_COUNT)).vval.v_number = count as varnumber_T;
-        (*get_vim_var_tv(VV_COUNT1)).vval.v_number = count1 as varnumber_T;
+        (*get_vim_var_tv(Vv::Count)).vval.v_number = count as varnumber_T;
+        (*get_vim_var_tv(Vv::Count1)).vval.v_number = count1 as varnumber_T;
     }
 }
 
@@ -536,7 +536,7 @@ pub unsafe fn before_set_vvar(
 /// `dict_T` and `set_var_lval` store straight into the `dictitem_T`, so
 /// upstream never runs [`before_set_vvar`] for it and the declared type of
 /// the variable is simply replaced.  That is a crash and not only a
-/// surprise: `get_vim_var_list(VV_OLDFILES)` reads `vval.v_list` with no
+/// surprise: `get_vim_var_list(Vv::Oldfiles)` reads `vval.v_list` with no
 /// type test, so `let v:['oldfiles'] = 1` followed by `:oldfiles`
 /// dereferences the address 1.  See docket O-B14-10.
 ///
@@ -629,12 +629,12 @@ pub(crate) unsafe fn set_vvar_item(
 pub unsafe fn reset_v_option_vars() {
     unsafe {
         for idx in [
-            VV_OPTION_NEW,
-            VV_OPTION_OLD,
-            VV_OPTION_OLDLOCAL,
-            VV_OPTION_OLDGLOBAL,
-            VV_OPTION_COMMAND,
-            VV_OPTION_TYPE,
+            Vv::OptionNew,
+            Vv::OptionOld,
+            Vv::OptionOldlocal,
+            Vv::OptionOldglobal,
+            Vv::OptionCommand,
+            Vv::OptionType,
         ] {
             set_vim_var_string(idx, ptr::null(), -1);
         }

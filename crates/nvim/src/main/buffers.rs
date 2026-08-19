@@ -46,9 +46,8 @@ use crate::path::vim_FullName;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    IOSIZE, Integer, OptInt, OptVal, OptValData, OptionSetFlags, VAR_FIXED, VV_ARGF, aentry_T,
-    bufref_T, exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
-    win_T,
+    IOSIZE, Integer, OptInt, OptVal, OptValData, OptionSetFlags, VAR_FIXED, Vv, aentry_T, bufref_T,
+    exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t, win_T,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -96,7 +95,7 @@ pub(crate) unsafe fn set_argf_var() {
             }
         }
         tv_list_set_lock(list, VAR_FIXED);
-        set_vim_var_list(VV_ARGF, list);
+        set_vim_var_list(Vv::Argf, list);
     }
 }
 

@@ -49,9 +49,8 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    FAIL, IOSIZE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags,
-    VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T, linenr_T, ptrdiff_t, scid_T, sctx_T,
-    size_t,
+    FAIL, IOSIZE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, Vv,
+    aentry_T, linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
 };
 use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
 
@@ -679,7 +678,7 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
             let len = strlen((*parmp).commands[0]) + 2;
             let swcmd = xmalloc(len + 1) as *mut c_char;
             snprintf(swcmd, len + 1, c":%s\r".as_ptr(), (*parmp).commands[0]);
-            set_vim_var_string(VV_SWAPCOMMAND, swcmd, len as ptrdiff_t);
+            set_vim_var_string(Vv::Swapcommand, swcmd, len as ptrdiff_t);
             xfree(swcmd as *mut c_void);
         }
 
@@ -762,8 +761,8 @@ pub(crate) unsafe fn init_path(exename: *const c_char) {
         if os_exepath(exepath.as_mut_ptr(), &raw mut exepathlen) != 0 {
             path_guess_exepath(exename, exepath.as_mut_ptr(), size_of_val(&exepath));
         }
-        set_vim_var_string(VV_PROGPATH, exepath.as_mut_ptr(), -1 as ptrdiff_t);
-        set_vim_var_string(VV_PROGNAME, path_tail(exename), -1 as ptrdiff_t);
+        set_vim_var_string(Vv::Progpath, exepath.as_mut_ptr(), -1 as ptrdiff_t);
+        set_vim_var_string(Vv::Progname, path_tail(exename), -1 as ptrdiff_t);
     }
 }
 

@@ -39,7 +39,7 @@ use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::types::{NUL, VAR_NUMBER, VV_EXITING, VV_EXITREASON, bufref_T, tabpage_T, varnumber_T};
+use crate::types::{NUL, VAR_NUMBER, Vv, bufref_T, tabpage_T, varnumber_T};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, strlen, tcdrain};
@@ -129,12 +129,12 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
     // SAFETY: walks the tab pages, windows and buffers, each of which the
     // autocommands below may free -- hence the `bufref` liveness checks.
     unsafe {
-        set_vim_var_type(VV_EXITING, VAR_NUMBER);
-        set_vim_var_nr(VV_EXITING, exitval as varnumber_T);
+        set_vim_var_type(Vv::Exiting, VAR_NUMBER);
+        set_vim_var_nr(Vv::Exiting, exitval as varnumber_T);
 
         // `:restart` and friends set a reason of their own first.
-        if *get_vim_var_str(VV_EXITREASON) as c_int == NUL {
-            set_vim_var_string(VV_EXITREASON, c"quit".as_ptr(), 4);
+        if *get_vim_var_str(Vv::Exitreason) as c_int == NUL {
+            set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4);
         }
 
         // Every `:defer`red function still on the stack.

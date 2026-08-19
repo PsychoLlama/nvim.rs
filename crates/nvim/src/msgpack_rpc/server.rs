@@ -17,7 +17,7 @@ use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
-use crate::types::{IOSIZE, SocketWatcher, VV_SEND_SERVER, size_t, uint32_t};
+use crate::types::{IOSIZE, SocketWatcher, Vv, size_t, uint32_t};
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;
 
@@ -142,7 +142,7 @@ fn set_vservername() {
         Some(&watcher) => unsafe { watcher_addr(watcher) },
         None => core::ptr::null_mut(),
     });
-    unsafe { set_vim_var_string(VV_SEND_SERVER, default_server, -1) };
+    unsafe { set_vim_var_string(Vv::Servername, default_server, -1) };
 }
 
 pub fn server_teardown() {
@@ -298,7 +298,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
     }
 
     WATCHERS.with_mut(|watchers| watchers.push(watcher));
-    if *get_vim_var_str(VV_SEND_SERVER) == 0 {
+    if *get_vim_var_str(Vv::Servername) == 0 {
         set_vservername();
     }
     0
@@ -344,7 +344,7 @@ pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bo
     };
 
     socket_watcher_close(watcher, Some(free_server));
-    if !keep_vservername && strequal(addr.as_ptr().cast_mut(), get_vim_var_str(VV_SEND_SERVER)) {
+    if !keep_vservername && strequal(addr.as_ptr().cast_mut(), get_vim_var_str(Vv::Servername)) {
         set_vservername();
     }
     true
