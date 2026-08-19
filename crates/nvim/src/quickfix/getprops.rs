@@ -13,9 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{
-    FAIL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenMayKnow,
-};
+use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenMayKnow};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -24,9 +22,9 @@ use core::ptr;
 /// # Safety
 ///
 /// `dict` must be a live dictionary.
-unsafe fn add_nr(dict: *mut dict_T, key: &str, value: varnumber_T) -> c_int {
+unsafe fn add_nr(dict: *mut dict_T, key: &str, value: varnumber_T) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
-    unsafe { tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), value) }
+    added(unsafe { tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), value) })
 }
 
 /// Add a string under `key`. A null `value` is stored as the empty string,
@@ -35,10 +33,10 @@ unsafe fn add_nr(dict: *mut dict_T, key: &str, value: varnumber_T) -> c_int {
 /// # Safety
 ///
 /// `dict` must be a live dictionary and `value` null or NUL-terminated.
-unsafe fn add_str(dict: *mut dict_T, key: &str, value: *const c_char) -> c_int {
+unsafe fn add_str(dict: *mut dict_T, key: &str, value: *const c_char) -> Result<(), KeyTaken> {
     let value = if value.is_null() { c"".as_ptr() } else { value };
     // SAFETY: the caller's dictionary and string.
-    unsafe { tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), value) }
+    added(unsafe { tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), value) })
 }
 
 /// Add a list under `key`, which takes over the reference.
@@ -46,9 +44,9 @@ unsafe fn add_str(dict: *mut dict_T, key: &str, value: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `dict` and `list` must be live.
-unsafe fn add_list(dict: *mut dict_T, key: &str, list: *mut list_T) -> c_int {
+unsafe fn add_list(dict: *mut dict_T, key: &str, list: *mut list_T) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and list.
-    unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list) }
+    added(unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list) })
 }
 
 /// Add a copy of `tv` under `key`.
@@ -56,9 +54,9 @@ unsafe fn add_list(dict: *mut dict_T, key: &str, list: *mut list_T) -> c_int {
 /// # Safety
 ///
 /// `dict` must be live and `tv` a live value.
-unsafe fn add_tv(dict: *mut dict_T, key: &str, tv: *mut typval_T) -> c_int {
+unsafe fn add_tv(dict: *mut dict_T, key: &str, tv: *mut typval_T) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and value.
-    unsafe { tv_dict_add_tv(dict, key.as_ptr().cast(), key.len(), tv) }
+    added(unsafe { tv_dict_add_tv(dict, key.as_ptr().cast(), key.len(), tv) })
 }
 
 /// The entry of `what` under `key`, or null.
@@ -84,10 +82,16 @@ unsafe fn asked_for(what: *const dict_T, key: &str) -> bool {
 
 /// Append one entry to `list`, as the dictionary `getqflist()` reports.
 ///
+/// Cannot fail. The dictionary is fresh and each key is written once, so the
+/// only way one of the writes could be refused is a null item, which cannot
+/// happen — upstream `abort()`s there rather than reporting anything, and so
+/// does this. Answering `OK`/`FAIL` made two callers check for a failure that
+/// is not reachable.
+///
 /// # Safety
 ///
 /// `qfp` must be a live entry and `list` a live list.
-unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut list_T) -> c_int {
+unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut list_T) {
     // SAFETY: forwarded from the caller.
     unsafe {
         // Handle entries with a non-existing buffer number.
@@ -102,25 +106,24 @@ unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut list_T) -> c_int {
         // The type is one character, or NUL for "none".
         let kind = [(*qfp).qf_type, 0];
 
-        if add_nr(dict, "bufnr", bufnum as varnumber_T) == FAIL
-            || add_nr(dict, "lnum", (*qfp).qf_lnum as varnumber_T) == FAIL
-            || add_nr(dict, "end_lnum", (*qfp).qf_end_lnum as varnumber_T) == FAIL
-            || add_nr(dict, "col", (*qfp).qf_col as varnumber_T) == FAIL
-            || add_nr(dict, "end_col", (*qfp).qf_end_col as varnumber_T) == FAIL
-            || add_nr(dict, "vcol", (*qfp).qf_viscol as varnumber_T) == FAIL
-            || add_nr(dict, "nr", (*qfp).qf_nr as varnumber_T) == FAIL
-            || add_str(dict, "module", (*qfp).qf_module) == FAIL
-            || add_str(dict, "pattern", (*qfp).qf_pattern) == FAIL
-            || add_str(dict, "text", (*qfp).qf_text) == FAIL
-            || add_str(dict, "type", kind.as_ptr()) == FAIL
+        if add_nr(dict, "bufnr", bufnum as varnumber_T).is_err()
+            || add_nr(dict, "lnum", (*qfp).qf_lnum as varnumber_T).is_err()
+            || add_nr(dict, "end_lnum", (*qfp).qf_end_lnum as varnumber_T).is_err()
+            || add_nr(dict, "col", (*qfp).qf_col as varnumber_T).is_err()
+            || add_nr(dict, "end_col", (*qfp).qf_end_col as varnumber_T).is_err()
+            || add_nr(dict, "vcol", (*qfp).qf_viscol as varnumber_T).is_err()
+            || add_nr(dict, "nr", (*qfp).qf_nr as varnumber_T).is_err()
+            || add_str(dict, "module", (*qfp).qf_module).is_err()
+            || add_str(dict, "pattern", (*qfp).qf_pattern).is_err()
+            || add_str(dict, "text", (*qfp).qf_text).is_err()
+            || add_str(dict, "type", kind.as_ptr()).is_err()
             || ((*qfp).qf_user_data.v_type != VAR_UNKNOWN
-                && add_tv(dict, "user_data", &raw mut (*qfp).qf_user_data) == FAIL)
-            || add_nr(dict, "valid", (*qfp).qf_valid as varnumber_T) == FAIL
+                && add_tv(dict, "user_data", &raw mut (*qfp).qf_user_data).is_err())
+            || add_nr(dict, "valid", (*qfp).qf_valid as varnumber_T).is_err()
         {
             // Only a NULL dict_item would cause this, which cannot happen.
             abort();
         }
-        OK
     }
 }
 
@@ -137,7 +140,7 @@ pub(crate) unsafe fn get_errorlist(
     mut qf_idx: c_int,
     eidx: c_int,
     list: *mut list_T,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut qi = qi_arg;
@@ -148,23 +151,23 @@ pub(crate) unsafe fn get_errorlist(
                 win_loclist(wp)
             };
             if qi.is_null() {
-                return FAIL;
+                return Err(QfError::NoSuchList);
             }
         }
 
         if eidx < 0 {
-            return OK;
+            return Ok(());
         }
         if qf_idx == INVALID_QFIDX {
             qf_idx = (*qi).qf_curlist;
         }
         if qf_idx >= (*qi).qf_listcount {
-            return FAIL;
+            return Err(QfError::NoSuchList);
         }
 
         let qfl = qf_get_list(qi, qf_idx);
         if qf_list_empty(qfl) {
-            return FAIL;
+            return Err(QfError::NoSuchList);
         }
 
         let mut qfp = (*qfl).qf_start;
@@ -172,15 +175,16 @@ pub(crate) unsafe fn get_errorlist(
         while !got_int.get() && i <= (*qfl).qf_count && !qfp.is_null() {
             if eidx > 0 {
                 if eidx == i {
-                    return get_qfline_items(qfp, list);
+                    get_qfline_items(qfp, list);
+                    return Ok(());
                 }
-            } else if get_qfline_items(qfp, list) == FAIL {
-                return FAIL;
+            } else {
+                get_qfline_items(qfp, list);
             }
             i += 1;
             qfp = (*qfp).qf_next;
         }
-        OK
+        Ok(())
     }
 }
 
@@ -195,18 +199,18 @@ unsafe fn qf_get_list_from_lines(
     what: *mut dict_T,
     di: *mut dictitem_T,
     retdict: *mut dict_T,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         if (*di).di_tv.v_type != VAR_LIST || (*di).di_tv.vval.v_list.is_null() {
-            return FAIL;
+            return Err(QfError::BadValue);
         }
 
         let mut errorformat = p_efm.get();
         let efm_di = find(what, "efm");
         if !efm_di.is_null() {
             if (*efm_di).di_tv.v_type != VAR_STRING || (*efm_di).di_tv.vval.v_string.is_null() {
-                return FAIL;
+                return Err(QfError::BadValue);
             }
             errorformat = (*efm_di).di_tv.vval.v_string;
         }
@@ -228,13 +232,15 @@ unsafe fn qf_get_list_from_lines(
             ptr::null_mut(),
         ) > 0;
         if parsed {
-            get_errorlist(qi, ptr::null_mut(), 0, 0, l);
+            // Whether the throwaway list had entries is not this answer:
+            // parsing nothing out of the lines is still a successful read.
+            let _ = get_errorlist(qi, ptr::null_mut(), 0, 0, l);
             qf_free(qf_get_list(qi, 0));
         }
         qf_free_lists(qi);
 
-        add_list(retdict, "items", l);
-        OK
+        add_list(retdict, "items", l)?;
+        Ok(())
     }
 }
 
@@ -263,7 +269,7 @@ unsafe fn qf_winid(qi: *mut qf_info_T) -> c_int {
 /// # Safety
 ///
 /// `qi` must be null or a live stack, and `retdict` live.
-unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut dict_T) -> c_int {
+unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut dict_T) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut bufnum = 0;
@@ -321,13 +327,14 @@ unsafe fn qf_getprop_keys2flags(what: *const dict_T, loclist: bool) -> c_int {
 }
 
 /// Which list `what` names, through its `nr` or `id` key, or the current one
-/// when it names neither. Answers `INVALID_QFIDX` for a list that is not on
-/// the stack, and for a `nr`/`id` of the wrong type.
+/// when it names neither. Answers `None` for a list that is not on the stack,
+/// and for a `nr`/`id` of the wrong type — upstream's `INVALID_QFIDX`
+/// sentinel, which every caller had to know about by name.
 ///
 /// # Safety
 ///
 /// `qi` must be a live stack and `what` null or a live dictionary.
-unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut dict_T) -> c_int {
+unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut dict_T) -> Option<c_int> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut qf_idx = (*qi).qf_curlist;
@@ -366,7 +373,7 @@ unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut dict_T) -> c_int {
             }
         }
 
-        qf_idx
+        (qf_idx != INVALID_QFIDX).then_some(qf_idx)
     }
 }
 
@@ -381,50 +388,51 @@ unsafe fn qf_getprop_defaults(
     flags: c_int,
     locstack: bool,
     retdict: *mut dict_T,
-) -> c_int {
+) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let wanted = |flag: c_uint| flags & flag as c_int != 0;
-        let mut status = OK;
 
+        // `?` is upstream's `if (status == OK && ...)` ladder: the first key
+        // the dictionary refuses stops the rest from being written.
         if wanted(QF_GETLIST_TITLE) {
-            status = add_str(retdict, "title", ptr::null());
+            add_str(retdict, "title", ptr::null())?;
         }
-        if status == OK && wanted(QF_GETLIST_ITEMS) {
+        if wanted(QF_GETLIST_ITEMS) {
             let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-            status = add_list(retdict, "items", l);
+            add_list(retdict, "items", l)?;
         }
-        if status == OK && wanted(QF_GETLIST_NR) {
-            status = add_nr(retdict, "nr", 0);
+        if wanted(QF_GETLIST_NR) {
+            add_nr(retdict, "nr", 0)?;
         }
-        if status == OK && wanted(QF_GETLIST_WINID) {
-            status = add_nr(retdict, "winid", qf_winid(qi) as varnumber_T);
+        if wanted(QF_GETLIST_WINID) {
+            add_nr(retdict, "winid", qf_winid(qi) as varnumber_T)?;
         }
-        if status == OK && wanted(QF_GETLIST_CONTEXT) {
-            status = add_str(retdict, "context", ptr::null());
+        if wanted(QF_GETLIST_CONTEXT) {
+            add_str(retdict, "context", ptr::null())?;
         }
-        if status == OK && wanted(QF_GETLIST_ID) {
-            status = add_nr(retdict, "id", 0);
+        if wanted(QF_GETLIST_ID) {
+            add_nr(retdict, "id", 0)?;
         }
-        if status == OK && wanted(QF_GETLIST_IDX) {
-            status = add_nr(retdict, "idx", 0);
+        if wanted(QF_GETLIST_IDX) {
+            add_nr(retdict, "idx", 0)?;
         }
-        if status == OK && wanted(QF_GETLIST_SIZE) {
-            status = add_nr(retdict, "size", 0);
+        if wanted(QF_GETLIST_SIZE) {
+            add_nr(retdict, "size", 0)?;
         }
-        if status == OK && wanted(QF_GETLIST_TICK) {
-            status = add_nr(retdict, "changedtick", 0);
+        if wanted(QF_GETLIST_TICK) {
+            add_nr(retdict, "changedtick", 0)?;
         }
-        if status == OK && locstack && wanted(QF_GETLIST_FILEWINID) {
-            status = add_nr(retdict, "filewinid", 0);
+        if locstack && wanted(QF_GETLIST_FILEWINID) {
+            add_nr(retdict, "filewinid", 0)?;
         }
-        if status == OK && wanted(QF_GETLIST_QFBUFNR) {
-            status = qf_getprop_qfbufnr(qi, retdict);
+        if wanted(QF_GETLIST_QFBUFNR) {
+            qf_getprop_qfbufnr(qi, retdict)?;
         }
-        if status == OK && wanted(QF_GETLIST_QFTF) {
-            status = add_str(retdict, "quickfixtextfunc", ptr::null());
+        if wanted(QF_GETLIST_QFTF) {
+            add_str(retdict, "quickfixtextfunc", ptr::null())?;
         }
-        status
+        Ok(())
     }
 }
 
@@ -438,7 +446,7 @@ unsafe fn qf_getprop_filewinid(
     wp: *const win_T,
     qi: *const qf_info_T,
     retdict: *mut dict_T,
-) -> c_int {
+) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut winid: handle_T = 0;
@@ -454,21 +462,18 @@ unsafe fn qf_getprop_filewinid(
 
 /// The entries of the list, or of just entry `eidx`.
 ///
+/// An empty list is a perfectly good answer, so neither the walk's refusal
+/// nor the write's is passed on — upstream discarded both here too.
+///
 /// # Safety
 ///
 /// `qi` must be a live stack and `retdict` live.
-unsafe fn qf_getprop_items(
-    qi: *mut qf_info_T,
-    qf_idx: c_int,
-    eidx: c_int,
-    retdict: *mut dict_T,
-) -> c_int {
+unsafe fn qf_getprop_items(qi: *mut qf_info_T, qf_idx: c_int, eidx: c_int, retdict: *mut dict_T) {
     // SAFETY: forwarded from the caller.
     unsafe {
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        get_errorlist(qi, ptr::null_mut(), qf_idx, eidx, l);
-        add_list(retdict, "items", l);
-        OK
+        let _ = get_errorlist(qi, ptr::null_mut(), qf_idx, eidx, l);
+        let _ = add_list(retdict, "items", l);
     }
 }
 
@@ -478,7 +483,7 @@ unsafe fn qf_getprop_items(
 /// # Safety
 ///
 /// `qfl` must be a live list and `retdict` live.
-unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut dict_T) -> c_int {
+unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     unsafe {
         if (*qfl).qf_ctx.is_null() {
@@ -486,8 +491,9 @@ unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut dict_T) -> c_int {
         }
         let di = tv_dict_item_alloc_len(c"context".as_ptr(), "context".len());
         tv_copy((*qfl).qf_ctx, &raw mut (*di).di_tv);
-        let status = tv_dict_add(retdict, di);
-        if status == FAIL {
+        let status = added(tv_dict_add(retdict, di));
+        if status.is_err() {
+            // A refused item is still ours to free.
             tv_dict_item_free(di);
         }
         status
@@ -499,7 +505,11 @@ unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut dict_T) -> c_int {
 /// # Safety
 ///
 /// `qfl` must be a live list and `retdict` live.
-unsafe fn qf_getprop_idx(qfl: *mut qf_list_T, mut eidx: c_int, retdict: *mut dict_T) -> c_int {
+unsafe fn qf_getprop_idx(
+    qfl: *mut qf_list_T,
+    mut eidx: c_int,
+    retdict: *mut dict_T,
+) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     unsafe {
         if eidx == 0 {
@@ -517,7 +527,7 @@ unsafe fn qf_getprop_idx(qfl: *mut qf_list_T, mut eidx: c_int, retdict: *mut dic
 /// # Safety
 ///
 /// `qfl` must be a live list and `retdict` live.
-unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut dict_T) -> c_int {
+unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     unsafe {
         if (*qfl).qf_qftf_cb.type_0 == kCallbackNone {
@@ -545,7 +555,7 @@ pub(crate) unsafe fn qf_get_properties(
     wp: *mut win_T,
     what: *mut dict_T,
     retdict: *mut dict_T,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut qi = ql_info.get();
@@ -564,13 +574,17 @@ pub(crate) unsafe fn qf_get_properties(
 
         let flags = qf_getprop_keys2flags(what, !wp.is_null());
 
-        let mut qf_idx = INVALID_QFIDX;
-        if !qf_stack_empty(qi) {
-            qf_idx = qf_getprop_qfidx(qi, what);
-        }
-        if qf_stack_empty(qi) || qf_idx == INVALID_QFIDX {
-            return qf_getprop_defaults(qi, flags, !wp.is_null(), retdict);
-        }
+        let named = if qf_stack_empty(qi) {
+            None
+        } else {
+            qf_getprop_qfidx(qi, what)
+        };
+        let Some(qf_idx) = named else {
+            // `?` here is the `From<KeyTaken>` conversion: the defaults can
+            // only fail the way the dictionary layer fails.
+            qf_getprop_defaults(qi, flags, !wp.is_null(), retdict)?;
+            return Ok(());
+        };
 
         let qfl = qf_get_list(qi, qf_idx);
 
@@ -579,50 +593,50 @@ pub(crate) unsafe fn qf_get_properties(
         let di = find(what, "idx");
         if !di.is_null() {
             if (*di).di_tv.v_type != VAR_NUMBER {
-                return FAIL;
+                return Err(QfError::BadValue);
             }
             eidx = (*di).di_tv.vval.v_number as c_int;
         }
 
         let wanted = |flag: c_uint| flags & flag as c_int != 0;
-        let mut status = OK;
 
+        // As in `qf_getprop_defaults`: the first refused key stops the rest.
         if wanted(QF_GETLIST_TITLE) {
-            status = add_str(retdict, "title", (*qfl).qf_title);
+            add_str(retdict, "title", (*qfl).qf_title)?;
         }
-        if status == OK && wanted(QF_GETLIST_NR) {
-            status = add_nr(retdict, "nr", (qf_idx + 1) as varnumber_T);
+        if wanted(QF_GETLIST_NR) {
+            add_nr(retdict, "nr", (qf_idx + 1) as varnumber_T)?;
         }
-        if status == OK && wanted(QF_GETLIST_WINID) {
-            status = add_nr(retdict, "winid", qf_winid(qi) as varnumber_T);
+        if wanted(QF_GETLIST_WINID) {
+            add_nr(retdict, "winid", qf_winid(qi) as varnumber_T)?;
         }
-        if status == OK && wanted(QF_GETLIST_ITEMS) {
-            status = qf_getprop_items(qi, qf_idx, eidx, retdict);
+        if wanted(QF_GETLIST_ITEMS) {
+            qf_getprop_items(qi, qf_idx, eidx, retdict);
         }
-        if status == OK && wanted(QF_GETLIST_CONTEXT) {
-            status = qf_getprop_ctx(qfl, retdict);
+        if wanted(QF_GETLIST_CONTEXT) {
+            qf_getprop_ctx(qfl, retdict)?;
         }
-        if status == OK && wanted(QF_GETLIST_ID) {
-            status = add_nr(retdict, "id", (*qfl).qf_id as varnumber_T);
+        if wanted(QF_GETLIST_ID) {
+            add_nr(retdict, "id", (*qfl).qf_id as varnumber_T)?;
         }
-        if status == OK && wanted(QF_GETLIST_IDX) {
-            status = qf_getprop_idx(qfl, eidx, retdict);
+        if wanted(QF_GETLIST_IDX) {
+            qf_getprop_idx(qfl, eidx, retdict)?;
         }
-        if status == OK && wanted(QF_GETLIST_SIZE) {
-            status = add_nr(retdict, "size", (*qfl).qf_count as varnumber_T);
+        if wanted(QF_GETLIST_SIZE) {
+            add_nr(retdict, "size", (*qfl).qf_count as varnumber_T)?;
         }
-        if status == OK && wanted(QF_GETLIST_TICK) {
-            status = add_nr(retdict, "changedtick", (*qfl).qf_changedtick as varnumber_T);
+        if wanted(QF_GETLIST_TICK) {
+            add_nr(retdict, "changedtick", (*qfl).qf_changedtick as varnumber_T)?;
         }
-        if status == OK && !wp.is_null() && wanted(QF_GETLIST_FILEWINID) {
-            status = qf_getprop_filewinid(wp, qi, retdict);
+        if !wp.is_null() && wanted(QF_GETLIST_FILEWINID) {
+            qf_getprop_filewinid(wp, qi, retdict)?;
         }
-        if status == OK && wanted(QF_GETLIST_QFBUFNR) {
-            status = qf_getprop_qfbufnr(qi, retdict);
+        if wanted(QF_GETLIST_QFBUFNR) {
+            qf_getprop_qfbufnr(qi, retdict)?;
         }
-        if status == OK && wanted(QF_GETLIST_QFTF) {
-            status = qf_getprop_qftf(qfl, retdict);
+        if wanted(QF_GETLIST_QFTF) {
+            qf_getprop_qftf(qfl, retdict)?;
         }
-        status
+        Ok(())
     }
 }

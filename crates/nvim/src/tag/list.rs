@@ -411,7 +411,8 @@ pub(crate) unsafe fn add_llist_tags(
             c"ltag %s".as_ptr(),
             tag,
         );
-        set_errorlist(
+        // Answers `Ok` for a plain entry list; upstream discarded it too.
+        let _ = set_errorlist(
             curwin.get(),
             list,
             ' ' as c_int,

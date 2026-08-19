@@ -9,9 +9,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{
-    FAIL, OK, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-};
+use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -31,11 +29,11 @@ unsafe fn find(what: *const dict_T, key: &str) -> *mut dictitem_T {
 /// # Safety
 ///
 /// `qfl` must be a live list and `di` a live entry.
-unsafe fn qf_setprop_qftf(qfl: *mut qf_list_T, di: *mut dictitem_T) -> c_int {
+unsafe fn qf_setprop_qftf(qfl: *mut qf_list_T, di: *mut dictitem_T) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         if check_secure() {
-            return FAIL;
+            return Err(QfError::Forbidden);
         }
         callback_free(&raw mut (*qfl).qf_qftf_cb);
         let mut cb = Callback {
@@ -48,7 +46,7 @@ unsafe fn qf_setprop_qftf(qfl: *mut qf_list_T, di: *mut dictitem_T) -> c_int {
         if callback_from_typval(&raw mut cb, &raw mut (*di).di_tv) {
             (*qfl).qf_qftf_cb = cb;
         }
-        OK
+        Ok(())
     }
 }
 
@@ -212,6 +210,11 @@ unsafe fn entry_is_closer_to_target(
 /// starts a new list, `'a'` appends, `'r'` replaces the entries and `'u'`
 /// replaces them while keeping the cursor on the nearest entry.
 ///
+/// Cannot fail: a member of `list` that is not a dictionary is skipped, not
+/// refused, and every other decision here is unconditional. Upstream declared
+/// it `int` and answered `OK` on every path, which made `setqflist()` look as
+/// though adding entries could be rejected.
+///
 /// # Safety
 ///
 /// `qi` must be a live stack, `list` null or a live list, and `title`
@@ -222,7 +225,7 @@ unsafe fn qf_add_entries(
     list: *mut list_T,
     title: *mut c_char,
     action: c_int,
-) -> c_int {
+) {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut qfl = qf_get_list(qi, qf_idx);
@@ -305,11 +308,13 @@ unsafe fn qf_add_entries(
 
         // Don't update the cursor in quickfix window when appending entries.
         qf_update_buffer(qi, old_last);
-        OK
     }
 }
 
-/// Which list a `setqflist()` `what` names, through its `nr` or `id` key.
+/// Which list a `setqflist()` `what` names, through its `nr` or `id` key, or
+/// `None` for one that is not on the stack — upstream's `INVALID_QFIDX`
+/// sentinel.
+///
 /// `newlist` is both an input — whether a new list is being started — and an
 /// output, since an `nr` one past the end asks for one.
 ///
@@ -321,7 +326,7 @@ unsafe fn qf_setprop_get_qfidx(
     what: *const dict_T,
     action: c_int,
     newlist: &mut bool,
-) -> c_int {
+) -> Option<c_int> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut qf_idx = (*qi).qf_curlist;
@@ -344,7 +349,7 @@ unsafe fn qf_setprop_get_qfidx(
                         (*qi).qf_listcount - 1
                     };
                 } else if qf_idx < 0 || qf_idx >= (*qi).qf_listcount {
-                    return INVALID_QFIDX;
+                    return None;
                 } else if action != ' ' as c_int {
                     *newlist = false;
                 }
@@ -356,10 +361,10 @@ unsafe fn qf_setprop_get_qfidx(
                 } else if *newlist {
                     qf_idx = 0;
                 } else {
-                    return INVALID_QFIDX;
+                    return None;
                 }
             } else {
-                return INVALID_QFIDX;
+                return None;
             }
         }
 
@@ -369,12 +374,13 @@ unsafe fn qf_setprop_get_qfidx(
             let di = find(what, "id");
             if !di.is_null() {
                 if (*di).di_tv.v_type != VAR_NUMBER {
-                    return INVALID_QFIDX;
+                    return None;
                 }
-                return qf_id2nr(qi, (*di).di_tv.vval.v_number as c_uint);
+                let by_id = qf_id2nr(qi, (*di).di_tv.vval.v_number as c_uint);
+                return (by_id != INVALID_QFIDX).then_some(by_id);
             }
         }
-        qf_idx
+        Some(qf_idx)
     }
 }
 
@@ -388,11 +394,11 @@ unsafe fn qf_setprop_title(
     qf_idx: c_int,
     what: *const dict_T,
     di: *const dictitem_T,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         if (*di).di_tv.v_type != VAR_STRING {
-            return FAIL;
+            return Err(QfError::BadValue);
         }
         let qfl = qf_get_list(qi, qf_idx);
         xfree((*qfl).qf_title.cast());
@@ -400,7 +406,7 @@ unsafe fn qf_setprop_title(
         if qf_idx == (*qi).qf_curlist {
             qf_update_win_titlevar(qi);
         }
-        OK
+        Ok(())
     }
 }
 
@@ -414,11 +420,11 @@ unsafe fn qf_setprop_items(
     qf_idx: c_int,
     di: *mut dictitem_T,
     action: c_int,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         if (*di).di_tv.v_type != VAR_LIST {
-            return FAIL;
+            return Err(QfError::BadValue);
         }
         // The title survives the entries being replaced, so it has to be
         // copied out before `qf_add_entries` frees them.
@@ -428,9 +434,9 @@ unsafe fn qf_setprop_items(
         } else {
             action
         };
-        let retval = qf_add_entries(qi, qf_idx, (*di).di_tv.vval.v_list, title_save, action);
+        qf_add_entries(qi, qf_idx, (*di).di_tv.vval.v_list, title_save, action);
         xfree(title_save.cast());
-        retval
+        Ok(())
     }
 }
 
@@ -446,21 +452,21 @@ unsafe fn qf_setprop_items_from_lines(
     what: *const dict_T,
     di: *mut dictitem_T,
     action: c_int,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut errorformat = p_efm.get();
         let efm_di = find(what, "efm");
         if !efm_di.is_null() {
             if (*efm_di).di_tv.v_type != VAR_STRING || (*efm_di).di_tv.vval.v_string.is_null() {
-                return FAIL;
+                return Err(QfError::BadValue);
             }
             errorformat = (*efm_di).di_tv.vval.v_string;
         }
 
         // Only a List value is supported.
         if (*di).di_tv.v_type != VAR_LIST || (*di).di_tv.vval.v_list.is_null() {
-            return FAIL;
+            return Err(QfError::BadValue);
         }
 
         if action == 'r' as c_int || action == 'u' as c_int {
@@ -479,24 +485,26 @@ unsafe fn qf_setprop_items_from_lines(
             ptr::null(),
             ptr::null_mut(),
         ) >= 0;
-        if parsed { OK } else { FAIL }
+        parsed.then_some(()).ok_or(QfError::Unparsable)
     }
 }
 
 /// Attach an arbitrary value to the list, which `getqflist({'context': 1})`
 /// hands back.
 ///
+/// Cannot fail: any value at all is a legal context. Upstream declared it
+/// `int` and answered `OK`.
+///
 /// # Safety
 ///
 /// `qfl` must be a live list and `di` a live entry.
-unsafe fn qf_setprop_context(qfl: *mut qf_list_T, di: *mut dictitem_T) -> c_int {
+unsafe fn qf_setprop_context(qfl: *mut qf_list_T, di: *mut dictitem_T) {
     // SAFETY: forwarded from the caller.
     unsafe {
         tv_free((*qfl).qf_ctx);
         let ctx: *mut typval_T = xcalloc(1, size_of::<typval_T>()).cast();
         tv_copy(&raw mut (*di).di_tv, ctx);
         (*qfl).qf_ctx = ctx;
-        OK
     }
 }
 
@@ -509,7 +517,7 @@ unsafe fn qf_setprop_curidx(
     qi: *mut qf_info_T,
     qfl: *mut qf_list_T,
     di: *const dictitem_T,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut newidx = if (*di).di_tv.v_type == VAR_STRING
@@ -522,20 +530,20 @@ unsafe fn qf_setprop_curidx(
             let mut not_a_number = false;
             let idx = tv_get_number_chk(&raw const (*di).di_tv, &raw mut not_a_number) as c_int;
             if not_a_number {
-                return FAIL;
+                return Err(QfError::BadValue);
             }
             idx
         };
 
         if newidx < 1 {
-            return FAIL;
+            return Err(QfError::BadValue);
         }
         newidx = newidx.min((*qfl).qf_count);
 
         let old_qfidx = (*qfl).qf_index;
         let qf_ptr = get_nth_entry(qfl, newidx, &mut newidx);
         if qf_ptr.is_null() {
-            return FAIL;
+            return Err(QfError::BadValue);
         }
         (*qfl).qf_ptr = qf_ptr;
         (*qfl).qf_index = newidx;
@@ -544,7 +552,7 @@ unsafe fn qf_setprop_curidx(
         if (*qf_get_curlist(qi)).qf_id == (*qfl).qf_id {
             qf_win_pos_update(qi, old_qfidx);
         }
-        OK
+        Ok(())
     }
 }
 
@@ -558,14 +566,13 @@ unsafe fn qf_set_properties(
     what: *const dict_T,
     action: c_int,
     title: *mut c_char,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let mut newlist = action == ' ' as c_int || qf_stack_empty(qi);
-        let mut qf_idx = qf_setprop_get_qfidx(qi, what, action, &mut newlist);
-        if qf_idx == INVALID_QFIDX {
-            return FAIL;
-        }
+        let Some(mut qf_idx) = qf_setprop_get_qfidx(qi, what, action, &mut newlist) else {
+            return Err(QfError::NoSuchList);
+        };
 
         if newlist {
             (*qi).qf_curlist = qf_idx;
@@ -575,8 +582,10 @@ unsafe fn qf_set_properties(
         let qfl = qf_get_list(qi, qf_idx);
 
         // Each key that is present overwrites the answer, so what is
-        // reported is the last one's result, not the worst.
-        let mut retval = FAIL;
+        // reported is the last one's result, not the worst. A `what` that
+        // named none of them is `NothingToSet` — upstream's initial `FAIL`,
+        // which is why `setqflist([], 'r', {})` answers -1.
+        let mut retval = Err(QfError::NothingToSet);
         let di = find(what, "title");
         if !di.is_null() {
             retval = qf_setprop_title(qi, qf_idx, what, di);
@@ -591,7 +600,8 @@ unsafe fn qf_set_properties(
         }
         let di = find(what, "context");
         if !di.is_null() {
-            retval = qf_setprop_context(qfl, di);
+            qf_setprop_context(qfl, di);
+            retval = Ok(());
         }
         let di = find(what, "idx");
         if !di.is_null() {
@@ -602,7 +612,7 @@ unsafe fn qf_set_properties(
             retval = qf_setprop_qftf(qfl, di);
         }
 
-        if newlist || retval == OK {
+        if newlist || retval.is_ok() {
             qf_list_changed(qfl);
         }
         if newlist {
@@ -626,7 +636,7 @@ pub unsafe fn set_errorlist(
     action: c_int,
     title: *mut c_char,
     what: *mut dict_T,
-) -> c_int {
+) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     unsafe {
         let qi = if wp.is_null() {
@@ -639,7 +649,7 @@ pub unsafe fn set_errorlist(
         if action == 'f' as c_int {
             // Free the entire quickfix or location list stack.
             qf_free_stack(wp, qi);
-            return OK;
+            return Ok(());
         }
 
         if !list.is_null() && tv_list_len(list) != 0 && !what.is_null() {
@@ -647,16 +657,14 @@ pub unsafe fn set_errorlist(
                 gettext(&raw const e_invarg2 as *const c_char),
                 gettext(c"cannot have both a list and a \"what\" argument".as_ptr()),
             );
-            return FAIL;
+            return Err(QfError::BadValue);
         }
 
         incr_quickfix_busy();
         let retval = if what.is_null() {
-            let retval = qf_add_entries(qi, (*qi).qf_curlist, list, title, action);
-            if retval == OK {
-                qf_list_changed(qf_get_curlist(qi));
-            }
-            retval
+            qf_add_entries(qi, (*qi).qf_curlist, list, title, action);
+            qf_list_changed(qf_get_curlist(qi));
+            Ok(())
         } else {
             qf_set_properties(qi, what, action, title)
         };

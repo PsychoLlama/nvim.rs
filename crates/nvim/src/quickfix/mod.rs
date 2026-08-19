@@ -37,8 +37,8 @@ use crate::drawscreen::{
 };
 use crate::edit::beginline;
 use crate::eval::typval::{
-    callback_copy, callback_free, callback_put, kCallbackNone, tv_clear, tv_copy, tv_dict_add,
-    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc,
+    KeyTaken, added, callback_copy, callback_free, callback_put, kCallbackNone, tv_clear, tv_copy,
+    tv_dict_add, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
     tv_dict_get_string, tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_unref,
     tv_free, tv_get_number_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
@@ -172,6 +172,45 @@ mod setprops;
 pub use self::setprops::*;
 mod eval;
 pub use self::eval::*;
+
+/// Why a `getqflist()`/`setqflist()` request could not be carried out.
+///
+/// Vimscript sees one answer for all of these — the function returns `-1` and
+/// says nothing more — which is why upstream never distinguished them and why
+/// this type has no `Display`. The variants are for the code: `qf_*` used to
+/// be a chain of functions whose only vocabulary was `FAIL`, so the reason a
+/// request was refused stopped existing the moment it was returned.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum QfError {
+    /// The request named a list that is not on the stack: an `nr` or `id`
+    /// that matches nothing, or no stack at all.
+    NoSuchList,
+    /// A key of the `what` dictionary was given a value of a type it cannot
+    /// take — an `idx` that is not a Number, a `title` that is not a String,
+    /// `lines` that is not a List.
+    BadValue,
+    /// `lines` could not be turned into entries with the `'errorformat'` in
+    /// force.
+    Unparsable,
+    /// The `what` dictionary named nothing this understands, so there was
+    /// nothing to do. `setqflist()` reports that as a failure.
+    NothingToSet,
+    /// `'secure'` or the sandbox forbids setting a callback. The message has
+    /// already been reported.
+    Forbidden,
+    /// A key could not be written into the answer dictionary. Unreachable in
+    /// practice — the answer is built fresh and each key is written once —
+    /// but the dictionary layer is entitled to refuse and this is where its
+    /// refusal lands.
+    KeyTaken,
+}
+
+impl From<KeyTaken> for QfError {
+    fn from(_: KeyTaken) -> Self {
+        QfError::KeyTaken
+    }
+}
+
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;

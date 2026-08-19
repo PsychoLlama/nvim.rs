@@ -13,6 +13,28 @@ use super::*;
 use crate::semsg_c;
 use crate::types::{CONV_NONE, FAIL, NUL, OK};
 
+/// The dictionary already has an entry under that key — or, in a scope
+/// dictionary, the key would shadow a builtin function — so nothing was
+/// stored and the value the caller passed is still the caller's to free.
+///
+/// The `tv_dict_add_*` family is `extern "C"` and pinned by the ABI ledger,
+/// so it goes on answering `OK`/`FAIL`. This is the name that `FAIL` has, for
+/// Rust callers that convert at the call with [`added`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct KeyTaken;
+
+/// One of the `tv_dict_add_*` answers as a `Result`.
+///
+/// The conversion belongs at the FFI edge and nowhere else: a caller that
+/// writes several keys in a row wants `?`, not a `status == OK` ladder.
+pub fn added(status: ::core::ffi::c_int) -> Result<(), KeyTaken> {
+    if status == FAIL {
+        Err(KeyTaken)
+    } else {
+        Ok(())
+    }
+}
+
 /// Allocate a `dictitem_T` sized for a `key_len`-byte key, and copy the key in.
 ///
 /// The item is over-allocated so the NUL-terminated key fits in the `di_key`

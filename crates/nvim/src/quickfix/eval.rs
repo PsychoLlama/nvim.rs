@@ -10,7 +10,7 @@
 use super::*;
 use crate::semsg_c;
 use crate::types::{
-    NUL, OK, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    NUL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -144,7 +144,8 @@ unsafe fn get_qf_loc_list(
         if (*what_arg).v_type == VAR_UNKNOWN {
             tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
             if is_qf || !wp.is_null() {
-                get_errorlist(ptr::null_mut(), wp, -1, 0, (*rettv).vval.v_list);
+                // No list, or an empty one, is an empty answer, not an error.
+                let _ = get_errorlist(ptr::null_mut(), wp, -1, 0, (*rettv).vval.v_list);
             }
             return;
         }
@@ -159,7 +160,9 @@ unsafe fn get_qf_loc_list(
         }
         let d = (*what_arg).vval.v_dict;
         if !d.is_null() {
-            qf_get_properties(wp, d, (*rettv).vval.v_dict);
+            // A request that names nothing readable answers the empty
+            // dictionary that is already in `rettv`.
+            let _ = qf_get_properties(wp, d, (*rettv).vval.v_dict);
         }
     }
 }
@@ -258,7 +261,7 @@ unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval
 
         RECURSIVE.set(RECURSIVE.get() + 1);
         let l = (*list_arg).vval.v_list;
-        if set_errorlist(wp, l, action as c_int, title.cast_mut(), what) == OK {
+        if set_errorlist(wp, l, action as c_int, title.cast_mut(), what).is_ok() {
             (*rettv).vval.v_number = 0;
         }
         RECURSIVE.set(RECURSIVE.get() - 1);
