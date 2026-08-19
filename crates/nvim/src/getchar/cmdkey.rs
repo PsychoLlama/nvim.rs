@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Keys;
 use crate::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
 use crate::semsg_multiline_c;
 use crate::types::{NUL, kErrorTypeNone};
@@ -44,7 +45,7 @@ pub unsafe fn getcmdkeycmd(
         let mut cmod = 0;
         let mut aborted = false;
 
-        *no_mapping.ptr() += 1; // no mapping for these characters
+        let unmapped = Keys::unmapped(); // no mapping for these characters
         got_int.set(false);
         while c1 != NUL && !aborted {
             ga_grow(&raw mut line_ga, 32);
@@ -102,7 +103,7 @@ pub unsafe fn getcmdkeycmd(
 
             cmod = 0;
         }
-        *no_mapping.ptr() -= 1;
+        drop(unmapped);
 
         if aborted {
             ga_clear(&raw mut line_ga);
@@ -125,7 +126,7 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
         let mut c1 = -1;
         let mut aborted = false;
 
-        *no_mapping.ptr() += 1;
+        let unmapped = Keys::unmapped();
         got_int.set(false);
         while c1 != NUL && !aborted {
             ga_grow(&raw mut line_ga, 32);
@@ -138,7 +139,7 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
                 ga_append(&raw mut line_ga, c1 as u8);
             }
         }
-        *no_mapping.ptr() -= 1;
+        drop(unmapped);
 
         if aborted || discard {
             ga_clear(&raw mut line_ga);

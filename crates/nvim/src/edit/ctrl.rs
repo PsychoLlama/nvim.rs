@@ -23,6 +23,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::guard::Keys;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, FAIL, NUL};
@@ -83,8 +84,7 @@ pub(crate) unsafe fn ins_reg() {
 
         // Don't map the register name.  This also keeps the mode message
         // from being deleted when ESC is hit.
-        (*no_mapping.ptr()) += 1;
-        (*allow_keys.ptr()) += 1;
+        let raw_key = Keys::unmapped_with_codes();
         let mut regname = langmap_adjust(plain_vgetc());
         if regname == Ctrl_R || regname == Ctrl_O || regname == Ctrl_P {
             // A third key follows, for a literal register insertion.
@@ -92,8 +92,7 @@ pub(crate) unsafe fn ins_reg() {
             add_to_showcmd_c(literally);
             regname = langmap_adjust(plain_vgetc());
         }
-        (*no_mapping.ptr()) -= 1;
-        (*allow_keys.ptr()) -= 1;
+        drop(raw_key);
 
         // Don't `u_sync()` while typing the expression, or while giving an
         // error message for it; only explicitly.
@@ -184,11 +183,10 @@ pub(crate) unsafe fn ins_ctrl_g() {
 
         // Don't map the second key.  This also keeps the mode message from
         // being deleted when ESC is hit.
-        (*no_mapping.ptr()) += 1;
-        (*allow_keys.ptr()) += 1;
-        let c = plain_vgetc();
-        (*no_mapping.ptr()) -= 1;
-        (*allow_keys.ptr()) -= 1;
+        let c = {
+            let _raw_key = Keys::unmapped_with_codes();
+            plain_vgetc()
+        };
 
         match c {
             // CTRL-G k and CTRL-G <Up>: cursor up to Insstart.col.

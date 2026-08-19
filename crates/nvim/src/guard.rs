@@ -231,6 +231,22 @@ impl Allow {
         Saved::new(&allow_keys, 0)
     }
 
+    /// `no_mapping -= 1` — the inverse of [`Keys::unmapped`], for the
+    /// callee that has to read a *mapped* key back out of a caller that
+    /// had suppressed mapping (`'langmap'`, composing characters).
+    pub fn mapping() -> Bump {
+        Bump::by(&no_mapping, -1)
+    }
+
+    /// [`Allow::mapping`] for both halves of the pair — the inverse of
+    /// [`Keys::unmapped_with_codes`].
+    pub fn mapping_with_codes() -> RawKeys {
+        RawKeys {
+            _no_mapping: Bump::by(&no_mapping, -1),
+            _allow_keys: Bump::by(&allow_keys, -1),
+        }
+    }
+
     /// `emsg_off = 1` — error display off for the scope, restoring
     /// whatever nesting level was in effect rather than decrementing.
     pub fn no_emsg() -> Saved {

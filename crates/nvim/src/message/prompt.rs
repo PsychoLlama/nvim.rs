@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Keys;
 use crate::keycodes::{
     Ctrl_B, Ctrl_C, Ctrl_F, K_IGNORE, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_MIDDLEDRAG,
     K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
@@ -147,8 +148,7 @@ pub unsafe fn wait_return(redraw: c_int) {
                     // typeahead buffer. Recording is disabled for the same
                     // reason -- the character is recorded later, when it is
                     // added to the typebuf after the loop.
-                    no_mapping.set(no_mapping.get() + 1);
-                    allow_keys.set(allow_keys.get() + 1);
+                    let raw_key = Keys::unmapped_with_codes();
                     let save_reg_recording = reg_recording.get();
                     let save_scriptout = scriptout.get();
                     reg_recording.set(0);
@@ -157,8 +157,7 @@ pub unsafe fn wait_return(redraw: c_int) {
                     if had_got_int && global_busy.get() == 0 {
                         got_int.set(false);
                     }
-                    no_mapping.set(no_mapping.get() - 1);
-                    allow_keys.set(allow_keys.get() - 1);
+                    drop(raw_key);
                     reg_recording.set(save_reg_recording);
                     scriptout.set(save_scriptout);
 

@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Keys;
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
@@ -200,16 +201,14 @@ pub(crate) unsafe fn getchar_common(
         if opts.cursor == CursorFlag::Hide {
             ui_busy_start();
         }
-        *no_mapping.ptr() += 1;
-        *allow_keys.ptr() += 1;
+        let raw_key = Keys::unmapped_with_codes();
         if !opts.simplify {
             *no_reduce_keys.ptr() += 1;
         }
 
         let n = getchar_read(argvars, opts.cursor);
 
-        *no_mapping.ptr() -= 1;
-        *allow_keys.ptr() -= 1;
+        drop(raw_key);
         if !opts.simplify {
             *no_reduce_keys.ptr() -= 1;
         }

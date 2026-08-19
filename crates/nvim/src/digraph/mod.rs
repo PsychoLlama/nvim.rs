@@ -23,11 +23,11 @@ use crate::ex_getln::putcmdline;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::getchar::plain_vgetc;
 use crate::global_cell::GlobalCell;
+use crate::guard::Keys;
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::K_BS;
 use crate::main::{
-    Columns, allow_keys, cmdline_star, curbuf, curwin, emsg_skip, got_int, msg_col, no_mapping,
-    p_cpo, p_dg, p_enc,
+    Columns, cmdline_star, curbuf, curwin, emsg_skip, got_int, msg_col, p_cpo, p_dg, p_enc,
 };
 use crate::mapping::do_map;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
@@ -161,12 +161,10 @@ pub fn get_digraph_for_char(val: c_int) -> Option<[u8; 3]> {
 /// CTRL-R CTRL-K on the cmdline) and return the resulting character.
 /// Returns NUL when ESC cancels the sequence.
 pub fn get_digraph(cmdline: bool) -> c_int {
-    no_mapping.set(no_mapping.get() + 1);
-    allow_keys.set(allow_keys.get() + 1);
+    let raw_key = Keys::unmapped_with_codes();
     // SAFETY: transpiled input machinery; no digraph state is borrowed.
     let c = unsafe { plain_vgetc() };
-    no_mapping.set(no_mapping.get() - 1);
-    allow_keys.set(allow_keys.get() - 1);
+    drop(raw_key);
     if c == ESC {
         // Special keys or ESC cancel CTRL-K.
         return NUL;
@@ -183,12 +181,10 @@ pub fn get_digraph(cmdline: bool) -> c_int {
         // SAFETY: same as above.
         add_to_showcmd(c);
     }
-    no_mapping.set(no_mapping.get() + 1);
-    allow_keys.set(allow_keys.get() + 1);
+    let raw_key = Keys::unmapped_with_codes();
     // SAFETY: as for the first read.
     let cc = unsafe { plain_vgetc() };
-    no_mapping.set(no_mapping.get() - 1);
-    allow_keys.set(allow_keys.get() - 1);
+    drop(raw_key);
     if cc != ESC {
         return digraph_get(c, cc, true);
     }

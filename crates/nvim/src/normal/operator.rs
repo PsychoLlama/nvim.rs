@@ -14,10 +14,11 @@ use crate::buffer::bt_prompt;
 use crate::edit::{BeginlineOpts, beginline, cursor_down, prompt_curpos_editable};
 use crate::eval::vars::{set_reg_var, set_vim_var_string};
 use crate::getchar::{plain_vgetc, start_redo, stuffcharReadbuff};
+use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
 use crate::main::{
     VIsual_active, VIsual_select, VIsual_select_reg, arrow_used, cmdwin_type, curbuf, curwin,
-    got_int, no_mapping, reg_executing, reg_recorded, restart_edit,
+    got_int, reg_executing, reg_recorded, restart_edit,
 };
 use crate::message::emsg;
 use crate::normal::{
@@ -172,10 +173,10 @@ pub(crate) unsafe fn nv_redo_or_register(cap: *mut cmdarg_T) {
     if VIsual_select.get() && VIsual_active.get() {
         // SAFETY: reads one key with mappings suppressed.
         unsafe {
-            (*no_mapping.ptr()) += 1;
+            let unmapped = Keys::unmapped();
             let mut reg = plain_vgetc();
             langmap_adjust(&mut reg, true);
-            (*no_mapping.ptr()) -= 1;
+            drop(unmapped);
             // `"` names the unnamed register, which is spelled 0 here.
             if reg == '"' as c_int {
                 reg = 0;

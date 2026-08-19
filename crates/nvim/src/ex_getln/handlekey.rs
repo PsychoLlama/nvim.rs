@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
+use crate::guard::Keys;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, is_special,
@@ -135,8 +136,7 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOut
         let save_new_cmdpos = new_cmdpos.get();
 
         putcmdline('"' as ::core::ffi::c_char, true);
-        (*no_mapping.ptr()) += 1;
-        (*allow_keys.ptr()) += 1;
+        let raw_key = Keys::unmapped_with_codes();
         (*s).c = plain_vgetc(); // CTRL-R <char>
         let mut i = (*s).c;
         if i == Ctrl_O {
@@ -145,8 +145,7 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOut
         if i == Ctrl_R {
             (*s).c = plain_vgetc(); // CTRL-R CTRL-R <char>
         }
-        (*no_mapping.ptr()) -= 1;
-        (*allow_keys.ptr()) -= 1;
+        drop(raw_key);
 
         // Insert the result of an expression.
         new_cmdpos.set(-1);

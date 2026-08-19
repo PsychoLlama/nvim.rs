@@ -24,15 +24,16 @@ use crate::ex_cmds::do_ecmd;
 use crate::ex_getln::{ERROR_INIT, curbuf_locked};
 use crate::file_search::grab_file_name;
 use crate::getchar::{plain_vgetc, typebuf_maplen};
+use crate::guard::Keys;
 use crate::keycodes::{
     Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
     Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
     Ctrl_X, Ctrl_Z, K_BS, K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP,
 };
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, allow_keys, cmdmod, cmdwin_type, curtab, curwin,
+    Columns, KeyStuffed, KeyTyped, Rows, cmdmod, cmdwin_type, curtab, curwin,
     e_buffer_nr_not_found, e_cmdwin, e_noalt, firstwin, g_do_tagpreview, langmap_mapchar, lastwin,
-    no_mapping, p_langmap, p_lrm, p_pvh, postponed_split, prevwin, swb_flags, vgetc_busy,
+    p_langmap, p_lrm, p_pvh, postponed_split, prevwin, swb_flags, vgetc_busy,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
@@ -588,12 +589,11 @@ fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
 
 /// CTRL-W g -- read the second letter and dispatch on it.
 fn window_g_command(prenum: c_int, prenum1: c_int, xchar: c_int) {
-    no_mapping.set(no_mapping.get() + 1);
-    allow_keys.set(allow_keys.get() + 1); // no mapping for xchar, but allow key codes
+    // No mapping for xchar, but allow key codes.
+    let raw_key = Keys::unmapped_with_codes();
     let mut xchar = if xchar == NUL { read_char() } else { xchar };
     xchar = langmap_adjust(xchar);
-    no_mapping.set(no_mapping.get() - 1);
-    allow_keys.set(allow_keys.get() - 1);
+    drop(raw_key);
     show_command_char(xchar);
 
     match xchar {

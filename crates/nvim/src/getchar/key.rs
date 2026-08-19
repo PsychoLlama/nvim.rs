@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::{Allow, Keys};
 use crate::keycodes::{K_C_END, K_C_HOME, K_COMMAND, K_IGNORE, K_LUA, K_MOUSEMOVE, key_unescape};
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::c_int;
@@ -133,26 +134,17 @@ unsafe fn vgetc_from_typeahead() -> c_int {
 
         let c = loop {
             // No mapping once a modifier has been read.
-            let did_inc = mod_mask.get() != 0;
-            if did_inc {
-                *no_mapping.ptr() += 1;
-                *allow_keys.ptr() += 1;
-            }
+            let raw_key = (mod_mask.get() != 0).then(Keys::unmapped_with_codes);
             let mut c = vgetorpeek(true);
-            if did_inc {
-                *no_mapping.ptr() -= 1;
-                *allow_keys.ptr() -= 1;
-            }
+            drop(raw_key);
 
             // A special key is three bytes; get the other two.
             if c == K_SPECIAL {
-                let save_allow_keys = allow_keys.get();
-                *no_mapping.ptr() += 1;
-                allow_keys.set(0); // make sure BS is not found
+                let unmapped = Keys::unmapped();
+                let no_codes = Allow::no_key_codes(); // make sure BS is not found
                 let second = vgetorpeek(true);
                 c = vgetorpeek(true);
-                *no_mapping.ptr() -= 1;
-                allow_keys.set(save_allow_keys);
+                drop((unmapped, no_codes));
                 if second == KS_MODIFIER {
                     mod_mask.set(c);
                     continue;
@@ -164,7 +156,7 @@ unsafe fn vgetc_from_typeahead() -> c_int {
             // This loops until every one of them has arrived.
             let n = mb_byte2len_check(c);
             if n > 1 {
-                *no_mapping.ptr() += 1;
+                let unmapped = Keys::unmapped();
                 let mut buf = [0u8; MB_MAXBYTES + 1];
                 buf[0] = c as u8;
                 for byte in &mut buf[1..n] {
@@ -176,7 +168,7 @@ unsafe fn vgetc_from_typeahead() -> c_int {
                         vgetorpeek(true); // skip KE_FILLER
                     }
                 }
-                *no_mapping.ptr() -= 1;
+                drop(unmapped);
                 c = utf_ptr2char(buf.as_ptr().cast());
             }
 
@@ -349,9 +341,9 @@ pub unsafe fn char_avail() -> bool {
         if test_disable_char_avail.get() {
             return false;
         }
-        *no_mapping.ptr() += 1;
+        let unmapped = Keys::unmapped();
         let c = vpeekc();
-        *no_mapping.ptr() -= 1;
+        drop(unmapped);
         c != NUL
     }
 }

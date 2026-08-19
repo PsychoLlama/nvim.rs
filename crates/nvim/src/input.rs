@@ -11,11 +11,12 @@
 use crate::eval::typval::kCallbackNone;
 use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::{fix_input_buffer, merge_modifiers};
+use crate::guard::Keys;
 use crate::highlight_group::HLF_R;
 use crate::keycodes::{Ctrl_C, K_IGNORE, K_LEFTMOUSE, K_SPECIAL, KS_MODIFIER, key_unescape};
 use crate::main::{
-    IObuff, State, allow_keys, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask,
-    msg_row, msg_scrolled, need_wait_return, no_mapping, no_wait_return,
+    IObuff, State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row,
+    msg_scrolled, need_wait_return, no_wait_return,
 };
 use crate::mbyte::{utf_ptr2char, utf8len_tab};
 use crate::memory::{xfree, xstrdup};
@@ -245,8 +246,8 @@ pub unsafe fn prompt_for_input(
     // SAFETY: main-thread editor call.
     unsafe { ui_flush() };
 
-    no_mapping.set(no_mapping.get() + 1); // Don't map prompt input.
-    allow_keys.set(allow_keys.get() + 1); // Allow special keys.
+    // Don't map prompt input, but do allow special keys.
+    let raw_key = Keys::unmapped_with_codes();
     // SAFETY: the caller's prompt and mouse flag; the answer is an owned
     // NUL-terminated string, freed here.
     let resp = unsafe {
@@ -261,8 +262,7 @@ pub unsafe fn prompt_for_input(
             mouse_used,
         )
     };
-    allow_keys.set(allow_keys.get() - 1);
-    no_mapping.set(no_mapping.get() - 1);
+    drop(raw_key);
 
     if !resp.is_null() {
         // SAFETY: non-null, so it is the owned answer.

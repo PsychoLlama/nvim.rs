@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Keys;
 use crate::keycodes::key_unescape;
 use crate::types::{NUL, kErrorTypeNone};
 use core::ffi::{c_char, c_int};
@@ -124,7 +125,7 @@ pub unsafe fn paste_repeat(count: c_int) {
         };
         let mut aborted = false;
 
-        *no_mapping.ptr() += 1;
+        let unmapped = Keys::unmapped();
         got_int.set(false);
         while !aborted {
             ga_grow(&raw mut ga, 32);
@@ -149,7 +150,7 @@ pub unsafe fn paste_repeat(count: c_int) {
             }
             aborted = got_int.get();
         }
-        *no_mapping.ptr() -= 1;
+        drop(unmapped);
 
         let str = String_0::from_raw_parts(ga.ga_data.cast(), ga.ga_len as usize);
         let mut arena: Arena = ARENA_EMPTY;

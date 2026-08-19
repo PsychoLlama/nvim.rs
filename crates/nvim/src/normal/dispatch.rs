@@ -24,17 +24,18 @@ use crate::getchar::{
     beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
     typebuf_maplen, ungetchars, vpeekc, vungetc,
 };
+use crate::guard::{Allow, Keys};
 use crate::keycodes::{
     Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT,
     K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_UP, K_ZERO, KE_C_LEFT, KE_C_RIGHT, KE_EVENT,
     KE_IGNORE, KE_KDEL, KE_MOUSEMOVE, simplify_key,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, State, VIsual_active, VIsual_select, VIsual_select_reg, allow_keys,
-    clear_cmdline, curbuf, curwin, did_cursorhold, fdo_flags, finish_op, km_startsel,
-    langmap_mapchar, mod_mask, mode_displayed, motion_force, msg_col, msg_didout, msg_nowait,
-    no_mapping, no_u_sync, no_zero_mapping, opcount, p_langmap, p_lrm, p_tm, p_ttm,
-    restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    KeyStuffed, KeyTyped, State, VIsual_active, VIsual_select, VIsual_select_reg, clear_cmdline,
+    curbuf, curwin, did_cursorhold, fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask,
+    mode_displayed, motion_force, msg_col, msg_didout, msg_nowait, no_u_sync, no_zero_mapping,
+    opcount, p_langmap, p_lrm, p_tm, p_ttm, restart_VIsual_select, restart_edit, vgetc_busy,
+    vgetc_char, vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
@@ -278,7 +279,7 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
     // SAFETY: `s` is the caller's live state; every write to
     // `nchar_composing` is bounded by its own length below.
     unsafe {
-        (*no_mapping.ptr()) -= 1;
+        let mapped = Allow::mapping();
         let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
         let mut prev_code = (*s).ca.nchar;
         loop {
@@ -308,7 +309,7 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
             prev_code = (*s).c;
         }
         (*s).ca.nchar_composing[(*s).ca.nchar_len as usize] = NUL as c_char;
-        (*no_mapping.ptr()) += 1;
+        drop(mapped);
         // The keys are recorded for a redo, not fed through undo syncing.
         (*no_u_sync.ptr()) += 1;
         gotchars_ignore();
@@ -321,8 +322,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
     // SAFETY: `s` is the caller's live state and `s.idx` is a valid row.
     unsafe {
         // Nothing read here is a mapping or a command; it is an argument.
-        (*no_mapping.ptr()) += 1;
-        (*allow_keys.ptr()) += 1;
+        let _raw_key = Keys::unmapped_with_codes();
         did_cursorhold.set(true);
 
         let (slot, lit, repl) = additional_char_slot(s);
@@ -341,16 +341,12 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
             // A language-mapped argument is read *with* mappings on, which is
             // the whole point of 'iminsert' being lmap.
             let langmap_active = lang && (*curbuf.get()).b_p_iminsert == B_IMODE_LMAP as OptInt;
+            let mapped = langmap_active.then(Allow::mapping_with_codes);
             if langmap_active {
-                (*no_mapping.ptr()) -= 1;
-                (*allow_keys.ptr()) -= 1;
                 State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
             }
             *cp = plain_vgetc();
-            if langmap_active {
-                (*no_mapping.ptr()) += 1;
-                (*allow_keys.ptr()) += 1;
-            }
+            drop(mapped);
             State.set(MODE_NORMAL_BUSY);
             (*s).need_flushbuf |= add_to_showcmd(*cp);
 
@@ -394,9 +390,6 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
                 read_composing_tail(s);
             }
         }
-
-        (*no_mapping.ptr()) -= 1;
-        (*allow_keys.ptr()) -= 1;
     }
 }
 
@@ -453,20 +446,14 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
             if (*s).toplevel && readbuf1_empty() {
                 set_vcount_ca(&raw mut (*s).ca, &mut (*s).set_prevcount);
             }
-            if (*s).ctrl_w {
-                (*no_mapping.ptr()) += 1;
-                (*allow_keys.ptr()) += 1;
-            }
+            let raw_key = (*s).ctrl_w.then(Keys::unmapped_with_codes);
             // A '0' here is a count digit, not the "go to column 0" command,
             // so it must not be mapped.
             (*no_zero_mapping.ptr()) += 1;
             (*s).c = plain_vgetc();
             langmap_adjust(&mut (*s).c, true);
             (*no_zero_mapping.ptr()) -= 1;
-            if (*s).ctrl_w {
-                (*no_mapping.ptr()) -= 1;
-                (*allow_keys.ptr()) -= 1;
-            }
+            drop(raw_key);
             (*s).need_flushbuf |= add_to_showcmd((*s).c);
         }
 
@@ -476,12 +463,10 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
             (*s).ctrl_w = true;
             (*s).ca.opcount = (*s).ca.count0;
             (*s).ca.count0 = 0;
-            (*no_mapping.ptr()) += 1;
-            (*allow_keys.ptr()) += 1;
+            let raw_key = Keys::unmapped_with_codes();
             (*s).c = plain_vgetc();
             langmap_adjust(&mut (*s).c, true);
-            (*no_mapping.ptr()) -= 1;
-            (*allow_keys.ptr()) -= 1;
+            drop(raw_key);
             (*s).need_flushbuf |= add_to_showcmd((*s).c);
             return true;
         }
@@ -866,17 +851,13 @@ pub(crate) unsafe fn clearopbeep(oap: *mut oparg_T) {
 /// 'langmap' handled the way a command character wants them, and show it in
 /// the 'showcmd' area.
 pub(crate) unsafe fn read_command_char() -> c_int {
-    // SAFETY: adjusts the two counters that suppress mapping around one read.
-    unsafe {
-        (*no_mapping.ptr()) += 1;
-        (*allow_keys.ptr()) += 1;
-        let mut c = plain_vgetc();
-        langmap_adjust(&mut c, true);
-        (*no_mapping.ptr()) -= 1;
-        (*allow_keys.ptr()) -= 1;
-        add_to_showcmd(c);
-        c
-    }
+    let raw_key = Keys::unmapped_with_codes();
+    // SAFETY: transpiled input machinery, plain value arguments.
+    let mut c = unsafe { plain_vgetc() };
+    langmap_adjust(&mut c, true);
+    drop(raw_key);
+    add_to_showcmd(c);
+    c
 }
 
 /// Open a fold the cursor has landed in, if the 'foldopen' flag for this kind

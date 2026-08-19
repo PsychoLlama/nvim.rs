@@ -25,6 +25,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::guard::Keys;
 use crate::keycodes::{K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE, K_NOP};
 use crate::r#move::WinValid;
 use crate::types::{FAIL, NUL, OK};
@@ -490,11 +491,10 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
         // Anything else after CTRL-\ is put back and the CTRL-\ inserted.
         if (*s).c == Ctrl_BSL {
             ins_redraw(false);
-            (*no_mapping.ptr()) += 1;
-            (*allow_keys.ptr()) += 1;
-            (*s).c = plain_vgetc();
-            (*no_mapping.ptr()) -= 1;
-            (*allow_keys.ptr()) -= 1;
+            (*s).c = {
+                let _raw_key = Keys::unmapped_with_codes();
+                plain_vgetc()
+            };
             if (*s).c != Ctrl_N && (*s).c != Ctrl_G && (*s).c != Ctrl_O {
                 vungetc((*s).c);
                 (*s).c = Ctrl_BSL;

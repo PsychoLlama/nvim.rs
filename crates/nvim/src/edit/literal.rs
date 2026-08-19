@@ -22,6 +22,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::guard::Keys;
 use crate::types::{FAIL, NUL, OK};
 
 /// Handle a CTRL-V or CTRL-Q typed in Insert mode.
@@ -81,7 +82,7 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
         let mut octal = false;
         let mut unicode = 0;
 
-        (*no_mapping.ptr()) += 1; // don't map the next key hits
+        let unmapped = Keys::unmapped(); // don't map the next key hits
         let mut cc = 0;
         let mut i = 0;
         let mut nc;
@@ -159,7 +160,7 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
             cc = '\n' as c_int; // NUL is stored as NL
         }
 
-        (*no_mapping.ptr()) -= 1;
+        drop(unmapped);
         if nc != 0 {
             vungetc(nc);
             // A character typed with i_CTRL-V_digit cannot have modifiers.
@@ -256,11 +257,10 @@ pub(crate) unsafe fn ins_digraph() -> c_int {
             add_to_showcmd_c(Ctrl_K);
         }
 
-        (*no_mapping.ptr()) += 1;
-        (*allow_keys.ptr()) += 1;
-        let mut c = plain_vgetc();
-        (*no_mapping.ptr()) -= 1;
-        (*allow_keys.ptr()) -= 1;
+        let mut c = {
+            let _raw_key = Keys::unmapped_with_codes();
+            plain_vgetc()
+        };
         if did_putchar {
             // If the line fits in 'columns' the `?` is at the start of the
             // next line and the redraw will not have removed it.
@@ -285,11 +285,10 @@ pub(crate) unsafe fn ins_digraph() -> c_int {
                 add_to_showcmd_c(c);
             }
 
-            (*no_mapping.ptr()) += 1;
-            (*allow_keys.ptr()) += 1;
-            let cc = plain_vgetc();
-            (*no_mapping.ptr()) -= 1;
-            (*allow_keys.ptr()) -= 1;
+            let cc = {
+                let _raw_key = Keys::unmapped_with_codes();
+                plain_vgetc()
+            };
             if did_putchar {
                 edit_unputchar();
             }
