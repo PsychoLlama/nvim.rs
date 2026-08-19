@@ -28,6 +28,10 @@ and this project adheres to [CalVer](https://calver.org/).
 - Gave most of the editor's internals ordinary Rust signatures: the C
   calling convention now survives only where something outside the crate
   really calls in. Nothing observable changed.
+- Rewrote every one of the API's 212 entry points to answer with a result
+  instead of filling in an error the caller had to remember to look at.
+  Every method keeps its name, its arguments and its documented behaviour.
+  Nothing observable changed.
 
 ## [2026.08.18-0975a8efd3]
 
