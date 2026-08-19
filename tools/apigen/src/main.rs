@@ -180,7 +180,9 @@ impl RetType {
 /// ```
 ///
 /// The first reports failure through an out-parameter the caller has to
-/// inspect afterwards; the second through its result. Everything downstream
+/// inspect afterwards; the second through its result. A function that cannot
+/// fail simply drops the `Error` from whichever shape it is in. Everything
+/// downstream
 /// — the RPC wrapper, the Lua binding, the metadata — sees the same `params`
 /// and the same `ret` either way; only [`ApiFn::fallible`] differs, and only
 /// the shape of the call the wrappers emit follows from it.
@@ -508,10 +510,16 @@ fn api_sources(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
-/// Collect the API functions in `<root>/src/api/`: every
-/// `pub unsafe extern "C" fn`, plus every `pub [unsafe] fn` that answers with
-/// a `Result<_, Error>` — the two shapes [`ApiFn`] documents. Anything else a
+/// Collect the API functions in `<root>/src/api/`: every `pub fn` the spec
+/// names, in either of the two shapes [`ApiFn`] documents. Anything else a
 /// source file holds is support code, and is passed over.
+///
+/// The spec is what says which functions are API — it always was, since a
+/// function it does not name gets no wrapper — so it is also what recognises
+/// them. The signature only has to be *one of the two shapes*, which is why
+/// an infallible entry point (`nvim_win_is_valid`, `nvim_get_current_buf`, …)
+/// can be a plain `pub fn` rather than having to keep a calling convention it
+/// has no C caller for.
 ///
 /// An API source file over the tree's 1,000-line cap is carved into
 /// `api/<stem>/mod.rs` plus `api/<stem>/*.rs`, with the parent re-exporting its
@@ -520,8 +528,9 @@ fn api_sources(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
 /// *top-level* stem, however deep the function itself lives: it is what the
 /// generated `use` lines name and what the per-module wrapper split is keyed
 /// on, so a carve moves no wrapper.
-fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
+fn collect_api_fns(root: &Path, specs: &[Spec]) -> Result<BTreeMap<String, ApiFn>, String> {
     let dir = root.join("src/api");
+    let named: BTreeSet<&str> = specs.iter().map(|s| s.name.as_str()).collect();
     let mut out: BTreeMap<String, ApiFn> = BTreeMap::new();
     let mut entries: Vec<PathBuf> = Vec::new();
     api_sources(&dir, &mut entries)?;
@@ -541,18 +550,13 @@ fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
             if !matches!(f.vis, syn::Visibility::Public(_)) {
                 continue;
             }
+            let name = f.sig.ident.to_string();
+            if !named.contains(name.as_str()) {
+                continue;
+            }
             let Some((ret, fallible)) = ret_type(&f.sig.output) else {
                 continue;
             };
-            // The transpiled shape is recognised by its calling convention;
-            // the converted one by its `Result`, which no support function in
-            // an API source file returns.
-            let transpiled = f.sig.unsafety.is_some()
-                && matches!(&f.sig.abi, Some(abi) if abi.name.as_ref().is_none_or(|n| n.value() == "C"));
-            if !transpiled && !fallible {
-                continue;
-            }
-            let name = f.sig.ident.to_string();
             // A `Result` is not FFI-safe, so a converted function cannot keep
             // the calling convention it no longer needs.
             if fallible && f.sig.abi.is_some() {
@@ -4071,9 +4075,9 @@ fn run() -> Result<(), String> {
     let metadata_file = metadata_file.ok_or("--metadata-file is required")?;
     let config = config.ok_or("--rustfmt-config is required")?;
 
-    let api = collect_api_fns(&root)?;
-    let keysets = collect_keysets(&root)?;
     let specs = parse_spec(&spec_path)?;
+    let api = collect_api_fns(&root, &specs)?;
+    let keysets = collect_keysets(&root)?;
     let sidecar = parse_sidecar(&metadata_spec)?;
     let sizes: BTreeMap<String, usize> =
         keysets.iter().map(|k| (k.name.clone(), k.len())).collect();
