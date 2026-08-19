@@ -14,7 +14,6 @@ use core::ptr;
 use super::marker::*;
 use super::*;
 use crate::pos::MAXLNUM;
-use crate::types::{kNone, kTrue};
 
 /// Close fold for current window at position "pos".
 /// Repeat "count" times.
@@ -306,7 +305,7 @@ pub unsafe fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
         (*wp).w_fold_manual = true;
     }
     (*fp_0).fd_flags = FD_CLOSED as c_int as c_char;
-    (*fp_0).fd_small = kNone;
+    (*fp_0).fd_small = None;
     changed_window_setting(wp);
 }
 
@@ -554,7 +553,7 @@ pub(super) unsafe fn foldOpenNested(mut fpr: *mut fold_T) {
 /// `use_levelp` — true: outer fold had FD_LEVEL
 /// `fp` — fold to check
 /// `level` — folding depth
-/// `maybe_smallp` — true: outer this had fd_small == kNone
+/// `maybe_smallp` — true: the outer fold had no `fd_small` answer yet
 /// `lnum_off` — line number offset for fp->fd_top
 /// Returns true if fold is closed
 pub(super) unsafe fn check_closed(
@@ -574,15 +573,15 @@ pub(super) unsafe fn check_closed(
     } else if (*fp).fd_flags as c_int == FD_CLOSED as c_int {
         closed = true;
     }
-    if (*fp).fd_small as c_int == kNone as c_int {
+    if (*fp).fd_small.is_none() {
         *maybe_smallp = true;
     }
     if closed {
         if *maybe_smallp {
-            (*fp).fd_small = kNone;
+            (*fp).fd_small = None;
         }
         checkSmall(wp, fp, lnum_off);
-        if (*fp).fd_small as c_int == kTrue as c_int {
+        if (*fp).fd_small == Some(true) {
             closed = false;
         }
     }

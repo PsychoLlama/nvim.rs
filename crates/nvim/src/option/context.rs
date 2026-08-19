@@ -17,13 +17,13 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Error, FAIL, OptIndex, OptScope, OptVal, OptValData, OptionSetFlags, aco_save_T, buf_T,
-    kErrorTypeException, kErrorTypeNone, kFalse, scid_T, switchwin_T, win_T,
+    Error, FAIL, OptIndex, OptScope, OptVal, OptionSetFlags, aco_save_T, buf_T,
+    kErrorTypeException, kErrorTypeNone, scid_T, switchwin_T, win_T,
 };
 use crate::window::win_find_tabpage;
 
 use super::{
-    get_option_value, kOptScopeBuf, kOptScopeWin, kOptValTypeNil, set_option_direct,
+    NIL_OPTVAL, get_option_value, kOptScopeBuf, kOptScopeWin, set_option_direct,
     set_option_value_handle_tty,
 };
 
@@ -170,10 +170,7 @@ pub unsafe fn get_option_value_for(
     let switched = unsafe { ctx.enter(from, err) };
     // SAFETY: `err` is valid.
     if unsafe { (*err).type_0 } != kErrorTypeNone {
-        return OptVal {
-            type_0: kOptValTypeNil,
-            data: OptValData { boolean: kFalse },
-        };
+        return NIL_OPTVAL;
     }
     let value = get_option_value(opt_idx, opt_flags);
     if switched {

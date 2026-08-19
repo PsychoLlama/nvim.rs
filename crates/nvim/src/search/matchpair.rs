@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{NUL, kFalse, kNone, kTrue};
+use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -464,9 +464,9 @@ struct Walk {
     /// 1 = yes.
     do_quotes: c_int,
     inquote: bool,
-    /// Whether the *start* position was inside quotes; `kNone` until the
+    /// Whether the *start* position was inside quotes; `None` until the
     /// first line has been counted.
-    start_in_quotes: TriState,
+    start_in_quotes: Option<bool>,
     /// Nesting depth, and where the innermost `/*` was found.
     count: c_int,
     match_pos: pos_T,
@@ -678,10 +678,10 @@ impl Walk {
             self.inquote = false;
             if *ptr.offset(-1) as c_int == '\\' as c_int {
                 self.do_quotes = 1;
-                if self.start_in_quotes == kNone {
+                if self.start_in_quotes.is_none() {
                     // Do we need to use at_start here?
                     self.inquote = true;
-                    self.start_in_quotes = kTrue;
+                    self.start_in_quotes = Some(true);
                 } else if self.backwards {
                     self.inquote = true;
                 }
@@ -695,10 +695,10 @@ impl Walk {
                     == '\\' as c_int
             {
                 self.do_quotes = 1;
-                if self.start_in_quotes == kNone {
+                if self.start_in_quotes.is_none() {
                     self.inquote = at_start != 0;
                     if self.inquote {
-                        self.start_in_quotes = kTrue;
+                        self.start_in_quotes = Some(true);
                     }
                 } else if !self.backwards {
                     self.inquote = true;
@@ -763,7 +763,7 @@ impl Walk {
                     || *self.linep.offset(self.pos.col as isize - 1) as c_int != '\\' as c_int
                 {
                     self.inquote = false;
-                    self.start_in_quotes = kFalse;
+                    self.start_in_quotes = Some(false);
                 }
                 return Step::Next;
             }
@@ -777,7 +777,7 @@ impl Walk {
                     }
                     if ((self.pos.col - 1 - col) & 1) == 0 {
                         self.inquote = !self.inquote;
-                        self.start_in_quotes = kFalse;
+                        self.start_in_quotes = Some(false);
                     }
                 }
                 return Step::Next;
@@ -806,7 +806,7 @@ impl Walk {
 
             // Check for a match outside of quotes, and inside of quotes
             // when the start position is inside quotes too.
-            if (!self.inquote || self.start_in_quotes == kTrue)
+            if (!self.inquote || self.start_in_quotes == Some(true))
                 && (c == target.initc || c == target.findc)
             {
                 let bslcnt = if cpo_bsl {
@@ -886,7 +886,7 @@ unsafe fn find_match(
             maxtravel,
             do_quotes: -1,
             inquote: false,
-            start_in_quotes: kNone,
+            start_in_quotes: None,
             count: 0,
             match_pos: pos_T::default(),
         };
@@ -937,8 +937,8 @@ unsafe fn find_match(
             } else if walk.do_quotes == -1 {
                 walk.count_quotes();
             }
-            if walk.start_in_quotes == kNone {
-                walk.start_in_quotes = kFalse;
+            if walk.start_in_quotes.is_none() {
+                walk.start_in_quotes = Some(false);
             }
 
             match walk.match_char(&target, cpo_match, cpo_bsl) {

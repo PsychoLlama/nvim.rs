@@ -13,22 +13,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
-use crate::types::{OK, OptionSetFlags, kFalse, kTrue};
+use crate::types::{OK, OptionSetFlags};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;
-
-/// `BOOLEAN_OPTVAL`. There is no constructor for these in the port yet — the
-/// transpile spells the literal out at every call site, tree-wide.
-const fn bool_optval(value: bool) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeBoolean,
-        data: OptValData {
-            boolean: if value { kTrue } else { kFalse },
-        },
-    }
-}
 
 /// `STATIC_CSTR_AS_OPTVAL`: an option value borrowed from a string literal.
 fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
@@ -375,11 +365,11 @@ unsafe fn pum_show_info(
                 if res == OK {
                     // A new, empty, throwaway buffer.
                     for (option, value) in [
-                        (kOptSwapfile, bool_optval(false)),
-                        (kOptBuflisted, bool_optval(false)),
+                        (kOptSwapfile, boolean_optval(Some(false))),
+                        (kOptBuflisted, boolean_optval(Some(false))),
                         (kOptBuftype, static_optval(c"nofile")),
                         (kOptBufhidden, static_optval(c"wipe")),
-                        (kOptDiff, bool_optval(false)),
+                        (kOptDiff, boolean_optval(Some(false))),
                     ] {
                         set_option_value_give_err(option, value, OptionSetFlags::LOCAL);
                     }

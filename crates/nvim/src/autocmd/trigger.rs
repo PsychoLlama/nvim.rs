@@ -273,19 +273,17 @@ unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
             false,
             ::core::ptr::null_mut(),
         );
-        pending_vimresume.set(kFalse);
+        pending_vimresume.set(SuspendLatch::Idle);
     }
 }
 
 /// Fire `VimSuspend`/`VimResume`, at most once per suspension.
 ///
-/// `pending_vimresume` is the three-state latch that makes that true:
-/// `kFalse` nothing pending, `kNone` an event is being fired right now,
-/// `kTrue` a resume is owed.
+/// [`SuspendLatch`] is what makes that true.
 pub unsafe fn may_trigger_vim_suspend_resume(suspend: bool) {
     unsafe {
-        if suspend && pending_vimresume.get() == kFalse {
-            pending_vimresume.set(kNone);
+        if suspend && pending_vimresume.get() == SuspendLatch::Idle {
+            pending_vimresume.set(SuspendLatch::Firing);
             apply_autocmds(
                 EVENT_VIMSUSPEND,
                 ::core::ptr::null_mut(),
@@ -293,9 +291,9 @@ pub unsafe fn may_trigger_vim_suspend_resume(suspend: bool) {
                 false,
                 ::core::ptr::null_mut(),
             );
-            pending_vimresume.set(kTrue);
-        } else if !suspend && pending_vimresume.get() == kTrue {
-            pending_vimresume.set(kNone);
+            pending_vimresume.set(SuspendLatch::ResumeOwed);
+        } else if !suspend && pending_vimresume.get() == SuspendLatch::ResumeOwed {
+            pending_vimresume.set(SuspendLatch::Firing);
             multiqueue_put_event(
                 (*main_loop.ptr()).events,
                 Event {

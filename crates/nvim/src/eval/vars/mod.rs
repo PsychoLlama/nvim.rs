@@ -76,23 +76,23 @@ use crate::search::set_search_direction;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
     BoolVarValue, CMD_const, CMD_lockvar, EvalFuncData, GRegFlags, OptIndex, OptInt, OptVal,
-    OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, TriState,
-    VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
-    VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER,
-    VAR_TYPE_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_CC_FROM, VV_CC_TO, VV_CHAR, VV_CMDARG,
-    VV_COMPAT, VV_COMPLETED_ITEM, VV_COUNT, VV_COUNT1, VV_ECHOSPACE, VV_ERRORS, VV_EVENT,
-    VV_EXCEPTION, VV_EXITING, VV_FALSE, VV_FNAME_DIFF, VV_FNAME_IN, VV_FNAME_NEW, VV_FNAME_OUT,
-    VV_HLSEARCH, VV_LUA, VV_MAXCOL, VV_MSGPACK_TYPES, VV_NULL, VV_NUMBERMAX, VV_NUMBERMIN,
-    VV_NUMBERSIZE, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL,
-    VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, VV_PREVCOUNT, VV_REG, VV_RO, VV_RO_SBX, VV_SEARCHFORWARD,
-    VV_STDERR, VV_THROWPOINT, VV_TRUE, VV_TYPE_BLOB, VV_TYPE_BOOL, VV_TYPE_DICT, VV_TYPE_FLOAT,
-    VV_TYPE_FUNC, VV_TYPE_LIST, VV_TYPE_NUMBER, VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG,
-    VarType, VimVarIndex, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T,
-    garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kFalse, kListLenUnknown,
-    kNone, kSpecialVarNull, kTrue, list_T, listitem_T, lval_T, partial_T, ptrdiff_t, scid_T,
-    scriptitem_T, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
-    typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
+    OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, VAR_BLOB,
+    VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
+    VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, VV_CC_FROM, VV_CC_TO, VV_CHAR, VV_CMDARG, VV_COMPAT,
+    VV_COMPLETED_ITEM, VV_COUNT, VV_COUNT1, VV_ECHOSPACE, VV_ERRORS, VV_EVENT, VV_EXCEPTION,
+    VV_EXITING, VV_FALSE, VV_FNAME_DIFF, VV_FNAME_IN, VV_FNAME_NEW, VV_FNAME_OUT, VV_HLSEARCH,
+    VV_LUA, VV_MAXCOL, VV_MSGPACK_TYPES, VV_NULL, VV_NUMBERMAX, VV_NUMBERMIN, VV_NUMBERSIZE,
+    VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL,
+    VV_OPTION_TYPE, VV_PREVCOUNT, VV_REG, VV_RO, VV_RO_SBX, VV_SEARCHFORWARD, VV_STDERR,
+    VV_THROWPOINT, VV_TRUE, VV_TYPE_BLOB, VV_TYPE_BOOL, VV_TYPE_DICT, VV_TYPE_FLOAT, VV_TYPE_FUNC,
+    VV_TYPE_LIST, VV_TYPE_NUMBER, VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG, VarType,
+    VimVarIndex, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T, garray_T,
+    hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown, kSpecialVarNull,
+    list_T, listitem_T, lval_T, partial_T, ptrdiff_t, scid_T, scriptitem_T, scriptvar_T, size_t,
+    ssize_t, switchwin_T, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T,
+    win_T,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -191,12 +191,6 @@ pub const AUTOLOAD_CHAR: c_char = b'#' as c_char;
 /// a real length: translate the name and measure it, or just measure it.
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX - 1;
-
-/// The `OptVal` that names no value: upstream's `NIL_OPTVAL`.
-pub(crate) const NIL_OPTVAL: OptVal = OptVal {
-    type_0: kOptValTypeNil,
-    data: OptValData { boolean: kFalse },
-};
 
 /// A zeroed `lval_T`, which is what `get_lval` expects to be handed.
 pub(crate) const LVAL_INITIAL_VALUE: lval_T = lval_T {

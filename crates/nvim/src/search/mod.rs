@@ -79,8 +79,8 @@ use crate::state::MODE_SHOWMATCH;
 use crate::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, TriState,
-    buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T, magic_T,
+    Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, buf_T,
+    cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T, magic_T,
     oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t,
     typval_T, varnumber_T, win_T,
 };

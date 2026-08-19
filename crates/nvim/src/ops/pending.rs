@@ -108,7 +108,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
         check_pos((*curwin.get()).w_buffer, &raw mut (*oap).end);
         (*oap).line_count = (*oap).end.lnum - (*oap).start.lnum + 1;
         // Set before `VIsual_active` is reset below.
-        virtual_op.set(virtual_active(curwin.get()) as TriState);
+        virtual_op.set(Some(virtual_active(curwin.get())));
 
         if VIsual_active.get() || redo_VIsual_busy.get() {
             get_op_vcol(oap, REDO_VISUAL.get().rv_vcol, true);
@@ -131,7 +131,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
             && (!(*oap).inclusive
                 || ((*oap).op_type == OP_YANK && gchar_pos(&raw mut (*oap).end) == NUL))
             && equalpos((*oap).start, (*oap).end)
-            && !(virtual_op.get() != 0 && (*oap).start.coladd != (*oap).end.coladd);
+            && !(op_virtual() && (*oap).start.coladd != (*oap).end.coladd);
         // For delete, change and yank it is an error to operate on an empty
         // region when 'cpoptions' has `E` (Vi compatible).
         let empty_region_error =
@@ -149,7 +149,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
         adjust_region_end(cap, oap);
         run_operator(cap, oap, empty_region_error, gui_yank, lbr_saved);
 
-        virtual_op.set(kNone);
+        virtual_op.set(None);
         if gui_yank {
             (*curwin.get()).w_cursor = old_cursor;
         } else if p_sol.get() == 0
@@ -578,7 +578,7 @@ unsafe fn finish_visual_region(
         } else if VIsual_mode.get() == 'v' as c_int {
             (*oap).motion_type = kMTCharWise;
             if *ml_get_pos(&raw mut (*oap).end) as c_int == NUL
-                && (include_line_break || virtual_op.get() == 0)
+                && (include_line_break || !op_virtual())
             {
                 (*oap).inclusive = false;
                 // Take the line break too, unless the operator only works on

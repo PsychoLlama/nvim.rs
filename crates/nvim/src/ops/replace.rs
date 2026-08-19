@@ -138,7 +138,7 @@ unsafe fn replace_block(oap: *mut oparg_T, c: c_int, had_ctrl_v_cr: bool) {
             // Make sure the cursor position is valid for `block_prep`.
             (*curwin.get()).w_cursor.col = 0;
             block_prep(oap, &raw mut bd, (*curwin.get()).w_cursor.lnum, true);
-            if bd.textlen != 0 || (virtual_op.get() != 0 && bd.is_MAX == 0) {
+            if bd.textlen != 0 || (op_virtual() && bd.is_MAX == 0) {
                 replace_block_line(oap, &mut bd, c, had_ctrl_v_cr);
             }
             (*curwin.get()).w_cursor.lnum += 1;
@@ -164,7 +164,7 @@ unsafe fn replace_block_line(oap: *mut oparg_T, bd: &mut block_def, c: c_int, ha
         // pre-padding. (Upstream also keeps a running count `n` of the extra
         // characters a split TAB needs, here and just below; nothing reads it,
         // so only this side effect on `startspaces` is carried over.)
-        if virtual_op.get() != 0 && bd.is_short != 0 && *bd.textstart as c_int == NUL {
+        if op_virtual() && bd.is_short != 0 && *bd.textstart as c_int == NUL {
             let mut vpos = pos_T {
                 lnum: (*curwin.get()).w_cursor.lnum,
                 col: 0,
@@ -176,7 +176,7 @@ unsafe fn replace_block_line(oap: *mut oparg_T, bd: &mut block_def, c: c_int, ha
 
         // How many characters to replace.
         let mut numc = (*oap).end_vcol - (*oap).start_vcol + 1;
-        if bd.is_short != 0 && (virtual_op.get() == 0 || bd.is_MAX != 0) {
+        if bd.is_short != 0 && (!op_virtual() || bd.is_MAX != 0) {
             numc -= ((*oap).end_vcol - bd.end_vcol) + 1;
         }
         // A double-wide character only fits half as many times.
@@ -336,7 +336,7 @@ unsafe fn replace_chars(oap: *mut oparg_T, c: c_int) {
                 }
             }
 
-            if !done && virtual_op.get() != 0 && (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
+            if !done && op_virtual() && (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
                 replace_virtual_tail(oap, c);
             }
 

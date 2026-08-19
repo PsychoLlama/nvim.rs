@@ -91,10 +91,10 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::{
     CMD_append, CMD_diffget, CMD_diffput, CMD_split, CmdModFlags, EvalFuncData, ExtmarkOp, FILE,
-    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, TriState, aco_save_T,
-    buf_T, bufref_T, cmd_addr_T, colnr_T, diff_T, diffblock_S, diffline_S, diffline_T,
-    diffline_change_T, exarg_T, garray_T, hlf_T, kFalse, kNone, kTrue, linenr_T, mmfile_t, scid_T,
-    size_t, tabpage_T, typval_T, uint64_t, varnumber_T, win_T, xdemitcb_t, xdemitconf_t, xpparam_t,
+    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, aco_save_T, buf_T,
+    bufref_T, cmd_addr_T, colnr_T, diff_T, diffblock_S, diffline_S, diffline_T, diffline_change_T,
+    exarg_T, garray_T, hlf_T, linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint64_t,
+    varnumber_T, win_T, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};
@@ -241,6 +241,6 @@ static linematch_lines: GlobalCell<::core::ffi::c_int> = GlobalCell::new(40 as :
 pub const LBUFLEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const MAX_XDIFF_SIZE: ::core::ffi::c_long =
     1024 as ::core::ffi::c_long * 1024 as ::core::ffi::c_long * 1023 as ::core::ffi::c_long;
-static diff_a_works: GlobalCell<TriState> = GlobalCell::new(kNone);
+static diff_a_works: GlobalCell<Option<bool>> = GlobalCell::new(None);
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

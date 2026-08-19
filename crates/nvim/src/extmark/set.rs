@@ -19,13 +19,13 @@ use super::{
     redraw_decor, signcols_count_range, tree_del_itr, tree_get_alt, tree_lookup, tree_lookup_ns,
     tree_move, tree_put, tree_revise_meta,
 };
+use crate::decoration::SignCountHalf;
 use crate::marktree::key::{
     MT_FLAG_DECOR_SIGNTEXT, MT_FLAG_EXTERNAL_MASK, MT_FLAG_INVALID, mt_decor, mt_decor_any, mt_end,
     mt_flags, mt_invalid, mt_paired,
 };
 use crate::types::{
-    DecorInline, Error, MTKey, MTPos, MarkTreeIter, buf_T, colnr_T, kNone, kTrue, uint16_t,
-    uint32_t, uint64_t,
+    DecorInline, Error, MTKey, MTPos, MarkTreeIter, buf_T, colnr_T, uint16_t, uint32_t, uint64_t,
 };
 
 /// Create or update an extmark.
@@ -172,7 +172,7 @@ pub(crate) fn extmark_setraw(
     {
         row1 = alt.pos.row.min(key.pos.row.min(row));
         row2 = alt.pos.row.max(key.pos.row.max(row));
-        signcols_count_range(buf, row1, last_line().min(row2), 0, kTrue);
+        signcols_count_range(buf, row1, last_line().min(row2), 0, SignCountHalf::Subtract);
     }
 
     if move_0 {
@@ -190,7 +190,7 @@ pub(crate) fn extmark_setraw(
         && key.flags as c_int & MT_FLAG_DECOR_SIGNTEXT != 0
         && buf.b_signcols.autom
     {
-        signcols_count_range(buf, row1, last_line().min(row2), 0, kNone);
+        signcols_count_range(buf, row1, last_line().min(row2), 0, SignCountHalf::Add);
     }
 }
 

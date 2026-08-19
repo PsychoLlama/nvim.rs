@@ -49,8 +49,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{
-    DecorState, NUL, TriState, colnr_T, hlf_T, kFalse, kTrue, linenr_T, pos_T, size_t, smt_T,
-    uint8_t, win_T,
+    DecorState, NUL, colnr_T, hlf_T, linenr_T, pos_T, size_t, smt_T, uint8_t, win_T,
 };
 use ::libc::{memset, strcpy, strlen};
 
@@ -66,7 +65,7 @@ unsafe fn decor_spell_nav_col(
     lnum: linenr_T,
     decor_lnum: &mut linenr_T,
     col: c_int,
-) -> TriState {
+) -> Option<bool> {
     unsafe {
         if *decor_lnum != lnum {
             decor_redraw_reset(wp, decor_state.ptr());
@@ -211,9 +210,9 @@ pub unsafe fn spell_move_to(
                             (*(*wp).w_s).b_p_spo_flags & kOptSpoFlagNoplainbuffer != 0;
                         let mut can_spell = !no_plain_buffer;
                         let decor_says = decor_spell_nav_col(wp, lnum, &mut decor_lnum, col);
-                        if decor_says == kTrue {
+                        if decor_says == Some(true) {
                             can_spell = true;
-                        } else if decor_says == kFalse {
+                        } else if decor_says == Some(false) {
                             can_spell = false;
                         } else if has_syntax {
                             can_spell = can_syn_spell(wp, lnum, col);

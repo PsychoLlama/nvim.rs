@@ -42,8 +42,8 @@ use crate::profile::{prof_input_end, prof_input_start};
 use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    Event, MultiQueue, RStream, Stream, String_0, TriState, event_T, kFalse, kNone, kTrue,
-    key_extra, size_t, uint8_t, uint64_t, uv_handle_type,
+    Event, MultiQueue, RStream, Stream, String_0, event_T, key_extra, size_t, uint8_t, uint64_t,
+    uv_handle_type,
 };
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::MaybeUninit;
@@ -137,7 +137,7 @@ fn create_cursorhold_event(events_enabled: bool) {
     // SAFETY: `main_loop.events` is the process's event queue.
     unsafe {
         // If events are enabled and the queue has any items, this should not
-        // have been reached — `inbuf_poll` would have answered `kTrue`.
+        // have been reached — `inbuf_poll` would have answered `Ready`.
         debug_assert!(!events_enabled || multiqueue_empty((*main_loop.ptr()).events));
         multiqueue_put_event(
             (*main_loop.ptr()).events,
@@ -212,17 +212,17 @@ pub unsafe fn input_get(
             ctrl_c_interrupts.set(false);
         }
 
-        let mut result = kFalse;
+        let mut result = InputAvail::Empty;
         if ms >= 0 {
             result = inbuf_poll(ms, events);
-            if result == kFalse {
+            if result == InputAvail::Empty {
                 return 0;
             }
         } else {
             let wait_start = os_hrtime();
             cursorhold_time.set(cursorhold_time.get().min(p_ut.get() as c_int));
             result = inbuf_poll(p_ut.get() as c_int - cursorhold_time.get(), events);
-            if result == kFalse {
+            if result == InputAvail::Empty {
                 if (*read_stream.ptr()).s.closed && silent_mode.get() {
                     // Drained event loop and initial input; exit `-es`/`-Es`.
                     read_error_exit();
@@ -256,7 +256,7 @@ pub unsafe fn input_get(
             return push_event_key(buf, maxlen);
         }
 
-        if result == kNone && ms != 0 {
+        if result == InputAvail::Eof && ms != 0 {
             read_error_exit();
         }
     }
@@ -265,7 +265,7 @@ pub unsafe fn input_get(
 
 /// Whether a character is available for reading.
 pub fn os_char_avail() -> bool {
-    inbuf_poll(0, ptr::null_mut()) == kTrue
+    inbuf_poll(0, ptr::null_mut()) == InputAvail::Ready
 }
 
 /// Poll for fast events; sets `got_int` if CTRL-C was typed.
@@ -652,6 +652,20 @@ pub fn input_enqueue_mouse(code: c_int, modifier: uint8_t, grid: c_int, row: c_i
     enqueue(&buf[..at + 3]);
 }
 
+/// What [`inbuf_poll`] found.
+///
+/// The third value is EOF, not "unknown", so this is an enumeration and not
+/// a tri-state boolean.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum InputAvail {
+    /// Input or events are available.
+    Ready,
+    /// Neither, within the timeout.
+    Empty,
+    /// The input stream has reached end of file.
+    Eof,
+}
+
 /// Whether the main loop is blocked waiting for input.
 pub fn input_blocking() -> bool {
     blocking.get()
@@ -661,15 +675,13 @@ pub fn input_blocking() -> bool {
 /// while waiting.
 ///
 /// `ms` is a timeout in milliseconds; -1 waits indefinitely and 0 does not
-/// wait. `events` is an optional queue to check for pending events. Answers
-/// `kTrue` for input or events available, `kFalse` for neither, and `kNone`
-/// once the input stream has reached EOF.
-fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> TriState {
+/// wait. `events` is an optional queue to check for pending events.
+fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> InputAvail {
     // SAFETY: `events` is NULL or a live queue, and `main_loop` is the
     // process's event loop.
     unsafe {
         if os_input_ready(events) {
-            return kTrue;
+            return InputAvail::Ready;
         }
 
         if do_profiling.get() == PROF_YES && ms != 0 {
@@ -708,11 +720,11 @@ fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> TriState {
         }
 
         if os_input_ready(events) {
-            kTrue
+            InputAvail::Ready
         } else if input_eof.get() {
-            kNone
+            InputAvail::Eof
         } else {
-            kFalse
+            InputAvail::Empty
         }
     }
 }

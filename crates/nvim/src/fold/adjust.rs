@@ -12,7 +12,6 @@ use super::open_close::*;
 use super::*;
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
-use crate::types::kNone;
 
 ///
 /// If "updown" is false: Move to the start or end of the fold.
@@ -304,8 +303,8 @@ pub(super) unsafe fn foldSplit(
     debug_assert!((*fp.offset(1)).fd_top > bot, "fp[1].fd_top > bot");
     (*fp.offset(1)).fd_len = (*fp).fd_len - ((*fp.offset(1)).fd_top - (*fp).fd_top);
     (*fp.offset(1)).fd_flags = (*fp).fd_flags;
-    (*fp.offset(1)).fd_small = kNone;
-    (*fp).fd_small = kNone;
+    (*fp.offset(1)).fd_small = None;
+    (*fp).fd_small = None;
     let gap1: *mut garray_T = &raw mut (*fp).fd_nested;
     let gap2: *mut garray_T = &raw mut (*fp.offset(1)).fd_nested;
     foldFind(gap1, bot + 1 - (*fp).fd_top, &raw mut fp2);

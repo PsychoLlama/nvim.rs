@@ -15,16 +15,16 @@ use crate::types::{
     LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, RgbValue,
     ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
-    TriState, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T,
-    bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T,
-    estack_T_es_info, etype_T, evalarg_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T,
-    garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, kFalse, kNone, linenr_T, lpos_T, match_T,
-    msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T, ptr_t,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t,
-    tabpage_T, typebuf_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u,
-    uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
-    uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node,
-    uv_timer_s_u, uv_timer_t, vimmenu_T, win_T, xfmark_T,
+    UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
+    bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, estack_T_es_info, etype_T,
+    evalarg_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T,
+    int16_t, int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t,
+    nvim_stats_s, optmagic_T, pos_T, proftime_T, ptr_t, reg_extmatch_T, regmatch_T, regmmatch_T,
+    regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, tabpage_T, typebuf_T, uint8_t, uint32_t,
+    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
+    xfmark_T,
 };
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
@@ -77,7 +77,6 @@ pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub(crate) const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
 pub(crate) const kOptValTypeString: OptValType = 2;
 pub(crate) const kOptValTypeNumber: OptValType = 1;
-pub(crate) const kOptValTypeBoolean: OptValType = 0;
 #[derive(Copy, Clone)]
 pub struct AucmdWinVec {
     pub size: size_t,
@@ -330,7 +329,7 @@ pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     conceal: 0,
     conceal_char: 0,
     conceal_attr: 0,
-    spell: kFalse,
+    spell: Some(false),
     running_decor_provider: false,
     itr_valid: false,
 });
@@ -1052,7 +1051,7 @@ pub static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
 pub static stl_syntax: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
-pub static virtual_op: GlobalCell<TriState> = GlobalCell::new(kNone);
+pub static virtual_op: GlobalCell<Option<bool>> = GlobalCell::new(None);
 #[unsafe(no_mangle)]
 pub static display_tick: GlobalCell<disptick_T> = GlobalCell::new(0 as disptick_T);
 pub static spell_redraw_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);

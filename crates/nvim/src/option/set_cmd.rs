@@ -17,7 +17,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::{set_op_T, ui_refresh_options};
+use super::{NIL_OPTVAL, boolean_optval, optval_boolean, set_op_T, ui_refresh_options};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
@@ -36,8 +36,8 @@ use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OptIndex, OptInt, OptVal,
-    OptValData, OptionSetFlags, TriState, exarg_T, kFalse, kNone, kTrue, scid_T, size_t, uint8_t,
-    uint32_t, uvarnumber_T, vimoption_T, win_T,
+    OptValData, OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T,
+    vimoption_T, win_T,
 };
 use ::libc::strlen;
 
@@ -273,10 +273,7 @@ unsafe fn get_option_newval(
 ) -> OptVal {
     debug_assert!(!varp.is_null());
 
-    let nil = OptVal {
-        type_0: kOptValTypeNil,
-        data: OptValData { boolean: kFalse },
-    };
+    let nil = NIL_OPTVAL;
 
     // SAFETY: the caller's `varp` is this option's variable, and `*argp` is
     // NUL-terminated.
@@ -315,20 +312,13 @@ unsafe fn get_option_newval(
                 let boolean = if nextchar == '!' as c_int {
                     // `:set opt!` inverts, leaving an unset global-local
                     // value unset.
-                    match oldval.data.boolean {
-                        kNone => kNone,
-                        kTrue => kFalse,
-                        _ => kTrue,
-                    }
+                    optval_boolean(oldval.data).map(|b| !b)
                 } else if prefix == Prefix::Inv {
-                    (*varp.cast::<c_int>() ^ 1) as TriState
+                    Some(*varp.cast::<c_int>() == 0)
                 } else {
-                    TriState::from(prefix != Prefix::No)
+                    Some(prefix != Prefix::No)
                 };
-                OptVal {
-                    type_0: kOptValTypeBoolean,
-                    data: OptValData { boolean },
-                }
+                boolean_optval(boolean)
             }
             kOptValTypeNumber => {
                 let oldval_num = oldval.data.number;

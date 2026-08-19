@@ -182,9 +182,9 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CharsizeArg, CmdModFlags, INSCHAR_CTRLV,
     INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo,
-    String_0, TriState, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T,
-    event_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t,
-    ssize_t, uint8_t, varnumber_T, win_T,
+    String_0, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T,
+    int32_t, int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t, varnumber_T,
+    win_T,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -310,7 +310,22 @@ static revins_chars: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static revins_legal: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static revins_scol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static ins_need_undo: GlobalCell<bool> = GlobalCell::new(false);
-static dont_sync_undo: GlobalCell<TriState> = GlobalCell::new(kFalse);
+/// Whether `i_CTRL-G_U` is holding the undoable change open across the
+/// key being handled — upstream's `dont_sync_undo`.
+///
+/// A three-state latch, not a tri-state boolean: `Armed` is not "unknown",
+/// it is "the *next* real key is the covered one".
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum KeepUndo {
+    /// Normal: a cursor motion ends the undoable change.
+    No,
+    /// `CTRL-G U` was pressed; the next real key is the one it covers.
+    Armed,
+    /// The key being handled right now is the covered one.
+    Now,
+}
+
+static dont_sync_undo: GlobalCell<KeepUndo> = GlobalCell::new(KeepUndo::No);
 static o_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static replace_stack: GlobalCell<ReplaceStack> = GlobalCell::new(REPLACE_STACK_EMPTY);
 /// What the last `edit_putchar` did to the screen cell it wrote over, and so

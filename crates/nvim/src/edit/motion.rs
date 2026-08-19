@@ -85,7 +85,7 @@ unsafe fn may_open_fold_hor() {
 /// `i_CTRL-G_U` sets `dont_sync_undo` for exactly one motion, which is what
 /// lets an insert survive an arrow key as a single undo block.
 fn ends_change() -> bool {
-    dont_sync_undo.get() == kFalse
+    dont_sync_undo.get() == KeepUndo::No
 }
 
 /// `<Left>` in Insert mode.
@@ -121,7 +121,7 @@ pub(crate) unsafe fn ins_left() {
         } else {
             vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
         }
-        dont_sync_undo.set(kFalse);
+        dont_sync_undo.set(KeepUndo::No);
     }
 }
 
@@ -184,7 +184,7 @@ pub(crate) unsafe fn ins_s_left() {
         } else {
             vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
         }
-        dont_sync_undo.set(kFalse);
+        dont_sync_undo.set(KeepUndo::No);
     }
 }
 
@@ -225,7 +225,7 @@ pub(crate) unsafe fn ins_right() {
         } else {
             vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
         }
-        dont_sync_undo.set(kFalse);
+        dont_sync_undo.set(KeepUndo::No);
     }
 }
 
@@ -251,7 +251,7 @@ pub(crate) unsafe fn ins_s_right() {
         } else {
             vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint);
         }
-        dont_sync_undo.set(kFalse);
+        dont_sync_undo.set(KeepUndo::No);
     }
 }
 

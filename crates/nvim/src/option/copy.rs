@@ -55,15 +55,13 @@ use crate::optionstr::{
 use crate::spell::compile_cap_prog;
 use crate::strings::vim_strchr;
 use crate::tag::set_buflocal_tfu_callback;
-use crate::types::{
-    CmdModFlags, NUL, OptInt, OptVal, OptValData, buf_T, colnr_T, int16_t, kFalse, win_T, winopt_T,
-};
+use crate::types::{CmdModFlags, NUL, OptInt, buf_T, colnr_T, int16_t, win_T, winopt_T};
 use crate::window::{check_colorcolumn, set_winbar_win};
 
 use super::{
-    BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, change_option_default,
-    check_blending, fill_culopt_flags, kFillchars, kListchars, kOptValTypeBoolean, parse_winhl_opt,
-    set_chars_option,
+    BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, boolean_optval,
+    change_option_default, check_blending, fill_culopt_flags, kFillchars, kListchars,
+    parse_winhl_opt, set_chars_option,
 };
 
 /// The two 'cpo' flags that decide when a buffer's options are copied:
@@ -664,13 +662,7 @@ pub fn reset_modifiable() {
     // SAFETY: `curbuf` is live.
     unsafe { (*curbuf.get()).b_p_ma = 0 };
     p_ma.set(0);
-    change_option_default(
-        kOptModifiable,
-        OptVal {
-            type_0: kOptValTypeBoolean,
-            data: OptValData { boolean: kFalse },
-        },
-    );
+    change_option_default(kOptModifiable, boolean_optval(Some(false)));
 }
 
 /// Carry a buffer's 'iminsert' back to the global value, so that the next

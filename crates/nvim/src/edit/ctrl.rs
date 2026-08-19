@@ -205,7 +205,7 @@ pub(crate) unsafe fn ins_ctrl_g() {
             }
             // CTRL-G U: allow one left/right cursor movement with the next
             // key without breaking undo.
-            CTRL_G_KEEP_UNDO => dont_sync_undo.set(kNone),
+            CTRL_G_KEEP_UNDO => dont_sync_undo.set(KeepUndo::Armed),
             // Esc after CTRL-G cancels it.
             ESC => {}
             // Unknown; reserved for future expansion.

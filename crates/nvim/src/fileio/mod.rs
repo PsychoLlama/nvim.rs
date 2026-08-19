@@ -645,7 +645,8 @@ pub unsafe fn set_file_options(set_options: bool, eap: *mut exarg_T) {
         if !eap.is_null() && (*eap).force_bin != 0 {
             let oldval = (*curbuf.get()).b_p_bin;
             (*curbuf.get()).b_p_bin = ((*eap).force_bin == FORCE_BIN) as c_int;
-            set_options_bin(oldval, (*curbuf.get()).b_p_bin, OptionSetFlags::LOCAL);
+            let bin = (*curbuf.get()).b_p_bin != 0;
+            set_options_bin(oldval != 0, bin, OptionSetFlags::LOCAL);
         }
     }
 }

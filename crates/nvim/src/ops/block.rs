@@ -354,7 +354,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
                     // block's width is the alternative, and it is deliberately
                     // not done: it leaves trailing white space behind.
                     (*bdp).is_short = 1;
-                    if (*oap).op_type == OP_APPEND || virtual_op.get() != 0 {
+                    if (*oap).op_type == OP_APPEND || op_virtual() {
                         (*bdp).endspaces =
                             (*oap).end_vcol - (*bdp).end_vcol + c_int::from((*oap).inclusive);
                     }
@@ -416,7 +416,7 @@ pub unsafe fn charwise_block_prep(
 
         if lnum == start.lnum {
             startcol = start.col;
-            if virtual_op.get() != 0 {
+            if op_virtual() {
                 getvcol(
                     curwin.get(),
                     &raw mut start,
@@ -435,7 +435,7 @@ pub unsafe fn charwise_block_prep(
 
         if lnum == end.lnum {
             endcol = end.col;
-            if virtual_op.get() != 0 {
+            if op_virtual() {
                 getvcol(
                     curwin.get(),
                     &raw mut end,

@@ -345,7 +345,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
 
         if l > (*curwin.get()).w_cursor.col
             && *ml_get((*curwin.get()).w_cursor.lnum) as c_int != NUL
-            && virtual_op.get() == 0
+            && !op_virtual()
         {
             inc_cursor();
         }
@@ -355,9 +355,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
         let mut pre_indent = 0;
         if (*oap).motion_type == kMTBlockWise {
             // Add the spaces before measuring the line's length.
-            if virtual_op.get() != 0
-                && ((*curwin.get()).w_cursor.coladd > 0 || gchar_cursor() == NUL)
-            {
+            if op_virtual() && ((*curwin.get()).w_cursor.coladd > 0 || gchar_cursor() == NUL) {
                 coladvance_force(getviscol());
             }
             let firstline = ml_get((*oap).start.lnum);
@@ -428,7 +426,7 @@ unsafe fn replay_change(
         let mut linenr = (*oap).start.lnum + 1;
         while linenr <= (*oap).end.lnum {
             block_prep(oap, &raw mut *bd, linenr, true);
-            if bd.is_short == 0 || virtual_op.get() != 0 {
+            if bd.is_short == 0 || op_virtual() {
                 // When the block starts in virtual space, that offset is
                 // padding in front of the text.
                 let mut vpos = pos_T {

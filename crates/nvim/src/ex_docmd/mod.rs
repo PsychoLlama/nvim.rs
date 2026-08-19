@@ -70,9 +70,9 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::{
     Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, Direction, ExArgt,
-    LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, TriState, cmd_addr_T,
+    LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, cmd_addr_T,
     dobuf_action_values, dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T,
-    handle_T, kNone, linenr_T, optmagic_T, uint8_t, uint16_t,
+    handle_T, linenr_T, optmagic_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -328,9 +328,9 @@ static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     type_0: kCallbackNone,
 });
 static prev_dir: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-static filetype_detect: GlobalCell<TriState> = GlobalCell::new(kNone);
-static filetype_plugin: GlobalCell<TriState> = GlobalCell::new(kNone);
-static filetype_indent: GlobalCell<TriState> = GlobalCell::new(kNone);
+static filetype_detect: GlobalCell<Option<bool>> = GlobalCell::new(None);
+static filetype_plugin: GlobalCell<Option<bool>> = GlobalCell::new(None);
+static filetype_indent: GlobalCell<Option<bool>> = GlobalCell::new(None);
 pub const MSG_BUF_LEN: c_int = 480 as c_int;
 pub const FILETYPE_FILE: [c_char; 26] = c_bytes(b"filetype.lua filetype.vim\0");
 pub const FTPLUGIN_FILE: [c_char; 13] = c_bytes(b"ftplugin.vim\0");

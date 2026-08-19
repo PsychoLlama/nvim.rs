@@ -38,9 +38,9 @@ use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, TriState, VAR_STRING, VV_SHELL_ERROR,
-    colnr_T, garray_T, kErrorTypeNone, kFalse, kListLenMayKnow, kNone, kObjectTypeBoolean, kTrue,
-    tabpage_T, typval_T, uint8_t, varnumber_T, win_T,
+    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, VV_SHELL_ERROR, colnr_T,
+    garray_T, kErrorTypeNone, kListLenMayKnow, kObjectTypeBoolean, tabpage_T, typval_T, uint8_t,
+    varnumber_T, win_T,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
@@ -242,8 +242,8 @@ unsafe fn special_feature(name: *const c_char) -> Option<bool> {
 
 /// Whether this is a WSL kernel, asked once and remembered.
 fn has_wsl() -> bool {
-    static ANSWER: GlobalCell<TriState> = GlobalCell::new(kNone);
-    if ANSWER.get() == kNone {
+    static ANSWER: GlobalCell<Option<bool>> = GlobalCell::new(None);
+    if ANSWER.get().is_none() {
         let mut err = Error {
             type_0: kErrorTypeNone,
             msg: ptr::null_mut(),
@@ -271,9 +271,9 @@ fn has_wsl() -> bool {
         debug_assert!(err.type_0 == kErrorTypeNone);
         // SAFETY: the union member is the one the type tag names.
         let yes = o.type_0 == kObjectTypeBoolean && unsafe { o.data.boolean } as c_int == 1;
-        ANSWER.set(if yes { kTrue } else { kFalse });
+        ANSWER.set(Some(yes));
     }
-    ANSWER.get() == kTrue
+    ANSWER.get() == Some(true)
 }
 
 /// `has({feature})`

@@ -24,7 +24,7 @@ use crate::os::env::os_getenv_noalloc;
 use crate::runtime::{RuntimeOpts, source_runtime};
 use crate::types::{
     Array, CMD_autocmd, Error, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0, exarg_T,
-    kErrorTypeNone, kFalse, kNone, kObjectTypeString, kTrue, size_t,
+    kErrorTypeNone, kObjectTypeString, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::strcmp;
@@ -87,16 +87,16 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
         if strcmp(arg, c"on".as_ptr()) == 0 || strcmp(arg, c"detect".as_ptr()) == 0 {
             // `:filetype detect` only re-sources the scripts when detection
             // was off; `:filetype on` always does.
-            if *arg as c_int == 'o' as c_int || filetype_detect.get() as c_int != kTrue as c_int {
+            if *arg as c_int == 'o' as c_int || filetype_detect.get() != Some(true) {
                 source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                filetype_detect.set(kTrue);
+                filetype_detect.set(Some(true));
                 if plugin {
                     source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_plugin.set(kTrue);
+                    filetype_plugin.set(Some(true));
                 }
                 if indent {
                     source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_indent.set(kTrue);
+                    filetype_indent.set(Some(true));
                 }
             }
             if *arg as c_int == 'd' as c_int {
@@ -114,15 +114,15 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
                 // Only what was named is turned off; detection stays on.
                 if plugin {
                     source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_plugin.set(kFalse);
+                    filetype_plugin.set(Some(false));
                 }
                 if indent {
                     source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                    filetype_indent.set(kFalse);
+                    filetype_indent.set(Some(false));
                 }
             } else {
                 source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-                filetype_detect.set(kFalse);
+                filetype_detect.set(Some(false));
             }
         } else {
             semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
@@ -136,7 +136,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
 /// is off, because nothing will ever ask them to run.
 unsafe fn report_filetype_state() {
     unsafe {
-        let detecting = filetype_detect.get() as c_int == kTrue as c_int;
+        let detecting = filetype_detect.get() == Some(true);
         let state = |on: bool| -> *const c_char {
             if !on {
                 c"OFF".as_ptr()
@@ -154,8 +154,8 @@ unsafe fn report_filetype_state() {
             } else {
                 c"OFF".as_ptr()
             },
-            state(filetype_plugin.get() as c_int == kTrue as c_int),
-            state(filetype_indent.get() as c_int == kTrue as c_int),
+            state(filetype_plugin.get() == Some(true)),
+            state(filetype_indent.get() == Some(true)),
         );
     }
 }
@@ -164,13 +164,13 @@ unsafe fn report_filetype_state() {
 /// explicitly turned off.
 pub unsafe fn filetype_plugin_enable() {
     unsafe {
-        if filetype_plugin.get() as c_int == kNone as c_int {
+        if filetype_plugin.get().is_none() {
             source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-            filetype_plugin.set(kTrue);
+            filetype_plugin.set(Some(true));
         }
-        if filetype_indent.get() as c_int == kNone as c_int {
+        if filetype_indent.get().is_none() {
             source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-            filetype_indent.set(kTrue);
+            filetype_indent.set(Some(true));
         }
     }
 }
@@ -178,9 +178,9 @@ pub unsafe fn filetype_plugin_enable() {
 /// The same for detection.
 pub unsafe fn filetype_maybe_enable() {
     unsafe {
-        if filetype_detect.get() as c_int == kNone as c_int {
+        if filetype_detect.get().is_none() {
             source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
-            filetype_detect.set(kTrue);
+            filetype_detect.set(Some(true));
         }
     }
 }

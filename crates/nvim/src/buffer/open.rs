@@ -36,14 +36,14 @@ use crate::memfile::MfDirty;
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_open};
 use crate::memory::xrealloc;
 use crate::r#move::WinValid;
-use crate::option::set_option_value_give_err;
+use crate::option::{boolean_optval, set_option_value_give_err};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::strings::vim_strchr;
 use crate::types::{
     FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, StringBuilder, aco_save_T,
-    colnr_T, exarg_T, handle_T, int64_t, kFalse, linenr_T, size_t, varnumber_T, win_T,
+    colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T, win_T,
 };
 use crate::winlayer::buffers;
 use ::libc::strcmp;
@@ -164,11 +164,7 @@ fn set_option_string(id: c_int, value: &'static CStr) {
 }
 
 fn set_option_false(id: c_int) {
-    let val = OptVal {
-        type_0: kOptValTypeBoolean,
-        data: OptValData { boolean: kFalse },
-    };
-    set_option_value_give_err(id, val, OptionSetFlags::LOCAL);
+    set_option_value_give_err(id, boolean_optval(Some(false)), OptionSetFlags::LOCAL);
 }
 
 /// Whether lines `a` and `b` of the two buffers differ.

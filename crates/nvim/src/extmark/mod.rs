@@ -42,8 +42,8 @@ use core::ptr;
 
 use crate::buffer_updates::buf_updates_send_splice;
 use crate::decoration::{
-    buf_decor_remove, buf_put_decor, buf_signcols_count_range, decor_free, decor_redraw,
-    decor_state_invalidate, decor_type_flags,
+    SignCountHalf, buf_decor_remove, buf_put_decor, buf_signcols_count_range, decor_free,
+    decor_redraw, decor_state_invalidate, decor_type_flags,
 };
 use crate::main::curbuf_splice_pending;
 use crate::map::{
@@ -59,7 +59,7 @@ use crate::memline::ml_find_line_or_offset;
 use crate::memory::{xfree, xrealloc};
 use crate::types::{
     DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, MTKey,
-    MTPair, MTPos, Map_uint32_t_uint32_t, MapHash, MarkTree, MarkTreeIter, Set_uint32_t, TriState,
+    MTPair, MTPos, Map_uint32_t_uint32_t, MapHash, MarkTree, MarkTreeIter, Set_uint32_t,
     UndoObjectType, bcount_t, buf_T, colnr_T, extmark_undo_vec_t, int32_t, linenr_T, size_t,
     u_header_T, uint16_t, uint32_t, uint64_t,
 };
@@ -304,9 +304,9 @@ fn invalidate_decor_state(buf: Buf) {
     unsafe { decor_state_invalidate(buf.raw()) }
 }
 
-fn signcols_count_range(buf: Buf, row1: c_int, row2: c_int, add: c_int, clear: TriState) {
+fn signcols_count_range(buf: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
     // SAFETY: a live buffer, whose own marktree this walks.
-    unsafe { buf_signcols_count_range(buf.raw(), row1, row2, add, clear) }
+    unsafe { buf_signcols_count_range(buf.raw(), row1, row2, add, half) }
 }
 
 /// `map_put_ref(uint32_t, uint32_t)`: the slot for `key`, created empty if it

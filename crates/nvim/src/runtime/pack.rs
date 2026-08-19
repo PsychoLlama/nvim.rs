@@ -370,7 +370,7 @@ unsafe fn splice_cached_path(
                         path: xstrdup(afterdir),
                         after: true,
                         pack_inserted: true,
-                        has_lua: kNone,
+                        has_lua: None,
                         pos_in_rtp: after_pos + addlen,
                     },
                 );
@@ -385,7 +385,7 @@ unsafe fn splice_cached_path(
                     path: xstrdup(fname),
                     after: false,
                     pack_inserted: true,
-                    has_lua: kNone,
+                    has_lua: None,
                     pos_in_rtp: first_pos,
                 },
             );

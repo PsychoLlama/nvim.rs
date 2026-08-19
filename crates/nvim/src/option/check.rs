@@ -74,14 +74,14 @@ pub fn did_set_title() {
 /// Apply what turning 'binary' on and off does to the four options it
 /// overrides. Their pre-'binary' values are stashed so that turning it off
 /// again restores them rather than the defaults.
-pub fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: OptionSetFlags) {
+pub fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFlags) {
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: `curbuf` is live.
     unsafe {
         let buf = curbuf.get();
-        if newval != 0 {
-            if oldval == 0 {
+        if newval {
+            if !oldval {
                 if local {
                     (*buf).b_p_tw_nobin = (*buf).b_p_tw;
                     (*buf).b_p_wm_nobin = (*buf).b_p_wm;
@@ -108,7 +108,7 @@ pub fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: OptionSetFlags) 
                 p_et.set(0);
                 p_bin.set(1);
             }
-        } else if oldval != 0 {
+        } else if oldval {
             if local {
                 (*buf).b_p_tw = (*buf).b_p_tw_nobin;
                 (*buf).b_p_wm = (*buf).b_p_wm_nobin;

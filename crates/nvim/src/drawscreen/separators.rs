@@ -15,8 +15,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::decoration::SignCountHalf;
 use crate::decoration::kMTMetaSignText;
-use crate::types::kFalse;
 
 /// Which corner of a window a separator connector is being drawn in.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -62,7 +62,7 @@ pub(crate) unsafe fn win_redraw_signcols(wp: *mut win_T) -> bool {
                 0,
                 (*buf).b_ml.ml_line_count - 1,
                 MAXLNUM as c_int,
-                kFalse,
+                SignCountHalf::Both,
             );
         }
 

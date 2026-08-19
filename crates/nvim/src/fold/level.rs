@@ -17,7 +17,7 @@ use super::adjust::*;
 use super::marker::*;
 use super::*;
 use crate::pos::MAXLNUM;
-use crate::types::{VV_LNUM, kNone};
+use crate::types::VV_LNUM;
 
 // The fold-level strategy is dispatched by comparing function addresses, as
 // the C code did; the helper spells the address comparison out so the intent
@@ -337,7 +337,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                                 }
                                 (*fp).fd_len += (*fp).fd_top - firstlnum;
                                 (*fp).fd_top = firstlnum;
-                                (*fp).fd_small = kNone;
+                                (*fp).fd_small = None;
                                 fold_changed.set(true);
                             } else if (*flp).start != 0 && lvl == level || firstlnum != startlnum {
                                 let mut breakstart: linenr_T = 0;
@@ -418,7 +418,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                     } else {
                         (*fp).fd_flags = (*fp.offset(-1)).fd_flags;
                     }
-                    (*fp).fd_small = kNone;
+                    (*fp).fd_small = None;
                     if getlevel_is(getlevel, foldlevelMarker)
                         || getlevel_is(getlevel, foldlevelExpr)
                         || getlevel_is(getlevel, foldlevelSyntax)
@@ -482,7 +482,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
     }
     if (*fp).fd_len < (*flp).lnum - (*fp).fd_top {
         (*fp).fd_len = (*flp).lnum - (*fp).fd_top;
-        (*fp).fd_small = kNone;
+        (*fp).fd_small = None;
         fold_changed.set(true);
     } else if (*fp).fd_top + (*fp).fd_len > linecount {
         (*fp).fd_len = linecount - (*fp).fd_top + 1;

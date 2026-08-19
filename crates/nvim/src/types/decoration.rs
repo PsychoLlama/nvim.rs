@@ -128,7 +128,7 @@ pub struct DecorState {
     pub conceal: ::core::ffi::c_int,
     pub conceal_char: schar_T,
     pub conceal_attr: ::core::ffi::c_int,
-    pub spell: TriState,
+    pub spell: Option<bool>,
     pub running_decor_provider: bool,
     pub itr_valid: bool,
 }

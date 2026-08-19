@@ -63,7 +63,7 @@ use crate::pos::MAXCOL;
 use crate::types::{
     DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, MTKey,
-    MTPair, MTPos, VirtTextPos, buf_T, kFalse, kNone, kTrue, uint32_t, win_T,
+    MTPair, MTPos, VirtTextPos, buf_T, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -800,7 +800,7 @@ pub unsafe fn decor_redraw_col_impl(
     let mut conceal = 0;
     let mut conceal_char = 0;
     let mut conceal_attr = 0;
-    let mut spell = kNone;
+    let mut spell = None;
 
     for i in 0..cur_end {
         let index = indices[i as usize];
@@ -836,9 +836,9 @@ pub unsafe fn decor_redraw_col_impl(
                     }
                 }
                 if sh_flags & kSHSpellOn as c_int != 0 {
-                    spell = kTrue;
+                    spell = Some(true);
                 } else if sh_flags & kSHSpellOff as c_int != 0 {
-                    spell = kFalse;
+                    spell = Some(false);
                 }
                 if !sh.url.is_null() {
                     // SAFETY: an item's URL is a live NUL-terminated string.

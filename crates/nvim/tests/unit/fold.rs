@@ -45,7 +45,7 @@ unsafe fn push(gap: &mut garray_T, top: linenr_T, len: linenr_T) -> *mut garray_
     (*fp).fd_top = top;
     (*fp).fd_len = len;
     (*fp).fd_flags = 0;
-    (*fp).fd_small = -1;
+    (*fp).fd_small = None;
     ga_init(&raw mut (*fp).fd_nested, size_of::<fold_T>() as c_int, 10);
     gap.ga_len += 1;
     &raw mut (*fp).fd_nested

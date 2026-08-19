@@ -21,8 +21,8 @@ use crate::options::{kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, Event, NUL, ProcType, VimState, dict_T, hashitem_T, hashtab_T, kNone,
-    save_v_event_T, size_t, uint8_t, win_T,
+    Direction, Event, NUL, ProcType, VimState, dict_T, hashitem_T, hashtab_T, save_v_event_T,
+    size_t, uint8_t, win_T,
 };
 use crate::ui::ui_flush;
 use ::libc::{strcmp, strcpy};
@@ -145,8 +145,9 @@ pub unsafe fn state_handle_k_event() {
     }
 }
 pub unsafe fn virtual_active(mut wp: *mut win_T) -> bool {
-    if virtual_op.get() as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
-        return virtual_op.get() as u64 != 0;
+    // Inside an operator, the operator's own answer stands.
+    if let Some(active) = virtual_op.get() {
+        return active;
     }
     if State.get() & MODE_TERMINAL != 0 {
         return true;

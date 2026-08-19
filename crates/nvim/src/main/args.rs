@@ -33,13 +33,12 @@ use crate::main::{
     SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx, embedded_mode,
     err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args,
     exmode_active, global_alist, headless_mode, kOptArabic, kOptKeymap, kOptRightleft,
-    kOptShadafile, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, kOptVerbosefile,
-    kOptWindow, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write,
-    readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
-    time_msg_at,
+    kOptShadafile, kOptValTypeNumber, kOptValTypeString, kOptVerbosefile, kOptWindow, mparm_T,
+    nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write, readonlymode, recoverymode,
+    silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
-use crate::option::{reset_modifiable, set_option_value_give_err, set_options_bin};
+use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
 use crate::os::cshim::{gettext, snprintf, stderr, strncasecmp};
 use crate::os::env::os_getenv;
 use crate::os::fs::{os_exepath, os_isdir, os_write};
@@ -51,8 +50,8 @@ use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
     FAIL, IOSIZE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags,
-    VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T, kFalse, kTrue, linenr_T, ptrdiff_t, scid_T,
-    sctx_T, size_t,
+    VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T, linenr_T, ptrdiff_t, scid_T, sctx_T,
+    size_t,
 };
 use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
 
@@ -89,17 +88,6 @@ fn number_opt(value: OptInt) -> OptVal {
     OptVal {
         type_0: kOptValTypeNumber,
         data: OptValData { number: value },
-    }
-}
-
-/// A boolean option value. The option layer's booleans are three-state
-/// (`kNone` means "unset"), so an on/off answer is `kTrue`/`kFalse`.
-fn boolean_opt(value: bool) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeBoolean,
-        data: OptValData {
-            boolean: if value { kTrue } else { kFalse },
-        },
     }
 }
 
@@ -348,11 +336,11 @@ impl Scan {
                     }
                     return want;
                 }
-                b'A' => set_opt(kOptArabic, boolean_opt(true)),
+                b'A' => set_opt(kOptArabic, boolean_optval(Some(true))),
                 b'b' => {
                     // Before the file names are expanded: on Windows this is
                     // what decides whether a shortcut is edited or followed.
-                    set_options_bin((*curbuf.get()).b_p_bin, 1, OptionSetFlags::NONE);
+                    set_options_bin((*curbuf.get()).b_p_bin != 0, true, OptionSetFlags::NONE);
                     (*curbuf.get()).b_p_bin = 1;
                 }
                 b'D' => (*self.parmp).use_debug_break_level = DEBUG_BREAK_ALL,
@@ -371,7 +359,7 @@ impl Scan {
                 }
                 b'H' => {
                     set_opt(kOptKeymap, string_opt(c"hebrew".as_ptr()));
-                    set_opt(kOptRightleft, boolean_opt(true));
+                    set_opt(kOptRightleft, boolean_optval(Some(true)));
                 }
                 b'M' | b'm' => {
                     // `-M` is `-m` plus 'nomodifiable'.

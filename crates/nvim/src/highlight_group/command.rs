@@ -29,7 +29,7 @@ use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::runtime::exestack;
 use crate::types::ui::kUILinegrid;
-use crate::types::{OptVal, OptValData, OptionSetFlags, estack_T, kFalse, kTrue};
+use crate::types::{OptVal, OptValData, OptionSetFlags, estack_T};
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
@@ -613,12 +613,12 @@ impl KeyLoop {
                 let (color, bold) = lookup_color(idx, foreground);
                 // Set or reset bold to get the light foreground colours some
                 // terminals (e.g. "linux") only have that way.
-                if bold == kTrue {
+                if bold == Some(true) {
                     with_group(self.id, |entry| {
                         entry.cterm |= HlAttrFlags::BOLD;
                         entry.cterm_bold = true;
                     });
-                } else if bold == kFalse {
+                } else if bold == Some(false) {
                     with_group(self.id, |entry| entry.cterm.clear(HlAttrFlags::BOLD));
                 }
                 color

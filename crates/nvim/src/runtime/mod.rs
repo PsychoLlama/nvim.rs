@@ -98,13 +98,13 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::{
     Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
     EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int,
-    MapHash, Object, ObjectType, OptVal, OptValData, OptValType, Set_String, String_0, TriState,
+    MapHash, Object, ObjectType, OptVal, OptValData, OptValType, Set_String, String_0,
     UV_MUTEX_INIT, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType, cmd_addr_T, dict_T, estack_T,
     estack_T_es_info, estack_arg_T, etype_T, exarg_T, expand_T, funccal_entry_T, garray_T,
-    handle_T, int64_t, kBoolVarFalse, kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, kTrue, linenr_T, list_T, object_data,
-    optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t,
-    typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
+    handle_T, int64_t, kBoolVarFalse, kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString, linenr_T, list_T, object_data, optset_T, proftime_T,
+    ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t, typval_T,
+    typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::{semsg_c, smsg_c};
@@ -212,7 +212,7 @@ pub struct SearchPathItem {
     pub path: *mut ::core::ffi::c_char,
     pub after: bool,
     pub pack_inserted: bool,
-    pub has_lua: TriState,
+    pub has_lua: Option<bool>,
     pub pos_in_rtp: size_t,
 }
 #[derive(Copy, Clone)]

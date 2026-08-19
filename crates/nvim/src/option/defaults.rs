@@ -49,16 +49,16 @@ use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, PATHSEPSTR, String_0, garray_T,
-    kFalse, kTrue, size_t, tabpage_T, uint32_t, vimoption_T,
+    size_t, tabpage_T, uint32_t, vimoption_T,
 };
 use crate::window::{last_status, win_comp_scroll};
 use ::libc::{getuid, strlen};
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, check_options, check_win_options,
-    default_fileformat, didset_options, didset_options2, get_option_unset_value, insecure_flag,
-    kOptFlagComma, kOptFlagGettext, kOptFlagInsecure, kOptFlagNoDefExp, kOptFlagNoDefault,
-    kOptFlagWasSet, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_expand,
+    NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, boolean_optval, check_options,
+    check_win_options, default_fileformat, didset_options, didset_options2, get_option_unset_value,
+    insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagInsecure, kOptFlagNoDefExp,
+    kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeNumber, kOptValTypeString, option_expand,
     option_has_type, option_is_global_local, option_var, option_was_set, optval_copy, optval_free,
     set_fileformat, set_option_direct, set_option_value_give_err, set_option_varp,
 };
@@ -96,14 +96,9 @@ unsafe fn owned(value: *mut c_char) -> OptVal {
     }
 }
 
-fn boolean(value: bool) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeBoolean,
-        data: OptValData {
-            boolean: if value { kTrue } else { kFalse },
-        },
-    }
-}
+/// The two boolean option values this module installs.
+const OFF: OptVal = boolean_optval(Some(false));
+const ON: OptVal = boolean_optval(Some(true));
 
 /// Whether a script has already given the option a value, in which case a
 /// computed default must not overwrite it.
@@ -367,11 +362,11 @@ pub fn set_init_1(clean_arg: bool) {
         set_init_expand_env();
 
         if os_env_exists(c"NVIM_NOTTYFAST".as_ptr(), false) {
-            set_option_value_give_err(kOptTtyfast, boolean(false), OptionSetFlags::NONE);
+            set_option_value_give_err(kOptTtyfast, OFF, OptionSetFlags::NONE);
         }
         save_file_ff(curbuf.get());
         if os_env_exists(c"MLTERM".as_ptr(), false) {
-            set_option_value_give_err(kOptTermbidi, boolean(true), OptionSetFlags::NONE);
+            set_option_value_give_err(kOptTermbidi, ON, OptionSetFlags::NONE);
         }
 
         didset_options2();
@@ -389,7 +384,7 @@ pub fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVa
     // code from whoever wrote the file.
     // SAFETY: `getuid` and the option table.
     if opt_idx == kOptModeline && unsafe { getuid() } == ROOT_UID as _ {
-        return boolean(false);
+        return OFF;
     }
     if opt_flags.has(OptionSetFlags::LOCAL) && option_is_global_local(opt_idx) {
         return get_option_unset_value(opt_idx);
@@ -681,7 +676,7 @@ pub unsafe fn set_helplang_default(lang: *const c_char) {
 pub fn set_title_defaults() {
     for (opt_idx, cell) in [(kOptTitle, &p_title), (kOptIcon, &p_icon)] {
         if !was_set(opt_idx) {
-            change_option_default(opt_idx, boolean(false));
+            change_option_default(opt_idx, OFF);
             cell.set(0);
         }
     }

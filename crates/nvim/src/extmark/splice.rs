@@ -25,10 +25,11 @@ use super::{
     Buf, Extent, kExtmarkMove, kExtmarkSplice, kExtmarkUndo, last_splice, line_offset, push_undo,
     send_splice, signcols_count_range, splice_pending, tree_move_region, tree_splice, undo_marks,
 };
+use crate::decoration::SignCountHalf;
 use crate::pos::MAXLNUM;
 use crate::types::{
     ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, MTPos, bcount_t, colnr_T,
-    extmark_undo_vec_t, kNone, kTrue, linenr_T, undo_object_data,
+    extmark_undo_vec_t, linenr_T, undo_object_data,
 };
 
 /// [`extmark_adjust`](super::extmark_adjust) for the callers that already
@@ -148,7 +149,7 @@ pub(crate) fn splice_impl(mut buf: Buf, start: Extent, old: Extent, new: Extent,
             start.row,
             (count - 1).min(start.row + old.row),
             0,
-            kTrue,
+            SignCountHalf::Subtract,
         );
         buf.b_prev_line_count = 0;
     }
@@ -161,7 +162,7 @@ pub(crate) fn splice_impl(mut buf: Buf, start: Extent, old: Extent, new: Extent,
 
     if old.row > 0 || new.row > 0 {
         let row2 = (buf.b_ml.ml_line_count - 1).min(start.row + new.row);
-        signcols_count_range(buf, start.row, row2, 0, kNone);
+        signcols_count_range(buf, start.row, row2, 0, SignCountHalf::Add);
     }
 
     if undo == kExtmarkUndo {
@@ -245,7 +246,7 @@ pub(crate) fn move_region(
 
     let row1 = start.row.min(new.row);
     let row2 = start.row.max(new.row) + extent.row;
-    signcols_count_range(buf, row1, row2, 0, kTrue);
+    signcols_count_range(buf, row1, row2, 0, SignCountHalf::Subtract);
 
     let at = MTPos {
         row: start.row,
@@ -253,7 +254,7 @@ pub(crate) fn move_region(
     };
     tree_move_region(buf.marktree(), at, extent.row, extent.col, new.row, new.col);
 
-    signcols_count_range(buf, row1, row2, 0, kNone);
+    signcols_count_range(buf, row1, row2, 0, SignCountHalf::Add);
 
     send_splice(buf, new, Extent::default(), extent);
 

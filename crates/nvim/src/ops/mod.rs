@@ -91,8 +91,8 @@ use crate::types::{
     OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC, OP_FORMAT, OP_FORMAT2, OP_FUNCTION,
     OP_INDENT, OP_INSERT, OP_JOIN, OP_JOIN_NS, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD, OP_NR_SUB,
     OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OpType, OptInt, StrCharInfo,
-    TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T,
-    dict_T, int32_t, int64_t, kNone, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T,
+    int32_t, int64_t, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
     typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::ui::vim_beep;
@@ -181,6 +181,15 @@ pub struct redo_VIsual_T {
     pub rv_count: ::core::ffi::c_int,
     /// Extra argument; `g CTRL-A` is the only user.
     pub rv_arg: ::core::ffi::c_int,
+}
+
+/// Whether the operator in progress may work past the end of a line.
+///
+/// `virtual_op` is `None` when no operator is running, and upstream's bare
+/// `virtual_op` test reads that as "yes" — only an explicit `Some(false)`,
+/// which `do_pending_operator` sets from `virtual_active`, turns it off.
+pub(crate) fn op_virtual() -> bool {
+    virtual_op.get() != Some(false)
 }
 
 /// `b_ml.ml_flags`: the buffer is one empty line.

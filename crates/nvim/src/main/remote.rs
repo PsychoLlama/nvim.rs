@@ -26,8 +26,8 @@ use crate::os::cshim::stderr;
 use crate::os::env::os_getenv_noalloc;
 use crate::types::{
     Arena, Array, Callback, Callback_data, CallbackReader, Dict, Error, Integer, Object, String_0,
-    TriState, dict_T, kErrorTypeNone, kFalse, kNone, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, kTrue, object_data, size_t, uint64_t,
+    dict_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString, object_data, size_t, uint64_t,
 };
 use ::libc::{fprintf, printf};
 
@@ -253,8 +253,8 @@ pub(crate) unsafe fn remote_request(
 
         // `should_exit` and `tabbed` are three-state so that "the server did
         // not say" is distinguishable from "the server said no".
-        let mut should_exit: TriState = kNone;
-        let mut tabbed: TriState = kNone;
+        let mut should_exit: Option<bool> = None;
+        let mut tabbed: Option<bool> = None;
         for i in 0..dict.size {
             let (key, value) = field(&dict, i);
             match key.to_bytes() {
@@ -275,19 +275,19 @@ pub(crate) unsafe fn remote_request(
                     if value.type_0 != kObjectTypeBoolean {
                         bad_reply_type(c"tabbed");
                     }
-                    tabbed = if value.data.boolean { kTrue } else { kFalse };
+                    tabbed = Some(value.data.boolean);
                 }
                 b"should_exit" => {
                     if value.type_0 != kObjectTypeBoolean {
                         bad_reply_type(c"should_exit");
                     }
-                    should_exit = if value.data.boolean { kTrue } else { kFalse };
+                    should_exit = Some(value.data.boolean);
                 }
                 _ => {}
             }
         }
 
-        if should_exit == kNone || tabbed == kNone {
+        if should_exit.is_none() || tabbed.is_none() {
             fprintf(
                 stderr,
                 c"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n"
@@ -298,10 +298,10 @@ pub(crate) unsafe fn remote_request(
 
         api_free_object(reply);
 
-        if should_exit == kTrue {
+        if should_exit == Some(true) {
             os_exit(0);
         }
-        if tabbed == kTrue {
+        if tabbed == Some(true) {
             // One tab page per file the server was asked to open, less the
             // `--remote*` argument itself.
             (*params).window_count = argc - remote_args - 1;

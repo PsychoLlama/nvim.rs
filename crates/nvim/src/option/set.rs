@@ -48,18 +48,18 @@ use crate::runtime::exestack;
 use crate::types::{
     IOSIZE, NUL, OptIndex, OptVal, OptValData, OptionSetFlags, String_0, VV_OPTION_COMMAND,
     VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE,
-    estack_T, kFalse, kNone, optset_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, vimoption_T,
+    estack_T, optset_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 use ::libc::strlen;
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, NUMBUFLEN, SID_NONE, check_redraw, do_spelllang_source, do_syntax_autocmd,
-    find_tty_option_end, get_varp, get_varp_scope, insecure_flag, is_option_hidden,
-    kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure,
-    kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean,
-    kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, option_has_scope, option_has_type,
+    NIL_OPTVAL, NO_LOCAL_UNDOLEVEL, NUMBUFLEN, SID_NONE, boolean_optval, check_redraw,
+    do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp, get_varp_scope,
+    insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure,
+    kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_scope, option_has_type,
     option_is_global_local, option_is_global_only, option_scope_idx, option_var, optval_copy,
     optval_equal, optval_free, optval_from_varp, set_option_varp, validate_option_value,
 };
@@ -232,10 +232,7 @@ pub unsafe fn get_tty_option(name: *const c_char) -> OptVal {
         } else if is_tty_option(name) {
             xstrdup(c"".as_ptr())
         } else {
-            return OptVal {
-                type_0: kOptValTypeNil,
-                data: OptValData { boolean: kFalse },
-            };
+            return NIL_OPTVAL;
         }
     };
     OptVal {
@@ -329,10 +326,7 @@ pub unsafe fn find_option(name: *const c_char) -> OptIndex {
 /// unknown option answers nil rather than failing.
 pub fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     if opt_idx == kOptInvalid {
-        return OptVal {
-            type_0: kOptValTypeNil,
-            data: OptValData { boolean: kFalse },
-        };
+        return NIL_OPTVAL;
     }
     // SAFETY: `opt` points into the option table, which is what both of
     // these want.
@@ -381,7 +375,7 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     }
     let (type_0, data) = match opt_idx {
         kOptAutocomplete | kOptAutoread | kOptFsync => {
-            (kOptValTypeBoolean, OptValData { boolean: kNone })
+            (kOptValTypeBoolean, boolean_optval(None).data)
         }
         kOptScrolloff | kOptSidescrolloff => (kOptValTypeNumber, OptValData { number: -1 }),
         kOptUndolevels => (

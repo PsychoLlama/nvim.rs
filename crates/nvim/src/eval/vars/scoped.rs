@@ -12,6 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::option::{NIL_OPTVAL, boolean_optval, optval_boolean};
 use crate::types::{NUL, OK, OptionSetFlags};
 
 /// The zeroed `switchwin_T` [`switch_win`] fills in.
@@ -204,12 +205,7 @@ pub(crate) unsafe fn tv_to_optval(
                     data: OptValData { number: n },
                 }
             } else {
-                OptVal {
-                    type_0: kOptValTypeBoolean,
-                    data: OptValData {
-                        boolean: tristate_from_int(n),
-                    },
-                }
+                boolean_optval(tristate_from_int(n))
             }
         } else if option_has_str {
             // Never set a string option to `v:true` or `v:null`.
@@ -260,11 +256,11 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
                 if numbool {
                     rettv.v_type = VAR_NUMBER;
                     rettv.vval.v_number = value.data.boolean as varnumber_T;
-                } else if value.data.boolean != kNone {
-                    // A `kNone` boolean has no Vimscript spelling and stays
-                    // the `v:null` this started as.
+                } else if let Some(boolean) = optval_boolean(value.data) {
+                    // An unset global-local boolean has no Vimscript
+                    // spelling and stays the `v:null` this started as.
                     rettv.v_type = VAR_BOOL;
-                    rettv.vval.v_bool = c_int::from(value.data.boolean == kTrue) as BoolVarValue;
+                    rettv.vval.v_bool = c_int::from(boolean) as BoolVarValue;
                 }
             }
             kOptValTypeNumber => {

@@ -55,9 +55,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, TriState, VV_WARNINGMSG,
-    buf_T, colnr_T, event_T, kFalse, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t,
-    win_T,
+    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, VV_WARNINGMSG, buf_T,
+    colnr_T, event_T, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::undo::{bufIsChanged, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
@@ -69,8 +68,8 @@ use ::libc::strcmp;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, STATUS_HEIGHT, check_blending, did_set_title,
-    kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles, set_option_value,
-    set_option_varp, set_options_bin,
+    kOptValTypeNumber, kOptValTypeString, option_was_set, optval_boolean, redraw_titles,
+    set_option_value, set_option_varp, set_options_bin,
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};
@@ -126,14 +125,14 @@ impl Frame {
         unsafe { self.new.number }
     }
 
-    fn old_boolean(self) -> TriState {
+    fn old_boolean(self) -> Option<bool> {
         // SAFETY: the table declares this option boolean.
-        unsafe { self.old.boolean }
+        unsafe { optval_boolean(self.old) }
     }
 
-    fn new_boolean(self) -> TriState {
+    fn new_boolean(self) -> Option<bool> {
         // SAFETY: the table declares this option boolean.
-        unsafe { self.new.boolean }
+        unsafe { optval_boolean(self.new) }
     }
 }
 
@@ -199,7 +198,8 @@ pub unsafe fn did_set_binary(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the buffer it names is live.
     unsafe {
         let f = Frame::read(args);
-        set_options_bin(f.old_boolean(), (*f.buf).b_p_bin, f.flags);
+        let bin = (*f.buf).b_p_bin != 0;
+        set_options_bin(f.old_boolean() == Some(true), bin, f.flags);
     }
     redraw_titles();
     ptr::null()
@@ -210,7 +210,7 @@ pub unsafe fn did_set_buflisted(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the buffer it names is live.
     unsafe {
         let f = Frame::read(args);
-        if f.old_boolean() != (*f.buf).b_p_bl {
+        if f.old_boolean() != Some((*f.buf).b_p_bl != 0) {
             let event = if (*f.buf).b_p_bl != 0 {
                 EVENT_BUFADD
             } else {
@@ -274,7 +274,7 @@ pub unsafe fn did_set_equalalways(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window it names is live.
     unsafe {
         let f = Frame::read(args);
-        if p_ea.get() != 0 && f.old_boolean() == kFalse {
+        if p_ea.get() != 0 && f.old_boolean() == Some(false) {
             win_equal(f.win, false, 0);
         }
     }
@@ -446,11 +446,11 @@ pub unsafe fn did_set_modified(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the buffer it names is live.
     unsafe {
         let f = Frame::read(args);
-        if f.new_boolean() == kFalse {
+        if f.new_boolean() == Some(false) {
             save_file_ff(f.buf);
         }
         redraw_titles();
-        (*f.buf).b_modified_was_set = f.new_boolean() != 0;
+        (*f.buf).b_modified_was_set = f.new_boolean() != Some(false);
     }
     ptr::null()
 }

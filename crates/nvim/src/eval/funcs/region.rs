@@ -30,8 +30,8 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg_c;
 use crate::state::virtual_active;
 use crate::types::{
-    EvalFuncData, FAIL, MotionType, NUL, OK, OP_NOP, String_0, TriState, VAR_DICT, block_def,
-    buf_T, colnr_T, kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
+    EvalFuncData, FAIL, MotionType, NUL, OK, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
+    kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
 use ::libc::memset;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -107,7 +107,7 @@ struct Region {
 /// however they leave.
 struct BufferSwap {
     buf: *mut buf_T,
-    virtual_op: TriState,
+    virtual_op: Option<bool>,
 }
 
 impl BufferSwap {
@@ -196,7 +196,7 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
 
         curbuf.set(findbuf);
         (*curwin.get()).w_buffer = curbuf.get();
-        virtual_op.set(virtual_active(curwin.get()) as TriState);
+        virtual_op.set(Some(virtual_active(curwin.get())));
 
         // Columns are one-based on the way in and zero-based from here.
         p1.col -= 1;
@@ -214,7 +214,7 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
             // An inclusive selection ending on the line terminator does not
             // actually cover a character, unless 'virtualedit' is on.
             if inclusive
-                && virtual_op.get() as u64 == 0
+                && virtual_op.get() == Some(false)
                 && *ml_get_pos(&raw mut p2) == NUL as c_char
             {
                 inclusive = false;

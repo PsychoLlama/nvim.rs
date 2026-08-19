@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::option::boolean_optval;
 use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
 use core::ffi::{c_char, c_int};
 
@@ -230,16 +231,7 @@ unsafe fn set_diff_option(wp: *mut win_T, value: bool) {
         curwin.set(wp);
         curbuf.set((*curwin.get()).w_buffer);
         (*curbuf.get()).b_ro_locked += 1;
-        set_option_value_give_err(
-            kOptDiff,
-            OptVal {
-                type_0: kOptValTypeBoolean,
-                data: OptValData {
-                    boolean: value as TriState,
-                },
-            },
-            OptionSetFlags::LOCAL,
-        );
+        set_option_value_give_err(kOptDiff, boolean_optval(Some(value)), OptionSetFlags::LOCAL);
         (*curbuf.get()).b_ro_locked -= 1;
         curwin.set(old_curwin);
         curbuf.set((*curwin.get()).w_buffer);

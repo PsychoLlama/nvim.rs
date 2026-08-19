@@ -270,7 +270,7 @@ unsafe fn push_path(
             path: (*key_alloc).data,
             after,
             pack_inserted: false,
-            has_lua: kNone,
+            has_lua: None,
             pos_in_rtp,
         });
     }

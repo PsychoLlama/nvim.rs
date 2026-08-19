@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
+use crate::option::NIL_OPTVAL;
 use crate::types::OptionSetFlags;
 
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<Dict, Error> {
@@ -146,10 +147,7 @@ unsafe fn get_option_from(
             api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
             return NIL;
         }
-        let mut value: OptVal = OptVal {
-            type_0: kOptValTypeNil,
-            data: OptValData { boolean: kFalse },
-        };
+        let mut value: OptVal = NIL_OPTVAL;
         if option_has_scope(opt_idx, scope) {
             value = get_option_value_for(
                 opt_idx,

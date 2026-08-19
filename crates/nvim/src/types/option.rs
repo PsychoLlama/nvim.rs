@@ -42,7 +42,12 @@ pub struct OptVal {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union OptValData {
-    pub boolean: TriState,
+    /// A boolean option's value, in the option variable's own alphabet: 0
+    /// false, 1 true, and -1 for a global-local option with no local value.
+    /// `optval_boolean`/`boolean_optval` are the `Option<bool>` face of it;
+    /// the raw `c_int` stays because `set_option_varp` writes this word
+    /// straight through to the variable.
+    pub boolean: ::core::ffi::c_int,
     pub number: OptInt,
     pub string: String_0,
 }

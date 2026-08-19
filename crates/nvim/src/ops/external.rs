@@ -175,8 +175,8 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
 
         // Reset virtual_op so that 'virtualedit' can be changed in the
         // function, and finish_op so that mode() returns the right value.
-        let save_virtual_op: TriState = virtual_op.get();
-        virtual_op.set(kNone);
+        let save_virtual_op: Option<bool> = virtual_op.get();
+        virtual_op.set(None);
         let save_finish_op: bool = finish_op.get();
         finish_op.set(false);
 

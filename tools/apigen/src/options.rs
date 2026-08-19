@@ -914,10 +914,13 @@ const fn scope_idx(
 }
 
 const fn boolean(value: bool) -> OptVal {
+    // The union holds the option variable's own tri-state word: 0 false, 1
+    // true, -1 for a global-local option with no value in this scope. A
+    // default is never the third.
     OptVal {
         type_0: kOptValTypeBoolean,
         data: OptValData {
-            boolean: if value { kTrue } else { kFalse },
+            boolean: if value { 1 } else { 0 },
         },
     }
 }
@@ -970,8 +973,6 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         "kOptValTypeBoolean",
         "kOptValTypeNumber",
         "kOptValTypeString",
-        "kTrue",
-        "kFalse",
     ]
     .into_iter()
     .collect();

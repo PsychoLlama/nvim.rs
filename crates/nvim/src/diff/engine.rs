@@ -25,9 +25,9 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
         let new = (*diffio).dio_new.din_fname;
         let out = (*diffio).dio_diff.dout_fname;
         let mut io_error = false;
-        let mut ok = kFalse;
+        let mut ok = false;
         loop {
-            ok = kFalse;
+            ok = false;
             let mut fd = os_fopen(orig, c"w".as_ptr());
             if fd.is_null() {
                 io_error = true;
@@ -59,7 +59,7 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
                             if strncmp(linebuf.as_ptr(), c"1c1".as_ptr(), 3) == 0
                                 || strncmp(linebuf.as_ptr(), c"@@ -1 +1 @@".as_ptr(), 11) == 0
                             {
-                                ok = kTrue;
+                                ok = true;
                             }
                         }
                         fclose(fd);
@@ -70,22 +70,22 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
                 os_remove(orig);
             }
             // With `'diffexpr'` set there is no `-a` to retry without.
-            if *p_dex.get() != 0 || diff_a_works.get() != kNone {
+            if *p_dex.get() != 0 || diff_a_works.get().is_some() {
                 break;
             }
-            diff_a_works.set(ok);
-            if ok != kFalse {
+            diff_a_works.set(Some(ok));
+            if ok {
                 break;
             }
         }
-        if ok != kFalse {
+        if ok {
             return OK;
         }
         if io_error {
             emsg(gettext(c"E810: Cannot read or write temp files".as_ptr()));
         }
         emsg(gettext(c"E97: Cannot create diffs".as_ptr()));
-        diff_a_works.set(kNone);
+        diff_a_works.set(None);
         FAIL
     }
 }
@@ -187,7 +187,7 @@ pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> c_int {
             cmd,
             len,
             c"diff %s%s%s%s%s%s%s%s %s".as_ptr(),
-            flag(diff_a_works.get() != kFalse, c"-a "),
+            flag(diff_a_works.get() != Some(false), c"-a "),
             c"".as_ptr(),
             flag(diff_flags.get() & DIFF_IWHITE != 0, c"-b "),
             flag(diff_flags.get() & DIFF_IWHITEALL != 0, c"-w "),

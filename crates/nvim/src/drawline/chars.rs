@@ -23,7 +23,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{NUL, kFalse, kTrue};
+use crate::types::NUL;
 
 impl Cells {
     /// Put the next character in [`Cells::cell_char`].
@@ -309,11 +309,8 @@ impl Cells {
                 // Extmarks take precedence over syntax.
                 self.decor_attr = hl_combine_attr(self.decor_attr, self.extmark_attr);
                 self.decor_conceal = (*decor_state.ptr()).conceal;
-                can_spell = match (*decor_state.ptr()).spell {
-                    s if s == kTrue => true,
-                    s if s == kFalse => false,
-                    _ => can_spell,
-                };
+                // The decoration only speaks when it has an opinion.
+                can_spell = (*decor_state.ptr()).spell.unwrap_or(can_spell);
             }
 
             self.attr_base = hl_combine_attr(self.fold_attr, self.decor_attr);

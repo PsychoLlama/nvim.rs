@@ -45,7 +45,7 @@ pub use text::get_foldtext;
 
 use crate::pos::MAXLNUM;
 use crate::state::MODE_INSERT;
-use crate::types::{kFalse, kNone, kTrue};
+
 use level::foldUpdateIEMS;
 use open_close::check_closed;
 
@@ -88,9 +88,9 @@ pub struct fold_T {
     pub fd_nested: garray_T,
     /// `FD_OPEN`, `FD_CLOSED` or `FD_LEVEL`.
     pub fd_flags: c_char,
-    /// Whether the fold is smaller than 'foldminlines'. `kNone` means "not
+    /// Whether the fold is smaller than 'foldminlines'. `None` means "not
     /// worked out yet", and applies to the nested folds too.
-    pub fd_small: TriState,
+    pub fd_small: Option<bool>,
 }
 
 /// What the per-'foldmethod' level computations are handed, and what they
@@ -379,7 +379,7 @@ pub unsafe fn foldUpdate(mut wp: *mut win_T, mut top: linenr_T, mut bot: linenr_
         let mut fp: *mut fold_T = ptr::null_mut();
         foldFind(&raw mut (*wp).w_folds, maybe_small_start, &raw mut fp);
         while fp < folds_end(&(*wp).w_folds) && (*fp).fd_top <= maybe_small_end {
-            (*fp).fd_small = kNone;
+            (*fp).fd_small = None;
             fp = fp.offset(1);
         }
     }
@@ -543,8 +543,8 @@ unsafe fn deleteFoldEntry(gap: *mut garray_T, idx: c_int, recursive: bool) {
             if (*fp).fd_flags as c_int == FD_LEVEL as c_int {
                 (*nfp.offset(i as isize)).fd_flags = FD_LEVEL as c_int as c_char;
             }
-            if (*fp).fd_small as c_int == kNone as c_int {
-                (*nfp.offset(i as isize)).fd_small = kNone;
+            if (*fp).fd_small.is_none() {
+                (*nfp.offset(i as isize)).fd_small = None;
             }
             i += 1;
         }
@@ -595,32 +595,32 @@ unsafe fn getDeepestNestingRecurse(mut gap: *mut garray_T) -> c_int {
 ///
 /// `lnum_off` — offset for fp->fd_top
 unsafe fn checkSmall(wp: *mut win_T, fp: *mut fold_T, lnum_off: linenr_T) {
-    if (*fp).fd_small as c_int != kNone as c_int {
+    if (*fp).fd_small.is_some() {
         return;
     }
     setSmallMaybe(&raw mut (*fp).fd_nested);
     if (*fp).fd_len as OptInt > (*wp).w_onebuf_opt.wo_fml {
-        (*fp).fd_small = kFalse;
+        (*fp).fd_small = Some(false);
     } else {
         let mut count: c_int = 0;
         let mut n: c_int = 0;
         while (n as linenr_T) < (*fp).fd_len {
             count += plines_win_nofold(wp, (*fp).fd_top + lnum_off + n as linenr_T);
             if count as OptInt > (*wp).w_onebuf_opt.wo_fml {
-                (*fp).fd_small = kFalse;
+                (*fp).fd_small = Some(false);
                 return;
             }
             n += 1;
         }
-        (*fp).fd_small = kTrue;
+        (*fp).fd_small = Some(true);
     };
 }
-/// Set small flags in "gap" to kNone.
+/// Set small flags in "gap" to None.
 unsafe fn setSmallMaybe(mut gap: *mut garray_T) {
     let mut fp: *mut fold_T = folds(&*gap);
     let mut i: c_int = 0;
     while i < (*gap).ga_len {
-        (*fp.offset(i as isize)).fd_small = kNone;
+        (*fp.offset(i as isize)).fd_small = None;
         i += 1;
     }
 }

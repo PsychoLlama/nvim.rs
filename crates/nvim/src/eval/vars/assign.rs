@@ -13,6 +13,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::option::{NIL_OPTVAL, boolean_optval};
 use crate::types::{FAIL, NUL, OK, OptionSetFlags};
 
 /// The compound assignment operators, as they appear before the `=`.
@@ -486,12 +487,7 @@ unsafe fn ex_let_option(
                             data: OptValData { number: new_n },
                         }
                     } else {
-                        OptVal {
-                            type_0: kOptValTypeBoolean,
-                            data: OptValData {
-                                boolean: tristate_from_int(new_n),
-                            },
-                        }
+                        boolean_optval(tristate_from_int(new_n))
                     };
                 } else if curval.type_0 == kOptValTypeString {
                     let curval_data = curval.data.string.data;
@@ -525,13 +521,13 @@ unsafe fn ex_let_option(
 
 /// Upstream's `TRISTATE_FROM_INT`: anything positive is true, zero is false,
 /// and a negative number is "unset".
-pub(crate) fn tristate_from_int(n: OptInt) -> TriState {
+pub(crate) fn tristate_from_int(n: OptInt) -> Option<bool> {
     if n == 0 {
-        kFalse
+        Some(false)
     } else if n >= 1 {
-        kTrue
+        Some(true)
     } else {
-        kNone
+        None
     }
 }
 

@@ -26,8 +26,8 @@ use crate::marktree::meta::MetaCount;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
 use crate::types::{
-    DecorInline, DecorSignHighlight, MTPos, MarkTreeIter, SignItem, SignTextAttrs, TriState, buf_T,
-    kFalse, kNone, kTrue, linenr_T, win_T,
+    DecorInline, DecorSignHighlight, MTPos, MarkTreeIter, SignItem, SignTextAttrs, buf_T, linenr_T,
+    win_T,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -88,7 +88,7 @@ pub unsafe fn buf_put_decor_sh(
     }
     sh.sign_add_id = SIGN_ADD_ID.replace(SIGN_ADD_ID.get() + 1);
     if sh.has_text() {
-        buf_signcols_count(buf, row1, row2, 1, kFalse);
+        buf_signcols_count(buf, row1, row2, 1, SignCountHalf::Both);
         may_force_numberwidth_recompute(buf, false);
     }
 }
@@ -112,7 +112,7 @@ pub unsafe fn buf_remove_decor_sh(
         return;
     }
     if buf.meta_total(kMTMetaSignText) != 0 {
-        buf_signcols_count(buf, row1, row2, -1, kFalse);
+        buf_signcols_count(buf, row1, row2, -1, SignCountHalf::Both);
     } else {
         may_force_numberwidth_recompute(buf, true);
         buf.b_signcols.count[0] = 0;
@@ -282,6 +282,21 @@ pub fn decor_find_sign(decor: DecorInline) -> *mut DecorSignHighlight {
         .map_or(ptr::null_mut(), Sh::raw)
 }
 
+/// Which half of a sign re-count a [`buf_signcols_count_range`] call does.
+///
+/// A marktree splice moves the marks between the two halves, so the counts
+/// have to come off the histogram before it and go back on after it. That is
+/// three answers, not an unknown boolean.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum SignCountHalf {
+    /// Subtract the old counts and add the new ones in one pass.
+    Both,
+    /// Only subtract the counts the range had before.
+    Subtract,
+    /// Only add the counts the range has now.
+    Add,
+}
+
 /// Re-counts the signs on rows `row1..=row2` and folds the difference into
 /// `buf->b_signcols`, the histogram `'signcolumn'`'s `auto:N` reads.
 ///
@@ -292,11 +307,11 @@ pub unsafe fn buf_signcols_count_range(
     row1: c_int,
     row2: c_int,
     add: c_int,
-    clear: TriState,
+    half: SignCountHalf,
 ) {
     // SAFETY: the caller's buffer.
     let buf = unsafe { Buf::new(buf) };
-    buf_signcols_count(buf, row1, row2, add, clear);
+    buf_signcols_count(buf, row1, row2, add, half);
 }
 
 /// [`buf_signcols_count_range`] for a buffer already promised live.
@@ -304,10 +319,8 @@ pub unsafe fn buf_signcols_count_range(
 /// `b_signcols.count[w - 1]` is how many rows show exactly `w` signs, so the
 /// widest row is `max`. `add` says what just happened to the range — 1 for an
 /// added sign, -1 for a deleted one, 0 for a range being counted from scratch
-/// — and `clear` splits the update in two around a marktree splice: `kTrue`
-/// only subtracts the old counts, `kNone` only adds the new ones, `kFalse`
-/// does both.
-fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, clear: TriState) {
+/// — and `half` is which side of a marktree splice this call is doing.
+fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
     if !buf.b_signcols.autom || row2 < row1 || buf.meta_total(kMTMetaSignText) == 0 {
         return;
     }
@@ -344,14 +357,14 @@ fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, clear:
 
     for &rowcount in &count {
         let prevwidth = SIGN_SHOW_MAX.min(rowcount - add);
-        if clear != kNone && prevwidth > 0 {
+        if half != SignCountHalf::Add && prevwidth > 0 {
             let slot = &mut buf.b_signcols.count[(prevwidth - 1) as usize];
             *slot -= 1;
             // TODO(bfredl): correct marktree splicing so that this doesn't fail
             debug_assert!(*slot >= 0);
         }
         let width = SIGN_SHOW_MAX.min(rowcount);
-        if clear != kTrue && width > 0 {
+        if half != SignCountHalf::Subtract && width > 0 {
             buf.b_signcols.count[(width - 1) as usize] += 1;
             if width > buf.b_signcols.max {
                 buf.b_signcols.max = width;

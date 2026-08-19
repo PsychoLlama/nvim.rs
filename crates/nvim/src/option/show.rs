@@ -39,8 +39,8 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, FILE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptionSetFlags, buf_T, kNone, kTrue,
-    size_t, uint32_t, vimoption_T,
+    FAIL, FILE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptionSetFlags, buf_T, size_t,
+    uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbufIsChanged;
@@ -51,7 +51,7 @@ use super::{
     kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
     kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_type,
     option_is_global_local, option_is_global_only, option_is_window_local, option_var,
-    optval_as_object, optval_equal, optval_from_varp, optval_is_default,
+    optval_as_object, optval_boolean, optval_equal, optval_from_varp, optval_is_default,
 };
 
 /// The column width one option gets in the multi-column listing, and the
@@ -394,8 +394,8 @@ pub(crate) unsafe fn put_set(
 
         match value.type_0 {
             kOptValTypeBoolean => {
-                debug_assert!(value.data.boolean != kNone);
-                let prefix = if value.data.boolean == kTrue {
+                debug_assert!(optval_boolean(value.data).is_some());
+                let prefix = if optval_boolean(value.data) == Some(true) {
                     c"".as_ptr()
                 } else {
                     c"no".as_ptr()

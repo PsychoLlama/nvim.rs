@@ -120,7 +120,6 @@ use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::option::MAX_MCO;
-use crate::types::types::{kFalse, kTrue};
 use crate::types::{
     OptIndex, OptInt, OptScopeFlags, OptVal, OptValData, OptVar, String_0, sctx_T, ssize_t,
     vimoption_T,
@@ -167,10 +166,13 @@ const fn scope_idx(global: GlobalOptIndex, win: WinOptIndex, buf: BufOptIndex) -
 }
 
 const fn boolean(value: bool) -> OptVal {
+    // The union holds the option variable's own tri-state word: 0 false, 1
+    // true, -1 for a global-local option with no value in this scope. A
+    // default is never the third.
     OptVal {
         type_0: kOptValTypeBoolean,
         data: OptValData {
-            boolean: if value { kTrue } else { kFalse },
+            boolean: if value { 1 } else { 0 },
         },
     }
 }

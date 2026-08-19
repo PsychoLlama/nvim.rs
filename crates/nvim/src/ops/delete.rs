@@ -120,7 +120,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
             }
 
             msgmore((*curbuf.get()).b_ml.ml_line_count as c_int - old_lcount as c_int);
-        } else if virtual_op.get() == 0 {
+        } else if !op_virtual() {
             // Operating on an empty region is an error when 'cpoptions'
             // contains 'E' (Vi compatible).
             if !vim_strchr(p_cpo.get(), CPO_EMPTYREGION).is_null() {
@@ -333,7 +333,7 @@ unsafe fn delete_whole_lines(oap: *mut oparg_T) -> Result<(), UndoFailed> {
 /// `oap` must point to a live charwise `oparg_T`.
 unsafe fn delete_chars(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
-        if virtual_op.get() != 0 {
+        if op_virtual() {
             break_tabs_at_edges(oap)?;
         }
 
@@ -417,7 +417,7 @@ unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> Result<(), UndoFailed> {
 
         let mut n = (*oap).end.col - (*oap).start.col + 1 - c_int::from(!(*oap).inclusive);
 
-        if virtual_op.get() != 0 {
+        if op_virtual() {
             let len = get_cursor_line_len();
             if (*oap).end.coladd != 0
                 && (*oap).end.col >= len - 1
@@ -437,7 +437,7 @@ unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> Result<(), UndoFailed> {
 
         del_bytes(
             n,
-            virtual_op.get() == 0,
+            !op_virtual(),
             (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
         );
         Ok(())
@@ -483,7 +483,7 @@ unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> Result<(), UndoFailed>
         (*curwin.get()).w_cursor.col = 0;
         del_bytes(
             n,
-            virtual_op.get() == 0,
+            !op_virtual(),
             (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
         );
 

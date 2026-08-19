@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
+use crate::getchar::PastePhase;
 use crate::types::{NUL, PUT_CURSEND};
 
 pub unsafe fn nvim_paste(
@@ -91,10 +92,10 @@ pub unsafe fn nvim_paste(
                 terminal_set_streamed_paste((*curbuf.get()).terminal, false);
             }
             if !cancelled.get() && (phase == -1 as Integer || phase == 1 as Integer) {
-                paste_store(channel_id, kFalse, NULL_STRING, crlf);
+                paste_store(channel_id, PastePhase::Start, NULL_STRING, crlf);
             }
             if !cancelled.get() {
-                paste_store(channel_id, kNone, data, crlf);
+                paste_store(channel_id, PastePhase::Chunk, data, crlf);
             }
             if phase == 3 as Integer
                 || phase
@@ -104,7 +105,7 @@ pub unsafe fn nvim_paste(
                         -1 as ::core::ffi::c_int
                     }) as Integer
             {
-                paste_store(channel_id, kTrue, NULL_STRING, crlf);
+                paste_store(channel_id, PastePhase::End, NULL_STRING, crlf);
             }
         }
         let mut retval: bool = !cancelled.get();

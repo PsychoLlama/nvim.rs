@@ -363,11 +363,11 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
             (*s).lastc = (*s).c;
         }
 
-        // `i_CTRL-G_U` set `kNone`; this is the one key it covers.
-        if dont_sync_undo.get() == kNone {
-            dont_sync_undo.set(kTrue);
+        // `i_CTRL-G_U` armed the latch; this is the one key it covers.
+        if dont_sync_undo.get() == KeepUndo::Armed {
+            dont_sync_undo.set(KeepUndo::Now);
         } else {
-            dont_sync_undo.set(kFalse);
+            dont_sync_undo.set(KeepUndo::No);
         }
 
         if (*s).ins_just_started {

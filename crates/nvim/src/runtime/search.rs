@@ -523,8 +523,8 @@ pub unsafe fn runtime_inspect(arena: *mut Arena) -> Array {
             if item.pack_inserted {
                 dict_put(&mut entry, c"pack_inserted", boolean_obj(true));
             }
-            if item.has_lua != kNone {
-                dict_put(&mut entry, c"has_lua", boolean_obj(item.has_lua == kTrue));
+            if let Some(has_lua) = item.has_lua {
+                dict_put(&mut entry, c"has_lua", boolean_obj(has_lua));
             }
             dict_put(
                 &mut entry,
@@ -591,16 +591,16 @@ pub unsafe fn runtime_get_named_thread(lua: bool, pat: Array, all: bool) -> Arra
 unsafe fn dir_has_lua(item: *mut SearchPathItem, buf: &mut [c_char]) -> bool {
     // SAFETY: the caller's live entry; `snprintf` NUL-terminates within `buf`.
     unsafe {
-        if (*item).has_lua == kNone {
+        if (*item).has_lua.is_none() {
             let size = snprintf(
                 buf.as_mut_ptr(),
                 buf.len(),
                 c"%s/lua/".as_ptr(),
                 (*item).path,
             ) as size_t;
-            (*item).has_lua = (size < buf.len() && os_isdir(buf.as_mut_ptr())) as TriState;
+            (*item).has_lua = Some(size < buf.len() && os_isdir(buf.as_mut_ptr()));
         }
-        (*item).has_lua != kFalse
+        (*item).has_lua != Some(false)
     }
 }
 

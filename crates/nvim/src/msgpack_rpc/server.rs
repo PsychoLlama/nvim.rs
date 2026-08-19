@@ -17,7 +17,7 @@ use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
-use crate::types::{IOSIZE, SocketWatcher, VV_SEND_SERVER, kFalse, kNone, kTrue, size_t, uint32_t};
+use crate::types::{IOSIZE, SocketWatcher, VV_SEND_SERVER, size_t, uint32_t};
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;
 
@@ -42,6 +42,21 @@ const ENV_LISTEN: &CStr = c"NVIM_LISTEN_ADDRESS";
 /// `v:servername` reports.
 static WATCHERS: GlobalCell<Vec<*mut SocketWatcher>> = GlobalCell::new(Vec::new());
 
+/// Where the start-up listening address came from.
+///
+/// Upstream keeps this in a `TriState`, but the three values name three
+/// sources, not an unknown boolean: only the first two are worth a message
+/// when listening fails, and each gets its own wording.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum ListenSource {
+    /// `--listen <address>`.
+    Argument,
+    /// `$NVIM_LISTEN_ADDRESS`.
+    Environment,
+    /// Nobody asked; the address was made up.
+    Generated,
+}
+
 /// Opens the start-up listening socket, if there is to be one.
 ///
 /// Returns whether that succeeded. An address the user did not ask for is
@@ -53,16 +68,16 @@ static WATCHERS: GlobalCell<Vec<*mut SocketWatcher>> = GlobalCell::new(Vec::new(
 pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
     let mut listen_addr = listen_addr;
     let mut must_free = false;
-    // Which of the three sources the address came from, in the order they are
-    // consulted; `kNone` means nobody asked for one.
-    let mut user_arg = kTrue;
+    // Which of the three sources the address came from, in the order they
+    // are consulted.
+    let mut source = ListenSource::Argument;
 
     if listen_addr.is_null() || *listen_addr == 0 {
         if os_env_exists(ENV_LISTEN.as_ptr(), true) {
-            user_arg = kFalse;
+            source = ListenSource::Environment;
             listen_addr = os_getenv(ENV_LISTEN.as_ptr());
         } else {
-            user_arg = kNone;
+            source = ListenSource::Generated;
             listen_addr = server_address_new(core::ptr::null());
         }
         must_free = true;
@@ -82,7 +97,7 @@ pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
     }
 
     let mut ok = true;
-    if rv != 0 && user_arg != kNone {
+    if rv != 0 && source != ListenSource::Generated {
         let reason = if rv < 0 {
             uv_strerror(rv)
         } else if rv == 1 {
@@ -93,7 +108,7 @@ pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
         snprintf(
             IObuff.ptr().cast::<c_char>(),
             IOSIZE as usize,
-            if user_arg == kTrue {
+            if source == ListenSource::Argument {
                 c"Failed to --listen: %s: \"%s\"".as_ptr()
             } else {
                 c"Failed $NVIM_LISTEN_ADDRESS: %s: \"%s\"".as_ptr()

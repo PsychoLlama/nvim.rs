@@ -306,9 +306,9 @@ unsafe fn count_selected_line(
         let mut s: *mut c_char = ::core::ptr::null_mut();
         let mut len = 0;
         if sel.mode == Ctrl_V {
-            virtual_op.set(virtual_active(curwin.get()) as TriState);
+            virtual_op.set(Some(virtual_active(curwin.get())));
             block_prep(&raw mut sel.oparg, &raw mut *bd, lnum, false);
-            virtual_op.set(kNone);
+            virtual_op.set(None);
             s = bd.textstart;
             len = bd.textlen;
         } else if sel.mode == 'V' as c_int {

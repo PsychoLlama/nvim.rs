@@ -10,7 +10,6 @@
 use core::ffi::{CStr, c_int};
 
 use crate::main::t_colors;
-use crate::types::{TriState, kFalse, kNone, kTrue};
 
 /// The names `ctermfg=`/`ctermbg=` accept, in the order the number tables
 /// below are indexed. `NONE` is last and maps to -1 in every table.
@@ -94,28 +93,28 @@ pub(crate) fn cterm_color_index(name: &CStr) -> Option<usize> {
 /// Answers -1 for `NONE`, the one entry that is not a colour. `bold` is only
 /// decided for a foreground colour on an 8-colour terminal, where the light
 /// half of the palette is reached by making the dark half bold; every other
-/// case leaves it [`kNone`], meaning "don't touch it".
-pub(crate) fn lookup_color(idx: usize, foreground: bool) -> (c_int, TriState) {
+/// case leaves it [`None`], meaning "don't touch it".
+pub(crate) fn lookup_color(idx: usize, foreground: bool) -> (c_int, Option<bool>) {
     // The _16 table doubles as the validity check.
     if COLOR_NUMBERS_16[idx] < 0 {
-        return (-1, kNone);
+        return (-1, None);
     }
     match t_colors.get() {
         8 => {
             let color = COLOR_NUMBERS_8[idx];
             let bold = if !foreground {
-                kNone
+                None
             } else if color & 8 != 0 {
-                kTrue
+                Some(true)
             } else {
-                kFalse
+                Some(false)
             };
             (color & 7, bold)
         }
-        16 => (COLOR_NUMBERS_8[idx], kNone),
-        88 => (COLOR_NUMBERS_88[idx], kNone),
-        n if n >= 256 => (COLOR_NUMBERS_256[idx], kNone),
-        _ => (COLOR_NUMBERS_16[idx], kNone),
+        16 => (COLOR_NUMBERS_8[idx], None),
+        88 => (COLOR_NUMBERS_88[idx], None),
+        n if n >= 256 => (COLOR_NUMBERS_256[idx], None),
+        _ => (COLOR_NUMBERS_16[idx], None),
     }
 }
 

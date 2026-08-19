@@ -13,15 +13,28 @@ use crate::types::{NUL, kErrorTypeNone};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
+/// Which part of a paste stream a [`paste_store`] call is carrying.
+///
+/// Upstream passes a `TriState` here, but the three values are phases of a
+/// stream, not an unknown boolean.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum PastePhase {
+    /// The paste is beginning; `K_PASTE_START` goes into the buffers.
+    Start,
+    /// A piece of the pasted text itself.
+    Chunk,
+    /// The paste is over; `K_PASTE_END` goes into the buffers.
+    End,
+}
+
 /// Record a piece of a paste into the redo and/or record buffers.
 ///
-/// `state` is `kFalse` for the start of a paste, `kTrue` for the end, and
-/// `kNone` for a chunk of its content — only then is `str` read. `K_SPECIAL`
-/// and NUL bytes in the content are escaped.
+/// `str` is read only for [`PastePhase::Chunk`]; `K_SPECIAL` and NUL bytes
+/// in the content are escaped.
 ///
 /// # Safety
-/// `str` must be a valid string when `state` is `kNone`.
-pub unsafe fn paste_store(channel_id: uint64_t, state: TriState, str: String_0, crlf: bool) {
+/// `str` must be a valid string when `phase` is [`PastePhase::Chunk`].
+pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0, crlf: bool) {
     unsafe {
         if State.get() & MODE_CMDLINE != 0 {
             return;
@@ -32,14 +45,14 @@ pub unsafe fn paste_store(channel_id: uint64_t, state: TriState, str: String_0, 
             return;
         }
 
-        if state != kNone {
-            let c = if state == kFalse {
+        if phase != PastePhase::Chunk {
+            let c = if phase == PastePhase::Start {
                 K_PASTE_START
             } else {
                 K_PASTE_END
             };
             if need_redo {
-                if state == kFalse && State.get() & MODE_INSERT == 0 {
+                if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
                     ResetRedobuff();
                 }
                 add_char_buff(redobuff.ptr(), c);

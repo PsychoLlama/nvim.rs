@@ -19,9 +19,8 @@ use crate::memory::{strnequal, xmalloc, xstrdup};
 use crate::options::options;
 use crate::os::cshim::snprintf;
 use crate::types::{
-    Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, TriState, kFalse, kNone,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kTrue, object,
-    object_data, size_t,
+    Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, kObjectTypeBoolean,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, object, object_data, size_t,
 };
 use crate::undo::curbufIsChanged;
 
@@ -29,6 +28,45 @@ use super::{
     NUMBUFLEN, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
     kOptValTypeString, option_has_type,
 };
+
+/// An `OptVal` holding nothing: an unknown option, or one the caller only
+/// wants the *absence* of.  The union payload is a don't-care and the tag is
+/// what every reader tests.
+pub(crate) const NIL_OPTVAL: OptVal = OptVal {
+    type_0: kOptValTypeNil,
+    data: OptValData { boolean: 0 },
+};
+
+/// The `OptVal` for a boolean option's value.
+///
+/// `None` is upstream's `kNone`: a global-local option with no value of its
+/// own in this scope.  It is not "false", and `optval_as_object` reports it
+/// as nil rather than as `false`.
+pub(crate) const fn boolean_optval(value: Option<bool>) -> OptVal {
+    OptVal {
+        type_0: kOptValTypeBoolean,
+        data: OptValData {
+            boolean: match value {
+                Some(true) => 1,
+                Some(false) => 0,
+                None => -1,
+            },
+        },
+    }
+}
+
+/// A boolean option's value, `None` for the unset global-local marker.
+///
+/// # Safety
+/// The `OptVal` this payload came from must be tagged `kOptValTypeBoolean`.
+pub(crate) unsafe fn optval_boolean(data: OptValData) -> Option<bool> {
+    // SAFETY: the caller's promise about the tag.
+    match unsafe { data.boolean } {
+        0 => Some(false),
+        1.. => Some(true),
+        _ => None,
+    }
+}
 
 /// What `:set` and `nvim_get_option_info` call each value type.
 pub(crate) fn optval_type_name(type_0: OptValType) -> &'static CStr {
@@ -114,24 +152,19 @@ pub unsafe fn optval_from_varp(opt_idx: OptIndex, varp: *mut c_void) -> OptVal {
     // misses a buffer whose undo state says it is unchanged after all.
     // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
     if varp.cast::<c_int>() == unsafe { &raw mut (*curbuf.get()).b_changed } {
-        return OptVal {
-            type_0: kOptValTypeBoolean,
-            // SAFETY: reading the current buffer's change state.
-            data: OptValData {
-                boolean: unsafe { curbufIsChanged() } as TriState,
-            },
-        };
+        // SAFETY: reading the current buffer's change state.
+        return boolean_optval(Some(unsafe { curbufIsChanged() }));
     }
     let type_0 = option_get_type(opt_idx);
     let data = match type_0 {
-        kOptValTypeNil => OptValData { boolean: kFalse },
+        kOptValTypeNil => NIL_OPTVAL.data,
         // SAFETY (all three): the caller's `varp` is the variable for this
         // option, and the table's type says which of the three it is.
         kOptValTypeBoolean => OptValData {
             boolean: match unsafe { *varp.cast::<c_int>() } {
-                0 => kFalse,
-                1.. => kTrue,
-                _ => kNone,
+                0 => 0,
+                1.. => 1,
+                _ => -1,
             },
         },
         kOptValTypeNumber => OptValData {
@@ -216,15 +249,14 @@ pub fn optval_as_object(value: OptVal) -> Object {
     unsafe {
         match value.type_0 {
             kOptValTypeNil => nil,
-            kOptValTypeBoolean => match value.data.boolean {
-                kFalse | kTrue => object {
+            kOptValTypeBoolean => match optval_boolean(value.data) {
+                Some(boolean) => object {
                     type_0: kObjectTypeBoolean,
-                    data: object_data {
-                        boolean: value.data.boolean != 0,
-                    },
+                    data: object_data { boolean },
                 },
-                kNone => nil,
-                _ => unreachable!("tri-state {}", value.data.boolean),
+                // A global-local option with no local value has no API
+                // spelling but nil.
+                None => nil,
             },
             kOptValTypeNumber => object {
                 type_0: kObjectTypeInteger,
@@ -249,16 +281,8 @@ pub fn object_as_optval(o: Object) -> Option<OptVal> {
     // SAFETY: each arm reads the payload the object's own tag selected.
     unsafe {
         Some(match o.type_0 {
-            kObjectTypeNil => OptVal {
-                type_0: kOptValTypeNil,
-                data: OptValData { boolean: kFalse },
-            },
-            kObjectTypeBoolean => OptVal {
-                type_0: kOptValTypeBoolean,
-                data: OptValData {
-                    boolean: o.data.boolean as TriState,
-                },
-            },
+            kObjectTypeNil => NIL_OPTVAL,
+            kObjectTypeBoolean => boolean_optval(Some(o.data.boolean)),
             kObjectTypeInteger => OptVal {
                 type_0: kOptValTypeNumber,
                 data: OptValData {
