@@ -20,10 +20,8 @@
 use super::complete::{COMMAND_COMPLETE, command_complete_name};
 use super::{
     ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
-    ADDR_QUICKFIX, ADDR_TABS, ADDR_WINDOWS, EX_BANG, EX_BUFNAME, EX_COUNT, EX_DFLALL, EX_EXTRA,
-    EX_KEEPSCRIPT, EX_NEEDARG, EX_NOSPC, EX_RANGE, EX_REGSTR, EX_TRLBAR, EX_XFILE, EX_ZEROR,
-    EXPAND_BUFFERS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_SHELLCMDLINE, EXPAND_USER_DEFINED,
-    EXPAND_USER_LIST, FAIL, OK, UC_BUFFER,
+    ADDR_QUICKFIX, ADDR_TABS, ADDR_WINDOWS, EXPAND_BUFFERS, EXPAND_DIRECTORIES, EXPAND_FILES,
+    EXPAND_SHELLCMDLINE, EXPAND_USER_DEFINED, EXPAND_USER_LIST, FAIL, OK, UC_BUFFER,
 };
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int;
@@ -31,7 +29,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
-use crate::types::{NUL, cmd_addr_T, size_t, uint32_t};
+use crate::types::{ExArgt, NUL, cmd_addr_T, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::slice;
 
@@ -123,7 +121,7 @@ pub unsafe fn parse_addr_type_arg(
 /// followed by `,` and the function argument that `custom`/`customlist`
 /// need.
 ///
-/// Stores the `EXPAND_*` type in `complp`, may add `EX_BUFNAME`/`EX_XFILE`
+/// Stores the `EXPAND_*` type in `complp`, may add `ExArgt::BUFNAME`/`ExArgt::XFILE`
 /// to `argt`, and hands `compl_arg` a fresh copy of the argument part.
 ///
 /// # Safety
@@ -132,7 +130,7 @@ pub unsafe fn parse_compl_arg(
     value: *const c_char,
     vallen: c_int,
     complp: &mut c_int,
-    argt: &mut uint32_t,
+    argt: &mut ExArgt,
     compl_arg: &mut *mut c_char,
 ) -> c_int {
     // SAFETY: caller contract.
@@ -154,12 +152,12 @@ pub unsafe fn parse_compl_arg(
     };
     *complp = expand;
     if expand == EXPAND_BUFFERS {
-        *argt |= EX_BUFNAME;
+        *argt |= ExArgt::BUFNAME;
     } else if expand == EXPAND_DIRECTORIES
         || expand == EXPAND_FILES
         || expand == EXPAND_SHELLCMDLINE
     {
-        *argt |= EX_XFILE;
+        *argt |= ExArgt::XFILE;
     }
 
     let custom = expand == EXPAND_USER_DEFINED || expand == EXPAND_USER_LIST;
@@ -187,7 +185,7 @@ pub unsafe fn parse_compl_arg(
 
 /// Everything one attribute can change about a command being defined.
 pub(super) struct Attributes<'a> {
-    pub(super) argt: &'a mut uint32_t,
+    pub(super) argt: &'a mut ExArgt,
     pub(super) def: &'a mut c_int,
     pub(super) flags: &'a mut c_int,
     pub(super) complp: &'a mut c_int,
@@ -225,19 +223,19 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
 
     // The flag attributes take no value.
     if abbreviates(typed, "bang") {
-        *into.argt |= EX_BANG;
+        *into.argt |= ExArgt::BANG;
         return OK;
     } else if abbreviates(typed, "buffer") {
         *into.flags |= UC_BUFFER;
         return OK;
     } else if abbreviates(typed, "register") {
-        *into.argt |= EX_REGSTR;
+        *into.argt |= ExArgt::REGSTR;
         return OK;
     } else if abbreviates(typed, "keepscript") {
-        *into.argt |= EX_KEEPSCRIPT;
+        *into.argt |= ExArgt::KEEPSCRIPT;
         return OK;
     } else if abbreviates(typed, "bar") {
-        *into.argt |= EX_TRLBAR;
+        *into.argt |= ExArgt::TRLBAR;
         return OK;
     }
 
@@ -275,7 +273,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
             },
         }
     } else if abbreviates(name, "addr") {
-        *into.argt |= EX_RANGE;
+        *into.argt |= ExArgt::RANGE;
         match value {
             None => Err(Bad::Missing(c"-addr")),
             // SAFETY: caller contract.
@@ -285,7 +283,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
                 FAIL => Err(Bad::Reported),
                 _ => {
                     if *into.addr_type_arg != ADDR_LINES {
-                        *into.argt |= EX_ZEROR;
+                        *into.argt |= ExArgt::ZEROR;
                     }
                     Ok(())
                 }
@@ -329,23 +327,23 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
 }
 
 /// `-nargs=`: one of `0`, `1`, `*`, `?`, `+`.
-fn scan_nargs(value: Option<&[u8]>, argt: &mut uint32_t) -> Result<(), Bad> {
+fn scan_nargs(value: Option<&[u8]>, argt: &mut ExArgt) -> Result<(), Bad> {
     match value {
         Some([b'0']) => Ok(()),
         Some([b'1']) => {
-            *argt |= EX_EXTRA | EX_NOSPC | EX_NEEDARG;
+            *argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG;
             Ok(())
         }
         Some([b'*']) => {
-            *argt |= EX_EXTRA;
+            *argt |= ExArgt::EXTRA;
             Ok(())
         }
         Some([b'?']) => {
-            *argt |= EX_EXTRA | EX_NOSPC;
+            *argt |= ExArgt::EXTRA | ExArgt::NOSPC;
             Ok(())
         }
         Some([b'+']) => {
-            *argt |= EX_EXTRA | EX_NEEDARG;
+            *argt |= ExArgt::EXTRA | ExArgt::NEEDARG;
             Ok(())
         }
         _ => Err(Bad::Nargs),
@@ -355,13 +353,13 @@ fn scan_nargs(value: Option<&[u8]>, argt: &mut uint32_t) -> Result<(), Bad> {
 /// `-range`, `-range=%` or `-range=N`.
 fn scan_range(
     value: Option<&[u8]>,
-    argt: &mut uint32_t,
+    argt: &mut ExArgt,
     def: &mut c_int,
     addr_type_arg: &mut cmd_addr_T,
 ) -> Result<(), Bad> {
-    *argt |= EX_RANGE;
+    *argt |= ExArgt::RANGE;
     match value {
-        Some(b"%") => *argt |= EX_DFLALL,
+        Some(b"%") => *argt |= ExArgt::DFLALL,
         Some(v) => {
             if *def >= 0 {
                 return Err(Bad::TwoCount);
@@ -373,7 +371,7 @@ fn scan_range(
                 return Err(Bad::InvalidCount);
             }
             *def = digits(v).ok_or(Bad::InvalidCount)?;
-            *argt |= EX_ZEROR;
+            *argt |= ExArgt::ZEROR;
         }
         None => {}
     }
@@ -387,11 +385,11 @@ fn scan_range(
 /// `-count` or `-count=N`.
 fn scan_count(
     value: Option<&[u8]>,
-    argt: &mut uint32_t,
+    argt: &mut ExArgt,
     def: &mut c_int,
     addr_type_arg: &mut cmd_addr_T,
 ) -> Result<(), Bad> {
-    *argt |= EX_COUNT | EX_ZEROR | EX_RANGE;
+    *argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
     // The default for -count is to count anything.
     if *addr_type_arg == ADDR_NONE {
         *addr_type_arg = ADDR_OTHER;

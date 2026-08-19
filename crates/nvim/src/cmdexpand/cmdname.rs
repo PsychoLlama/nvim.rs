@@ -42,7 +42,7 @@ use crate::types::{
     CMD_tmenu, CMD_topleft, CMD_tselect, CMD_tunmenu, CMD_unabbreviate, CMD_unlet, CMD_unmap,
     CMD_unmenu, CMD_unsilent, CMD_update, CMD_verbose, CMD_vertical, CMD_vglobal, CMD_vmap,
     CMD_vmapclear, CMD_vmenu, CMD_vnoremap, CMD_vnoremenu, CMD_vunmap, CMD_vunmenu, CMD_while,
-    CMD_windo, CMD_write, CMD_xmap, CMD_xmapclear, CMD_xnoremap, CMD_xunmap, FAIL, NUL,
+    CMD_windo, CMD_write, CMD_xmap, CMD_xmapclear, CMD_xnoremap, CMD_xunmap, ExArgt, FAIL, NUL,
     OptionSetFlags,
 };
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -60,7 +60,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
     cmdidx: cmdidx_T,
     xp: *mut expand_T,
     mut arg: *const c_char,
-    argt: uint32_t,
+    argt: ExArgt,
     context: c_int,
     forceit: bool,
 ) -> *const c_char {
@@ -364,7 +364,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
         (*xp).xp_pattern = buff as *mut c_char;
         (*xp).xp_line = buff as *mut c_char;
         (*xp).xp_context = EXPAND_COMMANDS; // Default until we get past command
-        ea.argt = 0;
+        ea.argt = ExArgt::NONE;
 
         // 1. skip comment lines and leading space, colons or bars
         let mut cmd: *const c_char = buff;
@@ -419,7 +419,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
         let mut arg = skipwhite(p);
 
         // Does command allow "++argopt" argument?
-        if ea.argt & EX_ARGOPT != 0 {
+        if ea.argt.has(ExArgt::ARGOPT) {
             while *arg as c_int != NUL && strncmp(arg, c"++".as_ptr(), 2) == 0 {
                 p = arg.add(2);
                 while *p != 0 && !ascii_isspace(*p as c_int) {
@@ -427,7 +427,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
                 }
 
                 // Still touching the command after "++"?
-                if *p as c_int == NUL && ea.argt & EX_ARGOPT != 0 {
+                if *p as c_int == NUL && ea.argt.has(ExArgt::ARGOPT) {
                     return set_context_in_argopt(xp, arg.add(2));
                 }
 
@@ -468,7 +468,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
         }
 
         // Does command allow "+command"?
-        if ea.argt & EX_CMDARG != 0 && !usefilter && *arg as c_int == '+' as c_int {
+        if ea.argt.has(ExArgt::CMDARG) && !usefilter && *arg as c_int == '+' as c_int {
             // Check if we're in the +command.
             p = arg.add(1);
             arg = skip_cmd_arg(arg as *mut c_char, false);
@@ -484,7 +484,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
 
         // Check for '|' to separate commands and '"' to start comments.
         // Don't do this for ":read !cmd" and ":write !cmd".
-        if ea.argt & EX_TRLBAR != 0 && !usefilter {
+        if ea.argt.has(ExArgt::TRLBAR) && !usefilter {
             p = arg;
             // ":redir @" is not the start of a comment.
             if ea.cmdidx == CMD_redir
@@ -498,7 +498,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
                     if *p.add(1) as c_int != NUL {
                         p = p.add(1);
                     }
-                } else if (*p as c_int == '"' as c_int && ea.argt & EX_NOTRLCOM == 0)
+                } else if (*p as c_int == '"' as c_int && !ea.argt.has(ExArgt::NOTRLCOM))
                     || *p as c_int == '|' as c_int
                     || *p as c_int == '\n' as c_int
                 {
@@ -513,7 +513,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
             }
         }
 
-        if ea.argt & EX_EXTRA == 0
+        if !ea.argt.has(ExArgt::EXTRA)
             && *arg as c_int != NUL
             && strchr(c"|\"".as_ptr(), *arg as c_int).is_null()
         {
@@ -538,7 +538,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
             }
         }
 
-        if ea.argt & EX_XFILE != 0 {
+        if ea.argt.has(ExArgt::XFILE) {
             set_context_for_wildcard_arg(&raw mut ea, arg, usefilter, xp, &raw mut context);
         }
 

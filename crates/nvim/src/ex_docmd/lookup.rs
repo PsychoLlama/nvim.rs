@@ -23,8 +23,8 @@ use crate::memory::xstrdup;
 use crate::message::iemsg;
 use crate::os::cshim::{gettext, strncmp};
 use crate::types::{
-    CMD_Next, CMD_SIZE, CMD_append, CMD_bang, CMD_k, CMD_match, CMD_substitute, EvalFuncData, NUL,
-    VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T, uint32_t,
+    CMD_Next, CMD_SIZE, CMD_append, CMD_bang, CMD_k, CMD_match, CMD_substitute, EvalFuncData,
+    ExArgt, NUL, VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T,
 };
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 
@@ -329,7 +329,7 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
 }
 
 /// The `EX_*` flag set of a command.
-pub unsafe fn excmd_get_argt(idx: cmdidx_T) -> uint32_t {
+pub unsafe fn excmd_get_argt(idx: cmdidx_T) -> ExArgt {
     unsafe { (*cmdnames.ptr())[idx as usize].cmd_argt }
 }
 

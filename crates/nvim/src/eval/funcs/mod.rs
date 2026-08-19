@@ -183,7 +183,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_growsize: 1 as ::core::ffi::c_int,
     ga_data: NULL_0,
 };
-pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
 pub const CONTEXT_INIT: Context = Context {
     regs: STRING_INIT,
     jumps: STRING_INIT,

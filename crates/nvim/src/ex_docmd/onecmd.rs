@@ -37,11 +37,9 @@ use crate::ex_docmd::scan::{
 use crate::ex_docmd::source::{ex_errmsg, getline_cookie, getline_equal};
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    ADDR_LINES, ADDR_OTHER, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, EX_ARGOPT,
-    EX_BANG, EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_FLAGS, EX_LOCK_OK, EX_MODIFY,
-    EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD, PROF_YES, cmdnames,
-    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, exmode_plus,
-    quitmore,
+    ADDR_LINES, ADDR_OTHER, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, PROF_YES,
+    cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T,
+    exmode_plus, quitmore,
 };
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
@@ -72,8 +70,8 @@ use crate::types::{
     CMD_pyx, CMD_read, CMD_return, CMD_rightbelow, CMD_rshift, CMD_ruby, CMD_silent, CMD_smagic,
     CMD_snomagic, CMD_substitute, CMD_syntax, CMD_tab, CMD_tcl, CMD_terminal, CMD_throw, CMD_tilde,
     CMD_topleft, CMD_try, CMD_unlet, CMD_unlockvar, CMD_update, CMD_verbose, CMD_vertical,
-    CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, FAIL, IOSIZE, LineGetter, NUL, cmdidx_T,
-    cmdmod_T, cstack_T, exarg_T, size_t, uint8_t, uint32_t,
+    CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, ExArgt, FAIL, IOSIZE, LineGetter, NUL, cmdidx_T,
+    cmdmod_T, cstack_T, exarg_T, size_t, uint8_t,
 };
 use ::libc::{strcpy, strlen};
 
@@ -154,7 +152,7 @@ pub(crate) unsafe fn shift_cmd_args(eap: *mut exarg_T) {
 /// Two groups: the control-flow commands, which have to run to find the end
 /// of the construct at all, and the commands that consume the rest of the
 /// line themselves. Upstream's rule for the second group is that a command
-/// must either carry `EX_TRLBAR`, appear here, or appear in the list at
+/// must either carry `ExArgt::TRLBAR`, appear here, or appear in the list at
 /// `:help :bar`.
 #[rustfmt::skip]
 const RUN_WHILE_SKIPPING: &[CMD_index] = &[
@@ -351,7 +349,7 @@ pub(crate) unsafe fn do_one_cmd(
                 // `curbuf->b_ro_locked` forbids editing another buffer.
                 // `:checktime` is postponed rather than refused, and `:edit`
                 // and `:file` are checked again once their argument is known.
-                if ea.argt & EX_CMDWIN as uint32_t == 0
+                if !ea.argt.has(ExArgt::CMDWIN)
                     && ea.cmdidx as c_int != CMD_checktime as c_int
                     && ea.cmdidx as c_int != CMD_edit as c_int
                     && ea.cmdidx as c_int != CMD_file as c_int
@@ -360,20 +358,20 @@ pub(crate) unsafe fn do_one_cmd(
                 {
                     break 'doend;
                 }
-                if !ni && ea.argt & EX_RANGE as uint32_t == 0 && ea.addr_count > 0 {
+                if !ni && !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
                     errormsg = gettext(&raw const e_norange as *const c_char);
                     break 'doend;
                 }
             }
 
-            if !ni && ea.argt & EX_BANG as uint32_t == 0 && ea.forceit != 0 {
+            if !ni && !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
                 errormsg = gettext(&raw const e_nobang as *const c_char);
                 break 'doend;
             }
 
             // A range that is not used is not complained about, which can
             // happen when a line count is accidentally zero.
-            if ea.skip == 0 && !ni && ea.argt & EX_RANGE as uint32_t != 0 {
+            if ea.skip == 0 && !ni && ea.argt.has(ExArgt::RANGE) {
                 // A backwards range is offered for swapping. `:global` is
                 // busy running a command per line and would fail below
                 // anyway, so it is not asked.
@@ -406,7 +404,7 @@ pub(crate) unsafe fn do_one_cmd(
 
             // Put the first line at the start of a closed fold and the last
             // line at its end.
-            if (ea.argt & EX_WHOLEFOLD as uint32_t != 0 || ea.addr_count >= 2)
+            if (ea.argt.has(ExArgt::WHOLEFOLD) || ea.addr_count >= 2)
                 && global_busy.get() == 0
                 && ea.addr_type as c_uint == ADDR_LINES as c_uint
             {
@@ -434,7 +432,7 @@ pub(crate) unsafe fn do_one_cmd(
             }
 
             // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
-            if ea.argt & EX_ARGOPT as uint32_t != 0 {
+            if ea.argt.has(ExArgt::ARGOPT) {
                 while *ea.arg.add(0) as c_int == '+' as c_int
                     && *ea.arg.add(1) as c_int == '+' as c_int
                 {
@@ -486,11 +484,11 @@ pub(crate) unsafe fn do_one_cmd(
 
             // `+command`, before the next command is looked for. Not for
             // `:read !cmd` and `:write !cmd`.
-            if ea.argt & EX_CMDARG as uint32_t != 0 && ea.usefilter == 0 {
+            if ea.argt.has(ExArgt::CMDARG) && ea.usefilter == 0 {
                 ea.do_ecmd_cmd = getargcmd(&raw mut ea.arg);
             }
 
-            if ea.argt & EX_TRLBAR as uint32_t != 0 && ea.usefilter == 0 {
+            if ea.argt.has(ExArgt::TRLBAR) && ea.usefilter == 0 {
                 separate_nextcmd(&raw mut ea);
             } else if ea.cmdidx as c_int == CMD_bang as c_int
                 || ea.cmdidx as c_int == CMD_terminal as c_int
@@ -517,7 +515,7 @@ pub(crate) unsafe fn do_one_cmd(
                 }
             }
 
-            if ea.argt & EX_DFLALL as uint32_t != 0 && ea.addr_count == 0 {
+            if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
                 set_cmd_dflall_range(&raw mut ea);
             }
 
@@ -526,19 +524,19 @@ pub(crate) unsafe fn do_one_cmd(
                 break 'doend;
             }
 
-            if ea.argt & EX_FLAGS as uint32_t != 0 {
+            if ea.argt.has(ExArgt::FLAGS) {
                 get_flags(&raw mut ea);
             }
             if !ni
-                && ea.argt & EX_EXTRA as uint32_t == 0
+                && !ea.argt.has(ExArgt::EXTRA)
                 && *ea.arg as c_int != NUL
                 && *ea.arg as c_int != '"' as c_int
-                && (*ea.arg as c_int != '|' as c_int || ea.argt & EX_TRLBAR as uint32_t == 0)
+                && (*ea.arg as c_int != '|' as c_int || !ea.argt.has(ExArgt::TRLBAR))
             {
                 errormsg = ex_errmsg(&raw const e_trailing_arg as *const c_char, ea.arg);
                 break 'doend;
             }
-            if !ni && ea.argt & EX_NEEDARG as uint32_t != 0 && *ea.arg as c_int == NUL {
+            if !ni && ea.argt.has(ExArgt::NEEDARG) && *ea.arg as c_int == NUL {
                 errormsg = gettext(&raw const e_argreq as *const c_char);
                 break 'doend;
             }
@@ -687,12 +685,12 @@ pub(crate) unsafe fn profile_cmd(
 /// Answers the message to report, or `None` when the command may run.
 unsafe fn refuses_here(ea: &exarg_T) -> Option<*const c_char> {
     unsafe {
-        if sandbox.get() != 0 && ea.argt & EX_SBOXOK as uint32_t == 0 {
+        if sandbox.get() != 0 && !ea.argt.has(ExArgt::SBOXOK) {
             return Some(gettext(&raw const e_sandbox as *const c_char));
         }
         // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
         if (*curbuf.get()).b_p_ma == 0
-            && ea.argt & EX_MODIFY as uint32_t != 0
+            && ea.argt.has(ExArgt::MODIFY)
             && !(!(*curbuf.get()).terminal.is_null()
                 && (ea.cmdidx as c_int == CMD_put as c_int
                     || ea.cmdidx as c_int == CMD_iput as c_int))
@@ -700,10 +698,10 @@ unsafe fn refuses_here(ea: &exarg_T) -> Option<*const c_char> {
             return Some(gettext(&raw const e_modifiable as *const c_char));
         }
         if !is_user_cmd(ea.cmdidx) {
-            if cmdwin_type.get() != 0 && ea.argt & EX_CMDWIN as uint32_t == 0 {
+            if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
                 return Some(gettext(&raw const e_cmdwin as *const c_char));
             }
-            if text_locked() && ea.argt & EX_LOCK_OK as uint32_t == 0 {
+            if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
                 return Some(gettext(get_text_locked_msg()));
             }
         }
@@ -726,7 +724,7 @@ pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> *mut c_char 
             || (exmode_active.get() && ea.cmd != (exmode_plus.ptr() as *mut c_char).add(1))
         {
             ea.cmdidx = CMD_print;
-            ea.argt = (EX_RANGE | EX_COUNT | EX_TRLBAR) as uint32_t;
+            ea.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;
             errormsg = invalid_range(eap);
             if errormsg.is_null() {
                 correct_range(eap);

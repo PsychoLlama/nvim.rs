@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::semsg_c;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{ExArgt, FAIL, NUL, OK};
 use core::ffi::{c_char, c_int};
 
 /// `do` and `dp`: get or put the diff block under the cursor.
@@ -33,7 +33,7 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
             cmdlinep: ::core::ptr::null_mut::<*mut c_char>(),
             cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             cmdidx: CMD_append,
-            argt: 0,
+            argt: ExArgt::NONE,
             skip: 0,
             forceit: 0,
             addr_count: 0,

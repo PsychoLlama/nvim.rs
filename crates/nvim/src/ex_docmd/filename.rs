@@ -22,8 +22,8 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::{
-    ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EX_NOSPC, EXPAND_FILES, FIND_EVAL,
-    FIND_IDENT, FIND_STRING, VALID_HEAD, VALID_PATH, dollar_command,
+    ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EXPAND_FILES, FIND_EVAL, FIND_IDENT,
+    FIND_STRING, VALID_HEAD, VALID_PATH, dollar_command,
     e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
@@ -46,8 +46,8 @@ use crate::runtime::estack_sfile;
 use crate::strings::{strrep, vim_strchr, vim_strsave_escaped};
 use crate::types::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
-    FAIL, MAXPATHL, NUL, OK, VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t, uint8_t,
-    uint32_t,
+    ExArgt, FAIL, MAXPATHL, NUL, OK, VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t,
+    uint8_t,
 };
 use ::libc::{strcat, strcmp, strcpy, strlen, strpbrk, strrchr};
 
@@ -177,7 +177,7 @@ pub unsafe fn expand_filename(
                 && idx != CMD_lmake as c_int
                 && idx != CMD_make as c_int
                 && idx != CMD_terminal as c_int
-                && ea.argt & EX_NOSPC as uint32_t == 0
+                && !ea.argt.has(ExArgt::NOSPC)
             {
                 let mut l = repl;
                 while *l != 0 {
@@ -204,9 +204,9 @@ pub unsafe fn expand_filename(
             xfree(repl as *mut c_void);
         }
 
-        // `EX_NOSPC` means the argument is one file name, so wildcards in
+        // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
         // it can be expanded to exactly one match.
-        if ea.argt & EX_NOSPC as uint32_t == 0 || ea.usefilter != 0 {
+        if !ea.argt.has(ExArgt::NOSPC) || ea.usefilter != 0 {
             return OK;
         }
 

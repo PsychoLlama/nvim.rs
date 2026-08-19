@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{CmdModFlags, FAIL, OptionSetFlags, kErrorTypeNone};
+use crate::types::{CmdModFlags, ExArgt, FAIL, OptionSetFlags, kErrorTypeNone};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> handle_T {
@@ -387,7 +387,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
             }
 
             // Is the command previewable? If not, don't attempt a preview.
-            if ea.argt & EX_PREVIEW == 0 {
+            if !ea.argt.has(ExArgt::PREVIEW) {
                 undo_cmdmod(&raw mut cmdinfo.cmdmod);
                 break 'end;
             }
@@ -401,7 +401,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
             cmdline_ui_flush();
 
             // Swap an invalid command range.
-            if ea.argt & EX_RANGE != 0 && ea.line1 > ea.line2 {
+            if ea.argt.has(ExArgt::RANGE) && ea.line1 > ea.line2 {
                 ::core::mem::swap(&mut ea.line1, &mut ea.line2);
             }
 

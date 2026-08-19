@@ -33,6 +33,68 @@ pub struct SubReplacementString {
     pub additional_data: *mut AdditionalData,
 }
 pub type cmd_addr_T = ::core::ffi::c_uint;
+
+crate::flag_set! {
+    /// What syntax an Ex command accepts -- upstream's `EX_*`, the bits
+    /// `exarg_T::argt` and the command table's `cmd_argt` carry. The whole
+    /// of `:` is described by this one word: which of a range, a `!`, an
+    /// argument, a register and a count the command takes, and where it is
+    /// allowed to run.
+    pub struct ExArgt;
+
+    /// The command takes a range.
+    const RANGE = 0x001;
+    /// The command takes a `!` after its name.
+    const BANG = 0x002;
+    /// The command takes an argument.
+    const EXTRA = 0x004;
+    /// Expand `%`, `#` and the other wildcards in the argument.
+    const XFILE = 0x008;
+    /// The argument is one word: no spaces allowed.
+    const NOSPC = 0x010;
+    /// A missing range means the whole file, not the current line.
+    const DFLALL = 0x020;
+    /// Extend the range to whole closed folds.
+    const WHOLEFOLD = 0x040;
+    /// An argument is required.
+    const NEEDARG = 0x080;
+    /// A `|` ends the command, and so does a `"` comment.
+    const TRLBAR = 0x100;
+    /// A register name may follow the command.
+    const REGSTR = 0x200;
+    /// A count may follow the command.
+    const COUNT = 0x400;
+    /// A `"` does *not* start a comment: the command's own argument may
+    /// contain one.
+    const NOTRLCOM = 0x800;
+    /// Line number zero is allowed in the range.
+    const ZEROR = 0x1000;
+    /// `CTRL-V` quotes the next character in the argument.
+    const CTRLV = 0x2000;
+    /// `++opt=arg` file options are copied into `eap->cmd`.
+    const CMDARG = 0x4000;
+    /// The argument names a buffer, for `:buffer`-style completion.
+    const BUFNAME = 0x8000;
+    /// The named buffer may be an unlisted one.
+    const BUFUNL = 0x10000;
+    /// `++opt=arg` file options are allowed.
+    const ARGOPT = 0x20000;
+    /// The command is allowed inside the `'sandbox'`.
+    const SBOXOK = 0x40000;
+    /// The command is allowed in the command-line window.
+    const CMDWIN = 0x80000;
+    /// The command changes the buffer, so `'modifiable'` and the text lock
+    /// are checked first.
+    const MODIFY = 0x100000;
+    /// Trailing `l`, `#` or `p` flags are allowed.
+    const FLAGS = 0x200000;
+    /// The command is allowed when the buffer is locked against changes.
+    const LOCK_OK = 0x1000000;
+    /// A user command that keeps the script context of its definition.
+    const KEEPSCRIPT = 0x4000000;
+    /// The command has an `'inccommand'` preview implementation.
+    const PREVIEW = 0x8000000;
+}
 crate::flag_set! {
     /// The `:silent`, `:noautocmd`, `:keepmarks` … command modifiers, as the
     /// bits [`cmdmod_T::cmod_flags`] carries.
@@ -98,7 +160,7 @@ pub struct exarg {
     pub cmdlinep: *mut *mut ::core::ffi::c_char,
     pub cmdline_tofree: *mut ::core::ffi::c_char,
     pub cmdidx: cmdidx_T,
-    pub argt: uint32_t,
+    pub argt: ExArgt,
     pub skip: ::core::ffi::c_int,
     pub forceit: ::core::ffi::c_int,
     pub addr_count: ::core::ffi::c_int,
@@ -139,7 +201,7 @@ impl Default for exarg {
             cmdlinep: ::core::ptr::null_mut(),
             cmdline_tofree: ::core::ptr::null_mut(),
             cmdidx: 0,
-            argt: 0,
+            argt: ExArgt::NONE,
             skip: 0,
             forceit: 0,
             addr_count: 0,

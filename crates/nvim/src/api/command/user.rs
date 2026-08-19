@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::types::ExArgt;
 
 pub unsafe fn nvim_create_user_command(
     channel_id: uint64_t,
@@ -111,7 +112,7 @@ pub unsafe fn create_user_command(
 ) {
     unsafe {
         let mut force: bool = false;
-        let mut argt: uint32_t = 0 as uint32_t;
+        let mut argt = ExArgt::NONE;
         let mut def: int64_t = -1 as int64_t;
         let mut addr_type_arg: cmd_addr_T = ADDR_NONE;
         let mut context: ::core::ffi::c_int = EXPAND_NOTHING as ::core::ffi::c_int;
@@ -150,9 +151,7 @@ pub unsafe fn create_user_command(
                     match (*opts).nargs.data.integer {
                         0 => {}
                         1 => {
-                            argt = (argt as ::core::ffi::c_uint
-                                | (EX_EXTRA | EX_NOSPC | EX_NEEDARG))
-                                as uint32_t;
+                            argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG;
                         }
                         _ => {
                             if true {
@@ -189,15 +188,13 @@ pub unsafe fn create_user_command(
                             as ::core::ffi::c_int
                         {
                             42 => {
-                                argt = (argt as ::core::ffi::c_uint | EX_EXTRA) as uint32_t;
+                                argt |= ExArgt::EXTRA;
                             }
                             63 => {
-                                argt = (argt as ::core::ffi::c_uint | (EX_EXTRA | EX_NOSPC))
-                                    as uint32_t;
+                                argt |= ExArgt::EXTRA | ExArgt::NOSPC;
                             }
                             43 => {
-                                argt = (argt as ::core::ffi::c_uint | (EX_EXTRA | EX_NEEDARG))
-                                    as uint32_t;
+                                argt |= ExArgt::EXTRA | ExArgt::NEEDARG;
                             }
                             _ => {
                                 if true {
@@ -223,7 +220,7 @@ pub unsafe fn create_user_command(
                     }
                 }
                 if !(!(has_key((*opts).is_set__user_command_, 10 as ::core::ffi::c_int))
-                    || argt != 0)
+                    || argt != ExArgt::NONE)
                 {
                     api_set_error(
                         err,
@@ -236,7 +233,7 @@ pub unsafe fn create_user_command(
                         == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         if (*opts).range.data.boolean {
-                            argt = (argt as ::core::ffi::c_uint | EX_RANGE) as uint32_t;
+                            argt |= ExArgt::RANGE;
                             addr_type_arg = ADDR_LINES;
                         }
                     } else if (*opts).range.type_0 as ::core::ffi::c_uint
@@ -261,14 +258,13 @@ pub unsafe fn create_user_command(
                             );
                             break '_err;
                         } else {
-                            argt =
-                                (argt as ::core::ffi::c_uint | (EX_RANGE | EX_DFLALL)) as uint32_t;
+                            argt |= ExArgt::RANGE | ExArgt::DFLALL;
                             addr_type_arg = ADDR_LINES;
                         }
                     } else if (*opts).range.type_0 as ::core::ffi::c_uint
                         == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        argt = (argt as ::core::ffi::c_uint | (EX_RANGE | EX_ZEROR)) as uint32_t;
+                        argt |= ExArgt::RANGE | ExArgt::ZEROR;
                         def = (*opts).range.data.integer as int64_t;
                         addr_type_arg = ADDR_LINES;
                     } else if has_key(
@@ -290,16 +286,14 @@ pub unsafe fn create_user_command(
                         == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         if (*opts).count.data.boolean {
-                            argt = (argt as ::core::ffi::c_uint | (EX_COUNT | EX_ZEROR | EX_RANGE))
-                                as uint32_t;
+                            argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
                             addr_type_arg = ADDR_OTHER;
                             def = 0 as int64_t;
                         }
                     } else if (*opts).count.type_0 as ::core::ffi::c_uint
                         == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        argt = (argt as ::core::ffi::c_uint | (EX_COUNT | EX_ZEROR | EX_RANGE))
-                            as uint32_t;
+                        argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
                         addr_type_arg = ADDR_OTHER;
                         def = (*opts).count.data.integer as int64_t;
                     } else if has_key(
@@ -347,25 +341,25 @@ pub unsafe fn create_user_command(
                             );
                             break '_err;
                         } else {
-                            argt = (argt as ::core::ffi::c_uint | EX_RANGE) as uint32_t;
+                            argt |= ExArgt::RANGE;
                             if addr_type_arg as ::core::ffi::c_uint
                                 != ADDR_LINES as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
-                                argt = (argt as ::core::ffi::c_uint | EX_ZEROR) as uint32_t;
+                                argt |= ExArgt::ZEROR;
                             }
                         }
                     }
                     if (*opts).bang {
-                        argt = (argt as ::core::ffi::c_uint | EX_BANG) as uint32_t;
+                        argt |= ExArgt::BANG;
                     }
                     if (*opts).bar {
-                        argt = (argt as ::core::ffi::c_uint | EX_TRLBAR) as uint32_t;
+                        argt |= ExArgt::TRLBAR;
                     }
                     if (*opts).register_ {
-                        argt = (argt as ::core::ffi::c_uint | EX_REGSTR) as uint32_t;
+                        argt |= ExArgt::REGSTR;
                     }
                     if (*opts).keepscript {
-                        argt = (argt as ::core::ffi::c_uint | EX_KEEPSCRIPT) as uint32_t;
+                        argt |= ExArgt::KEEPSCRIPT;
                     }
                     force = if has_key(
                         (*opts).is_set__user_command_,
@@ -432,7 +426,7 @@ pub unsafe fn create_user_command(
                                 );
                                 break '_err;
                             } else {
-                                argt = (argt as ::core::ffi::c_uint | EX_PREVIEW) as uint32_t;
+                                argt |= ExArgt::PREVIEW;
                                 preview_luaref = (*opts).preview.data.luaref;
                                 (*opts).preview.data.luaref = LUA_NOREF as LuaRef;
                             }

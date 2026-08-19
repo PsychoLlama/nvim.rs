@@ -143,7 +143,7 @@ use crate::types::{
     Arena, Array, BackslashEscape, Boolean, CMD_append, Callback,
     Callback_data as C2Rust_Unnamed_5, CmdModFlags, CmdParseInfo,
     CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk, CmdlineColors,
-    CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExprAST, ExprASTNodeType,
+    CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExprAST, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
     HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData,
     OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
@@ -473,8 +473,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const EX_RANGE: ::core::ffi::c_uint = 0x1 as ::core::ffi::c_uint;
-pub const EX_PREVIEW: ::core::ffi::c_uint = 0x8000000 as ::core::ffi::c_uint;
 pub const CPO_ESC: ::core::ffi::c_int = 'x' as ::core::ffi::c_int;
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -667,7 +665,7 @@ pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
     cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     cmdidx: CMD_append,
-    argt: 0,
+    argt: ExArgt::NONE,
     skip: 0,
     forceit: 0,
     addr_count: 0,

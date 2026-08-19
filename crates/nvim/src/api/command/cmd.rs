@@ -36,7 +36,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
-use crate::types::{FieldHashfn, NUL};
+use crate::types::{ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -213,7 +213,7 @@ unsafe fn prepare_cmd(
     if !unsafe { apply_argopt(ea, err) } {
         return false;
     }
-    if ea.argt & EX_CMDARG as uint32_t != 0 && ea.usefilter == 0 {
+    if ea.argt.has(ExArgt::CMDARG) && ea.usefilter == 0 {
         // SAFETY: as above.
         ea.do_ecmd_cmd = unsafe { getargcmd(&raw mut ea.arg) };
     }
@@ -308,7 +308,7 @@ unsafe fn resolve_command(
     }
 
     if range_only {
-        ea.argt = (EX_RANGE | EX_SBOXOK) as uint32_t;
+        ea.argt = ExArgt::RANGE | ExArgt::SBOXOK;
     } else if (ea.cmdidx as c_int) >= 0 {
         // A user command's flags already came out of `find_ex_command`.
         // SAFETY: `ea.cmdidx` is a valid index, checked just above.
@@ -331,10 +331,7 @@ unsafe fn collect_args(
 ) -> Option<bool> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
-    if cmd.args.size == 1
-        && ea.argt & EX_COUNT as uint32_t != 0
-        && ea.argt & EX_EXTRA as uint32_t == 0
-    {
+    if cmd.args.size == 1 && ea.argt.has(ExArgt::COUNT) && !ea.argt.has(ExArgt::EXTRA) {
         // SAFETY: the size is 1, so item 0 is in bounds; the union arm is
         // chosen by `type_0`.
         let count = unsafe {
@@ -408,11 +405,12 @@ unsafe fn collect_args(
         }
     }
 
-    let argc_valid = match ea.argt & (EX_EXTRA | EX_NOSPC | EX_NEEDARG) as uint32_t {
-        v if v == (EX_EXTRA | EX_NOSPC | EX_NEEDARG) as uint32_t => args.size == 1,
-        v if v == (EX_EXTRA | EX_NOSPC) as uint32_t => args.size <= 1,
-        v if v == (EX_EXTRA | EX_NEEDARG) as uint32_t => args.size >= 1,
-        v if v == EX_EXTRA as uint32_t => true,
+    let arity = ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG;
+    let argc_valid = match ea.argt.masked(arity) {
+        v if v == arity => args.size == 1,
+        v if v == ExArgt::EXTRA | ExArgt::NOSPC => args.size <= 1,
+        v if v == ExArgt::EXTRA | ExArgt::NEEDARG => args.size >= 1,
+        v if v == ExArgt::EXTRA => true,
         _ => args.size == 0,
     };
     if !argc_valid {
@@ -426,7 +424,7 @@ unsafe fn collect_args(
 /// Apply `cmd.range`, then fall back to the command's default range.
 fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
     if has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__range) {
-        if ea.argt & EX_RANGE as uint32_t == 0 {
+        if !ea.argt.has(ExArgt::RANGE) {
             err_cannot_accept(err, c"range", cmd);
             return false;
         }
@@ -467,7 +465,7 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
     }
 
     if ea.addr_count == 0 {
-        if ea.argt & EX_DFLALL as uint32_t != 0 {
+        if ea.argt.has(ExArgt::DFLALL) {
             // SAFETY: `ea` is resolved; both entry points read it and the
             // editor globals, per the module contract.
             unsafe { set_cmd_dflall_range(ea) };
@@ -498,7 +496,7 @@ fn apply_count(
         err_validation(err, c"Cannot specify both 'count' and numeric argument");
         return false;
     }
-    if ea.argt & EX_COUNT as uint32_t == 0 {
+    if !ea.argt.has(ExArgt::COUNT) {
         err_cannot_accept(err, c"count", cmd);
         return false;
     }
@@ -517,7 +515,7 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool 
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__reg) {
         return true;
     }
-    if ea.argt & EX_REGSTR as uint32_t == 0 {
+    if !ea.argt.has(ExArgt::REGSTR) {
         err_cannot_accept(err, c"register", cmd);
         return false;
     }
@@ -556,7 +554,7 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool 
 /// Apply `cmd.bang`.
 fn apply_bang(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
     ea.forceit = cmd.bang as c_int;
-    if ea.forceit != 0 && ea.argt & EX_BANG as uint32_t == 0 {
+    if ea.forceit != 0 && !ea.argt.has(ExArgt::BANG) {
         err_cannot_accept(err, c"bang", cmd);
         return false;
     }
@@ -586,8 +584,8 @@ fn apply_magic(
     cmdinfo: &mut CmdParseInfo,
     err: &mut Error,
 ) -> bool {
-    let argt_file = ea.argt & EX_XFILE as uint32_t != 0;
-    let argt_bar = ea.argt & EX_TRLBAR as uint32_t != 0;
+    let argt_file = ea.argt.has(ExArgt::XFILE);
+    let argt_bar = ea.argt.has(ExArgt::TRLBAR);
 
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__magic) {
         cmdinfo.magic.file = argt_file;
@@ -611,11 +609,11 @@ fn apply_magic(
         argt_bar
     };
 
-    // `magic.file` overrides EX_XFILE for the expansion `execute_cmd` does.
+    // `magic.file` overrides `XFILE` for the expansion `execute_cmd` does.
     if cmdinfo.magic.file {
-        ea.argt |= EX_XFILE as uint32_t;
+        ea.argt |= ExArgt::XFILE;
     } else {
-        ea.argt &= !(EX_XFILE as uint32_t);
+        ea.argt.clear(ExArgt::XFILE);
     }
     true
 }
@@ -696,7 +694,7 @@ fn apply_mods(
         cmdinfo.cmdmod.cmod_flags |= CmdModFlags::SILENT;
     }
 
-    if cmdinfo.cmdmod.cmod_flags.has(CmdModFlags::SANDBOX) && ea.argt & EX_SBOXOK as uint32_t == 0 {
+    if cmdinfo.cmdmod.cmod_flags.has(CmdModFlags::SANDBOX) && !ea.argt.has(ExArgt::SBOXOK) {
         err_validation(err, c"Command cannot be run in sandbox");
         return false;
     }
@@ -753,7 +751,7 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo, err: &m
 /// # Safety
 /// `ea.arg` must point into a live NUL-terminated command line.
 unsafe fn apply_argopt(ea: &mut exarg_T, err: &mut Error) -> bool {
-    if ea.argt & EX_ARGOPT as uint32_t == 0 {
+    if !ea.argt.has(ExArgt::ARGOPT) {
         return true;
     }
     loop {

@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::types::ExArgt;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -140,7 +141,7 @@ pub(crate) unsafe fn build_cmdline_str(
         };
         concat_cmdmods(&raw mut cmdline, &(*cmdinfo).cmdmod);
 
-        if (*eap).argt & EX_RANGE as uint32_t != 0 {
+        if (*eap).argt.has(ExArgt::RANGE) {
             if (*eap).addr_count == 1 {
                 kv_do_printf(&raw mut cmdline, c"%d".as_ptr(), (*eap).line2);
             } else if (*eap).addr_count > 1 {
@@ -156,10 +157,10 @@ pub(crate) unsafe fn build_cmdline_str(
         }
         let cmdname_idx: size_t = cmdline.size;
         cmdline_concat(&raw mut cmdline, (*eap).cmd, strlen((*eap).cmd));
-        if (*eap).argt & EX_BANG as uint32_t != 0 && (*eap).forceit != 0 {
+        if (*eap).argt.has(ExArgt::BANG) && (*eap).forceit != 0 {
             cmdline_concat_str(&raw mut cmdline, c"!");
         }
-        if (*eap).argt & EX_REGSTR as uint32_t != 0 && (*eap).regname != 0 {
+        if (*eap).argt.has(ExArgt::REGSTR) && (*eap).regname != 0 {
             kv_do_printf(&raw mut cmdline, c" %c".as_ptr(), (*eap).regname);
         }
 

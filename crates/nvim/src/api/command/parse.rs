@@ -10,8 +10,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
-use crate::types::NUL;
 use crate::types::builders::static_cstring;
+use crate::types::{ExArgt, NUL};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -54,7 +54,7 @@ unsafe fn parse_args(ea: &exarg_T, arena: *mut Arena) -> Array {
         // SAFETY: caller contract.
         return unsafe { parse_map_cmd(ea.arg, arena) };
     }
-    if ea.argt & EX_NOSPC as uint32_t != 0 {
+    if ea.argt.has(ExArgt::NOSPC) {
         // One argument, whitespace and all.
         if empty {
             return Array::EMPTY;
@@ -263,7 +263,7 @@ pub unsafe fn nvim_parse_cmd(
     // SAFETY: both names are NUL-terminated, and outlive the reply.
     result.cmd = unsafe { cstr_as_string(command_name(&ea, cmd)) };
 
-    if ea.argt & EX_RANGE as uint32_t != 0 && ea.addr_count > 0 {
+    if ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.
         let mut range: Array = arena_array(arena, 2);
         // SAFETY: at most the two items just reserved are added.
@@ -277,7 +277,7 @@ pub unsafe fn nvim_parse_cmd(
         result.range = range;
     }
 
-    if ea.argt & EX_COUNT as uint32_t != 0 {
+    if ea.argt.has(ExArgt::COUNT) {
         let count: Integer = if ea.addr_count > 0 {
             ea.line2 as Integer
         } else {
@@ -290,7 +290,7 @@ pub unsafe fn nvim_parse_cmd(
         }
     }
 
-    if ea.argt & EX_REGSTR as uint32_t != 0 {
+    if ea.argt.has(ExArgt::REGSTR) {
         let mut reg: [c_char; 2] = [ea.regname as c_char, NUL as c_char];
         result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__reg;
         // SAFETY: `reg` is NUL-terminated and alive until the copy is made.
@@ -303,15 +303,15 @@ pub unsafe fn nvim_parse_cmd(
     result.args = args;
 
     // `:command -nargs=` spelling of how many arguments the command takes.
-    let nargs: &CStr = if ea.argt & EX_EXTRA as uint32_t == 0 {
+    let nargs: &CStr = if !ea.argt.has(ExArgt::EXTRA) {
         c"0"
-    } else if ea.argt & EX_NOSPC as uint32_t != 0 {
-        if ea.argt & EX_NEEDARG as uint32_t != 0 {
+    } else if ea.argt.has(ExArgt::NOSPC) {
+        if ea.argt.has(ExArgt::NEEDARG) {
             c"1"
         } else {
             c"?"
         }
-    } else if ea.argt & EX_NEEDARG as uint32_t != 0 {
+    } else if ea.argt.has(ExArgt::NEEDARG) {
         c"+"
     } else {
         c"*"

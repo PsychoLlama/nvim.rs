@@ -26,8 +26,8 @@ use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
     ADDR_QUICKFIX, ADDR_QUICKFIX_VALID, ADDR_TABS, ADDR_TABS_RELATIVE, ADDR_UNSIGNED, ADDR_WINDOWS,
-    EX_RANGE, EX_ZEROR, EXPAND_NOTHING, INT32_MAX, cmdnames, e_backslash, e_invrange,
-    e_line_number_out_of_range, e_no_errors, e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
+    EXPAND_NOTHING, INT32_MAX, cmdnames, e_backslash, e_invrange, e_line_number_out_of_range,
+    e_no_errors, e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
 };
 use crate::fold::hasFolding;
 use crate::main::{curbuf, curtab, curwin, firstbuf, lastbuf};
@@ -41,8 +41,8 @@ use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, Direction, FAIL, MarkGet,
-    MarkMove, NUL, OK, buf_T, cmd_addr_T, colnr_T, exarg_T, linenr_T, pos_T, size_t, uint32_t,
+    CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, Direction, ExArgt, FAIL,
+    MarkGet, MarkMove, NUL, OK, buf_T, cmd_addr_T, colnr_T, exarg_T, linenr_T, pos_T, size_t,
 };
 use ::libc::strlen;
 
@@ -193,7 +193,7 @@ pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> linenr_T {
     }
 }
 
-/// The range an `EX_DFLALL` command means by "no range": everything.
+/// The range an `ExArgt::DFLALL` command means by "no range": everything.
 pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
@@ -238,7 +238,7 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
                 || t == ADDR_QUICKFIX as c_uint =>
             {
                 iemsg(gettext(
-                    c"INTERNAL: Cannot use EX_DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX"
+                    c"INTERNAL: Cannot use ExArgt::DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX"
                         .as_ptr(),
                 ));
             }
@@ -878,7 +878,7 @@ pub unsafe fn invalid_range(eap: *mut exarg_T) -> *mut c_char {
         if ea.line1 < 0 || ea.line2 < 0 || ea.line1 > ea.line2 {
             return invrange();
         }
-        if ea.argt & EX_RANGE as uint32_t == 0 {
+        if !ea.argt.has(ExArgt::RANGE) {
             return ptr::null_mut();
         }
         match ea.addr_type as c_uint {
@@ -964,7 +964,7 @@ pub unsafe fn invalid_range(eap: *mut exarg_T) -> *mut c_char {
 pub(crate) unsafe fn correct_range(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
-        if ea.argt & EX_ZEROR as uint32_t != 0 {
+        if ea.argt.has(ExArgt::ZEROR) {
             return;
         }
         if ea.line1 == 0 {

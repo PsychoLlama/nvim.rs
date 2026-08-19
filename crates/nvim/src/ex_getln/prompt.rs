@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::types::{ExArgt, FAIL, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.
@@ -210,7 +210,7 @@ pub unsafe fn get_user_input(
         if !xp_name.is_null() {
             // input() with a third argument: completion
             let xp_namelen = strlen(xp_name) as ::core::ffi::c_int;
-            let mut argt: uint32_t = 0;
+            let mut argt = ExArgt::NONE;
             if parse_compl_arg(xp_name, xp_namelen, &mut xp_type, &mut argt, &mut xp_arg) == FAIL {
                 return;
             }

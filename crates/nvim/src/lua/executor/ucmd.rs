@@ -25,10 +25,10 @@ use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
-    CmdModFlags, OptInt, exarg_T, handle_T, linenr_T, lua_Integer, scid_T, sctx_T, size_t, ucmd_T,
-    uint32_t,
+    CmdModFlags, ExArgt, OptInt, exarg_T, handle_T, linenr_T, lua_Integer, scid_T, sctx_T, size_t,
+    ucmd_T,
 };
-use crate::usercmd::{EX_EXTRA, EX_NEEDARG, EX_NOSPC, uc_mods, uc_split_args_iter};
+use crate::usercmd::{uc_mods, uc_split_args_iter};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::strlen;
 
@@ -142,9 +142,9 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
         lua_pushstring(lstate, (*eap).arg);
         lua_pushvalue(lstate, -1);
         lua_setfield(lstate, -4, c"args".as_ptr());
-        if (*cmd).uc_argt & EX_NOSPC as uint32_t != 0 {
+        if (*cmd).uc_argt.has(ExArgt::NOSPC) {
             // At most one argument: `fargs` is the whole of it, or empty.
-            if (*cmd).uc_argt & EX_NEEDARG as uint32_t != 0 || strlen((*eap).arg) != 0 {
+            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || strlen((*eap).arg) != 0 {
                 lua_rawseti(lstate, -2, 1);
             } else {
                 lua_pop(lstate, 1);
@@ -276,12 +276,12 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
 }
 
 /// The `-nargs=` letter this command's argument flags mean.
-fn nargs_char(argt: uint32_t) -> c_char {
-    if argt & EX_EXTRA as uint32_t == 0 {
+fn nargs_char(argt: ExArgt) -> c_char {
+    if !argt.has(ExArgt::EXTRA) {
         return b'0' as c_char;
     }
-    let needarg = argt & EX_NEEDARG as uint32_t != 0;
-    if argt & EX_NOSPC as uint32_t != 0 {
+    let needarg = argt.has(ExArgt::NEEDARG);
+    if argt.has(ExArgt::NOSPC) {
         if needarg {
             b'1' as c_char
         } else {

@@ -70,8 +70,8 @@ use crate::runtime::sourcing_lnum;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{
-    CMD_USER, CMD_USER_BUF, FAIL, LuaRef, OK, cmd_addr_T, exarg_T, expand_T, garray_T, int64_t,
-    size_t, ucmd_T, uint32_t,
+    CMD_USER, CMD_USER_BUF, ExArgt, FAIL, LuaRef, OK, cmd_addr_T, exarg_T, expand_T, garray_T,
+    int64_t, size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
 use ::libc::strlen;
@@ -110,19 +110,6 @@ pub const DOCMD_NOWAIT: u32 = 2;
 pub const DOCMD_VERBOSE: u32 = 1;
 pub const UC_BUFFER: c_int = 1;
 pub const LUA_NOREF: c_int = -2;
-pub const EX_RANGE: u32 = 0x1;
-pub const EX_BANG: u32 = 0x2;
-pub const EX_EXTRA: u32 = 0x4;
-pub const EX_XFILE: u32 = 0x8;
-pub const EX_NOSPC: u32 = 0x10;
-pub const EX_DFLALL: u32 = 0x20;
-pub const EX_NEEDARG: u32 = 0x80;
-pub const EX_TRLBAR: u32 = 0x100;
-pub const EX_REGSTR: u32 = 0x200;
-pub const EX_COUNT: u32 = 0x400;
-pub const EX_ZEROR: u32 = 0x1000;
-pub const EX_BUFNAME: u32 = 0x8000;
-pub const EX_KEEPSCRIPT: u32 = 0x4000000;
 
 /// The global user commands. A buffer's own live in its `b_ucmds`.
 pub static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
@@ -360,7 +347,7 @@ pub unsafe fn uc_add_command(
     name: *mut c_char,
     name_len: size_t,
     rep: *const c_char,
-    argt: uint32_t,
+    argt: ExArgt,
     def: int64_t,
     flags: c_int,
     context: c_int,
@@ -522,7 +509,7 @@ unsafe fn free_new_command(
 /// # Safety
 /// Module contract; `eap` must be the command being executed.
 pub unsafe fn ex_command(eap: *mut exarg_T) {
-    let mut argt: uint32_t = 0;
+    let mut argt = ExArgt::NONE;
     let mut def: c_int = -1;
     let mut flags: c_int = 0;
     let mut context: c_int = EXPAND_NOTHING;
@@ -587,7 +574,7 @@ pub unsafe fn ex_command(eap: *mut exarg_T) {
         Some(c"E183: User defined commands must start with an uppercase letter")
     } else if b"Next".starts_with(name_bytes) {
         Some(c"E841: Reserved name, cannot be used for user defined command")
-    } else if context > 0 && argt & EX_EXTRA == 0 {
+    } else if context > 0 && !argt.has(ExArgt::EXTRA) {
         Some(c"E1208: -complete used without allowing arguments")
     } else {
         // SAFETY: module contract; `uc_add_command` takes `compl_arg`.

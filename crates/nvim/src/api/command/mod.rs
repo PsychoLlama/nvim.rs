@@ -36,8 +36,7 @@ use crate::types::{
     StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow, linenr_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t,
-    uint64_t,
+    kObjectTypeTabpage, kObjectTypeWindow, linenr_T, sctx_T, size_t, ucmd_T, uint8_t, uint64_t,
 };
 use crate::usercmd::{
     commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
@@ -105,20 +104,4 @@ pub const KEYSET_OPTIDX_cmd_mods__split: ::core::ffi::c_int = 3 as ::core::ffi::
 pub const KEYSET_OPTIDX_cmd_mods__filter: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd_mods__verbose: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd_mods_filter__pattern: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const EX_RANGE: ::core::ffi::c_uint = 0x1 as ::core::ffi::c_uint;
-pub const EX_BANG: ::core::ffi::c_uint = 0x2 as ::core::ffi::c_uint;
-pub const EX_EXTRA: ::core::ffi::c_uint = 0x4 as ::core::ffi::c_uint;
-pub const EX_XFILE: ::core::ffi::c_uint = 0x8 as ::core::ffi::c_uint;
-pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
-pub const EX_DFLALL: ::core::ffi::c_uint = 0x20 as ::core::ffi::c_uint;
-pub const EX_NEEDARG: ::core::ffi::c_uint = 0x80 as ::core::ffi::c_uint;
-pub const EX_TRLBAR: ::core::ffi::c_uint = 0x100 as ::core::ffi::c_uint;
-pub const EX_REGSTR: ::core::ffi::c_uint = 0x200 as ::core::ffi::c_uint;
-pub const EX_COUNT: ::core::ffi::c_uint = 0x400 as ::core::ffi::c_uint;
-pub const EX_ZEROR: ::core::ffi::c_uint = 0x1000 as ::core::ffi::c_uint;
-pub const EX_CMDARG: ::core::ffi::c_uint = 0x4000 as ::core::ffi::c_uint;
-pub const EX_ARGOPT: ::core::ffi::c_uint = 0x20000 as ::core::ffi::c_uint;
-pub const EX_SBOXOK: ::core::ffi::c_uint = 0x40000 as ::core::ffi::c_uint;
-pub const EX_KEEPSCRIPT: ::core::ffi::c_uint = 0x4000000 as ::core::ffi::c_uint;
-pub const EX_PREVIEW: ::core::ffi::c_uint = 0x8000000 as ::core::ffi::c_uint;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

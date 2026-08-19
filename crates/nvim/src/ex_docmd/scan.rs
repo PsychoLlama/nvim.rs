@@ -17,8 +17,7 @@ use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{
-    ADDR_LINES, CPO_BAR, EX_BUFNAME, EX_COUNT, EX_CTRLV, EX_NOTRLCOM, EX_REGSTR, EX_XFILE,
-    EX_ZEROR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount,
+    ADDR_LINES, CPO_BAR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount,
 };
 use crate::keycodes::Ctrl_V;
 use crate::main::{curbuf, p_cpo};
@@ -32,8 +31,8 @@ use crate::types::ex_cmds::exarg_T;
 use crate::types::pos::linenr_T;
 use crate::types::{
     CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep, CMD_lvimgrepadd, CMD_put,
-    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, FAIL, NUL,
-    OK, size_t, uint32_t,
+    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, ExArgt, FAIL,
+    NUL, OK, size_t,
 };
 use ::libc::strlen;
 
@@ -63,10 +62,10 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
         let is_user_command = (ea.cmdidx as c_int) < 0;
-        if ea.argt & EX_REGSTR as uint32_t == 0
+        if !ea.argt.has(ExArgt::REGSTR)
             || *ea.arg as c_int == NUL
             || (is_user_command && *ea.arg as c_int == '=' as c_int)
-            || (ea.argt & EX_COUNT as uint32_t != 0 && ascii_isdigit(*ea.arg as c_int))
+            || (ea.argt.has(ExArgt::COUNT) && ascii_isdigit(*ea.arg as c_int))
         {
             return;
         }
@@ -131,12 +130,12 @@ pub(crate) unsafe fn parse_count(
 ) -> c_int {
     unsafe {
         let ea = &mut *eap;
-        if ea.argt & EX_COUNT as uint32_t == 0 || !ascii_isdigit(*ea.arg as c_int) {
+        if !ea.argt.has(ExArgt::COUNT) || !ascii_isdigit(*ea.arg as c_int) {
             return OK;
         }
         // A command that also takes a buffer name (`:buffer 2x`) only reads
         // the digits as a count when they are the whole word.
-        if ea.argt & EX_BUFNAME as uint32_t != 0 {
+        if ea.argt.has(ExArgt::BUFNAME) {
             let p = skipdigits(ea.arg.add(1));
             if *p as c_int != NUL && !ascii_iswhite(*p as c_int) {
                 return OK;
@@ -158,7 +157,7 @@ pub(crate) unsafe fn parse_count(
                 shift_cmd_args(eap);
             }
         }
-        if n <= 0 && ea.argt & EX_ZEROR as uint32_t == 0 {
+        if n <= 0 && !ea.argt.has(ExArgt::ZEROR) {
             if !errormsg.is_null() {
                 *errormsg = gettext(&raw const e_zerocount as *const c_char);
             }
@@ -228,9 +227,9 @@ pub(crate) unsafe fn skip_grep_pat(eap: *mut exarg_T) -> *mut c_char {
 /// Three characters can end an argument and each has exceptions:
 ///
 /// - CTRL-V escapes the next character for a command that asked for it
-///   (`EX_CTRLV`/`EX_XFILE`) and is *removed* for every other command.
+///   (`ExArgt::CTRLV`/`ExArgt::XFILE`) and is *removed* for every other command.
 /// - `"` starts a comment unless the command takes one literally
-///   (`EX_NOTRLCOM`); `:@"` and `:redir @"` name a register with it.
+///   (`ExArgt::NOTRLCOM`); `:@"` and `:redir @"` name a register with it.
 /// - `|` separates commands unless the command reads the following lines
 ///   (`:append`, `:change`, `:insert`).
 ///
@@ -242,7 +241,7 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
         let mut p = skip_grep_pat(eap);
         while *p != 0 {
             if *p as c_int == Ctrl_V {
-                if ea.argt & (EX_CTRLV as uint32_t | EX_XFILE as uint32_t) != 0 {
+                if ea.argt.has(ExArgt::CTRLV | ExArgt::XFILE) {
                     p = p.add(1);
                 } else {
                     drop_one_byte(p);
@@ -252,7 +251,7 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
                 }
             } else if *p as c_int == '`' as c_int
                 && *p.add(1) as c_int == '=' as c_int
-                && ea.argt & EX_XFILE as uint32_t != 0
+                && ea.argt.has(ExArgt::XFILE)
             {
                 // A backtick-equals expression is stepped over by the
                 // evaluator, not by this scan: it may contain any of the
@@ -264,7 +263,7 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
                 }
             } else if ends_argument(ea, p) {
                 let escaped = (vim_strchr(p_cpo.get(), CPO_BAR).is_null()
-                    || ea.argt & EX_CTRLV as uint32_t == 0)
+                    || !ea.argt.has(ExArgt::CTRLV))
                     && *p.offset(-1) as c_int == '\\' as c_int;
                 if escaped {
                     p = p.offset(-1);
@@ -277,7 +276,7 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
             }
             p = p.add(utfc_ptr2len(p) as usize);
         }
-        if ea.argt & EX_NOTRLCOM as uint32_t == 0 {
+        if !ea.argt.has(ExArgt::NOTRLCOM) {
             del_trailing_spaces(ea.arg);
         }
     }
@@ -293,7 +292,7 @@ unsafe fn ends_argument(ea: &exarg_T, p: *mut c_char) -> bool {
         let c = *p as c_int;
         let cmdidx = ea.cmdidx as c_int;
         let comment = c == '"' as c_int
-            && ea.argt & EX_NOTRLCOM as uint32_t == 0
+            && !ea.argt.has(ExArgt::NOTRLCOM)
             && (cmdidx != CMD_at as c_int || p != ea.arg)
             && (cmdidx != CMD_redir as c_int
                 || p != ea.arg.add(1)

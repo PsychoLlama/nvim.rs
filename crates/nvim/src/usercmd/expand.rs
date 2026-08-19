@@ -24,9 +24,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_VERBOSE, EX_KEEPSCRIPT, EX_NOSPC, Scope, ucmd_list,
-};
+use super::{DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_VERBOSE, Scope, ucmd_list};
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
 use crate::ex_docmd::do_cmdline;
@@ -37,7 +35,9 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
-use crate::types::{CMD_USER, CmdModFlags, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T};
+use crate::types::{
+    CMD_USER, CmdModFlags, ExArgt, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
+};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{strcat, strlen};
 use core::ffi::{CStr, c_char, c_int};
@@ -642,7 +642,7 @@ unsafe fn expand_args(
     }
     // A command declared to take a single argument does not split it, so
     // that `:Cmd %` works when `%` stands for "a b c".
-    let quote = if eap.argt & EX_NOSPC != 0 && quote == Quote::Split {
+    let quote = if eap.argt.has(ExArgt::NOSPC) && quote == Quote::Split {
         Quote::One
     } else {
         quote
@@ -707,7 +707,7 @@ pub unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
 
     // The command body runs with the defining script's id, unless it asked
     // to keep the caller's.
-    let saved = (cmd.uc_argt & EX_KEEPSCRIPT == 0).then(|| {
+    let saved = (!cmd.uc_argt.has(ExArgt::KEEPSCRIPT)).then(|| {
         let saved = current_sctx.get();
         current_sctx.with_mut(|sctx| sctx.sc_sid = cmd.uc_script_ctx.sc_sid);
         saved

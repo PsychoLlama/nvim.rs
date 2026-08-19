@@ -108,7 +108,7 @@ use crate::types::{
     Object, OptInt, buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
     fuzmatch_str_T, garray_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T,
     listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, scriptitem_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uint32_t, varnumber_T, xp_prefix_T,
+    typval_vval_union, varnumber_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::usercmd::{
@@ -349,12 +349,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const EX_EXTRA: ::core::ffi::c_uint = 0x4 as ::core::ffi::c_uint;
-pub const EX_XFILE: ::core::ffi::c_uint = 0x8 as ::core::ffi::c_uint;
-pub const EX_TRLBAR: ::core::ffi::c_uint = 0x100 as ::core::ffi::c_uint;
-pub const EX_NOTRLCOM: ::core::ffi::c_uint = 0x800 as ::core::ffi::c_uint;
-pub const EX_CMDARG: ::core::ffi::c_uint = 0x4000 as ::core::ffi::c_uint;
-pub const EX_ARGOPT: ::core::ffi::c_uint = 0x20000 as ::core::ffi::c_uint;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);

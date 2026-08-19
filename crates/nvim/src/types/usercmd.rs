@@ -7,7 +7,7 @@ use super::*;
 #[derive(Copy, Clone)]
 pub struct ucmd_T {
     pub uc_name: *mut ::core::ffi::c_char,
-    pub uc_argt: uint32_t,
+    pub uc_argt: ExArgt,
     pub uc_rep: *mut ::core::ffi::c_char,
     pub uc_def: int64_t,
     pub uc_compl: ::core::ffi::c_int,

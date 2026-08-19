@@ -69,10 +69,10 @@ use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::{
-    Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, Direction, LineGetter,
-    LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, TriState, cmd_addr_T,
+    Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, Direction, ExArgt,
+    LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, TriState, cmd_addr_T,
     dobuf_action_values, dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T,
-    handle_T, kNone, linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
+    handle_T, kNone, linenr_T, optmagic_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -176,7 +176,7 @@ pub struct CommandDefinition {
     pub cmd_name: *mut c_char,
     pub cmd_func: ex_func_T,
     pub cmd_preview_func: ex_preview_func_T,
-    pub cmd_argt: uint32_t,
+    pub cmd_argt: ExArgt,
     pub cmd_addr_type: cmd_addr_T,
 }
 pub const DOBUF_WIPE: dobuf_action_values = 4;
@@ -291,30 +291,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_growsize: 1 as c_int,
     ga_data: NULL_1,
 };
-pub const EX_RANGE: c_uint = 0x1 as c_uint;
-pub const EX_BANG: c_uint = 0x2 as c_uint;
-pub const EX_EXTRA: c_uint = 0x4 as c_uint;
-pub const EX_XFILE: c_uint = 0x8 as c_uint;
-pub const EX_NOSPC: c_uint = 0x10 as c_uint;
-pub const EX_DFLALL: c_uint = 0x20 as c_uint;
-pub const EX_WHOLEFOLD: c_uint = 0x40 as c_uint;
-pub const EX_NEEDARG: c_uint = 0x80 as c_uint;
-pub const EX_TRLBAR: c_uint = 0x100 as c_uint;
-pub const EX_REGSTR: c_uint = 0x200 as c_uint;
-pub const EX_COUNT: c_uint = 0x400 as c_uint;
-pub const EX_NOTRLCOM: c_uint = 0x800 as c_uint;
-pub const EX_ZEROR: c_uint = 0x1000 as c_uint;
-pub const EX_CTRLV: c_uint = 0x2000 as c_uint;
-pub const EX_CMDARG: c_uint = 0x4000 as c_uint;
-pub const EX_BUFNAME: c_uint = 0x8000 as c_uint;
-pub const EX_BUFUNL: c_uint = 0x10000 as c_uint;
-pub const EX_ARGOPT: c_uint = 0x20000 as c_uint;
-pub const EX_SBOXOK: c_uint = 0x40000 as c_uint;
-pub const EX_CMDWIN: c_uint = 0x80000 as c_uint;
-pub const EX_MODIFY: c_uint = 0x100000 as c_uint;
-pub const EX_FLAGS: c_uint = 0x200000 as c_uint;
-pub const EX_LOCK_OK: c_uint = 0x1000000 as c_uint;
-pub const EX_PREVIEW: c_uint = 0x8000000 as c_uint;
 pub const BAD_KEEP: c_int = -1 as c_int;
 pub const BAD_DROP: c_int = -2 as c_int;
 pub const FORCE_BIN: c_int = 1 as c_int;

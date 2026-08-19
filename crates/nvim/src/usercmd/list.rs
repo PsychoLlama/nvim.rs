@@ -17,10 +17,7 @@
 
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;
-use super::{
-    EX_BANG, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_KEEPSCRIPT, EX_NEEDARG, EX_NOSPC, EX_RANGE,
-    EX_REGSTR, EX_TRLBAR, LUA_NOREF, Scope, ucmd_list, ucmd_name, ucmds,
-};
+use super::{LUA_NOREF, Scope, ucmd_list, ucmd_name, ucmds};
 use crate::api::private::helpers::{
     arena_dict, arena_string, cstr_as_string, dict_put, dict_put_str,
 };
@@ -38,7 +35,7 @@ use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Dict, LuaRef, NUL, Object, buf_T, garray_T, int64_t, size_t, ucmd_T, uint32_t,
+    Arena, Dict, ExArgt, LuaRef, NUL, Object, buf_T, garray_T, int64_t, size_t, ucmd_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
@@ -48,13 +45,13 @@ use core::ptr;
 ///
 /// The five combinations upstream tests for are the only ones its parser
 /// produces; anything else is left blank, as upstream's `switch` does.
-fn nargs_str(argt: uint32_t) -> &'static CStr {
-    match argt & (EX_EXTRA | EX_NOSPC | EX_NEEDARG) {
-        0 => c"0",
-        EX_EXTRA => c"*",
-        x if x == EX_EXTRA | EX_NOSPC => c"?",
-        x if x == EX_EXTRA | EX_NEEDARG => c"+",
-        x if x == EX_EXTRA | EX_NOSPC | EX_NEEDARG => c"1",
+fn nargs_str(argt: ExArgt) -> &'static CStr {
+    match argt.masked(ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG) {
+        x if x.is_empty() => c"0",
+        x if x == ExArgt::EXTRA => c"*",
+        x if x == ExArgt::EXTRA | ExArgt::NOSPC => c"?",
+        x if x == ExArgt::EXTRA | ExArgt::NEEDARG => c"+",
+        x if x == ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG => c"1",
         _ => c"",
     }
 }
@@ -166,10 +163,10 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
     // SAFETY: module contract.
     unsafe {
         for (present, mark) in [
-            (a & EX_BANG != 0, b'!'),
-            (a & EX_REGSTR != 0, b'"'),
+            (a.has(ExArgt::BANG), b'!'),
+            (a.has(ExArgt::REGSTR), b'"'),
             (scope == Scope::Buffer, b'b'),
-            (a & EX_TRLBAR != 0, b'|'),
+            (a.has(ExArgt::TRLBAR), b'|'),
         ] {
             if present {
                 msg_putchar(mark as c_int);
@@ -202,11 +199,11 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
             cols.put(nargs_str(a).to_bytes());
             cols.pad_to(5, over);
 
-            if a & (EX_RANGE | EX_COUNT) != 0 {
-                if a & EX_COUNT != 0 {
+            if a.has(ExArgt::RANGE | ExArgt::COUNT) {
+                if a.has(ExArgt::COUNT) {
                     // -count=N
                     let _ = write!(cols, "{}c", cmd.uc_def);
-                } else if a & EX_DFLALL != 0 {
+                } else if a.has(ExArgt::DFLALL) {
                     cols.push(b'%');
                 } else if cmd.uc_def >= 0 {
                     // -range=N
@@ -335,7 +332,7 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
             None => Object::NIL,
         },
     };
-    let count = (a & EX_COUNT != 0).then(|| {
+    let count = (a.has(ExArgt::COUNT)).then(|| {
         if cmd.uc_def >= 0 {
             // SAFETY: `arena` is the dispatcher's.
             Object::string(unsafe { arena_printf(arena, c"%ld".as_ptr(), cmd.uc_def) })
@@ -343,8 +340,8 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
             Object::string(static_cstring(c"0"))
         }
     });
-    let range = (a & EX_RANGE != 0).then(|| {
-        if a & EX_DFLALL != 0 {
+    let range = (a.has(ExArgt::RANGE)).then(|| {
+        if a.has(ExArgt::DFLALL) {
             Object::string(static_cstring(c"%"))
         } else if cmd.uc_def >= 0 {
             // SAFETY: `arena` is the dispatcher's.
@@ -366,10 +363,13 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
                 c"script_id",
                 Some(Object::integer(cmd.uc_script_ctx.sc_sid.into())),
             ),
-            (c"bang", Some(Object::boolean(a & EX_BANG != 0))),
-            (c"bar", Some(Object::boolean(a & EX_TRLBAR != 0))),
-            (c"register", Some(Object::boolean(a & EX_REGSTR != 0))),
-            (c"keepscript", Some(Object::boolean(a & EX_KEEPSCRIPT != 0))),
+            (c"bang", Some(Object::boolean(a.has(ExArgt::BANG)))),
+            (c"bar", Some(Object::boolean(a.has(ExArgt::TRLBAR)))),
+            (c"register", Some(Object::boolean(a.has(ExArgt::REGSTR)))),
+            (
+                c"keepscript",
+                Some(Object::boolean(a.has(ExArgt::KEEPSCRIPT))),
+            ),
             (c"preview", luaref(cmd.uc_preview_luaref)),
             (c"callback", luaref(cmd.uc_luaref)),
             (c"nargs", Some(Object::string(nargs))),

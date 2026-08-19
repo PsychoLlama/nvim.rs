@@ -23,10 +23,9 @@
 
 use super::attr::ADDR_TYPES;
 use super::{
-    EX_XFILE, EXPAND_COMMANDS, EXPAND_MAPPINGS, EXPAND_MENUS, EXPAND_NOTHING,
-    EXPAND_USER_ADDR_TYPE, EXPAND_USER_CMD_FLAGS, EXPAND_USER_COMMANDS, EXPAND_USER_COMPLETE,
-    EXPAND_USER_DEFINED, EXPAND_USER_LIST, EXPAND_USER_LUA, EXPAND_USER_NARGS, Scope, ucmd_list,
-    ucmd_name,
+    EXPAND_COMMANDS, EXPAND_MAPPINGS, EXPAND_MENUS, EXPAND_NOTHING, EXPAND_USER_ADDR_TYPE,
+    EXPAND_USER_CMD_FLAGS, EXPAND_USER_COMMANDS, EXPAND_USER_COMPLETE, EXPAND_USER_DEFINED,
+    EXPAND_USER_LIST, EXPAND_USER_LUA, EXPAND_USER_NARGS, Scope, ucmd_list, ucmd_name,
 };
 use crate::charset::{skiptowhite, skipwhite};
 use crate::mapping::set_context_in_map_cmd;
@@ -34,7 +33,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
 use crate::os::cshim::snprintf;
-use crate::types::{CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, NUL, expand_T, uint32_t};
+use crate::types::{CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, ExArgt, NUL, expand_T};
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -158,7 +157,7 @@ unsafe fn set_context(xp: *mut expand_T, context: c_int, pattern: *const c_char)
 pub unsafe fn set_context_in_user_cmdarg(
     cmd: *const c_char,
     arg: *const c_char,
-    argt: uint32_t,
+    argt: ExArgt,
     context: c_int,
     xp: *mut expand_T,
     forceit: bool,
@@ -166,8 +165,8 @@ pub unsafe fn set_context_in_user_cmdarg(
     if context == EXPAND_NOTHING {
         return ptr::null();
     }
-    if argt & EX_XFILE != 0 {
-        // EX_XFILE: file names are handled before this call.
+    if argt.has(ExArgt::XFILE) {
+        // ExArgt::XFILE: file names are handled before this call.
         return ptr::null();
     }
     // SAFETY: caller contract.

@@ -33,8 +33,8 @@
 ///
 /// The generated type has `NONE`, the named members, `bits`/`from_bits` for
 /// the boundaries where a raw `c_int` is unavoidable, `has` (any of the
-/// asked-for bits are set), `has_all` (all of them), `without`/`clear`,
-/// `is_empty`, and `|`/`|=`.
+/// asked-for bits are set), `has_all` (all of them), `masked`,
+/// `without`/`clear`, `is_empty`, and `|`/`|=`.
 #[macro_export]
 macro_rules! flag_set {
     (
@@ -99,6 +99,14 @@ macro_rules! flag_set {
             #[inline]
             pub const fn when(self, cond: bool) -> Self {
                 if cond { self } else { Self::NONE }
+            }
+
+            /// Only the bits `flags` names: C's `opts & MASK`, for a
+            /// family with a sub-field that is asked *which* of several
+            /// mutually exclusive values it holds.
+            #[inline]
+            pub const fn masked(self, flags: Self) -> Self {
+                Self(self.0 & flags.0)
             }
 
             /// Drop `flags` in place: C's `opts &= ~FOO`. The `|=`

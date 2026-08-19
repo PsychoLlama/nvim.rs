@@ -71,7 +71,7 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, 
 use crate::types::{
     OptInt, buf_T, bufstate_T, colnr_T, exarg_T, expand_T, garray_T, hashtab_T, int16_t, linenr_T,
     lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
-    synblock_T, synstate_T, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
+    synblock_T, synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen, strpbrk};
 
@@ -209,8 +209,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_growsize: 1 as ::core::ffi::c_int,
     ga_data: NULL,
 };
-pub const EX_XFILE: ::core::ffi::c_uint = 0x8 as ::core::ffi::c_uint;
-pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
 pub const SYNSPL_DEFAULT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SYNSPL_NOTOP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

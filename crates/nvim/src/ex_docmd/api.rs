@@ -33,9 +33,8 @@ use crate::ex_docmd::scan::{
 };
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::{
-    ADDR_LINES, ADDR_NONE, EX_BANG, EX_BUFNAME, EX_BUFUNL, EX_CMDWIN, EX_DFLALL, EX_LOCK_OK,
-    EX_MODIFY, EX_RANGE, EX_TRLBAR, EX_WHOLEFOLD, EX_XFILE, cmdnames,
-    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_pressedreturn,
+    ADDR_LINES, ADDR_NONE, cmdnames, e_ambiguous_use_of_user_defined_command,
+    e_not_an_editor_command, ex_pressedreturn,
 };
 use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
@@ -51,8 +50,8 @@ use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout, CMD_checktime, CMD_edit, CMD_file,
-    CMD_iput, CMD_put, CMD_read, CMD_try, CmdParseInfo, FAIL, IOSIZE, NUL, OK, cmdmod_T, cstack_T,
-    exarg_T, linenr_T, pos_T, size_t, uint32_t,
+    CMD_iput, CMD_put, CMD_read, CMD_try, CmdParseInfo, ExArgt, FAIL, IOSIZE, NUL, OK, cmdmod_T,
+    cstack_T, exarg_T, linenr_T, pos_T, size_t,
 };
 use crate::usercmd::do_ucmd;
 use ::libc::{memset, strlen};
@@ -122,9 +121,9 @@ pub unsafe fn parse_cmdline(
             if *ea.cmd as c_int == NUL && ea.cmdidx as c_int == CMD_SIZE as c_int {
                 ea.arg = ea.cmd;
                 if ea.addr_count > 0 {
-                    ea.argt = EX_RANGE as uint32_t;
+                    ea.argt = ExArgt::RANGE;
                 } else {
-                    ea.argt = 0;
+                    ea.argt = ExArgt::NONE;
                     ea.addr_type = ADDR_NONE;
                 }
                 retval = true;
@@ -163,11 +162,11 @@ pub unsafe fn parse_cmdline(
                 ea.forceit = 0;
             }
 
-            if ea.argt & EX_TRLBAR as uint32_t != 0 {
+            if ea.argt.has(ExArgt::TRLBAR) {
                 separate_nextcmd(eap);
             } else if cmd_has_expr_args(ea.cmdidx) {
                 // A command whose argument is an expression has no
-                // `EX_TRLBAR`, because a `|` inside the expression is not a
+                // `ExArgt::TRLBAR`, because a `|` inside the expression is not a
                 // separator. Skipping expression by expression finds the one
                 // that is.
                 let mut arg = ea.arg;
@@ -191,15 +190,15 @@ pub unsafe fn parse_cmdline(
                 }
             }
 
-            if ea.argt & EX_BANG as uint32_t == 0 && ea.forceit != 0 {
+            if !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
                 *errormsg = gettext(&raw const e_nobang as *const c_char);
                 break 'end;
             }
-            if ea.argt & EX_RANGE as uint32_t == 0 && ea.addr_count > 0 {
+            if !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
                 *errormsg = gettext(&raw const e_norange as *const c_char);
                 break 'end;
             }
-            if ea.argt & EX_DFLALL as uint32_t != 0 && ea.addr_count == 0 {
+            if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
                 set_cmd_dflall_range(eap);
             }
 
@@ -214,10 +213,10 @@ pub unsafe fn parse_cmdline(
 
             // Which characters the caller must escape to have them taken
             // literally when the command is handed back.
-            if ea.argt & EX_XFILE as uint32_t != 0 {
+            if ea.argt.has(ExArgt::XFILE) {
                 (*cmdinfo).magic.file = true;
             }
-            if ea.argt & EX_TRLBAR as uint32_t != 0 {
+            if ea.argt.has(ExArgt::TRLBAR) {
                 (*cmdinfo).magic.bar = true;
             }
             retval = true;
@@ -245,15 +244,13 @@ pub(crate) unsafe fn execute_cmd0(
 ) -> c_int {
     unsafe {
         let ea = &mut *eap;
-        if ea.argt & EX_XFILE as uint32_t != 0
-            && expand_filename(eap, ea.cmdlinep, errormsg) == FAIL
-        {
+        if ea.argt.has(ExArgt::XFILE) && expand_filename(eap, ea.cmdlinep, errormsg) == FAIL {
             return FAIL;
         }
 
         // A buffer name may stand in for a buffer number, but not alongside
         // one, and not for a user command.
-        if ea.argt & EX_BUFNAME as uint32_t != 0
+        if ea.argt.has(ExArgt::BUFNAME)
             && *ea.arg as c_int != NUL
             && ea.addr_count == 0
             && !is_user_cmd(ea.cmdidx)
@@ -275,13 +272,8 @@ pub(crate) unsafe fn execute_cmd0(
                     }
                     p
                 };
-                ea.line2 = buflist_findpat(
-                    ea.arg,
-                    p,
-                    ea.argt & EX_BUFUNL as uint32_t != 0,
-                    false,
-                    false,
-                ) as linenr_T;
+                ea.line2 = buflist_findpat(ea.arg, p, ea.argt.has(ExArgt::BUFUNL), false, false)
+                    as linenr_T;
                 ea.addr_count = 1;
                 ea.arg = skipwhite(p);
             } else {
@@ -290,7 +282,7 @@ pub(crate) unsafe fn execute_cmd0(
                 ea.line2 = buflist_findpat(
                     *ea.args,
                     (*ea.args).add(*ea.arglens),
-                    ea.argt & EX_BUFUNL as uint32_t != 0,
+                    ea.argt.has(ExArgt::BUFUNL),
                     false,
                     false,
                 ) as linenr_T;
@@ -317,7 +309,7 @@ pub(crate) unsafe fn execute_cmd0(
             if preview {
                 *retv = (*cmdnames.ptr())[ea.cmdidx as usize]
                     .cmd_preview_func
-                    .expect("a command with EX_PREVIEW has a preview callback")(
+                    .expect("a command with ExArgt::PREVIEW has a preview callback")(
                     eap,
                     cmdpreview_get_ns(),
                     cmdpreview_get_bufnr(),
@@ -361,7 +353,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
             // `:put` is allowed in a terminal buffer, which is not
             // 'modifiable'.
             if (*curbuf.get()).b_p_ma == 0
-                && ea.argt & EX_MODIFY as uint32_t != 0
+                && ea.argt.has(ExArgt::MODIFY)
                 && !(!(*curbuf.get()).terminal.is_null()
                     && (ea.cmdidx as c_int == CMD_put as c_int
                         || ea.cmdidx as c_int == CMD_iput as c_int))
@@ -370,11 +362,11 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
                 break 'end;
             }
             if !is_user_cmd(ea.cmdidx) {
-                if cmdwin_type.get() != 0 && ea.argt & EX_CMDWIN as uint32_t == 0 {
+                if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
                     errormsg = gettext(&raw const e_cmdwin as *const c_char);
                     break 'end;
                 }
-                if text_locked() && ea.argt & EX_LOCK_OK as uint32_t == 0 {
+                if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
                     errormsg = gettext(get_text_locked_msg());
                     break 'end;
                 }
@@ -382,7 +374,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
             // `curbuf->b_ro_locked` forbids editing another buffer.
             // `:checktime` is postponed, `:edit` is checked later, and
             // `:file` with no argument only reports.
-            if ea.argt & EX_CMDWIN as uint32_t == 0
+            if !ea.argt.has(ExArgt::CMDWIN)
                 && ea.cmdidx as c_int != CMD_checktime as c_int
                 && ea.cmdidx as c_int != CMD_edit as c_int
                 && !(ea.cmdidx as c_int == CMD_file as c_int && *ea.arg as c_int == NUL)
@@ -400,7 +392,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
 
             // Put the first line at the start of a closed fold and the last
             // line at its end.
-            if (ea.argt & EX_WHOLEFOLD as uint32_t != 0 || ea.addr_count >= 2)
+            if (ea.argt.has(ExArgt::WHOLEFOLD) || ea.addr_count >= 2)
                 && global_busy.get() == 0
                 && ea.addr_type as c_uint == ADDR_LINES as c_uint
             {

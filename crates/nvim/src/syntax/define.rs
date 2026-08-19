@@ -14,7 +14,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use super::*;
 use crate::regexp::RE_MAGIC;
 use crate::runtime::RuntimeOpts;
-use crate::types::{FAIL, NUL};
+use crate::types::{ExArgt, FAIL, NUL};
 
 /// Adjust an item's flags when it is declared in a `:syntax include`d file.
 ///
@@ -69,7 +69,7 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         }
 
         // Everything left, up to the next command, is the file to include.
-        (*eap).argt = ((*eap).argt as ::core::ffi::c_uint | (EX_XFILE | EX_NOSPC)) as uint32_t;
+        (*eap).argt |= ExArgt::XFILE | ExArgt::NOSPC;
         separate_nextcmd(eap);
 
         // An absolute path, "$VIM/.." or "<sfile>.." is `:source`d, which needs
