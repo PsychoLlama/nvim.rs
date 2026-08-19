@@ -15,7 +15,8 @@ use crate::cursor::{
 use crate::diff::nv_diffgetput;
 use crate::drawscreen::win_cursorline_standout;
 use crate::edit::{
-    beginline, edit, get_literal, ins_copychar, prompt_curpos_editable, set_last_insert,
+    BeginlineOpts, beginline, edit, get_literal, ins_copychar, prompt_curpos_editable,
+    set_last_insert,
 };
 use crate::fold::{foldUpdateAfterInsert, hasFolding};
 use crate::getchar::{
@@ -32,10 +33,10 @@ use crate::memline::{inc, ml_delete_flags, ml_get};
 use crate::memory::xfree;
 use crate::message::emsg;
 use crate::normal::{
-    BL_WHITE, CA_COMMAND_BUSY, CAR, DEL, ESC, FO_OPEN_COMS, ML_DEL_MESSAGE, ML_EMPTY, NL,
-    OPENLINE_DO_COM, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig,
-    checkclearop, checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo,
-    prep_redo_cmd, true_0, v_swap_corners, v_visop,
+    CA_COMMAND_BUSY, CAR, DEL, ESC, FO_OPEN_COMS, ML_DEL_MESSAGE, ML_EMPTY, NL, OPENLINE_DO_COM,
+    REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig, checkclearop,
+    checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo, prep_redo_cmd,
+    true_0, v_swap_corners, v_visop,
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
@@ -552,7 +553,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
         }
         match u8::try_from((*cap).cmdchar) {
             Ok(b'A') => set_cursor_for_append_to_line(),
-            Ok(b'I') => beginline(BL_WHITE as c_int),
+            Ok(b'I') => beginline(BeginlineOpts::WHITE),
             Ok(b'a') => {
                 // `a` steps one right first. Under 'virtualedit' a position
                 // inside a tab or past the end of the line moves by a cell.

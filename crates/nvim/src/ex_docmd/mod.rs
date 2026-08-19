@@ -191,9 +191,6 @@ pub const kMTLineWise: MotionType = 1;
 pub type C2Rust_Unnamed_43 = c_uint;
 pub type C2Rust_Unnamed_44 = c_uint;
 pub type C2Rust_Unnamed_46 = c_uint;
-pub const BL_FIX: C2Rust_Unnamed_46 = 4;
-pub const BL_SOL: C2Rust_Unnamed_46 = 2;
-pub const BL_WHITE: C2Rust_Unnamed_46 = 1;
 pub type C2Rust_Unnamed_47 = c_uint;
 pub const VIM_QUESTION: C2Rust_Unnamed_47 = 4;
 pub type C2Rust_Unnamed_48 = c_uint;
@@ -254,7 +251,6 @@ pub struct wcmd_T {
     pub lnum: linenr_T,
 }
 pub const ETYPE_EXCEPT: etype_T = 5;
-pub const FNAME_MESS: C2Rust_Unnamed_56 = 1;
 pub const DT_LTAG: C2Rust_Unnamed_65 = 11;
 pub const DT_TAG: C2Rust_Unnamed_65 = 1;
 pub const DT_LAST: C2Rust_Unnamed_65 = 6;
@@ -275,7 +271,6 @@ pub const CHECK_PATH: C2Rust_Unnamed_61 = 3;
 pub const ESTACK_SCRIPT: estack_arg_T = 3;
 pub const ESTACK_STACK: estack_arg_T = 2;
 pub const ESTACK_SFILE: estack_arg_T = 1;
-pub const FNAME_HYP: C2Rust_Unnamed_56 = 4;
 pub const FIND_STRING: C2Rust_Unnamed_58 = 2;
 pub const FIND_EVAL: C2Rust_Unnamed_58 = 4;
 pub const FIND_IDENT: C2Rust_Unnamed_58 = 1;

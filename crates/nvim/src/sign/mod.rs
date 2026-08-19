@@ -36,7 +36,7 @@ use crate::decoration::{
     kMTMetaSignHL, kMTMetaSignText, kSHIsSign, sign_item_cmp,
 };
 use crate::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg,
@@ -88,8 +88,6 @@ pub const EXPAND_HIGHLIGHT: c_int = 13;
 pub const EXPAND_BUFFERS: c_int = 9;
 pub const EXPAND_FILES: c_int = 2;
 pub const EXPAND_NOTHING: c_int = 0;
-
-pub const BL_WHITE: c_int = 1;
 
 /// The priority a placement gets when neither the definition nor the
 /// `:sign place` / `sign_place()` call names one.
@@ -962,7 +960,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *mut c_char, buf: *mut buf_T) -
         // SAFETY: as above.
         unsafe {
             check_cursor_lnum(win.raw());
-            beginline(BL_WHITE);
+            beginline(BeginlineOpts::WHITE);
         };
     } else {
         if buf.b_fname.is_null() {

@@ -10,7 +10,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::cursor::{check_cursor, check_cursor_col};
 use crate::drawscreen::{UPD_VALID, clearmode, redraw_later, setcursor_mayforce, showmode};
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::event::r#loop::process_events_until;
 use crate::ex_cmds::{
     do_move, ex_copy, ex_substitute, ex_substitute_preview, global_exe, print_line,
@@ -20,8 +20,8 @@ use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::modifier::expr_map_locked;
 use crate::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::ex_docmd::{
-    BL_FIX, BL_SOL, BL_WHITE, CPO_EXECBUF, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR,
-    KS_SPECIAL, ML_EMPTY, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES, kMTLineWise,
+    CPO_EXECBUF, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, ML_EMPTY,
+    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES, kMTLineWise,
 };
 use crate::ex_getln::getexline;
 use crate::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -88,7 +88,7 @@ pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
             }
             setpcmark();
             (*curwin.get()).w_cursor.lnum = (*eap).line2;
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
         // Ex mode has just printed the line itself; it must not print it
         // again.
@@ -235,7 +235,7 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
         if (*eap).cmdidx as c_int != CMD_yank as c_int {
             setpcmark();
             (*curwin.get()).w_cursor.lnum = (*eap).line1;
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
         if VIsual_active.get() {
             end_visual_mode();
@@ -347,7 +347,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
             ex_copy((*eap).line1, (*eap).line2, n);
         }
         u_clearline(curbuf.get());
-        beginline(BL_SOL as c_int | BL_FIX as c_int);
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         ex_may_print(eap);
     }
 }
@@ -427,7 +427,7 @@ pub(crate) unsafe fn ex_join(eap: *mut exarg_T) {
             true,
             true,
         );
-        beginline(BL_WHITE as c_int | BL_FIX as c_int);
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         ex_may_print(eap);
     }
 }
@@ -609,7 +609,7 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
         // the cursor goes there and comes back.
         let pos = (*curwin.get()).w_cursor;
         (*curwin.get()).w_cursor.lnum = (*eap).line2;
-        beginline(BL_WHITE as c_int | BL_FIX as c_int);
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         if setmark(*(*eap).arg as c_int) == FAIL {
             emsg(gettext(
                 c"E191: Argument must be a letter or forward/backward quote".as_ptr(),

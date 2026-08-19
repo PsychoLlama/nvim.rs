@@ -11,14 +11,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{BL_FIX, BL_WHITE, CAR, CMD_center, CMD_left, CMD_right, EOL_MAC, FAIL, NL, TAB};
+use super::{CAR, CMD_center, CMD_left, CMD_right, EOL_MAC, FAIL, NL, TAB};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{transchar, transchar_nonprint, vim_isprintc};
 use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::indent::{get_indent, set_indent};
 use crate::main::{IObuff, curbuf, curwin};
 use crate::mbyte::{
@@ -297,7 +297,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     unsafe {
         changed_lines(curbuf.get(), line1, 0, line2 + 1, 0, true);
         (*curwin.get()).w_cursor = save_curpos;
-        beginline((BL_WHITE | BL_FIX) as c_int);
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 }
 

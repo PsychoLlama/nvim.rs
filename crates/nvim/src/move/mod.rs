@@ -68,8 +68,6 @@ use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
 
 pub type C2Rust_Unnamed_15 = c_uint;
-pub const BL_FIX: C2Rust_Unnamed_15 = 4;
-pub const BL_SOL: C2Rust_Unnamed_15 = 2;
 pub const kMTCharWise: MotionType = 0;
 
 /// One buffer line as the vertical scrolling walks it: the line, the filler

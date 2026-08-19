@@ -25,11 +25,10 @@ mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
 use super::{
-    BF_CHECK_RO, BF_NEVERLOADED, BF_NOTEDITED, BFA_KEEP_UNDO, BL_FIX, BL_SOL, BL_WHITE, CCGD_AW,
-    CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOCMD_VERBOSE, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT,
-    ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP, FAIL,
-    KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT, SHM_FILEINFO, SHM_OVERALL,
-    false_0, true_0,
+    BF_CHECK_RO, BF_NEVERLOADED, BF_NOTEDITED, BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT,
+    CCGD_MULTWIN, DOCMD_VERBOSE, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST,
+    ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP, FAIL, KEYMAP_INIT, READ_KEEP_UNDO,
+    READ_NOWINENTER, SEA_DIALOG, SEA_QUIT, SHM_FILEINFO, SHM_OVERALL, false_0, true_0,
 };
 use crate::arglist::check_arg_idx;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER, apply_autocmds_retval};
@@ -42,7 +41,7 @@ use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum, get_curso
 use crate::diff::{diff_buf_add, diff_invalidate};
 use crate::digraph::keymap_init;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::do_cmdline;
@@ -757,14 +756,14 @@ unsafe fn place_cursor(state: &Ecmd) {
                 (*curwin.get()).w_cursor.coladd = 0;
                 (*curwin.get()).w_set_curswant = true_0;
             } else {
-                beginline(BL_SOL as c_int | BL_FIX as c_int);
+                beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
             }
         } else {
             // no line number, go to last line in Ex mode
             if exmode_active.get() {
                 (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
             }
-            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
     }
 }

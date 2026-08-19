@@ -14,15 +14,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BL_FIX, BL_WHITE, CPO_REMMARK, FAIL, READ_FILTER, buf_autocmd, check_secure, false_0,
-    kExtmarkNOOP, true_0,
+    CPO_REMMARK, FAIL, READ_FILTER, buf_autocmd, check_secure, false_0, kExtmarkNOOP, true_0,
 };
 use crate::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
 use crate::charset::skipwhite;
 use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds2::autowrite_all;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
@@ -578,7 +577,7 @@ unsafe fn do_filter(
             }
 
             // SAFETY: cursor on first non-blank.
-            unsafe { beginline(BL_WHITE as c_int | BL_FIX as c_int) };
+            unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
             no_wait_return.set(no_wait_return.get() - 1);
 
             if linecount as OptInt > p_report.get() {

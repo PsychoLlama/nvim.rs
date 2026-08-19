@@ -11,7 +11,7 @@
 use core::ptr;
 
 use crate::buffer::bt_prompt;
-use crate::edit::{beginline, cursor_down, prompt_curpos_editable};
+use crate::edit::{BeginlineOpts, beginline, cursor_down, prompt_curpos_editable};
 use crate::eval::vars::{set_reg_var, set_vim_var_string};
 use crate::getchar::{plain_vgetc, start_redo, stuffcharReadbuff};
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
@@ -21,8 +21,8 @@ use crate::main::{
 };
 use crate::message::emsg;
 use crate::normal::{
-    BL_FIX, BL_SOL, BL_WHITE, checkclearop, checkclearopq, clearopbeep,
-    e_cmdline_window_already_open, false_0, kMTLineWise, langmap_adjust, true_0,
+    checkclearop, checkclearopq, clearopbeep, e_cmdline_window_already_open, false_0, kMTLineWise,
+    langmap_adjust, true_0,
 };
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
@@ -253,9 +253,9 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
         {
             // A delete or a shift leaves the cursor at the start of the line,
             // on the first non-blank only if 'startofline' says so.
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         } else if (*oap).op_type != OP_YANK {
-            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
     }
 }

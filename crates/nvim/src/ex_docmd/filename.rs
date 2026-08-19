@@ -23,14 +23,14 @@ use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::{
     ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EX_NOSPC, EXPAND_FILES, FIND_EVAL,
-    FIND_IDENT, FIND_STRING, FNAME_HYP, FNAME_MESS, VALID_HEAD, VALID_PATH, dollar_command,
+    FIND_IDENT, FIND_STRING, VALID_HEAD, VALID_PATH, dollar_command,
     e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
     e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
-use crate::file_search::file_name_at_cursor;
+use crate::file_search::{FileNameOpts, file_name_at_cursor};
 use crate::main::{
     NameBuff, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, curbuf,
     current_sctx, e_usingsid, escape_chars, p_gp, p_mp, p_wic,
@@ -517,7 +517,7 @@ pub unsafe fn eval_vars(
                 }
                 SPEC_CFILE => {
                     result = file_name_at_cursor(
-                        FNAME_MESS as c_int | FNAME_HYP as c_int,
+                        FileNameOpts::MESS | FileNameOpts::HYP,
                         1,
                         ptr::null_mut(),
                     );

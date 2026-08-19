@@ -113,11 +113,12 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
-    Arena, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction, EvalFuncData,
-    ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VAR_UNLOCKED, VV_COMPLETED_ITEM, buf_T,
-    colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, linenr_T,
-    list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t,
-    typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
+    Arena, BackslashEscape, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction,
+    EvalFuncData, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VAR_UNLOCKED,
+    VV_COMPLETED_ITEM, buf_T, colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T,
+    hashtab_T, linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T,
+    sctx_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T,
+    xp_prefix_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -456,7 +457,7 @@ static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
         sc_lnum: 0,
         sc_chan: 0,
     },
-    xp_backslash: 0,
+    xp_backslash: BackslashEscape::NONE,
     xp_shell: false,
     xp_numfiles: 0,
     xp_col: 0,

@@ -20,12 +20,12 @@ use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
     CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FNAME_MESS, ML_EMPTY, cmdmod_has,
-    ex_pressedreturn, kDirectionNotSet,
+    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, ML_EMPTY, cmdmod_has, ex_pressedreturn,
+    kDirectionNotSet,
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
-use crate::file_search::{find_file_in_path, vim_findfile_cleanup};
+use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::fileio::readfile;
 use crate::getchar::stuffReadbuff;
 use crate::main::{
@@ -253,7 +253,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T)
         let mut fname = find_file_in_path(
             pat,
             strlen(pat),
-            FNAME_MESS as c_int,
+            FileNameOpts::MESS,
             true,
             (*curbuf.get()).b_ffname,
             &raw mut file_to_find,
@@ -269,7 +269,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T)
                 fname = find_file_in_path(
                     ptr::null_mut(),
                     0 as size_t,
-                    FNAME_MESS as c_int,
+                    FileNameOpts::MESS,
                     false,
                     (*curbuf.get()).b_ffname,
                     &raw mut file_to_find,

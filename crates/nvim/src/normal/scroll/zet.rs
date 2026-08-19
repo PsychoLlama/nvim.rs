@@ -8,7 +8,7 @@ use core::ptr;
 use crate::ascii::ascii_isdigit;
 use crate::cursor::{check_cursor_col, set_leftcol};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_later};
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::{
     clearFolding, closeFold, closeFoldRecurse, deleteFold, foldManualAllowed, foldMoveTo,
     foldOpenCursor, foldmethodIsDiff, foldmethodIsManual, foldmethodIsMarker, getDeepestNesting,
@@ -19,9 +19,8 @@ use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
 use crate::normal::{
-    BL_FIX, BL_WHITE, CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop,
-    clearopbeep, false_0, find_ident_under_cursor, get_visual_text, nv_operator, nv_put,
-    read_command_char, true_0,
+    CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop, clearopbeep, false_0,
+    find_ident_under_cursor, get_visual_text, nv_operator, nv_put, read_command_char, true_0,
 };
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
@@ -560,7 +559,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
 
         if let Some((place, to_first_non_blank)) = place {
             if to_first_non_blank {
-                beginline(BL_WHITE as c_int | BL_FIX as c_int);
+                beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
             match place {
                 Place::Top => scroll_cursor_top(win, 0, true_0),

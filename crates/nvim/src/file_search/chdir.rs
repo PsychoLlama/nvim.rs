@@ -129,7 +129,7 @@ pub unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
         let dir_name = find_directory_in_path(
             new_dir,
             strlen(new_dir),
-            FNAME_MESS as c_int,
+            FileNameOpts::MESS,
             (*curbuf.get()).b_ffname,
             &raw mut file_to_find,
             &raw mut search_ctx,

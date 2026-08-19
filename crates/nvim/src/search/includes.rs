@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::file_search::FileNameOpts;
 use crate::highlight_group::{HLF_D, HLF_R};
 use crate::regexp::RE_MAGIC;
 use crate::smsg_c;
@@ -24,9 +25,6 @@ const ACTION_SHOW: c_int = super::ACTION_SHOW as c_int;
 const ACTION_SPLIT: c_int = super::ACTION_SPLIT as c_int;
 const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL as c_int;
 const ACTION_EXPAND: c_int = super::ACTION_EXPAND as c_int;
-const FNAME_EXP: c_int = super::FNAME_EXP as c_int;
-const FNAME_INCL: c_int = super::FNAME_INCL as c_int;
-const FNAME_REL: c_int = super::FNAME_REL as c_int;
 const LSIZE: usize = super::LSIZE as usize;
 
 /// An `xmalloc`ed NUL-terminated name that frees itself.
@@ -407,7 +405,7 @@ unsafe fn handle_include(
         };
         let start = pats.incl.startp[0];
         let end = pats.incl.endp[0];
-        let flags = FNAME_EXP | FNAME_INCL | FNAME_REL;
+        let flags = FileNameOpts::EXP | FileNameOpts::INCL | FileNameOpts::REL;
         let raw = if include_uses_zs(inc_opt) {
             // Use the text from '\zs' to '\ze' (or the end) of 'include'.
             find_file_name_in_path(start, end.offset_from(start) as size_t, flags, 1, p_fname)

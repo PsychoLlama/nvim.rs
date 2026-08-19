@@ -23,6 +23,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::register::is_append_register;
 use crate::types::NUL;
@@ -292,7 +293,7 @@ unsafe fn delete_whole_lines(oap: *mut oparg_T) -> Result<(), UndoFailed> {
     unsafe {
         if (*oap).op_type != OP_CHANGE {
             del_lines((*oap).line_count, true);
-            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             // `U` is not possible after `dd`.
             u_clearline(curbuf.get());
             return Ok(());
@@ -310,11 +311,11 @@ unsafe fn delete_whole_lines(oap: *mut oparg_T) -> Result<(), UndoFailed> {
         if (*curbuf.get()).b_p_ai != 0 {
             // Keep the indent, on the first non-white character; `did_ai` is
             // what deletes it again if the insert is left with ESC.
-            beginline(BL_WHITE as c_int);
+            beginline(BeginlineOpts::WHITE);
             did_ai.set(true);
             ai_col.set((*curwin.get()).w_cursor.col);
         } else {
-            beginline(0);
+            beginline(BeginlineOpts::NONE);
         }
         // The rest of the line, leaving the cursor past its last character.
         truncate_line(false_0);

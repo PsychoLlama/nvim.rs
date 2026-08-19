@@ -72,12 +72,26 @@ pub const kBufOptIncludeexpr: c_int = 46;
 pub const FINDFILE_DIR: c_int = 1;
 pub const FINDFILE_BOTH: c_int = 2;
 
-pub const FNAME_MESS: c_int = 1;
-pub const FNAME_EXP: c_int = 2;
-pub const FNAME_HYP: c_int = 4;
-pub const FNAME_INCL: c_int = 8;
-pub const FNAME_REL: c_int = 16;
-pub const FNAME_UNESC: c_int = 32;
+crate::flag_set! {
+    /// How to read the file name under the cursor -- upstream's `FNAME_*`,
+    /// the `options` argument [`file_name_at_cursor`] and
+    /// [`find_file_name_in_path`] thread.
+    pub struct FileNameOpts;
+
+    /// Say why, when no name could be read or no file found.
+    const MESS = 1;
+    /// Expand the name: environment variables, `~`, and a `'path'` search.
+    const EXP = 2;
+    /// Recognise a hypertext link (`http://…`) as a name.
+    const HYP = 4;
+    /// Run the name through `'includeexpr'` first.
+    const INCL = 8;
+    /// Answer the name relative to the current directory when that is
+    /// shorter than the absolute one.
+    const REL = 16;
+    /// Undo the command line's backslash escaping in the name.
+    const UNESC = 32;
+}
 
 /// The directories `ff_get_next` walks into. `NOTWILD` is there — a bit of a
 /// hack, upstream says — because the already-expanded path may hold wildcard

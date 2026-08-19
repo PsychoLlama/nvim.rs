@@ -12,11 +12,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BL_FIX, BL_WHITE, DOCMD_NOWAIT, FAIL, check_regexp_delim, do_sub_msg, global_need_beginline,
-    global_need_msg_kind,
+    DOCMD_NOWAIT, FAIL, check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind,
 };
 use crate::cursor::check_cursor;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::do_cmdline;
 use crate::main::{
     curbuf, curwin, e_backslash, e_interr, e_invcmd, global_busy, got_int, msg_col, msg_didout,
@@ -362,7 +361,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     global_busy.set(0 as c_int);
     if global_need_beginline.get() {
         // SAFETY: main thread, live window.
-        unsafe { beginline(BL_WHITE as c_int | BL_FIX as c_int) };
+        unsafe { beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX) };
     } else {
         // SAFETY: as above -- the cursor may be beyond the end of the line.
         unsafe { check_cursor(curwin.get()) };

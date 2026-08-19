@@ -13,7 +13,9 @@ use crate::change::{changed_lines, ins_bytes, ins_str};
 use crate::charset::skipwhite;
 use crate::cursor::{coladvance, get_cursor_line_len, get_cursor_line_ptr};
 use crate::drawscreen::{UPD_INVERTED, UPD_NOT_VALID, redraw_curbuf_later};
-use crate::edit::{backspace_until_column, beginline, replace_join, replace_push_nul};
+use crate::edit::{
+    BeginlineOpts, backspace_until_column, beginline, replace_join, replace_push_nul,
+};
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_splice_cols;
 use crate::indent_c::in_cinkeys;
@@ -154,7 +156,7 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
         }
         // Put the cursor on the first non-blank of the indented line.
         (*win).w_cursor.lnum = start_lnum;
-        beginline(BL_SOL as c_int | BL_FIX as c_int);
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         // Mark the changed lines for redraw. Under Visual highlighting that
         // has to reach the last line even when nothing changed, so that the
         // highlight goes away.
@@ -508,7 +510,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
         let mut start_col = (*win).w_cursor.col as c_int;
         // Offset of the cursor from the first non-blank.
         let mut new_cursor_col = (*win).w_cursor.col as c_int;
-        beginline(BL_WHITE as c_int);
+        beginline(BeginlineOpts::WHITE);
         new_cursor_col -= (*win).w_cursor.col as c_int;
         let mut insstart_less = (*win).w_cursor.col as c_int;
         if new_cursor_col < 0 {

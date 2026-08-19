@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::edit::BeginlineOpts;
 use crate::search::SEARCH_KEEP;
 use crate::types::{FAIL, IOSIZE, OK};
 use core::ffi::{c_char, c_int, c_uint};
@@ -238,7 +239,7 @@ unsafe fn qf_jump_goto_line(
             (*curwin.get()).w_cursor.lnum = qf_lnum.min((*curbuf.get()).b_ml.ml_line_count);
         }
         if qf_col <= 0 {
-            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             return;
         }
         (*curwin.get()).w_cursor.coladd = 0;

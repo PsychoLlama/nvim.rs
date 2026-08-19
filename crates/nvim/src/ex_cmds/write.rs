@@ -15,10 +15,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BF_NEW, BF_NOTEDITED, BF_READERR, BL_FIX, BL_SOL, CPO_ALTWRITE, CPO_OVERNEW, ECMD_FORCEIT,
-    ECMD_HIDE, FAIL, GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE,
-    NODE_OTHER, SHM_FILEINFO, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd, false_0,
-    true_0,
+    BF_NEW, BF_NOTEDITED, BF_READERR, CPO_ALTWRITE, CPO_OVERNEW, ECMD_FORCEIT, ECMD_HIDE, FAIL,
+    GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
+    SHM_FILEINFO, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd, false_0, true_0,
 };
 use crate::arglist::do_argfile;
 use crate::autocmd::{
@@ -32,7 +31,7 @@ use crate::buffer::{
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::channel::channel_job_running;
 use crate::cursor::check_cursor_lnum;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds2::{autowrite, buf_write_all, check_fname, dialog_changed};
 use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
@@ -919,7 +918,7 @@ pub unsafe fn getfile(
                 (*curwin.get()).w_cursor.lnum = lnum;
             }
             check_cursor_lnum(curwin.get());
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
         // it's in the same file
         return GETFILE_SAME_FILE;

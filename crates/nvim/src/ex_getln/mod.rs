@@ -140,20 +140,20 @@ use crate::state::{
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, Boolean, CMD_append, Callback, Callback_data as C2Rust_Unnamed_5, CmdModFlags,
-    CmdParseInfo, CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk,
-    CmdlineColors, CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExprAST,
-    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
-    ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
-    OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, RemapValues, Set_ptr_t, String_0, TryState, UndoObjectType,
-    VimState, aco_save_T, buf_T, bufref_T, cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T,
-    disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T, expand_T,
-    garray_T, handle_T, hashitem_T, hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T,
-    magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
-    regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t,
-    typval_T, typval_vval_union, u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
-    xp_prefix_T,
+    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback,
+    Callback_data as C2Rust_Unnamed_5, CmdModFlags, CmdParseInfo,
+    CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk, CmdlineColors,
+    CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExprAST, ExprASTNodeType,
+    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
+    HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData,
+    OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
+    RemapValues, Set_ptr_t, String_0, TryState, UndoObjectType, VimState, aco_save_T, buf_T,
+    bufref_T, cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
+    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
+    hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
+    optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
+    save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
+    u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -205,7 +205,6 @@ pub const kMHExisting: MHPutStatus = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const XP_BS_NONE: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_18 = 0;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_18 = -2;
@@ -593,7 +592,7 @@ pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
         sc_lnum: 0,
         sc_chan: 0,
     },
-    xp_backslash: 0,
+    xp_backslash: BackslashEscape::NONE,
     xp_shell: false,
     xp_numfiles: 0,
     xp_col: 0,

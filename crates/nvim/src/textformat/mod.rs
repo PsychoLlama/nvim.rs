@@ -43,8 +43,6 @@ pub const OPENLINE_KEEPTRAIL: c_uint = 4;
 pub const OPENLINE_DO_COM: c_uint = 2;
 pub const OPENLINE_DELSPACES: c_uint = 1;
 pub const INDENT_SET: c_uint = 1;
-pub const BL_FIX: c_uint = 4;
-pub const BL_WHITE: c_uint = 1;
 pub const SIN_CHANGED: c_uint = 1;
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 

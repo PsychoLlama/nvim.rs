@@ -10,7 +10,9 @@
 
 use super::*;
 use crate::drawscreen::windows_in_curtab;
-use crate::types::{NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue, kErrorTypeNone};
+use crate::types::{
+    BackslashEscape, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue, kErrorTypeNone,
+};
 
 /// An all-zero [`CommandLineState`]: the fields C's designated initialiser
 /// leaves out, which the C zeroes for it.
@@ -210,7 +212,7 @@ pub(crate) unsafe fn command_line_enter(
                 (*cc).cmdspos = cmd_startcol();
             }
             (*s).xpc.xp_context = EXPAND_NOTHING;
-            (*s).xpc.xp_backslash = XP_BS_NONE;
+            (*s).xpc.xp_backslash = BackslashEscape::NONE;
             (*s).xpc.xp_shell = false;
 
             if (*cc).input_fn != 0 {

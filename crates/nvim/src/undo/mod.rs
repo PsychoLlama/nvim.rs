@@ -79,10 +79,6 @@ mod header {
     /// `ml_append`/`ml_delete` flags.
     pub const ML_EMPTY: c_int = 0x1;
 
-    /// `beginline` flags.
-    pub const BL_SOL: c_int = 2;
-    pub const BL_FIX: c_int = 4;
-
     /// The `u_header_T::uh_flags` bits.
     pub const UH_CHANGED: c_int = 1;
     pub const UH_EMPTYBUF: c_int = 2;

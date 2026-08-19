@@ -1,7 +1,7 @@
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{bt_prompt, buflist_getfile};
 use crate::cursor::check_cursor;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curwin, listcmd_busy, namedfm};
 use crate::message::emsg;
@@ -343,7 +343,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove) -> MarkMov
             pos = (*fm).mark;
             (*curwin.get()).w_cursor = (*fm).mark;
             if flags as c_uint & kMarkBeginLine as c_int as c_uint != 0 {
-                beginline(BL_WHITE as c_int | BL_FIX as c_int);
+                beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
             res = (if prev_pos.lnum != pos.lnum {
                 res as c_uint

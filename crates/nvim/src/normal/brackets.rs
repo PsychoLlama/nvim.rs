@@ -7,7 +7,7 @@ use core::ptr;
 
 use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::diff::diff_move_to;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::foldMoveTo;
 use crate::keycodes::{K_LEFTMOUSE, K_RIGHTRELEASE};
 use crate::main::{curbuf, curwin};
@@ -15,9 +15,9 @@ use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::memory::{xfree, xmemdupz};
 use crate::mouse::do_mouse;
 use crate::normal::{
-    _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, BL_FIX, BL_WHITE, FIND_ANY,
-    FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clearop, clearopbeep,
-    false_0, find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
+    _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE,
+    FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clearop, clearopbeep, false_0,
+    find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
     may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt, true_0,
 };
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
@@ -334,7 +334,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
                 clearopbeep((*cap).oap);
             } else {
                 if (*(*cap).oap).op_type == OP_NOP {
-                    beginline(BL_WHITE as c_int | BL_FIX as c_int);
+                    beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
                 }
                 may_fold_open(cap, kOptFdoFlagBlock as c_uint);
             }

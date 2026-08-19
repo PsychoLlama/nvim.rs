@@ -60,9 +60,6 @@ pub use expr::{
     use_indentexpr_for_lisp,
 };
 
-const BL_WHITE: c_int = 1;
-const BL_SOL: c_int = 2;
-const BL_FIX: c_int = 4;
 const INDENT_SET: c_uint = 1;
 const INDENT_DEC: c_uint = 3;
 const kBufOptIndentexpr: c_uint = 47;

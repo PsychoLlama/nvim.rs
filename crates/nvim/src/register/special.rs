@@ -17,6 +17,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::file_search::FileNameOpts;
 use crate::types::NUL;
 
 /// Prompt for the `"=` expression on the command line.
@@ -168,7 +169,9 @@ pub unsafe fn get_spec_reg(
                     return false;
                 }
                 *argp = file_name_at_cursor(
-                    FNAME_MESS | FNAME_HYP | if regname == Ctrl_P { FNAME_EXP } else { 0 },
+                    FileNameOpts::MESS
+                        | FileNameOpts::HYP
+                        | FileNameOpts::EXP.when(regname == Ctrl_P),
                     1,
                     ::core::ptr::null_mut(),
                 );

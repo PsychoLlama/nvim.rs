@@ -18,7 +18,7 @@ use core::ptr;
 use crate::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, getnextac, has_event};
 use crate::charset::skipwhite;
 use crate::debugger::dbg_check_breakpoint;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::userfunc::{current_func_returned, do_return, get_func_line};
 use crate::ex_docmd::address::{
     correct_range, find_excmd_after_range, invalid_range, parse_cmd_address, set_cmd_addr_type,
@@ -37,11 +37,11 @@ use crate::ex_docmd::scan::{
 use crate::ex_docmd::source::{ex_errmsg, getline_cookie, getline_equal};
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    ADDR_LINES, ADDR_OTHER, BL_FIX, BL_SOL, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE,
-    DOCMD_VERBOSE, EX_ARGOPT, EX_BANG, EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA,
-    EX_FLAGS, EX_LOCK_OK, EX_MODIFY, EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD,
-    PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command,
-    ex_func_T, exmode_plus, quitmore,
+    ADDR_LINES, ADDR_OTHER, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, EX_ARGOPT,
+    EX_BANG, EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_FLAGS, EX_LOCK_OK, EX_MODIFY,
+    EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD, PROF_YES, cmdnames,
+    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, exmode_plus,
+    quitmore,
 };
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
@@ -739,7 +739,7 @@ pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> *mut c_char 
             } else {
                 // Line 0 is not a position; the cursor goes to line 1.
                 (*curwin.get()).w_cursor.lnum = if ea.line2 == 0 { 1 } else { ea.line2 };
-                beginline(BL_SOL as c_int | BL_FIX as c_int);
+                beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
             }
         }
         errormsg

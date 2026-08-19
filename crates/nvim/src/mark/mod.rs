@@ -60,8 +60,6 @@ pub use shada::{mark_buffer_iter, mark_global_iter, mark_set_global, mark_set_lo
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
 pub const TAB: c_int = '\t' as c_int;
-pub const BL_WHITE: c_uint = 1;
-pub const BL_FIX: c_uint = 4;
 pub const GETF_SETMARK: getf_values = 1;
 pub const AUGROUP_ALL: c_int = -3;
 pub const BUF_HAS_QF_ENTRY: c_int = 1;

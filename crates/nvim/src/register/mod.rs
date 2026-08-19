@@ -158,17 +158,7 @@ pub const YREG_PUT: ::core::ffi::c_int = 2;
 pub const YREG_YANK: ::core::ffi::c_int = 1;
 pub const YREG_PASTE: ::core::ffi::c_int = 0;
 
-/// `beginline()` flags: land on the first non-blank, on the start of the
-/// line, and clamp into a valid column.
-pub const BL_FIX: ::core::ffi::c_int = 4;
-pub const BL_SOL: ::core::ffi::c_int = 2;
-pub const BL_WHITE: ::core::ffi::c_int = 1;
-
-/// `file_name_at_cursor()` flags: expand `~`/`$VAR`, report an error when
-/// there is no file name, and follow 'includeexpr'-style hypertext.
-pub const FNAME_HYP: ::core::ffi::c_int = 4;
-pub const FNAME_EXP: ::core::ffi::c_int = 2;
-pub const FNAME_MESS: ::core::ffi::c_int = 1;
+/// `ins_typebuf` remap mode: what the inserted keys may be remapped by.
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
 /// `set_indent()` flags: leave the marks alone, save for undo, this is an

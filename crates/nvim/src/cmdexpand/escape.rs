@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
+use crate::types::BackslashEscape;
 use core::ffi::{c_char, c_int, c_void};
 
 /// Is fuzzy completion supported in this cmdline completion context?
@@ -111,15 +112,15 @@ pub(crate) unsafe fn wildescape(
             // and wildmatch characters, except '~'.
             for slot in matches.iter_mut() {
                 // For ":set path=" we need to escape spaces twice.
-                if (*xp).xp_backslash & XP_BS_THREE != 0 {
-                    let pat = if (*xp).xp_backslash & XP_BS_COMMA != 0 {
+                if (*xp).xp_backslash.has(BackslashEscape::THREE) {
+                    let pat = if (*xp).xp_backslash.has(BackslashEscape::COMMA) {
                         c" ,"
                     } else {
                         c" "
                     };
                     let escaped = vim_strsave_escaped(*slot, pat.as_ptr());
                     put(slot, escaped);
-                } else if (*xp).xp_backslash & XP_BS_COMMA != 0
+                } else if (*xp).xp_backslash.has(BackslashEscape::COMMA)
                     && !vim_strchr(*slot, ',' as c_int).is_null()
                 {
                     let escaped = vim_strsave_escaped(*slot, c",".as_ptr());
@@ -140,7 +141,7 @@ pub(crate) unsafe fn wildescape(
                     escape_fname(slot);
                 }
             }
-            (*xp).xp_backslash = XP_BS_NONE;
+            (*xp).xp_backslash = BackslashEscape::NONE;
 
             // If the first match starts with a '+' escape it.  Otherwise it
             // could be read as "+cmd".

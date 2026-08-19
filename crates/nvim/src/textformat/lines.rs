@@ -17,7 +17,7 @@ use crate::cursor::{
     check_cursor, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr,
 };
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
-use crate::edit::{beginline, insertchar};
+use crate::edit::{BeginlineOpts, beginline, insertchar};
 use crate::eval::eval_to_number;
 use crate::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
 use crate::ex_docmd::cmdmod_has;
@@ -88,7 +88,7 @@ pub unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
         {
             (*curwin.get()).w_cursor.lnum += 1;
         }
-        beginline((BL_WHITE | BL_FIX) as c_int);
+        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         old_line_count = (*curbuf.get()).b_ml.ml_line_count - old_line_count;
         msgmore(old_line_count as c_int);
 

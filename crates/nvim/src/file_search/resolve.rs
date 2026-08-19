@@ -22,7 +22,7 @@ use core::{ptr, slice};
 /// repeating calls. Repeating calls return other files called `ptr[len]`
 /// from the path; only on the first call are `ptr` and `len` used.
 ///
-/// If nothing is found on the first call, `FNAME_MESS` issues
+/// If nothing is found on the first call, `FileNameOpts::MESS` issues
 /// `Can't find file "<file>" in path`; on repeating calls,
 /// `No more file "<file>" found in path`.
 ///
@@ -39,7 +39,7 @@ use core::{ptr, slice};
 pub unsafe fn find_file_in_path(
     ptr: *mut c_char,
     len: size_t,
-    options: c_int,
+    options: FileNameOpts,
     first: bool,
     rel_fname: *mut c_char,
     file_to_find: *mut *mut c_char,
@@ -64,8 +64,8 @@ pub unsafe fn find_file_in_path(
 /// Find the directory name `ptr[len]` in `'cdpath'`.
 ///
 /// options:
-/// - `FNAME_MESS`   give error message when not found
-/// - `FNAME_UNESC`  unescape backslashes
+/// - `FileNameOpts::MESS`   give error message when not found
+/// - `FileNameOpts::UNESC`  unescape backslashes
 ///
 /// Uses `NameBuff`.
 ///
@@ -79,7 +79,7 @@ pub unsafe fn find_file_in_path(
 pub unsafe fn find_directory_in_path(
     ptr: *mut c_char,
     len: size_t,
-    options: c_int,
+    options: FileNameOpts,
     rel_fname: *mut c_char,
     file_to_find: *mut *mut c_char,
     search_ctx: *mut *mut c_char,
@@ -102,12 +102,12 @@ pub unsafe fn find_directory_in_path(
 
 /// Replace `*file_to_find` with `ptr[len]`, environment variables expanded.
 ///
-/// With `FNAME_UNESC` every `"\ "` in the result becomes a plain space, so
+/// With `FileNameOpts::UNESC` every `"\ "` in the result becomes a plain space, so
 /// that a name escaped for the command line reaches the file system whole.
 unsafe fn prepare_name(
     ptr: *mut c_char,
     len: size_t,
-    options: c_int,
+    options: FileNameOpts,
     file_to_find: *mut *mut c_char,
 ) {
     unsafe {
@@ -129,7 +129,7 @@ unsafe fn prepare_name(
         xfree((*file_to_find).cast());
         let name_buff = slice::from_raw_parts(name_buff.cast::<u8>(), written);
         let mut name = name_buff.to_vec();
-        if options & FNAME_UNESC as c_int != 0 {
+        if options.has(FileNameOpts::UNESC) {
             // Change all "\ " to " ".
             let mut out = 0;
             let mut at = 0;
@@ -194,12 +194,12 @@ unsafe fn try_suffixes(namelen: size_t, find_what: c_int, suffixes: *mut c_char)
 /// Look for a name that needs no `'path'`: absolute, or relative to the
 /// current directory.
 ///
-/// `FNAME_REL` asks for the directory of `rel_fname` to be tried first; the
+/// `FileNameOpts::REL` asks for the directory of `rel_fname` to be tried first; the
 /// current directory is the second and last try.
 unsafe fn find_without_path(
     file_to_find: *const c_char,
     file_to_findlen: size_t,
-    options: c_int,
+    options: FileNameOpts,
     find_what: c_int,
     rel_fname: *const c_char,
     suffixes: *mut c_char,
@@ -216,7 +216,7 @@ unsafe fn find_without_path(
             strlen(rel_fname)
         };
         let relative = rel_to_curdir(file_to_find)
-            && options & FNAME_REL as c_int != 0
+            && options.has(FileNameOpts::REL)
             && !rel_fname.is_null()
             && rel_fnamelen + file_to_findlen < MAXPATHL as usize;
 
@@ -355,7 +355,7 @@ unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_c
 pub unsafe fn find_file_in_path_option(
     ptr: *mut c_char,
     len: size_t,
-    options: c_int,
+    options: FileNameOpts,
     first: bool,
     path_option: *mut c_char,
     find_what: c_int,
@@ -404,7 +404,7 @@ pub unsafe fn find_file_in_path_option(
             )
         };
 
-        if file_name.is_null() && options & FNAME_MESS as c_int != 0 {
+        if file_name.is_null() && options.has(FileNameOpts::MESS) {
             report_missing(first, find_what, name);
         }
         file_name

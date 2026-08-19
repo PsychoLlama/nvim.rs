@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
@@ -78,9 +79,6 @@ pub const OPENLINE_DO_COM: c_uint = 2;
 pub const SHM_SEARCHCOUNT: c_uint = 83;
 pub const SHM_FILEINFO: c_uint = 70;
 pub const HIST_SEARCH: c_int = 1;
-pub const BL_FIX: c_uint = 4;
-pub const BL_SOL: c_uint = 2;
-pub const BL_WHITE: c_uint = 1;
 pub const ECMD_HIDE: c_uint = 1;
 pub const ECMD_LAST: c_int = -1;
 pub const DOCMD_KEEPLINE: c_uint = 32;
@@ -317,7 +315,7 @@ static nv_cmds: GlobalCell<[nv_cmd; 188]> = GlobalCell::new([
         '^' as c_int,
         Some(nv_beginline),
         0,
-        BL_WHITE as c_int | BL_FIX as c_int,
+        BeginlineOpts::WHITE.or(BeginlineOpts::FIX).bits(),
     ),
     cmd('_' as c_int, Some(nv_lineop), 0, 0),
     cmd('`' as c_int, Some(nv_gomark), NV_NCH_ALW, false_0),

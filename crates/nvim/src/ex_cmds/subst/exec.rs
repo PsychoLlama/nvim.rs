@@ -25,10 +25,8 @@ use super::{do_sub_msg, global_need_beginline, show_sub, static_cstr_optval, sub
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
 use crate::cursor::coladvance;
-use crate::edit::beginline;
-use crate::ex_cmds::{
-    BL_FIX, BL_WHITE, LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline,
-};
+use crate::edit::{BeginlineOpts, beginline};
+use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline};
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fold::hasAnyFolding;
@@ -638,7 +636,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
                     if args.endcolumn {
                         coladvance(curwin.get(), MAXCOL as c_int);
                     } else {
-                        beginline(BL_WHITE as c_int | BL_FIX as c_int);
+                        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
                     }
                 }
             }

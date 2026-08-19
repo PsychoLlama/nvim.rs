@@ -31,19 +31,19 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T, expand_T, fuzmatch_str_T, garray_T,
-    optexpand_T, regmatch_T, size_t, uint8_t, uint32_t, vimoption_T, xp_prefix_T,
+    BackslashEscape, FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T, expand_T,
+    fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint8_t, uint32_t, vimoption_T,
+    xp_prefix_T,
 };
 use ::libc::{strcmp, strlen};
 
 use super::{
     EXPAND_BOOL_SETTINGS, EXPAND_DIRECTORIES, EXPAND_FILES, EXPAND_FILETYPE, EXPAND_KEYMAP,
     EXPAND_NOTHING, EXPAND_OLD_SETTING, EXPAND_OWNSYNTAX, EXPAND_SETTING_SUBTRACT, EXPAND_SETTINGS,
-    EXPAND_STRING_SETTING, EXPAND_UNSUCCESSFUL, FUZZY_SCORE_NONE, XP_BS_COMMA, XP_BS_ONE,
-    XP_BS_THREE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
-    get_option_varp_scope_from, get_varp_scope, is_option_hidden, kOptFlagColon, kOptFlagComma,
-    kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
-    option_value2string, option_var,
+    EXPAND_STRING_SETTING, EXPAND_UNSUCCESSFUL, FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO,
+    find_option, find_option_len, get_option, get_option_varp_scope_from, get_varp_scope,
+    is_option_hidden, kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList,
+    kOptValTypeBoolean, kOptValTypeNumber, option_has_type, option_value2string, option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
@@ -383,12 +383,12 @@ unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t
             EXPAND_FILES
         };
         (*xp).xp_backslash = if three {
-            XP_BS_THREE as c_int
+            BackslashEscape::THREE
         } else {
-            XP_BS_ONE as c_int
+            BackslashEscape::ONE
         };
         if flags & kOptFlagComma as uint32_t != 0 {
-            (*xp).xp_backslash |= XP_BS_COMMA as c_int;
+            (*xp).xp_backslash |= BackslashEscape::COMMA;
         }
     }
 }
@@ -416,7 +416,7 @@ unsafe fn seek_item_start(xp: *mut expand_T, argend: *mut c_char, flags: uint32_
                 // needs fewer than two backslashes, and a colon in a
                 // colon-list is never escaped.
                 let splits =
-                    (c == ' ' as c_int && (*xp).xp_backslash & XP_BS_THREE as c_int != 0 && bs < 3)
+                    (c == ' ' as c_int && (*xp).xp_backslash.has(BackslashEscape::THREE) && bs < 3)
                         || (c == ',' as c_int && comma_list && bs < 2)
                         || (c == ':' as c_int && colon_list);
                 if splits {

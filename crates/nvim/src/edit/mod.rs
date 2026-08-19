@@ -229,9 +229,6 @@ pub const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
 pub const INDENT_DEC: ::core::ffi::c_int = 3;
 pub const INDENT_INC: ::core::ffi::c_int = 2;
 pub const INDENT_SET: ::core::ffi::c_int = 1;
-pub const BL_FIX: ::core::ffi::c_int = 4;
-pub const BL_SOL: ::core::ffi::c_int = 2;
-pub const BL_WHITE: ::core::ffi::c_int = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct InsertState {

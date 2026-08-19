@@ -12,12 +12,12 @@
 
 use super::lines::set_op_range;
 use super::{
-    B_IMODE_LMAP, BL_FIX, BL_SOL, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, FAIL, ML_EMPTY,
-    NL, print_line, true_0,
+    B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, FAIL, ML_EMPTY, NL, print_line,
+    true_0,
 };
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
 use crate::main::{
@@ -185,7 +185,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     unsafe {
         (*curwin.get()).w_cursor.lnum = lnum;
         check_cursor_lnum(curwin.get());
-        beginline((BL_SOL | BL_FIX) as c_int);
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
 
     // Don't use wait_return() now.

@@ -19,33 +19,39 @@ use core::ffi::c_int;
 use super::*;
 use crate::types::{FAIL, NUL, OK};
 
+crate::flag_set! {
+    /// What [`beginline`] should do about the column -- upstream's `BL_*`.
+    pub struct BeginlineOpts;
+
+    /// Stop at the first non-white character.
+    const WHITE = 1;
+    /// Do that only when `'startofline'` is set; otherwise keep the column
+    /// the user wants (`w_curswant`) and do not move horizontally at all.
+    const SOL = 2;
+    /// Do not leave the cursor on the NUL: on an all-white line stop on the
+    /// last blank rather than past it.
+    const FIX = 4;
+}
+
 /// Move the cursor to the start of the current line.
-///
-/// `flags` is a set of `BL_*`:
-/// - `BL_WHITE` -- stop at the first non-white character.
-/// - `BL_SOL` -- do that only when 'startofline' is set; otherwise keep the
-///   column the user wants (`w_curswant`) and do not move horizontally at
-///   all.
-/// - `BL_FIX` -- do not leave the cursor on the NUL, i.e. on an all-white
-///   line stop on the last blank rather than past it.
 ///
 /// # Safety
 /// Must run with a live `curwin` whose cursor line exists.
-pub(crate) unsafe fn beginline(flags: c_int) {
+pub(crate) unsafe fn beginline(flags: BeginlineOpts) {
     unsafe {
         let win = curwin.get();
-        if flags & BL_SOL != 0 && p_sol.get() == 0 {
+        if flags.has(BeginlineOpts::SOL) && p_sol.get() == 0 {
             coladvance(win, (*win).w_curswant);
         } else {
             (*win).w_cursor.col = 0;
             (*win).w_cursor.coladd = 0;
 
-            if flags & (BL_WHITE | BL_SOL) != 0 {
+            if flags.has(BeginlineOpts::WHITE | BeginlineOpts::SOL) {
                 let mut ptr = get_cursor_line_ptr();
-                // `ptr[1] == NUL` under BL_FIX is what keeps an all-white
+                // `ptr[1] == NUL` under `FIX` is what keeps an all-white
                 // line from ending with the cursor on the NUL.
                 while ascii_iswhite(*ptr as c_int)
-                    && !(flags & BL_FIX != 0 && *ptr.offset(1) as c_int == NUL)
+                    && !(flags.has(BeginlineOpts::FIX) && *ptr.offset(1) as c_int == NUL)
                 {
                     (*win).w_cursor.col += 1;
                     ptr = ptr.offset(1);

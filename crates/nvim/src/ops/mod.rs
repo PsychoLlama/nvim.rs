@@ -165,12 +165,6 @@ pub const YREG_YANK: ::core::ffi::c_int = 1;
 /// `change_indent`: set the indent to the given column.
 pub const INDENT_SET: ::core::ffi::c_int = 1;
 
-/// `beginline` flags: to the first non-white, to the start of the line, and
-/// "fix the column even in Visual mode".
-pub const BL_WHITE: ::core::ffi::c_int = 1;
-pub const BL_SOL: ::core::ffi::c_int = 2;
-pub const BL_FIX: ::core::ffi::c_int = 4;
-
 /// `set_indent`: report the change through `changed_bytes`.
 pub const SIN_CHANGED: ::core::ffi::c_int = 1;
 

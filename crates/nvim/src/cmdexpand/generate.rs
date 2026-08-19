@@ -14,7 +14,7 @@ use crate::path::ExpandFlags;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::types::{ArrayBuf, FAIL, MAXPATHL, OK, kErrorTypeNone, static_cstring};
+use crate::types::{ArrayBuf, BackslashEscape, FAIL, MAXPATHL, OK, kErrorTypeNone, static_cstring};
 
 /// Expand a file or directory pattern.
 ///
@@ -37,7 +37,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
     unsafe {
         let mut pat = pat;
         let mut flags = flags;
-        let free_pat = (*xp).xp_backslash != XP_BS_NONE;
+        let free_pat = (*xp).xp_backslash != BackslashEscape::NONE;
         if free_pat {
             // Halve the backslashes of an escaped space (or comma).
             let pat_len = strlen(pat);
@@ -50,15 +50,17 @@ pub(crate) unsafe fn expand_files_and_dirs(
                     // is a distinct `xp_backslash` mode; upstream's
                     // BACKSLASH_IN_FILENAME arm of the comma case is not
                     // compiled on any platform this port builds for.
-                    let drop = if (*xp).xp_backslash & XP_BS_THREE != 0
+                    let drop = if (*xp).xp_backslash.has(BackslashEscape::THREE)
                         && *p.add(1) == b'\\' as c_char
                         && *p.add(2) == b'\\' as c_char
                         && *p.add(3) == b' ' as c_char
                     {
                         3
-                    } else if (*xp).xp_backslash & XP_BS_ONE != 0 && *p.add(1) == b' ' as c_char {
+                    } else if (*xp).xp_backslash.has(BackslashEscape::ONE)
+                        && *p.add(1) == b' ' as c_char
+                    {
                         1
-                    } else if (*xp).xp_backslash & XP_BS_COMMA != 0
+                    } else if (*xp).xp_backslash.has(BackslashEscape::COMMA)
                         && *p.add(1) == b'\\' as c_char
                         && *p.add(2) == b',' as c_char
                     {

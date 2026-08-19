@@ -19,7 +19,7 @@ use crate::api::private::helpers::api_clear_error;
 use crate::autocmd::EVENT_TABNEWENTERED;
 use crate::buffer::{buflist_findname_exp, buflist_findnr, buflist_getfile, set_pcmark};
 use crate::cursor::check_cursor_lnum;
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
 use crate::ex_getln::{ERROR_INIT, curbuf_locked};
 use crate::file_search::grab_file_name;
@@ -747,7 +747,7 @@ fn revalidate_cursor_lnum(mut wp: Win) {
 /// Put the cursor on the first non-blank of its line.
 fn first_non_blank() {
     // SAFETY: reads the current window's line.
-    unsafe { beginline(BL_SOL as c_int | BL_FIX as c_int) };
+    unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
 }
 
 /// The identifier under the cursor: its length, and a pointer into the line,

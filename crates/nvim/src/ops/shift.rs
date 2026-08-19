@@ -20,6 +20,7 @@
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
+use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::types::{FAIL, IOSIZE, NUL};
 
@@ -64,7 +65,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
         } else if curs_top {
             (*curwin.get()).w_cursor.lnum = (*oap).start.lnum;
             // `shift_line` may have moved the column.
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         } else {
             (*curwin.get()).w_cursor.lnum -= 1;
         }

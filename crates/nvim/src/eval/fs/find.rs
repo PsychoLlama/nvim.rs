@@ -34,14 +34,14 @@ use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts,
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
-use crate::file_search::{find_file_in_path_option, vim_findfile_cleanup};
+use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
 use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::main::{curbuf, p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
-    EvalFuncData, OK, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VV_VAL, expand_T, garray_T,
-    kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
+    BackslashEscape, EvalFuncData, OK, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VV_VAL, expand_T,
+    garray_T, kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -70,7 +70,7 @@ impl Expand {
                 sc_lnum: 0,
                 sc_chan: 0,
             },
-            xp_backslash: 0,
+            xp_backslash: BackslashEscape::NONE,
             xp_shell: false,
             xp_numfiles: 0,
             xp_col: 0,
@@ -273,12 +273,16 @@ fn findfilendir(args: Args<'_>, rettv: &mut typval_T, find_what: c_int) {
             (ptr::null_mut(), 0)
         };
         let (f2f, c) = (&raw mut to_find, &raw mut ctx);
+        // `findfile()` is quiet and takes the name as written: no message,
+        // no `'includeexpr'`, no relative-path preference.
+        let quiet = FileNameOpts::NONE;
         // SAFETY: `p` is NUL-terminated with `n` bytes, or NULL; `path` and
         // `sua` are option strings; `rel` is the current buffer's own name;
         // and the two out-parameters carry the walk's state from one round
         // to the next.
-        fresult =
-            unsafe { find_file_in_path_option(p, n, 0, first, path, find_what, rel, sua, f2f, c) };
+        fresult = unsafe {
+            find_file_in_path_option(p, n, quiet, first, path, find_what, rel, sua, f2f, c)
+        };
         first = false;
         if !fresult.is_null() && rettv.v_type == VAR_LIST {
             RetList::of(rettv).push(fresult);

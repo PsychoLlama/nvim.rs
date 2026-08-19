@@ -17,6 +17,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::Put;
+use crate::edit::BeginlineOpts;
 use crate::register::*;
 use crate::types::{FAIL, NUL};
 
@@ -297,7 +298,7 @@ impl Put {
             if self.flags & PUT_CURSLINE as c_int != 0 {
                 // `:put`: the cursor goes on the last inserted line.
                 (*curwin.get()).w_cursor.lnum = lnum;
-                beginline(BL_WHITE | BL_FIX);
+                beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             } else if self.flags & PUT_CURSEND as c_int != 0 {
                 // The cursor goes after the inserted text.
                 if self.y_type == kMTLineWise {
@@ -321,7 +322,7 @@ impl Put {
                 if self.dir == FORWARD {
                     (*curwin.get()).w_cursor.lnum += 1;
                 }
-                beginline(BL_WHITE | BL_FIX);
+                beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             } else {
                 // The cursor goes on the first character put.
                 (*curwin.get()).w_cursor = new_cursor;

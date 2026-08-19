@@ -182,7 +182,7 @@ pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_
                 && !revins_on.get()
             {
                 let save_col = (*curwin.get()).w_cursor.col;
-                beginline(BL_WHITE);
+                beginline(BeginlineOpts::WHITE);
                 if (*curwin.get()).w_cursor.col < save_col {
                     mincol = (*curwin.get()).w_cursor.col;
                     // The indent should now be fixed to match the previous

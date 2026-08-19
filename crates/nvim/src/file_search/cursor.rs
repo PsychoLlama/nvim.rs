@@ -21,9 +21,10 @@ use std::ffi::CStr;
 /// Returns the name in allocated memory, NULL for failure.
 pub unsafe fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *mut c_char {
     unsafe {
-        let options = (FNAME_MESS | FNAME_EXP | FNAME_REL | FNAME_UNESC) as c_int;
+        let options =
+            FileNameOpts::MESS | FileNameOpts::EXP | FileNameOpts::REL | FileNameOpts::UNESC;
         if !VIsual_active.get() {
-            return file_name_at_cursor(options | FNAME_HYP as c_int, count, file_lnum);
+            return file_name_at_cursor(options | FileNameOpts::HYP, count, file_lnum);
         }
 
         let mut len: size_t = 0;
@@ -51,12 +52,12 @@ pub unsafe fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *mut c_c
 /// if the file name or the file is not found.
 ///
 /// options:
-/// - `FNAME_MESS`  give error messages
-/// - `FNAME_EXP`   expand to path
-/// - `FNAME_HYP`   check for hypertext link
-/// - `FNAME_INCL`  apply `'includeexpr'`
+/// - `FileNameOpts::MESS`  give error messages
+/// - `FileNameOpts::EXP`   expand to path
+/// - `FileNameOpts::HYP`   check for hypertext link
+/// - `FileNameOpts::INCL`  apply `'includeexpr'`
 pub unsafe fn file_name_at_cursor(
-    options: c_int,
+    options: FileNameOpts,
     count: c_int,
     file_lnum: *mut linenr_T,
 ) -> *mut c_char {
@@ -77,7 +78,7 @@ pub unsafe fn file_name_at_cursor(
 ///
 /// Goes one character back to the `":"` before `"//"`, or to the drive letter
 /// before `":\"`, even when `":"` is not in `'isfname'`.
-unsafe fn name_start(line: *mut c_char, col: c_int, options: c_int) -> *mut c_char {
+unsafe fn name_start(line: *mut c_char, col: c_int, options: FileNameOpts) -> *mut c_char {
     unsafe {
         // Search forward for what could be the start of a file name.
         let mut ptr = line.offset(col as isize);
@@ -94,7 +95,7 @@ unsafe fn name_start(line: *mut c_char, col: c_int, options: c_int) -> *mut c_ch
             if head_off > 0 {
                 ptr = ptr.sub(head_off + 1);
             } else if vim_isfilec(*ptr.sub(1) as u8 as c_int)
-                || (options & FNAME_HYP as c_int != 0 && path_is_url(ptr.sub(1)) != 0)
+                || (options.has(FileNameOpts::HYP) && path_is_url(ptr.sub(1)) != 0)
             {
                 ptr = ptr.sub(1);
             } else {
@@ -110,9 +111,9 @@ unsafe fn name_start(line: *mut c_char, col: c_int, options: c_int) -> *mut c_ch
 /// `":"`, `"?"`, `"&"` and `"="` join the name once a `type://` prefix has
 /// been seen, so that `http://google.com:8080?q=this&that=ok` comes out
 /// whole. `"\ "` is an escaped space and counts as two.
-unsafe fn name_length(ptr: *const c_char, options: c_int) -> usize {
+unsafe fn name_length(ptr: *const c_char, options: FileNameOpts) -> usize {
     unsafe {
-        let hyp = options & FNAME_HYP as c_int != 0;
+        let hyp = options.has(FileNameOpts::HYP);
         // TODO(justinmk): Check for driveletter "x:/" at start, regardless of
         // 'isfname'.
         let mut len = if path_has_drive_letter(ptr, strlen(ptr)) {
@@ -196,7 +197,7 @@ unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
 pub unsafe fn file_name_in_line(
     line: *mut c_char,
     col: c_int,
-    options: c_int,
+    options: FileNameOpts,
     count: c_int,
     rel_fname: *mut c_char,
     file_lnum: *mut linenr_T,
@@ -204,7 +205,7 @@ pub unsafe fn file_name_in_line(
     unsafe {
         let ptr = name_start(line, col, options);
         if ptr.is_null() {
-            if options & FNAME_MESS as c_int != 0 {
+            if options.has(FileNameOpts::MESS) {
                 emsg(gettext(c"E446: No file name under cursor".as_ptr()));
             }
             return ptr::null_mut();
@@ -248,7 +249,7 @@ pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c
 pub unsafe fn find_file_name_in_path(
     ptr: *mut c_char,
     len: size_t,
-    options: c_int,
+    options: FileNameOpts,
     count: c_long,
     rel_fname: *mut c_char,
 ) -> *mut c_char {
@@ -262,7 +263,7 @@ pub unsafe fn find_file_name_in_path(
 
         // "file:/name" and "file://name" both name "/name"; a drive letter
         // after "file:/" keeps the slash.
-        if options & FNAME_HYP as c_int != 0
+        if options.has(FileNameOpts::HYP)
             && len > 6
             && strncmp(ptr, c"file:/".as_ptr(), 6) == 0
             && !vim_ispathsep(*ptr.add(6) as c_int)
@@ -277,7 +278,7 @@ pub unsafe fn find_file_name_in_path(
         }
 
         let mut tofree: *mut c_char = ptr::null_mut();
-        if options & FNAME_INCL as c_int != 0 && *(*curbuf.get()).b_p_inex != 0 {
+        if options.has(FileNameOpts::INCL) && *(*curbuf.get()).b_p_inex != 0 {
             tofree = eval_includeexpr(ptr, len);
             if !tofree.is_null() {
                 ptr = tofree;
@@ -286,10 +287,10 @@ pub unsafe fn find_file_name_in_path(
         }
 
         let mut file_name: *mut c_char = ptr::null_mut();
-        if options & FNAME_EXP as c_int != 0 {
+        if options.has(FileNameOpts::EXP) {
             let mut file_to_find: *mut c_char = ptr::null_mut();
             let mut search_ctx: *mut c_char = ptr::null_mut();
-            let quiet = options & !(FNAME_MESS as c_int);
+            let quiet = options.without(FileNameOpts::MESS);
             let mut look = |ptr, len, first| {
                 find_file_in_path(
                     ptr,
@@ -306,7 +307,7 @@ pub unsafe fn find_file_name_in_path(
             // If the file could not be found in a normal way, try applying
             // 'includeexpr' (unless done already).
             if file_name.is_null()
-                && options & FNAME_INCL as c_int == 0
+                && !options.has(FileNameOpts::INCL)
                 && *(*curbuf.get()).b_p_inex != 0
             {
                 tofree = eval_includeexpr(ptr, len);
@@ -316,7 +317,7 @@ pub unsafe fn find_file_name_in_path(
                     file_name = look(ptr, len, true);
                 }
             }
-            if file_name.is_null() && options & FNAME_MESS as c_int != 0 {
+            if file_name.is_null() && options.has(FileNameOpts::MESS) {
                 let c = *ptr.add(len);
                 *ptr.add(len) = 0;
                 semsg_c!(
@@ -329,7 +330,7 @@ pub unsafe fn find_file_name_in_path(
             // Repeat finding the file "count" times. This matters when it
             // appears several times in the path.
             //
-            // Note the repeats pass `options` unmasked, so FNAME_MESS reaches
+            // Note the repeats pass `options` unmasked, so FileNameOpts::MESS reaches
             // find_file_in_path and its "No more file" message. Upstream.
             while !file_name.is_null() && {
                 count -= 1;

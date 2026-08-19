@@ -4,6 +4,7 @@
 use super::tree::*;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
+use crate::edit::BeginlineOpts;
 use crate::pos::MAXLNUM;
 use crate::{semsg_c, smsg_keep_c};
 
@@ -644,7 +645,7 @@ pub(crate) unsafe fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
                 (*curwin.get()).w_cursor.coladd = 0;
             }
         } else {
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
         (*curwin.get()).w_cursor.col = 0;

@@ -11,7 +11,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::semsg_c;
-use crate::types::{FAIL, OK};
+use crate::types::{BackslashEscape, FAIL, OK};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -582,7 +582,7 @@ pub unsafe fn ExpandOne(
 pub unsafe fn ExpandInit(xp: *mut expand_T) {
     unsafe {
         xp.write_bytes(0, 1);
-        (*xp).xp_backslash = XP_BS_NONE;
+        (*xp).xp_backslash = BackslashEscape::NONE;
         (*xp).xp_prefix = XP_PREFIX_NONE;
         (*xp).xp_numfiles = -1;
     }

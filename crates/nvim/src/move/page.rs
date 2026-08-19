@@ -19,7 +19,7 @@ use super::*;
 use crate::cursor::check_cursor;
 use crate::diff::diff_get_corresponding_line;
 use crate::drawscreen::UPD_VALID;
-use crate::edit::{beginline, cursor_down_inner, cursor_up_inner};
+use crate::edit::{BeginlineOpts, beginline, cursor_down_inner, cursor_up_inner};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
@@ -105,7 +105,7 @@ pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
         unsafe { beep_flush() };
     } else if win.w_onebuf_opt.wo_sms == 0 {
         // SAFETY: the caller's promise -- this moves `curwin`'s cursor.
-        unsafe { beginline(BL_SOL as c_int | BL_FIX as c_int) };
+        unsafe { beginline(BeginlineOpts::SOL | BeginlineOpts::FIX) };
     } else if p_sol.get() != 0 {
         // SAFETY: the caller's promise; `ca` is a command of this frame.
         unsafe { nv_g_home_m_cmd(&raw mut ca) };

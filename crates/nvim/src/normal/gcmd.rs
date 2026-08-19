@@ -9,7 +9,7 @@ use crate::cursor::{
     check_cursor_lnum, coladvance, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr,
     get_cursor_pos_ptr,
 };
-use crate::edit::{beginline, cursor_down, cursor_up, oneleft, oneright};
+use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, oneright};
 use crate::ex_cmds::do_ascii;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
 use crate::fold::hasAnyFolding;
@@ -380,7 +380,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             Ok(b'i') => nv_gi_cmd(cap),
             // `gI`: insert in column 1 regardless of indent.
             Ok(b'I') => {
-                beginline(0);
+                beginline(BeginlineOpts::NONE);
                 if !checkclearopq(oap) {
                     invoke_edit(cap, false_0, 'g' as c_int, false_0);
                 }

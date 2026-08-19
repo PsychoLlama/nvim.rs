@@ -10,7 +10,7 @@ use crate::change::get_leader_len;
 use crate::charset::{skipwhite, vim_iswordp};
 use crate::cmdhist::{add_to_history, init_history};
 use crate::cursor::{check_cursor_lnum, get_cursor_line_ptr};
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::do_cmdline_cmd;
@@ -29,9 +29,9 @@ use crate::memline::ml_get_buf;
 use crate::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::message::{emsg, messaging};
 use crate::normal::{
-    BL_FIX, BL_SOL, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD,
-    HIST_SEARCH, POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked, checkclearopq,
-    clearop, clearopbeep, false_0, get_visual_text, normal_search, true_0,
+    DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH,
+    POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked, checkclearopq, clearop,
+    clearopbeep, false_0, get_visual_text, normal_search, true_0,
 };
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
@@ -901,7 +901,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
         if opened && (*cap).nchar == 'F' as c_int && lnum >= 0 {
             (*curwin.get()).w_cursor.lnum = lnum;
             check_cursor_lnum(curwin.get());
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
         xfree(name as *mut c_void);
     }

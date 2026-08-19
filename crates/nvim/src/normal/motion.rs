@@ -11,7 +11,8 @@ use crate::charset::{vim_isprintc, vim_strsize};
 use crate::cursor::{coladvance, gchar_cursor, get_cursor_pos_ptr};
 use crate::decoration::{decor_conceal_line, win_lines_concealed};
 use crate::edit::{
-    beginline, cursor_down, cursor_down_inner, cursor_up, cursor_up_inner, oneleft, oneright,
+    BeginlineOpts, beginline, cursor_down, cursor_down_inner, cursor_up, cursor_up_inner, oneleft,
+    oneright,
 };
 use crate::eval::prompt_invoke_callback;
 use crate::fold::hasFolding;
@@ -24,9 +25,9 @@ use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
-    BL_FIX, BL_SOL, BL_WHITE, CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, MOD_MASK_CTRL, MOD_MASK_SHIFT,
-    TAB, adjust_for_sel, clearopbeep, false_0, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
-    true_0, unadjust_for_sel,
+    CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, MOD_MASK_CTRL, MOD_MASK_SHIFT, TAB, adjust_for_sel,
+    clearopbeep, false_0, kMTCharWise, kMTLineWise, may_fold_open, nv_page, true_0,
+    unadjust_for_sel,
 };
 use crate::option::{get_showbreak_value, get_ve_flags};
 use crate::options::{
@@ -292,7 +293,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
         if (*(*cap).oap).op_type == OP_NOP {
             cursor_correct(win);
         }
-        beginline(BL_SOL as c_int | BL_FIX as c_int);
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
 }
 
@@ -460,7 +461,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
             clearopbeep((*cap).oap);
         } else if (*cap).arg != 0 {
             // `-` and `CTRL-P` land on the first non-blank; `k` does not.
-            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
     }
 }
@@ -501,7 +502,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
         } else if (*cap).arg != 0 {
             // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
             // not.
-            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
     }
 }
@@ -615,7 +616,7 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
                     (count * (*cap).count0 as linenr_T + 99) / 100
                 };
                 (*win).w_cursor.lnum = (*win).w_cursor.lnum.max(1).min(count);
-                beginline(BL_SOL as c_int | BL_FIX as c_int);
+                beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
             }
         } else {
             (*(*cap).oap).motion_type = kMTCharWise;
@@ -699,7 +700,7 @@ pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = false;
-        beginline(0);
+        beginline(BeginlineOpts::NONE);
         if (*cap).count0 > 0 {
             coladvance(curwin.get(), (*cap).count0 - 1);
             (*curwin.get()).w_curswant = (*cap).count0 - 1;
@@ -796,7 +797,7 @@ pub(crate) unsafe fn nv_beginline(cap: *mut cmdarg_T) {
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = false;
-        beginline((*cap).arg);
+        beginline(BeginlineOpts::from_bits((*cap).arg));
         may_fold_open(cap, kOptFdoFlagHor as c_uint);
     }
     ins_at_eol.set(false);
@@ -814,7 +815,7 @@ pub(crate) unsafe fn nv_goto(cap: *mut cmdarg_T) {
             lnum = (*cap).count0 as linenr_T;
         }
         (*curwin.get()).w_cursor.lnum = lnum.max(1).min(last);
-        beginline(BL_SOL as c_int | BL_FIX as c_int);
+        beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         may_fold_open(cap, kOptFdoFlagJump as c_uint);
     }
 }

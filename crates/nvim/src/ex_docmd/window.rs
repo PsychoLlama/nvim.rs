@@ -20,6 +20,7 @@ use crate::charset::{getdigits, getdigits_int, skipwhite};
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
 use crate::ex_cmds::prepare_tagpreview;
 use crate::ex_docmd::argopt::get_tabpage_arg;
+use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::display::ex_redraw;
 use crate::ex_docmd::file::{do_exbuffer, do_exedit};
 use crate::ex_docmd::onecmd::fresh_exarg;
@@ -27,8 +28,7 @@ use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::scan::check_nextcmd;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::tags::ex_findpat;
-use crate::ex_docmd::{FNAME_MESS, cmdmod_has};
-use crate::file_search::{find_file_in_path, vim_findfile_cleanup};
+use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
 use crate::main::{
@@ -289,7 +289,7 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
     let (ff, sc) = (&raw mut file_to_find, &raw mut search_ctx);
-    let (mess, from) = (FNAME_MESS as c_int, cur_buf().b_ffname);
+    let (mess, from) = (FileNameOpts::MESS, cur_buf().b_ffname);
     // SAFETY: a NUL-terminated argument, and the search's own two slots.
     let found = unsafe { find_file_in_path(arg, n, mess, true, from, ff, sc) };
     free(file_to_find);

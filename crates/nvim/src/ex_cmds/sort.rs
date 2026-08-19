@@ -19,13 +19,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BL_FIX, BL_WHITE, FAIL, MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT,
-    e_interr, e_invarg, e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo, true_0,
+    FAIL, MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, e_interr, e_invarg,
+    e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo, true_0,
 };
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{skiptobin, skiptodigit, skiptohex, skipwhite, vim_str2nr};
-use crate::edit::beginline;
+use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::check_nextcmd;
 use crate::extmark::extmark_splice;
 use crate::global_cell::GlobalCell;
@@ -637,7 +637,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
             }
 
             (*curwin.get()).w_cursor.lnum = line1;
-            beginline((BL_WHITE | BL_FIX) as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
     }
 
@@ -916,7 +916,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
                 changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true);
             }
             (*curwin.get()).w_cursor.lnum = line1;
-            beginline((BL_WHITE | BL_FIX) as c_int);
+            beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         }
     }
 

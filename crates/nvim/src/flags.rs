@@ -46,6 +46,11 @@ macro_rules! flag_set {
         #[repr(transparent)]
         $vis struct $Name(::core::ffi::c_int);
 
+        // Every family gets the whole vocabulary whether or not it happens to
+        // need all of it: a `bits`/`from_bits` pair a family never crosses an
+        // edge with, or a `without` nothing in it clears, is the macro being
+        // uniform, not the member being dead.
+        #[allow(dead_code)]
         impl $Name {
             /// No flag at all.
             pub const NONE: Self = Self(0);

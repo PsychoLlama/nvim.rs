@@ -13,6 +13,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
@@ -876,7 +877,7 @@ pub unsafe fn readfile(
                     from + 1
                 };
                 check_cursor_lnum(curwin.get());
-                beginline((BL_WHITE | BL_FIX) as c_int); // on the first non-blank
+                beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX); // on the first non-blank
 
                 if !cmdmod_has(CmdModFlags::LOCKMARKS) {
                     // Set the '[ and '] marks to the newly read lines.
