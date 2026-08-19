@@ -151,12 +151,6 @@ impl Suppress {
         Bump::new(&msg_silent)
     }
 
-    /// [`Suppress::messages`], but by `by` rather than by one — the two
-    /// sites that add `ui_has(kUIMessages)`.
-    pub fn messages_by(by: c_int) -> Bump {
-        Bump::by(&msg_silent, by)
-    }
-
     /// [`Suppress::messages`] whose release *restores* the level it found
     /// rather than subtracting one.
     ///
@@ -224,23 +218,10 @@ impl Allow {
         Saved::new(&RedrawingDisabled, 0)
     }
 
-    /// `RedrawingDisabled = value` — the handful of sites that restore a
-    /// value they carried in from elsewhere rather than the one they saw.
-    pub fn redraw_at(value: c_int) -> Saved {
-        Saved::new(&RedrawingDisabled, value)
-    }
-
     /// `no_wait_return = 0` — the hit-enter prompt is armed again for this
     /// scope, whatever the caller had asked for.
     pub fn wait_return() -> Saved {
         Saved::new(&no_wait_return, 0)
-    }
-
-    /// `no_wait_return = 1` — startup's inverse: no prompt until the
-    /// guard's scope ends. Spelled as a [`Saved`] because startup sets it
-    /// unconditionally rather than nesting.
-    pub fn no_wait_return() -> Saved {
-        Saved::new(&no_wait_return, 1)
     }
 
     /// `textlock = 0` — the callback about to run is allowed to change
@@ -326,18 +307,12 @@ impl Keys {
         Bump::new(&no_mapping)
     }
 
-    /// `allow_keys` — special key codes (`<Up>`, `<F1>`, …) are recognised
-    /// even while mapping is off.
-    pub fn codes() -> Bump {
-        Bump::new(&allow_keys)
-    }
-
     /// `no_mapping` + `allow_keys`: the recurring pair. Read the next key
     /// literally, but still decode the multi-byte key codes.
     pub fn unmapped_with_codes() -> RawKeys {
         RawKeys {
             _no_mapping: Self::unmapped(),
-            _allow_keys: Self::codes(),
+            _allow_keys: Bump::new(&allow_keys),
         }
     }
 }
@@ -374,6 +349,29 @@ mod tests {
         }
         assert_eq!(msg_silent.get(), 3);
         msg_silent.set(0);
+    }
+
+    #[test]
+    fn a_panic_releases_the_guard() {
+        // The whole point: no path out of the scope can leak the counter.
+        let caught = std::panic::catch_unwind(|| {
+            let _guard = Lock::text();
+            assert_eq!(textlock.get(), 1);
+            panic!("the callee failed");
+        });
+        assert!(caught.is_err());
+        assert_eq!(textlock.get(), 0);
+    }
+
+    #[test]
+    fn a_negative_bump_adds_back() {
+        no_mapping.set(2);
+        {
+            let _lifted = Allow::mapping();
+            assert_eq!(no_mapping.get(), 1);
+        }
+        assert_eq!(no_mapping.get(), 2);
+        no_mapping.set(0);
     }
 
     #[test]
