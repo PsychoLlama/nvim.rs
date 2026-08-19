@@ -49,6 +49,13 @@ and this project adheres to [CalVer](https://calver.org/).
   `'shortmess'`, `'formatoptions'` and `'backspace'` that can no longer be
   confused with one another, and option names passed as strings rather than
   as pointers. Nothing observable changed.
+- Made the editor's "hold off on that for a moment" switches release
+  themselves. Whether errors, messages, the hit-enter prompt, redrawing,
+  key mapping or changes to the text are suspended is counted in a handful
+  of globals that every caller had to remember to put back by hand; the
+  suspension is now tied to the scope that asked for it, so no path out of
+  that scope -- including one that fails -- can leave the editor silent,
+  frozen or unable to be typed at. Nothing observable changed.
 
 ## [2026.08.18-0975a8efd3]
 
