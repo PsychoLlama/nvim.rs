@@ -21,15 +21,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::flag::{
-    BF_SYN_SET, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST, DOCMD_NOWAIT, DOCMD_VERBOSE,
-};
+use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST, DOCMD_NOWAIT, DOCMD_VERBOSE};
 use super::{buffers, check_changed};
 use crate::arglist::{do_argfile, editing_arg_idx};
 use crate::autocmd::{
     EVENT_SYNTAX, apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
 };
-use crate::buffer::{buf_hide, goto_buffer};
+use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::do_cmdline;
 use crate::main::{
     curbuf, curwin, first_tabpage, firstbuf, firstwin, got_int, listcmd_busy, msg_listdo_overwrite,
@@ -116,7 +114,7 @@ pub unsafe fn ex_listdo(eap: *mut exarg_T) {
         save_ei = unsafe { au_event_disable(c",Syntax".as_ptr().cast_mut()) };
         for buf in buffers() {
             // SAFETY: the buffer is live.
-            unsafe { (*buf).b_flags &= !BF_SYN_SET };
+            unsafe { (*buf).b_flags.clear(BufFlags::SYN_SET) };
         }
     }
 
@@ -393,8 +391,8 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
             let mut bnext = (*buf).b_next;
-            if (*buf).b_nwindows > 0 && (*buf).b_flags & BF_SYN_SET != 0 {
-                (*buf).b_flags &= !BF_SYN_SET;
+            if (*buf).b_nwindows > 0 && (*buf).b_flags.has(BufFlags::SYN_SET) {
+                (*buf).b_flags.clear(BufFlags::SYN_SET);
                 if buf == curbuf.get() {
                     apply_autocmds(
                         EVENT_SYNTAX,

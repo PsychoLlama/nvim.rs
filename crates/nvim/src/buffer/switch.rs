@@ -519,7 +519,7 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     }
 
     if (action == DOBUF_GOTO as c_int || action == DOBUF_SPLIT as c_int)
-        && buf.b_flags & BF_DUMMY != 0
+        && buf.b_flags.has(BufFlags::DUMMY)
     {
         // disallow navigating to the dummy buffer
         err_nobufnr(count);

@@ -283,7 +283,6 @@ pub type C2Rust_Unnamed_65 = c_uint;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;
-pub const BF_DUMMY: c_int = 0x80 as c_int;
 pub const ML_EMPTY: c_int = 0x1 as c_int;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as c_int,

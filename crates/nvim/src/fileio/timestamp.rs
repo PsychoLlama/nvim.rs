@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::buffer::BufFlags;
 use crate::semsg_c;
 use crate::undo::UNDO_HASH_SIZE;
 use core::ffi::{c_char, c_int};
@@ -374,7 +375,7 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
 
         let mut file_info = FileInfo::default();
         let mut file_info_ok = false;
-        let differs = (*buf).b_flags & BF_NOTEDITED == 0 && (*buf).b_mtime != 0 && {
+        let differs = !(*buf).b_flags.has(BufFlags::NOTEDITED) && (*buf).b_mtime != 0 && {
             file_info_ok = os_fileinfo((*buf).b_ffname, &raw mut file_info);
             !file_info_ok
                 || time_differs(&file_info, (*buf).b_mtime, (*buf).b_mtime_ns)
@@ -466,15 +467,15 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
                     },
                 }
             }
-        } else if (*buf).b_flags & BF_NEW != 0
-            && (*buf).b_flags & BF_NEW_W == 0
+        } else if (*buf).b_flags.has(BufFlags::NEW)
+            && !(*buf).b_flags.has(BufFlags::NEW_W)
             && os_path_exists((*buf).b_ffname)
         {
             retval = 1;
             mesg = Some(translate!(
                 c"W13: Warning: File \"%s\" has been created after editing started",
             ));
-            (*buf).b_flags |= BF_NEW_W;
+            (*buf).b_flags |= BufFlags::NEW_W;
             can_reload = true;
         }
 
@@ -594,7 +595,7 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
         }
 
         if saved == OK {
-            (*curbuf.get()).b_flags |= BF_CHECK_RO; // check for RO again
+            (*curbuf.get()).b_flags |= BufFlags::CHECK_RO; // check for RO again
             (*curbuf.get()).b_keep_filetype = true; // don't detect 'filetype'
             if readfile(
                 (*buf).b_ffname,

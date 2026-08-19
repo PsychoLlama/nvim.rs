@@ -223,14 +223,14 @@ fn skip(buf: Buf, arg: *const c_char, forceit: c_int) -> bool {
 
     buf.b_p_bl == 0 && forceit == 0 && !has_flag(arg, b'u')
         || has_flag(arg, b'u') && buf.b_p_bl != 0
-        || has_flag(arg, b'+') && (buf.b_flags & BF_READERR != 0 || !buf_changed(buf))
+        || has_flag(arg, b'+') && (buf.b_flags.has(BufFlags::READERR) || !buf_changed(buf))
         || has_flag(arg, b'a') && (!loaded || buf.b_nwindows == 0)
         || has_flag(arg, b'h') && (!loaded || buf.b_nwindows != 0)
         || has_flag(arg, b'R') && (!is_terminal || !job_running)
         || has_flag(arg, b'F') && (!is_terminal || job_running)
         || has_flag(arg, b'-') && buf.b_p_ma != 0
         || has_flag(arg, b'=') && buf.b_p_ro == 0
-        || has_flag(arg, b'x') && buf.b_flags & BF_READERR == 0
+        || has_flag(arg, b'x') && !buf.b_flags.has(BufFlags::READERR)
         || has_flag(arg, b'%') && buf.raw() != curbuf.get()
         || has_flag(arg, b'#') && (buf.raw() == curbuf.get() || alt_fnum != buf.handle)
 }
@@ -251,7 +251,7 @@ fn fill_name(mut buf: Buf, name: &mut [c_char; MAXPATHL as usize]) {
 /// Print one buffer's line: the number, the flag column, the name padded to
 /// column 40, and the line number or the time it was last used.
 fn show(mut buf: Buf, by_time: bool) {
-    let changed_char = if buf.b_flags & BF_READERR != 0 {
+    let changed_char = if buf.b_flags.has(BufFlags::READERR) {
         b'x'
     } else if buf_changed(buf) {
         b'+'
@@ -407,17 +407,17 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         } else {
             c" ".as_ptr()
         },
-        if buf.b_flags & BF_NOTEDITED != 0 && !dontwrite {
+        if buf.b_flags.has(BufFlags::NOTEDITED) && !dontwrite {
             tr(c"[Not edited]")
         } else {
             c"".as_ptr()
         },
-        if buf.b_flags & BF_NEW != 0 && !dontwrite {
+        if buf.b_flags.has(BufFlags::NEW) && !dontwrite {
             tr(c"[New]")
         } else {
             c"".as_ptr()
         },
-        if buf.b_flags & BF_READERR != 0 {
+        if buf.b_flags.has(BufFlags::READERR) {
             tr(c"[Read errors]")
         } else {
             c"".as_ptr()
@@ -431,7 +431,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         } else {
             c"".as_ptr()
         },
-        if modified || buf.b_flags & BF_WRITE_MASK != 0 || buf.b_p_ro != 0 {
+        if modified || buf.b_flags.has(BufFlags::WRITE_MASK) || buf.b_p_ro != 0 {
             c" ".as_ptr()
         } else {
             c"".as_ptr()

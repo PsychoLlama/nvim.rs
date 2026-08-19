@@ -25,15 +25,15 @@ mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
 use super::{
-    BF_CHECK_RO, BF_NEVERLOADED, BF_NOTEDITED, BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT,
-    CCGD_MULTWIN, DOCMD_VERBOSE, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST,
-    ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP, FAIL, KEYMAP_INIT, READ_KEEP_UNDO,
-    READ_NOWINENTER, SEA_DIALOG, SEA_QUIT, SHM_FILEINFO, SHM_OVERALL, false_0, true_0,
+    BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOCMD_VERBOSE, ECMD_ADDBUF,
+    ECMD_ALTBUF, ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF,
+    ECMD_SET_HELP, FAIL, KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
+    SHM_FILEINFO, SHM_OVERALL, false_0, true_0,
 };
 use crate::arglist::check_arg_idx;
 use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER, apply_autocmds_retval};
 use crate::buffer::{
-    buf_clear_file, buf_freeall, bufref_valid, do_autochdir, do_modelines, fileinfo,
+    BufFlags, buf_clear_file, buf_freeall, bufref_valid, do_autochdir, do_modelines, fileinfo,
     handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, set_bufref, setaltfname,
 };
 use crate::charset::skipwhite;
@@ -400,7 +400,7 @@ pub unsafe fn do_ecmd(
         // ":write" works.
         if !other_file {
             // SAFETY: `curbuf` is live.
-            unsafe { (*curbuf.get()).b_flags &= !BF_NOTEDITED };
+            unsafe { (*curbuf.get()).b_flags.clear(BufFlags::NOTEDITED) };
         }
 
         // Check if we are editing the w_arg_idx file in the argument list.
@@ -577,7 +577,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
         // If the buffer was used before, store the current contents so that
         // the reload can be undone.  Do not do this if the (empty) buffer is
         // being re-used for another file.
-        if (*curbuf.get()).b_flags & BF_NEVERLOADED == 0
+        if !(*curbuf.get()).b_flags.has(BufFlags::NEVERLOADED)
             && (p_ur.get() < 0 || (*curbuf.get()).b_ml.ml_line_count as OptInt <= p_ur.get())
         {
             // Sync first so that this is a separate undo-able action.
@@ -665,7 +665,7 @@ unsafe fn enter_new_buffer(
         // set/reset 'ro' flag
         // SAFETY: `curbuf` is live and `eap` the caller's.
         unsafe {
-            (*curbuf.get()).b_flags |= BF_CHECK_RO;
+            (*curbuf.get()).b_flags |= BufFlags::CHECK_RO;
             // Open the buffer and read the file.
             if flags & ECMD_NOWINENTER as c_int != 0 {
                 state.readfile_flags |= READ_NOWINENTER as c_int;

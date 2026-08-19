@@ -10,8 +10,8 @@ use crate::autocmd::{
     apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists, do_doautocmd,
 };
 use crate::buffer::{
-    bt_dontwrite, bt_nofilename, bt_normal, buf_contents_changed, buf_is_empty, buflist_new,
-    bufref_valid, do_modelines, set_bufref, setfname, wipe_buffer,
+    BufFlags, bt_dontwrite, bt_nofilename, bt_normal, buf_contents_changed, buf_is_empty,
+    buflist_new, bufref_valid, do_modelines, set_bufref, setfname, wipe_buffer,
 };
 use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};
@@ -165,10 +165,6 @@ pub const UV_FS_COPYFILE_EXCL: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const BASENAMELEN: ::core::ffi::c_int = NAME_MAX - 5 as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const BF_CHECK_RO: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-pub const BF_NEW_W: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> =
@@ -285,7 +281,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
         }
 
         if setfname(curbuf.get(), fname, sfname, false) == OK {
-            (*curbuf.get()).b_flags |= BF_NOTEDITED;
+            (*curbuf.get()).b_flags |= BufFlags::NOTEDITED;
         }
 
         // ...and a new named one is created.

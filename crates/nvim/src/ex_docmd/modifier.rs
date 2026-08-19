@@ -13,6 +13,7 @@ use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::buffer::BufFlags;
 use crate::charset::{skipdigits, skipwhite};
 use crate::ex_cmds::skip_vimgrep_pat;
 use crate::ex_docmd::address::{get_address, skip_range};
@@ -22,8 +23,7 @@ use crate::ex_docmd::scan::ends_excmd;
 use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    ADDR_TABS, BF_DUMMY, SID_NONE, cmdnames, e_invrange, ex_func_T, ex_pressedreturn, exmode_plus,
-    getexline,
+    ADDR_TABS, SID_NONE, cmdnames, e_invrange, ex_func_T, ex_pressedreturn, exmode_plus, getexline,
 };
 use crate::main::{
     cmdmod, curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col,
@@ -578,7 +578,7 @@ pub(crate) unsafe fn shared_prefix(p: *const c_char, name: &CStr) -> usize {
 /// The dummy buffer an expression mapping is evaluated in is exempt: the
 /// lock is about the *user's* text.
 pub unsafe fn expr_map_locked() -> bool {
-    unsafe { expr_map_lock.get() > 0 && (*curbuf.get()).b_flags & BF_DUMMY == 0 }
+    unsafe { expr_map_lock.get() > 0 && !(*curbuf.get()).b_flags.has(BufFlags::DUMMY) }
 }
 
 /// Is this the location-list spelling of a quickfix command? Upstream tells

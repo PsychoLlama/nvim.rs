@@ -129,7 +129,7 @@ pub unsafe fn readfile(
 
         'theend: {
             // If there is no file name yet, use the one for the read file, and
-            // set BF_NOTEDITED to reflect that. Not for a read from a filter,
+            // set BufFlags::NOTEDITED to reflect that. Not for a read from a filter,
             // and only when 'cpoptions' contains the 'f' flag.
             if (*curbuf.get()).b_ffname.is_null()
                 && !how.filtering

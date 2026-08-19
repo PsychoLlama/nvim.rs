@@ -187,13 +187,38 @@ pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const BF_CHECK_RO: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const BF_NEVERLOADED: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-pub const BF_READERR: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
-pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
-pub const BF_WRITE_MASK: ::core::ffi::c_int = BF_NOTEDITED + BF_NEW + BF_READERR;
+crate::flag_set! {
+    /// What has and has not happened to a buffer -- upstream's `BF_*`, the
+    /// bits `buf_T::b_flags` carries.
+    pub struct BufFlags;
+
+    /// The buffer was recovered from a swap file.
+    const RECOVERED = 0x1;
+    /// `'readonly'` has not been checked for this buffer yet.
+    const CHECK_RO = 0x2;
+    /// The buffer has never been loaded, so its options still hold their
+    /// defaults rather than anything a file or a modeline set.
+    const NEVERLOADED = 0x4;
+    /// The buffer's contents are not what its file holds -- it was never
+    /// read, or `:file` renamed it.
+    const NOTEDITED = 0x8;
+    /// The file did not exist when the buffer was created.
+    const NEW = 0x10;
+    /// [`Self::NEW`] as it stood when the buffer was last *written*, which
+    /// is what decides whether `'cpoptions'`'s `+` applies.
+    const NEW_W = 0x20;
+    /// Reading the file failed part-way, so the buffer is incomplete.
+    const READERR = 0x40;
+    /// A scratch buffer that exists only to be looked at once and thrown
+    /// away -- `:vimgrep`'s and `:helpgrep`'s.
+    const DUMMY = 0x80;
+    /// `'syntax'` was set for this buffer, so `:syntax` state exists.
+    const SYN_SET = 0x200;
+
+    /// The three a successful write clears, and the ones `:write` copies
+    /// from the buffer it wrote into the one it wrote *for*.
+    const WRITE_MASK = 0x8 | 0x10 | 0x40;
+}
 pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;

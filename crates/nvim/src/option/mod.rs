@@ -149,7 +149,6 @@ pub const MIN_COLUMNS: c_uint = 12;
 pub const kListchars: CharsOption = 1;
 pub const kFillchars: CharsOption = 0;
 pub const ROOT_UID: c_int = 0 as c_int;
-pub const BF_SYN_SET: c_int = 0x200 as c_int;
 pub const B_IMODE_USE_INSERT: c_int = -1 as c_int;
 pub const B_IMODE_NONE: c_int = 0 as c_int;
 pub const KEYMAP_INIT: c_int = 1 as c_int;

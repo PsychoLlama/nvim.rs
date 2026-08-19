@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::buffer::BufFlags;
 use crate::os::uv_error::{UV_EFBIG, UV_ENOENT};
 use core::ffi::{c_char, c_int};
 
@@ -119,9 +120,9 @@ pub(crate) unsafe fn open_source(
                     // The BufReadCmd code usually uses ":read" to get the
                     // text and perhaps ":file" to change the buffer name,
                     // but this should work like ":edit", so reset
-                    // BF_NOTEDITED and let ":write" overwrite the file.
+                    // BufFlags::NOTEDITED and let ":write" overwrite the file.
                     if retval == OK {
-                        (*curbuf.get()).b_flags &= !BF_NOTEDITED;
+                        (*curbuf.get()).b_flags.clear(BufFlags::NOTEDITED);
                     }
                     return Err(retval);
                 }
@@ -221,8 +222,8 @@ pub(crate) unsafe fn open_source(
 
         // When opening a new file take the readonly flag from the file.
         // The default is r/w and can be set to r/o below; don't reset it
-        // in readonly mode, and only touch b_p_ro when BF_CHECK_RO is set.
-        let check_readonly = how.newfile && (*curbuf.get()).b_flags & BF_CHECK_RO != 0;
+        // in readonly mode, and only touch b_p_ro when BufFlags::CHECK_RO is set.
+        let check_readonly = how.newfile && (*curbuf.get()).b_flags.has(BufFlags::CHECK_RO);
         if check_readonly && !readonlymode.get() {
             (*curbuf.get()).b_p_ro = false as c_int;
         }
@@ -252,7 +253,9 @@ pub(crate) unsafe fn open_source(
             }
             // Reset the "new file" flag; it is set again below when the
             // file doesn't exist.
-            (*curbuf.get()).b_flags &= !(BF_NEW | BF_NEW_W);
+            (*curbuf.get())
+                .b_flags
+                .clear(BufFlags::NEW | BufFlags::NEW_W);
         }
 
         // Check readonly.
@@ -277,7 +280,7 @@ pub(crate) unsafe fn open_source(
             if perm == UV_ENOENT {
                 // The file does not exist. Set the 'new-file' flag, so
                 // that a ":w" complains if someone else created it since.
-                (*curbuf.get()).b_flags |= BF_NEW;
+                (*curbuf.get()).b_flags |= BufFlags::NEW;
 
                 // Create a swap file now, so that other Nvims are warned
                 // that we are editing this file. Not for a "nofile" or

@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::buffer::BufFlags;
 use crate::ex_docmd::cmdmod_has;
 use crate::path::ExpandFlags;
 use crate::semsg_c;
@@ -369,7 +370,7 @@ unsafe fn resolve_swapfile_clash(
         // Only worth a word if the swap file belongs to *this* file, the
         // buffer was not already recovered, and 'shortmess' allows it.
         if swapfile_is_for_other_file(buf, fname)
-            || (*curbuf.get()).b_flags & BF_RECOVERED != 0
+            || (*curbuf.get()).b_flags.has(BufFlags::RECOVERED)
             || !vim_strchr(p_shm.get(), SHM_ATTENTION as c_int).is_null()
         {
             return false;
@@ -561,7 +562,7 @@ pub(crate) unsafe fn findswapname(
                 && !recoverymode.get()
                 && !buf_fname.is_null()
                 && !(*buf).b_help
-                && (*buf).b_flags & BF_DUMMY == 0
+                && !(*buf).b_flags.has(BufFlags::DUMMY)
                 && resolve_swapfile_clash(buf, fname, buf_fname)
             {
                 break;

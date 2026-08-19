@@ -13,6 +13,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::buffer::BufFlags;
 use crate::types::NUL;
 
 /// The message [`change_warning`] gives, once per buffer.
@@ -195,11 +196,11 @@ pub unsafe fn file_ff_differs(buf: *mut buf_T, ignore_empty: bool) -> bool {
     unsafe {
         // Handle a file that was never loaded as "not changed": the recorded
         // values are the defaults, not the file's.
-        if (*buf).b_flags & BF_NEVERLOADED != 0 {
+        if (*buf).b_flags.has(BufFlags::NEVERLOADED) {
             return false;
         }
         if ignore_empty
-            && (*buf).b_flags & BF_NEW != 0
+            && (*buf).b_flags.has(BufFlags::NEW)
             && (*buf).b_ml.ml_line_count == 1
             && c_int::from(*ml_get_buf(buf, 1)) == NUL
         {

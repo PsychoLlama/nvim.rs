@@ -536,7 +536,7 @@ fn close_buffer_inner(
             );
 
             // Make it look like a new buffer.
-            buf.b_flags = BF_CHECK_RO | BF_NEVERLOADED;
+            buf.b_flags = BufFlags::CHECK_RO | BufFlags::NEVERLOADED;
 
             // Init the options when loaded again.
             buf.b_p_initialized = false;
@@ -754,7 +754,7 @@ pub unsafe fn buf_freeall(buf: *mut buf_T, flags: c_int) {
         free_undo(buf);
     }
     clear_syntax(&mut buf.b_s); // reset syntax info
-    buf.b_flags &= !BF_READERR; // a read error is no longer relevant
+    buf.b_flags.clear(BufFlags::READERR); // a read error is no longer relevant
 }
 
 /// The autocommand half of [`buf_freeall`]: `BufUnload`, then `BufDelete` and

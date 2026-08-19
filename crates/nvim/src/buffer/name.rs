@@ -162,7 +162,7 @@ pub unsafe extern "C" fn setfname(
         // - if the buffer is loaded, fail
         // - if the buffer is not loaded, delete it from the list
         (file_id, file_id_valid) = file_id_of(ffname);
-        let obuf = if b.b_flags & BF_DUMMY != 0 {
+        let obuf = if b.b_flags.has(BufFlags::DUMMY) {
             None
         } else {
             buflist_findname_file_id(ffname, &file_id, file_id_valid)

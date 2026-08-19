@@ -3,6 +3,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::buffer::BufFlags;
 use crate::r#move::WinValid;
 
 pub type AlignTextPos = ::core::ffi::c_uint;
@@ -139,7 +140,7 @@ pub struct file_buffer {
     pub b_next: *mut buf_T,
     pub b_prev: *mut buf_T,
     pub b_nwindows: ::core::ffi::c_int,
-    pub b_flags: ::core::ffi::c_int,
+    pub b_flags: BufFlags,
     pub b_locked: ::core::ffi::c_int,
     pub b_locked_split: ::core::ffi::c_int,
     pub b_ro_locked: ::core::ffi::c_int,

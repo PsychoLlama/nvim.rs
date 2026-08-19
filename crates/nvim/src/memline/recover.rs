@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::buffer::BufFlags;
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
@@ -365,7 +366,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             {
                 ml_delete((*curbuf.get()).b_ml.ml_line_count);
             }
-            (*curbuf.get()).b_flags |= BF_RECOVERED;
+            (*curbuf.get()).b_flags |= BufFlags::RECOVERED;
             check_cursor(curwin.get());
 
             msg_ext_skip_flush.set(!got_int.get());

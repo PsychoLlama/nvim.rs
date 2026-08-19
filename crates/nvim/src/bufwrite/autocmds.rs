@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::buffer::BufFlags;
 use crate::ex_docmd::cmdmod_has;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
@@ -209,9 +210,9 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                     // Assume the buffer was written; update the timestamp.
                     ml_timestamp(buf);
                     if mode.req.append {
-                        (*buf).b_flags &= !BF_NEW;
+                        (*buf).b_flags.clear(BufFlags::NEW);
                     } else {
-                        (*buf).b_flags &= !BF_WRITE_MASK;
+                        (*buf).b_flags.clear(BufFlags::WRITE_MASK);
                     }
                 }
                 if mode.req.reset_changed

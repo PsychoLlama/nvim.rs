@@ -13,7 +13,7 @@ use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf,
 };
 use crate::buffer::{
-    bt_nofilename, buf_get_changedtick, buf_set_file_id, bufref_valid, set_bufref,
+    BufFlags, bt_nofilename, buf_get_changedtick, buf_set_file_id, bufref_valid, set_bufref,
 };
 use crate::change::unchanged;
 use crate::drawscreen::status_redraw_all;
@@ -240,10 +240,6 @@ pub const O_NOFOLLOW: ::core::ffi::c_int = __O_NOFOLLOW;
 pub const UV_FS_COPYFILE_FICLONE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-pub const BF_READERR: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
-pub const BF_WRITE_MASK: ::core::ffi::c_int = BF_NOTEDITED + BF_NEW + BF_READERR;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
@@ -329,7 +325,7 @@ pub unsafe fn buf_write(
         ex_no_reprint.set(true);
 
         let (mut fname, mut sfname) = (fname, sfname);
-        // With no file name yet, take the one being written to. BF_NOTEDITED
+        // With no file name yet, take the one being written to. BufFlags::NOTEDITED
         // records that, in case the write fails. Not for a filter command,
         // not when appending, and only when 'cpoptions' contains "F".
         if (*buf).b_ffname.is_null()
@@ -780,13 +776,13 @@ pub unsafe fn buf_write(
 
                     // Written to the current file: update the swap file's
                     // timestamp (which also sets b_mtime) and reset the
-                    // BF_WRITE_MASK flags.
+                    // BufFlags::WRITE_MASK flags.
                     if overwriting {
                         ml_timestamp(buf);
                         if req.append {
-                            (*buf).b_flags &= !BF_NEW;
+                            (*buf).b_flags.clear(BufFlags::NEW);
                         } else {
-                            (*buf).b_flags &= !BF_WRITE_MASK;
+                            (*buf).b_flags.clear(BufFlags::WRITE_MASK);
                         }
                     }
 

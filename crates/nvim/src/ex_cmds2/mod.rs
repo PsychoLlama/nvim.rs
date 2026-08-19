@@ -99,9 +99,6 @@ mod flag {
     use super::c_int;
     use crate::types::{dobuf_action_values, dobuf_start_values};
 
-    /// `buf_T.b_flags`: the Syntax autocommands ran for this buffer.
-    pub const BF_SYN_SET: c_int = 0x200;
-
     /// `check_changed` flags.
     pub const CCGD_AW: c_int = 1;
     pub const CCGD_MULTWIN: c_int = 2;

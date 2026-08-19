@@ -7,7 +7,7 @@ use crate::autocmd::{
     EVENT_FILETYPE, aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event,
     unblock_autocmds,
 };
-use crate::buffer::{buflist_new, bufref_valid, set_bufref, wipe_buffer};
+use crate::buffer::{BufFlags, buflist_new, bufref_valid, set_bufref, wipe_buffer};
 use crate::options::{kOptAleph, kOptBufhidden, kOptBuftype, kOptInvalid};
 
 use crate::main::{curbuf, current_sctx, curwin};
@@ -294,7 +294,7 @@ unsafe fn wipe_ft_buf(mut buf: *mut buf_T) {
         wipe_buffer(buf, false);
     }
     if bufref_valid(&raw mut bufref) {
-        (*buf).b_flags &= !BF_DUMMY;
+        (*buf).b_flags.clear(BufFlags::DUMMY);
     }
     unblock_autocmds();
 }
@@ -448,6 +448,5 @@ pub const KEYSET_OPTIDX_option__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_in
 pub const KEYSET_OPTIDX_option__win: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_option__scope: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_option__filetype: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -18,7 +18,7 @@ use core::ptr;
 
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{EVENT_BUFADD, EVENT_BUFDELETE, EVENT_SYNTAX, apply_autocmds};
-use crate::buffer::do_autochdir;
+use crate::buffer::{BufFlags, do_autochdir};
 use crate::change::save_file_ff;
 use crate::charset::buf_init_chartab;
 use crate::diff::diff_buf_adjust;
@@ -68,9 +68,9 @@ use crate::winfloat::win_float_update_statusline;
 use ::libc::strcmp;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, NO_SCREEN, STATUS_HEIGHT, check_blending,
-    did_set_title, kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles,
-    set_option_value, set_option_varp, set_options_bin,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, STATUS_HEIGHT, check_blending, did_set_title,
+    kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles, set_option_value,
+    set_option_varp, set_options_bin,
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};
@@ -829,7 +829,7 @@ pub(crate) unsafe fn do_syntax_autocmd(buf: *mut buf_T, value_changed: bool) {
     syn_recursive.set(syn_recursive.get() + 1);
     // SAFETY: the caller's buffer is live.
     unsafe {
-        (*buf).b_flags |= BF_SYN_SET;
+        (*buf).b_flags |= BufFlags::SYN_SET;
         apply_autocmds(
             EVENT_SYNTAX,
             (*buf).b_p_syn,

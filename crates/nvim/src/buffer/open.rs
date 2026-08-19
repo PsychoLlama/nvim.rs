@@ -317,11 +317,11 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     let mut read_fifo = false;
     let silent = short_mess(SHM_FILEINFO as c_int);
 
-    // The 'readonly' flag is only set when BF_NEVERLOADED is being reset.
+    // The 'readonly' flag is only set when BufFlags::NEVERLOADED is being reset.
     // When re-entering the same buffer, it should not change, because the
     // user may have reset the flag by hand.
     let mut buf = cur_buf();
-    if readonlymode.get() && !buf.b_ffname.is_null() && buf.b_flags & BF_NEVERLOADED != 0 {
+    if readonlymode.get() && !buf.b_ffname.is_null() && buf.b_flags.has(BufFlags::NEVERLOADED) {
         buf.b_p_ro = true_0;
     }
 
@@ -397,7 +397,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     }
 
     // if first time loading this buffer, init b_chartab[]
-    if buf.b_flags & BF_NEVERLOADED != 0 {
+    if buf.b_flags.has(BufFlags::NEVERLOADED) {
         init_chartab(buf);
         parse_cindent_options(buf);
     }
@@ -432,7 +432,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
 
     // require "!" to overwrite the file, because it wasn't read completely
     if aborting_now() {
-        cur_buf().b_flags |= BF_READERR;
+        cur_buf().b_flags |= BufFlags::READERR;
     }
 
     // Need to update automatic folding.  Do this before the autocommands, they
@@ -459,7 +459,9 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
     // Go to the buffer that was opened, make sure it is in a window.
     in_buffer(old, || {
         do_modelines(OptionSetFlags::NONE);
-        cur_buf().b_flags &= !(BF_CHECK_RO | BF_NEVERLOADED);
+        cur_buf()
+            .b_flags
+            .clear(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
 
         if flags & READ_NOWINENTER as c_int == 0 {
             fire_retval(EVENT_BUFWINENTER, cur_buf(), &mut retval);

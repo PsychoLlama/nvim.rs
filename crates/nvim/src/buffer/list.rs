@@ -326,9 +326,9 @@ pub unsafe extern "C" fn buflist_new(
         buf.file_id = file_id;
     }
     buf.b_u_synced = true;
-    buf.b_flags = BF_CHECK_RO | BF_NEVERLOADED;
+    buf.b_flags = BufFlags::CHECK_RO | BufFlags::NEVERLOADED;
     if flags & BLN_DUMMY as c_int != 0 {
-        buf.b_flags |= BF_DUMMY;
+        buf.b_flags |= BufFlags::DUMMY;
     }
     // SAFETY: a live buffer.
     unsafe { buf_clear_file(buf.raw()) };
@@ -735,7 +735,7 @@ pub(crate) fn buflist_findname_file_id(
     let file_id = (&raw const *file_id).cast_mut();
     buffers_backwards().find(|buf| {
         // SAFETY: a live buffer, a NUL-terminated name and a live file id.
-        buf.b_flags & BF_DUMMY == 0
+        !buf.b_flags.has(BufFlags::DUMMY)
             && !unsafe { otherfile_buf(buf.raw(), ffname, file_id, file_id_valid) }
     })
 }

@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::BufFlags;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
 use crate::regexp::RE_MAGIC;
@@ -559,13 +560,13 @@ unsafe fn keep_or_drop_dummy(
             {
                 unload_dummy_buffer(buf, dirname_start);
                 // Keeping the buffer, remove the dummy flag.
-                (*buf).b_flags &= !BF_DUMMY;
+                (*buf).b_flags.clear(BufFlags::DUMMY);
                 return;
             }
         }
 
         // Keeping the buffer, remove the dummy flag.
-        (*buf).b_flags &= !BF_DUMMY;
+        (*buf).b_flags.clear(BufFlags::DUMMY);
 
         // The buffer is still loaded, so the jump below has to go to the
         // directory the search left it in.

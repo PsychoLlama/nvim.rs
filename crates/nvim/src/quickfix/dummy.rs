@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::buffer::BufFlags;
 use crate::types::{CMD_cd, CMD_lcd, MAXPATHL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -92,7 +93,7 @@ pub(crate) unsafe fn load_dummy_buffer(
 
             // Remove the "dummy" flag, otherwise autocommands may not
             // work.
-            (*curbuf.get()).b_flags &= !BF_DUMMY;
+            (*curbuf.get()).b_flags.clear(BufFlags::DUMMY);
 
             let mut newbuf_to_wipe = bufref_T::default();
             let readfile_result = readfile(
@@ -106,7 +107,10 @@ pub(crate) unsafe fn load_dummy_buffer(
                 false,
             );
             (*newbuf).b_locked -= 1;
-            if readfile_result == OK && !got_int.get() && (*curbuf.get()).b_flags & BF_NEW == 0 {
+            if readfile_result == OK
+                && !got_int.get()
+                && !(*curbuf.get()).b_flags.has(BufFlags::NEW)
+            {
                 failed = false;
                 if !ptr::eq(curbuf.get(), newbuf) {
                     // Bloody autocommands changed the buffer! Restore
@@ -127,7 +131,7 @@ pub(crate) unsafe fn load_dummy_buffer(
 
             // Add back the "dummy" flag, otherwise buflist_findname_file_id()
             // won't skip it.
-            (*newbuf).b_flags |= BF_DUMMY;
+            (*newbuf).b_flags |= BufFlags::DUMMY;
         }
 
         // When autocommands/'autochdir' option changed directory: go back.
@@ -175,7 +179,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_
             }
             if !did_one {
                 // The buffer keeps a window; it can only stop being a dummy.
-                (*buf).b_flags &= !BF_DUMMY;
+                (*buf).b_flags.clear(BufFlags::DUMMY);
                 return;
             }
         }
@@ -199,7 +203,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(buf: *mut buf_T, dirname_start: *const c_
             return;
         }
 
-        (*buf).b_flags &= !BF_DUMMY;
+        (*buf).b_flags.clear(BufFlags::DUMMY);
     }
 }
 

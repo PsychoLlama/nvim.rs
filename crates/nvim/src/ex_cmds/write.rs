@@ -15,18 +15,19 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    BF_NEW, BF_NOTEDITED, BF_READERR, CPO_ALTWRITE, CPO_OVERNEW, ECMD_FORCEIT, ECMD_HIDE, FAIL,
-    GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
-    SHM_FILEINFO, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd, false_0, true_0,
+    CPO_ALTWRITE, CPO_OVERNEW, ECMD_FORCEIT, ECMD_HIDE, FAIL, GETFILE_ERROR, GETFILE_NOT_WRITTEN,
+    GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER, SHM_FILEINFO, VIM_QUESTION, VIM_YES,
+    buf_autocmd, do_bang, do_ecmd, false_0, true_0,
 };
 use crate::arglist::do_argfile;
 use crate::autocmd::{
     EVENT_BUFADD, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, augroup_exists, do_doautocmd,
 };
 use crate::buffer::{
-    bt_dontwrite, bt_dontwrite_msg, bt_nofilename, buf_hide, buf_name_changed, buflist_findname,
-    buflist_new, bufref_valid, do_autochdir, do_modelines, fileinfo, fname_expand,
-    no_write_message, no_write_message_buf, otherfile, set_bufref, setaltfname, setfname,
+    BufFlags, bt_dontwrite, bt_dontwrite_msg, bt_nofilename, buf_hide, buf_name_changed,
+    buflist_findname, buflist_new, bufref_valid, do_autochdir, do_modelines, fileinfo,
+    fname_expand, no_write_message, no_write_message_buf, otherfile, set_bufref, setaltfname,
+    setfname,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::channel::channel_job_running;
@@ -139,7 +140,7 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> c_int {
             (*curbuf.get()).b_sfname = sfname;
             return FAIL;
         }
-        (*curbuf.get()).b_flags |= BF_NOTEDITED;
+        (*curbuf.get()).b_flags |= BufFlags::NOTEDITED;
         if !xfname.is_null() && *xfname as c_int != NUL {
             let alt = buflist_new(fname, xfname, (*curwin.get()).w_cursor.lnum, 0);
             if !alt.is_null() && !cmdmod_has(CmdModFlags::KEEPALT) {
@@ -500,8 +501,8 @@ unsafe fn saveas_exchange_names(alt_buf: *mut buf_T) -> Option<*mut c_char> {
     }
 }
 
-/// Check if it is allowed to overwrite a file.  If `b_flags` has `BF_NOTEDITED`,
-/// `BF_NEW` or `BF_READERR`, check for overwriting the current file.
+/// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
+/// `BufFlags::NEW` or `BufFlags::READERR`, check for overwriting the current file.
 ///
 /// May set `eap->forceit` if a dialog says it's OK to overwrite.  `fname` is
 /// the file name to be used (which can differ from `buf`'s), `ffname` its full
@@ -523,10 +524,10 @@ pub unsafe fn check_overwrite(
     let contested = other
         || unsafe {
             !bt_nofilename(buf)
-                && ((*buf).b_flags & BF_NOTEDITED != 0
-                    || (*buf).b_flags & BF_NEW != 0
+                && ((*buf).b_flags.has(BufFlags::NOTEDITED)
+                    || (*buf).b_flags.has(BufFlags::NEW)
                         && vim_strchr(p_cpo.get(), CPO_OVERNEW).is_null()
-                    || (*buf).b_flags & BF_READERR != 0)
+                    || (*buf).b_flags.has(BufFlags::READERR))
         };
     // SAFETY: `ffname` is a live file name.
     if !contested || p_wa.get() != 0 || !unsafe { os_path_exists(ffname) } {

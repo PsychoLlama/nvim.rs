@@ -14,7 +14,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::autocmd::{
     EVENT_BUFREADPOST, EVENT_BUFWINENTER, EVENT_SWAPEXISTS, apply_autocmds, has_autocmd,
 };
-use crate::buffer::{buf_inc_changedtick, buf_spname, open_buffer, setfname};
+use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer, setfname};
 use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
@@ -214,8 +214,6 @@ pub const KV_INITIAL_VALUE: StringBuilder = StringBuilder {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
-pub const BF_RECOVERED: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const ML_CHNK_ADDLINE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ML_CHNK_UPDLINE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -528,7 +526,7 @@ pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
 
         // Clear the "recovered" flag, so the ATTENTION prompt comes back the
         // next time this buffer is loaded.
-        (*buf).b_flags &= !BF_RECOVERED;
+        (*buf).b_flags.clear(BufFlags::RECOVERED);
     }
 }
 
