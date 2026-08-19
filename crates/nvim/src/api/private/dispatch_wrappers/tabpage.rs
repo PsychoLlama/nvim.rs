@@ -51,10 +51,10 @@ pub unsafe fn handle_nvim_open_tabpage(
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_open_tabpage(arg_1, arg_2, &raw mut arg_3, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_open_tabpage(arg_1, arg_2, &raw mut arg_3) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(
         kObjectTypeTabpage,
         object_data {
@@ -93,9 +93,8 @@ pub unsafe fn handle_nvim_tabpage_del_var(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_tabpage_del_var(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_tabpage_del_var(arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -228,9 +227,7 @@ pub unsafe fn handle_nvim_tabpage_is_valid(
         wrong_type(error, 1, c"nvim_tabpage_is_valid", c"Tabpage");
         return NIL;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_tabpage_is_valid(arg_1) };
+    let rv = nvim_tabpage_is_valid(arg_1);
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
@@ -260,10 +257,10 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_tabpage_list_wins(arg_1, arena, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
-    }
+    let rv = match unsafe { nvim_tabpage_list_wins(arg_1, arena) } {
+        Ok(rv) => rv,
+        Err(e) => return failure(error, e),
+    };
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
@@ -334,9 +331,8 @@ pub unsafe fn handle_nvim_tabpage_set_win(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_tabpage_set_win(arg_1, arg_2, error) };
-    if error.type_0 != kErrorTypeNone {
-        return NIL;
+    if let Err(e) = unsafe { nvim_tabpage_set_win(arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }
