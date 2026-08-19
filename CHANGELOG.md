@@ -13,6 +13,10 @@ and this project adheres to [CalVer](https://calver.org/).
   Lua wrappers around every `nvim_*` function are emitted as ordinary Rust
   with scoped cleanup instead of goto-shaped jumps, and the generator now
   accepts API functions that return `Result`. Nothing observable changed.
+- Gave the editor one definition of each of the constants it had been
+  re-declaring in every file that used them -- success and failure, the
+  string terminator, the path and buffer size limits, the option-scope
+  flags. Nothing observable changed.
 - Took the editor's own hand-written declarations of the C library out and
   put the `libc` crate in their place, leaving a small module for the
   handful of things that crate does not carry. Nothing observable changed.
