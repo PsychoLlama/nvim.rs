@@ -37,6 +37,12 @@ and this project adheres to [CalVer](https://calver.org/).
   can no longer be passed where another was meant. Two of the C names
   turned out to cover two unrelated sets of flags each, and those are now
   two types. Nothing observable changed.
+- Gave the same treatment to the names that stand for one choice rather
+  than a set of flags: what a `:` range counts, what the command line is
+  completing, which `v:` variable is meant, and the several things the
+  editor was tracking as "yes, no, or not decided yet". Several of those
+  turned out to be two unrelated families sharing a prefix, and are now
+  separate types. Nothing observable changed.
 
 ## [2026.08.18-0975a8efd3]
 
