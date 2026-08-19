@@ -12,9 +12,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
-use crate::types::{CMOD_KEEPPATTERNS, FAIL, NUL, OK, VV_SEARCHFORWARD};
+use crate::types::{CmdModFlags, FAIL, NUL, OK, VV_SEARCHFORWARD};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -198,9 +199,7 @@ pub unsafe extern "C" fn search_regcomp(
 
         // Remember the pattern, unless the caller or `:keeppatterns` asked
         // us not to.
-        if options & SEARCH_KEEP as c_int == 0
-            && (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS as c_int == 0
-        {
+        if options & SEARCH_KEEP as c_int == 0 && !cmdmod_has(CmdModFlags::KEEPPATTERNS) {
             if pat_save == RE_SEARCH || pat_save == RE_BOTH {
                 save_re_pat(RE_SEARCH, pat, patlen, magic);
             }

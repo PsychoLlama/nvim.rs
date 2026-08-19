@@ -1,5 +1,6 @@
 use crate::buffer::buflist_findnr;
-use crate::main::{IObuff, cmdmod, curbuf, curwin, global_busy, got_int, jop_flags, listcmd_busy};
+use crate::ex_docmd::cmdmod_has;
+use crate::main::{IObuff, curbuf, curwin, global_busy, got_int, jop_flags, listcmd_busy};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
     message_filtered, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts, msg_puts_title,
@@ -14,16 +15,13 @@ use core::ptr;
 use super::show::*;
 use super::*;
 use crate::highlight_group::HLF_D;
-use crate::types::CMOD_KEEPJUMPS;
+use crate::types::CmdModFlags;
 
 /// Set the previous context mark to the current position and add it to the
 /// jump list.
 pub unsafe fn setpcmark() {
     let mut fm: *mut xfmark_T = ptr::null_mut();
-    if global_busy.get() != 0
-        || listcmd_busy.get()
-        || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPJUMPS as c_int != 0
-    {
+    if global_busy.get() != 0 || listcmd_busy.get() || cmdmod_has(CmdModFlags::KEEPJUMPS) {
         return;
     }
     (*curwin.get()).w_prev_pcmark = (*curwin.get()).w_pcmark;

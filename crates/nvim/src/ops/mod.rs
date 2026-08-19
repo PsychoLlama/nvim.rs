@@ -45,12 +45,12 @@ use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::main::{
     IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
-    VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, cmdmod, curbuf,
-    curbuf_splice_pending, curwin, did_ai, disable_fold_update, e_invarg, e_modifiable,
-    empty_string_option, finish_op, got_int, motion_force, mouse_dragging, msg_scroll,
-    no_lines_msg, p_ch, p_cpo, p_fp, p_js, p_opfunc, p_report, p_ri, p_sbr, p_sel, p_shm, p_sol,
-    p_sr, redo_VIsual_busy, repeat_cmdline, repeat_luaref, resel_VIsual_line_count,
-    resel_VIsual_mode, resel_VIsual_vcol, restart_edit, virtual_op,
+    VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, curbuf, curbuf_splice_pending,
+    curwin, did_ai, disable_fold_update, e_invarg, e_modifiable, empty_string_option, finish_op,
+    got_int, motion_force, mouse_dragging, msg_scroll, no_lines_msg, p_ch, p_cpo, p_fp, p_js,
+    p_opfunc, p_report, p_ri, p_sbr, p_sel, p_shm, p_sol, p_sr, redo_VIsual_busy, repeat_cmdline,
+    repeat_luaref, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit,
+    virtual_op,
 };
 use crate::mark::{mark_col_adjust, mark_mb_adjustpos};
 use crate::mbyte::{
@@ -86,14 +86,14 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::types::{
-    CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, ExtmarkOp,
-    MotionType, OP_APPEND, OP_CHANGE, OP_COLON, OP_DELETE, OP_FILTER, OP_FOLD, OP_FOLDCLOSE,
-    OP_FOLDCLOSEREC, OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC, OP_FORMAT, OP_FORMAT2,
-    OP_FUNCTION, OP_INDENT, OP_INSERT, OP_JOIN, OP_JOIN_NS, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD,
-    OP_NR_SUB, OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OpType, OptInt,
-    StrCharInfo, TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T,
-    cmdarg_T, colnr_T, dict_T, int32_t, int64_t, kNone, linenr_T, oparg_T, optset_T, pos_T, size_t,
-    ssize_t, typval_T, typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
+    Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CmdModFlags, ExtmarkOp, MotionType,
+    OP_APPEND, OP_CHANGE, OP_COLON, OP_DELETE, OP_FILTER, OP_FOLD, OP_FOLDCLOSE, OP_FOLDCLOSEREC,
+    OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC, OP_FORMAT, OP_FORMAT2, OP_FUNCTION,
+    OP_INDENT, OP_INSERT, OP_JOIN, OP_JOIN_NS, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD, OP_NR_SUB,
+    OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OpType, OptInt, StrCharInfo,
+    TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T,
+    dict_T, int32_t, int64_t, kNone, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
+    typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};

@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdmod_has;
 use crate::semsg_c;
 use core::ffi::CStr;
 use std::borrow::Cow;
@@ -28,9 +29,9 @@ use crate::fileio::{
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
 use crate::main::{
-    IObuff, cmdmod, curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting,
-    got_int, msg_scroll, msg_silent, need_maketitle, no_wait_return, p_bdir, p_bex, p_bk, p_bsk,
-    p_ccv, p_cpo, p_fs, p_pm, p_wb,
+    IObuff, curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting, got_int,
+    msg_scroll, msg_silent, need_maketitle, no_wait_return, p_bdir, p_bex, p_bk, p_bsk, p_ccv,
+    p_cpo, p_fs, p_pm, p_wb,
 };
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
@@ -52,7 +53,7 @@ use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 use crate::types::{
-    CMOD_LOCKMARKS, FAIL, FileInfo, IOSIZE, MAXPATHL, OK, aco_save_T, buf_T, bufref_T, exarg_T,
+    CmdModFlags, FAIL, FileInfo, IOSIZE, MAXPATHL, OK, aco_save_T, buf_T, bufref_T, exarg_T,
     iconv_t, int64_t, linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
 };
 use crate::ui::ui_flush;
@@ -388,7 +389,7 @@ pub unsafe fn buf_write(
             return res;
         }
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
+        if cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Restore the original '[ and '] positions.
             (*buf).b_op_start = orig.start;
             (*buf).b_op_end = orig.end;

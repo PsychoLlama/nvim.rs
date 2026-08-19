@@ -15,11 +15,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
 use crate::regexp::RE_MAGIC;
 use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
-    CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE, FAIL, MAXPATHL, NUL, OK, OptionSetFlags,
+    CMD_vimgrep, CMD_vimgrepadd, CmdModFlags, FAIL, MAXPATHL, NUL, OK, OptionSetFlags,
 };
 use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -544,8 +545,8 @@ unsafe fn keep_or_drop_dummy(
         // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
         // buffer goes away as soon as it is hidden, which wins.
         let bufhidden = *(*buf).b_p_bh as u8;
-        let hidden_stays = (*cmdmod.ptr()).cmod_flags & CMOD_HIDE as c_int != 0
-            && !matches!(bufhidden, b'u' | b'w' | b'd');
+        let hidden_stays =
+            cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
         if !hidden_stays {
             if !found_match {
                 // Do not keep a buffer that was not loaded before.

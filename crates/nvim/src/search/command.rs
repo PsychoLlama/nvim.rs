@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
 use crate::search::{
@@ -19,7 +20,7 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
-use crate::types::{CMOD_KEEPPATTERNS, FAIL, NUL};
+use crate::types::{CmdModFlags, FAIL, NUL};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -723,9 +724,7 @@ pub unsafe fn do_search(
         if !found {
             retval = 0;
         }
-        if options & SEARCH_KEEP != 0
-            || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS as c_int != 0
-        {
+        if options & SEARCH_KEEP != 0 || cmdmod_has(CmdModFlags::KEEPPATTERNS) {
             set_search_offset(old_off);
         }
         retval

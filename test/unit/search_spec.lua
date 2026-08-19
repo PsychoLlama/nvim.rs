@@ -50,7 +50,7 @@ describe('search_regcomp', function()
     --crafted to call reverse_text with invalid utf
     globals.curwin.w_onebuf_opt.wo_rl = 1
     globals.curwin.w_onebuf_opt.wo_rlc = to_cstr('s')
-    globals.cmdmod.cmod_flags = globals.CMOD_KEEPPATTERNS
+    globals.cmdmod.cmod_flags = globals.CmdModFlags_KEEPPATTERNS
     local fail = search_regcomp('a\192', 2, 0, 0, 0)
     eq(1, fail)
     eq('\192a', get_search_pat())

@@ -28,7 +28,7 @@ use crate::getchar::{stuff_empty, typebuf_typed};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    IObuff, State, allbuf_lock, autocmd_busy, cmdmod, curbuf, curtab, curwin, did_check_timestamps,
+    IObuff, State, allbuf_lock, autocmd_busy, curbuf, curtab, curwin, did_check_timestamps,
     e_interr, e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage,
     firstbuf, firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col,
     msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,

@@ -9,14 +9,15 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CMOD_LOCKMARKS, FAIL, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
+use super::{CmdModFlags, FAIL, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
+use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_move_region;
 use crate::fold::foldMoveRange;
 use crate::main::{
-    VIsual, VIsual_active, cmdmod, curbuf, curwin, disable_fold_update, global_busy, p_report,
+    VIsual, VIsual_active, curbuf, curwin, disable_fold_update, global_busy, p_report,
 };
 use crate::mark::mark_adjust_nofold;
 use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len};
@@ -280,7 +281,7 @@ unsafe fn fold_move_range(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
 /// # Safety
 /// The current buffer must be live.
 pub(super) unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
-    if cmdmod.with(|mods| mods.cmod_flags) & CMOD_LOCKMARKS as c_int != 0 {
+    if cmdmod_has(CmdModFlags::LOCKMARKS) {
         return;
     }
     // SAFETY: caller's contract.  `coladd` is deliberately left alone, as

@@ -33,30 +33,46 @@ pub struct SubReplacementString {
     pub additional_data: *mut AdditionalData,
 }
 pub type cmd_addr_T = ::core::ffi::c_uint;
-/// The `:silent`, `:noautocmd`, `:keepmarks` … command modifiers, as the
-/// bits `cmdmod_T::cmod_flags` carries.  The field is a `c_int` and every
-/// transpiled test site casts, so these stay `c_uint` until the modules
-/// reading them are rewritten and the casts go with them.
-pub type CmdModFlags = ::core::ffi::c_uint;
-pub const CMOD_SANDBOX: CmdModFlags = 1;
-pub const CMOD_SILENT: CmdModFlags = 2;
-pub const CMOD_ERRSILENT: CmdModFlags = 4;
-pub const CMOD_UNSILENT: CmdModFlags = 8;
-pub const CMOD_NOAUTOCMD: CmdModFlags = 16;
-pub const CMOD_HIDE: CmdModFlags = 32;
-pub const CMOD_BROWSE: CmdModFlags = 64;
-pub const CMOD_CONFIRM: CmdModFlags = 128;
-pub const CMOD_KEEPALT: CmdModFlags = 256;
-pub const CMOD_KEEPMARKS: CmdModFlags = 512;
-pub const CMOD_KEEPJUMPS: CmdModFlags = 1024;
-pub const CMOD_LOCKMARKS: CmdModFlags = 2048;
-pub const CMOD_KEEPPATTERNS: CmdModFlags = 4096;
-pub const CMOD_NOSWAPFILE: CmdModFlags = 8192;
+crate::flag_set! {
+    /// The `:silent`, `:noautocmd`, `:keepmarks` … command modifiers, as the
+    /// bits [`cmdmod_T::cmod_flags`] carries.
+    pub struct CmdModFlags;
+
+    /// `:sandbox` -- the command runs with `sandbox` raised.
+    const SANDBOX = 1;
+    /// `:silent` -- do not echo what the command says.
+    const SILENT = 2;
+    /// `:silent!` -- do not show its errors either.
+    const ERRSILENT = 4;
+    /// `:unsilent` -- say it even inside a `:silent`.
+    const UNSILENT = 8;
+    /// `:noautocmd` -- fire no autocommands for the duration.
+    const NOAUTOCMD = 16;
+    /// `:hide` -- a buffer left behind becomes hidden rather than unloaded.
+    const HIDE = 32;
+    /// `:browse` -- ask for a file name. There is no file dialog, so this
+    /// only ever reaches the "not supported" arm.
+    const BROWSE = 64;
+    /// `:confirm` -- prompt before a destructive step.
+    const CONFIRM = 128;
+    /// `:keepalt` -- leave the alternate file alone.
+    const KEEPALT = 256;
+    /// `:keepmarks` -- leave the marks alone.
+    const KEEPMARKS = 512;
+    /// `:keepjumps` -- leave the jump list and the `\'` mark alone.
+    const KEEPJUMPS = 1024;
+    /// `:lockmarks` -- do not move the marks for lines the command adds or
+    /// removes.
+    const LOCKMARKS = 2048;
+    /// `:keeppatterns` -- leave the search history alone.
+    const KEEPPATTERNS = 4096;
+    /// `:noswapfile` -- a buffer the command opens gets no swap file.
+    const NOSWAPFILE = 8192;
+}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct cmdmod_T {
-    /// A set of [`CmdModFlags`] bits.
-    pub cmod_flags: ::core::ffi::c_int,
+    pub cmod_flags: CmdModFlags,
     pub cmod_split: ::core::ffi::c_int,
     pub cmod_tab: ::core::ffi::c_int,
     pub cmod_filter_pat: *mut ::core::ffi::c_char,

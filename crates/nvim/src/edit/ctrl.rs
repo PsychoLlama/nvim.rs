@@ -22,6 +22,7 @@
 use core::ffi::c_int;
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::types::{FAIL, NUL};
 
 /// The three CTRL-G commands that are spelled with a letter.
@@ -303,7 +304,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
         }
 
         // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
-        if (*cmdmod.ptr()).cmod_flags & CMOD_KEEPJUMPS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
             let view = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
             let fm = &raw mut (*curbuf.get()).b_last_insert;
             free_fmark(*fm);

@@ -18,6 +18,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::types::{FAIL, NUL, OK};
 
 /// Overwrite the single byte at `lp` with `c`.
@@ -117,7 +118,7 @@ pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
             true,
         );
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*curbuf.get()).b_op_start = (*oap).start;
             (*curbuf.get()).b_op_end = (*oap).end;
         }

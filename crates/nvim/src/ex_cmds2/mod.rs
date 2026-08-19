@@ -57,7 +57,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var, set_vim_var_string};
 use crate::ex_cmds::{check_overwrite, set_swapcommand};
-use crate::ex_docmd::{dialog_msg, do_cmdline, do_cmdline_cmd};
+use crate::ex_docmd::{cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::highlight_group::HLF_W;
@@ -76,7 +76,7 @@ use crate::path::vim_FullName;
 use crate::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::semsg_c;
 use crate::types::{
-    CMD_first, CMD_sfirst, CMOD_CONFIRM, FAIL, MAXPATHL, NUL, OK, VV_SWAPCOMMAND, aentry_T, buf_T,
+    CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, VV_SWAPCOMMAND, aentry_T, buf_T,
     bufref_T, exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T,
     win_T,
 };
@@ -354,9 +354,7 @@ pub unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
         return false;
     }
 
-    let confirm = (p_confirm.get() != 0
-        || cmdmod.with(|m| m.cmod_flags) & CMOD_CONFIRM as c_int != 0)
-        && p_write.get() != 0;
+    let confirm = (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0;
     if !confirm {
         unsafe {
             if flags & CCGD_EXCMD != 0 {
@@ -586,7 +584,7 @@ pub unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
 
         exiting.set(false);
         // With ":confirm" the dialog was the message; do not add an error.
-        if !(p_confirm.get() != 0 || cmdmod.with(|m| m.cmod_flags) & CMOD_CONFIRM as c_int != 0) {
+        if !(p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) {
             report_unwritten(culprit);
         }
 

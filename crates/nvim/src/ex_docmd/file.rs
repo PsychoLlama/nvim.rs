@@ -20,8 +20,8 @@ use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
     CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FNAME_MESS, ML_EMPTY, ex_pressedreturn,
-    kDirectionNotSet,
+    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FNAME_MESS, ML_EMPTY, cmdmod_has,
+    ex_pressedreturn, kDirectionNotSet,
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -29,9 +29,9 @@ use crate::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::fileio::readfile;
 use crate::getchar::stuffReadbuff;
 use crate::main::{
-    RedrawingDisabled, cmdmod, curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint,
-    exmode_active, global_busy, msg_scroll, need_wait_return, no_wait_return, p_awa, p_cpo,
-    p_shada, pending_exmode_active, readonlymode, recoverymode,
+    RedrawingDisabled, curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active,
+    global_busy, msg_scroll, need_wait_return, no_wait_return, p_awa, p_cpo, p_shada,
+    pending_exmode_active, readonlymode, recoverymode,
 };
 use crate::mark::setpcmark;
 use crate::memfile::mf_fname;
@@ -49,7 +49,7 @@ use crate::strings::vim_strchr;
 use crate::types::ui::kUICmdline;
 use crate::types::{
     CMD_badd, CMD_balt, CMD_edit, CMD_enew, CMD_new, CMD_rshada, CMD_rviminfo, CMD_split,
-    CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
+    CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CmdModFlags,
     FAIL, NUL, OK, cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T,
 };
 use crate::ui::ui_has;
@@ -469,7 +469,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             && curwin.get() != old_curwin
             && win_valid(old_curwin)
             && (*old_curwin).w_buffer != curbuf.get()
-            && (*cmdmod.ptr()).cmod_flags & CMOD_KEEPALT as c_int == 0
+            && !cmdmod_has(CmdModFlags::KEEPALT)
         {
             (*old_curwin).w_alt_fnum = (*curbuf.get()).handle as c_int;
         }

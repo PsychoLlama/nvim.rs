@@ -1,15 +1,16 @@
 use crate::buffer::bt_prompt;
 use crate::diff::diff_mark_adjust;
+use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_adjust;
 use crate::fold::foldMarkAdjust;
 use crate::global_cell::GlobalCell;
-use crate::main::{cmdmod, curbuf, curtab, curwin, first_tabpage, firstwin, namedfm, saved_cursor};
+use crate::main::{curbuf, curtab, curwin, first_tabpage, firstwin, namedfm, saved_cursor};
 use crate::pos::{MAXLNUM, equalpos};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
 
 use super::*;
-use crate::types::CMOD_LOCKMARKS;
+use crate::types::CmdModFlags;
 
 /// `mark.c`'s `ONE_ADJUST` family: the line-number rewrite every mark store
 /// gets when lines are inserted, deleted or moved. Marks in `line1..=line2`
@@ -173,7 +174,7 @@ pub unsafe fn mark_adjust_buf(
     }
     let mut by_api: bool = mode as c_uint == kMarkAdjustApi as c_int as c_uint;
     let mut by_term: bool = mode as c_uint == kMarkAdjustTerm as c_int as c_uint;
-    if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+    if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         let mut i: c_int = 0;
         while i < NMARKS {
             shift.line(
@@ -265,7 +266,7 @@ pub unsafe fn mark_adjust_buf(
             (*tab_0).tp_firstwin
         };
         while !win_0.is_null() {
-            if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+            if !cmdmod_has(CmdModFlags::LOCKMARKS) {
                 let mut i_2: c_int = 0;
                 while i_2 < (*win_0).w_jumplistlen {
                     if (*win_0).w_jumplist[i_2 as usize].fmark.fnum == fnum {
@@ -281,7 +282,7 @@ pub unsafe fn mark_adjust_buf(
                 }
             }
             if (*win_0).w_buffer == buf {
-                if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+                if !cmdmod_has(CmdModFlags::LOCKMARKS) {
                     let mut i_3: c_int = 0;
                     while i_3 < (*win_0).w_tagstacklen {
                         if (*win_0).w_tagstack[i_3 as usize].fmark.fnum == fnum {
@@ -376,9 +377,7 @@ pub unsafe fn mark_col_adjust(
         col_amount,
         spaces_removed,
     };
-    if col_amount == 0 && lnum_amount == 0
-        || (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int != 0
-    {
+    if col_amount == 0 && lnum_amount == 0 || cmdmod_has(CmdModFlags::LOCKMARKS) {
         return;
     }
     let mut i: c_int = 0;

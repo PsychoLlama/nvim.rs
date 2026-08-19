@@ -14,12 +14,12 @@ use crate::charset::skipwhite;
 use crate::cursor::{coladvance, get_cursor_line_len, get_cursor_line_ptr};
 use crate::drawscreen::{UPD_INVERTED, UPD_NOT_VALID, redraw_curbuf_later};
 use crate::edit::{backspace_until_column, beginline, replace_join, replace_push_nul};
+use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_splice_cols;
 use crate::indent_c::in_cinkeys;
 use crate::main::{
-    IObuff, Insstart, State, ai_col, can_si, can_si_back, cmdmod, curbuf_splice_pending, did_si,
-    e_interr, e_modifiable, e_resulting_text_too_long, got_int, old_indent, p_paste, p_report,
-    trylevel,
+    IObuff, Insstart, State, ai_col, can_si, can_si_back, curbuf_splice_pending, did_si, e_interr,
+    e_modifiable, e_resulting_text_too_long, got_int, old_indent, p_paste, p_report, trylevel,
 };
 use crate::mbyte::{utf_ptr2StrCharInfo, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
@@ -35,7 +35,7 @@ use crate::pos::MAXCOL;
 use crate::search::findmatch;
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::strings::xstrnsave;
-use crate::types::CMOD_LOCKMARKS;
+use crate::types::CmdModFlags;
 use crate::undo::{u_clearline, u_save, u_savecommon};
 use ::libc::memset;
 
@@ -180,7 +180,7 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
                 c"success",
             );
         }
-        if cmdmod.with(|m| m.cmod_flags) & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
             (*buf).b_op_start = (*oap).start;
             (*buf).b_op_end = (*oap).end;

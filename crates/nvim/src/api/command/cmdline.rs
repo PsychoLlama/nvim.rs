@@ -78,12 +78,12 @@ unsafe fn concat_cmdmods(cmdline: *mut StringBuilder, cmdmod: &cmdmod_T) {
         if cmdmod.cmod_verbose > 0 {
             kv_do_printf(cmdline, c"%dverbose ".as_ptr(), cmdmod.cmod_verbose - 1);
         }
-        if cmdmod.cmod_flags & CMOD_ERRSILENT as c_int != 0 {
+        if cmdmod.cmod_flags.has(CmdModFlags::ERRSILENT) {
             cmdline_concat_str(cmdline, c"silent! ");
-        } else if cmdmod.cmod_flags & CMOD_SILENT as c_int != 0 {
+        } else if cmdmod.cmod_flags.has(CmdModFlags::SILENT) {
             cmdline_concat_str(cmdline, c"silent ");
         }
-        if cmdmod.cmod_flags & CMOD_UNSILENT as c_int != 0 {
+        if cmdmod.cmod_flags.has(CmdModFlags::UNSILENT) {
             cmdline_concat_str(cmdline, c"unsilent ");
         }
         // A switch over the *masked* value, so two placement bits at once
@@ -106,19 +106,19 @@ unsafe fn concat_cmdmods(cmdline: *mut StringBuilder, cmdmod: &cmdmod_T) {
             cmdline_concat_str(cmdline, c"horizontal ");
         }
         for (mask, text) in [
-            (CMOD_SANDBOX, c"sandbox "),
-            (CMOD_NOAUTOCMD, c"noautocmd "),
-            (CMOD_BROWSE, c"browse "),
-            (CMOD_CONFIRM, c"confirm "),
-            (CMOD_HIDE, c"hide "),
-            (CMOD_KEEPALT, c"keepalt "),
-            (CMOD_KEEPJUMPS, c"keepjumps "),
-            (CMOD_KEEPMARKS, c"keepmarks "),
-            (CMOD_KEEPPATTERNS, c"keeppatterns "),
-            (CMOD_LOCKMARKS, c"lockmarks "),
-            (CMOD_NOSWAPFILE, c"noswapfile "),
+            (CmdModFlags::SANDBOX, c"sandbox "),
+            (CmdModFlags::NOAUTOCMD, c"noautocmd "),
+            (CmdModFlags::BROWSE, c"browse "),
+            (CmdModFlags::CONFIRM, c"confirm "),
+            (CmdModFlags::HIDE, c"hide "),
+            (CmdModFlags::KEEPALT, c"keepalt "),
+            (CmdModFlags::KEEPJUMPS, c"keepjumps "),
+            (CmdModFlags::KEEPMARKS, c"keepmarks "),
+            (CmdModFlags::KEEPPATTERNS, c"keeppatterns "),
+            (CmdModFlags::LOCKMARKS, c"lockmarks "),
+            (CmdModFlags::NOSWAPFILE, c"noswapfile "),
         ] {
-            if cmdmod.cmod_flags & mask as c_int != 0 {
+            if cmdmod.cmod_flags.has(mask) {
                 cmdline_concat_str(cmdline, text);
             }
         }

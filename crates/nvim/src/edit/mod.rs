@@ -113,8 +113,8 @@ use crate::keycodes::{
 };
 use crate::main::{
     Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, VIsual_active, ai_col,
-    allow_keys, arrow_used, can_si, can_si_back, clear_cmdline, cmdmod, cmdwin_result, cmdwin_type,
-    curbuf, curwin, default_grid, did_ai, did_check_timestamps, did_cursorhold, did_si,
+    allow_keys, arrow_used, can_si, can_si_back, clear_cmdline, cmdwin_result, cmdwin_type, curbuf,
+    curwin, default_grid, did_ai, did_check_timestamps, did_cursorhold, did_si,
     disable_fold_update, dollar_vcol, e_noinstext, e_sandbox, e_textlock, edit_submode_extra,
     emsg_on_display, end_comment_pending, ex_normal_busy, fdo_flags, first_tabpage,
     force_restart_edit, got_int, hl_attr_active, ins_at_eol, km_startsel, langmap_mapchar,
@@ -180,7 +180,7 @@ use crate::textformat::{
 use crate::textobject::{bck_word, fwd_word};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CMOD_KEEPJUMPS, CharsizeArg, INSCHAR_CTRLV,
+    BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CharsizeArg, CmdModFlags, INSCHAR_CTRLV,
     INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo,
     String_0, TriState, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T,
     event_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t,

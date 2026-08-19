@@ -31,7 +31,7 @@ use crate::autocmd::apply_autocmds;
 use crate::charset::{skiptowhite, vim_isIDc};
 use crate::eval::typval::{tv_get_string, tv_list_find_str, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
-use crate::ex_docmd::do_exedit;
+use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::input::prompt_for_input;
 use crate::main::{
     cmdmod, curtab, curwin, e_curdir, e_interr, e_invarg, e_invarg2, e_noprevre, e_sandbox,
@@ -50,8 +50,8 @@ use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
-    CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMOD_BROWSE, CMOD_LOCKMARKS,
-    ExtmarkOp, FAIL, NUL, OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType,
+    CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CmdModFlags, ExtmarkOp,
+    FAIL, NUL, OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType,
     VV_OLDFILES, bcount_t, bfa_values, bln_values, buf_T, dobuf_action_values, event_T, exarg_T,
     getf_retvalues, linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
@@ -385,7 +385,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
             }
         }
         got_int.set(false_0 != 0);
-        if (*cmdmod.ptr()).cmod_flags & CMOD_BROWSE as ::core::ffi::c_int != 0 {
+        if cmdmod_has(CmdModFlags::BROWSE) {
             quit_more.set(false_0 != 0);
             nr = prompt_for_input(
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -403,7 +403,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
                 let s: *mut ::core::ffi::c_char = expand_env_save(p as *mut ::core::ffi::c_char);
                 (*eap).arg = s;
                 (*eap).cmdidx = CMD_edit;
-                (*cmdmod.ptr()).cmod_flags &= !(CMOD_BROWSE as ::core::ffi::c_int);
+                cmdmod.with_mut(|m| m.cmod_flags = m.cmod_flags.without(CmdModFlags::BROWSE));
                 do_exedit(eap, ::core::ptr::null_mut::<win_T>());
                 xfree(s as *mut ::core::ffi::c_void);
             }

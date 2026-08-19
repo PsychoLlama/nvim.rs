@@ -90,7 +90,7 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::{
-    CMD_append, CMD_diffget, CMD_diffput, CMD_split, CMOD_LOCKMARKS, EvalFuncData, ExtmarkOp, FILE,
+    CMD_append, CMD_diffget, CMD_diffput, CMD_split, CmdModFlags, EvalFuncData, ExtmarkOp, FILE,
     FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, TriState, aco_save_T,
     buf_T, bufref_T, cmd_addr_T, colnr_T, diff_T, diffblock_S, diffline_S, diffline_T,
     diffline_change_T, exarg_T, garray_T, hlf_T, kFalse, kNone, kTrue, linenr_T, mmfile_t, scid_T,

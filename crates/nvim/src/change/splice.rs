@@ -26,6 +26,7 @@
 use core::ffi::{c_int, c_void};
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 
 /// Every window in every tabpage.
 ///
@@ -370,7 +371,7 @@ unsafe fn changed_common(
             }
         }
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_KEEPJUMPS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
             record_change_mark(buf, lnum, col);
         }
 

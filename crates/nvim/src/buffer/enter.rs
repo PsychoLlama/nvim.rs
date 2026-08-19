@@ -29,11 +29,12 @@ use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::typval::tv_dict_add;
+use crate::ex_docmd::cmdmod_has;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::{buf_check_timestamp, shorten_fnames};
 use crate::indent::inindent;
 use crate::main::{
-    State, VIsual_active, VIsual_reselect, cmdmod, curbuf, curwin, e_job_still_running,
+    State, VIsual_active, VIsual_reselect, curbuf, curwin, e_job_still_running,
     e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
     e_no_write_since_last_change_add_bang_to_override,
     e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, last_chdir_reason, msg_silent,
@@ -45,7 +46,7 @@ use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    CMOD_KEEPALT, ChangedtickDictItem, NUL, OK, OptInt, Terminal, VAR_FIXED, VAR_NUMBER, colnr_T,
+    ChangedtickDictItem, CmdModFlags, NUL, OK, OptInt, Terminal, VAR_FIXED, VAR_NUMBER, colnr_T,
     dictitem_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::undo::u_sync;
@@ -229,7 +230,7 @@ pub unsafe fn set_curbuf(buf: *mut buf_T, action: c_int, update_jumplist: bool) 
     }
 
     let mut win = cur_win();
-    if cmdmod.with(|m| m.cmod_flags) & CMOD_KEEPALT as c_int == 0 {
+    if !cmdmod_has(CmdModFlags::KEEPALT) {
         win.w_alt_fnum = cur_buf().handle as c_int; // remember alternate file
     }
     remember_altfpos(win); // remember curpos

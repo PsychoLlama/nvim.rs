@@ -32,7 +32,7 @@ use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{bt_help, buflist_findnr, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
 use crate::ex_cmds::do_ecmd;
-use crate::ex_docmd::do_cmdline_cmd;
+use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
@@ -51,9 +51,9 @@ use crate::pos::MAXCOL;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Array, ArrayBuf, CMOD_KEEPALT, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt,
-    OptVal, OptValData, OptionSetFlags, exarg_T, file_comparison, kErrorTypeNone,
-    kObjectTypeString, linenr_T, size_t, win_T,
+    Array, ArrayBuf, CmdModFlags, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt, OptVal,
+    OptValData, OptionSetFlags, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString,
+    linenr_T, size_t, win_T,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::{semsg_c, smsg_c};
@@ -111,7 +111,7 @@ const NO_ERROR: Error = Error {
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
 /// be changed.
 fn keepalt_is_off() -> bool {
-    cmdmod.with(|m| m.cmod_flags) & CMOD_KEEPALT as c_int == 0
+    !cmdmod_has(CmdModFlags::KEEPALT)
 }
 
 /// A borrowed string option value; `set_option_direct` copies what it keeps.

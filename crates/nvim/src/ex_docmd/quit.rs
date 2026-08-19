@@ -24,20 +24,21 @@ use crate::ex_docmd::argopt::{check_more, get_tabpage_arg};
 use crate::ex_docmd::source::not_exiting;
 use crate::ex_docmd::{
     CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, EXIT_FAILURE,
+    cmdmod_has,
 };
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::getchar::beep_flush;
 use crate::keycodes::{Ctrl_C, KE_IGNORE, KE_XF1, KE_XF2};
 use crate::main::{
-    cmdmod, cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting,
-    first_tabpage, firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,
+    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting, first_tabpage,
+    firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,
 };
 use crate::message::{emsg, msg};
 use crate::os::cshim::{gettext, snprintf};
 use crate::types::{
     CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
-    CMD_wq, CMOD_CONFIRM, FAIL, Integer, NUL, OK, VV_EXITREASON, buf_T, bufref_T, exarg_T,
-    linenr_T, ptrdiff_t, tabpage_T, win_T,
+    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, VV_EXITREASON, buf_T, bufref_T, exarg_T, linenr_T,
+    ptrdiff_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{bufIsChanged, curbufIsChanged};
@@ -345,9 +346,7 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) 
         // Only the last window on a changed buffer has to ask.
         let mut need_hide = bufIsChanged(buf) && (*buf).b_nwindows <= 1;
         if need_hide && !buf_hide(buf) && forceit == 0 {
-            if (p_confirm.get() != 0 || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as c_int != 0)
-                && p_write.get() != 0
-            {
+            if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
                 let mut bufref: bufref_T = core::mem::zeroed();
                 set_bufref(&raw mut bufref, buf);
                 dialog_changed(buf, false);

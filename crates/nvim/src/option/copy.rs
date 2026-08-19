@@ -17,16 +17,17 @@ use core::ptr;
 
 use crate::buffer::free_buf_options;
 use crate::charset::buf_init_chartab;
+use crate::ex_docmd::cmdmod_has;
 use crate::indent::{briopt_check, tabstop_set};
 use crate::insexpand::{
     set_buflocal_cfu_callback, set_buflocal_cpt_callbacks, set_buflocal_ofu_callback,
 };
 use crate::main::{
-    cmdmod, curbuf, empty_string_option, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink, p_cino,
-    p_cinsd, p_cinw, p_cms, p_com, p_cpo, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp,
-    p_fo, p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop,
-    p_ma, p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl, p_spo,
-    p_sts, p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
+    curbuf, empty_string_option, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink, p_cino, p_cinsd,
+    p_cinw, p_cms, p_com, p_cpo, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo,
+    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop, p_ma,
+    p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl, p_spo, p_sts,
+    p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
 };
 use crate::memory::xstrdup;
 
@@ -55,8 +56,7 @@ use crate::spell::compile_cap_prog;
 use crate::strings::vim_strchr;
 use crate::tag::set_buflocal_tfu_callback;
 use crate::types::{
-    CMOD_NOSWAPFILE, NUL, OptInt, OptVal, OptValData, buf_T, colnr_T, int16_t, kFalse, win_T,
-    winopt_T,
+    CmdModFlags, NUL, OptInt, OptVal, OptValData, buf_T, colnr_T, int16_t, kFalse, win_T, winopt_T,
 };
 use crate::window::{check_colorcolumn, set_winbar_win};
 
@@ -446,7 +446,7 @@ pub unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
 
             // `:noswapfile` wins over the global 'swapfile', and leaves the
             // script context alone because nothing set it.
-            if (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as c_int != 0 {
+            if cmdmod_has(CmdModFlags::NOSWAPFILE) {
                 (*buf).b_p_swf = 0;
             } else {
                 (*buf).b_p_swf = p_swf.get();

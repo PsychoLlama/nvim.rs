@@ -29,10 +29,8 @@ use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::strings::kv_do_printf;
 use crate::types::{
-    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_iput, CMD_put, CMOD_BROWSE,
-    CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
-    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
-    CMOD_UNSILENT, CmdParseInfo, Dict, Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic,
+    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_iput, CMD_put, CmdModFlags,
+    CmdParseInfo, Dict, Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic,
     KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
     KeyDict_get_commands, KeyDict_user_command, KeyValuePair, LuaRef, Object, String_0,
     StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,

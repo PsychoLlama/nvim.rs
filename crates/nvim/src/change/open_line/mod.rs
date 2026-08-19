@@ -52,7 +52,7 @@ fn replace_normal(state: c_int) -> bool {
 /// prepended to what will become the new line.
 ///
 /// Answers the allocated replacement for `p_extra`, or null if this was not a
-/// prompt line. Freezes the marks (`CMOD_LOCKMARKS`) for the move, so that
+/// prompt line. Freezes the marks (`CmdModFlags::LOCKMARKS`) for the move, so that
 /// `b_prompt_start` stays where it is.
 ///
 /// # Safety
@@ -76,7 +76,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
             prompt_line.add(prompt_len) as *const c_void,
             strlen(prompt_line.add(prompt_len)).wrapping_add(1),
         );
-        (*cmdmod.ptr()).cmod_flags |= CMOD_LOCKMARKS as c_int;
+        (*cmdmod.ptr()).cmod_flags |= CmdModFlags::LOCKMARKS;
         ml_replace((*curwin.get()).w_cursor.lnum, prompt_line, true);
         concat_str(prompt, p_extra)
     }

@@ -25,27 +25,25 @@ use crate::lua::ffi::{
 };
 use crate::main::{cmdmod, g_min_log_level};
 use crate::types::{
-    CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS,
-    CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, aco_save_T, buf_T,
-    cmdmod_T, lua_State, pos_T, switchwin_T, win_T, win_execute_T,
+    CmdModFlags, aco_save_T, buf_T, cmdmod_T, lua_State, pos_T, switchwin_T, win_T, win_execute_T,
 };
 use crate::window::win_find_tabpage;
 use ::libc::memset;
 
 /// The context keys that are plain `:command` modifiers: a truthy value ors
 /// the flag in, anything else is ignored.
-const FLAG_KEYS: [(&CStr, c_int); 11] = [
-    (c"sandbox", CMOD_SANDBOX as c_int),
-    (c"silent", CMOD_SILENT as c_int),
-    (c"emsg_silent", CMOD_ERRSILENT as c_int),
-    (c"unsilent", CMOD_UNSILENT as c_int),
-    (c"noautocmd", CMOD_NOAUTOCMD as c_int),
-    (c"hide", CMOD_HIDE as c_int),
-    (c"keepalt", CMOD_KEEPALT as c_int),
-    (c"keepmarks", CMOD_KEEPMARKS as c_int),
-    (c"keepjumps", CMOD_KEEPJUMPS as c_int),
-    (c"lockmarks", CMOD_LOCKMARKS as c_int),
-    (c"keeppatterns", CMOD_KEEPPATTERNS as c_int),
+const FLAG_KEYS: [(&CStr, CmdModFlags); 11] = [
+    (c"sandbox", CmdModFlags::SANDBOX),
+    (c"silent", CmdModFlags::SILENT),
+    (c"emsg_silent", CmdModFlags::ERRSILENT),
+    (c"unsilent", CmdModFlags::UNSILENT),
+    (c"noautocmd", CmdModFlags::NOAUTOCMD),
+    (c"hide", CmdModFlags::HIDE),
+    (c"keepalt", CmdModFlags::KEEPALT),
+    (c"keepmarks", CmdModFlags::KEEPMARKS),
+    (c"keepjumps", CmdModFlags::KEEPJUMPS),
+    (c"lockmarks", CmdModFlags::LOCKMARKS),
+    (c"keeppatterns", CmdModFlags::KEEPPATTERNS),
 ];
 
 /// An all-zero [`win_execute_T`]; `win_execute_before` fills it.
@@ -75,7 +73,7 @@ const WIN_EXECUTE_INIT: win_execute_T = win_execute_T {
 /// callback at slot 2.
 pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let mut flags: c_int = 0;
+        let mut flags = CmdModFlags::NONE;
         let mut buf: *mut buf_T = ptr::null_mut();
         let mut win: *mut win_T = ptr::null_mut();
         let mut log_level: c_int = -1;
@@ -111,10 +109,10 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
         let mut status: c_int = 0;
         let mut rets: c_int = 0;
 
-        if flags & CMOD_ERRSILENT as c_int != 0 {
-            // CMOD_ERRSILENT must imply CMOD_SILENT, or apply_cmdmod() and
+        if flags.has(CmdModFlags::ERRSILENT) {
+            // CmdModFlags::ERRSILENT must imply CmdModFlags::SILENT, or apply_cmdmod() and
             // undo_cmdmod() won't work properly.
-            flags |= CMOD_SILENT as c_int;
+            flags |= CmdModFlags::SILENT;
         }
 
         let save_min_log_level = g_min_log_level.get();

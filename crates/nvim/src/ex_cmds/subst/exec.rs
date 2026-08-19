@@ -29,13 +29,14 @@ use crate::edit::beginline;
 use crate::ex_cmds::{
     BL_FIX, BL_WHITE, LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline,
 };
+use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fold::hasAnyFolding;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_check_group;
 use crate::main::{
-    cmdmod, curbuf, curwin, e_interr, e_patnotf2, global_busy, got_int, p_ch, p_cwh, p_icm,
-    sub_nlines, sub_nsubs,
+    curbuf, curwin, e_interr, e_patnotf2, global_busy, got_int, p_ch, p_cwh, p_icm, sub_nlines,
+    sub_nsubs,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::utfc_ptr2len;
@@ -55,8 +56,8 @@ use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, NUL, OptInt, OptionSetFlags, colnr_T, exarg_T, handle_T,
-    int64_t, linenr_T, lpos_T, pos_T, proftime_T, regmmatch_T, size_t,
+    CmdModFlags, NUL, OptInt, OptionSetFlags, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
+    lpos_T, pos_T, proftime_T, regmmatch_T, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
@@ -618,7 +619,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
 
     if sub_nsubs.get() > args.start_nsubs {
-        if cmdmod.with(|mods| mods.cmod_flags) & CMOD_LOCKMARKS as c_int == 0 as c_int {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
             // SAFETY: the current buffer is live.
             unsafe {
@@ -769,7 +770,7 @@ pub(crate) unsafe fn do_sub(
         sub_nlines.set(0 as linenr_T);
     }
     let start_nsubs = sub_nsubs.get();
-    let keeppatterns = cmdmod.with(|mods| mods.cmod_flags) & CMOD_KEEPPATTERNS as c_int != 0;
+    let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
     // SAFETY: the current window and buffer are live.
     let (old_cursor, old_line_count) =
         unsafe { ((*curwin.get()).w_cursor, (*curbuf.get()).b_ml.ml_line_count) };

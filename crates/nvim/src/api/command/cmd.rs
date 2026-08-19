@@ -673,32 +673,30 @@ fn apply_mods(
     }
 
     for (set, bit) in [
-        (mods.silent, CMOD_SILENT),
-        (mods.emsg_silent, CMOD_ERRSILENT),
-        (mods.unsilent, CMOD_UNSILENT),
-        (mods.sandbox, CMOD_SANDBOX),
-        (mods.noautocmd, CMOD_NOAUTOCMD),
-        (mods.browse, CMOD_BROWSE),
-        (mods.confirm, CMOD_CONFIRM),
-        (mods.hide, CMOD_HIDE),
-        (mods.keepalt, CMOD_KEEPALT),
-        (mods.keepjumps, CMOD_KEEPJUMPS),
-        (mods.keepmarks, CMOD_KEEPMARKS),
-        (mods.keeppatterns, CMOD_KEEPPATTERNS),
-        (mods.lockmarks, CMOD_LOCKMARKS),
-        (mods.noswapfile, CMOD_NOSWAPFILE),
+        (mods.silent, CmdModFlags::SILENT),
+        (mods.emsg_silent, CmdModFlags::ERRSILENT),
+        (mods.unsilent, CmdModFlags::UNSILENT),
+        (mods.sandbox, CmdModFlags::SANDBOX),
+        (mods.noautocmd, CmdModFlags::NOAUTOCMD),
+        (mods.browse, CmdModFlags::BROWSE),
+        (mods.confirm, CmdModFlags::CONFIRM),
+        (mods.hide, CmdModFlags::HIDE),
+        (mods.keepalt, CmdModFlags::KEEPALT),
+        (mods.keepjumps, CmdModFlags::KEEPJUMPS),
+        (mods.keepmarks, CmdModFlags::KEEPMARKS),
+        (mods.keeppatterns, CmdModFlags::KEEPPATTERNS),
+        (mods.lockmarks, CmdModFlags::LOCKMARKS),
+        (mods.noswapfile, CmdModFlags::NOSWAPFILE),
     ] {
         if set {
-            cmdinfo.cmdmod.cmod_flags |= bit as c_int;
+            cmdinfo.cmdmod.cmod_flags |= bit;
         }
     }
-    if cmdinfo.cmdmod.cmod_flags & CMOD_ERRSILENT as c_int != 0 {
-        cmdinfo.cmdmod.cmod_flags |= CMOD_SILENT as c_int;
+    if cmdinfo.cmdmod.cmod_flags.has(CmdModFlags::ERRSILENT) {
+        cmdinfo.cmdmod.cmod_flags |= CmdModFlags::SILENT;
     }
 
-    if cmdinfo.cmdmod.cmod_flags & CMOD_SANDBOX as c_int != 0
-        && ea.argt & EX_SBOXOK as uint32_t == 0
-    {
+    if cmdinfo.cmdmod.cmod_flags.has(CmdModFlags::SANDBOX) && ea.argt & EX_SBOXOK as uint32_t == 0 {
         err_validation(err, c"Command cannot be run in sandbox");
         return false;
     }

@@ -11,8 +11,8 @@ use crate::options::{
 };
 use crate::profile::time_msg;
 use crate::types::{
-    AdditionalData, Array, Callback, Callback_data, DecorState, FILE, GridView, Loop, LuaRef,
-    LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
+    AdditionalData, Array, Callback, Callback_data, CmdModFlags, DecorState, FILE, GridView, Loop,
+    LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, RgbValue,
     ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
     TriState, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T,
@@ -928,7 +928,7 @@ pub static mapped_ctrl_c: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static ctrl_c_interrupts: GlobalCell<bool> = GlobalCell::new(true);
 #[unsafe(no_mangle)]
 pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
-    cmod_flags: 0,
+    cmod_flags: CmdModFlags::NONE,
     cmod_split: 0,
     cmod_tab: 0,
     cmod_filter_pat: ::core::ptr::null_mut::<c_char>(),

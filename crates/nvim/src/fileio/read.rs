@@ -13,10 +13,11 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
 use crate::pos::MAXCOL;
-use crate::types::{CMOD_LOCKMARKS, FAIL, OK, OptionSetFlags};
+use crate::types::{CmdModFlags, FAIL, OK, OptionSetFlags};
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {
@@ -877,7 +878,7 @@ pub unsafe fn readfile(
                 check_cursor_lnum(curwin.get());
                 beginline((BL_WHITE | BL_FIX) as c_int); // on the first non-blank
 
-                if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+                if !cmdmod_has(CmdModFlags::LOCKMARKS) {
                     // Set the '[ and '] marks to the newly read lines.
                     (*curbuf.get()).b_op_start.lnum = from + 1;
                     (*curbuf.get()).b_op_start.col = 0;

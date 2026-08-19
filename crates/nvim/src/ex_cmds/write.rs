@@ -34,12 +34,12 @@ use crate::channel::channel_job_running;
 use crate::cursor::check_cursor_lnum;
 use crate::edit::beginline;
 use crate::ex_cmds2::{autowrite, buf_write_all, check_fname, dialog_changed};
-use crate::ex_docmd::{before_quit_all, dialog_msg, not_exiting};
+use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::main::{
-    cmdmod, curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_isadir2, e_readonly,
-    emsg_silent, exiting, firstbuf, getout, no_wait_return, p_confirm, p_cpo, p_dir, p_wa, p_write,
+    curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_isadir2, e_readonly, emsg_silent,
+    exiting, firstbuf, getout, no_wait_return, p_confirm, p_cpo, p_dir, p_wa, p_write,
     redraw_tabline,
 };
 use crate::mark::setpcmark;
@@ -53,8 +53,8 @@ use crate::path::fix_fname;
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_saveas, CMD_wqall, CMD_xall, CMOD_CONFIRM, CMOD_KEEPALT, MAXPATHL, NUL, OK, OptionSetFlags,
-    buf_T, bufref_T, exarg_T, int32_t, int64_t, linenr_T,
+    CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, MAXPATHL, NUL, OK, OptionSetFlags, buf_T,
+    bufref_T, exarg_T, int32_t, int64_t, linenr_T,
 };
 use crate::undo::{bufIsChanged, curbufIsChanged};
 use crate::window::check_can_set_curbuf_forceit;
@@ -80,7 +80,7 @@ impl Drop for Owned {
 /// Is a `:confirm` dialog wanted here -- either from 'confirm' or from the
 /// command's own modifier?
 fn confirming() -> bool {
-    p_confirm.get() != 0 || cmdmod.with(|mods| mods.cmod_flags) & CMOD_CONFIRM as c_int != 0
+    p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)
 }
 
 /// Put `name` into the one-`%s` message `fmt` and ask the user to confirm it.
@@ -143,7 +143,7 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> c_int {
         (*curbuf.get()).b_flags |= BF_NOTEDITED;
         if !xfname.is_null() && *xfname as c_int != NUL {
             let alt = buflist_new(fname, xfname, (*curwin.get()).w_cursor.lnum, 0);
-            if !alt.is_null() && cmdmod.with(|mods| mods.cmod_flags) & CMOD_KEEPALT as c_int == 0 {
+            if !alt.is_null() && !cmdmod_has(CmdModFlags::KEEPALT) {
                 (*curwin.get()).w_alt_fnum = (*alt).handle as c_int;
             }
         }

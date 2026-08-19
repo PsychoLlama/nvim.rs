@@ -12,10 +12,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdmod_has;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
-use crate::types::{CMOD_LOCKMARKS, FAIL, OK, event_T};
+use crate::types::{CmdModFlags, FAIL, OK, event_T};
 
 use super::*;
 
@@ -181,7 +182,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             || nofile_err
             || aborting()
         {
-            if !buf.is_null() && (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int != 0 {
+            if !buf.is_null() && cmdmod_has(CmdModFlags::LOCKMARKS) {
                 (*buf).b_op_start = orig.start;
                 (*buf).b_op_end = orig.end;
             }

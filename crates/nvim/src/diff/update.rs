@@ -168,8 +168,8 @@ unsafe fn diff_write(
         // Upstream saves the whole `cmod_flags` bit set into a `bool` and
         // restores it from there, so every flag that was set comes back as
         // the single bit 1. Reproduced; see O-B15-17.
-        let save_cmod_flags = (*cmdmod.ptr()).cmod_flags != 0;
-        (*cmdmod.ptr()).cmod_flags |= CMOD_LOCKMARKS as c_int;
+        let save_cmod_flags = !(*cmdmod.ptr()).cmod_flags.is_empty();
+        (*cmdmod.ptr()).cmod_flags |= CmdModFlags::LOCKMARKS;
         if end < start {
             // The range names a completely empty file.
             end = start;
@@ -184,7 +184,7 @@ unsafe fn diff_write(
             ::core::ptr::null_mut(),
             WriteRequest::filter(),
         );
-        (*cmdmod.ptr()).cmod_flags = save_cmod_flags as c_int;
+        (*cmdmod.ptr()).cmod_flags = CmdModFlags::SANDBOX.when(save_cmod_flags);
         free_string_option((*buf).b_p_ff);
         (*buf).b_p_ff = save_ff;
         (*buf).b_ml.ml_flags = (*buf).b_ml.ml_flags & !ML_EMPTY | save_ml_flags & ML_EMPTY;

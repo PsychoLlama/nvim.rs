@@ -17,6 +17,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::types::{FAIL, NUL};
 
 /// `:` for a Visual region, and the `!` filter `=` and `gq` fall back to.
@@ -195,7 +196,7 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
 
         virtual_op.set(save_virtual_op);
         finish_op.set(save_finish_op);
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int != 0 {
+        if cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*curbuf.get()).b_op_start = orig_start;
             (*curbuf.get()).b_op_end = orig_end;
         }

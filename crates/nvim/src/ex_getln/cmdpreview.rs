@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{CMOD_NOSWAPFILE, FAIL, OptionSetFlags, kErrorTypeNone};
+use crate::types::{CmdModFlags, FAIL, OptionSetFlags, kErrorTypeNone};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> handle_T {
@@ -265,7 +265,7 @@ pub(crate) unsafe fn cmdpreview_prepare(cpinfo: *mut CpInfo) {
         // Disable the :leftabove/:botright, :tab and swap-file modifiers.
         (*cmdmod.ptr()).cmod_split = 0;
         (*cmdmod.ptr()).cmod_tab = 0;
-        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE as ::core::ffi::c_int;
+        (*cmdmod.ptr()).cmod_flags |= CmdModFlags::NOSWAPFILE;
 
         u_sync(true);
     }

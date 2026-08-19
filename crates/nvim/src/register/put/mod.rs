@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdmod_has;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -505,7 +506,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
             }
         }
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int != 0 {
+        if cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*curbuf.get()).b_op_start = orig_start;
             (*curbuf.get()).b_op_end = orig_end;
         }

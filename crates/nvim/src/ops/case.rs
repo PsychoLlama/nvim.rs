@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdmod_has;
 use crate::smsg_c;
 use core::ffi::c_int;
 
@@ -100,7 +101,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
             redraw_curbuf_later(UPD_INVERTED);
         }
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*curbuf.get()).b_op_start = (*oap).start;
             (*curbuf.get()).b_op_end = (*oap).end;
         }

@@ -26,10 +26,10 @@ use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::charset::{getdigits_int, skiptowhite_esc, skipwhite};
 use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
-use crate::ex_docmd::ex_errmsg;
+use crate::ex_docmd::{cmdmod_has, ex_errmsg};
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::main::{
-    IObuff, VIsual_active, au_new_curbuf, cmdline_row, cmdmod, curbuf, curwin,
+    IObuff, VIsual_active, au_new_curbuf, cmdline_row, curbuf, curwin,
     e_cannot_switch_to_a_closing_buffer,
     e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, e_nobufnr, e_trailing_arg,
     got_int, jop_flags, lastwin, msg_row, msg_scroll, need_fileinfo, p_confirm, p_report, p_write,
@@ -45,8 +45,8 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    CMD_bNext, CMD_bnext, CMD_bprevious, CMD_sbNext, CMD_sbnext, CMD_sbprevious, CMOD_CONFIRM,
-    FAIL, IOSIZE, NUL, OK, OptInt, OptionSetFlags, bufref_T, cleanup_T, exarg_T, int64_t, linenr_T,
+    CMD_bNext, CMD_bnext, CMD_bprevious, CMD_sbNext, CMD_sbnext, CMD_sbprevious, CmdModFlags, FAIL,
+    IOSIZE, NUL, OK, OptInt, OptionSetFlags, bufref_T, cleanup_T, exarg_T, int64_t, linenr_T,
     size_t, win_T,
 };
 use crate::window::{
@@ -201,7 +201,7 @@ fn jop_clean() -> bool {
     jop_flags.get() & kOptJopFlagClean as c_int as ::core::ffi::c_uint != 0
 }
 fn confirming() -> bool {
-    p_confirm.get() != 0 || cmdmod.with(|m| m.cmod_flags) & CMOD_CONFIRM as c_int != 0
+    p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)
 }
 
 // ---------------------------------------------------------------------------

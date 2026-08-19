@@ -15,12 +15,12 @@ use crate::ex_docmd::scan::skip_cmd_arg;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES,
+    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
     dollar_command, quitmore,
 };
 use crate::main::{
-    arg_had_last, cmdmod, curbuf, curtab, curwin, e_invarg2, e_invargval, e_invrange, e_isadir2,
-    e_mkdir, lastused_tabpage, p_confirm,
+    arg_had_last, curbuf, curtab, curwin, e_invarg2, e_invargval, e_invrange, e_isadir2, e_mkdir,
+    lastused_tabpage, p_confirm,
 };
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
@@ -31,7 +31,7 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 use crate::strings::vim_snprintf;
 use crate::types::regexp::regmatch_T;
 use crate::types::{
-    CMD_tabmove, CMD_tabnext, CMOD_CONFIRM, CompleteListItemGetter, FAIL, FILE, NUL, OK, exarg_T,
+    CMD_tabmove, CMD_tabnext, CmdModFlags, CompleteListItemGetter, FAIL, FILE, NUL, OK, exarg_T,
     expand_T, int32_t, intmax_t, size_t, uint8_t,
 };
 use crate::window::{only_one_window, tabpage_index, valid_tabpage};
@@ -406,7 +406,7 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
         if !message {
             return FAIL;
         }
-        if (p_confirm.get() != 0 || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as c_int != 0)
+        if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM))
             && !(*curbuf.get()).b_fname.is_null()
         {
             let mut buff: [c_char; 1000] = [0; 1000];

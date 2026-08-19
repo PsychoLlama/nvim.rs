@@ -12,13 +12,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdmod_has;
 use crate::path::ExpandFlags;
 use crate::semsg_c;
 use ::libc::{EINVAL, ENOENT};
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{CMOD_NOSWAPFILE, FAIL, MAXPATHL, NUL, OK, VV_SWAPCHOICE, VV_SWAPNAME};
+use crate::types::{CmdModFlags, FAIL, MAXPATHL, NUL, OK, VV_SWAPCHOICE, VV_SWAPNAME};
 
 /// Rename the swap file after the buffer's file name changed.
 ///
@@ -31,7 +32,7 @@ pub unsafe fn ml_setname(buf: *mut buf_T) {
         if (*mfp).mf_fd < 0 {
             // There is no swap file yet: with `'updatecount'` zero and
             // `'noswapfile'` there never was one. Help files get one now.
-            if p_uc.get() != 0 && (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as c_int == 0 {
+            if p_uc.get() != 0 && !cmdmod_has(CmdModFlags::NOSWAPFILE) {
                 ml_open_file(buf);
             }
             return;

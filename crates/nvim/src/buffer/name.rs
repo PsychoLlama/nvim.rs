@@ -17,7 +17,8 @@ use core::ptr;
 use super::*;
 use crate::arglist::check_arg_idx;
 use crate::drawscreen::status_redraw_all;
-use crate::main::{cmdmod, curbuf, e_noalt};
+use crate::ex_docmd::cmdmod_has;
+use crate::main::{curbuf, e_noalt};
 use crate::mark::fmarks_check_names;
 use crate::memline::{ml_setname, ml_timestamp};
 use crate::memory::{xfree, xstrdup};
@@ -25,7 +26,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_fileid, os_fileid_equal};
 use crate::path::{fix_fname, path_fnamecmp};
-use crate::types::{CMOD_KEEPALT, FAIL, FileID, OK, buf_T, linenr_T, win_T};
+use crate::types::{CmdModFlags, FAIL, FileID, OK, buf_T, linenr_T, win_T};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 // ---------------------------------------------------------------------------
@@ -254,7 +255,7 @@ pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: linenr
     // Create a buffer; 'buflisted' is not set if it is a new one.
     // SAFETY: two names to hand over, either of which may be null.
     let buf = unsafe { buflist_new(ffname, sfname, lnum, 0) };
-    if !buf.is_null() && cmdmod.with(|m| m.cmod_flags) & CMOD_KEEPALT as c_int == 0 {
+    if !buf.is_null() && !cmdmod_has(CmdModFlags::KEEPALT) {
         // SAFETY: non-null, hence live.
         current_win().w_alt_fnum = unsafe { Buf::new(buf) }.handle as c_int;
     }

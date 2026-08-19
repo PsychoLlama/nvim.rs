@@ -63,11 +63,10 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, State, VIsual_active, VIsual_mode, c_bytes, cmdmod, curbuf, curwin, e_nobufnr,
-    e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long, got_int, last_cmdline,
-    msg_ext_skip_flush, must_redraw, new_last_cmdline, p_ch, p_cpo, p_report, p_sel,
-    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit,
-    textlock,
+    Columns, State, VIsual_active, VIsual_mode, c_bytes, curbuf, curwin, e_nobufnr, e_noinstext,
+    e_nolastcmd, e_noprevre, e_resulting_text_too_long, got_int, last_cmdline, msg_ext_skip_flush,
+    must_redraw, new_last_cmdline, p_ch, p_cpo, p_report, p_sel, pending_end_reg_executing,
+    redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit, textlock,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
@@ -99,7 +98,7 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::terminal::terminal_paste;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, CMOD_LOCKMARKS, CharsizeArg, ExtmarkOp, GRegFlags, MotionType, NUL,
+    AdditionalData, CharsizeArg, CmdModFlags, ExtmarkOp, GRegFlags, MotionType, NUL,
     PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
     PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VAR_FIXED, bcount_t, block_def,
     cmd_addr_T, colnr_T, exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse,

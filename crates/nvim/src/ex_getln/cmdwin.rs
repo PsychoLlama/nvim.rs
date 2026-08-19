@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::keycodes::Ctrl_C;
-use crate::types::{CMOD_NOSWAPFILE, FAIL, NUL, OK, OptionSetFlags};
+use crate::types::{CmdModFlags, FAIL, NUL, OK, OptionSetFlags};
 
 /// True when the text must not be changed and we cannot switch to another
 /// window or buffer — editing the command line, and the like.
@@ -141,7 +141,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
         // Don't use a new tab page.
         (*cmdmod.ptr()).cmod_tab = 0;
-        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE as ::core::ffi::c_int;
+        (*cmdmod.ptr()).cmod_flags |= CmdModFlags::NOSWAPFILE;
 
         // Create a window for the command-line buffer.
         if win_split(

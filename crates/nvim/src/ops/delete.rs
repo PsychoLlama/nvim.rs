@@ -23,6 +23,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::register::is_append_register;
 use crate::types::NUL;
 use crate::undo::{UndoFailed, saved};
@@ -129,7 +130,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
         // In 'virtualedit' an empty region deletes nothing, but the marks are
         // set as if it had.
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             if (*oap).motion_type == kMTBlockWise {
                 (*curbuf.get()).b_op_end.lnum = (*oap).end.lnum;
                 (*curbuf.get()).b_op_end.col = (*oap).start.col;

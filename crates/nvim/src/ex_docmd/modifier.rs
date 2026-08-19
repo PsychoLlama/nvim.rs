@@ -26,7 +26,7 @@ use crate::ex_docmd::{
     getexline,
 };
 use crate::main::{
-    curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col,
+    cmdmod, curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col,
     msg_scroll, msg_silent, p_ei, p_verbose, sandbox,
 };
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
@@ -40,11 +40,8 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CMOD_BROWSE,
-    CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
-    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
-    CMOD_UNSILENT, FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T,
-    cmdmod_T, exarg_T, size_t,
+    CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CmdModFlags, FAIL, NUL,
+    OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T, cmdmod_T, exarg_T, size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{atoi, memset, strlen};
@@ -191,7 +188,7 @@ pub unsafe fn parse_command_modifiers(
                     if checkforcmd(&raw mut ea.cmd, c"belowright".as_ptr(), 3) {
                         cm.cmod_split |= WSP_BELOW as c_int;
                     } else if checkforcmd(&raw mut ea.cmd, c"browse".as_ptr(), 3) {
-                        cm.cmod_flags |= CMOD_BROWSE as c_int;
+                        cm.cmod_flags |= CmdModFlags::BROWSE;
                     } else if checkforcmd(&raw mut ea.cmd, c"botright".as_ptr(), 2) {
                         cm.cmod_split |= WSP_BOT as c_int;
                     } else {
@@ -202,17 +199,17 @@ pub unsafe fn parse_command_modifiers(
                     if !checkforcmd(&raw mut ea.cmd, c"confirm".as_ptr(), 4) {
                         break;
                     }
-                    cm.cmod_flags |= CMOD_CONFIRM as c_int;
+                    cm.cmod_flags |= CmdModFlags::CONFIRM;
                 }
                 b'k' => {
                     if checkforcmd(&raw mut ea.cmd, c"keepmarks".as_ptr(), 3) {
-                        cm.cmod_flags |= CMOD_KEEPMARKS as c_int;
+                        cm.cmod_flags |= CmdModFlags::KEEPMARKS;
                     } else if checkforcmd(&raw mut ea.cmd, c"keepalt".as_ptr(), 5) {
-                        cm.cmod_flags |= CMOD_KEEPALT as c_int;
+                        cm.cmod_flags |= CmdModFlags::KEEPALT;
                     } else if checkforcmd(&raw mut ea.cmd, c"keeppatterns".as_ptr(), 5) {
-                        cm.cmod_flags |= CMOD_KEEPPATTERNS as c_int;
+                        cm.cmod_flags |= CmdModFlags::KEEPPATTERNS;
                     } else if checkforcmd(&raw mut ea.cmd, c"keepjumps".as_ptr(), 5) {
-                        cm.cmod_flags |= CMOD_KEEPJUMPS as c_int;
+                        cm.cmod_flags |= CmdModFlags::KEEPJUMPS;
                     } else {
                         break;
                     }
@@ -263,14 +260,14 @@ pub unsafe fn parse_command_modifiers(
                         // only a modifier when a command follows it and no
                         // range precedes it.
                         ea.cmd = p;
-                        cm.cmod_flags |= CMOD_HIDE as c_int;
+                        cm.cmod_flags |= CmdModFlags::HIDE;
                     } else {
                         break;
                     }
                 }
                 b'l' => {
                     if checkforcmd(&raw mut ea.cmd, c"lockmarks".as_ptr(), 3) {
-                        cm.cmod_flags |= CMOD_LOCKMARKS as c_int;
+                        cm.cmod_flags |= CmdModFlags::LOCKMARKS;
                     } else if checkforcmd(&raw mut ea.cmd, c"leftabove".as_ptr(), 5) {
                         cm.cmod_split |= WSP_ABOVE as c_int;
                     } else {
@@ -279,9 +276,9 @@ pub unsafe fn parse_command_modifiers(
                 }
                 b'n' => {
                     if checkforcmd(&raw mut ea.cmd, c"noautocmd".as_ptr(), 3) {
-                        cm.cmod_flags |= CMOD_NOAUTOCMD as c_int;
+                        cm.cmod_flags |= CmdModFlags::NOAUTOCMD;
                     } else if checkforcmd(&raw mut ea.cmd, c"noswapfile".as_ptr(), 3) {
-                        cm.cmod_flags |= CMOD_NOSWAPFILE as c_int;
+                        cm.cmod_flags |= CmdModFlags::NOSWAPFILE;
                     } else {
                         break;
                     }
@@ -294,9 +291,9 @@ pub unsafe fn parse_command_modifiers(
                 }
                 b's' => {
                     if checkforcmd(&raw mut ea.cmd, c"sandbox".as_ptr(), 3) {
-                        cm.cmod_flags |= CMOD_SANDBOX as c_int;
+                        cm.cmod_flags |= CmdModFlags::SANDBOX;
                     } else if checkforcmd(&raw mut ea.cmd, c"silent".as_ptr(), 3) {
-                        cm.cmod_flags |= CMOD_SILENT as c_int;
+                        cm.cmod_flags |= CmdModFlags::SILENT;
                         // `:silent!` only means "and silence errors" when
                         // the `!` is stuck to the word: `:silent !cmd` runs
                         // a shell command quietly.
@@ -304,7 +301,7 @@ pub unsafe fn parse_command_modifiers(
                             && !ascii_iswhite(*ea.cmd.offset(-1) as c_int)
                         {
                             ea.cmd = skipwhite(ea.cmd.add(1));
-                            cm.cmod_flags |= CMOD_ERRSILENT as c_int;
+                            cm.cmod_flags |= CmdModFlags::ERRSILENT;
                         }
                     } else {
                         break;
@@ -347,7 +344,7 @@ pub unsafe fn parse_command_modifiers(
                     if !checkforcmd(&raw mut ea.cmd, c"unsilent".as_ptr(), 3) {
                         break;
                     }
-                    cm.cmod_flags |= CMOD_UNSILENT as c_int;
+                    cm.cmod_flags |= CmdModFlags::UNSILENT;
                 }
                 b'v' => {
                     if checkforcmd(&raw mut ea.cmd, c"vertical".as_ptr(), 4) {
@@ -424,13 +421,23 @@ unsafe fn restore_visual_range(
     }
 }
 
+/// Whether the running command carries any of `flags` as a `:` modifier.
+///
+/// The question every caller asked through the raw cell -- `unsafe {
+/// (*cmdmod.ptr()).cmod_flags } & CMOD_LOCKMARKS as c_int != 0` -- for a read
+/// that needs no pointer at all.
+pub fn cmdmod_has(flags: CmdModFlags) -> bool {
+    cmdmod.with(|mods| mods.cmod_flags).has(flags)
+}
+
 /// Put the parsed modifiers in force. Every field this writes is saved
 /// *plus one*, so that zero can mean "not saved" — `undo_cmdmod` relies on
 /// it, and so does the fact that `apply_cmdmod` may run twice.
 pub unsafe fn apply_cmdmod(cmod: *mut cmdmod_T) {
     unsafe {
         let cm = &mut *cmod;
-        if cm.cmod_flags & CMOD_SANDBOX as c_int != 0 && cm.cmod_did_sandbox == 0 {
+        let mods = cm.cmod_flags;
+        if mods.has(CmdModFlags::SANDBOX) && cm.cmod_did_sandbox == 0 {
             *sandbox.ptr() += 1;
             cm.cmod_did_sandbox = 1;
         }
@@ -440,23 +447,21 @@ pub unsafe fn apply_cmdmod(cmod: *mut cmdmod_T) {
             }
             p_verbose.set((cm.cmod_verbose - 1) as OptInt);
         }
-        if cm.cmod_flags & (CMOD_SILENT as c_int | CMOD_UNSILENT as c_int) != 0
-            && cm.cmod_save_msg_silent == 0
-        {
+        if mods.has(CmdModFlags::SILENT | CmdModFlags::UNSILENT) && cm.cmod_save_msg_silent == 0 {
             cm.cmod_save_msg_silent = msg_silent.get() + 1;
             cm.cmod_save_msg_scroll = msg_scroll.get();
         }
-        if cm.cmod_flags & CMOD_SILENT as c_int != 0 {
+        if mods.has(CmdModFlags::SILENT) {
             *msg_silent.ptr() += 1;
         }
-        if cm.cmod_flags & CMOD_UNSILENT as c_int != 0 {
+        if mods.has(CmdModFlags::UNSILENT) {
             msg_silent.set(0);
         }
-        if cm.cmod_flags & CMOD_ERRSILENT as c_int != 0 {
+        if mods.has(CmdModFlags::ERRSILENT) {
             *emsg_silent.ptr() += 1;
             cm.cmod_did_esilent += 1;
         }
-        if cm.cmod_flags & CMOD_NOAUTOCMD as c_int != 0 && cm.cmod_save_ei.is_null() {
+        if mods.has(CmdModFlags::NOAUTOCMD) && cm.cmod_save_ei.is_null() {
             cm.cmod_save_ei = xstrdup(p_ei.get());
             set_option_direct(
                 kOptEventignore,

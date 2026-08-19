@@ -22,10 +22,11 @@ use crate::ex_cmds::{
     BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, ECMD_ADDBUF, ECMD_ALTBUF,
     ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_SET_HELP, buf_autocmd,
 };
+use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};
 use crate::main::{
-    au_new_curbuf, cmdmod, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curwin,
+    au_new_curbuf, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curwin,
     e_cannot_switch_to_a_closing_buffer,
 };
 use crate::memory::{xfree, xstrdup};
@@ -34,7 +35,7 @@ use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::terminal::terminal_running;
-use crate::types::{CMOD_KEEPALT, buf_T, bufref_T, linenr_T, win_T};
+use crate::types::{CmdModFlags, buf_T, bufref_T, linenr_T, win_T};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
 use ::libc::atol;
@@ -75,7 +76,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) == 0 {
         // SAFETY: `curwin`/`curbuf` are live, and `oldwin` was validated.
         unsafe {
-            if cmdmod.with(|mods| mods.cmod_flags) & CMOD_KEEPALT as c_int == 0 {
+            if !cmdmod_has(CmdModFlags::KEEPALT) {
                 (*curwin.get()).w_alt_fnum = (*curbuf.get()).handle;
             }
             if !oldwin.is_null() {

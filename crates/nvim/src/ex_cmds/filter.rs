@@ -24,6 +24,7 @@ use crate::charset::skipwhite;
 use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
 use crate::edit::beginline;
 use crate::ex_cmds2::autowrite_all;
+use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{readfile, vim_tempname, write_lnum_adjust};
 use crate::fold::foldUpdate;
@@ -54,7 +55,7 @@ use crate::pos::MAXLNUM;
 use crate::semsg_c;
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
-use crate::types::{CMOD_KEEPMARKS, CMOD_LOCKMARKS, NUL, OK, OptInt, buf_T, exarg_T, linenr_T};
+use crate::types::{CmdModFlags, NUL, OK, OptInt, buf_T, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{bufIsChanged, u_save};
 use core::ffi::{CStr, c_char, c_int};
@@ -325,7 +326,7 @@ unsafe fn do_filter(
     // Temporarily disable lockmarks since that's needed to propagate changed
     // regions of the buffer for foldUpdate(), linecount, etc.
     let save_cmod_flags = cmdmod.with(|mods| mods.cmod_flags);
-    cmdmod.with_mut(|mods| mods.cmod_flags &= !(CMOD_LOCKMARKS as c_int));
+    cmdmod.with_mut(|mods| mods.cmod_flags = mods.cmod_flags.without(CmdModFlags::LOCKMARKS));
 
     let mut linecount = line2 - line1 + 1;
     // SAFETY: `curwin` is the live current window and `line1` a line of it.
@@ -517,7 +518,7 @@ unsafe fn do_filter(
             }
 
             if do_in {
-                if cmdmod.with(|mods| mods.cmod_flags) & CMOD_KEEPMARKS as c_int != 0
+                if cmdmod_has(CmdModFlags::KEEPMARKS)
                     // SAFETY: 'cpoptions' is a live option string.
                     || unsafe { vim_strchr(p_cpo.get(), CPO_REMMARK) }.is_null()
                 {
@@ -608,7 +609,7 @@ unsafe fn do_filter(
                 c"E135: *Filter* Autocommands must not change current buffer".as_ptr(),
             ));
         }
-    } else if cmdmod.with(|mods| mods.cmod_flags) & CMOD_LOCKMARKS as c_int != 0 {
+    } else if cmdmod_has(CmdModFlags::LOCKMARKS) {
         // SAFETY: `curbuf` is live and the marks came from it.
         unsafe {
             (*curbuf.get()).b_op_start = orig_start;

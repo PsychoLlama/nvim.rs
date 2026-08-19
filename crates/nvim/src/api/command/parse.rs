@@ -147,7 +147,7 @@ unsafe fn parse_mods(cmdmod: &cmdmod_T, arena: *mut Arena) -> Dict {
         ],
     );
 
-    let flag = |mask: uint32_t| Object::boolean(cmdmod.cmod_flags & mask as c_int != 0);
+    let flag = |mask: CmdModFlags| Object::boolean(cmdmod.cmod_flags.has(mask));
     let split_flag = |mask: c_int| Object::boolean(cmdmod.cmod_split & mask != 0);
     // The four placements are mutually exclusive; no modifier is "".
     let split: &CStr = if cmdmod.cmod_split & WSP_BOT as c_int != 0 {
@@ -166,11 +166,11 @@ unsafe fn parse_mods(cmdmod: &cmdmod_T, arena: *mut Arena) -> Dict {
         arena,
         [
             (c"filter", Object::dict(filter)),
-            (c"silent", flag(CMOD_SILENT)),
-            (c"emsg_silent", flag(CMOD_ERRSILENT)),
-            (c"unsilent", flag(CMOD_UNSILENT)),
-            (c"sandbox", flag(CMOD_SANDBOX)),
-            (c"noautocmd", flag(CMOD_NOAUTOCMD)),
+            (c"silent", flag(CmdModFlags::SILENT)),
+            (c"emsg_silent", flag(CmdModFlags::ERRSILENT)),
+            (c"unsilent", flag(CmdModFlags::UNSILENT)),
+            (c"sandbox", flag(CmdModFlags::SANDBOX)),
+            (c"noautocmd", flag(CmdModFlags::NOAUTOCMD)),
             // Both counts are stored one higher than they read, so that zero
             // means "not given".
             (c"tab", Object::integer((cmdmod.cmod_tab - 1) as Integer)),
@@ -178,15 +178,15 @@ unsafe fn parse_mods(cmdmod: &cmdmod_T, arena: *mut Arena) -> Dict {
                 c"verbose",
                 Object::integer((cmdmod.cmod_verbose - 1) as Integer),
             ),
-            (c"browse", flag(CMOD_BROWSE)),
-            (c"confirm", flag(CMOD_CONFIRM)),
-            (c"hide", flag(CMOD_HIDE)),
-            (c"keepalt", flag(CMOD_KEEPALT)),
-            (c"keepjumps", flag(CMOD_KEEPJUMPS)),
-            (c"keepmarks", flag(CMOD_KEEPMARKS)),
-            (c"keeppatterns", flag(CMOD_KEEPPATTERNS)),
-            (c"lockmarks", flag(CMOD_LOCKMARKS)),
-            (c"noswapfile", flag(CMOD_NOSWAPFILE)),
+            (c"browse", flag(CmdModFlags::BROWSE)),
+            (c"confirm", flag(CmdModFlags::CONFIRM)),
+            (c"hide", flag(CmdModFlags::HIDE)),
+            (c"keepalt", flag(CmdModFlags::KEEPALT)),
+            (c"keepjumps", flag(CmdModFlags::KEEPJUMPS)),
+            (c"keepmarks", flag(CmdModFlags::KEEPMARKS)),
+            (c"keeppatterns", flag(CmdModFlags::KEEPPATTERNS)),
+            (c"lockmarks", flag(CmdModFlags::LOCKMARKS)),
+            (c"noswapfile", flag(CmdModFlags::NOSWAPFILE)),
             (c"vertical", split_flag(WSP_VERT as c_int)),
             (c"horizontal", split_flag(WSP_HOR as c_int)),
             (c"split", Object::string(static_cstring(split))),

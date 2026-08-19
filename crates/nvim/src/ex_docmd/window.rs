@@ -19,7 +19,6 @@ use crate::buffer::{bt_quickfix, buf_spname};
 use crate::charset::{getdigits, getdigits_int, skipwhite};
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
 use crate::ex_cmds::prepare_tagpreview;
-use crate::ex_docmd::FNAME_MESS;
 use crate::ex_docmd::argopt::get_tabpage_arg;
 use crate::ex_docmd::display::ex_redraw;
 use crate::ex_docmd::file::{do_exbuffer, do_exedit};
@@ -28,6 +27,7 @@ use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::scan::check_nextcmd;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::tags::ex_findpat;
+use crate::ex_docmd::{FNAME_MESS, cmdmod_has};
 use crate::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
@@ -47,7 +47,7 @@ use crate::popupmenu::pum_make_popup;
 use crate::strings::vim_snprintf;
 use crate::types::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
-    CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
+    CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CmdModFlags,
     FAIL, IOSIZE, NUL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::undo::bufIsChanged;
@@ -323,7 +323,7 @@ fn open_tabpage(ea: Ex, old_curwin: *mut win_T) {
     if curwin.get() != old_curwin
         && let Some(mut old) = valid_win(old_curwin)
         && old.w_buffer != curbuf.get()
-        && cmdmod.with(|m| m.cmod_flags) & CMOD_KEEPALT as c_int == 0
+        && !cmdmod_has(CmdModFlags::KEEPALT)
     {
         old.w_alt_fnum = cur_buf().handle as c_int;
     }

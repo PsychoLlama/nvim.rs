@@ -25,10 +25,8 @@ use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
-    CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
-    CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE,
-    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, OptInt, exarg_T, handle_T, linenr_T, lua_Integer,
-    scid_T, sctx_T, size_t, ucmd_T, uint32_t,
+    CmdModFlags, OptInt, exarg_T, handle_T, linenr_T, lua_Integer, scid_T, sctx_T, size_t, ucmd_T,
+    uint32_t,
 };
 use crate::usercmd::{EX_EXTRA, EX_NEEDARG, EX_NOSPC, uc_mods, uc_split_args_iter};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
@@ -38,16 +36,16 @@ use ::libc::strlen;
 const MODS_BUFSIZE: usize = 200;
 
 /// The `smods` flags that are just a bit and a name.
-const MOD_FLAGS: [(c_int, &CStr); 9] = [
-    (CMOD_BROWSE as c_int, c"browse"),
-    (CMOD_CONFIRM as c_int, c"confirm"),
-    (CMOD_HIDE as c_int, c"hide"),
-    (CMOD_KEEPALT as c_int, c"keepalt"),
-    (CMOD_KEEPJUMPS as c_int, c"keepjumps"),
-    (CMOD_KEEPMARKS as c_int, c"keepmarks"),
-    (CMOD_KEEPPATTERNS as c_int, c"keeppatterns"),
-    (CMOD_LOCKMARKS as c_int, c"lockmarks"),
-    (CMOD_NOSWAPFILE as c_int, c"noswapfile"),
+const MOD_FLAGS: [(CmdModFlags, &CStr); 9] = [
+    (CmdModFlags::BROWSE, c"browse"),
+    (CmdModFlags::CONFIRM, c"confirm"),
+    (CmdModFlags::HIDE, c"hide"),
+    (CmdModFlags::KEEPALT, c"keepalt"),
+    (CmdModFlags::KEEPJUMPS, c"keepjumps"),
+    (CmdModFlags::KEEPMARKS, c"keepmarks"),
+    (CmdModFlags::KEEPPATTERNS, c"keeppatterns"),
+    (CmdModFlags::LOCKMARKS, c"lockmarks"),
+    (CmdModFlags::NOSWAPFILE, c"noswapfile"),
 ];
 
 /// Point `current` at the Lua source position the running function was
@@ -230,18 +228,18 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
         set(c"horizontal");
 
         let flags = (*cmod).cmod_flags;
-        lua_pushboolean(lstate, flags & CMOD_SILENT as c_int);
+        lua_pushboolean(lstate, flags.has(CmdModFlags::SILENT) as c_int);
         set(c"silent");
-        lua_pushboolean(lstate, flags & CMOD_ERRSILENT as c_int);
+        lua_pushboolean(lstate, flags.has(CmdModFlags::ERRSILENT) as c_int);
         set(c"emsg_silent");
-        lua_pushboolean(lstate, flags & CMOD_UNSILENT as c_int);
+        lua_pushboolean(lstate, flags.has(CmdModFlags::UNSILENT) as c_int);
         set(c"unsilent");
-        lua_pushboolean(lstate, flags & CMOD_SANDBOX as c_int);
+        lua_pushboolean(lstate, flags.has(CmdModFlags::SANDBOX) as c_int);
         set(c"sandbox");
-        lua_pushboolean(lstate, flags & CMOD_NOAUTOCMD as c_int);
+        lua_pushboolean(lstate, flags.has(CmdModFlags::NOAUTOCMD) as c_int);
         set(c"noautocmd");
         for (flag, name) in MOD_FLAGS {
-            lua_pushboolean(lstate, flags & flag);
+            lua_pushboolean(lstate, flags.has(flag) as c_int);
             set(name);
         }
         set(c"smods");

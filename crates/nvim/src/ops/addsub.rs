@@ -25,6 +25,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdmod_has;
 use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -157,7 +158,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
             // Nothing changed, so the selection has to come off the screen.
             redraw_curbuf_later(UPD_INVERTED);
         }
-        if change_cnt > 0 && (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if change_cnt > 0 && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*curbuf.get()).b_op_start = startpos;
         }
         if change_cnt > p_report.get() as ssize_t {
@@ -294,7 +295,7 @@ pub unsafe fn do_addsub(
                 };
                 did_change = true;
 
-                if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+                if !cmdmod_has(CmdModFlags::LOCKMARKS) {
                     (*curbuf.get()).b_op_start = startpos;
                     (*curbuf.get()).b_op_end = endpos;
                     if (*curbuf.get()).b_op_end.col > 0 {

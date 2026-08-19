@@ -21,15 +21,15 @@ use crate::autocmd::{EVENT_BUFENTER, EVENT_TABENTER, EVENT_WINENTER};
 use crate::buffer::{BufRef, bt_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_cmds2::{can_abandon, dialog_changed};
+use crate::ex_docmd::cmdmod_has;
 use crate::keycodes::Ctrl_C;
 use crate::main::{
-    RedrawingDisabled, State, autocmd_busy, clear_cmdline, cmdmod, cmdwin_old_curwin,
-    cmdwin_result, cmdwin_type, cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_floatonly,
-    firstbuf, firstwin, lastwin, mode_displayed, p_confirm, p_write, restart_edit,
-    stop_insert_mode,
+    RedrawingDisabled, State, autocmd_busy, clear_cmdline, cmdwin_old_curwin, cmdwin_result,
+    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_floatonly, firstbuf, firstwin,
+    lastwin, mode_displayed, p_confirm, p_write, restart_edit, stop_insert_mode,
 };
 use crate::state::MODE_INSERT;
-use crate::types::{CMD_SIZE, CMOD_CONFIRM, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
+use crate::types::{CMD_SIZE, CmdModFlags, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
 use crate::winlayer::tabs;
 
 pub unsafe fn entering_window(win: *mut win_T) {
@@ -414,8 +414,7 @@ fn close_all_others(message: bool, forceit: bool) {
                 break 'skip;
             }
             if !r {
-                let confirm = p_confirm.get() != 0
-                    || cmdmod.with(|m| m.cmod_flags) & CMOD_CONFIRM as c_int != 0;
+                let confirm = p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM);
                 if message && confirm && p_write.get() != 0 {
                     ask_about_changes(wp.buffer());
                     if valid_win(wp.raw()).is_none() {

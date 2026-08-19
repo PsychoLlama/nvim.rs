@@ -20,6 +20,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::types::{FAIL, NUL, OK};
 
 /// Where the text of a line starts once its comment leader is skipped, and
@@ -191,7 +192,7 @@ unsafe fn measure_join(
             plan.curr_start = ml_get((*curwin.get()).w_cursor.lnum + t);
             plan.curr = plan.curr_start;
 
-            if t == 0 && setmark && (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+            if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
                 (*(*curwin.get()).w_buffer).b_op_start.lnum = (*curwin.get()).w_cursor.lnum;
                 (*(*curwin.get()).w_buffer).b_op_start.col = strlen(plan.curr) as colnr_T;
             }
@@ -363,7 +364,7 @@ unsafe fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: 
 
         ml_replace_len((*curwin.get()).w_cursor.lnum, newp, newp_len, false);
 
-        if setmark && (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*(*curwin.get()).w_buffer).b_op_end.lnum = (*curwin.get()).w_cursor.lnum;
             (*(*curwin.get()).w_buffer).b_op_end.col = plan.sumsize;
         }

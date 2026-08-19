@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdmod_has;
 use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -296,7 +297,7 @@ pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankre
             }
         }
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*curbuf.get()).b_op_start = (*oap).start;
             (*curbuf.get()).b_op_end = (*oap).end;
             if yank_type == kMTLineWise {

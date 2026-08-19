@@ -303,41 +303,62 @@ fn bitfield_invocations(ast: &syn::File) -> HashMap<String, BitfieldAccessors> {
     out
 }
 
-/// The type names declared by `crate::flag_set!` invocations in this file.
+/// One parsed `crate::flag_set!` invocation: a C flag family declared as a
+/// `#[repr(transparent)]` newtype over `c_int` with its members as associated
+/// constants (src/flags.rs).
 ///
-/// The macro expands to a `#[repr(transparent)]` newtype over `c_int`, so on
-/// the C side the family *is* an `int`: a by-value parameter of the newtype
-/// and a by-value `int` have the same ABI, and the members the specs would
-/// name are plain integers. Without this, ffigen sees only a macro call, the
-/// name reaches the emitter undefined, and it goes out as an incomplete
-/// `typedef struct X X;` that no declaration can take by value.
-fn flag_set_invocations(ast: &syn::File) -> Vec<String> {
+/// ffigen parses with `syn` and does not expand macros, so without this the
+/// family's name reaches the emitter undefined and goes out as an incomplete
+/// `typedef struct X X;` that no declaration can take by value. On the C side
+/// the family *is* an `int` -- a by-value newtype and a by-value `int` have
+/// the same ABI -- so it emits as an alias, and the members, which are no
+/// longer free `const` items for the const pass to find, emit as
+/// `<Type>_<MEMBER>`.
+///
+/// Grammar, mirroring the macro's own:
+///
+///   <attrs> <vis> struct <Name>; ( <attrs> const <MEMBER> = <expr>; )+
+struct FlagSet {
+    name: String,
+    members: Vec<(String, syn::Expr)>,
+}
+
+impl syn::parse::Parse for FlagSet {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.call(syn::Attribute::parse_outer)?;
+        let _vis: syn::Visibility = input.parse()?;
+        input.parse::<syn::Token![struct]>()?;
+        let name: syn::Ident = input.parse()?;
+        input.parse::<syn::Token![;]>()?;
+        let mut members = Vec::new();
+        while !input.is_empty() {
+            input.call(syn::Attribute::parse_outer)?;
+            input.parse::<syn::Token![const]>()?;
+            let member: syn::Ident = input.parse()?;
+            input.parse::<syn::Token![=]>()?;
+            let value: syn::Expr = input.parse()?;
+            input.parse::<syn::Token![;]>()?;
+            members.push((member.to_string(), value));
+        }
+        Ok(FlagSet {
+            name: name.to_string(),
+            members,
+        })
+    }
+}
+
+fn flag_set_invocations(ast: &syn::File) -> Vec<FlagSet> {
     let mut out = Vec::new();
     for item in &ast.items {
         let syn::Item::Macro(m) = item else { continue };
-        if !m
-            .mac
+        if m.mac
             .path
             .segments
             .last()
             .is_some_and(|s| s.ident == "flag_set")
         {
-            continue;
+            out.push(syn::parse2(m.mac.tokens.clone()).expect("parse flag_set! invocation"));
         }
-        // `… pub struct Name; const MEMBER = …;` — the ident after the one
-        // `struct` keyword in the invocation is the family's type.
-        let mut toks = m.mac.tokens.clone().into_iter();
-        let name = loop {
-            match toks.next() {
-                Some(proc_macro2::TokenTree::Ident(id)) if id == "struct" => match toks.next() {
-                    Some(proc_macro2::TokenTree::Ident(id)) => break id.to_string(),
-                    _ => panic!("flag_set!: `struct` is not followed by a name"),
-                },
-                Some(_) => {}
-                None => panic!("flag_set!: invocation declares no `struct`"),
-            }
-        };
-        out.push(name);
     }
     out
 }
@@ -417,9 +438,19 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
             .insert((rel.to_string(), name.clone()), def.clone());
         world.by_name.entry(name).or_default().push(def);
     };
-    for name in flag_set_invocations(&ast) {
+    for fam in flag_set_invocations(&ast) {
+        for (member, expr) in &fam.members {
+            world
+                .consts
+                .entry(format!("{}_{}", fam.name, member))
+                .or_default()
+                .push(Konst {
+                    file: rel.to_string(),
+                    expr: expr.clone(),
+                });
+        }
         let int: syn::Type = syn::parse_quote!(::core::ffi::c_int);
-        add(world, name, Kind::Alias(Box::new(int)), None);
+        add(world, fam.name, Kind::Alias(Box::new(int)), None);
     }
     for item in ast.items {
         match item {

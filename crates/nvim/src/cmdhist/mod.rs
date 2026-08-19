@@ -23,9 +23,10 @@ pub use ring::{HistEntry, Ring};
 use crate::charset::vim_strsize;
 use crate::eval::typval::{tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_get_string_chk};
 use crate::ex_cmds::check_secure;
+use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, IObuff, cmdmod, got_int, maptick, p_hi};
+use crate::main::{Columns, IObuff, got_int, maptick, p_hi};
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
@@ -36,9 +37,9 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
-    AdditionalData, CMOD_KEEPPATTERNS, EvalFuncData, FAIL, HistoryType, IOSIZE, OK, OptInt,
-    Timestamp, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t,
-    typval_T, varnumber_T,
+    AdditionalData, CmdModFlags, EvalFuncData, FAIL, HistoryType, IOSIZE, OK, OptInt, Timestamp,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T,
+    varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -198,7 +199,7 @@ pub fn add_to_history(histype: c_int, new_entry: &[u8], in_map: bool, sep: u8) {
         return;
     }
     debug_assert!(histype != HIST_DEFAULT);
-    if cmdmod.with(|m| m.cmod_flags & CMOD_KEEPPATTERNS as c_int != 0) && histype == HIST_SEARCH {
+    if cmdmod_has(CmdModFlags::KEEPPATTERNS) && histype == HIST_SEARCH {
         return;
     }
     let now = os_time();

@@ -21,6 +21,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::eval::typval::{tv_dict_add_nr, tv_dict_add_str_len, tv_list_append_allocated_string};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::event::libuv::{uv_strerror, uv_uptime};
+use crate::ex_docmd::cmdmod_has;
 use crate::fileio::{
     buf_store_file_info, modname, read_eintr, readfile, vim_deltempdir, vim_rename, vim_tempname,
 };
@@ -28,10 +29,10 @@ use crate::getchar::flush_buffers;
 use crate::global_cell::GlobalCell;
 use crate::input::prompt_for_input;
 use crate::main::{
-    NameBuff, allbuf_lock, cmdline_row, cmdmod, curbuf, curwin, did_check_timestamps, firstbuf,
-    getout, got_int, inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent,
-    need_check_timestamps, need_wait_return, no_lines_msg, no_wait_return, p_dir, p_shm, p_uc,
-    p_verbose, recoverymode, swap_exists_action,
+    NameBuff, allbuf_lock, cmdline_row, curbuf, curwin, did_check_timestamps, firstbuf, getout,
+    got_int, inhibit_delete_count, msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps,
+    need_wait_return, no_lines_msg, no_wait_return, p_dir, p_shm, p_uc, p_verbose, recoverymode,
+    swap_exists_action,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -70,10 +71,10 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{kv_do_printf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMOD_NOSWAPFILE, FAIL, FileInfo, NUL, OK, OptVal, OptValData, OptValType, String_0,
-    StringBuilder, Timestamp, bhdr_T, blocknr_T, buf_T, chunksize_T, colnr_T, dict_T,
-    file_comparison, flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T,
-    off_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
+    CmdModFlags, FAIL, FileInfo, NUL, OK, OptVal, OptValData, OptValType, String_0, StringBuilder,
+    Timestamp, bhdr_T, blocknr_T, buf_T, chunksize_T, colnr_T, dict_T, file_comparison,
+    flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T,
+    size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::bufIsChanged;
@@ -268,7 +269,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
         (*buf).b_ml.ml_chunksize = ::core::ptr::null_mut();
         (*buf).b_ml.ml_usedchunks = 0;
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
+        if cmdmod_has(CmdModFlags::NOSWAPFILE) {
             (*buf).b_p_swf = false_0;
         }
         // A swap file may still be opened later, when 'updatecount' is set.
@@ -415,7 +416,7 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
         if mfp.is_null()
             || (*mfp).mf_fd >= 0
             || (*buf).b_p_swf == 0
-            || (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0
+            || cmdmod_has(CmdModFlags::NOSWAPFILE)
             || !(*buf).terminal.is_null()
         {
             return; // nothing to do

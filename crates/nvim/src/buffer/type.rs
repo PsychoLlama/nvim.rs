@@ -23,13 +23,15 @@ use core::ptr;
 use super::*;
 use crate::autocmd::{EVENT_BUFADD, EVENT_BUFDELETE, apply_autocmds};
 use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_notify};
-use crate::main::{cmdmod, cmdwin_buf, curbuf, msg_loclist, msg_qflist, p_hid};
+use crate::ex_docmd::cmdmod_has;
+use crate::main::{cmdwin_buf, curbuf, msg_loclist, msg_qflist, p_hid};
 use crate::memline::ml_get_buf;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
-    CMOD_HIDE, VAR_FIXED, VAR_NUMBER, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T, varnumber_T,
+    CmdModFlags, VAR_FIXED, VAR_NUMBER, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T,
+    varnumber_T,
 };
 use crate::winlayer::Buf;
 
@@ -195,7 +197,7 @@ pub unsafe fn buf_hide(buf: *const buf_T) -> bool {
         b'h' => return true,                // "hide"
         _ => {}
     }
-    p_hid.get() != 0 || cmdmod.with(|m| m.cmod_flags) & CMOD_HIDE as c_int != 0
+    p_hid.get() != 0 || cmdmod_has(CmdModFlags::HIDE)
 }
 
 // ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
+use crate::ex_docmd::cmdmod_has;
 use crate::types::{FAIL, IOSIZE, NUL};
 
 /// `<` and `>` over the operator's region.
@@ -104,7 +105,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
             msg_keep(IObuff.ptr() as *mut c_char, 0, true, false);
         }
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             (*curbuf.get()).b_op_start = (*oap).start;
             (*curbuf.get()).b_op_end.lnum = (*oap).end.lnum;
             (*curbuf.get()).b_op_end.col = ml_get_len((*oap).end.lnum);

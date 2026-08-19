@@ -37,11 +37,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
-use crate::types::{
-    CMD_USER, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
-    CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE,
-    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
-};
+use crate::types::{CMD_USER, CmdModFlags, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{strcat, strlen};
 use core::ffi::{CStr, c_char, c_int};
@@ -376,19 +372,19 @@ pub unsafe fn add_win_cmd_modifiers(
 /// As [`add_cmd_modifier`]; `cmod` must be live.
 pub unsafe fn uc_mods(buf: *mut c_char, cmod: *const cmdmod_T, quote: bool) -> size_t {
     /// The modifiers that are nothing but a flag.
-    static MOD_ENTRIES: [(c_int, &CStr); 12] = [
-        (CMOD_BROWSE as c_int, c"browse"),
-        (CMOD_CONFIRM as c_int, c"confirm"),
-        (CMOD_HIDE as c_int, c"hide"),
-        (CMOD_KEEPALT as c_int, c"keepalt"),
-        (CMOD_KEEPJUMPS as c_int, c"keepjumps"),
-        (CMOD_KEEPMARKS as c_int, c"keepmarks"),
-        (CMOD_KEEPPATTERNS as c_int, c"keeppatterns"),
-        (CMOD_LOCKMARKS as c_int, c"lockmarks"),
-        (CMOD_NOSWAPFILE as c_int, c"noswapfile"),
-        (CMOD_UNSILENT as c_int, c"unsilent"),
-        (CMOD_NOAUTOCMD as c_int, c"noautocmd"),
-        (CMOD_SANDBOX as c_int, c"sandbox"),
+    static MOD_ENTRIES: [(CmdModFlags, &CStr); 12] = [
+        (CmdModFlags::BROWSE, c"browse"),
+        (CmdModFlags::CONFIRM, c"confirm"),
+        (CmdModFlags::HIDE, c"hide"),
+        (CmdModFlags::KEEPALT, c"keepalt"),
+        (CmdModFlags::KEEPJUMPS, c"keepjumps"),
+        (CmdModFlags::KEEPMARKS, c"keepmarks"),
+        (CmdModFlags::KEEPPATTERNS, c"keeppatterns"),
+        (CmdModFlags::LOCKMARKS, c"lockmarks"),
+        (CmdModFlags::NOSWAPFILE, c"noswapfile"),
+        (CmdModFlags::UNSILENT, c"unsilent"),
+        (CmdModFlags::NOAUTOCMD, c"noautocmd"),
+        (CmdModFlags::SANDBOX, c"sandbox"),
     ];
     // SAFETY: caller contract.
     let flags = unsafe { (*cmod).cmod_flags };
@@ -416,13 +412,13 @@ pub unsafe fn uc_mods(buf: *mut c_char, cmod: *const cmdmod_T, quote: bool) -> s
     };
 
     for &(flag, name) in &MOD_ENTRIES {
-        if flags & flag != 0 {
+        if flags.has(flag) {
             // SAFETY: caller contract.
             result += unsafe { add_cmd_modifier(body, name.as_ptr(), &mut multi_mods) };
         }
     }
-    if flags & CMOD_SILENT as c_int != 0 {
-        let name = if flags & CMOD_ERRSILENT as c_int != 0 {
+    if flags.has(CmdModFlags::SILENT) {
+        let name = if flags.has(CmdModFlags::ERRSILENT) {
             c"silent!"
         } else {
             c"silent"

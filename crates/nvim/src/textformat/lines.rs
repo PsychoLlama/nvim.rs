@@ -20,14 +20,14 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::{beginline, insertchar};
 use crate::eval::eval_to_number;
 use crate::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
+use crate::ex_docmd::cmdmod_has;
 use crate::getchar::beep_flush;
 use crate::indent::{
     get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent, get_number_indent, set_indent,
 };
 use crate::indent_c::{cindent_on, get_c_indent};
 use crate::main::{
-    State, cmdmod, curbuf, current_sctx, curtab, curwin, firstwin, got_int, p_smd, sandbox,
-    saved_cursor,
+    State, curbuf, current_sctx, curtab, curwin, firstwin, got_int, p_smd, sandbox, saved_cursor,
 };
 use crate::mark::mark_col_adjust;
 use crate::memline::ml_get;
@@ -42,7 +42,7 @@ use crate::pos::MAXCOL;
 use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
-    CMOD_LOCKMARKS, FAIL, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
+    CmdModFlags, FAIL, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
     OptionSetFlags, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t,
     varnumber_T,
 };
@@ -71,7 +71,7 @@ pub unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
             // When nothing changes, the Visual selection still has to go.
             redraw_curbuf_later(UPD_INVERTED);
         }
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // The `'[` mark goes at the start of the formatted area.
             (*curbuf.get()).b_op_start = (*oap).start;
         }
@@ -92,7 +92,7 @@ pub unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
         old_line_count = (*curbuf.get()).b_ml.ml_line_count - old_line_count;
         msgmore(old_line_count as c_int);
 
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // The `']` mark goes at the end of it.
             (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
         }
