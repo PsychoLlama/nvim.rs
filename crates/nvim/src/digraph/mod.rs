@@ -36,7 +36,7 @@ use crate::message::{msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar};
 use crate::normal::add_to_showcmd;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
-use crate::runtime::{getsourceline, source_runtime};
+use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
     BoolVarValue, EvalFuncData, FAIL, NUL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
@@ -719,7 +719,7 @@ fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
     name.extend_from_slice(b".vim\0");
     // SAFETY: `name` is NUL-terminated and outlives the call, which only
     // reads it.
-    unsafe { source_runtime(name.as_mut_ptr() as *mut c_char, 0) != FAIL }
+    unsafe { source_runtime(name.as_mut_ptr() as *mut c_char, RuntimeOpts::NONE) != FAIL }
 }
 
 /// `:loadkeymap` — read language mappings from the file being sourced.

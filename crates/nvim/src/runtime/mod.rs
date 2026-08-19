@@ -162,16 +162,33 @@ pub const kRetObject: LuaRetMode = 0;
 /// `do_source`'s `is_vimrc`: whether the file being sourced is the vimrc.
 pub const DOSO_VIMRC: ::core::ffi::c_int = 1;
 pub const DOSO_NONE: ::core::ffi::c_int = 0;
-pub const DIP_DIRFILE: ::core::ffi::c_uint = 512;
-/// `do_in_path` flags: which runtime directories to visit and what to match.
-pub const DIP_AFTER: ::core::ffi::c_uint = 128;
-pub const DIP_NOAFTER: ::core::ffi::c_uint = 64;
-pub const DIP_NORTP: ::core::ffi::c_uint = 32;
-pub const DIP_OPT: ::core::ffi::c_uint = 16;
-pub const DIP_START: ::core::ffi::c_uint = 8;
-pub const DIP_ERR: ::core::ffi::c_uint = 4;
-pub const DIP_DIR: ::core::ffi::c_uint = 2;
-pub const DIP_ALL: ::core::ffi::c_uint = 1;
+crate::flag_set! {
+    /// How a runtime-file search should behave -- upstream's `DIP_*`, the
+    /// `flags` argument [`do_in_path`] and everything under it thread:
+    /// which directories to visit, what to match there, and what a miss
+    /// means.
+    pub struct RuntimeOpts;
+
+    /// Visit every match rather than stopping at the first.
+    const ALL = 1;
+    /// Look for directories, not files.
+    const DIR = 2;
+    /// Finding nothing is an error the user hears about.
+    const ERR = 4;
+    /// Also search `{packpath}/pack/*/start/*`.
+    const START = 8;
+    /// Also search `{packpath}/pack/*/opt/*`.
+    const OPT = 16;
+    /// Do not search `'runtimepath'` itself -- only the package trees
+    /// [`Self::START`] and [`Self::OPT`] name.
+    const NORTP = 32;
+    /// Visit only the entries that are *not* under an `after/` directory.
+    const NOAFTER = 64;
+    /// Visit only the entries that *are* under an `after/` directory.
+    const AFTER = 128;
+    /// Look for both directories and files.
+    const DIRFILE = 512;
+}
 #[derive(Copy, Clone)]
 pub struct source_cookie_T {
     pub fp: *mut FILE,
@@ -355,7 +372,7 @@ static runtime_search_path_thread: SharedCell<RuntimeSearchPath> =
         items: ::core::ptr::null_mut::<SearchPathItem>(),
     });
 static runtime_search_path_mutex: SharedCell<uv_mutex_t> = SharedCell::new(UV_MUTEX_INIT);
-static runtime_expand_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static runtime_expand_flags: GlobalCell<RuntimeOpts> = GlobalCell::new(RuntimeOpts::NONE);
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

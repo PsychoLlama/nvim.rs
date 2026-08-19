@@ -94,12 +94,7 @@ pub unsafe fn nvim_get_runtime_file(
             ) as size_t;
         cookie.rv.size = 0 as size_t;
         cookie.rv.items = &raw mut cookie.rv.init_array as *mut Object;
-        let mut flags: ::core::ffi::c_int = DIP_DIRFILE as ::core::ffi::c_int
-            | (if all as ::core::ffi::c_int != 0 {
-                DIP_ALL as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            });
+        let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all as ::core::ffi::c_int != 0);
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
             private_msg_list: ::core::ptr::null_mut::<msglist_T>(),

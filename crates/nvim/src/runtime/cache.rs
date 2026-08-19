@@ -141,7 +141,7 @@ pub(crate) unsafe fn runtime_search_path_unref(path: RuntimeSearchPath, ref_0: *
 /// Find the file `name` in the cached search path and invoke `callback` for
 /// each match.  `name` may contain wildcards.
 ///
-/// `DIP_ALL` visits every match, `DIP_DIR` looks for directories, `DIP_ERR`
+/// `RuntimeOpts::ALL` visits every match, `RuntimeOpts::DIR` looks for directories, `RuntimeOpts::ERR`
 /// turns "nothing found" into an error message.  Answers OK when something
 /// was found.
 ///
@@ -149,7 +149,7 @@ pub(crate) unsafe fn runtime_search_path_unref(path: RuntimeSearchPath, ref_0: *
 /// `name` may be null; `callback` must accept `cookie`.
 pub(crate) unsafe fn do_in_cached_path(
     name: *mut c_char,
-    flags: c_int,
+    flags: RuntimeOpts,
     callback: DoInRuntimepathCB,
     cookie: *mut c_void,
 ) -> c_int {
@@ -171,7 +171,7 @@ pub(crate) unsafe fn do_in_cached_path(
     let mut ref_0: c_int = 0;
     // SAFETY: `ref_0` is this frame's borrow token, released below.
     let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };
-    let do_all = flags & DIP_ALL as c_int != 0;
+    let do_all = flags.has(RuntimeOpts::ALL);
     let ew_flags = wildcard_flags(flags) | ExpandFlags::NOBREAK;
     let mut did_one = false;
 
@@ -215,7 +215,7 @@ pub(crate) unsafe fn do_in_cached_path(
     if !did_one && !name.is_null() {
         // SAFETY: `name` is the caller's NUL-terminated pattern.
         unsafe {
-            if flags & DIP_ERR as c_int != 0 {
+            if flags.has(RuntimeOpts::ERR) {
                 semsg_c!(
                     gettext(&raw const e_dirnotf as *const c_char),
                     c"runtime path".as_ptr(),

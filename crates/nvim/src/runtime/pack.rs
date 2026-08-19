@@ -619,7 +619,7 @@ pub unsafe fn add_pack_start_dirs() {
             p_pp.get(),
             c"".as_ptr(),
             ptr::null_mut(),
-            DIP_ALL as c_int + DIP_DIR as c_int,
+            RuntimeOpts::ALL | RuntimeOpts::DIR,
             Some(add_pack_start_dir as DoInRuntimepathCBFn),
             ptr::null_mut(),
         );
@@ -698,7 +698,7 @@ pub unsafe fn load_start_packages() {
                 p_pp.get(),
                 c"".as_ptr(),
                 name.as_ptr().cast_mut(),
-                DIP_ALL as c_int + DIP_DIR as c_int,
+                RuntimeOpts::ALL | RuntimeOpts::DIR,
                 Some(add_start_pack_plugins as DoInRuntimepathCBFn),
                 PackWork::Load.cookie(),
             );
@@ -744,7 +744,7 @@ pub unsafe fn load_plugins() {
         source_in_path_vim_lua(
             rtp_copy,
             plugin_pattern,
-            DIP_ALL as c_int | DIP_NOAFTER as c_int,
+            RuntimeOpts::ALL | RuntimeOpts::NOAFTER,
         );
         time_msg_now(c"loading rtp plugins");
 
@@ -755,7 +755,7 @@ pub unsafe fn load_plugins() {
         }
         time_msg_now(c"loading packages");
 
-        source_runtime_vim_lua(plugin_pattern, DIP_ALL as c_int | DIP_AFTER as c_int);
+        source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER);
         time_msg_now(c"loading after plugins");
     }
 }
@@ -797,7 +797,7 @@ pub unsafe fn ex_packadd(eap: *mut exarg_T) {
                 p_pp.get(),
                 c"".as_ptr(),
                 pat,
-                DIP_ALL as c_int + DIP_DIR as c_int,
+                RuntimeOpts::ALL | RuntimeOpts::DIR,
                 Some(add_start_pack_plugins as DoInRuntimepathCBFn),
                 cookie,
             );
@@ -809,7 +809,7 @@ pub unsafe fn ex_packadd(eap: *mut exarg_T) {
             p_pp.get(),
             c"".as_ptr(),
             pat,
-            DIP_ALL as c_int + DIP_DIR as c_int + if res == FAIL { DIP_ERR as c_int } else { 0 },
+            RuntimeOpts::ALL | RuntimeOpts::DIR | RuntimeOpts::ERR.when(res == FAIL),
             Some(add_opt_pack_plugins as DoInRuntimepathCBFn),
             cookie,
         );

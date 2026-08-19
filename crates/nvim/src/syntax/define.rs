@@ -13,7 +13,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
-use crate::runtime::DIP_ALL;
+use crate::runtime::RuntimeOpts;
 use crate::types::{FAIL, NUL};
 
 /// Adjust an item's flags when it is declared in a `:syntax include`d file.
@@ -108,7 +108,7 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
                 ::core::ptr::null_mut(),
             ) == FAIL
         } else {
-            source_runtime((*eap).arg, DIP_ALL as c_int) == FAIL
+            source_runtime((*eap).arg, RuntimeOpts::ALL) == FAIL
         };
         if failed {
             semsg_c!(gettext(&raw const e_notopen as *const c_char), (*eap).arg);

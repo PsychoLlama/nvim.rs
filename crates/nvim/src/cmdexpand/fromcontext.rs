@@ -40,6 +40,10 @@ pub(crate) fn map_wildopts_to_ewflags(options: WildOpts) -> ExpandFlags {
         })
 }
 
+/// A runtime-directory completion that wants nothing special: `'runtimepath'`
+/// as it stands, no package trees and no `after/` filter. Upstream's bare `0`.
+const RTP_ONLY: RuntimeOpts = RuntimeOpts::NONE;
+
 /// Do the expansion based on `xp->xp_context` and `pat`.
 ///
 /// `options` is a set of `WILD_*` flags.  Most contexts have a generator of
@@ -106,7 +110,7 @@ pub(crate) unsafe fn ExpandFromContext(
                 let mut dirs = [c"colors".as_ptr() as *mut c_char, ptr::null_mut()];
                 return ExpandRTDir(
                     pat,
-                    (DIP_START + DIP_OPT) as c_int,
+                    RuntimeOpts::START | RuntimeOpts::OPT,
                     numMatches,
                     matches,
                     dirs.as_mut_ptr(),
@@ -114,11 +118,11 @@ pub(crate) unsafe fn ExpandFromContext(
             }
             EXPAND_COMPILER => {
                 let mut dirs = [c"compiler".as_ptr() as *mut c_char, ptr::null_mut()];
-                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
             EXPAND_OWNSYNTAX => {
                 let mut dirs = [c"syntax".as_ptr() as *mut c_char, ptr::null_mut()];
-                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
             EXPAND_FILETYPE => {
                 let mut dirs = [
@@ -127,11 +131,11 @@ pub(crate) unsafe fn ExpandFromContext(
                     c"ftplugin".as_ptr() as *mut c_char,
                     ptr::null_mut(),
                 ];
-                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
             EXPAND_KEYMAP => {
                 let mut dirs = [c"keymap".as_ptr() as *mut c_char, ptr::null_mut()];
-                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
             EXPAND_USER_LIST => return ExpandUserList(xp, matches, numMatches),
             EXPAND_USER_LUA => return ExpandUserLua(xp, numMatches, matches),

@@ -4,7 +4,7 @@
 //! [`do_in_path`] is the primitive: split a path list on commas, glob each
 //! entry against a pattern, and hand every match to a callback, optionally
 //! stopping at the first.  [`do_in_path_and_pp`] adds 'packpath''s
-//! `pack/*/start` and `pack/*/opt` trees for the `DIP_START`/`DIP_OPT` flags,
+//! `pack/*/start` and `pack/*/opt` trees for the `RuntimeOpts::START`/`RuntimeOpts::OPT` flags,
 //! and [`do_in_runtimepath`] is the 'runtimepath' entry point that prefers the
 //! cached search path when there is one (see [`super::cache`]).  The
 //! `source_runtime*` wrappers pick the callback that sources what was found,
@@ -27,14 +27,16 @@ use core::{ptr, slice};
 /// The `[where]` qualifiers `:runtime` accepts, and the `DIP_*` set each one
 /// selects.  Upstream sums the flags; they are disjoint bits, so this is the
 /// same number.
-const WHERE_FLAGS: [(&CStr, c_int); 4] = [
-    (c"START", DIP_START as c_int | DIP_NORTP as c_int),
-    (c"OPT", DIP_OPT as c_int | DIP_NORTP as c_int),
+const WHERE_FLAGS: [(&CStr, RuntimeOpts); 4] = [
+    (c"START", RuntimeOpts::START.or(RuntimeOpts::NORTP)),
+    (c"OPT", RuntimeOpts::OPT.or(RuntimeOpts::NORTP)),
     (
         c"PACK",
-        DIP_START as c_int | DIP_OPT as c_int | DIP_NORTP as c_int,
+        RuntimeOpts::START
+            .or(RuntimeOpts::OPT)
+            .or(RuntimeOpts::NORTP),
     ),
-    (c"ALL", DIP_START as c_int | DIP_OPT as c_int),
+    (c"ALL", RuntimeOpts::START.or(RuntimeOpts::OPT)),
 ];
 
 /// Get the `DIP_*` flags from the `[where]` argument of a `:runtime` command,
@@ -46,9 +48,9 @@ const WHERE_FLAGS: [(&CStr, c_int); 4] = [
 /// # Safety
 /// `*argp` must be a NUL-terminated string with at least `where_len` bytes
 /// before its terminator.
-unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> c_int {
+unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> RuntimeOpts {
     if where_len == 0 {
-        return 0;
+        return RuntimeOpts::NONE;
     }
     // SAFETY: the caller's out-parameter holds the argument to look at.
     let arg = unsafe { *argp };
@@ -62,7 +64,7 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> c_
             }
         }
     }
-    0
+    RuntimeOpts::NONE
 }
 
 /// `:runtime[!] [where] {name}`.
@@ -72,12 +74,12 @@ pub unsafe fn ex_runtime(eap: *mut exarg_T) {
     unsafe {
         let mut arg = (*eap).arg;
         let mut flags = if (*eap).forceit != 0 {
-            DIP_ALL as c_int
+            RuntimeOpts::ALL
         } else {
-            0
+            RuntimeOpts::NONE
         };
         let where_len = skiptowhite(arg).offset_from(arg) as size_t;
-        flags += get_runtime_cmd_flags(&raw mut arg, where_len);
+        flags |= get_runtime_cmd_flags(&raw mut arg, where_len);
         debug_assert!(!arg.is_null(), "arg != NULL");
         source_runtime(arg, flags);
     }
@@ -97,7 +99,7 @@ pub unsafe fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const c_char) 
         runtime_expand_flags.set(if *p != 0 {
             get_runtime_cmd_flags(&raw mut arg, p.offset_from(arg) as size_t)
         } else {
-            0
+            RuntimeOpts::NONE
         });
         // Skip to the last argument.
         loop {
@@ -105,10 +107,10 @@ pub unsafe fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const c_char) 
             if *p == 0 {
                 break;
             }
-            if runtime_expand_flags.get() == 0 {
+            if runtime_expand_flags.get() == RuntimeOpts::NONE {
                 // With multiple arguments and no [where], an unrelated
                 // non-zero flag keeps [where] out of the completion.
-                runtime_expand_flags.set(DIP_ALL as c_int);
+                runtime_expand_flags.set(RuntimeOpts::ALL);
             }
             arg = skipwhite(p);
         }
@@ -244,12 +246,12 @@ impl Visitor {
 }
 
 /// The [`ExpandFlags`] a `DIP_*` set asks a wildcard expansion for.
-pub(crate) fn wildcard_flags(flags: c_int) -> ExpandFlags {
-    (if flags & DIP_DIR as c_int != 0 {
+pub(crate) fn wildcard_flags(flags: RuntimeOpts) -> ExpandFlags {
+    (if flags.has(RuntimeOpts::DIR) {
         ExpandFlags::DIR
     } else {
         ExpandFlags::FILE
-    }) | (if flags & DIP_DIRFILE as c_int != 0 {
+    }) | (if flags.has(RuntimeOpts::DIRFILE) {
         ExpandFlags::DIR | ExpandFlags::FILE
     } else {
         ExpandFlags::NONE
@@ -258,10 +260,10 @@ pub(crate) fn wildcard_flags(flags: c_int) -> ExpandFlags {
 
 /// Whether `flags` asks for this entry to be skipped for being — or for not
 /// being — an `after/` directory.
-pub(crate) fn skips_entry(flags: c_int, is_after: bool) -> bool {
-    flags & (DIP_NOAFTER as c_int | DIP_AFTER as c_int) != 0
-        && (is_after && flags & DIP_NOAFTER as c_int != 0
-            || !is_after && flags & DIP_AFTER as c_int != 0)
+pub(crate) fn skips_entry(flags: RuntimeOpts, is_after: bool) -> bool {
+    flags.has(RuntimeOpts::NOAFTER | RuntimeOpts::AFTER)
+        && (is_after && flags.has(RuntimeOpts::NOAFTER)
+            || !is_after && flags.has(RuntimeOpts::AFTER))
 }
 
 /// Expand each whitespace-separated pattern of `name` in turn at `tail` and
@@ -352,8 +354,8 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
 /// Find the patterns in `name` in all directories in `path` and invoke
 /// `callback` for each match.  `prefix` is prepended to each pattern.
 ///
-/// `DIP_ALL` visits every match rather than stopping at the first, `DIP_DIR`
-/// looks for directories, and `DIP_ERR` turns "nothing found" into an error
+/// `RuntimeOpts::ALL` visits every match rather than stopping at the first, `RuntimeOpts::DIR`
+/// looks for directories, and `RuntimeOpts::ERR` turns "nothing found" into an error
 /// message rather than a verbose note.
 ///
 /// Answers OK when something was found, FAIL otherwise.
@@ -365,7 +367,7 @@ pub unsafe fn do_in_path(
     path: *const c_char,
     prefix: *const c_char,
     name: *mut c_char,
-    flags: c_int,
+    flags: RuntimeOpts,
     callback: DoInRuntimepathCB,
     cookie: *mut c_void,
 ) -> c_int {
@@ -381,7 +383,7 @@ pub unsafe fn do_in_path(
         unsafe { announce_search(name, prefix, path) };
     }
 
-    let do_all = flags & DIP_ALL as c_int != 0;
+    let do_all = flags.has(RuntimeOpts::ALL);
     let mut did_one = false;
     let mut rtp = rtp_copy;
     // SAFETY: `rtp` walks the copy; `buf` has `MAXPATHL` writable bytes.
@@ -446,7 +448,7 @@ pub unsafe fn do_in_path(
         };
         // SAFETY: `basepath` is a literal and `name` the caller's pattern.
         unsafe {
-            if flags & DIP_ERR as c_int != 0 {
+            if flags.has(RuntimeOpts::ERR) {
                 semsg_c!(
                     gettext(&raw const e_dirnotf as *const c_char),
                     basepath.as_ptr(),
@@ -667,7 +669,7 @@ unsafe fn matches_of<'a>(array: Array) -> &'a [Object] {
     unsafe { slice::from_raw_parts(array.items, array.size) }
 }
 
-/// Find `name` in `path`, and then — for `DIP_START`/`DIP_OPT` — in
+/// Find `name` in `path`, and then — for `RuntimeOpts::START`/`RuntimeOpts::OPT` — in
 /// 'packpath''s package trees, invoking `callback` for each match.
 ///
 /// Answers OK when at least one match was found.  With `name` null the
@@ -678,7 +680,7 @@ unsafe fn matches_of<'a>(array: Array) -> &'a [Object] {
 pub unsafe fn do_in_path_and_pp(
     path: *mut c_char,
     name: *mut c_char,
-    flags: c_int,
+    flags: RuntimeOpts,
     callback: DoInRuntimepathCB,
     cookie: *mut c_void,
 ) -> c_int {
@@ -690,19 +692,19 @@ pub unsafe fn do_in_path_and_pp(
         name
     };
     let mut done = FAIL;
-    // Each round is skipped once something has been found, unless DIP_ALL.
-    let wants_more = |done: c_int| done == FAIL || flags & DIP_ALL as c_int != 0;
+    // Each round is skipped once something has been found, unless RuntimeOpts::ALL.
+    let wants_more = |done: c_int| done == FAIL || flags.has(RuntimeOpts::ALL);
 
-    if flags & DIP_NORTP as c_int == 0 {
+    if !flags.has(RuntimeOpts::NORTP) {
         // SAFETY: the caller's strings and callback.
         done |= unsafe { do_in_path(path, c"".as_ptr(), dirs_only, flags, callback, cookie) };
     }
 
-    if wants_more(done) && flags & DIP_START as c_int != 0 {
-        let after = flags & DIP_AFTER as c_int != 0;
-        // The `after/` variants are searched under the package, so DIP_AFTER
+    if wants_more(done) && flags.has(RuntimeOpts::START) {
+        let after = flags.has(RuntimeOpts::AFTER);
+        // The `after/` variants are searched under the package, so `AFTER`
         // is spent here and must not filter the packpath entries as well.
-        let start_flags = flags & !(DIP_AFTER as c_int);
+        let start_flags = flags.without(RuntimeOpts::AFTER);
         for prefix in [
             if after {
                 c"pack/*/start/*/after/"
@@ -732,7 +734,7 @@ pub unsafe fn do_in_path_and_pp(
         }
     }
 
-    if wants_more(done) && flags & DIP_OPT as c_int != 0 {
+    if wants_more(done) && flags.has(RuntimeOpts::OPT) {
         for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
             // SAFETY: as above.
             done |=
@@ -753,12 +755,12 @@ pub unsafe fn do_in_path_and_pp(
 /// As [`do_in_path`].
 pub unsafe fn do_in_runtimepath(
     name: *mut c_char,
-    mut flags: c_int,
+    mut flags: RuntimeOpts,
     callback: DoInRuntimepathCB,
     cookie: *mut c_void,
 ) -> c_int {
     let mut success = FAIL;
-    if flags & DIP_NORTP as c_int == 0 {
+    if !flags.has(RuntimeOpts::NORTP) {
         // SAFETY: `name` is null or NUL-terminated.
         let dirs_only = if !name.is_null() && unsafe { *name } == 0 {
             ptr::null_mut()
@@ -769,12 +771,12 @@ pub unsafe fn do_in_runtimepath(
         success |= unsafe { do_in_cached_path(dirs_only, flags, callback, cookie) };
         // The cached path already covers 'runtimepath' and the `start`
         // packages spliced into it.
-        flags = flags & !(DIP_START as c_int) | DIP_NORTP as c_int;
+        flags = flags.without(RuntimeOpts::START) | RuntimeOpts::NORTP;
     }
     // TODO(bfredl): we could integrate disabled OPT dirs into the cached path,
     // which would make ":packadd myoptpack" effective as well.
-    if flags & (DIP_START as c_int | DIP_OPT as c_int) != 0
-        && (success == FAIL || flags & DIP_ALL as c_int != 0)
+    if flags.has(RuntimeOpts::START | RuntimeOpts::OPT)
+        && (success == FAIL || flags.has(RuntimeOpts::ALL))
     {
         // SAFETY: as above.
         success |= unsafe { do_in_path_and_pp(p_rtp.get(), name, flags, callback, cookie) };
@@ -783,11 +785,11 @@ pub unsafe fn do_in_runtimepath(
 }
 
 /// Source the file `name` from all directories in 'runtimepath'.  `name` may
-/// contain wildcards; `DIP_ALL` sources every match rather than the first.
+/// contain wildcards; `RuntimeOpts::ALL` sources every match rather than the first.
 ///
 /// # Safety
 /// `name` must be NUL-terminated.
-pub unsafe fn source_runtime(name: *mut c_char, flags: c_int) -> c_int {
+pub unsafe fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> c_int {
     // SAFETY: `source_callback` takes a null cookie.
     unsafe {
         do_in_runtimepath(
@@ -803,7 +805,7 @@ pub unsafe fn source_runtime(name: *mut c_char, flags: c_int) -> c_int {
 ///
 /// # Safety
 /// As [`source_runtime`].
-pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int {
+pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: RuntimeOpts) -> c_int {
     // SAFETY: as `source_runtime`.
     unsafe {
         do_in_runtimepath(
@@ -820,7 +822,11 @@ pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int {
 ///
 /// # Safety
 /// Both must be NUL-terminated.
-pub unsafe fn source_in_path_vim_lua(path: *mut c_char, name: *mut c_char, flags: c_int) -> c_int {
+pub unsafe fn source_in_path_vim_lua(
+    path: *mut c_char,
+    name: *mut c_char,
+    flags: RuntimeOpts,
+) -> c_int {
     // SAFETY: as `source_runtime`.
     unsafe {
         do_in_path_and_pp(

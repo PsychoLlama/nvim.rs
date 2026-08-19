@@ -50,7 +50,7 @@ use crate::optionstr::check_signcolumn;
 use crate::os::cshim::{gettext, strncmp};
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::{ll_resize_stack, qf_resize_stack};
-use crate::runtime::{DIP_ALL, source_runtime_vim_lua};
+use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
@@ -876,7 +876,7 @@ pub(crate) unsafe fn do_spelllang_source(win: *mut win_T) {
                 p.offset_from(q) as c_int,
                 q,
             );
-            source_runtime_vim_lua(fname.as_mut_ptr(), DIP_ALL as c_int);
+            source_runtime_vim_lua(fname.as_mut_ptr(), RuntimeOpts::ALL);
         }
     }
 }

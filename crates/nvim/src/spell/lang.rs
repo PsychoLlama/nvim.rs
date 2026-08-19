@@ -59,7 +59,7 @@ use super::slang::slang_free;
 use super::{
     MAXWLEN, REGION_ALL, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to, spelload_T,
 };
-use crate::runtime::DIP_ALL;
+use crate::runtime::RuntimeOpts;
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
 fn ascii_isalpha(c: c_int) -> bool {
@@ -125,7 +125,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
                 lang,
                 spell_enc(),
             );
-            r = do_in_runtimepath_cb(fname_enc.as_mut_ptr(), 0, &raw mut sl);
+            r = do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl);
 
             if r == FAIL_I && sl.sl_lang[0] != 0 {
                 // Fall back on the ASCII version.
@@ -135,7 +135,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
                     c"spell/%s.ascii.spl".as_ptr(),
                     lang,
                 );
-                r = do_in_runtimepath_cb(fname_enc.as_mut_ptr(), 0, &raw mut sl);
+                r = do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl);
 
                 if r == FAIL_I
                     && sl.sl_lang[0] != 0
@@ -185,7 +185,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
                 fname_enc.as_mut_ptr().add(strlen(fname_enc.as_ptr()) - 3),
                 c"add.spl".as_ptr(),
             );
-            do_in_runtimepath_cb(fname_enc.as_mut_ptr(), DIP_ALL as c_int, &raw mut sl);
+            do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl);
         }
 
         (*curbuf.get()).b_locked -= 1;
@@ -195,7 +195,11 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
 const FAIL_I: c_int = 0;
 
 /// `do_in_runtimepath` with [`spell_load_cb`] as the callback.
-unsafe fn do_in_runtimepath_cb(name: *mut c_char, flags: c_int, sl: *mut spelload_T) -> c_int {
+unsafe fn do_in_runtimepath_cb(
+    name: *mut c_char,
+    flags: RuntimeOpts,
+    sl: *mut spelload_T,
+) -> c_int {
     unsafe {
         crate::runtime::do_in_runtimepath(name, flags, Some(spell_load_cb), sl as *mut c_void)
     }

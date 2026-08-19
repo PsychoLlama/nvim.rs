@@ -16,7 +16,7 @@ use crate::main::{
     cterm_normal_bg_color, cterm_normal_fg_color, curbuf, normal_bg, normal_fg, normal_sp, p_bg,
 };
 use crate::memory::{xfree, xstrdup};
-use crate::runtime::{DIP_OPT, DIP_START, source_runtime_vim_lua};
+use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::types::{OK, RgbValue};
 
 use super::do_highlight;
@@ -580,7 +580,7 @@ pub unsafe fn load_colors(name: *mut c_char) -> c_int {
         let mut pattern = [b"colors/", CStr::from_ptr(name).to_bytes(), b".*\0"].concat();
         let retval = source_runtime_vim_lua(
             pattern.as_mut_ptr().cast(),
-            DIP_START as c_int + DIP_OPT as c_int,
+            RuntimeOpts::START | RuntimeOpts::OPT,
         );
         if retval == OK {
             apply_autocmds(

@@ -83,8 +83,8 @@ use crate::os::proc::os_proc_children;
 use crate::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
 use crate::runtime::{
-    DIP_ALL, DIP_DIRFILE, do_in_runtimepath, do_source, get_lib_dir, runtime_get_named,
-    runtime_inspect, script_autoload,
+    RuntimeOpts, do_in_runtimepath, do_source, get_lib_dir, runtime_get_named, runtime_inspect,
+    script_autoload,
 };
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::get_mode;

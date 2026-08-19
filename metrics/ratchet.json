@@ -75,7 +75,7 @@
     "crates/nvim/src/api/vim/marks.rs": {"unsafe_lines": 105},
     "crates/nvim/src/api/vim/paste.rs": {"cell_ptr": 2, "unsafe_lines": 171},
     "crates/nvim/src/api/vim/redraw.rs": {"unsafe_lines": 217},
-    "crates/nvim/src/api/vim/runtime.rs": {"unsafe_lines": 173},
+    "crates/nvim/src/api/vim/runtime.rs": {"unsafe_lines": 168},
     "crates/nvim/src/api/vim/statusline.rs": {"unsafe_lines": 96},
     "crates/nvim/src/api/vim/term.rs": {"cell_ptr": 2, "unsafe_lines": 159},
     "crates/nvim/src/api/vim/vars.rs": {"unsafe_lines": 87},

@@ -33,7 +33,7 @@ use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
 use crate::path::{ExpandFlags, FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
-use crate::runtime::{DIP_ALL, DIP_DIR, do_in_path};
+use crate::runtime::{RuntimeOpts, do_in_path};
 use crate::semsg_c;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{FAIL, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t};
@@ -72,7 +72,7 @@ pub unsafe fn ex_helptags(eap: *mut exarg_T) {
                 p_rtp.get(),
                 c"".as_ptr(),
                 c"doc".as_ptr().cast_mut(),
-                (DIP_ALL + DIP_DIR) as c_int,
+                RuntimeOpts::ALL | RuntimeOpts::DIR,
                 Some(helptags_cb),
                 (&raw mut add_help_tags).cast::<c_void>(),
             );

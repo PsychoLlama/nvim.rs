@@ -87,7 +87,7 @@ use crate::regexp::{
     vim_regfree,
 };
 use crate::runtime::{
-    DIP_OPT, DIP_START, ExpandPackAddDir, ExpandRTDir, expand_runtime_cmd, script_items,
+    ExpandPackAddDir, ExpandRTDir, RuntimeOpts, expand_runtime_cmd, script_items,
     set_context_in_runtime_cmd,
 };
 use crate::search::{

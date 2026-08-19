@@ -12,7 +12,7 @@ use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::file_search::Name;
 use crate::path::tail_index;
-use crate::runtime::DIP_ALL;
+use crate::runtime::RuntimeOpts;
 use crate::types::MAXPATHL;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -217,7 +217,7 @@ impl HelpTags {
         unsafe {
             do_in_runtimepath(
                 c"doc/tags doc/tags-??".as_ptr().cast_mut(),
-                DIP_ALL as c_int,
+                RuntimeOpts::ALL,
                 Some(found_tagfile_cb),
                 (&raw mut found).cast(),
             );

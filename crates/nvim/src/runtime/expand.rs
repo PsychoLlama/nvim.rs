@@ -76,7 +76,7 @@ unsafe fn glob_rounds(
     buf: *mut c_char,
     buf_len: size_t,
     dir: *mut c_char,
-    flags: c_int,
+    flags: RuntimeOpts,
     gap: *mut garray_T,
 ) {
     let mut glob_flags = WildOpts::NONE;
@@ -85,17 +85,17 @@ unsafe fn glob_rounds(
     unsafe {
         build_pattern(buf, buf_len, c"", dir, pat, SCRIPTS);
         loop {
-            if flags & DIP_NORTP as c_int == 0 {
+            if !flags.has(RuntimeOpts::NORTP) {
                 globpath(p_rtp.get(), buf, gap, glob_flags, expand_dirs);
             }
             let suffix = if expand_dirs { ANYTHING } else { SCRIPTS };
-            if flags & DIP_START as c_int != 0 {
+            if flags.has(RuntimeOpts::START) {
                 for prefix in [c"pack/*/start/*/", c"start/*/"] {
                     build_pattern(buf, buf_len, prefix, dir, pat, suffix);
                     globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
                 }
             }
-            if flags & DIP_OPT as c_int != 0 {
+            if flags.has(RuntimeOpts::OPT) {
                 for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
                     build_pattern(buf, buf_len, prefix, dir, pat, suffix);
                     globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
@@ -180,7 +180,7 @@ unsafe fn ga_strings<'a>(gap: *mut garray_T) -> &'a [*mut c_char] {
 unsafe fn ExpandRTDir_int(
     pat: *mut c_char,
     pat_len: size_t,
-    flags: c_int,
+    flags: RuntimeOpts,
     keep_ext: bool,
     gap: *mut garray_T,
     dirnames: *mut *mut c_char,
@@ -249,15 +249,15 @@ unsafe fn take_matches(ga: garray_T, num_file: *mut c_int, file: *mut *mut *mut 
 
 /// Expand color scheme, compiler or filetype names.
 ///
-/// Searches `{runtimepath}/{dirnames}/{pat}.{vim,lua}`; `DIP_START` adds
-/// `{packpath}/pack/*/start/*/{dirnames}/...` and `DIP_OPT` the `opt`
+/// Searches `{runtimepath}/{dirnames}/{pat}.{vim,lua}`; `RuntimeOpts::START` adds
+/// `{packpath}/pack/*/start/*/{dirnames}/...` and `RuntimeOpts::OPT` the `opt`
 /// equivalent.  `dirnames` is an array of one or more directory names.
 ///
 /// # Safety
 /// As [`ExpandRTDir_int`]; both out-parameters must be writable.
 pub unsafe fn ExpandRTDir(
     pat: *mut c_char,
-    flags: c_int,
+    flags: RuntimeOpts,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
     dirnames: *mut *mut c_char,
@@ -305,7 +305,7 @@ pub unsafe fn expand_runtime_cmd(
         );
 
         // Complete the [where] argument too, when none was given.
-        if runtime_expand_flags.get() == 0 {
+        if runtime_expand_flags.get() == RuntimeOpts::NONE {
             for value in WHERE_VALUES {
                 if strncmp(pat, value.as_ptr(), pat_len) == 0 {
                     ga_grow(&raw mut ga, 1);

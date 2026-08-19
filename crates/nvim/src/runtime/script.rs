@@ -939,7 +939,7 @@ pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: boo
     let ret = unsafe {
         do_in_runtimepath(
             scriptname,
-            DIP_START as c_int,
+            RuntimeOpts::START,
             Some(source_callback as DoInRuntimepathCBFn),
             (&raw mut ret_sid).cast::<c_void>(),
         ) == OK
