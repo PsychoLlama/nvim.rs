@@ -6690,7 +6690,6 @@ static const int SB_CLEAR_CMDLINE_DONE = 3;
 static const int SB_CLEAR_NONE = 0;
 static const int SB_MAX = 1000000;
 static const int SCHAR_BYTES = 33;
-static const int SCHAR_CONTINUATION = -1;
 static const int SCL_NO = -1;
 static const int SCL_NUM = -2;
 static const int SCORE_BIG = 288;

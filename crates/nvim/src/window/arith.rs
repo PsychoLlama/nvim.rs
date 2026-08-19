@@ -22,6 +22,13 @@
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -107,7 +114,7 @@ pub fn frame_minheight(topfrp: Frame, next_curwin: NextCurwin, opts: MinSize) ->
             m += 1;
         }
         m
-    } else if topfrp.fr_layout as c_int == FR_ROW {
+    } else if c_int::from(topfrp.fr_layout) == FR_ROW {
         // The minimal height of the tallest frame in this row.
         topfrp.children().fold(0, |m, frp| {
             let n = frame_minheight(frp, next_curwin, opts);
@@ -137,7 +144,7 @@ pub fn frame_minwidth(topfrp: Frame, next_curwin: NextCurwin, opts: MinSize) -> 
             m += 1;
         }
         m
-    } else if topfrp.fr_layout as c_int == FR_COL {
+    } else if c_int::from(topfrp.fr_layout) == FR_COL {
         topfrp.children().fold(0, |m, frp| {
             let n = frame_minwidth(frp, next_curwin, opts);
             if m > n { m } else { n }
@@ -158,7 +165,7 @@ pub fn frame_check_height(topfrp: Frame, height: c_int) -> bool {
     if topfrp.fr_height != height {
         return false;
     }
-    if topfrp.fr_layout as c_int == FR_ROW {
+    if c_int::from(topfrp.fr_layout) == FR_ROW {
         return topfrp.children().all(|frp| frp.fr_height == height);
     }
     true
@@ -171,7 +178,7 @@ pub fn frame_check_width(topfrp: Frame, width: c_int) -> bool {
     if topfrp.fr_width != width {
         return false;
     }
-    if topfrp.fr_layout as c_int == FR_COL {
+    if c_int::from(topfrp.fr_layout) == FR_COL {
         return topfrp.children().all(|frp| frp.fr_width == width);
     }
     true

@@ -5,6 +5,13 @@
 //! macros; callers now use the std `f64`/`u64` methods directly.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -22,7 +29,9 @@ pub fn vim_append_digit_int(value: &mut c_int, digit: c_int) -> bool {
 
 /// Clamp an `i64` into `int` range.
 pub fn trim_to_int(x: i64) -> c_int {
-    x.clamp(c_int::MIN as i64, c_int::MAX as i64) as c_int
+    // The clamp is the narrowing's proof.
+    c_int::try_from(x.clamp(i64::from(c_int::MIN), i64::from(c_int::MAX)))
+        .expect("clamped into `c_int` range")
 }
 
 #[cfg(test)]

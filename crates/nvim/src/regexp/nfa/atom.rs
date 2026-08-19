@@ -6,6 +6,13 @@
 //! shorthands, back-references and ordinary characters.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_char, c_int};
 
@@ -119,7 +126,9 @@ pub(crate) fn nfa_regatom(rex: Rex) -> Parsed {
         // already have stopped; reaching one here means the parser lost
         // track. The rest are repeats with no atom in front of them.
         M_BAR | M_AMP | M_PAREN_CLOSE | M_EQUAL | M_QUESTION | M_PLUS | M_AT | M_STAR | M_BRACE => {
-            let c = unmagic(c) as u8 as char;
+            // Every arm above is a magic token, so `unmagic` answers the one
+            // ASCII byte it was built from; the low byte is that byte.
+            let c = char::from(unmagic(c).cast_unsigned().to_le_bytes()[0]);
             semsg!("E866: (NFA regexp) Misplaced {c}");
             Err(Rejected)
         }

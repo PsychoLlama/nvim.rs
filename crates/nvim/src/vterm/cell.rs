@@ -10,13 +10,20 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_uint;
 
 use crate::types::{ScreenCell, ScreenPen, VTermColor, VTermScreenCell, schar_T};
 
 /// The `schar` of the cell hidden behind a double-width glyph.
-pub const SCHAR_CONTINUATION: schar_T = -1i32 as schar_T;
+pub const SCHAR_CONTINUATION: schar_T = schar_T::MAX;
 
 /// The pen an erased cell is left with: the current colours, everything else
 /// back to its reset state. The caller stamps the line's double-width and

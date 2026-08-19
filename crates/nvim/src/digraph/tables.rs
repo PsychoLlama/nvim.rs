@@ -7,6 +7,13 @@
 //! checksum.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::Digraph;
 use core::ffi::c_int;
@@ -130,11 +137,11 @@ pub const BLOCK_HEADERS: [BlockHeader; 26] = [
     },
 ];
 
-const fn d(char1: u8, char2: u8, result: u32) -> Digraph {
+const fn d(char1: u8, char2: u8, result: c_int) -> Digraph {
     Digraph {
         char1,
         char2,
-        result: result as c_int,
+        result,
     }
 }
 

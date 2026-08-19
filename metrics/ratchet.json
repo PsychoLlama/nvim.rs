@@ -2,7 +2,7 @@
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1045,
   "files_without_deny_unsafe_op": 89,
-  "files_without_deny_casts": 1130,
+  "files_without_deny_casts": 1114,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
     "crates/nvim/src/api/autocmd/create.rs": {"missing_safety_doc": 4, "unsafe_lines": 339},

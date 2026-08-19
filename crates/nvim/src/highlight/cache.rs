@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! The memo tables in front of the attribute set.
 //!
@@ -80,9 +87,12 @@ impl Default for AttrCache {
     }
 }
 
+/// The two attribute ids packed into one key. Reinterpreted rather than
+/// widened: a `c_int` attribute id may be negative, and the pair only has to
+/// be distinct, not ordered.
 #[inline]
-const fn pair(first: c_int, second: c_int) -> u64 {
-    ((first as u32 as u64) << 32) | second as u32 as u64
+fn pair(first: c_int, second: c_int) -> u64 {
+    (u64::from(first.cast_unsigned()) << 32) | u64::from(second.cast_unsigned())
 }
 
 #[cfg(test)]

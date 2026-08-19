@@ -8,6 +8,13 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_int, c_uint};
 
@@ -66,7 +73,8 @@ impl VTermState {
     /// How many columns row `row` holds: half the screen when the line is
     /// marked double-width.
     pub(super) fn row_width(&self, row: c_int) -> c_int {
-        if self.lineinfo()[row as usize].doublewidth() != 0 {
+        let row = usize::try_from(row).expect("a screen row is never negative");
+        if self.lineinfo()[row].doublewidth() != 0 {
             self.cols / 2
         } else {
             self.cols
@@ -136,16 +144,25 @@ impl VTermState {
         }
     }
 
+    /// Which byte of the tab-stop bitmap holds `col`, and its bit in it.
+    fn tabstop_bit(col: c_int) -> (usize, u8) {
+        let col = usize::try_from(col).expect("a screen column is never negative");
+        (col >> 3, 1 << (col & 7))
+    }
+
     pub(super) fn is_tabstop(&mut self, col: c_int) -> bool {
-        self.tabstops_mut()[(col >> 3) as usize] & (1 << (col & 7)) != 0
+        let (byte, bit) = Self::tabstop_bit(col);
+        self.tabstops_mut()[byte] & bit != 0
     }
 
     pub(super) fn set_tabstop(&mut self, col: c_int) {
-        self.tabstops_mut()[(col >> 3) as usize] |= 1 << (col & 7);
+        let (byte, bit) = Self::tabstop_bit(col);
+        self.tabstops_mut()[byte] |= bit;
     }
 
     pub(super) fn clear_tabstop(&mut self, col: c_int) {
-        self.tabstops_mut()[(col >> 3) as usize] &= !(1 << (col & 7));
+        let (byte, bit) = Self::tabstop_bit(col);
+        self.tabstops_mut()[byte] &= !bit;
     }
 
     /// The power-on tab stops: one every eight columns.

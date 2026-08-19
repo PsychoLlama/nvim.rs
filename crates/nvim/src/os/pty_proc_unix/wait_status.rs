@@ -6,6 +6,13 @@
 //! exit code. A stopped child is reported as `0x7f` in the low byte with the
 //! stopping signal above it, and a continued one as the reserved `0xffff`.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -45,7 +52,8 @@ pub fn decode(stat: c_int) -> ChildState {
 /// exit) nor `0x7f` (stopped). Written the way the C macro is, because the
 /// signed-byte truncation is what excludes `0x7f`.
 fn is_signalled(signal: c_int) -> bool {
-    (((signal + 1) as i8) as c_int) >> 1 > 0
+    let low = (signal + 1).to_le_bytes()[0].cast_signed();
+    c_int::from(low) >> 1 > 0
 }
 
 #[cfg(test)]

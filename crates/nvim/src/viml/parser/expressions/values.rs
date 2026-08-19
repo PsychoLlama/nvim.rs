@@ -6,6 +6,13 @@
 //! with no scope, join the preceding identifier into a curly-braces name.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::parse::{ExprParser, Flow, hl};
 use super::*;
@@ -56,7 +63,7 @@ pub(super) fn option(p: &mut ExprParser) -> Flow {
             ident: p.line_ptr(at.wrapping_add(p.cur_token.len)),
             ident_len: 0,
             scope: if p.cur_token.len == 3 {
-                p.line_byte(at.wrapping_add(1)) as ExprOptScope
+                ExprOptScope::from(p.line_byte(at.wrapping_add(1)))
             } else {
                 kExprOptScopeUnspecified
             },

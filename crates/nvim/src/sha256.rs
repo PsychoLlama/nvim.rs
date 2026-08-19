@@ -3,6 +3,13 @@
 //! so the output must stay bit-identical.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 /// Size of a SHA-256 digest in bytes.
 pub const SHA256_SUM_SIZE: usize = 32;
@@ -50,8 +57,14 @@ impl Sha256 {
         }
     }
 
+    /// How far into the block buffer `total` bytes leave the next write.
+    fn block_offset(total: u64) -> usize {
+        // The remainder is below `BLOCK_SIZE`, so the narrowing cannot fail.
+        usize::try_from(total % BLOCK_SIZE as u64).expect("a remainder below BLOCK_SIZE")
+    }
+
     pub fn update(&mut self, mut input: &[u8]) {
-        let left = self.total as usize % BLOCK_SIZE;
+        let left = Self::block_offset(self.total);
         self.total = self.total.wrapping_add(input.len() as u64);
         if left != 0 {
             let fill = BLOCK_SIZE - left;
@@ -78,7 +91,7 @@ impl Sha256 {
             p
         };
         let bit_len = self.total.wrapping_mul(8);
-        let last = self.total as usize % BLOCK_SIZE;
+        let last = Self::block_offset(self.total);
         let padn = if last < 56 { 56 - last } else { 120 - last };
         self.update(&PADDING[..padn]);
         self.update(&bit_len.to_be_bytes());

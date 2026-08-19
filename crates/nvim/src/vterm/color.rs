@@ -13,6 +13,13 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_long;
 
@@ -84,14 +91,17 @@ pub fn ansi_default(index: c_long) -> Option<ColorValue> {
 pub fn fixed_palette(index: c_long) -> Option<ColorValue> {
     match index {
         16..=231 => {
-            let cube = (index - 16) as usize;
+            let cube = usize::try_from(index - 16).expect("the arm bounds it to 0..=215");
             Some(ColorValue::Rgb {
                 red: CUBE_LEVELS[cube / 36],
                 green: CUBE_LEVELS[cube / 6 % 6],
                 blue: CUBE_LEVELS[cube % 6],
             })
         }
-        232..=255 => Some(ColorValue::grey(GREYS[(index - 232) as usize])),
+        232..=255 => {
+            let grey = usize::try_from(index - 232).expect("the arm bounds it to 0..=23");
+            Some(ColorValue::grey(GREYS[grey]))
+        }
         _ => None,
     }
 }

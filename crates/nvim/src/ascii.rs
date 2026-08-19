@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! Character classification for the ASCII range.
 //!
@@ -9,7 +16,7 @@
 //! so the transpiler left a copy in every module that called one.
 
 use crate::types::NUL;
-use core::ffi::c_int;
+use core::ffi::{c_int, c_uint};
 
 /// A decimal digit.
 pub fn ascii_isdigit(c: c_int) -> bool {
@@ -20,9 +27,9 @@ pub fn ascii_isdigit(c: c_int) -> bool {
 pub fn ascii_isalpha(c: c_int) -> bool {
     // Unsigned, so that a negative byte fails both ranges rather than
     // wrapping into one of them -- which is what the C macro's cast does.
-    let c = c as ::core::ffi::c_uint;
-    (c >= 'A' as ::core::ffi::c_uint && c <= 'Z' as ::core::ffi::c_uint)
-        || (c >= 'a' as ::core::ffi::c_uint && c <= 'z' as ::core::ffi::c_uint)
+    let c = c.cast_unsigned();
+    (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c)
+        || (c_uint::from(b'a')..=c_uint::from(b'z')).contains(&c)
 }
 
 /// A binary digit.

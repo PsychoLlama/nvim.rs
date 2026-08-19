@@ -5,6 +5,13 @@
 //! literals a hex dump shows and the encoder is pinned by round-trip tests.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -39,9 +46,9 @@ pub const UHP_SAVE_NR: c_int = 1;
 pub fn encode_be(nr: u64, len: usize) -> [u8; 8] {
     assert!((1..=8).contains(&len), "undo file fields are 1..=8 bytes");
     let mut buf = [0u8; 8];
-    for (i, slot) in buf[..len].iter_mut().enumerate() {
-        *slot = (nr >> ((len - 1 - i) * 8)) as u8;
-    }
+    // The low `len` bytes, most significant first: the tail of the number's
+    // own big-endian encoding.
+    buf[..len].copy_from_slice(&nr.to_be_bytes()[8 - len..]);
     buf
 }
 

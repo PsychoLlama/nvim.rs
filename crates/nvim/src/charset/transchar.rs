@@ -5,6 +5,13 @@
 //! translation layer uses.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -62,7 +69,7 @@ impl Rendered {
 /// The low nibble of `n` as a lowercase hex digit.
 #[inline(always)]
 fn hex_digit(n: c_int) -> u8 {
-    let n = (n & 0xf) as u8;
+    let n = u8::try_from(n & 0xf).expect("a nibble");
     if n <= 9 { b'0' + n } else { b'a' + n - 10 }
 }
 
@@ -92,7 +99,10 @@ pub fn hex_form(c: c_int) -> Rendered {
 pub fn control_form(c: c_int) -> Rendered {
     let mut out = Rendered::new();
     out.push(b'^');
-    out.push((c ^ 0x40) as u8);
+    // The low byte, as the C's `(char)` takes it. `c` is a C0 control or DEL
+    // here, so the xor lands in the printable range; a caller that broke that
+    // contract used to get the truncation rather than a panic, and still does.
+    out.push((c ^ 0x40).cast_unsigned().to_le_bytes()[0]);
     out
 }
 

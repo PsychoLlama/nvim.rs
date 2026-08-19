@@ -15,6 +15,13 @@
 //! it.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -22,7 +29,7 @@ use core::ffi::c_int;
 pub(crate) struct EquiClass {
     /// The members both of upstream's copies agree on, in the order the
     /// backtracking compiler emitted them.
-    members: &'static [u32],
+    members: &'static [c_int],
     /// Members present only in upstream's NFA copy of the table. Two
     /// accidents of drift between the two hand-maintained switches, kept
     /// because they are what each engine actually did:
@@ -32,33 +39,28 @@ pub(crate) struct EquiClass {
     ///   two engines.
     /// - the NFA copy lists `U+1ECB` twice in the `i` class, which is
     ///   invisible in a set but keeps the emitted postfix identical.
-    nfa_only: &'static [u32],
+    nfa_only: &'static [c_int],
 }
 
 impl EquiClass {
     /// The class as the backtracking compiler sees it.
     pub(crate) fn backtracking_members(&self) -> impl Iterator<Item = c_int> + '_ {
-        self.members.iter().map(|&c| c as c_int)
+        self.members.iter().copied()
     }
 
     /// The class as the NFA compiler sees it.
     pub(crate) fn nfa_members(&self) -> impl Iterator<Item = c_int> + '_ {
-        self.members
-            .iter()
-            .chain(self.nfa_only)
-            .map(|&c| c as c_int)
+        self.members.iter().chain(self.nfa_only).copied()
     }
 }
 
 /// The class containing `c` as the backtracking compiler sees it, if any.
 pub(crate) fn backtracking_class_of(c: c_int) -> Option<&'static EquiClass> {
-    let c = u32::try_from(c).ok()?;
     CLASSES.iter().find(|class| class.members.contains(&c))
 }
 
 /// The class containing `c` as the NFA compiler sees it, if any.
 pub(crate) fn nfa_class_of(c: c_int) -> Option<&'static EquiClass> {
-    let c = u32::try_from(c).ok()?;
     CLASSES
         .iter()
         .find(|class| class.members.contains(&c) || class.nfa_only.contains(&c))

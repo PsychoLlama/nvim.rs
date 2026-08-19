@@ -17,6 +17,13 @@
 //! Original: `src/nvim/eval/list.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::CStr;
 use core::ptr;
@@ -31,7 +38,7 @@ use crate::garray::Gap;
 use crate::main::{did_emsg, e_invalblob, e_string_required};
 use crate::types::{
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_LOCKED, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, Vv,
-    garray_T, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    garray_T, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// A byte-item `garray_T`, the way `ga_init(&ga, sizeof(char), 80)` leaves
@@ -153,7 +160,7 @@ pub(crate) fn filter_map_blob(
     let mut i = 0;
     let mut idx = 0;
     while i < b.len() {
-        let val = b.byte(i) as varnumber_T;
+        let val = varnumber_T::from(b.byte(i));
         let mut tv = typval_T {
             v_type: VAR_NUMBER,
             v_lock: VAR_UNLOCKED,
@@ -176,7 +183,9 @@ pub(crate) fn filter_map_blob(
             if filtermap != FilterMap::Filter {
                 let byte = number_arm(&newtv);
                 if byte != val {
-                    b_ret.set_byte(i, byte as uint8_t);
+                    // A blob element takes the number's low byte, as
+                    // upstream's `(uint8_t)` cast does.
+                    b_ret.set_byte(i, byte.cast_unsigned().to_le_bytes()[0]);
                 }
             } else if rem {
                 b.remove_byte(i);
