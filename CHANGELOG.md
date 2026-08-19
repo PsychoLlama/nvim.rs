@@ -32,6 +32,11 @@ and this project adheres to [CalVer](https://calver.org/).
   instead of filling in an error the caller had to remember to look at.
   Every method keeps its name, its arguments and its documented behaviour.
   Nothing observable changed.
+- Gave the editor's option, command, window, buffer, syntax and highlight
+  flag words types of their own, so that a value belonging to one of them
+  can no longer be passed where another was meant. Two of the C names
+  turned out to cover two unrelated sets of flags each, and those are now
+  two types. Nothing observable changed.
 
 ## [2026.08.18-0975a8efd3]
 
