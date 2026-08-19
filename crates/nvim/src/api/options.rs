@@ -9,6 +9,7 @@ use crate::autocmd::{
 };
 use crate::buffer::{BufFlags, buflist_new, bufref_valid, set_bufref, wipe_buffer};
 use crate::options::{kOptAleph, kOptBufhidden, kOptBuftype, kOptInvalid};
+use core::ffi::CStr;
 
 use crate::main::{curbuf, current_sctx, curwin};
 use crate::memline::ml_open;
@@ -121,7 +122,7 @@ unsafe fn validate_option_value_args(
         );
         return 0 as ::core::ffi::c_int;
     }
-    *opt_idxp = find_option(name);
+    *opt_idxp = find_option(CStr::from_ptr(name));
     if *opt_idxp as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
         api_set_error(
             err,

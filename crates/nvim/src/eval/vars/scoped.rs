@@ -156,7 +156,7 @@ pub(crate) unsafe fn tv_to_optval(
     unsafe {
         let mut nbuf = [0 as c_char; 65];
         let mut err = false;
-        let is_tty_opt = is_tty_option(option);
+        let is_tty_opt = is_tty_option(CStr::from_ptr(option));
         let option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
         let option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
         let option_has_str = is_tty_opt || option_has_type(opt_idx, kOptValTypeString);
@@ -285,7 +285,7 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
 /// `varname` is a NUL-terminated name and `varp` a live value.
 unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
     unsafe {
-        let opt_idx = find_option(varname);
+        let opt_idx = find_option(CStr::from_ptr(varname));
         if opt_idx == kOptInvalid {
             semsg_c!(
                 gettext(&raw const e_unknown_option2 as *const c_char),

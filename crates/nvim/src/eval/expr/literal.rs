@@ -11,7 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::null_mut;
 
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
@@ -89,7 +89,8 @@ pub unsafe fn eval_option(arg: *mut *const c_char, rettv: *mut typval_T, evaluat
         let c = *option_end;
         *option_end = NUL as c_char;
 
-        let is_tty_opt = is_tty_option(*arg);
+        let opt_name = CStr::from_ptr(*arg);
+        let is_tty_opt = is_tty_option(opt_name);
         let ret = if opt_idx == kOptInvalid && !is_tty_opt {
             // Only report it when the result is going to be used.
             if !rettv.is_null() {
@@ -98,7 +99,7 @@ pub unsafe fn eval_option(arg: *mut *const c_char, rettv: *mut typval_T, evaluat
             FAIL
         } else if !rettv.is_null() {
             let value: OptVal = if is_tty_opt {
-                get_tty_option(*arg)
+                get_tty_option(opt_name)
             } else {
                 get_option_value(opt_idx, opt_flags)
             };

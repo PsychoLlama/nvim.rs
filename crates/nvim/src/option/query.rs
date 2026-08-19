@@ -128,14 +128,13 @@ pub fn reset_option_was_set(opt_idx: OptIndex) {
 ///
 /// # Safety
 ///
-/// `val`, when non-null, must be NUL-terminated; `wp` must be live.
-pub unsafe fn fill_culopt_flags(val: *mut c_char, wp: *mut win_T) -> c_int {
+/// `wp` must be live.
+pub unsafe fn fill_culopt_flags(val: Option<&CStr>, wp: *mut win_T) -> c_int {
     // SAFETY: the caller's `wp` is live and `val` is NUL-terminated.
     unsafe {
-        let mut p = if val.is_null() {
-            (*wp).w_onebuf_opt.wo_culopt
-        } else {
-            val
+        let mut p = match val {
+            Some(val) => val.as_ptr().cast_mut(),
+            None => (*wp).w_onebuf_opt.wo_culopt,
         };
         let mut flags: uint8_t = 0;
         while *p != 0 {

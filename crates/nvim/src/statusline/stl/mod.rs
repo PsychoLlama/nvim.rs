@@ -327,7 +327,7 @@ impl Env {
         }
         if self.opt_idx as c_int != kOptInvalid as c_int {
             // SAFETY: `p_sloc` holds a NUL-terminated option value.
-            let loc = unsafe { find_option(p_sloc.get()) };
+            let loc = find_option(unsafe { CStr::from_ptr(p_sloc.get()) });
             if loc as c_int != self.opt_idx as c_int {
                 return;
             }

@@ -293,7 +293,7 @@ pub unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
         }
         check_colorcolumn(ptr::null_mut(), wp);
         briopt_check(ptr::null_mut(), wp);
-        fill_culopt_flags(ptr::null_mut(), wp);
+        fill_culopt_flags(None, wp);
         set_chars_option(
             wp,
             (*wp).w_onebuf_opt.wo_fcs,

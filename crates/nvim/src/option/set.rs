@@ -34,7 +34,7 @@ use crate::main::{
     curbuf, current_sctx, curwin, e_invarg, e_sandbox, e_secure, e_unknown_option2,
     e_unsupportedoption, p_flp, p_mouse, p_wbr, sandbox, secure, starting, t_colors,
 };
-use crate::memory::{strequal, xfree, xmalloc, xstrdup};
+use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::mouse::setmouse;
 
@@ -51,7 +51,6 @@ use crate::types::{
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
-use ::libc::strlen;
 
 use super::{
     NIL_OPTVAL, NO_LOCAL_UNDOLEVEL, NUMBUFLEN, SID_NONE, boolean_optval, check_redraw,
@@ -199,24 +198,18 @@ fn apply_optionset_autocmd(
 /// Whether the name is one of the terminal options nvim keeps only to stay
 /// compatible with scripts that set them.
 ///
-/// # Safety
-///
-/// `name` must be a NUL-terminated string.
-pub unsafe fn is_tty_option(name: *const c_char) -> bool {
-    // SAFETY: the caller's `name` is NUL-terminated.
-    !unsafe { find_tty_option_end(name) }.is_null()
+pub fn is_tty_option(name: &CStr) -> bool {
+    // SAFETY: `name` is NUL-terminated, which is all the walk needs.
+    !unsafe { find_tty_option_end(name.as_ptr()) }.is_null()
 }
 
 /// What a terminal option reads back as. Only `t_Co`, `term` and `ttytype`
 /// have anything to say; the rest answer with the empty string.
 ///
-/// # Safety
-///
-/// `name` must be a NUL-terminated string.
-pub unsafe fn get_tty_option(name: *const c_char) -> OptVal {
-    // SAFETY: the caller's `name` is NUL-terminated.
+pub fn get_tty_option(name: &CStr) -> OptVal {
+    // SAFETY: `name` is NUL-terminated, and every arm allocates its answer.
     let value = unsafe {
-        if strequal(name, c"t_Co".as_ptr()) {
+        if name == c"t_Co" {
             if t_colors.get() <= 1 {
                 xstrdup(c"".as_ptr())
             } else {
@@ -224,9 +217,9 @@ pub unsafe fn get_tty_option(name: *const c_char) -> OptVal {
                 snprintf(buf, NUMBUFLEN as size_t, c"%d".as_ptr(), t_colors.get());
                 buf
             }
-        } else if strequal(name, c"term".as_ptr()) {
+        } else if name == c"term" {
             xstrdup(TERM.or(c"nvim"))
-        } else if strequal(name, c"ttytype".as_ptr()) {
+        } else if name == c"ttytype" {
             xstrdup(TTYTYPE.or(c"nvim"))
         } else if is_tty_option(name) {
             xstrdup(c"".as_ptr())
@@ -248,16 +241,14 @@ pub unsafe fn get_tty_option(name: *const c_char) -> OptVal {
 ///
 /// # Safety
 ///
-/// `name` must be NUL-terminated. On success the option takes ownership of
-/// `value`, which must be an allocation the option module may free.
-pub unsafe fn set_tty_option(name: *const c_char, value: *mut c_char) -> bool {
-    // SAFETY: the caller's `name` is NUL-terminated and `value` is ours now.
-    unsafe {
-        for (spelling, cell) in [(c"term", &TERM), (c"ttytype", &TTYTYPE)] {
-            if strequal(name, spelling.as_ptr()) {
-                cell.replace(value);
-                return true;
-            }
+/// On success the option takes ownership of `value`, which must be an
+/// allocation the option module may free.
+pub unsafe fn set_tty_option(name: &CStr, value: *mut c_char) -> bool {
+    for (spelling, cell) in [(c"term", &TERM), (c"ttytype", &TTYTYPE)] {
+        if name == spelling {
+            // SAFETY: `value` is ours now.
+            unsafe { cell.replace(value) };
+            return true;
         }
     }
     false
@@ -298,27 +289,17 @@ impl TtyName {
     }
 }
 
-/// The table index of `len` bytes of option name, or `kOptInvalid`.
-///
-/// # Safety
-///
-/// `name` must be readable for `len` bytes.
-pub unsafe fn find_option_len(name: *const c_char, len: size_t) -> OptIndex {
-    if len == 0 {
+/// The table index of an option name given as bytes, or `kOptInvalid`.
+pub fn find_option_len(name: &[u8]) -> OptIndex {
+    if name.is_empty() {
         return kOptInvalid;
     }
-    // SAFETY: the caller passes `len` readable bytes at `name`.
-    find_option_index(unsafe { ::core::slice::from_raw_parts(name.cast::<u8>(), len) })
+    find_option_index(name)
 }
 
 /// The table index of an option name, or `kOptInvalid`.
-///
-/// # Safety
-///
-/// `name` must be a NUL-terminated string.
-pub unsafe fn find_option(name: *const c_char) -> OptIndex {
-    // SAFETY: the caller's `name` is NUL-terminated.
-    unsafe { find_option_len(name, strlen(name)) }
+pub fn find_option(name: &CStr) -> OptIndex {
+    find_option_len(name.to_bytes())
 }
 
 /// An owned copy of the option's value in the scope the flags name. An
@@ -459,7 +440,7 @@ pub(crate) unsafe fn did_set_option(
         {
             errmsg = e_secure.as_ptr();
         } else if new_value.type_0 == kOptValTypeString
-            && check_illegal_path_names(*varp.cast::<*mut c_char>(), (*opt).flags)
+            && check_illegal_path_names(CStr::from_ptr(*varp.cast::<*mut c_char>()), (*opt).flags)
         {
             errmsg = e_invarg.as_ptr();
         } else if let Some(did_set_cb) = (*opt).opt_did_set_cb {
@@ -803,7 +784,7 @@ pub unsafe fn set_option_value_handle_tty(
     // SAFETY: the caller's `name` is NUL-terminated, and `ERRBUF` is
     // `IOSIZE` writable bytes.
     unsafe {
-        if is_tty_option(name) {
+        if is_tty_option(CStr::from_ptr(name)) {
             return ptr::null();
         }
         snprintf(

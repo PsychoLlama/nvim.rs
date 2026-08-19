@@ -234,12 +234,8 @@ pub unsafe fn check_string_option(pp: *mut *mut c_char) {
 }
 
 /// Is `val` a name 'filetype', 'syntax' or 'keymap' will accept?
-///
-/// # Safety
-/// `val` is a C string.
-pub(crate) unsafe fn valid_filetype(val: *const c_char) -> bool {
-    // SAFETY: `valid_name` only reads the string.
-    unsafe { valid_name(val, c".-_".as_ptr()) }
+pub(crate) fn valid_filetype(val: &CStr) -> bool {
+    valid_name(val, b".-_")
 }
 
 /// Parse 'signcolumn' and, given a window, store the width range it asks
@@ -439,9 +435,8 @@ pub unsafe fn check_stl_option(s: *mut c_char) -> *const c_char {
 ///
 /// # Safety
 /// `val` is a C string.
-pub unsafe fn check_illegal_path_names(val: *mut c_char, flags: uint32_t) -> bool {
-    // SAFETY: the caller's C string.
-    let val = unsafe { CStr::from_ptr(val) }.to_bytes();
+pub fn check_illegal_path_names(val: &CStr, flags: uint32_t) -> bool {
+    let val = val.to_bytes();
     let holds = |set: &[u8]| val.iter().any(|b| set.contains(b));
     (flags & kOptFlagNFname as uint32_t != 0
         && holds(if secure.get() != 0 {

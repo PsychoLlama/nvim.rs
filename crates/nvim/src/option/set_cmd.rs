@@ -16,6 +16,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use core::slice;
 
 use super::{NIL_OPTVAL, boolean_optval, optval_boolean, set_op_T, ui_refresh_options};
 use crate::api::private::helpers::cstr_as_string;
@@ -244,7 +245,10 @@ pub unsafe fn find_option_end(arg: *const c_char, opt_idxp: *mut OptIndex) -> *c
             *opt_idxp = kOptInvalid;
             return ptr::null();
         }
-        *opt_idxp = super::find_option_len(arg, p.offset_from(arg) as size_t);
+        *opt_idxp = super::find_option_len(slice::from_raw_parts(
+            arg.cast::<u8>(),
+            p.offset_from(arg) as usize,
+        ));
         p
     }
 }
@@ -445,7 +449,7 @@ unsafe fn do_one_set_option(
         let option_end = find_option_end(arg, &raw mut opt_idx);
         if opt_idx == kOptInvalid {
             // A terminal option is accepted and discarded.
-            if !is_tty_option(arg) {
+            if !is_tty_option(CStr::from_ptr(arg)) {
                 *errmsg = E_UNKNOWN_OPTION.as_ptr();
             }
             return;

@@ -12,8 +12,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
+use core::slice;
 
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
@@ -332,7 +333,10 @@ unsafe fn take_option_name(
             return None;
         }
         let nextchar = **p;
-        let opt_idx = find_option_len(arg, p.offset_from(arg) as size_t);
+        let opt_idx = find_option_len(slice::from_raw_parts(
+            arg.cast::<u8>(),
+            p.offset_from(arg) as usize,
+        ));
         if opt_idx == kOptInvalid || is_option_hidden(opt_idx) {
             (*xp).xp_context = ExpandContext::Nothing;
             return None;
@@ -609,7 +613,7 @@ pub unsafe fn ExpandOldSetting(numMatches: *mut c_int, matches: *mut *mut *mut c
         // A terminal option has no table row, so it is looked up by the
         // name `set_context_in_set_cmd` spelled out.
         if IDX.get() == kOptInvalid {
-            IDX.set(find_option(NAME.ptr().cast::<c_char>()));
+            IDX.set(find_option(CStr::from_ptr(NAME.ptr().cast::<c_char>())));
         }
         let var = if IDX.get() == kOptInvalid {
             c"".as_ptr() as *mut c_char

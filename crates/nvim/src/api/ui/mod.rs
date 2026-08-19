@@ -466,7 +466,7 @@ unsafe fn ui_set_option(
             }
             // 'term' is global, so the last UI to say what terminal it is
             // wins; the copy on the UI is what `nvim_list_uis` reports.
-            set_tty_option(c"term".as_ptr(), string_to_cstr(value.data.string));
+            set_tty_option(c"term", string_to_cstr(value.data.string));
             (*ui).term_name = string_to_cstr(value.data.string);
             return;
         }

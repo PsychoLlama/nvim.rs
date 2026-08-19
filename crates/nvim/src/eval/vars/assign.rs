@@ -425,10 +425,11 @@ unsafe fn ex_let_option(
         let c1 = *p;
         *p = NUL as c_char;
 
-        let is_tty_opt = is_tty_option(arg);
+        let arg_name = CStr::from_ptr(arg);
+        let is_tty_opt = is_tty_option(arg_name);
         let hidden = is_option_hidden(opt_idx);
         let curval = if is_tty_opt {
-            get_tty_option(arg)
+            get_tty_option(arg_name)
         } else {
             get_option_value(opt_idx, opt_flags)
         };

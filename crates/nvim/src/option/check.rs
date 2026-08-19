@@ -8,11 +8,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::api::extmark::nvim_create_namespace;
-use crate::ascii::ascii_isdigit;
 use crate::buffer::maketitle;
 use crate::charset::init_chartab;
 use crate::decoration_provider::get_decor_provider;
@@ -38,10 +37,9 @@ use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
-use crate::strings::vim_strchr;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, NUL, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, optset_T,
-    size_t, uint8_t, uint32_t, vimoption_T, win_T,
+    DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, optset_T,
+    size_t, uint32_t, vimoption_T, win_T,
 };
 
 use super::{
@@ -263,24 +261,13 @@ pub fn redraw_titles() {
 /// Whether every byte of `val` is a letter, a digit, or one of `allowed` —
 /// the test a 'filetype'/'syntax'/'keymap' value has to pass.
 ///
-/// # Safety
 ///
-/// `val` and `allowed` must be NUL-terminated.
-pub unsafe fn valid_name(val: *const c_char, allowed: *const c_char) -> bool {
-    // SAFETY: the caller's strings are NUL-terminated.
-    unsafe {
-        let mut s = val;
-        while *s != NUL as c_char {
-            if !(*s as u8).is_ascii_alphabetic()
-                && !ascii_isdigit(*s as c_int)
-                && vim_strchr(allowed, *s as uint8_t as c_int).is_null()
-            {
-                return false;
-            }
-            s = s.add(1);
-        }
-    }
-    true
+/// `allowed` is ASCII at every call site, so the byte search here is the
+/// same answer as upstream's `vim_strchr`, which only differs above 0x7f.
+pub fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
+    val.to_bytes()
+        .iter()
+        .all(|b| b.is_ascii_alphanumeric() || allowed.contains(b))
 }
 
 /// Whether the window's grid has to be composed with what is under it —

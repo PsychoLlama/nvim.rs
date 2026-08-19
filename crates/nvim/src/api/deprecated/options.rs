@@ -11,6 +11,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::option::NIL_OPTVAL;
 use crate::types::OptionSetFlags;
+use core::ffi::CStr;
 
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
@@ -143,7 +144,7 @@ unsafe fn get_option_from(
             return NIL;
         }
         let opt_name = name.data();
-        let mut opt_idx: OptIndex = find_option(opt_name);
+        let mut opt_idx: OptIndex = find_option(CStr::from_ptr(opt_name));
         if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
             api_err_invalid(err, c"option name".as_ptr(), opt_name, 0 as int64_t, true);
             return NIL;
@@ -195,7 +196,7 @@ unsafe fn set_option_to(
             return;
         }
         let opt_name = name.data();
-        let mut opt_idx: OptIndex = find_option(opt_name);
+        let mut opt_idx: OptIndex = find_option(CStr::from_ptr(opt_name));
         if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
             api_err_invalid(err, c"option name".as_ptr(), opt_name, 0 as int64_t, true);
             return;

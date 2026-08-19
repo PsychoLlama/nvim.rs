@@ -297,7 +297,7 @@ pub unsafe fn did_set_spellfile(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_spelllang(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
-    if !unsafe { valid_spelllang(*varp(args)) } {
+    if !valid_spelllang(unsafe { CStr::from_ptr(*varp(args)) }) {
         return invalid();
     }
     // SAFETY: re-reads the spelling options.

@@ -27,8 +27,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::smsg_c;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::autocmd::{EVENT_SPELLFILEMISSING, apply_autocmds};
 use crate::buffer::{bufref_valid, set_bufref};
@@ -290,7 +291,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
             ) as c_int;
             let mut region: *mut c_char = core::ptr::null_mut();
 
-            if !valid_spelllang(lang.as_ptr()) {
+            if !valid_spelllang(cstr::in_chars(&lang)) {
                 continue;
             }
 
@@ -675,8 +676,8 @@ pub unsafe fn spell_reload() {
 }
 
 /// Whether `val` is a usable `'spelllang'` value.
-pub unsafe fn valid_spelllang(val: *const c_char) -> bool {
-    unsafe { valid_name(val, c".-_,@".as_ptr()) }
+pub fn valid_spelllang(val: &CStr) -> bool {
+    valid_name(val, b".-_,@")
 }
 
 /// Whether `val` is a usable `'spellfile'` value: a comma-separated list of

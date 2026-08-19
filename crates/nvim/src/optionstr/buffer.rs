@@ -441,7 +441,7 @@ pub unsafe fn did_set_filetype_or_syntax(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value and its old one.
     unsafe {
         let value = *varp(args);
-        if !valid_filetype(value) {
+        if !valid_filetype(CStr::from_ptr(value)) {
             return invalid();
         }
         (*args).os_value_changed = strcmp(old_value(args), value) != 0;
@@ -576,7 +576,7 @@ pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
     let (buf, varp, opt_flags) =
         unsafe { ((*args).os_buf.cast::<buf_T>(), varp(args), (*args).os_flags) };
     // SAFETY: the frame's C string value.
-    if !unsafe { valid_filetype(*varp) } {
+    if !unsafe { valid_filetype(CStr::from_ptr(*varp)) } {
         return invalid();
     }
 
