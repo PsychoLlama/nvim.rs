@@ -8,7 +8,7 @@ use core::ffi::c_int;
 
 use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
-use super::postfix;
+use super::{Parsed, Rejected, postfix};
 use crate::ascii::ascii_isdigit;
 use crate::main::{curwin, rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
@@ -20,10 +20,10 @@ use crate::regexp::{
     getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,
 };
 use crate::semsg;
-use crate::types::{FAIL, MB_MAXBYTES, NUL, OK, colnr_T};
+use crate::types::{MB_MAXBYTES, NUL, colnr_T};
 
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
-pub(crate) fn z_atom(rex: Rex) -> c_int {
+pub(crate) fn z_atom(rex: Rex) -> Parsed {
     let c = unmagic(getchr());
     // `u8::try_from` rather than `as u8`: a multibyte character after `\z`
     // must reach the default arm rather than alias one of these bytes.
@@ -31,7 +31,7 @@ pub(crate) fn z_atom(rex: Rex) -> c_int {
         Ok(b's') => {
             postfix::emit(NFA_ZSTART);
             if !re_mult_next("\\zs") {
-                return FAIL;
+                return Err(Rejected);
             }
         }
         Ok(b'e') => {
@@ -40,7 +40,7 @@ pub(crate) fn z_atom(rex: Rex) -> c_int {
             // end position rather than take it from where it stopped.
             rex.set_nfa_has_zend(1);
             if !re_mult_next("\\ze") {
-                return FAIL;
+                return Err(Rejected);
             }
         }
         Ok(b'1'..=b'9') => {
@@ -49,7 +49,7 @@ pub(crate) fn z_atom(rex: Rex) -> c_int {
             if reg_do_extmatch.get() & REX_USE == 0 {
                 semsg!("E67: \\z1 - \\z9 not allowed here");
                 rc_did_emsg.set(true);
-                return FAIL;
+                return Err(Rejected);
             }
             postfix::emit(NFA_ZREF1 + (c - b'1' as c_int));
             re_has_z.set(REX_USE);
@@ -59,20 +59,18 @@ pub(crate) fn z_atom(rex: Rex) -> c_int {
             if reg_do_extmatch.get() != REX_SET {
                 semsg!("E66: \\z( not allowed here");
                 rc_did_emsg.set(true);
-                return FAIL;
+                return Err(Rejected);
             }
-            if nfa_reg(rex, REG_ZPAREN) == FAIL {
-                return FAIL;
-            }
+            nfa_reg(rex, REG_ZPAREN)?;
             re_has_z.set(REX_SET);
         }
         _ => {
             let c = unmagic(c) as u8 as char;
             semsg!("E867: (NFA) Unknown operator '\\z{c}'");
-            return FAIL;
+            return Err(Rejected);
         }
     }
-    OK
+    Ok(())
 }
 
 /// `\%`: the non-capturing group, the character escapes, the boundary
@@ -81,14 +79,12 @@ pub(crate) fn z_atom(rex: Rex) -> c_int {
 /// `save_prev_at_start` is the "still at the start of the pattern" flag from
 /// before this atom was read; `\%23l` restores it, because a position
 /// assertion consumes nothing and so does not move the start.
-pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> c_int {
+pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> Parsed {
     let c = unmagic(getchr());
     // `u8::try_from` rather than `as u8`: see `z_atom`.
     match u8::try_from(c) {
         Ok(b'(') => {
-            if nfa_reg(rex, REG_NPAREN) == FAIL {
-                return FAIL;
-            }
+            nfa_reg(rex, REG_NPAREN)?;
             postfix::emit(NFA_NOPEN);
         }
         Ok(escape @ (b'd' | b'o' | b'x' | b'u' | b'U')) => return character_escape(escape),
@@ -101,7 +97,7 @@ pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> c_int {
             if pat_byte(0) == b'=' && matches!(pat_byte(1), b'0'..=b'2') {
                 let which = pat_byte(1) as char;
                 semsg!("E1281: Atom '\\%#={which}' must be at the start of the pattern");
-                return FAIL;
+                return Err(Rejected);
             }
             postfix::emit(NFA_CURSOR);
         }
@@ -110,12 +106,12 @@ pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> c_int {
         Ok(b'[') => return optional_sequence(rex),
         _ => return position_atom(c, save_prev_at_start),
     }
-    OK
+    Ok(())
 }
 
 /// `\%d123`, `\%o17`, `\%x2a`, `\%u20ac`, `\%U0001f600`: a character by its
 /// code point.
-fn character_escape(escape: u8) -> c_int {
+fn character_escape(escape: u8) -> Parsed {
     let nr = match escape {
         b'd' => getdecchrs(),
         b'o' => getoctchrs(),
@@ -127,19 +123,19 @@ fn character_escape(escape: u8) -> c_int {
         let prefix = magic_prefix();
         semsg!("E678: Invalid character after {prefix}%[dxouU]");
         rc_did_emsg.set(true);
-        return FAIL;
+        return Err(Rejected);
     }
     // A NUL cannot be matched as itself; in a pattern it stands for a line
     // break, as it does everywhere else in the engine.
     postfix::emit(if nr == 0 { 0xa } else { nr as c_int });
-    OK
+    Ok(())
 }
 
 /// `\%[abc]`: a sequence in which every trailing part is optional.
 ///
 /// Each member is one atom, and `NFA_OPT_CHARS` carries how many of them
 /// there were.
-fn optional_sequence(rex: Rex) -> c_int {
+fn optional_sequence(rex: Rex) -> Parsed {
     let mut n = 0;
     loop {
         let c = peekchr();
@@ -150,11 +146,9 @@ fn optional_sequence(rex: Rex) -> c_int {
             let prefix = magic_prefix();
             semsg!("E69: Missing ] after {prefix}%[");
             rc_did_emsg.set(true);
-            return FAIL;
+            return Err(Rejected);
         }
-        if nfa_regatom(rex) == FAIL {
-            return FAIL;
-        }
+        nfa_regatom(rex)?;
         n += 1;
     }
     getchr();
@@ -162,12 +156,12 @@ fn optional_sequence(rex: Rex) -> c_int {
         let prefix = magic_prefix();
         semsg!("E70: Empty {prefix}%[]");
         rc_did_emsg.set(true);
-        return FAIL;
+        return Err(Rejected);
     }
     postfix::emit(NFA_OPT_CHARS);
     postfix::emit(n);
     postfix::emit(NFA_NOPEN);
-    OK
+    Ok(())
 }
 
 /// Which side of the given position a match has to be on.
@@ -184,7 +178,7 @@ fn compare(cmp: c_int, lt: c_int, gt: c_int, at: c_int) -> c_int {
 /// The `\%23l`, `\%23c`, `\%23v` and `\%'m` assertions, in their bare,
 /// `\%<` and `\%>` forms, and with `.` standing for the cursor's own line,
 /// column or virtual column.
-fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> c_int {
+fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
     let mut c = cmp;
     if c == b'<' as c_int || c == b'>' as c_int {
         c = getchr();
@@ -200,11 +194,11 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> c_int {
         if cur {
             let c = unmagic(c) as u8 as char;
             semsg!("E1204: No Number allowed after .: '\\%{c}'");
-            return FAIL;
+            return Err(Rejected);
         }
         if n > ((INT32_MAX - (c - b'0' as c_int)) / 10) as i64 {
             semsg!("E951: \\% value too large");
-            return FAIL;
+            return Err(Rejected);
         }
         n = n * 10 + (c - b'0' as c_int) as i64;
         c = getchr();
@@ -215,7 +209,7 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> c_int {
         if !cur && !got_digit {
             let c = unmagic(c) as u8 as char;
             semsg!("E1273: (NFA regexp) missing value in '\\%{c}'");
-            return FAIL;
+            return Err(Rejected);
         }
         let mut limit = INT32_MAX;
         match unit {
@@ -248,21 +242,21 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> c_int {
         }
         if n >= limit as i64 {
             semsg!("E951: \\% value too large");
-            return FAIL;
+            return Err(Rejected);
         }
         postfix::emit(n as c_int);
-        return OK;
+        return Ok(());
     }
 
     if unmagic(c) == b'\'' as c_int && n == 0 {
         postfix::emit(compare(cmp, NFA_MARK_LT, NFA_MARK_GT, NFA_MARK));
         postfix::emit(getchr());
-        return OK;
+        return Ok(());
     }
 
     let c = unmagic(c) as u8 as char;
     semsg!("E867: (NFA) Unknown operator '\\%{c}'");
-    FAIL
+    Err(Rejected)
 }
 
 fn cursor_lnum() -> i64 {

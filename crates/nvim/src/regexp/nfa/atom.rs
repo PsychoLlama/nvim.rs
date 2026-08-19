@@ -15,14 +15,14 @@ use super::literal::{
     back_reference, class_shorthand, is_class_shorthand, literal, previous_substitute,
 };
 use super::parse::nfa_reg;
-use super::{cursor, postfix};
+use super::{Parsed, Rejected, cursor, postfix};
 use crate::main::rc_did_emsg;
 use crate::regexp::{
     NFA_ADD_NL, NFA_BOL, NFA_BOW, NFA_EOL, NFA_EOW, NFA_NEWL, NL, REG_PAREN, RF_HASNL, Rex, getchr,
     had_eol, magic, prev_at_start, reg_string, regflags, unmagic,
 };
 use crate::semsg;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');
@@ -48,7 +48,7 @@ const M_1: c_int = magic(b'1');
 const M_9: c_int = magic(b'9');
 
 /// Parse one atom and append it to the postfix program.
-pub(crate) fn nfa_regatom(rex: Rex) -> c_int {
+pub(crate) fn nfa_regatom(rex: Rex) -> Parsed {
     // `\%23l` restores the "still at the start of the pattern" flag, because
     // a position assertion consumes no input; [`percent_atom`] needs the
     // value from before this atom was read.
@@ -69,12 +69,12 @@ pub(crate) fn nfa_regatom(rex: Rex) -> c_int {
         return match u8::try_from(c) {
             Ok(b'^') => {
                 postfix::emit(NFA_BOL);
-                OK
+                Ok(())
             }
             Ok(b'$') => {
                 postfix::emit(NFA_EOL);
                 had_eol.set(1);
-                OK
+                Ok(())
             }
             Ok(b'[') => bracketed(NFA_ADD_NL, atom_start, c),
             _ => class_shorthand(c, NFA_ADD_NL),
@@ -85,20 +85,20 @@ pub(crate) fn nfa_regatom(rex: Rex) -> c_int {
         NUL => nul_found(),
         M_CARET => {
             postfix::emit(NFA_BOL);
-            OK
+            Ok(())
         }
         M_DOLLAR => {
             postfix::emit(NFA_EOL);
             had_eol.set(1);
-            OK
+            Ok(())
         }
         M_LT => {
             postfix::emit(NFA_BOW);
-            OK
+            Ok(())
         }
         M_GT => {
             postfix::emit(NFA_EOW);
-            OK
+            Ok(())
         }
 
         // `\n` is a line break, except in a string match, where there are no
@@ -110,7 +110,7 @@ pub(crate) fn nfa_regatom(rex: Rex) -> c_int {
                 postfix::emit(NFA_NEWL);
                 regflags.set(regflags.get() | RF_HASNL as u32);
             }
-            OK
+            Ok(())
         }
 
         M_PAREN_OPEN => nfa_reg(rex, REG_PAREN),
@@ -121,7 +121,7 @@ pub(crate) fn nfa_regatom(rex: Rex) -> c_int {
         M_BAR | M_AMP | M_PAREN_CLOSE | M_EQUAL | M_QUESTION | M_PLUS | M_AT | M_STAR | M_BRACE => {
             let c = unmagic(c) as u8 as char;
             semsg!("E866: (NFA regexp) Misplaced {c}");
-            FAIL
+            Err(Rejected)
         }
 
         M_TILDE => previous_substitute(),
@@ -137,19 +137,19 @@ pub(crate) fn nfa_regatom(rex: Rex) -> c_int {
     }
 }
 
-fn nul_found() -> c_int {
+fn nul_found() -> Parsed {
     semsg!("E865: (NFA) Regexp end encountered prematurely");
     rc_did_emsg.set(true);
-    FAIL
+    Err(Rejected)
 }
 
 /// A `[` that may open a collection. If it does not close, it is an ordinary
 /// character — unless 'regexpengine' strictness is on, where the missing `]`
 /// is an error.
-fn bracketed(extra: c_int, atom_start: *mut c_char, c: c_int) -> c_int {
+fn bracketed(extra: c_int, atom_start: *mut c_char, c: c_int) -> Parsed {
     match collection(extra, atom_start) {
-        Collection::Done => OK,
-        Collection::Failed => FAIL,
+        Collection::Done => Ok(()),
+        Collection::Failed => Err(Rejected),
         Collection::NotACollection => literal(c, atom_start),
     }
 }

@@ -8,7 +8,7 @@
 use crate::siemsg_c;
 use core::ffi::{c_char, c_int};
 
-use super::{cursor, postfix};
+use super::{Parsed, Rejected, cursor, postfix};
 use crate::main::{e_nopresub, rc_did_emsg};
 use crate::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::message::emsg;
@@ -22,7 +22,7 @@ use crate::regexp::{
     seen_endbrace, unmagic,
 };
 use crate::semsg;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::NUL;
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `nfa_classcodes`) paired them. The `\_x` form of each is
@@ -67,7 +67,7 @@ pub(crate) fn is_class_shorthand(c: c_int) -> bool {
 /// Reached both from a magic `\d` and from a `\_d`, which is why the lookup
 /// is on the unmagicked character. `atom_start` is where this atom began,
 /// which the `.`-plus-combining-character case needs.
-pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> c_int {
+pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> Parsed {
     let Some(&(_, code)) = CLASS_SHORTHANDS
         .iter()
         .find(|(name, _)| *name as c_int == unmagic(c))
@@ -86,7 +86,7 @@ pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> c_int {
             // SAFETY: a NUL-terminated literal and the int its `%d` takes.
             unsafe { siemsg_c!(c"INTERNAL: Unknown character class char: %d".as_ptr(), c) };
         }
-        return FAIL;
+        return Err(Rejected);
     };
 
     // `.` followed by a combining character is that grapheme, not the "any"
@@ -102,32 +102,32 @@ pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> c_int {
         postfix::emit(NFA_OR);
         regflags.set(regflags.get() | RF_HASNL as u32);
     }
-    OK
+    Ok(())
 }
 
 /// `\1` .. `\9`: match what that capture group matched.
-pub(crate) fn back_reference(rex: Rex, c: c_int) -> c_int {
+pub(crate) fn back_reference(rex: Rex, c: c_int) -> Parsed {
     let refnum = unmagic(c) - b'1' as c_int;
     // A back-reference to a group that has not been closed yet cannot work.
     if !seen_endbrace(refnum + 1) {
-        return FAIL;
+        return Err(Rejected);
     }
     postfix::emit(NFA_BACKREF1 + refnum);
     rex.set_nfa_has_backref(1);
-    OK
+    Ok(())
 }
 
 /// `\~`: the text of the last `:substitute` replacement, as literal
 /// characters wrapped in a group so that a repeat after it applies to the
 /// whole run.
-pub(crate) fn previous_substitute() -> c_int {
+pub(crate) fn previous_substitute() -> Parsed {
     // SAFETY: `reg_prev_sub` is either null or a NUL-terminated copy of the
     // replacement, owned by the substitute code.
     unsafe {
         let sub = reg_prev_sub.get();
         if sub.is_null() {
             emsg(gettext(&raw const e_nopresub as *const c_char));
-            return FAIL;
+            return Err(Rejected);
         }
         let mut p = sub;
         while *p as c_int != NUL {
@@ -140,7 +140,7 @@ pub(crate) fn previous_substitute() -> c_int {
             p = p.add(utf_ptr2len(p) as usize);
         }
         postfix::emit(NFA_NOPEN);
-        OK
+        Ok(())
     }
 }
 
@@ -149,11 +149,11 @@ pub(crate) fn previous_substitute() -> c_int {
 ///
 /// A grapheme becomes an `NFA_COMPOSING` group holding each of its code
 /// points; a plain character is one item.
-pub(crate) fn literal(mut c: c_int, atom_start: *mut c_char) -> c_int {
+pub(crate) fn literal(mut c: c_int, atom_start: *mut c_char) -> Parsed {
     let plen = cursor::grapheme_len(atom_start);
     if utf_char2len(c) == plen && !cursor::is_composing(c) {
         postfix::emit(unmagic(c));
-        return OK;
+        return Ok(());
     }
 
     let mut i = 0;
@@ -170,5 +170,5 @@ pub(crate) fn literal(mut c: c_int, atom_start: *mut c_char) -> c_int {
     }
     postfix::emit(NFA_COMPOSING);
     cursor::seek_to(atom_start.wrapping_offset(plen as isize));
-    OK
+    Ok(())
 }

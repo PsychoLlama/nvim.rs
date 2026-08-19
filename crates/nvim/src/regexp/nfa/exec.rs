@@ -343,7 +343,7 @@ pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut re
         nfa_regcomp_start(rex, expr, re_flags);
 
         let mut prog: *mut nfa_regprog_T = core::ptr::null_mut();
-        if re2post(rex) != FAIL {
+        if re2post(rex).is_ok() {
             // The first pass counts the states, because the program is one
             // block with them inline.
             postfix::with_items(|items| post2nfa(items, Pass::Count));
