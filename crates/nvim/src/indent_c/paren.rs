@@ -74,7 +74,7 @@ pub(crate) unsafe fn find_start_brace() -> *mut pos_T {
 
             let mut pos = ::core::ptr::null_mut::<pos_T>();
             if cin_skip2pos(trypos) == (*trypos).col && {
-                pos = ind_find_start_CORS(None);
+                pos = ind_find_start_comment_or_raw_string(None);
                 pos.is_null()
             } {
                 break;
@@ -138,12 +138,12 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> *mut pos_T {
                 continue;
             }
 
-            // Copy it: the `ind_find_start_CORS` below overwrites the static.
+            // Copy it: the `ind_find_start_comment_or_raw_string` below overwrites the static.
             POS_COPY.set(*trypos);
             trypos = POS_COPY.ptr();
             (*curwin.get()).w_cursor = *trypos;
 
-            let trypos_wk = ind_find_start_CORS(None);
+            let trypos_wk = ind_find_start_comment_or_raw_string(None);
             if trypos_wk.is_null() {
                 break trypos;
             }

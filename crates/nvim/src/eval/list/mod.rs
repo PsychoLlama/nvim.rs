@@ -51,7 +51,7 @@ use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
     set_vim_var_type, var_check_fixed, var_check_ro,
 };
-use crate::eval::{eval_expr_typval, get_copyID};
+use crate::eval::{eval_expr_typval, get_copy_id};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::ga_grow;
 use crate::hashtab::{hash_lock, hash_unlock};
@@ -267,7 +267,7 @@ impl List {
     #[inline(always)]
     pub(crate) fn copy(self) -> List {
         // SAFETY: live or NULL; no conversion, and a fresh copyID.
-        Self(unsafe { tv_list_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copyID()) })
+        Self(unsafe { tv_list_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copy_id()) })
     }
 
     #[inline(always)]
@@ -456,7 +456,7 @@ impl Dict {
     #[inline(always)]
     pub(crate) fn copy(self) -> Dict {
         // SAFETY: live; no conversion, and a fresh copyID.
-        Self(unsafe { tv_dict_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copyID()) })
+        Self(unsafe { tv_dict_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copy_id()) })
     }
 
     #[inline(always)]

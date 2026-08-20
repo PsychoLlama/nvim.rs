@@ -146,7 +146,7 @@ pub(crate) unsafe fn cin_first_id_amount() -> c_int {
         }
 
         let mut len = 0usize;
-        while vim_isIDc(c_int::from(*p.add(len) as u8)) {
+        while vim_is_ident_char(c_int::from(*p.add(len) as u8)) {
             len += 1;
         }
         if len == 0 || !ascii_iswhite(c_int::from(*p.add(len) as u8)) || cin_nocode(p) {

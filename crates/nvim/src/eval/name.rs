@@ -11,7 +11,7 @@ use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_isdigit;
-use crate::charset::{skipwhite, vim_isIDc};
+use crate::charset::{skipwhite, vim_is_ident_char};
 use crate::eval::userfunc::eval_fname_script;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
@@ -37,7 +37,7 @@ use ::libc::strlen;
 pub unsafe fn get_env_len(arg: *mut *const c_char) -> c_int {
     unsafe {
         let mut p = *arg;
-        while vim_isIDc(*p as uint8_t as c_int) {
+        while vim_is_ident_char(*p as uint8_t as c_int) {
             p = p.add(1);
         }
         if p == *arg {

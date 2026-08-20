@@ -13,7 +13,7 @@ use crate::change::{
     deleted_lines_mark, ins_bytes_len, ins_char, ins_char_bytes, ins_str, open_line,
 };
 use crate::charset::{
-    getwhitecols, ptr2cells, skipwhite, str_foldcase, vim_isIDc, vim_isfilec, vim_isprintc,
+    getwhitecols, ptr2cells, skipwhite, str_foldcase, vim_is_ident_char, vim_isfilec, vim_isprintc,
     vim_iswordc, vim_iswordp, vim_strsize,
 };
 use crate::cmdexpand::{addstar, expand_cmdline, set_cmd_context};
@@ -22,7 +22,7 @@ use crate::cursor::{
     get_cursor_pos_ptr, inc_cursor,
 };
 use crate::drawscreen::{
-    UPD_VALID, redraw_later, redrawWinline, setcursor, showmode, update_screen,
+    UPD_VALID, redraw_later, redraw_win_line, setcursor, showmode, update_screen,
 };
 use crate::edit::{
     backspace_until_column, get_can_cindent, ins_apply_autocmds, ins_eol, ins_need_undo_get,

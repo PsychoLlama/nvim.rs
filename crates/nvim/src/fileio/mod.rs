@@ -71,7 +71,7 @@ use crate::os::input::os_breakcheck;
 use crate::os::users::os_get_username;
 use crate::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
-    path_shorten_fname, path_tail, path_with_url, vim_FullName,
+    path_shorten_fname, path_tail, path_with_url, vim_full_name,
 };
 use crate::pos::MAXLNUM;
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};

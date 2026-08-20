@@ -2,7 +2,7 @@
 //!
 //! A paragraph boundary is an empty line, a form feed, or a line matching one
 //! of the two-letter nroff macro lists in 'paragraphs'/'sections'.
-//! [`startPS`] is that test -- the rest of the tree asks it too -- and
+//! [`starts_para`] is that test -- the rest of the tree asks it too -- and
 //! [`findpar`] and [`current_par`] are the two shapes built on it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -61,7 +61,7 @@ pub unsafe fn findpar(
                     curr = (if dir > 0 { fold_last } else { fold_first }) + dir as linenr_T;
                     fold_skipped = true;
                 }
-                if !first && did_skip && startPS(curr, what, both) {
+                if !first && did_skip && starts_para(curr, what, both) {
                     break;
                 }
                 if fold_skipped {
@@ -146,7 +146,7 @@ unsafe fn inmacro(opt: *mut c_char, s: *const c_char) -> bool {
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe fn startPS(lnum: linenr_T, para: c_int, both: bool) -> bool {
+pub unsafe fn starts_para(lnum: linenr_T, para: c_int, both: bool) -> bool {
     unsafe {
         let s = ml_get(lnum);
         if *s as u8 as c_int == para
@@ -212,7 +212,7 @@ unsafe fn extend_paragraphs(mut start_lnum: linenr_T, count: c_int, include: boo
                 while start_lnum != limit(dir) {
                     if start_is_white != linewhite(start_lnum + dir as linenr_T) as c_int
                         || (start_is_white == 0
-                            && startPS(start_lnum + if dir > 0 { 1 } else { 0 }, 0, false))
+                            && starts_para(start_lnum + if dir > 0 { 1 } else { 0 }, 0, false))
                     {
                         break;
                     }
@@ -258,7 +258,7 @@ pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0
                 if !linewhite(start_lnum - 1) {
                     break; // stop at the first white line
                 }
-            } else if linewhite(start_lnum - 1) || startPS(start_lnum, 0, false) {
+            } else if linewhite(start_lnum - 1) || starts_para(start_lnum, 0, false) {
                 break; // stop at the paragraph's first line
             }
             start_lnum -= 1;
@@ -295,7 +295,7 @@ pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0
                 // On to the end of the paragraph.
                 while end_lnum < (*curbuf.get()).b_ml.ml_line_count
                     && !linewhite(end_lnum + 1)
-                    && !startPS(end_lnum + 1, 0, false)
+                    && !starts_para(end_lnum + 1, 0, false)
                 {
                     end_lnum += 1;
                 }

@@ -16,7 +16,7 @@ use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
 };
-use crate::eval::{eval_expr_typval, get_copyID, partial_name, var_item_copy};
+use crate::eval::{eval_expr_typval, get_copy_id, partial_name, var_item_copy};
 use crate::main::{called_emsg, did_emsg, e_invarg2, e_listarg, e_listblobreq, e_listdictblobarg};
 use crate::memory::xstrdup;
 use crate::message::{emsg, internal_error};
@@ -59,7 +59,7 @@ pub unsafe fn f_deepcopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             return;
         }
         let noref = args.has(1) && tv_get_bool_chk(args.ptr(1), ptr::null_mut()) != 0;
-        let copy_id = if noref { 0 } else { get_copyID() };
+        let copy_id = if noref { 0 } else { get_copy_id() };
         var_item_copy(ptr::null(), args.ptr(0), rettv, true, copy_id);
     }
 }
@@ -147,7 +147,7 @@ unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) 
             return;
         }
         if make_copy {
-            list = tv_list_copy(ptr::null(), list, false, get_copyID());
+            list = tv_list_copy(ptr::null(), list, false, get_copy_id());
             rettv.vval.v_list = list;
             if list.is_null() {
                 return;

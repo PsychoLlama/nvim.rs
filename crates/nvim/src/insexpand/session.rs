@@ -43,7 +43,8 @@ pub(crate) unsafe fn get_normal_compl_info(
             if !compl_status_adding() {
                 while {
                     startcol -= 1;
-                    startcol >= 0 && vim_isIDc(*line.offset(startcol as isize) as u8 as c_int)
+                    startcol >= 0
+                        && vim_is_ident_char(*line.offset(startcol as isize) as u8 as c_int)
                 } {}
                 startcol += 1;
                 (*compl_col.ptr()) += startcol;
@@ -565,7 +566,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
 
         // If any of the original typed text has been changed we need to fix
         // the redo buffer.
-        ins_compl_fixRedoBufForLeader(ptr::null_mut());
+        ins_compl_fix_redo_buf_for_leader(ptr::null_mut());
 
         // Always add a completion for the original text.
         clear_string(&compl_orig_text);

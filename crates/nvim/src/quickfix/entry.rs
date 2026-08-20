@@ -72,7 +72,7 @@ pub(crate) unsafe fn qf_get_fnum(
         }
         // Owned only when the name had to be joined to a directory.
         let mut joined: *mut c_char = ptr::null_mut();
-        let bufname = if !directory.is_null() && !vim_isAbsName(fname) {
+        let bufname = if !directory.is_null() && !vim_is_abs_name(fname) {
             joined = concat_fnames(directory, fname, true);
             // The file should be there. If it is not, `make` changed
             // directory without a "leaving directory" message and the
@@ -147,7 +147,7 @@ pub(crate) unsafe fn qf_push_dir(
         }
         let stack = &mut **slot;
         let name = Name::from_ptr(dirbuf);
-        let plain = vim_isAbsName(dirbuf) || stack.dirs.is_empty() || is_file_stack;
+        let plain = vim_is_abs_name(dirbuf) || stack.dirs.is_empty() || is_file_stack;
         stack.dirs.push(name);
         if plain {
             return stack.top();

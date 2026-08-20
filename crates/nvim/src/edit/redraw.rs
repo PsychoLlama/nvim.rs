@@ -215,9 +215,9 @@ pub(crate) unsafe fn edit_unputchar() {
             // restored a cell at a time; redraw the whole line instead.
             PutChar::Right => {
                 (*win).w_wcol += 1;
-                redrawWinline(win, (*win).w_cursor.lnum);
+                redraw_win_line(win, (*win).w_cursor.lnum);
             }
-            PutChar::Left => redrawWinline(win, (*win).w_cursor.lnum),
+            PutChar::Left => redraw_win_line(win, (*win).w_cursor.lnum),
             PutChar::Set => {
                 grid_line_start(&raw mut (*win).w_grid, pc_row.get());
                 grid_line_put_schar(pc_col.get(), pc_schar.get(), pc_attr.get());
@@ -268,7 +268,7 @@ pub(crate) unsafe fn undisplay_dollar() {
             return;
         }
         dollar_vcol.set(-1);
-        redrawWinline(curwin.get(), (*curwin.get()).w_cursor.lnum);
+        redraw_win_line(curwin.get(), (*curwin.get()).w_cursor.lnum);
     }
 }
 

@@ -88,7 +88,7 @@ const EXESTACK_SLACK: c_int = 500;
 
 /// The next mark. Two apart, so `set_ref_in_previous_funccal` can use the
 /// odd value in between.
-pub unsafe fn get_copyID() -> c_int {
+pub unsafe fn get_copy_id() -> c_int {
     static CURRENT_COPY_ID: GlobalCell<c_int> = GlobalCell::new(0);
     // SAFETY: a plain counter in a cell nothing else touches.
     unsafe { *CURRENT_COPY_ID.ptr() += COPYID_INC };
@@ -121,7 +121,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
 
         trim_exestack();
 
-        let copy_id = get_copyID();
+        let copy_id = get_copy_id();
 
         // 1. Mark everything reachable from a root.
 

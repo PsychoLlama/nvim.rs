@@ -79,7 +79,7 @@ unsafe fn previous_line_under_same_paren(
                 (*curwin.get()).w_cursor.lnum = lnum;
 
                 // Skip a comment or raw string.
-                let trypos = ind_find_start_CORS(None);
+                let trypos = ind_find_start_comment_or_raw_string(None);
                 if !trypos.is_null() {
                     lnum = (*trypos).lnum + 1;
                 } else {

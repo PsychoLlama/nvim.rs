@@ -39,7 +39,7 @@ use crate::os::input::os_breakcheck;
 use crate::path::{
     ExpandFlags, FreeWild, FullName_save, after_pathsep, expand_wildcards, path_fnamecmp,
     path_fnamencmp, path_has_drive_letter, path_is_url, path_shorten_fname, path_tail,
-    path_tail_with_sep, path_with_url, pathcmp, simplify_filename, vim_isAbsName, vim_ispathsep,
+    path_tail_with_sep, path_with_url, pathcmp, simplify_filename, vim_is_abs_name, vim_ispathsep,
 };
 use crate::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
@@ -357,7 +357,7 @@ impl FindContext {
             let mut expand_empty = false;
 
             // If we have a start dir copy it in.
-            if !vim_isAbsName(frame.fix_path.as_ptr())
+            if !vim_is_abs_name(frame.fix_path.as_ptr())
                 && let Some(start_dir) = &self.start_dir
             {
                 if start_dir.len() + 1 >= MAXPATHL as usize {

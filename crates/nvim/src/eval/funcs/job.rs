@@ -41,7 +41,7 @@ use crate::os::fs::os_isdir;
 use crate::os::pty_proc_unix::pty_proc_resize;
 use crate::os::shell::shell_free_argv;
 use crate::os::time::os_hrtime;
-use crate::path::vim_FullName;
+use crate::path::vim_full_name;
 use crate::semsg_c;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
@@ -631,7 +631,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         // which is what each of these three re-tests is for.
         if terminal_live(chan) {
             // Name the buffer `term://{cwd}//{pid}:{cmd}`.
-            vim_FullName(cwd, NameBuff.ptr() as *mut c_char, 4096, false);
+            vim_full_name(cwd, NameBuff.ptr() as *mut c_char, 4096, false);
             let len = home_replace(
                 ptr::null(),
                 NameBuff.ptr() as *mut c_char,

@@ -42,7 +42,7 @@ use crate::message::msg_putchar;
 use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::cshim::snprintf;
 use crate::os::input::os_breakcheck;
-use crate::path::vim_FullName;
+use crate::path::vim_full_name;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
@@ -85,7 +85,7 @@ pub(crate) unsafe fn set_argf_var() {
         for i in 0..(*alist).al_ga.ga_len {
             let fname = alist_name(((*alist).al_ga.ga_data as *mut aentry_T).offset(i as isize));
             if !fname.is_null() {
-                vim_FullName(
+                vim_full_name(
                     fname,
                     NameBuff.ptr() as *mut c_char,
                     size_of::<[c_char; 4096]>(),

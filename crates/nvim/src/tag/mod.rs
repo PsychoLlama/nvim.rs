@@ -52,7 +52,8 @@ use crate::os::cshim::{gettext, snprintf, strncmp, strstr};
 use crate::os::fs::{os_fopen, os_path_exists};
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::path::{
-    FreeWild, FullName_save, path_full_compare, path_has_wildcard, simplify_filename, vim_isAbsName,
+    FreeWild, FullName_save, path_full_compare, path_has_wildcard, simplify_filename,
+    vim_is_abs_name,
 };
 use crate::pos::MAXLNUM;
 use crate::quickfix::set_errorlist;

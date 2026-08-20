@@ -15,7 +15,7 @@ use crate::eval::typval::{
     callback_free, tv_clear, tv_list_copy, tv_list_find, tv_list_free, tv_list_len,
 };
 use crate::eval::userfunc::get_scriptlocal_funcname;
-use crate::eval::{callback_call, get_copyID, set_ref_in_callback};
+use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
 use crate::ex_docmd::{ffu_cb, kCdCauseManual, prev_dir};
 use crate::ex_getln::allbuf_locked;
 use crate::file_search::{do_autocmd_dirchanged, vim_chdir};
@@ -88,7 +88,7 @@ pub(crate) unsafe fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) 
         let mut retlist: *mut list_T = ptr::null_mut();
         if called as c_int == OK {
             if rettv.v_type as c_uint == VAR_LIST as c_uint {
-                retlist = tv_list_copy(ptr::null(), rettv.vval.v_list, false, get_copyID());
+                retlist = tv_list_copy(ptr::null(), rettv.vval.v_list, false, get_copy_id());
             } else {
                 emsg(gettext(
                     &raw const e_invalid_return_type_from_findfunc as *const c_char,

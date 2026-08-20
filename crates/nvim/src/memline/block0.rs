@@ -531,8 +531,8 @@ pub(crate) unsafe fn files_differ(
         // compare those instead.
         let mut buf_c: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         let mut buf_s: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-        let ok_c = vim_FullName(fname_c, buf_c.as_mut_ptr(), MAXPATHL as size_t, true) == OK;
-        let ok_s = vim_FullName(fname_s, buf_s.as_mut_ptr(), MAXPATHL as size_t, true) == OK;
+        let ok_c = vim_full_name(fname_c, buf_c.as_mut_ptr(), MAXPATHL as size_t, true) == OK;
+        let ok_s = vim_full_name(fname_s, buf_s.as_mut_ptr(), MAXPATHL as size_t, true) == OK;
         if ok_c && ok_s {
             return strcmp(buf_c.as_ptr(), buf_s.as_ptr()) != 0;
         }

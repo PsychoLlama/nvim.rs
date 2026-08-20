@@ -234,7 +234,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) ->
                 }
             } else if let Some(word) = [&b"class"[..], &b"struct"[..]].into_iter().find(|word| {
                 let bytes = CStr::from_ptr(s).to_bytes();
-                bytes.starts_with(word) && !vim_isIDc(c_int::from(byte_at(bytes, word.len())))
+                bytes.starts_with(word) && !vim_is_ident_char(byte_at(bytes, word.len()).into())
             }) {
                 class_or_struct = true;
                 lookfor_ctor_init = false;
@@ -251,7 +251,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) ->
                 } else if *s as u8 == b'?' {
                     // Do not see the '() :' after a '?' as a constructor init.
                     return false;
-                } else if !vim_isIDc(c_int::from(*s as u8)) {
+                } else if !vim_is_ident_char(c_int::from(*s as u8)) {
                     // Not an identifier: we are wrong.
                     class_or_struct = false;
                     lookfor_ctor_init = false;

@@ -185,7 +185,7 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
 
         // Resolve the full name too, so that opening the same relative
         // symlink from two working directories still picks one swap file.
-        vim_FullName(tmp.as_ptr(), buf, MAXPATHL as size_t, true)
+        vim_full_name(tmp.as_ptr(), buf, MAXPATHL as size_t, true)
     }
 }
 

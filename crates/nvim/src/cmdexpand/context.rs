@@ -265,7 +265,7 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
         if *(*xp).xp_pattern as c_int == '$' as c_int {
             p = (*xp).xp_pattern.add(1);
             while *p as c_int != NUL {
-                if !vim_isIDc(*p as u8 as c_int) {
+                if !vim_is_ident_char(*p as u8 as c_int) {
                     break;
                 }
                 p = p.add(1);

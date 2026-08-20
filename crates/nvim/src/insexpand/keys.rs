@@ -279,7 +279,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
             if !compl_curr_match.get().is_null() && compl_used_match.get() && c != Ctrl_E {
                 ptr = (*compl_curr_match.get()).cp_str.data();
             }
-            ins_compl_fixRedoBufForLeader(ptr);
+            ins_compl_fix_redo_buf_for_leader(ptr);
         }
 
         let mut want_cindent = get_can_cindent() && cindent_on();
@@ -321,7 +321,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
             word = xstrdup((*compl_shown_match.get()).cp_str.data());
             retval = true;
             // May need to remove ComplMatchIns highlight.
-            redrawWinline(curwin.get(), (*curwin.get()).w_cursor.lnum);
+            redraw_win_line(curwin.get(), (*curwin.get()).w_cursor.lnum);
         }
 
         // When a match was inserted but the pum was never displayed (e.g. only
@@ -524,7 +524,7 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
 /// text: insert backspaces and append the changed text.
 ///
 /// `ptr_arg` is the known leader text, or null to use `compl_leader`.
-pub(crate) unsafe fn ins_compl_fixRedoBufForLeader(ptr_arg: *mut c_char) {
+pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
     unsafe {
         let mut len = 0;
         let mut ptr = ptr_arg;

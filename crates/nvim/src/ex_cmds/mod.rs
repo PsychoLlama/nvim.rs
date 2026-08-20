@@ -28,7 +28,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::autocmd::apply_autocmds;
-use crate::charset::{skiptowhite, vim_isIDc};
+use crate::charset::{skiptowhite, vim_is_ident_char};
 use crate::eval::typval::{tv_get_string, tv_list_find_str, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
@@ -291,7 +291,7 @@ pub unsafe fn skip_vimgrep_pat(
     mut flags: *mut ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     unsafe {
-        if vim_isIDc(*p as uint8_t as ::core::ffi::c_int) {
+        if vim_is_ident_char(*p as uint8_t as ::core::ffi::c_int) {
             if !s.is_null() {
                 *s = p;
             }

@@ -455,7 +455,7 @@ unsafe fn parse_isopt(var: *const c_char, buf: *mut buf_T, only_check: bool) -> 
 ///
 /// # Safety
 /// The global table must be initialised.
-pub unsafe fn vim_isIDc(c: c_int) -> bool {
+pub unsafe fn vim_is_ident_char(c: c_int) -> bool {
     c > 0 && c < 0x100 && chartab(c as uint8_t) & CT_ID_CHAR != 0
 }
 

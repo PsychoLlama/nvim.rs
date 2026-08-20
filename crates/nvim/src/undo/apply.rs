@@ -549,7 +549,7 @@ pub(crate) unsafe fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
                 do_buf_event,
             );
             if spell_check_window(curwin.get()) && bot <= (*curbuf.get()).b_ml.ml_line_count {
-                redrawWinline(curwin.get(), bot);
+                redraw_win_line(curwin.get(), bot);
             }
         }
         (*curbuf.get()).b_op_start.lnum = if (*curbuf.get()).b_op_start.lnum < top + 1 {

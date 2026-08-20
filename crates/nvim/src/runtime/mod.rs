@@ -44,7 +44,7 @@ use crate::eval::typval::{
 };
 use crate::eval::userfunc::{func_tbl_get, restore_funccal, save_funccal};
 use crate::eval::vars::new_script_vars;
-use crate::eval::{eval_to_number, get_copyID};
+use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal};
 use crate::ex_eval::{aborting, cleanup_conditionals, report_make_pending};

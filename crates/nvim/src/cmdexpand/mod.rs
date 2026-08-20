@@ -7,7 +7,7 @@ use crate::autocmd::{expand_get_augroup_name, expand_get_event_name, set_context
 use crate::buffer::ExpandBufnames;
 use crate::charset::{
     backslash_halve_save, ptr2cells, rem_backslash, skipdigits, skiptowhite, skipwhite, transchar,
-    transchar_byte, vim_isIDc, vim_isfilec_or_wc, vim_strsize,
+    transchar_byte, vim_is_ident_char, vim_isfilec_or_wc, vim_strsize,
 };
 use crate::cmdhist::get_history_arg;
 use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};

@@ -175,7 +175,7 @@ pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: linenr_T, force: bool
     unsafe {
         for wp in windows_in_curtab() {
             if (*wp).w_buffer == buf {
-                redrawWinline(wp, line.min((*buf).b_ml.ml_line_count));
+                redraw_win_line(wp, line.min((*buf).b_ml.ml_line_count));
                 if force && line > (*buf).b_ml.ml_line_count {
                     (*wp).w_redraw_bot = line;
                 }
@@ -206,8 +206,7 @@ pub unsafe fn redraw_win_range_later(wp: *mut win_T, first: linenr_T, last: line
 ///
 /// Inserting or deleting lines invalidates the range this widens, so a caller
 /// that does either has to mark the whole window instead.
-#[allow(non_snake_case)]
-pub unsafe fn redrawWinline(wp: *mut win_T, lnum: linenr_T) {
+pub unsafe fn redraw_win_line(wp: *mut win_T, lnum: linenr_T) {
     // SAFETY: a live window on the main thread.
     unsafe { redraw_win_range_later(wp, lnum, lnum) }
 }

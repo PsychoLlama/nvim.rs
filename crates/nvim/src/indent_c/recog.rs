@@ -81,10 +81,10 @@ pub(crate) unsafe fn cin_has_js_key(text: *const c_char) -> bool {
             quote = *s as u8;
             s = s.add(1);
         }
-        if !vim_isIDc(c_int::from(*s as u8)) {
+        if !vim_is_ident_char(c_int::from(*s as u8)) {
             return false; // need at least one ID character
         }
-        while vim_isIDc(c_int::from(*s as u8)) {
+        while vim_is_ident_char(c_int::from(*s as u8)) {
             s = s.add(1);
         }
         if *s != 0 && *s as u8 == quote {
@@ -187,7 +187,7 @@ pub(crate) unsafe fn cin_isscopedecl(p: *const c_char) -> bool {
 pub(crate) unsafe fn cin_starts_with(s: *const c_char, word: &[u8]) -> bool {
     unsafe {
         let bytes = CStr::from_ptr(s).to_bytes();
-        bytes.starts_with(word) && !vim_isIDc(c_int::from(byte_at(bytes, word.len())))
+        bytes.starts_with(word) && !vim_is_ident_char(c_int::from(byte_at(bytes, word.len())))
     }
 }
 
@@ -316,7 +316,7 @@ pub(crate) unsafe fn cin_is_if_for_while_before_offset(
         }
 
         // It is only the keyword if nothing identifier-ish precedes it.
-        if offset != 0 && vim_isIDc(c_int::from(byte_at(bytes, (offset - 1) as usize))) {
+        if offset != 0 && vim_is_ident_char(c_int::from(byte_at(bytes, (offset - 1) as usize))) {
             return false;
         }
         *poffset = offset;

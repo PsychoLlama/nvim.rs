@@ -25,7 +25,7 @@
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{
-    getdigits_int, getwhitecols_curline, skiptowhite, skipwhite, vim_isIDc, vim_iswordc,
+    getdigits_int, getwhitecols_curline, skiptowhite, skipwhite, vim_is_ident_char, vim_iswordc,
     vim_iswordp, vim_strsize,
 };
 use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};

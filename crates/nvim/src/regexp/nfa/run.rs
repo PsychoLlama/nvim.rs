@@ -10,7 +10,7 @@ use core::ffi::{c_char, c_int, c_ushort};
 
 use super::matcher::nfa_regmatch;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
-use crate::charset::{vim_isIDc, vim_isfilec, vim_isprintc};
+use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::main::re_extmatch_in;
 use crate::mbyte::{
     mb_islower, mb_isupper, utf_char2len, utf_fold, utf_head_off, utf_iscomposing_legacy,
@@ -67,7 +67,7 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> c_int {
             NFA_CLASS_RETURN => c == b'\r' as c_int,
             NFA_CLASS_BACKSPACE => c == 0x08,
             NFA_CLASS_ESCAPE => c == ESC,
-            NFA_CLASS_IDENT => vim_isIDc(c),
+            NFA_CLASS_IDENT => vim_is_ident_char(c),
             NFA_CLASS_KEYWORD => reg_iswordc(rex, c),
             NFA_CLASS_FNAME => vim_isfilec(c),
             _ => {

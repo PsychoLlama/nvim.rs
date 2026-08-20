@@ -14,7 +14,7 @@ use super::compile::{regc, regmbc, regnode, set_opcode};
 use super::equi_class::reg_equi_class;
 use super::piece::coll_get_char;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
-use crate::charset::{vim_isIDc, vim_isfilec, vim_isprintc};
+use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::main::rc_did_emsg;
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
 use crate::os::cshim::__ctype_b_loc;
@@ -307,7 +307,7 @@ fn in_class(rex: Rex, class: c_uint, c: c_int) -> bool {
             CLASS_PRINT => vim_isprintc(c),
             CLASS_UPPER => mb_isupper(c),
             CLASS_XDIGIT => ascii_isxdigit(c),
-            CLASS_IDENT => vim_isIDc(c),
+            CLASS_IDENT => vim_is_ident_char(c),
             CLASS_KEYWORD => reg_iswordc(rex, c),
             CLASS_FNAME => vim_isfilec(c),
             _ => false,

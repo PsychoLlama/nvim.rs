@@ -197,7 +197,7 @@ pub unsafe fn parse_pattern_and_range(
         }
 
         p = skipwhite(p);
-        let delim = if delim_optional && vim_isIDc(*p as uint8_t as ::core::ffi::c_int) {
+        let delim = if delim_optional && vim_is_ident_char(*p as uint8_t as ::core::ffi::c_int) {
             ' ' as ::core::ffi::c_int
         } else {
             let c = *p as ::core::ffi::c_int;

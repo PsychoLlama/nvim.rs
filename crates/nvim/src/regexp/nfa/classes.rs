@@ -9,7 +9,7 @@
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::charset::{vim_isIDc, vim_isfilec, vim_isprintc};
+use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::utf_ptr2char;
 use crate::regexp::{
     NFA_ALPHA, NFA_DIGIT, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER,
@@ -46,11 +46,11 @@ fn ignoring_case(rex: Rex) -> bool {
     rex.reg_ic()
 }
 
-/// `vim_isIDc` and `vim_isfilec` are pure tests on a code point that read
+/// `vim_is_ident_char` and `vim_isfilec` are pure tests on a code point that read
 /// only option state.
 fn is_ident_char(c: c_int) -> bool {
     // SAFETY: a pure test on a code point.
-    unsafe { vim_isIDc(c) }
+    unsafe { vim_is_ident_char(c) }
 }
 
 fn is_file_char(c: c_int) -> bool {

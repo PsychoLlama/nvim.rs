@@ -15,7 +15,7 @@ use crate::change::get_leader_len;
 use crate::charset::skipwhite;
 use crate::indent::{byte_at, get_number_indent};
 use crate::memline::{ml_get, ml_get_len};
-use crate::textobject::startPS;
+use crate::textobject::starts_para;
 use crate::types::{NUL, linenr_T};
 
 /// A line's comment leader: how many bytes of it there are, and where the
@@ -90,7 +90,7 @@ pub(crate) unsafe fn fmt_check_par(lnum: linenr_T, leader: &mut Leader, do_comme
         let ends_a_comment = leader.len > 0 && leader.has_flag(COM_END);
         *skipwhite(ptr.offset(leader.len as isize)) as c_int == NUL
             || ends_a_comment
-            || startPS(lnum, NUL, false)
+            || starts_para(lnum, NUL, false)
     }
 }
 

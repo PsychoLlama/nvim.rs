@@ -86,7 +86,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             (*curwin.get()).w_cursor.col = 0;
 
             // In a comment or raw string now: skip to the start of it.
-            let trypos = ind_find_start_CORS(None);
+            let trypos = ind_find_start_comment_or_raw_string(None);
             if !trypos.is_null() {
                 (*curwin.get()).w_cursor.lnum = (*trypos).lnum + 1;
                 (*curwin.get()).w_cursor.col = 0;

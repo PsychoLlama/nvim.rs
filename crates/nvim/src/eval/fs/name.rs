@@ -40,7 +40,7 @@ use crate::os::env::{expand_env_save, home_replace};
 use crate::os::fs::{os_dirname, os_isdir};
 use crate::path::{
     FullName_save, add_pathsep, after_pathsep, get_past_head, path_fnamencmp, path_tail,
-    vim_isAbsName,
+    vim_is_abs_name,
 };
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::{EvalFuncData, MAXPATHL, buf_T, size_t, typval_T};
@@ -248,7 +248,7 @@ fn full_name(p: *mut c_char, force: bool) -> *mut c_char {
 
 fn is_abs_name(s: &CStr) -> bool {
     // SAFETY: `s` is NUL-terminated.
-    unsafe { vim_isAbsName(s.as_ptr()) }
+    unsafe { vim_is_abs_name(s.as_ptr()) }
 }
 
 fn is_dir(s: &CStr) -> bool {

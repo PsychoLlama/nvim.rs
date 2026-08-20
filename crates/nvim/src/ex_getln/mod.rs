@@ -15,7 +15,9 @@ use crate::buffer::{
     buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid,
     buflist_findnr, bufref_valid, close_buffer, do_buffer, set_bufref,
 };
-use crate::charset::{ptr2cells, skipwhite, vim_isIDc, vim_isprintc, vim_iswordc, vim_str2nr};
+use crate::charset::{
+    ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc, vim_str2nr,
+};
 use crate::cmdexpand::{
     ExpandCleanup, ExpandInit, ExpandOne, clear_cmdline_orig, cmdline_pum_active,
     cmdline_pum_cleanup, cmdline_pum_remove, nextwild, set_expand_context, showmatches,

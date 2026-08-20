@@ -745,13 +745,13 @@ unsafe fn writable_value(vartv: &typval_T) -> bool {
             VAR_FUNC | VAR_PARTIAL => false,
             VAR_DICT => {
                 let di = vartv.vval.v_dict;
-                let copy_id = get_copyID();
+                let copy_id = get_copy_id();
                 set_ref_in_ht(&raw mut (*di).dv_hashtab, copy_id, core::ptr::null_mut())
                     || copy_id != (*di).dv_copyID
             }
             VAR_LIST => {
                 let l = vartv.vval.v_list;
-                let copy_id = get_copyID();
+                let copy_id = get_copy_id();
                 set_ref_in_list_items(l, copy_id, core::ptr::null_mut())
                     || copy_id != (*l).lv_copyID
             }

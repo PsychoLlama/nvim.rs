@@ -256,7 +256,7 @@ pub unsafe fn ins_compl_accept_char(c: c_int) -> bool {
     unsafe {
         if ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0 {
             // Expanding an identifier: only identifier characters.
-            return vim_isIDc(c);
+            return vim_is_ident_char(c);
         }
         match ctrl_x_mode.get() {
             // File names, but not path separators, so that "proto/<Tab>"

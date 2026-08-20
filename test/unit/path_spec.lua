@@ -404,10 +404,10 @@ describe('path.c', function()
     uv.fs_rmdir('unit-test-directory')
   end)
 
-  describe('vim_FullName', function()
-    local function vim_FullName(filename, buflen, do_expand)
+  describe('vim_full_name', function()
+    local function vim_full_name(filename, buflen, do_expand)
       local buf = cstr(buflen, '')
-      local result = cimp.vim_FullName(to_cstr(filename), buf, buflen, do_expand)
+      local result = cimp.vim_full_name(to_cstr(filename), buf, buflen, do_expand)
       return buf, result
     end
 
@@ -419,7 +419,7 @@ describe('path.c', function()
       local do_expand = 1
       local buflen = 10
       local buf = cstr(buflen, '')
-      local result = cimp.vim_FullName(NULL, buf, buflen, do_expand)
+      local result = cimp.vim_full_name(NULL, buf, buflen, do_expand)
       eq(FAIL, result)
     end)
 
@@ -428,7 +428,7 @@ describe('path.c', function()
       local too_short_len = 8
       local buf = cstr(too_short_len, '')
       local do_expand = 1
-      local result = cimp.vim_FullName(filename, buf, too_short_len, do_expand)
+      local result = cimp.vim_full_name(filename, buf, too_short_len, do_expand)
       local expected = string.sub(filename, 1, (too_short_len - 1))
       eq(expected, ffi.string(buf))
       eq(FAIL, result)
@@ -438,7 +438,7 @@ describe('path.c', function()
       local filename = 'http://www.neovim.org'
       local buflen = string.len(filename) + 1
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(filename, ffi.string(buf))
       eq(OK, result)
     end)
@@ -449,7 +449,7 @@ describe('path.c', function()
         local filename = ('non_existing_'):rep(rep) .. 'dir/test.file'
         local buflen = string.len(filename) + 1
         local do_expand = 1
-        local buf, result = vim_FullName(filename, buflen, do_expand)
+        local buf, result = vim_full_name(filename, buflen, do_expand)
         eq(filename, ffi.string(buf))
         eq(FAIL, result)
       end
@@ -460,7 +460,7 @@ describe('path.c', function()
       local filename = 'test.file'
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(expected, ffi.string(buf))
       eq(OK, result)
     end)
@@ -473,7 +473,7 @@ describe('path.c', function()
       local filename = '..'
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(expected, ffi.string(buf))
       eq(OK, result)
     end)
@@ -486,7 +486,7 @@ describe('path.c', function()
       local filename = '../test.file'
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(expected, ffi.string(buf))
       eq(OK, result)
     end)
@@ -495,7 +495,7 @@ describe('path.c', function()
       local absolute_path = '/absolute/path'
       local buflen = string.len(absolute_path) + 1
       local do_expand = 0
-      local buf, result = vim_FullName(absolute_path, buflen, do_expand)
+      local buf, result = vim_full_name(absolute_path, buflen, do_expand)
       eq(absolute_path, ffi.string(buf))
       eq(OK, result)
     end)
@@ -505,7 +505,7 @@ describe('path.c', function()
       local absolute_path = '~/home.file'
       local buflen = string.len(absolute_path) + 1
       local do_expand = 1
-      local buf, result = vim_FullName(absolute_path, buflen, do_expand)
+      local buf, result = vim_full_name(absolute_path, buflen, do_expand)
       eq(absolute_path, ffi.string(buf))
       eq(FAIL, result)
     end)
@@ -515,7 +515,7 @@ describe('path.c', function()
       local filename = 'unit-test-directory/test.file'
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(expected, ffi.string(buf))
       eq(OK, result)
     end)
@@ -528,7 +528,7 @@ describe('path.c', function()
       local do_expand = 1
       -- Don't use the wrapper but pass a cstring directly to the c function.
       eq('unit-test-directory/test.file', ffi.string(filename))
-      local result = cimp.vim_FullName(filename, buf, buflen, do_expand)
+      local result = cimp.vim_full_name(filename, buf, buflen, do_expand)
       eq(expected, ffi.string(buf))
       eq(OK, result)
     end)
@@ -538,7 +538,7 @@ describe('path.c', function()
       local expected = filename
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq('/tmp', ffi.string(buf))
       eq(OK, result)
     end)
@@ -548,7 +548,7 @@ describe('path.c', function()
       local filename = 'non_existing_dir/'
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(expected, ffi.string(buf))
       eq(OK, result)
     end)
@@ -558,7 +558,7 @@ describe('path.c', function()
       local filename = './unit-test-directory/test.file'
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(OK, result)
       eq(expected, ffi.string(buf))
     end)
@@ -568,7 +568,7 @@ describe('path.c', function()
       local filename = 'unit-test-directory/../unit-test-directory/test.file'
       local buflen = get_buf_len(expected, filename)
       local do_expand = 1
-      local buf, result = vim_FullName(filename, buflen, do_expand)
+      local buf, result = vim_full_name(filename, buflen, do_expand)
       eq(OK, result)
       eq(expected, ffi.string(buf))
     end)

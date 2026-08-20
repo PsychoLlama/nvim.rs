@@ -384,7 +384,7 @@ pub unsafe fn find_file_in_path_option(
 
         // "..", "../path", "." and "./path" mean the current directory just
         // as an absolute name means itself: neither uses `path_option`.
-        let file_name = if vim_isAbsName(name) || rel_to_curdir(name) {
+        let file_name = if vim_is_abs_name(name) || rel_to_curdir(name) {
             // If this is not a first call, return NULL: we already returned
             // a filename on the first call.
             if first {

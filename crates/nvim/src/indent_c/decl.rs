@@ -22,10 +22,10 @@ use core::ffi::{CStr, c_char, c_int};
 /// `*s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_islabel_skip(s: &mut *const c_char) -> bool {
     unsafe {
-        if !vim_isIDc(c_int::from(**s as u8)) {
+        if !vim_is_ident_char(c_int::from(**s as u8)) {
             return false; // need at least one ID character
         }
-        while vim_isIDc(c_int::from(**s as u8)) {
+        while vim_is_ident_char(c_int::from(**s as u8)) {
             *s = (*s).offset(utfc_ptr2len(*s) as isize);
         }
         *s = cin_skipcomment(*s);
@@ -53,7 +53,7 @@ pub(crate) unsafe fn cin_islabel() -> bool {
         if cin_isdefault(s) || cin_isscopedecl(s) || !cin_islabel_skip(&mut s) {
             return false;
         }
-        if !ind_find_start_CORS(None).is_null() {
+        if !ind_find_start_comment_or_raw_string(None).is_null() {
             return false; // not a label in a comment or a raw string
         }
 
@@ -61,7 +61,7 @@ pub(crate) unsafe fn cin_islabel() -> bool {
         while (*curwin.get()).w_cursor.lnum > 1 {
             (*curwin.get()).w_cursor.lnum -= 1;
             (*curwin.get()).w_cursor.col = 0;
-            let trypos = ind_find_start_CORS(None);
+            let trypos = ind_find_start_comment_or_raw_string(None);
             if !trypos.is_null() {
                 (*curwin.get()).w_cursor = *trypos;
             }
@@ -102,8 +102,8 @@ pub(crate) unsafe fn cin_is_compound_init(s: *const c_char) -> bool {
                 p = cin_skipcomment(p.add(1));
                 r = p;
             } else if CStr::from_ptr(p).to_bytes().starts_with(b"return")
-                && !vim_isIDc(c_int::from(*p.add(6) as u8))
-                && (p == s || !vim_isIDc(c_int::from(*p.sub(1) as u8)))
+                && !vim_is_ident_char(c_int::from(*p.add(6) as u8))
+                && (p == s || !vim_is_ident_char(c_int::from(*p.sub(1) as u8)))
             {
                 p = cin_skipcomment(p.add(6));
                 r = p;

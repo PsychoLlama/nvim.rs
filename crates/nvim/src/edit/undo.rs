@@ -79,7 +79,7 @@ pub(crate) unsafe fn check_spell_redraw() {
         if spell_redraw_lnum.get() != 0 {
             let lnum = spell_redraw_lnum.get();
             spell_redraw_lnum.set(0);
-            redrawWinline(curwin.get(), lnum);
+            redraw_win_line(curwin.get(), lnum);
         }
     }
 }

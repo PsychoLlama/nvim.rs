@@ -72,7 +72,7 @@ use crate::message::{
     vim_dialog_yesnocancel, wait_return,
 };
 use crate::os::cshim::gettext;
-use crate::path::vim_FullName;
+use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg_c;
 use crate::types::{
@@ -227,7 +227,7 @@ unsafe fn script_host_execute_file(name: &CStr, eap: *mut exarg_T) {
             return;
         }
         let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-        vim_FullName((*eap).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false);
+        vim_full_name((*eap).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false);
 
         let args = tv_list_alloc(3 as ptrdiff_t);
         tv_list_append_string(args, buffer.as_ptr(), -1 as ssize_t);

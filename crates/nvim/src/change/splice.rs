@@ -421,7 +421,7 @@ pub unsafe fn changed_bytes(lnum: linenr_T, col: colnr_T) {
             && lnum < (*curbuf.get()).b_ml.ml_line_count
             && !cpo_has(CpoFlag::DOLLAR)
         {
-            redrawWinline(curwin.get(), lnum + 1);
+            redraw_win_line(curwin.get(), lnum + 1);
         }
 
         // Notify any channels that are watching.

@@ -8,7 +8,7 @@ use core::ffi::c_int;
 
 use super::exec::re_num_cmp;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::charset::{vim_isIDc, vim_isfilec, vim_isprintc};
+use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::main::{curwin, re_extmatch_in};
 use crate::mark::mark_get;
 use crate::mbyte::{
@@ -177,10 +177,10 @@ fn cursor_of(rex: Rex) -> Option<pos_T> {
     (!win.is_null()).then(|| unsafe { (*win).w_cursor })
 }
 
-/// `vim_isIDc`, `vim_isfilec` and `vim_isprintc` are pure tests on a code
+/// `vim_is_ident_char`, `vim_isfilec` and `vim_isprintc` are pure tests on a code
 /// point that read only option state.
 fn is_ident_char(c: c_int) -> bool {
-    unsafe { vim_isIDc(c) }
+    unsafe { vim_is_ident_char(c) }
 }
 
 fn is_file_char(c: c_int) -> bool {

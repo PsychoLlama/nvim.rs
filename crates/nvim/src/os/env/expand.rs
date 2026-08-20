@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::charset::{vim_isIDc, vim_isfilec};
+use crate::charset::{vim_is_ident_char, vim_isfilec};
 use crate::cmdexpand::{ExpandInit, ExpandOne, WildMode, WildOpts};
 use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
@@ -80,7 +80,7 @@ unsafe fn resolve_env_var(src: *const c_char, dst: *mut c_char, dstlen: c_int) -
         // about `src[1]` rather than about `braced`: 'isident' may itself
         // contain '{'.
         let brace = *tail == b'{' as c_char;
-        let braced = brace && !vim_isIDc('{' as c_int);
+        let braced = brace && !vim_is_ident_char('{' as c_int);
         if braced {
             tail = tail.add(1); // ignore '{'
             while c > 0 && *tail != 0 && *tail != b'}' as c_char {
@@ -90,7 +90,7 @@ unsafe fn resolve_env_var(src: *const c_char, dst: *mut c_char, dstlen: c_int) -
                 tail = tail.add(1);
             }
         } else {
-            while c > 0 && *tail != 0 && vim_isIDc(*tail as u8 as c_int) {
+            while c > 0 && *tail != 0 && vim_is_ident_char(*tail as u8 as c_int) {
                 c -= 1;
                 *var = *tail;
                 var = var.add(1);

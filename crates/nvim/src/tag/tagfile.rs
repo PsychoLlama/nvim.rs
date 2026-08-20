@@ -327,7 +327,7 @@ pub(crate) unsafe fn expand_tag_fname(
         let dir = &dir[..tail_index(dir)];
 
         let retval = if (p_tr.get() != 0 || (*curbuf.get()).b_help)
-            && !vim_isAbsName(fname)
+            && !vim_is_abs_name(fname)
             && !dir.is_empty()
         {
             let name = CStr::from_ptr(fname).to_bytes();

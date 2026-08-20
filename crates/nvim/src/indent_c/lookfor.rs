@@ -85,7 +85,7 @@ impl BlockScan<'_> {
                     return Step::Done;
                 }
 
-                let trypos = ind_find_start_CORS(None);
+                let trypos = ind_find_start_comment_or_raw_string(None);
                 if !trypos.is_null() {
                     self.resume_at((*trypos).lnum);
                     return Step::Again;
@@ -139,7 +139,7 @@ impl BlockScan<'_> {
                 return Step::Done;
             }
 
-            let trypos = ind_find_start_CORS(None);
+            let trypos = ind_find_start_comment_or_raw_string(None);
             if !trypos.is_null() {
                 self.resume_at((*trypos).lnum);
                 return Step::Again;
@@ -206,7 +206,7 @@ impl BlockScan<'_> {
     pub(crate) unsafe fn step(&mut self) -> Step {
         unsafe {
             // In a comment or raw string now: skip to the start of it.
-            let trypos = ind_find_start_CORS(Some(&mut self.raw_string_start));
+            let trypos = ind_find_start_comment_or_raw_string(Some(&mut self.raw_string_start));
             if !trypos.is_null() {
                 self.resume_at((*trypos).lnum);
                 return Step::Again;

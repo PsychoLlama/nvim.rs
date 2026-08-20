@@ -5,7 +5,7 @@
 //! call [`skip_string`] too.  The `find_start_*` half is the other direction:
 //! given the cursor, `findmatchlimit` backwards for the `/*` or the
 //! `R"delim(` that encloses it, bounded by 'cinoptions' `*N`
-//! (`b_ind_maxcomment`).  [`ind_find_start_CORS`] is the pair asked at once --
+//! (`b_ind_maxcomment`).  [`ind_find_start_comment_or_raw_string`] is the pair asked at once --
 //! Comment Or Raw String -- and answers whichever starts later.
 //!
 //! The scanners here are written over `&[u8]` and answer a byte *index*, so
@@ -91,7 +91,9 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> *mut pos_T {
 ///
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn ind_find_start_CORS(is_raw: Option<&mut linenr_T>) -> *mut pos_T {
+pub(crate) unsafe fn ind_find_start_comment_or_raw_string(
+    is_raw: Option<&mut linenr_T>,
+) -> *mut pos_T {
     unsafe {
         // `findmatchlimit` answers out of one static, and the raw-string
         // search below is another call into it, so the comment answer has to

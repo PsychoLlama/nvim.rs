@@ -201,7 +201,7 @@ pub unsafe fn conceal_check_cursor_line() {
             return;
         }
 
-        redrawWinline(wp, (*wp).w_cursor.lnum);
+        redraw_win_line(wp, (*wp).w_cursor.lnum);
 
         // Whether the line is displayed at all may have changed with it.
         if decor_conceal_line(wp, (*wp).w_cursor.lnum - 1, true) {

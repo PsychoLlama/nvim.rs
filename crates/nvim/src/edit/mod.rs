@@ -58,7 +58,7 @@ use crate::cursor::{
 use crate::decoration::{decor_conceal_line, kMTMetaInline, win_lines_concealed};
 use crate::digraph::{digraph_get, do_digraph};
 use crate::drawscreen::{
-    UPD_VALID, redraw_later, redraw_statuslines, redrawWinline, redrawing, setcursor,
+    UPD_VALID, redraw_later, redraw_statuslines, redraw_win_line, redrawing, setcursor,
     show_cursor_info_later, showmode, skip_showmode, status_redraw_curbuf, unshowmode,
     update_screen,
 };

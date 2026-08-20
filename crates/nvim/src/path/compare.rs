@@ -52,13 +52,13 @@ pub unsafe extern "C" fn path_full_compare(
             if checkname {
                 let mut full1 = [0 as c_char; MAXPATHL as usize];
                 let mut full2 = [0 as c_char; MAXPATHL as usize];
-                vim_FullName(
+                vim_full_name(
                     expanded1.as_mut_ptr(),
                     full1.as_mut_ptr(),
                     MAXPATHL as size_t,
                     false,
                 );
-                vim_FullName(s2, full2.as_mut_ptr(), MAXPATHL as size_t, false);
+                vim_full_name(s2, full2.as_mut_ptr(), MAXPATHL as size_t, false);
                 if path_fnamecmp(full1.as_mut_ptr(), full2.as_mut_ptr()) == 0 {
                     return kEqualFileNames;
                 }
@@ -164,7 +164,7 @@ pub unsafe fn same_directory(f1: *mut c_char, f2: *mut c_char) -> bool {
         }
         let mut ffname = [0 as c_char; MAXPATHL as usize];
         let full = ffname.as_mut_ptr();
-        vim_FullName(f1, full, MAXPATHL as size_t, false);
+        vim_full_name(f1, full, MAXPATHL as size_t, false);
         let head = path_tail_with_sep(full).offset_from(full);
         head == path_tail_with_sep(f2).offset_from(f2) && pathcmp(full, f2, head as c_int) == 0
     }

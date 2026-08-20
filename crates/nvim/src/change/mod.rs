@@ -30,7 +30,7 @@ use crate::cursor::{
 use crate::decoration::{kMTMetaInline, kMTMetaLines};
 use crate::diff::{diff_internal, diff_lnum_win, diff_update_line};
 use crate::drawscreen::{
-    UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_later, redrawWinline,
+    UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_later, redraw_win_line,
     set_must_redraw, showmode,
 };
 use crate::edit::{prompt_text, replace_push, replace_push_nul, truncate_spaces};

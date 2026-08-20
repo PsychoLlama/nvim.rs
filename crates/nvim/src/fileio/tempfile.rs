@@ -426,7 +426,7 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
         if buf.is_null() {
             return false;
         }
-        vim_FullName(tempdir, buf, MAXPATHL as size_t, false);
+        vim_full_name(tempdir, buf, MAXPATHL as size_t, false);
         let mut full = CStr::from_ptr(buf).to_bytes().to_vec();
         xfree(buf.cast());
 

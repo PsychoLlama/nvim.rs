@@ -368,7 +368,7 @@ pub unsafe extern "C" fn path_with_extension(
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-pub unsafe fn vim_isAbsName(name: *const c_char) -> bool {
+pub unsafe fn vim_is_abs_name(name: *const c_char) -> bool {
     unsafe { path_with_url(name) != 0 || path_is_absolute(name) }
 }
 

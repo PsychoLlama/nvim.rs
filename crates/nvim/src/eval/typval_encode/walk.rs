@@ -16,7 +16,7 @@ use crate::eval::typval::{
     tv_list_last, tv_list_len, tv_list_set_copyid,
 };
 use crate::eval::vars::eval_msgpack_type_lists;
-use crate::eval::{get_copyID, partial_name};
+use crate::eval::{get_copy_id, partial_name};
 use crate::memory::xfree;
 use crate::message::internal_error;
 use crate::types::{
@@ -513,7 +513,7 @@ unsafe fn walk<S: TypvalSink>(
     objname: *const c_char,
 ) -> Result<(), Refused> {
     unsafe {
-        let copyid = get_copyID();
+        let copyid = get_copy_id();
         let mut stack = ConvStack::new();
         convert_one_value(sink, &mut stack, top_tv, copyid, objname)?;
 

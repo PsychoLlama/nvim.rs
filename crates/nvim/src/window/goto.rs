@@ -21,7 +21,7 @@ use crate::autocmd::{
     EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_WINENTER, EVENT_WINLEAVE, EVENT_WINNEW,
 };
 use crate::buffer::{do_autochdir, maketitle};
-use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redrawWinline};
+use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_win_line};
 use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
@@ -89,7 +89,7 @@ pub(crate) fn goto_win(wp: Win) {
 fn redraw_winline(wp: Win) {
     let lnum = wp.w_cursor.lnum;
     // SAFETY: a live window and a line of its own buffer.
-    unsafe { redrawWinline(wp.raw(), lnum) };
+    unsafe { redraw_win_line(wp.raw(), lnum) };
 }
 
 pub unsafe fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T {

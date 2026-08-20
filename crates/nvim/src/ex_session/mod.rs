@@ -66,7 +66,7 @@ use crate::options::{
 use crate::os::cshim::{gettext, putc};
 use crate::os::env::home_replace_save;
 use crate::os::fs::{os_chdir, os_dirname, os_isdir};
-use crate::path::{add_pathsep, vim_FullName, vim_ispathsep};
+use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg_c;
 use crate::types::{
@@ -328,7 +328,7 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, gap: *mut garray_T, fullname
             let mut full = ptr::null_mut::<c_char>();
             if fullname {
                 full = xmalloc(MAXPATHL as size_t).cast::<c_char>();
-                vim_FullName(name, full, MAXPATHL as size_t, false);
+                vim_full_name(name, full, MAXPATHL as size_t, false);
                 name = full;
             }
             let escaped = ses_escape_fname(name);
@@ -520,7 +520,7 @@ pub unsafe fn ex_mkrc(eap: *mut exarg_T) {
             } else if cmdidx == CMD_mksession {
                 // A successful session write sets v:this_session.
                 let full = xmalloc(MAXPATHL as size_t).cast::<c_char>();
-                if vim_FullName(fname, full, MAXPATHL as size_t, false) == OK {
+                if vim_full_name(fname, full, MAXPATHL as size_t, false) == OK {
                     set_vim_var_string(Vv::ThisSession, full, -1);
                 }
                 xfree(full.cast::<c_void>());

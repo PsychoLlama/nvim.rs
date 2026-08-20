@@ -66,7 +66,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                     }
                 } else if dir as c_int == FORWARD as c_int
                     && pos.col == 0
-                    && startPS(pos.lnum, NUL, false)
+                    && starts_para(pos.lnum, NUL, false)
                 {
                     // At the start of a paragraph or section, going forward:
                     // the next line is the answer.
@@ -114,7 +114,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> c_int {
                 loop {
                     // Find the end of the sentence.
                     let mut c = gchar_pos(&raw mut pos);
-                    if c == NUL || (pos.col == 0 && startPS(pos.lnum, NUL, false)) {
+                    if c == NUL || (pos.col == 0 && starts_para(pos.lnum, NUL, false)) {
                         if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
                             pos.lnum += 1;
                         }

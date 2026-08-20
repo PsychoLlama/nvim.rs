@@ -74,7 +74,7 @@ unsafe fn starting_dir(
         if dot_slash && (!tagfile || !cpo_has(CpoFlag::DOTTAG)) && !rel_fname.is_null() {
             let len = path_tail(rel_fname.cast_mut()).offset_from(rel_fname) as usize;
             ctx.start_dir = Some(
-                if !vim_isAbsName(rel_fname) && len + 1 < MAXPATHL as usize {
+                if !vim_is_abs_name(rel_fname) && len + 1 < MAXPATHL as usize {
                     // Make the start dir an absolute path name.
                     full_name_of(name_of(rel_fname, len).as_ptr(), false)
                 } else {
@@ -86,7 +86,7 @@ unsafe fn starting_dir(
             return Ok(if *path != 0 { path.add(1) } else { path });
         }
 
-        if *path == 0 || !vim_isAbsName(path) {
+        if *path == 0 || !vim_is_abs_name(path) {
             let mut curdir = [0 as c_char; MAXPATHL as usize];
             if os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) == FAIL {
                 return Err(());
@@ -122,7 +122,7 @@ unsafe fn stop_directories(stopdirs: *mut c_char) -> Vec<Name> {
             };
 
             dirs.push(
-                if *entry != 0 && !vim_isAbsName(entry) && len + 1 < MAXPATHL as usize {
+                if *entry != 0 && !vim_is_abs_name(entry) && len + 1 < MAXPATHL as usize {
                     // Upstream copies the entry into a scratch buffer and then
                     // resolves `entry` instead, which is not NUL-terminated at
                     // the ';': a relative stop directory with another after it

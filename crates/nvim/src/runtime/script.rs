@@ -437,7 +437,7 @@ unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut reg
             // A script ID was specified, so report that script in full.
             if let ScriptQuery::Sid(_) = *query {
                 let sv_dict = &raw mut (*(*si).sn_vars).sv_dict;
-                let vars = tv_dict_copy(ptr::null(), sv_dict, true, get_copyID());
+                let vars = tv_dict_copy(ptr::null(), sv_dict, true, get_copy_id());
                 tv_dict_add_dict(d, c"variables".as_ptr(), c"variables".count_bytes(), vars);
                 let funcs = get_script_local_funcs(sid as scid_T);
                 tv_dict_add_list(d, c"functions".as_ptr(), c"functions".count_bytes(), funcs);

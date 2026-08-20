@@ -3,7 +3,7 @@
 //! The parent holds the two ends of the job. [`simplify_filename`] is the
 //! canonicaliser — it removes `.`, `..` and duplicate separators from a name
 //! in place, asking the file system before it strips anything that a symlink
-//! could make a lie. [`vim_FullName`] and its neighbours are the other end:
+//! could make a lie. [`vim_full_name`] and its neighbours are the other end:
 //! making a name absolute, which is what everything that compares or stores
 //! a name wants first.
 //!
@@ -135,7 +135,7 @@ pub unsafe fn FullName_save(fname: *const c_char, force: bool) -> *mut c_char {
             return core::ptr::null_mut();
         }
         let buf: *mut c_char = xmalloc(MAXPATHL as size_t).cast();
-        if vim_FullName(fname, buf, MAXPATHL as size_t, force) == FAIL {
+        if vim_full_name(fname, buf, MAXPATHL as size_t, force) == FAIL {
             xfree(buf.cast());
             return xstrdup(fname);
         }
@@ -411,7 +411,7 @@ pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
 /// `buf` must be writable for `len` bytes; `fname` must be a NUL-terminated
 /// string, or NULL.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_FullName(
+pub unsafe extern "C" fn vim_full_name(
     fname: *const c_char,
     buf: *mut c_char,
     len: size_t,
@@ -534,7 +534,7 @@ pub unsafe extern "C" fn append_path(
 }
 
 /// Put the full path of `fname` in `buf`, which holds `len` bytes. What
-/// [`vim_FullName`] and [`fix_fname`] are built on: it resolves the
+/// [`vim_full_name`] and [`fix_fname`] are built on: it resolves the
 /// directory part and appends the name to it.
 ///
 /// `force` asks for the expansion even when `fname` is already absolute.

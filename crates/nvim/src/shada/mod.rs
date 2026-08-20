@@ -14,7 +14,7 @@ use crate::eval::typval::{
     tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string, tv_list_len,
 };
 use crate::eval::vars::{get_globvar_ht, get_vim_var_list, set_vim_var_list};
-use crate::eval::{get_copyID, set_ref_in_ht, set_ref_in_list_items, var_flavour, var_set_global};
+use crate::eval::{get_copy_id, set_ref_in_ht, set_ref_in_list_items, var_flavour, var_set_global};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
 use crate::ex_docmd::set_no_hlsearch;

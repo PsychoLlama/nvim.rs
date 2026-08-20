@@ -15,7 +15,7 @@ use crate::charset::{getdigits_int, init_chartab, ptr2cells};
 use crate::cursor::coladvance;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::drawscreen::{
-    UPD_INVERTED, UPD_NOT_VALID, comp_col, redraw_all_later, redraw_curbuf_later, redrawWinline,
+    UPD_INVERTED, UPD_NOT_VALID, comp_col, redraw_all_later, redraw_curbuf_later, redraw_win_line,
 };
 use crate::eval::vars::{do_unlet, get_var_value};
 use crate::ex_getln::check_opt_wim;
@@ -238,7 +238,7 @@ pub unsafe fn did_set_guicursor(_args: *mut optset_T) -> *const c_char {
     // The Visual-mode cursor shape is drawn as part of the line.
     if VIsual_active.get() {
         // SAFETY: the current window is live.
-        unsafe { redrawWinline(curwin.get(), (*curwin.get()).w_cursor.lnum) };
+        unsafe { redraw_win_line(curwin.get(), (*curwin.get()).w_cursor.lnum) };
     }
     ptr::null()
 }

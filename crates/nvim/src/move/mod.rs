@@ -51,7 +51,7 @@ use crate::cursor::check_cursor_lnum;
 use crate::decoration::{SIGN_WIDTH, decor_conceal_line, win_lines_concealed};
 use crate::drawscreen::{
     UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, conceal_cursor_line, number_width, redraw_buf_later,
-    redrawWinline, redrawing, win_cursorline_standout,
+    redraw_win_line, redrawing, win_cursorline_standout,
 };
 use crate::fold::foldAdjustCursor;
 use crate::main::{VIsual_active, cmdwin_win, curbuf};
@@ -271,7 +271,7 @@ impl Win {
     /// Redraw just the cursor's line.
     pub(super) fn redraw_cursor_line(self) {
         // SAFETY: a live window.
-        unsafe { redrawWinline(self.raw(), self.w_cursor.lnum) };
+        unsafe { redraw_win_line(self.raw(), self.w_cursor.lnum) };
     }
 
     /// Let any float anchored to this window follow it.

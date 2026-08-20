@@ -7,7 +7,7 @@ use crate::change::{
 use crate::cursor::{
     check_cursor, check_cursor_col, check_cursor_lnum, check_pos, coladvance, getviscol,
 };
-use crate::drawscreen::{redraw_later, redrawWinline};
+use crate::drawscreen::{redraw_later, redraw_win_line};
 use crate::edit::beginline;
 use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::{
