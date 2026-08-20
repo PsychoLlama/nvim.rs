@@ -52,7 +52,7 @@ use crate::pos::MAXLNUM;
 use crate::state::MODE_INSERT;
 
 use level::fold_update_computed;
-use list::{Fold, FoldList};
+use list::{FLine, Fold, FoldList};
 use open_close::check_closed;
 
 pub const TAB: c_int = '\t' as c_int;

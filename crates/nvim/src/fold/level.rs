@@ -282,187 +282,188 @@ pub(super) unsafe fn fold_update_computed_recurse(
     mut bot: linenr_T,
     topflags: c_int,
 ) -> linenr_T {
+    // SAFETY: the caller's promise. Every `line.*()` below is safe because of
+    // this one construction.
+    let line = unsafe { FLine::new(flp) };
     // The fold this call is building, once there is one. `None` means "not
     // started yet", which is what the whole first half of the loop is about.
     let mut fold: Option<Fold> = None;
-    // SAFETY: the caller's promise.
-    unsafe {
-        if getlevel_is(getlevel, foldlevel_marker)
-            && (*flp).start <= (*flp).lvl - level
-            && (*flp).lvl > 0
-        {
-            // A marker fold may already start above `startlnum`; continue it
-            // rather than opening a second one.
-            let i = match folds.find(startlnum - 1) {
-                Ok(i) | Err(i) => i,
-            };
-            if i < folds.len() && folds.at(i).top() < startlnum {
-                fold = Some(folds.at(i));
-            }
+    if getlevel_is(getlevel, foldlevel_marker)
+        && line.start() <= line.lvl() - level
+        && line.lvl() > 0
+    {
+        // A marker fold may already start above `startlnum`; continue it
+        // rather than opening a second one.
+        let i = match folds.find(startlnum - 1) {
+            Ok(i) | Err(i) => i,
+        };
+        if i < folds.len() && folds.at(i).top() < startlnum {
+            fold = Some(folds.at(i));
         }
     }
     let mut lvl = level;
     let mut startlnum2 = startlnum;
-    // SAFETY: the caller's promise.
-    let (firstlnum, linecount) = unsafe {
-        (
-            (*flp).lnum,
-            (*(*(*flp).wp).w_buffer).b_ml.ml_line_count - (*flp).off,
-        )
-    };
+    let firstlnum = line.lnum();
+    // SAFETY: a live window has a live buffer.
+    let linecount = unsafe { (*(*line.win()).w_buffer).b_ml.ml_line_count } - line.off();
     let mut finish = false;
-    // SAFETY: the caller's promise.
-    unsafe { (*flp).lnum_save = (*flp).lnum };
+    line.set_lnum_save(line.lnum());
     while !got_int.get() {
         line_breakcheck();
-        // SAFETY: the caller's promise; `flp` is the caller's.
-        unsafe {
-            lvl = (*flp).lvl.min(MAX_LEVEL);
-            if (*flp).lnum > firstlnum && (level > lvl - (*flp).start || level >= (*flp).had_end) {
-                // The fold ended above this line.
-                lvl = 0;
+        lvl = line.lvl().min(MAX_LEVEL);
+        if line.lnum() > firstlnum && (level > lvl - line.start() || level >= line.had_end()) {
+            // The fold ended above this line.
+            lvl = 0;
+        }
+        if line.lnum() > bot
+            && !finish
+            && let Some(current) = fold
+        {
+            // Past the changed text. For the three open-ended methods a fold
+            // may still have grown or shrunk, so keep going until the tree
+            // agrees with the levels again.
+            if !getlevel_is_open_ended(getlevel) {
+                break;
             }
-            if (*flp).lnum > bot
-                && !finish
-                && let Some(current) = fold
-            {
-                // Past the changed text. For the three open-ended methods a
-                // fold may still have grown or shrunk, so keep going until
-                // the tree agrees with the levels again.
-                if !getlevel_is_open_ended(getlevel) {
+            let mut depth = 0;
+            if lvl >= level {
+                // How deep the existing tree says this line is.
+                let mut inner = current.nested();
+                let mut ll = line.lnum() - current.top();
+                while let Ok(k) = inner.find(ll) {
+                    let nested = inner.at(k);
+                    depth += 1;
+                    ll -= nested.top();
+                    inner = nested.nested();
+                }
+            }
+            if lvl < level + depth {
+                // The tree is deeper than the levels are: the nested fold that
+                // has to go also has to be redrawn.
+                let inner = current.nested();
+                let k = match inner.find(line.lnum() - current.top()) {
+                    Ok(k) | Err(k) => k,
+                };
+                if inner.has_data() {
+                    bot = inner.at(k).last() + current.top();
+                }
+            } else {
+                if !(current.top() + current.len() <= line.lnum() && lvl >= level) {
                     break;
                 }
-                let mut depth = 0;
-                if lvl >= level {
-                    // How deep the existing tree says this line is.
-                    let mut inner = current.nested();
-                    let mut ll = (*flp).lnum - current.top();
-                    while let Ok(k) = inner.find(ll) {
-                        let nested = inner.at(k);
-                        depth += 1;
-                        ll -= nested.top();
-                        inner = nested.nested();
-                    }
-                }
-                if lvl < level + depth {
-                    // The tree is deeper than the levels are: the nested fold
-                    // that has to go also has to be redrawn.
-                    let inner = current.nested();
-                    let k = match inner.find((*flp).lnum - current.top()) {
-                        Ok(k) | Err(k) => k,
-                    };
-                    if inner.has_data() {
-                        bot = inner.at(k).last() + current.top();
-                    }
-                } else {
-                    if !(current.top() + current.len() <= (*flp).lnum && lvl >= level) {
-                        break;
-                    }
-                    finish = true;
-                }
+                finish = true;
             }
-            if fold.is_none()
-                && (lvl != level
-                    || (*flp).lnum_save >= bot
-                    || (*flp).start != 0
-                    || (*flp).had_end <= MAX_LEVEL
-                    || (*flp).lnum == linecount)
-            {
-                // No fold started yet, and this line says one should have.
-                // Reuse, truncate, split or delete whatever is in the way,
-                // then leave `fold` naming the one to grow.
-                while !got_int.get() {
-                    // Whether an existing fold that ends just above
-                    // `firstlnum` may be joined onto this one.
-                    let concat = if (*flp).start != 0 || (*flp).had_end <= MAX_LEVEL {
-                        0
-                    } else {
-                        1
+        }
+        if fold.is_none()
+            && (lvl != level
+                || line.lnum_save() >= bot
+                || line.start() != 0
+                || line.had_end() <= MAX_LEVEL
+                || line.lnum() == linecount)
+        {
+            // No fold started yet, and this line says one should have. Reuse,
+            // truncate, split or delete whatever is in the way, then leave
+            // `fold` naming the one to grow.
+            while !got_int.get() {
+                // Whether an existing fold that ends just above `firstlnum`
+                // may be joined onto this one.
+                let concat = if line.start() != 0 || line.had_end() <= MAX_LEVEL {
+                    0
+                } else {
+                    1
+                };
+                // `fold.c` threads one out-parameter through four tests here;
+                // the first that hits names the entry to work on, and a miss
+                // leaves the index the fold would be inserted at.
+                let mut i = 0;
+                let mut matched = false;
+                if !folds.is_empty() {
+                    i = match folds.find(startlnum) {
+                        Ok(k) => {
+                            matched = true;
+                            k
+                        }
+                        Err(k) => k,
                     };
-                    // `fold.c` threads one out-parameter through four tests
-                    // here; the first that hits names the entry to work on,
-                    // and a miss leaves the index the fold would be inserted
-                    // at.
-                    let mut i = 0;
-                    let mut matched = false;
-                    if !folds.is_empty() {
-                        i = match folds.find(startlnum) {
+                    if !matched && i < folds.len() && folds.at(i).top() <= firstlnum {
+                        matched = true;
+                    }
+                    if !matched {
+                        i = match folds.find(firstlnum - concat) {
                             Ok(k) => {
                                 matched = true;
                                 k
                             }
                             Err(k) => k,
                         };
-                        if !matched && i < folds.len() && folds.at(i).top() <= firstlnum {
-                            matched = true;
-                        }
-                        if !matched {
-                            i = match folds.find(firstlnum - concat) {
-                                Ok(k) => {
-                                    matched = true;
-                                    k
-                                }
-                                Err(k) => k,
-                            };
-                        }
-                        if !matched
-                            && i < folds.len()
-                            && (lvl < level && folds.at(i).top() < (*flp).lnum
-                                || lvl >= level && folds.at(i).top() <= (*flp).lnum_save)
-                        {
-                            matched = true;
-                        }
                     }
-                    if !matched {
-                        // Nothing usable: make a new fold covering the rest
-                        // of the changed range.
-                        let at = if folds.is_empty() { 0 } else { i };
-                        fold_insert(folds, at);
-                        let new = folds.at(at);
-                        new.set_top(firstlnum);
-                        new.set_len(bot - firstlnum + 1);
-                        if topflags == FD_OPEN {
-                            (*(*flp).wp).w_fold_manual = true;
-                            new.set_flags(FD_OPEN);
-                        } else if at <= 0 {
-                            new.set_flags(topflags);
-                            if topflags != FD_LEVEL {
-                                (*(*flp).wp).w_fold_manual = true;
-                            }
-                        } else {
-                            new.set_flags(folds.at(at - 1).flags());
-                        }
-                        new.set_small(None);
-                        if getlevel_is_open_ended(getlevel) {
-                            finish = true;
-                        }
-                        fold_changed.set(true);
-                        fold = Some(new);
-                        break;
+                    if !matched
+                        && i < folds.len()
+                        && (lvl < level && folds.at(i).top() < line.lnum()
+                            || lvl >= level && folds.at(i).top() <= line.lnum_save())
+                    {
+                        matched = true;
                     }
-                    let mut current = folds.at(i);
-                    if current.top() + current.len() + concat <= firstlnum {
-                        // It ends above the new fold.
-                        if current.top() >= startlnum {
-                            // Entirely inside the removed range.
-                            delete_fold_entry(folds, i, true);
-                        } else {
-                            current.set_len(startlnum - current.top());
+                }
+                if !matched {
+                    // Nothing usable: make a new fold covering the rest of the
+                    // changed range.
+                    let at = if folds.is_empty() { 0 } else { i };
+                    // SAFETY: `at` is in `0..=folds.len()`.
+                    unsafe { fold_insert(folds, at) };
+                    let new = folds.at(at);
+                    new.set_top(firstlnum);
+                    new.set_len(bot - firstlnum + 1);
+                    if topflags == FD_OPEN {
+                        // SAFETY: a live window.
+                        unsafe { (*line.win()).w_fold_manual = true };
+                        new.set_flags(FD_OPEN);
+                    } else if at <= 0 {
+                        new.set_flags(topflags);
+                        if topflags != FD_LEVEL {
+                            // SAFETY: a live window.
+                            unsafe { (*line.win()).w_fold_manual = true };
+                        }
+                    } else {
+                        new.set_flags(folds.at(at - 1).flags());
+                    }
+                    new.set_small(None);
+                    if getlevel_is_open_ended(getlevel) {
+                        finish = true;
+                    }
+                    fold_changed.set(true);
+                    fold = Some(new);
+                    break;
+                }
+                let mut current = folds.at(i);
+                if current.top() + current.len() + concat <= firstlnum {
+                    // It ends above the new fold.
+                    if current.top() >= startlnum {
+                        // Entirely inside the removed range.
+                        // SAFETY: `i` names an entry of `folds`.
+                        unsafe { delete_fold_entry(folds, i, true) };
+                    } else {
+                        current.set_len(startlnum - current.top());
+                        // SAFETY: a live fold's nested list is a live fold list.
+                        unsafe {
                             fold_mark_adjust_recurse(
                                 current.nested().gap(),
                                 current.len(),
                                 MAXLNUM as linenr_T,
                                 LINES_DELETED,
                                 0,
-                            );
-                            fold_changed.set(true);
-                        }
-                        continue;
+                            )
+                        };
+                        fold_changed.set(true);
                     }
-                    if current.top() != firstlnum {
-                        if current.top() >= startlnum {
-                            // It starts below the new fold: pull its top up,
-                            // dragging the nested folds with it.
+                    continue;
+                }
+                if current.top() != firstlnum {
+                    if current.top() >= startlnum {
+                        // It starts below the new fold: pull its top up,
+                        // dragging the nested folds with it.
+                        // SAFETY: a live fold's nested list is a live fold list.
+                        unsafe {
                             if current.top() > firstlnum {
                                 fold_mark_adjust_recurse(
                                     current.nested().gap(),
@@ -480,58 +481,66 @@ pub(super) unsafe fn fold_update_computed_recurse(
                                     current.top() - firstlnum,
                                 );
                             }
-                            current.set_len(current.len() + current.top() - firstlnum);
-                            current.set_top(firstlnum);
-                            current.set_small(None);
-                            fold_changed.set(true);
-                        } else if (*flp).start != 0 && lvl == level || firstlnum != startlnum {
-                            // It starts above: break it in two so the new
-                            // fold can start where the levels say it does.
-                            let (breakstart, breakend) = if firstlnum != startlnum {
-                                (startlnum, firstlnum)
-                            } else {
-                                ((*flp).lnum, (*flp).lnum)
-                            };
+                        }
+                        current.set_len(current.len() + current.top() - firstlnum);
+                        current.set_top(firstlnum);
+                        current.set_small(None);
+                        fold_changed.set(true);
+                    } else if line.start() != 0 && lvl == level || firstlnum != startlnum {
+                        // It starts above: break it in two so the new fold can
+                        // start where the levels say it does.
+                        let (breakstart, breakend) = if firstlnum != startlnum {
+                            (startlnum, firstlnum)
+                        } else {
+                            (line.lnum(), line.lnum())
+                        };
+                        // SAFETY: a live window and its buffer; `i` names an
+                        // entry of `folds`.
+                        unsafe {
                             fold_remove(
-                                (*flp).wp,
+                                line.win(),
                                 current.nested(),
                                 breakstart - current.top(),
                                 breakend - current.top(),
                             );
-                            fold_split((*(*flp).wp).w_buffer, folds, i, breakstart, breakend - 1);
-                            current = folds.at(i + 1);
-                            if getlevel_is_open_ended(getlevel) {
-                                finish = true;
-                            }
+                            fold_split((*line.win()).w_buffer, folds, i, breakstart, breakend - 1);
+                        }
+                        current = folds.at(i + 1);
+                        if getlevel_is_open_ended(getlevel) {
+                            finish = true;
                         }
                     }
-                    if current.top() == startlnum && concat != 0 {
-                        // It now touches the fold above it, so they are one.
-                        let k = folds.index_of(current);
-                        if k != 0 {
-                            let above = folds.at(k - 1);
-                            if above.top() + above.len() == current.top() {
-                                fold_merge(above, folds, current);
-                                current = above;
-                            }
-                        }
-                    }
-                    fold = Some(current);
-                    break;
                 }
-            }
-            if lvl < level || (*flp).lnum > linecount {
+                if current.top() == startlnum && concat != 0 {
+                    // It now touches the fold above it, so they are one.
+                    let k = folds.index_of(current);
+                    if k != 0 {
+                        let above = folds.at(k - 1);
+                        if above.top() + above.len() == current.top() {
+                            // SAFETY: both are entries of `folds`.
+                            unsafe { fold_merge(above, folds, current) };
+                            current = above;
+                        }
+                    }
+                }
+                fold = Some(current);
                 break;
             }
-            if lvl > level
-                && let Some(current) = fold
-            {
-                // Deeper than this level: the nested list takes over.
-                bot = bot.max((*flp).lnum);
-                (*flp).lnum = (*flp).lnum_save - current.top();
-                (*flp).off += current.top();
-                let i = folds.index_of(current);
-                bot = fold_update_computed_recurse(
+        }
+        if lvl < level || line.lnum() > linecount {
+            break;
+        }
+        if lvl > level
+            && let Some(current) = fold
+        {
+            // Deeper than this level: the nested list takes over.
+            bot = bot.max(line.lnum());
+            line.set_lnum(line.lnum_save() - current.top());
+            line.set_off(line.off() + current.top());
+            let i = folds.index_of(current);
+            // SAFETY: the fold's own nested list, and the caller's `flp`.
+            bot = unsafe {
+                fold_update_computed_recurse(
                     current.nested(),
                     level + 1,
                     startlnum2 - current.top(),
@@ -539,110 +548,116 @@ pub(super) unsafe fn fold_update_computed_recurse(
                     getlevel,
                     bot - current.top(),
                     current.flags(),
-                );
-                // The recursion may have grown the array under us.
-                let current = folds.at(i);
-                fold = Some(current);
-                (*flp).lnum += current.top();
-                (*flp).lnum_save += current.top();
-                (*flp).off -= current.top();
-                bot += current.top();
-                startlnum2 = (*flp).lnum;
-            } else {
-                // Step to the next line with a level of its own, remembering
-                // where that search started so the caller sees both.
-                (*flp).lnum = (*flp).lnum_save;
-                let next = (*flp).lnum + 1;
-                while !got_int.get() {
-                    // 'foldexpr' may ask for the level of this line while we
-                    // are working out the next one; park the answer.
-                    prev_lnum.set((*flp).lnum);
-                    prev_lnum_lvl.set((*flp).lvl);
-                    (*flp).lnum += 1;
-                    if (*flp).lnum > linecount {
-                        break;
-                    }
-                    (*flp).lvl = (*flp).lvl_next;
-                    getlevel.expect("non-null function pointer")(flp);
-                    if (*flp).lvl >= 0 || (*flp).had_end <= MAX_LEVEL {
-                        break;
-                    }
-                }
-                prev_lnum.set(0);
-                if (*flp).lnum > linecount {
+                )
+            };
+            // The recursion may have grown the array under us.
+            let current = folds.at(i);
+            fold = Some(current);
+            line.set_lnum(line.lnum() + current.top());
+            line.set_lnum_save(line.lnum_save() + current.top());
+            line.set_off(line.off() - current.top());
+            bot += current.top();
+            startlnum2 = line.lnum();
+        } else {
+            // Step to the next line with a level of its own, remembering where
+            // that search started so the caller sees both.
+            line.set_lnum(line.lnum_save());
+            let next = line.lnum() + 1;
+            while !got_int.get() {
+                // 'foldexpr' may ask for the level of this line while we are
+                // working out the next one; park the answer.
+                prev_lnum.set(line.lnum());
+                prev_lnum_lvl.set(line.lvl());
+                line.set_lnum(line.lnum() + 1);
+                if line.lnum() > linecount {
                     break;
                 }
-                (*flp).lnum_save = (*flp).lnum;
-                (*flp).lnum = next;
-            }
-        }
-    }
-    let Some(fold) = fold else {
-        return bot;
-    };
-    // SAFETY: the caller's promise.
-    unsafe {
-        // Give the fold the length the walk ended up at.
-        if fold.len() < (*flp).lnum - fold.top() {
-            fold.set_len((*flp).lnum - fold.top());
-            fold.set_small(None);
-            fold_changed.set(true);
-        } else if fold.top() + fold.len() > linecount {
-            fold.set_len(linecount - fold.top() + 1);
-        }
-        fold_remove(
-            (*flp).wp,
-            fold.nested(),
-            startlnum2 - fold.top(),
-            (*flp).lnum - 1 - fold.top(),
-        );
-        let mut fold = fold;
-        if lvl < level && fold.len() != (*flp).lnum - fold.top() {
-            // It used to reach further down than the levels now say.
-            if fold.top() + fold.len() - 1 > bot {
-                if getlevel_is_open_ended(getlevel) {
-                    // The rest of it still has to be looked at.
-                    bot = fold.top() + fold.len() - 1;
-                    fold.set_len((*flp).lnum - fold.top());
-                } else {
-                    let i = folds.index_of(fold);
-                    fold_split((*(*flp).wp).w_buffer, folds, i, (*flp).lnum, bot);
-                    fold = folds.at(i);
+                line.set_lvl(line.lvl_next());
+                // SAFETY: the caller's `flp`.
+                unsafe { getlevel.expect("non-null function pointer")(flp) };
+                if line.lvl() >= 0 || line.had_end() <= MAX_LEVEL {
+                    break;
                 }
-            } else {
-                fold.set_len((*flp).lnum - fold.top());
             }
-            fold_changed.set(true);
-        }
-        // Absorb or drop the folds the new one now overlaps.
-        loop {
-            let next = fold.offset(1);
-            if !folds.holds(next) || next.top() > (*flp).lnum {
+            prev_lnum.set(0);
+            if line.lnum() > linecount {
                 break;
             }
-            if next.top() + next.len() > (*flp).lnum {
-                if next.top() < (*flp).lnum {
+            line.set_lnum_save(line.lnum());
+            line.set_lnum(next);
+        }
+    }
+    let Some(mut fold) = fold else {
+        return bot;
+    };
+    // Give the fold the length the walk ended up at.
+    if fold.len() < line.lnum() - fold.top() {
+        fold.set_len(line.lnum() - fold.top());
+        fold.set_small(None);
+        fold_changed.set(true);
+    } else if fold.top() + fold.len() > linecount {
+        fold.set_len(linecount - fold.top() + 1);
+    }
+    // SAFETY: a live window, and the fold's own nested list.
+    unsafe {
+        fold_remove(
+            line.win(),
+            fold.nested(),
+            startlnum2 - fold.top(),
+            line.lnum() - 1 - fold.top(),
+        )
+    };
+    if lvl < level && fold.len() != line.lnum() - fold.top() {
+        // It used to reach further down than the levels now say.
+        if fold.top() + fold.len() - 1 > bot {
+            if getlevel_is_open_ended(getlevel) {
+                // The rest of it still has to be looked at.
+                bot = fold.top() + fold.len() - 1;
+                fold.set_len(line.lnum() - fold.top());
+            } else {
+                let i = folds.index_of(fold);
+                // SAFETY: a live window's buffer; `i` names an entry.
+                unsafe { fold_split((*line.win()).w_buffer, folds, i, line.lnum(), bot) };
+                fold = folds.at(i);
+            }
+        } else {
+            fold.set_len(line.lnum() - fold.top());
+        }
+        fold_changed.set(true);
+    }
+    // Absorb or drop the folds the new one now overlaps.
+    loop {
+        let next = fold.offset(1);
+        if !folds.holds(next) || next.top() > line.lnum() {
+            break;
+        }
+        if next.top() + next.len() > line.lnum() {
+            if next.top() < line.lnum() {
+                // SAFETY: a live fold's nested list is a live fold list.
+                unsafe {
                     fold_mark_adjust_recurse(
                         next.nested().gap(),
                         0,
-                        (*flp).lnum - next.top() - 1,
+                        line.lnum() - next.top() - 1,
                         LINES_DELETED,
-                        next.top() - (*flp).lnum,
-                    );
-                    next.set_len(next.len() - ((*flp).lnum - next.top()));
-                    next.set_top((*flp).lnum);
-                    fold_changed.set(true);
-                }
-                if lvl >= level {
-                    fold_merge(fold, folds, next);
-                }
-                break;
+                        next.top() - line.lnum(),
+                    )
+                };
+                next.set_len(next.len() - (line.lnum() - next.top()));
+                next.set_top(line.lnum());
+                fold_changed.set(true);
             }
-            fold_changed.set(true);
-            delete_fold_entry(folds, folds.index_of(next), true);
+            if lvl >= level {
+                // SAFETY: both are entries of `folds`.
+                unsafe { fold_merge(fold, folds, next) };
+            }
+            break;
         }
-        bot.max((*flp).lnum - 1)
+        fold_changed.set(true);
+        // SAFETY: `next` is an entry of `folds`.
+        unsafe { delete_fold_entry(folds, folds.index_of(next), true) };
     }
+    bot.max(line.lnum() - 1)
 }
 
 /// Low level function to get the foldlevel for the "indent" method.
@@ -655,25 +670,27 @@ pub(super) unsafe fn fold_update_computed_recurse(
 /// buffer.
 pub(super) unsafe fn foldlevel_indent(flp: *mut fline_T) {
     // SAFETY: the caller's promise.
+    let line = unsafe { FLine::new(flp) };
+    let lnum = line.lnum() + line.off();
+    // SAFETY: a live window has a live buffer, and `lnum` is inside it.
     unsafe {
-        let lnum = (*flp).lnum + (*flp).off;
-        let buf = (*(*flp).wp).w_buffer;
+        let buf = (*line.win()).w_buffer;
         let s = skipwhite(ml_get_buf(buf, lnum));
         // A blank line, or one starting with a 'foldignore' character, takes
         // its level from its neighbours.
         if *s as c_int == NUL
-            || !vim_strchr((*(*flp).wp).w_onebuf_opt.wo_fdi, *s as uint8_t as c_int).is_null()
+            || !vim_strchr((*line.win()).w_onebuf_opt.wo_fdi, *s as uint8_t as c_int).is_null()
         {
-            (*flp).lvl = if lnum == 1 || lnum == (*buf).b_ml.ml_line_count {
+            line.set_lvl(if lnum == 1 || lnum == (*buf).b_ml.ml_line_count {
                 0
             } else {
                 -1
-            };
+            });
         } else {
-            (*flp).lvl = get_indent_buf(buf, lnum) / get_sw_value(buf);
+            line.set_lvl(get_indent_buf(buf, lnum) / get_sw_value(buf));
         }
-        let foldnestmax = (*(*flp).wp).w_onebuf_opt.wo_fdn.max(0) as c_int;
-        (*flp).lvl = (*flp).lvl.min(foldnestmax);
+        let foldnestmax = (*line.win()).w_onebuf_opt.wo_fdn.max(0) as c_int;
+        line.set_lvl(line.lvl().min(foldnestmax));
     }
 }
 
@@ -685,7 +702,10 @@ pub(super) unsafe fn foldlevel_indent(flp: *mut fline_T) {
 /// buffer.
 pub(super) unsafe fn foldlevel_diff(flp: *mut fline_T) {
     // SAFETY: the caller's promise.
-    unsafe { (*flp).lvl = c_int::from(diff_infold((*flp).wp, (*flp).lnum + (*flp).off)) };
+    let line = unsafe { FLine::new(flp) };
+    // SAFETY: a live window, and a line inside its buffer.
+    let infold = unsafe { diff_infold(line.win(), line.lnum() + line.off()) };
+    line.set_lvl(c_int::from(infold));
 }
 
 /// Low level function to get the foldlevel for the "expr" method.
@@ -697,74 +717,81 @@ pub(super) unsafe fn foldlevel_diff(flp: *mut fline_T) {
 /// `flp` must be writable and name a live window and a line inside its
 /// buffer.
 pub(super) unsafe fn foldlevel_expr(flp: *mut fline_T) {
-    // SAFETY: the caller's promise; the current window is restored below.
+    // SAFETY: the caller's promise.
+    let line = unsafe { FLine::new(flp) };
+    let lnum = line.lnum() + line.off();
+    let win = curwin.get();
+    // SAFETY: a live window; the current window is restored below.
     unsafe {
-        let lnum = (*flp).lnum + (*flp).off;
-        let win = curwin.get();
-        curwin.set((*flp).wp);
-        curbuf.set((*(*flp).wp).w_buffer);
+        curwin.set(line.win());
+        curbuf.set((*line.win()).w_buffer);
         set_vim_var_nr(Vv::Lnum, lnum as varnumber_T);
-        (*flp).start = 0;
-        (*flp).had_end = (*flp).end;
-        (*flp).end = MAX_LEVEL + 1;
-        if lnum <= 1 {
-            (*flp).lvl = 0;
-        }
-        // 'foldexpr' must not count as typed input.
-        let save_keytyped = KeyTyped.get();
-        let mut verdict: c_int = 0;
-        let n = eval_foldexpr((*flp).wp, &raw mut verdict);
-        KeyTyped.set(save_keytyped);
-        match verdict as u8 {
-            b'a' => {
-                // "a1": one level deeper from here on.
-                if (*flp).lvl >= 0 {
-                    (*flp).lvl += n;
-                    (*flp).lvl_next = (*flp).lvl;
-                }
-                (*flp).start = n;
-            }
-            b's' => {
-                // "s1": one level shallower from the next line.
-                if (*flp).lvl >= 0 {
-                    (*flp).lvl_next = if n > (*flp).lvl { 0 } else { (*flp).lvl - n };
-                    (*flp).end = (*flp).lvl_next + 1;
-                }
-            }
-            b'>' => {
-                // ">1": a fold of level 1 starts here.
-                (*flp).lvl = n;
-                (*flp).lvl_next = n;
-                (*flp).start = 1;
-            }
-            b'<' => {
-                // "<1": a fold of level 1 ends here.
-                (*flp).lvl_next = (*flp).lvl.min(n - 1);
-                (*flp).end = n;
-            }
-            b'=' => {
-                // "=": the same level as the line above.
-                (*flp).lvl_next = (*flp).lvl;
-            }
-            _ => {
-                (*flp).lvl_next = if n < 0 { (*flp).lvl } else { n };
-                (*flp).lvl = n;
-            }
-        }
-        if (*flp).lvl < 0 {
-            // An undefined level at either end of the buffer has nothing to
-            // inherit from.
-            if lnum <= 1 {
-                (*flp).lvl = 0;
-                (*flp).lvl_next = 0;
-            }
-            if lnum == (*curbuf.get()).b_ml.ml_line_count {
-                (*flp).lvl_next = 0;
-            }
-        }
-        curwin.set(win);
-        curbuf.set((*curwin.get()).w_buffer);
     }
+    line.set_start(0);
+    line.set_had_end(line.end());
+    line.set_end(MAX_LEVEL + 1);
+    if lnum <= 1 {
+        line.set_lvl(0);
+    }
+    // 'foldexpr' must not count as typed input.
+    let save_keytyped = KeyTyped.get();
+    let mut verdict: c_int = 0;
+    // SAFETY: a live window, and `verdict` is ours.
+    let n = unsafe { eval_foldexpr(line.win(), &raw mut verdict) };
+    KeyTyped.set(save_keytyped);
+    // `eval_foldexpr` writes one byte of the expression's answer, so the
+    // truncation below is exact.
+    match verdict as u8 {
+        b'a' => {
+            // "a1": one level deeper from here on.
+            if line.lvl() >= 0 {
+                line.set_lvl(line.lvl() + n);
+                line.set_lvl_next(line.lvl());
+            }
+            line.set_start(n);
+        }
+        b's' => {
+            // "s1": one level shallower from the next line.
+            if line.lvl() >= 0 {
+                line.set_lvl_next(if n > line.lvl() { 0 } else { line.lvl() - n });
+                line.set_end(line.lvl_next() + 1);
+            }
+        }
+        b'>' => {
+            // ">1": a fold of level 1 starts here.
+            line.set_lvl(n);
+            line.set_lvl_next(n);
+            line.set_start(1);
+        }
+        b'<' => {
+            // "<1": a fold of level 1 ends here.
+            line.set_lvl_next(line.lvl().min(n - 1));
+            line.set_end(n);
+        }
+        b'=' => {
+            // "=": the same level as the line above.
+            line.set_lvl_next(line.lvl());
+        }
+        _ => {
+            line.set_lvl_next(if n < 0 { line.lvl() } else { n });
+            line.set_lvl(n);
+        }
+    }
+    if line.lvl() < 0 {
+        // An undefined level at either end of the buffer has nothing to
+        // inherit from.
+        if lnum <= 1 {
+            line.set_lvl(0);
+            line.set_lvl_next(0);
+        }
+        // SAFETY: a live buffer.
+        if lnum == unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+            line.set_lvl_next(0);
+        }
+    }
+    curwin.set(win);
+    // SAFETY: a live window.
+    unsafe { curbuf.set((*curwin.get()).w_buffer) };
 }
 
 /// Low level function to get the foldlevel for the "syntax" method.
@@ -775,17 +802,19 @@ pub(super) unsafe fn foldlevel_expr(flp: *mut fline_T) {
 /// buffer.
 pub(super) unsafe fn foldlevel_syntax(flp: *mut fline_T) {
     // SAFETY: the caller's promise.
+    let line = unsafe { FLine::new(flp) };
+    let lnum = line.lnum() + line.off();
+    // SAFETY: a live window, and a line inside its buffer.
     unsafe {
-        let lnum = (*flp).lnum + (*flp).off;
-        (*flp).lvl = syn_get_foldlevel((*flp).wp, lnum);
-        (*flp).start = 0;
-        if lnum < (*(*(*flp).wp).w_buffer).b_ml.ml_line_count {
+        line.set_lvl(syn_get_foldlevel(line.win(), lnum));
+        line.set_start(0);
+        if lnum < (*(*line.win()).w_buffer).b_ml.ml_line_count {
             // A fold that starts on the next line starts here as far as the
             // tree is concerned, so the syntax item's first line is inside.
-            let n = syn_get_foldlevel((*flp).wp, lnum + 1);
-            if n > (*flp).lvl {
-                (*flp).start = n - (*flp).lvl;
-                (*flp).lvl = n;
+            let n = syn_get_foldlevel(line.win(), lnum + 1);
+            if n > line.lvl() {
+                line.set_start(n - line.lvl());
+                line.set_lvl(n);
             }
         }
     }

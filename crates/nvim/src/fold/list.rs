@@ -22,8 +22,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::fold_T;
-use crate::types::{garray_T, linenr_T};
+use super::{fline_T, fold_T};
+use crate::types::{garray_T, linenr_T, win_T};
 use core::ffi::{c_char, c_int};
 
 /// One fold list: a `garray_T` whose items are [`fold_T`].
@@ -245,6 +245,123 @@ impl Fold {
     pub(super) fn write(self, fold: fold_T) {
         // SAFETY: as `top`.
         unsafe { *self.fp = fold };
+    }
+}
+
+/// The per-line state the computed fold methods are handed, and answer in.
+///
+/// One `fline_T` travels the whole of `fold_update_computed_recurse`: each
+/// level of the recursion reads what the level above left and writes what the
+/// level below will read, which is why it is passed by pointer rather than by
+/// `&mut`. The same trick as [`FoldList`] applies — the promise is made once,
+/// at construction, and the field accessors are safe.
+#[derive(Copy, Clone)]
+pub(super) struct FLine {
+    flp: *mut fline_T,
+}
+
+impl FLine {
+    /// # Safety
+    /// `flp` must point at a live, writable `fline_T` naming a live window,
+    /// and must stay so for as long as the handle is used.
+    pub(super) const unsafe fn new(flp: *mut fline_T) -> Self {
+        Self { flp }
+    }
+
+    /// The window whose folds are being computed.
+    pub(super) fn win(self) -> *mut win_T {
+        // SAFETY: `new`'s caller promised a live `fline_T`.
+        unsafe { (*self.flp).wp }
+    }
+
+    /// Current line number, relative to the start of the enclosing fold.
+    pub(super) fn lnum(self) -> linenr_T {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lnum }
+    }
+
+    pub(super) fn set_lnum(self, lnum: linenr_T) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lnum = lnum };
+    }
+
+    /// Offset between [`FLine::lnum`] and the real buffer line.
+    pub(super) fn off(self) -> linenr_T {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).off }
+    }
+
+    pub(super) fn set_off(self, off: linenr_T) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).off = off };
+    }
+
+    /// The line the level was actually read from, when the level at
+    /// [`FLine::lnum`] is undefined.
+    pub(super) fn lnum_save(self) -> linenr_T {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lnum_save }
+    }
+
+    pub(super) fn set_lnum_save(self, lnum: linenr_T) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lnum_save = lnum };
+    }
+
+    /// Level of this line; -1 for undefined.
+    pub(super) fn lvl(self) -> c_int {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lvl }
+    }
+
+    pub(super) fn set_lvl(self, lvl: c_int) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lvl = lvl };
+    }
+
+    /// Level to use for the next line.
+    pub(super) fn lvl_next(self) -> c_int {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lvl_next }
+    }
+
+    pub(super) fn set_lvl_next(self, lvl: c_int) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).lvl_next = lvl };
+    }
+
+    /// How many folds are forced to start at this line.
+    pub(super) fn start(self) -> c_int {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).start }
+    }
+
+    pub(super) fn set_start(self, start: c_int) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).start = start };
+    }
+
+    /// Level of the fold forced to end below this line.
+    pub(super) fn end(self) -> c_int {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).end }
+    }
+
+    pub(super) fn set_end(self, end: c_int) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).end = end };
+    }
+
+    /// Level of the fold forced to end above this line — the previous line's
+    /// [`FLine::end`].
+    pub(super) fn had_end(self) -> c_int {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).had_end }
+    }
+
+    pub(super) fn set_had_end(self, end: c_int) {
+        // SAFETY: as `win`.
+        unsafe { (*self.flp).had_end = end };
     }
 }
 
