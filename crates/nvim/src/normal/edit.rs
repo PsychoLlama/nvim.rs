@@ -20,7 +20,7 @@ use crate::edit::{
 };
 use crate::fold::{foldUpdateAfterInsert, hasFolding};
 use crate::getchar::{
-    AppendCharToRedobuff, AppendToRedobuff, stuff_empty, stuff_readbuf, stuff_readbuf_char,
+    append_to_redobuff, append_to_redobuff_char, stuff_empty, stuff_readbuf, stuff_readbuf_char,
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
@@ -196,9 +196,9 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
         let old_state = State.get();
         if (*cap).nchar_len > 0 {
-            AppendToRedobuff(&raw mut (*cap).nchar_composing as *mut c_char);
+            append_to_redobuff(&raw mut (*cap).nchar_composing as *mut c_char);
         } else {
-            AppendCharToRedobuff((*cap).nchar);
+            append_to_redobuff_char((*cap).nchar);
         }
         for _ in 0..(*cap).count1 {
             // `ins_char` looks at 'State' to decide it is overwriting rather

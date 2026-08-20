@@ -248,27 +248,27 @@ unsafe fn record_operator_redo(cap: *mut cmdarg_T, oap: *mut oparg_T, redo_yank:
             // A search: without 'cpoptions' `r` the pattern goes in too, so
             // that the repeat really is the same command.
             if !cpo_has(CpoFlag::REDO) {
-                AppendToRedobuffLit((*cap).searchbuf, -1);
+                append_to_redobuff_literally((*cap).searchbuf, -1);
             }
-            AppendToRedobuff(c"\n".as_ptr());
+            append_to_redobuff(c"\n".as_ptr());
         } else if is_ex_cmdchar(cap) {
             // `do_cmdline` stored the first typed line in `repeat_cmdline`.
             // When several lines were typed, repeating is not possible.
             if repeat_cmdline.get().is_null() {
-                ResetRedobuff();
+                reset_redobuff();
             } else {
                 if (*cap).cmdchar == ':' as c_int {
-                    AppendToRedobuffLit(repeat_cmdline.get(), -1);
+                    append_to_redobuff_literally(repeat_cmdline.get(), -1);
                 } else {
-                    AppendToRedobuffSpec(repeat_cmdline.get());
+                    append_to_redobuff_keys(repeat_cmdline.get());
                 }
-                AppendToRedobuff(c"\n".as_ptr());
+                append_to_redobuff(c"\n".as_ptr());
                 xfree(repeat_cmdline.get() as *mut c_void);
                 repeat_cmdline.set(::core::ptr::null_mut());
             }
         } else if (*cap).cmdchar == K_LUA {
-            AppendNumberToRedobuff(repeat_luaref.get() as c_int);
-            AppendToRedobuff(c"\n".as_ptr());
+            append_to_redobuff_number(repeat_luaref.get() as c_int);
+            append_to_redobuff(c"\n".as_ptr());
         }
     }
 }
@@ -674,7 +674,7 @@ unsafe fn run_operator(
         unsafe fn refuse() {
             unsafe {
                 vim_beep(kOptBoFlagOperator as ::core::ffi::c_uint);
-                CancelRedo();
+                cancel_redo();
             }
         }
 
@@ -747,7 +747,7 @@ unsafe fn run_operator(
             OP_FILTER => {
                 if cpo_has(CpoFlag::FILTER) {
                     // Use whichever `!cmd` was last used.
-                    AppendToRedobuff(c"!\r".as_ptr());
+                    append_to_redobuff(c"!\r".as_ptr());
                 } else {
                     // `do_bang` will put the command in the redo buffer.
                     bangredo.set(true);

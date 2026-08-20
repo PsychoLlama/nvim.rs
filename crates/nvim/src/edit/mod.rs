@@ -70,10 +70,11 @@ use crate::fold::{
     foldCheckClose, foldOpenCursor, foldUpdateAfterInsert, hasFolding, hasFoldingWin,
 };
 use crate::getchar::{
-    AppendCharToRedobuff, AppendNumberToRedobuff, AppendToRedobuff, AppendToRedobuffLit,
-    ResetRedobuff, char_avail, get_inserted, getcmdkeycmd, map_execute_lua, merge_modifiers,
-    paste_repeat, plain_vgetc, start_redo_ins, stop_redo_ins, stuff_empty, stuff_readbuf_char,
-    stuff_readbuf_len, stuff_redo_readbuf, typebuf_maplen, vgetc, vpeekc, vungetc,
+    append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally,
+    append_to_redobuff_number, char_avail, get_inserted, getcmdkeycmd, map_execute_lua,
+    merge_modifiers, paste_repeat, plain_vgetc, reset_redobuff, start_redo_ins, stop_redo_ins,
+    stuff_empty, stuff_readbuf_char, stuff_readbuf_len, stuff_redo_readbuf, typebuf_maplen, vgetc,
+    vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
 use crate::grid::{

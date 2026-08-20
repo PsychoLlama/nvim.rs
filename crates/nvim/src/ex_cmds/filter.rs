@@ -26,7 +26,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{readfile, vim_tempname, write_lnum_adjust};
 use crate::fold::foldUpdate;
-use crate::getchar::{AppendToRedobuff, AppendToRedobuffLit};
+use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
@@ -177,9 +177,9 @@ pub unsafe fn do_bang(
             // SAFETY: `prevcmd` is a live C string and `cmd` our own copy.
             unsafe {
                 let cmd = vim_strsave_escaped(prevcmd.get(), c"%#".as_ptr());
-                AppendToRedobuffLit(cmd, -1);
+                append_to_redobuff_literally(cmd, -1);
                 xfree(cmd.cast());
-                AppendToRedobuff(c"\n".as_ptr());
+                append_to_redobuff(c"\n".as_ptr());
             }
             bangredo.set(false);
         }

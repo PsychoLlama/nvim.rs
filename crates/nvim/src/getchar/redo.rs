@@ -1,7 +1,7 @@
 //! The redo buffer: what `.` replays.
 //!
 //! Normal-mode commands append themselves to `redobuff` as they run
-//! ([`AppendToRedobuff`] and friends); `.` calls [`start_redo`], which copies
+//! ([`append_to_redobuff`] and friends); `.` calls [`start_redo`], which copies
 //! that buffer into the read buffer so the keys are re-read as if stuffed.
 //! `old_redobuff` keeps the previous one so that `CTRL-O .` in Insert mode can
 //! repeat the command before the insert rather than the insert itself.
@@ -26,7 +26,7 @@ static redo_at: GlobalCell<*const u8> = GlobalCell::new(ptr::null());
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn ResetRedobuff() {
+pub unsafe fn reset_redobuff() {
     unsafe {
         if block_redo.get() {
             return;
@@ -41,7 +41,7 @@ pub unsafe fn ResetRedobuff() {
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn CancelRedo() {
+pub unsafe fn cancel_redo() {
     unsafe {
         if block_redo.get() {
             return;
@@ -97,7 +97,7 @@ pub unsafe fn restore_redobuff(save_redo: *mut save_redo_T) {
 ///
 /// # Safety
 /// `s` must point at a NUL-terminated string.
-pub unsafe fn AppendToRedobuff(s: *const c_char) {
+pub unsafe fn append_to_redobuff(s: *const c_char) {
     unsafe {
         if !block_redo.get() {
             add_buff(redobuff.ptr(), s, -1);
@@ -113,7 +113,7 @@ pub unsafe fn AppendToRedobuff(s: *const c_char) {
 /// # Safety
 /// `str` must point at `len` readable bytes, or at a NUL-terminated string
 /// when `len` is negative.
-pub unsafe fn AppendToRedobuffLit(str: *const c_char, len: c_int) {
+pub unsafe fn append_to_redobuff_literally(str: *const c_char, len: c_int) {
     unsafe {
         if block_redo.get() {
             return;
@@ -175,7 +175,7 @@ pub unsafe fn AppendToRedobuffLit(str: *const c_char, len: c_int) {
 ///
 /// # Safety
 /// `s` must point at a NUL-terminated string.
-pub unsafe fn AppendToRedobuffSpec(mut s: *const c_char) {
+pub unsafe fn append_to_redobuff_keys(mut s: *const c_char) {
     unsafe {
         if block_redo.get() {
             return;
@@ -200,7 +200,7 @@ pub unsafe fn AppendToRedobuffSpec(mut s: *const c_char) {
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn AppendCharToRedobuff(c: c_int) {
+pub unsafe fn append_to_redobuff_char(c: c_int) {
     unsafe {
         if !block_redo.get() {
             add_char_buff(redobuff.ptr(), c);
@@ -212,7 +212,7 @@ pub unsafe fn AppendCharToRedobuff(c: c_int) {
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn AppendNumberToRedobuff(n: c_int) {
+pub unsafe fn append_to_redobuff_number(n: c_int) {
     unsafe {
         if !block_redo.get() {
             add_num_buff(redobuff.ptr(), n);

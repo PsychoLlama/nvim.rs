@@ -66,7 +66,7 @@ use ::libc::qsort;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::getchar::{
-    AppendCharToRedobuff, AppendNumberToRedobuff, AppendToRedobuff, ResetRedobuff,
+    append_to_redobuff, append_to_redobuff_char, append_to_redobuff_number, reset_redobuff,
 };
 use crate::r#move::{do_check_cursorbind, validate_cursor};
 use crate::option::cpo_has;
@@ -737,9 +737,9 @@ pub(crate) unsafe fn prep_redo_cmd(cap: *mut cmdarg_T) {
         );
         // A character with a combining tail is replayed as its whole encoding.
         if (*cap).nchar_len > 0 {
-            AppendToRedobuff((*cap).nchar_composing.as_mut_ptr());
+            append_to_redobuff((*cap).nchar_composing.as_mut_ptr());
         } else {
-            AppendCharToRedobuff((*cap).nchar);
+            append_to_redobuff_char((*cap).nchar);
         }
     }
 }
@@ -774,25 +774,25 @@ pub(crate) fn prep_redo_num2(
 ) {
     // SAFETY: all of these append to the redo buffer, which grows itself.
     unsafe {
-        ResetRedobuff();
+        reset_redobuff();
         if regname != 0 {
-            AppendCharToRedobuff('"' as c_int);
-            AppendCharToRedobuff(regname);
+            append_to_redobuff_char('"' as c_int);
+            append_to_redobuff_char(regname);
         }
         if num1 != 0 {
-            AppendNumberToRedobuff(num1);
+            append_to_redobuff_number(num1);
         }
         for cmd in [cmd1, cmd2] {
             if cmd != NUL {
-                AppendCharToRedobuff(cmd);
+                append_to_redobuff_char(cmd);
             }
         }
         if num2 != 0 {
-            AppendNumberToRedobuff(num2);
+            append_to_redobuff_number(num2);
         }
         for cmd in [cmd3, cmd4, cmd5] {
             if cmd != NUL {
-                AppendCharToRedobuff(cmd);
+                append_to_redobuff_char(cmd);
             }
         }
     }

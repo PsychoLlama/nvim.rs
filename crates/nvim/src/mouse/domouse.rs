@@ -30,7 +30,7 @@ use crate::eval::eval_has_provider;
 use crate::ex_docmd::{do_cmdline_cmd, tabpage_new};
 use crate::fold::{closeFold, openFold};
 use crate::getchar::{
-    AppendCharToRedobuff, safe_vgetc, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
+    append_to_redobuff_char, safe_vgetc, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
@@ -550,9 +550,9 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
     // Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r
     // SAFETY: appends to the redo buffer.
     unsafe {
-        AppendCharToRedobuff(Ctrl_R);
-        AppendCharToRedobuff(if fixindent { Ctrl_P } else { Ctrl_O });
-        AppendCharToRedobuff(if regname == 0 { '"' as c_int } else { regname });
+        append_to_redobuff_char(Ctrl_R);
+        append_to_redobuff_char(if fixindent { Ctrl_P } else { Ctrl_O });
+        append_to_redobuff_char(if regname == 0 { '"' as c_int } else { regname });
     }
     Some(false)
 }

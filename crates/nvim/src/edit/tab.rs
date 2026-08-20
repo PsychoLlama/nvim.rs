@@ -40,7 +40,7 @@ pub(crate) unsafe fn ins_shift(c: c_int, lastc: c_int) {
         if stop_arrow() == FAIL {
             return;
         }
-        AppendCharToRedobuff(c);
+        append_to_redobuff_char(c);
 
         // `0 CTRL-D` and `^ CTRL-D`: the `0`/`^` was inserted as an ordinary
         // character and has to come off again.
@@ -124,7 +124,7 @@ pub(crate) unsafe fn ins_tab() -> bool {
         did_si.set(false);
         can_si.set(false);
         can_si_back.set(false);
-        AppendToRedobuff(c"\t".as_ptr());
+        append_to_redobuff(c"\t".as_ptr());
 
         // How many columns to the next stop, from whichever option owns it.
         let mut temp = if p_sta.get() != 0 && ind {
@@ -390,7 +390,7 @@ pub(crate) unsafe fn ins_eol(c: c_int) -> bool {
             (*curwin.get()).w_cursor.col += get_cursor_pos_len();
         }
 
-        AppendToRedobuff(NL_STR.as_ptr());
+        append_to_redobuff(NL_STR.as_ptr());
         let ok = open_line(
             FORWARD,
             if has_format_option(FoFlag::RET_COMS) {

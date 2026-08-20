@@ -102,7 +102,7 @@ pub(crate) unsafe fn ins_left() {
         if oneleft() == OK {
             start_arrow_with_change(&raw mut tpos, end_change);
             if !end_change {
-                AppendCharToRedobuff(K_LEFT);
+                append_to_redobuff_char(K_LEFT);
             }
             // Only the characters 'revins' itself put there are legal to go
             // back over.
@@ -177,7 +177,7 @@ pub(crate) unsafe fn ins_s_left() {
         if (*curwin.get()).w_cursor.lnum > 1 || (*curwin.get()).w_cursor.col > 0 {
             start_arrow_with_change(&raw mut (*curwin.get()).w_cursor, end_change);
             if !end_change {
-                AppendCharToRedobuff(K_S_LEFT);
+                append_to_redobuff_char(K_S_LEFT);
             }
             bck_word(1, false, false);
             (*curwin.get()).w_set_curswant = 1;
@@ -201,7 +201,7 @@ pub(crate) unsafe fn ins_right() {
         if gchar_cursor() != NUL || virtual_active(curwin.get()) {
             start_arrow_with_change(&raw mut (*curwin.get()).w_cursor, end_change);
             if !end_change {
-                AppendCharToRedobuff(K_RIGHT);
+                append_to_redobuff_char(K_RIGHT);
             }
             (*curwin.get()).w_set_curswant = 1;
             if virtual_active(curwin.get()) {
@@ -244,7 +244,7 @@ pub(crate) unsafe fn ins_s_right() {
         {
             start_arrow_with_change(&raw mut (*curwin.get()).w_cursor, end_change);
             if !end_change {
-                AppendCharToRedobuff(K_S_RIGHT);
+                append_to_redobuff_char(K_S_RIGHT);
             }
             fwd_word(1, false, false);
             (*curwin.get()).w_set_curswant = 1;

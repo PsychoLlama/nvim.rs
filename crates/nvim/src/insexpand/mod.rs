@@ -46,8 +46,8 @@ use crate::fileio::vim_fgets;
 use crate::fuzzy::{fuzzy_match_str, fuzzy_match_str_in_line, search_for_fuzzy_match};
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::getchar::{
-    AppendCharToRedobuff, AppendToRedobuffLit, char_avail, safe_vgetc, using_script, vgetc, vpeekc,
-    vpeekc_any, vungetc,
+    append_to_redobuff_char, append_to_redobuff_literally, char_avail, safe_vgetc, using_script,
+    vgetc, vpeekc, vpeekc_any, vungetc,
 };
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};

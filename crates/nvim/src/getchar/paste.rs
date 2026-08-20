@@ -54,7 +54,7 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
             };
             if need_redo {
                 if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
-                    ResetRedobuff();
+                    reset_redobuff();
                 }
                 add_char_buff(redobuff.ptr(), c);
             }

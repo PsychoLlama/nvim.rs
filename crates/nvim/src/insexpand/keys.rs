@@ -550,11 +550,11 @@ pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
             // A backspace for each remaining character of the original text.
             p = p.offset(len as isize);
             while *p as c_int != NUL {
-                AppendCharToRedobuff(K_BS);
+                append_to_redobuff_char(K_BS);
                 p = p.offset(utfc_ptr2len(p) as isize);
             }
         }
-        AppendToRedobuffLit(ptr.offset(len as isize), -1);
+        append_to_redobuff_literally(ptr.offset(len as isize), -1);
     }
 }
 

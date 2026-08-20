@@ -523,8 +523,8 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
                     }
                     (*curwin.get()).w_cursor = curpos;
                 }
-                AppendCharToRedobuff(Ctrl_R);
-                AppendCharToRedobuff(regname);
+                append_to_redobuff_char(Ctrl_R);
+                append_to_redobuff_char(regname);
                 do_put(
                     regname,
                     ::core::ptr::null_mut(),

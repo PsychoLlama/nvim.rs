@@ -116,9 +116,9 @@ pub(crate) unsafe fn ins_reg() {
 
             if literally == Ctrl_O || literally == Ctrl_P {
                 // Append the command to the redo buffer.
-                AppendCharToRedobuff(Ctrl_R);
-                AppendCharToRedobuff(literally);
-                AppendCharToRedobuff(regname);
+                append_to_redobuff_char(Ctrl_R);
+                append_to_redobuff_char(literally);
+                append_to_redobuff_char(regname);
                 let fix = if literally == Ctrl_P {
                     PUT_FIXINDENT as c_int
                 } else {
@@ -132,8 +132,8 @@ pub(crate) unsafe fn ins_reg() {
                     fix | PUT_CURSEND as c_int,
                 );
             } else if (*reg).y_size > 1 && is_literal_register(regname) {
-                AppendCharToRedobuff(Ctrl_R);
-                AppendCharToRedobuff(regname);
+                append_to_redobuff_char(Ctrl_R);
+                append_to_redobuff_char(regname);
                 do_put(
                     regname,
                     ::core::ptr::null_mut(),
@@ -263,7 +263,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
         if !arrow_used.get() {
             // Don't append the ESC for `r<CR>` and `grx`.
             if !single_char_insert {
-                AppendToRedobuff(ESC_STR.as_ptr());
+                append_to_redobuff(ESC_STR.as_ptr());
             }
 
             // Repeating an insert may take a long time; check for an
@@ -430,7 +430,7 @@ pub(crate) unsafe fn ins_insert(replace_state: c_int) {
             State.set(replace_state | State.get() & MODE_LANGMAP);
         }
         may_trigger_modechanged();
-        AppendCharToRedobuff(K_INS);
+        append_to_redobuff_char(K_INS);
         showmode();
         ui_cursor_shape();
     }

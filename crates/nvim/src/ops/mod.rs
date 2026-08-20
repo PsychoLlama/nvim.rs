@@ -32,8 +32,9 @@ use crate::eval::{callback_call, set_ref_in_callback};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{deleteFold, foldCreate, foldOpenCursor, hasFolding, opFoldRange};
 use crate::getchar::{
-    AppendNumberToRedobuff, AppendToRedobuff, AppendToRedobuffLit, AppendToRedobuffSpec,
-    CancelRedo, ResetRedobuff, beep_flush, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
+    append_to_redobuff, append_to_redobuff_keys, append_to_redobuff_literally,
+    append_to_redobuff_number, beep_flush, cancel_redo, reset_redobuff, stuff_readbuf,
+    stuff_readbuf_char, stuff_readbuf_number,
 };
 use crate::global_cell::GlobalCell;
 use crate::indent::{

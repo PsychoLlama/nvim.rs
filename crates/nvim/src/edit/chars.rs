@@ -130,7 +130,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
                 0
             };
             if buf[redo_from] as c_int != NUL {
-                AppendToRedobuffLit(buf.as_mut_ptr().add(redo_from), -1);
+                append_to_redobuff_literally(buf.as_mut_ptr().add(redo_from), -1);
             }
         } else {
             let cc = utf_char2len(c);
@@ -139,13 +139,13 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
                 utf_char2bytes(c, buf.as_mut_ptr());
                 buf[cc as usize] = NUL as c_char;
                 ins_char_bytes(buf.as_mut_ptr(), cc as size_t);
-                AppendCharToRedobuff(c);
+                append_to_redobuff_char(c);
             } else {
                 ins_char(c);
                 if flags & INSCHAR_CTRLV as c_int != 0 {
                     redo_literal(c);
                 } else {
-                    AppendCharToRedobuff(c);
+                    append_to_redobuff_char(c);
                 }
             }
         }

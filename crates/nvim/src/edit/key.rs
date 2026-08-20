@@ -637,7 +637,7 @@ unsafe fn insert_normal_char(s: *mut InsertState) {
                         }
                         p = p.offset(utfc_ptr2len(p) as isize);
                     }
-                    AppendToRedobuffLit(str, -1);
+                    append_to_redobuff_literally(str, -1);
                 }
                 xfree(str as *mut ::core::ffi::c_void);
                 (*s).c = NUL;

@@ -33,7 +33,8 @@ use crate::change::inserted_bytes;
 use crate::charset::rl_mirror_ascii;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::getchar::{
-    AppendCharToRedobuff, AppendToRedobuff, AppendToRedobuffLit, ResetRedobuff, beep_flush,
+    append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally, beep_flush,
+    reset_redobuff,
 };
 use crate::input::prompt_for_input;
 use crate::main::{
@@ -439,13 +440,13 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
         strcat(newline, sug.su_badptr.offset(stp.st_orglen as isize));
 
         // Redo is a change-word command.
-        ResetRedobuff();
-        AppendToRedobuff(c"ciw".as_ptr());
-        AppendToRedobuffLit(
+        reset_redobuff();
+        append_to_redobuff(c"ciw".as_ptr());
+        append_to_redobuff_literally(
             newline.offset(col as isize),
             stp.st_wordlen + sug.su_badlen - stp.st_orglen,
         );
-        AppendCharToRedobuff(ESC);
+        append_to_redobuff_char(ESC);
 
         // `newline` may be freed here.
         ml_replace((*curwin.get()).w_cursor.lnum, newline, false);

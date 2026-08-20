@@ -74,20 +74,20 @@ unsafe fn insert_enter(s: *mut InsertState) {
 
         // Record the command that started the insert, so `.` repeats it.
         if (*s).cmdchar != NUL && restart_edit.get() == 0 {
-            ResetRedobuff();
-            AppendNumberToRedobuff((*s).count);
+            reset_redobuff();
+            append_to_redobuff_number((*s).count);
             if (*s).cmdchar == 'V' as c_int || (*s).cmdchar == 'v' as c_int {
                 // `gR` and `gr`.
-                AppendCharToRedobuff('g' as c_int);
-                AppendCharToRedobuff(if (*s).cmdchar == 'v' as c_int {
+                append_to_redobuff_char('g' as c_int);
+                append_to_redobuff_char(if (*s).cmdchar == 'v' as c_int {
                     'r' as c_int
                 } else {
                     'R' as c_int
                 });
             } else {
-                AppendCharToRedobuff((*s).cmdchar);
+                append_to_redobuff_char((*s).cmdchar);
                 if (*s).cmdchar == 'g' as c_int {
-                    AppendCharToRedobuff('I' as c_int); // `gI` means "insert in column 1"
+                    append_to_redobuff_char('I' as c_int); // `gI` means "insert in column 1"
                 } else if (*s).cmdchar == 'r' as c_int {
                     (*s).count = 1; // `r<CR>` inserts one <CR> however big the count
                 }

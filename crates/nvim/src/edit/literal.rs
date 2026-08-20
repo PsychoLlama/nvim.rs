@@ -39,7 +39,7 @@ pub(crate) unsafe fn ins_ctrl_v() {
             edit_putchar('^' as c_int, true);
             did_putchar = true;
         }
-        AppendToRedobuff(CTRL_V_STR.as_ptr());
+        append_to_redobuff(CTRL_V_STR.as_ptr());
         add_to_showcmd_c(Ctrl_V);
 
         // Do not fold the modifiers into the key for CTRL-SHIFT-V.
@@ -200,7 +200,7 @@ pub(crate) unsafe fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut 
                 }
                 *p.offset((len - 1) as isize) = NUL as c_char;
                 ins_str(p, (len - 1) as size_t);
-                AppendToRedobuffLit(p, -1);
+                append_to_redobuff_literally(p, -1);
                 ctrlv = 0;
             }
         }
@@ -230,9 +230,9 @@ pub(crate) unsafe fn redo_literal(c: c_int) {
         if ascii_isdigit(c) {
             let mut buf: [c_char; 10] = [0; 10];
             vim_snprintf(buf.as_mut_ptr(), buf.len(), c"%03d".as_ptr(), c);
-            AppendToRedobuff(buf.as_mut_ptr());
+            append_to_redobuff(buf.as_mut_ptr());
         } else {
-            AppendCharToRedobuff(c);
+            append_to_redobuff_char(c);
         }
     }
 }
@@ -294,7 +294,7 @@ pub(crate) unsafe fn ins_digraph() -> c_int {
             }
 
             if cc != ESC {
-                AppendToRedobuff(CTRL_V_STR.as_ptr());
+                append_to_redobuff(CTRL_V_STR.as_ptr());
                 c = digraph_get(c, cc, true);
                 clear_showcmd();
                 return c;
@@ -383,7 +383,7 @@ pub(crate) unsafe fn ins_ctrl_ey(tc: c_int) -> c_int {
         // A non-alphanumeric byte has to be recorded literally, or the redo
         // would read it as a command.
         if c < 256 && *(*__ctype_b_loc()).offset(c as isize) & _ISalnum == 0 {
-            AppendToRedobuff(CTRL_V_STR.as_ptr());
+            append_to_redobuff(CTRL_V_STR.as_ptr());
         }
         let tw_save = (*curbuf.get()).b_p_tw;
         (*curbuf.get()).b_p_tw = -1;

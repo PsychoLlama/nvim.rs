@@ -48,8 +48,8 @@ pub(crate) unsafe fn start_arrow_with_change(end_insert_pos: *mut pos_T, end_cha
     unsafe {
         start_arrow_common(end_insert_pos, end_change);
         if !end_change {
-            AppendCharToRedobuff(Ctrl_G);
-            AppendCharToRedobuff('U' as c_int);
+            append_to_redobuff_char(Ctrl_G);
+            append_to_redobuff_char('U' as c_int);
         }
     }
 }
@@ -60,7 +60,7 @@ unsafe fn start_arrow_common(end_insert_pos: *mut pos_T, end_change: bool) {
     unsafe {
         if !arrow_used.get() && end_change {
             // Something has been inserted: close the block.
-            AppendToRedobuff(ESC_STR.as_ptr());
+            append_to_redobuff(ESC_STR.as_ptr());
             stop_insert(end_insert_pos, 0, 0);
             arrow_used.set(true);
         }
@@ -111,8 +111,8 @@ pub(crate) unsafe fn stop_arrow() -> c_int {
                 orig_line_count.set((*curbuf.get()).b_ml.ml_line_count);
                 vr_lines_changed.set(1);
             }
-            ResetRedobuff();
-            AppendToRedobuff(c"1i".as_ptr()); // pretend we start an insertion
+            reset_redobuff();
+            append_to_redobuff(c"1i".as_ptr()); // pretend we start an insertion
             new_insert_skip.set(2);
         } else if ins_need_undo.get() && u_save_cursor() == OK {
             ins_need_undo.set(false);

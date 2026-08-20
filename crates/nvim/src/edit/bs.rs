@@ -81,7 +81,7 @@ pub(crate) unsafe fn ins_del() {
         did_si.set(false);
         can_si.set(false);
         can_si_back.set(false);
-        AppendCharToRedobuff(K_DEL);
+        append_to_redobuff_char(K_DEL);
     }
 }
 
@@ -225,7 +225,7 @@ pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_
 
         // It is a little strange to put backspaces into the redo buffer, but
         // it makes auto-indent much easier to deal with.
-        AppendCharToRedobuff(c);
+        append_to_redobuff_char(c);
 
         // If the deletion went before the insertion point, move that too.
         if (*curwin.get()).w_cursor.lnum == (*Insstart_orig.ptr()).lnum
