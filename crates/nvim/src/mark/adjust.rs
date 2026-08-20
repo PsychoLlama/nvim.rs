@@ -1,16 +1,55 @@
+//! Rewriting every mark store when the buffer's lines move.
+//!
+//! `mark_adjust_buf` is on the path of every `:d`, `:m`, `:put`, undo and API
+//! line splice, and it has to visit *every* store the editor keeps: the
+//! buffer's own marks, the global table, the change list, the visual range,
+//! the quickfix and location lists, every window's jump list, tag stack,
+//! topline and cursor, the folds, the diffs, and the remembered per-window
+//! positions. What it does to each is one of three rules — [`LineShift`]'s
+//! `line`, `line_nodel` and `cursor`, upstream's `ONE_ADJUST`,
+//! `ONE_ADJUST_NODEL` and `ONE_ADJUST_CURSOR` — and *which* rule a store gets
+//! is a per-store decision that nothing but a differential can check. It is
+//! written out one store per line here for that reason.
+//!
+//! [`mark_col_adjust`] is the same shape one dimension over: when text on a
+//! line moves sideways, every mark at or after a column moves with it. Its
+//! three callers are `ops/join.rs`, `textformat/`'s wrap and
+//! `textformat/lines.rs`. Note that it carries a `:lockmarks` short-circuit of
+//! its **own**, separate from `mark_adjust_buf`'s — the two guard different
+//! functions and a rewrite that merges the line half must not drop the column
+//! half.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
 use crate::buffer::bt_prompt;
 use crate::diff::diff_mark_adjust;
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_adjust;
 use crate::fold::fold_mark_adjust;
-use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curtab, curwin, first_tabpage, firstwin, namedfm, saved_cursor};
+use crate::main::{curbuf, saved_cursor};
 use crate::pos::{MAXLNUM, equalpos};
+use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
 
+use super::store::{Fmark, GlobalMarks};
 use super::*;
 use crate::types::CmdModFlags;
+
+/// Where `clrallmarks` leaves `b_last_cursor`, and therefore what
+/// "`'"` has never really been set" looks like to the adjuster.
+const INIT_POS: pos_T = pos_T {
+    lnum: 1,
+    col: 0,
+    coladd: 0,
+};
 
 /// `mark.c`'s `ONE_ADJUST` family: the line-number rewrite every mark store
 /// gets when lines are inserted, deleted or moved. Marks in `line1..=line2`
@@ -28,7 +67,7 @@ impl LineShift {
     /// `ONE_ADJUST`: a deleted mark is invalidated.
     fn line(self, lp: &mut linenr_T) {
         if *lp >= self.line1 && *lp <= self.line2 {
-            *lp = if self.amount == MAXLNUM as c_int {
+            *lp = if self.amount == MAXLNUM.cast_signed() {
                 0
             } else {
                 *lp + self.amount
@@ -42,7 +81,7 @@ impl LineShift {
     /// rather than being invalidated.
     fn line_nodel(self, lp: &mut linenr_T) {
         if *lp >= self.line1 && *lp <= self.line2 {
-            *lp = if self.amount == MAXLNUM as c_int {
+            *lp = if self.amount == MAXLNUM.cast_signed() {
                 self.line1
             } else {
                 *lp + self.amount
@@ -56,7 +95,7 @@ impl LineShift {
     /// start of the line before it.
     fn cursor(self, posp: &mut pos_T) {
         if posp.lnum >= self.line1 && posp.lnum <= self.line2 {
-            if self.amount == MAXLNUM as c_int {
+            if self.amount == MAXLNUM.cast_signed() {
                 posp.lnum = (self.line1 - 1).max(1);
                 posp.col = 0;
             } else {
@@ -64,6 +103,29 @@ impl LineShift {
             }
         } else if self.amount_after != 0 && posp.lnum > self.line2 {
             posp.lnum += self.amount_after;
+        }
+    }
+
+    /// [`LineShift::line`] applied to a mark store.
+    fn mark(self, fm: Fmark) {
+        let mut lnum = fm.lnum();
+        self.line(&mut lnum);
+        fm.set_lnum(lnum);
+    }
+
+    /// [`LineShift::line_nodel`] applied to a mark store.
+    fn mark_nodel(self, fm: Fmark) {
+        let mut lnum = fm.lnum();
+        self.line_nodel(&mut lnum);
+        fm.set_lnum(lnum);
+    }
+
+    /// [`LineShift::line_nodel`], but only for a mark that names buffer
+    /// `fnum`. The global table, every jump list and every tag stack hold
+    /// marks in other buffers, which this adjustment must not touch.
+    fn mark_nodel_in(self, fm: Fmark, fnum: c_int) {
+        if fm.fnum() == fnum {
+            self.mark_nodel(fm);
         }
     }
 }
@@ -93,6 +155,20 @@ impl ColShift {
             posp.col += self.col_amount;
         }
     }
+
+    /// [`ColShift::col`] applied to a mark store.
+    fn mark(self, fm: Fmark) {
+        let mut pos = fm.pos();
+        self.col(&mut pos);
+        fm.set_pos(pos);
+    }
+
+    /// [`ColShift::col`], but only for a mark that names buffer `fnum`.
+    fn mark_in(self, fm: Fmark, fnum: c_int) {
+        if fm.fnum() == fnum {
+            self.mark(fm);
+        }
+    }
 }
 
 /// Adjust marks between "line1" and "line2" (inclusive) to move "amount" lines.
@@ -104,23 +180,29 @@ impl ColShift {
 /// Example: Delete lines 34 and 35: mark_adjust(34, 35, MAXLNUM, -2);
 /// Example: Insert two lines below 55: mark_adjust(56, MAXLNUM, 2, 0);
 /// or: mark_adjust(56, 55, MAXLNUM, 2);
+///
+/// # Safety
+/// The editor's globals must be live, which they are from startup to exit.
 pub unsafe fn mark_adjust(
-    mut line1: linenr_T,
-    mut line2: linenr_T,
-    mut amount: linenr_T,
-    mut amount_after: linenr_T,
-    mut op: ExtmarkOp,
+    line1: linenr_T,
+    line2: linenr_T,
+    amount: linenr_T,
+    amount_after: linenr_T,
+    op: ExtmarkOp,
 ) {
-    mark_adjust_buf(
-        curbuf.get(),
-        line1,
-        line2,
-        amount,
-        amount_after,
-        true,
-        kMarkAdjustNormal,
-        op,
-    );
+    // SAFETY: forwarded from the caller; `curbuf` is live from startup.
+    unsafe {
+        mark_adjust_buf(
+            curbuf.get(),
+            line1,
+            line2,
+            amount,
+            amount_after,
+            true,
+            kMarkAdjustNormal,
+            op,
+        );
+    }
 }
 
 /// mark_adjust_nofold() does the same as mark_adjust() but without adjusting
@@ -128,228 +210,236 @@ pub unsafe fn mark_adjust(
 /// This is only useful when folds need to be moved in a way different to
 /// calling fold_mark_adjust() with arguments line1, line2, amount, amount_after,
 /// for an example of why this may be necessary, see do_move().
+///
+/// # Safety
+/// As [`mark_adjust`].
 pub unsafe fn mark_adjust_nofold(
-    mut line1: linenr_T,
-    mut line2: linenr_T,
-    mut amount: linenr_T,
-    mut amount_after: linenr_T,
-    mut op: ExtmarkOp,
+    line1: linenr_T,
+    line2: linenr_T,
+    amount: linenr_T,
+    amount_after: linenr_T,
+    op: ExtmarkOp,
 ) {
-    mark_adjust_buf(
-        curbuf.get(),
-        line1,
-        line2,
-        amount,
-        amount_after,
-        false,
-        kMarkAdjustNormal,
-        op,
-    );
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        mark_adjust_buf(
+            curbuf.get(),
+            line1,
+            line2,
+            amount,
+            amount_after,
+            false,
+            kMarkAdjustNormal,
+            op,
+        );
+    }
 }
 
+/// # Safety
+/// `buf` must be a live buffer, and the editor's window and tab page lists
+/// must be live.
 pub unsafe fn mark_adjust_buf(
-    mut buf: *mut buf_T,
-    mut line1: linenr_T,
-    mut line2: linenr_T,
-    mut amount: linenr_T,
-    mut amount_after: linenr_T,
-    mut adjust_folds: bool,
-    mut mode: MarkAdjustMode,
-    mut op: ExtmarkOp,
+    buf: *mut buf_T,
+    line1: linenr_T,
+    line2: linenr_T,
+    amount: linenr_T,
+    amount_after: linenr_T,
+    adjust_folds: bool,
+    mode: MarkAdjustMode,
+    op: ExtmarkOp,
 ) {
-    let mut fnum: c_int = (*buf).handle as c_int;
+    // An empty range with nothing to shift after it is the no-op the callers
+    // rely on: `mark_adjust(56, 55, ...)` with `amount_after == 0` reaches
+    // here from every unchanged splice.
+    if line2 < line1 && amount_after == 0 {
+        return;
+    }
+
+    // SAFETY: the caller promised a live buffer.
+    let mut buf = unsafe { Buf::new(buf) };
+    let fnum = buf.handle as c_int;
     let shift = LineShift {
         line1,
         line2,
         amount,
         amount_after,
     };
-    static initpos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-        lnum: 1,
-        col: 0,
-        coladd: 0,
-    });
-    if line2 < line1 && amount_after == 0 {
-        return;
-    }
-    let mut by_api: bool = mode as c_uint == kMarkAdjustApi as c_int as c_uint;
-    let mut by_term: bool = mode as c_uint == kMarkAdjustTerm as c_int as c_uint;
+    let by_api = mode as c_uint == kMarkAdjustApi as c_uint;
+    let by_term = mode as c_uint == kMarkAdjustTerm as c_uint;
+
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        let mut i: c_int = 0;
-        while i < NMARKS {
-            shift.line(
-                &mut (*(&raw mut (*buf).b_namedm as *mut fmark_T).offset(i as isize))
-                    .mark
-                    .lnum,
-            );
-            if (*namedfm.ptr())[i as usize].fmark.fnum == fnum {
-                shift.line_nodel(
-                    &mut (*(namedfm.ptr() as *mut xfmark_T).offset(i as isize))
-                        .fmark
-                        .mark
-                        .lnum,
-                );
-            }
-            i += 1;
+        // `'a`-`'z` are invalidated when their line goes; the global table's
+        // `'A`-`'Z0`-`'9` land on the first deleted line instead, because a
+        // global mark is the user's bookmark and losing it outright is worse
+        // than moving it. Both halves of the table are walked, but only the
+        // slots naming *this* buffer are touched.
+        for i in 0..NMARKS {
+            shift.mark(buf.named_mark(i));
+            shift.mark_nodel_in(GlobalMarks::at(i).fmark(), fnum);
         }
-        let mut i_0: c_int = NMARKS;
-        while i_0 < NGLOBALMARKS {
-            if (*namedfm.ptr())[i_0 as usize].fmark.fnum == fnum {
-                shift.line_nodel(
-                    &mut (*(namedfm.ptr() as *mut xfmark_T).offset(i_0 as isize))
-                        .fmark
-                        .mark
-                        .lnum,
-                );
-            }
-            i_0 += 1;
+        for i in NMARKS..NGLOBALMARKS {
+            shift.mark_nodel_in(GlobalMarks::at(i).fmark(), fnum);
         }
-        shift.line(&mut (*buf).b_last_insert.mark.lnum);
-        shift.line(&mut (*buf).b_last_change.mark.lnum);
-        if !equalpos((*buf).b_last_cursor.mark, initpos.get())
-            && (!by_term || (*buf).b_last_cursor.mark.lnum < (*buf).b_ml.ml_line_count)
+
+        shift.mark(buf.last_insert());
+        shift.mark(buf.last_change());
+        // `'"` is skipped while it still sits where `clrallmarks` left it —
+        // shifting that would invent a position the user never visited — and,
+        // for a terminal buffer, while it names the last line, which the
+        // terminal is about to rewrite anyway.
+        if !equalpos(buf.last_cursor().pos(), INIT_POS)
+            && (!by_term || buf.last_cursor().lnum() < buf.b_ml.ml_line_count)
         {
-            shift.line(&mut (*buf).b_last_cursor.mark.lnum);
+            shift.mark(buf.last_cursor());
         }
-        if bt_prompt(buf) {
-            shift.line_nodel(&mut (*buf).b_prompt_start.mark.lnum);
+        // SAFETY: `buf` is live, which is all `bt_prompt` reads.
+        if unsafe { bt_prompt(buf.raw()) } {
+            shift.mark_nodel(buf.prompt_start());
         }
-        let mut i_1: c_int = 0;
-        while i_1 < (*buf).b_changelistlen {
-            shift.line_nodel(
-                &mut (*(&raw mut (*buf).b_changelist as *mut fmark_T).offset(i_1 as isize))
-                    .mark
-                    .lnum,
-            );
-            i_1 += 1;
+        for change in buf.changes() {
+            shift.mark_nodel(change);
         }
-        shift.line_nodel(&mut (*buf).b_visual.vi_start.lnum);
-        shift.line_nodel(&mut (*buf).b_visual.vi_end.lnum);
-        if !qf_mark_adjust(buf, ptr::null_mut(), line1, line2, amount, amount_after) {
-            (*buf).b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
+        shift.line_nodel(&mut buf.b_visual.vi_start.lnum);
+        shift.line_nodel(&mut buf.b_visual.vi_end.lnum);
+
+        // The quickfix list is asked once for the buffer and then once per
+        // window for that window's location list; a buffer with no surviving
+        // entry in either loses the corresponding flag.
+        // SAFETY: `buf` is live and the window list is the editor's own.
+        if !unsafe {
+            qf_mark_adjust(
+                buf.raw(),
+                ptr::null_mut(),
+                line1,
+                line2,
+                amount,
+                amount_after,
+            )
+        } {
+            buf.b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
         }
-        let mut found_one: bool = false;
-        let mut tab: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tab.is_null() {
-            let mut win: *mut win_T = if tab == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tab).tp_firstwin
-            };
-            while !win.is_null() {
-                found_one = found_one as c_int
-                    | qf_mark_adjust(buf, win, line1, line2, amount, amount_after) as c_int
-                    != 0;
-                win = (*win).w_next;
-            }
-            tab = (*tab).tp_next as *mut tabpage_T;
+        let mut found_one = false;
+        for win in tab_windows() {
+            // SAFETY: as above; `win` came out of the editor's own list.
+            found_one |=
+                unsafe { qf_mark_adjust(buf.raw(), win.raw(), line1, line2, amount, amount_after) };
         }
         if !found_one {
-            (*buf).b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
+            buf.b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
         }
     }
-    if op as c_uint != kExtmarkNOOP as c_int as c_uint {
-        extmark_adjust(buf, line1, line2, amount, amount_after, op);
+
+    if op as c_uint != kExtmarkNOOP as c_uint {
+        // SAFETY: `buf` is live.
+        unsafe { extmark_adjust(buf.raw(), line1, line2, amount, amount_after, op) };
     }
-    if (*curwin.get()).w_buffer == buf {
-        shift.line(&mut (*curwin.get()).w_pcmark.lnum);
-        shift.line(&mut (*curwin.get()).w_prev_pcmark.lnum);
-        if (*saved_cursor.ptr()).lnum != 0 {
-            shift.line_nodel(&mut (*saved_cursor.ptr()).lnum);
+
+    // The context marks and the saved cursor belong to the current window
+    // rather than to `buf`, so they only move when the two agree. They are
+    // NOT under the `:lockmarks` guard above — upstream leaves them out, and
+    // `:lockmarks` is documented as being about the *named* marks.
+    // SAFETY: `curwin` is live from startup to exit.
+    let mut curwin_handle = unsafe { Win::current() };
+    if curwin_handle.w_buffer == buf.raw() {
+        shift.line(&mut curwin_handle.w_pcmark.lnum);
+        shift.line(&mut curwin_handle.w_prev_pcmark.lnum);
+        let mut saved = saved_cursor.get();
+        if saved.lnum != 0 {
+            shift.line_nodel(&mut saved.lnum);
+            saved_cursor.set(saved);
         }
     }
-    let mut tab_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-    while !tab_0.is_null() {
-        let mut win_0: *mut win_T = if tab_0 == curtab.get() {
-            firstwin.get()
-        } else {
-            (*tab_0).tp_firstwin
-        };
-        while !win_0.is_null() {
-            if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-                let mut i_2: c_int = 0;
-                while i_2 < (*win_0).w_jumplistlen {
-                    if (*win_0).w_jumplist[i_2 as usize].fmark.fnum == fnum {
-                        shift.line_nodel(
-                            &mut (*(&raw mut (*win_0).w_jumplist as *mut xfmark_T)
-                                .offset(i_2 as isize))
-                            .fmark
-                            .mark
-                            .lnum,
-                        );
-                    }
-                    i_2 += 1;
-                }
+
+    for mut win in tab_windows() {
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
+            for jump in win.jumps() {
+                shift.mark_nodel_in(jump.fmark(), fnum);
             }
-            if (*win_0).w_buffer == buf {
-                if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-                    let mut i_3: c_int = 0;
-                    while i_3 < (*win_0).w_tagstacklen {
-                        if (*win_0).w_tagstack[i_3 as usize].fmark.fnum == fnum {
-                            shift.line_nodel(
-                                &mut (*(&raw mut (*win_0).w_tagstack as *mut taggy_T)
-                                    .offset(i_3 as isize))
-                                .fmark
-                                .mark
-                                .lnum,
-                            );
-                        }
-                        i_3 += 1;
-                    }
-                }
-                if (*win_0).w_old_cursor_lnum != 0 {
-                    shift.line_nodel(&mut (*win_0).w_old_cursor_lnum);
-                    shift.line_nodel(&mut (*win_0).w_old_visual_lnum);
-                }
-                if by_api
-                    || (if by_term {
-                        ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count) as c_int
-                    } else {
-                        (win_0 != curwin.get()) as c_int
-                    }) != 0
-                {
-                    if (*win_0).w_topline >= line1 && (*win_0).w_topline <= line2 {
-                        if amount == MAXLNUM as c_int {
-                            if !(by_api && amount_after > line1 - line2 - 1) {
-                                (*win_0).w_topline = if line1 - 1 > 1 { line1 - 1 } else { 1 };
-                            }
-                        } else if (*win_0).w_topline > line1 {
-                            (*win_0).w_topline += amount;
-                        }
-                        (*win_0).w_topfill = 0;
-                    } else if amount_after != 0
-                        && (*win_0).w_topline
-                            > line2 + (if by_api && line2 < line1 { 1 } else { 0 })
-                    {
-                        (*win_0).w_topline += amount_after;
-                        (*win_0).w_topfill = 0;
-                    }
-                }
-                if !by_api
-                    && (if by_term {
-                        ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count) as c_int
-                    } else {
-                        (win_0 != curwin.get()) as c_int
-                    }) != 0
-                {
-                    shift.cursor(&mut (*win_0).w_cursor);
-                }
-                if adjust_folds {
-                    fold_mark_adjust(win_0, line1, line2, amount, amount_after);
-                }
+        }
+        if win.w_buffer != buf.raw() {
+            continue;
+        }
+        if !cmdmod_has(CmdModFlags::LOCKMARKS) {
+            for tag in win.tag_marks() {
+                shift.mark_nodel_in(tag, fnum);
             }
-            win_0 = (*win_0).w_next;
         }
-        tab_0 = (*tab_0).tp_next as *mut tabpage_T;
+        // The remembered Visual range of a window that is not the current
+        // one; the two move together or not at all.
+        if win.w_old_cursor_lnum != 0 {
+            shift.line_nodel(&mut win.w_old_cursor_lnum);
+            shift.line_nodel(&mut win.w_old_visual_lnum);
+        }
+
+        // Which windows follow the change with their view: an API splice
+        // moves every window's, a terminal one moves those not already
+        // parked on the last line, and an ordinary edit moves every window
+        // except the one the user is typing in — whose topline
+        // `update_topline` will work out for itself.
+        // `ml_line_count` is re-read here rather than hoisted: the walk above
+        // this one calls out to `qf_mark_adjust`, `extmark_adjust` and
+        // `fold_mark_adjust`, and upstream reads the field afresh at each of
+        // these three tests.
+        if by_api || follows(win, by_term, buf) {
+            if win.w_topline >= line1 && win.w_topline <= line2 {
+                if amount == MAXLNUM.cast_signed() {
+                    // An API splice that *replaces* the topline's range with
+                    // at least as many lines leaves the topline where it is.
+                    if !(by_api && amount_after > line1 - line2 - 1) {
+                        win.w_topline = (line1 - 1).max(1);
+                    }
+                } else if win.w_topline > line1 {
+                    win.w_topline += amount;
+                }
+                win.w_topfill = 0;
+            } else if amount_after != 0
+                && win.w_topline > line2 + c_int::from(by_api && line2 < line1)
+            {
+                win.w_topline += amount_after;
+                win.w_topfill = 0;
+            }
+        }
+        // The cursor is the one store an API splice leaves alone: the API
+        // contract is that a splice does not move the user's cursor.
+        if !by_api && follows(win, by_term, buf) {
+            let mut cursor = win.w_cursor;
+            shift.cursor(&mut cursor);
+            win.w_cursor = cursor;
+        }
+        if adjust_folds {
+            // SAFETY: `win` came out of the editor's own window list.
+            unsafe { fold_mark_adjust(win.raw(), line1, line2, amount, amount_after) };
+        }
     }
-    diff_mark_adjust(buf, line1, line2, amount, amount_after);
-    let mut i_4: size_t = 0;
-    while i_4 < (*buf).b_wininfo.size {
-        let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.add(i_4);
-        if !by_term || (*wip).wi_mark.mark.lnum < (*buf).b_ml.ml_line_count {
-            shift.cursor(&mut (*wip).wi_mark.mark);
+
+    // SAFETY: `buf` is live and the tab page list is the editor's own.
+    unsafe { diff_mark_adjust(buf.raw(), line1, line2, amount, amount_after) };
+
+    // The per-window remembered cursor of every window that has ever shown
+    // this buffer, including ones that no longer exist.
+    for i in 0..buf.b_wininfo.size {
+        // SAFETY: `b_wininfo` is a kvec of `size` live `WinInfo` pointers
+        // owned by the buffer, so the entry and its `wi_mark` are live; the
+        // handle reads and writes one position.
+        let mark = unsafe { Fmark::new(&raw mut (**buf.b_wininfo.items.add(i)).wi_mark) };
+        if !by_term || mark.lnum() < buf.b_ml.ml_line_count {
+            let mut pos = mark.pos();
+            shift.cursor(&mut pos);
+            mark.set_pos(pos);
         }
-        i_4 = i_4.wrapping_add(1);
+    }
+}
+
+/// Whether `win`'s view follows a splice.
+///
+/// An ordinary edit moves every window's view except the current one's; a
+/// terminal splice instead moves the views of the windows whose cursor is not
+/// already on `buf`'s last line.
+fn follows(win: Win, by_term: bool, buf: Buf) -> bool {
+    if by_term {
+        win.w_cursor.lnum < buf.b_ml.ml_line_count
+    } else {
+        !win.is_current()
     }
 }
 
@@ -358,18 +448,31 @@ pub unsafe fn mark_adjust_buf(
 /// position.
 /// "spaces_removed" is the number of spaces that were removed, matters when the
 /// cursor is inside them.
+///
+/// # Safety
+/// The editor's globals must be live, which they are from startup to exit.
 pub unsafe fn mark_col_adjust(
-    mut lnum: linenr_T,
-    mut mincol: colnr_T,
-    mut lnum_amount: linenr_T,
-    mut col_amount: colnr_T,
-    mut spaces_removed: c_int,
+    lnum: linenr_T,
+    mincol: colnr_T,
+    lnum_amount: linenr_T,
+    col_amount: colnr_T,
+    spaces_removed: c_int,
 ) {
-    let mut fnum: c_int = (*curbuf.get()).handle as c_int;
     // Upstream asserts this once per adjusted mark; `col_amount` does not
     // change, and the upper half is vacuous for a `colnr_T`. What it really
     // guards is `-col_amount` below.
     debug_assert!(col_amount > colnr_T::MIN, "col_amount > INT_MIN");
+    // `mark_adjust_buf`'s `:lockmarks` guard is a DIFFERENT one, in a
+    // different function: a line operation never reaches here and a column
+    // one never reaches that. `1787242636-jmarkmutate.py`'s
+    // `mark-col-lockmarks` is the anchor on this line specifically.
+    if col_amount == 0 && lnum_amount == 0 || cmdmod_has(CmdModFlags::LOCKMARKS) {
+        return;
+    }
+
+    // SAFETY: `curbuf` and `curwin` are live from startup to exit.
+    let (mut buf, mut cur) = unsafe { (Buf::current(), Win::current()) };
+    let fnum = buf.handle as c_int;
     let shift = ColShift {
         lnum,
         mincol,
@@ -377,86 +480,49 @@ pub unsafe fn mark_col_adjust(
         col_amount,
         spaces_removed,
     };
-    if col_amount == 0 && lnum_amount == 0 || cmdmod_has(CmdModFlags::LOCKMARKS) {
-        return;
+
+    for i in 0..NMARKS {
+        shift.mark(buf.named_mark(i));
+        shift.mark_in(GlobalMarks::at(i).fmark(), fnum);
     }
-    let mut i: c_int = 0;
-    while i < NMARKS {
-        shift.col(
-            &mut (*(&raw mut (*curbuf.get()).b_namedm as *mut fmark_T).offset(i as isize)).mark,
-        );
-        if (*namedfm.ptr())[i as usize].fmark.fnum == fnum {
-            shift.col(
-                &mut (*(namedfm.ptr() as *mut xfmark_T).offset(i as isize))
-                    .fmark
-                    .mark,
-            );
+    for i in NMARKS..NGLOBALMARKS {
+        shift.mark_in(GlobalMarks::at(i).fmark(), fnum);
+    }
+    shift.mark(buf.last_insert());
+    shift.mark(buf.last_change());
+    // SAFETY: `buf` is live.
+    if unsafe { bt_prompt(buf.raw()) } {
+        shift.mark(buf.prompt_start());
+    }
+    for change in buf.changes() {
+        shift.mark(change);
+    }
+    shift.col(&mut buf.b_visual.vi_start);
+    shift.col(&mut buf.b_visual.vi_end);
+    shift.col(&mut cur.w_pcmark);
+    shift.col(&mut cur.w_prev_pcmark);
+    let mut saved = saved_cursor.get();
+    shift.col(&mut saved);
+    saved_cursor.set(saved);
+
+    // The current tab page's windows only. Upstream spells the head
+    // `curtab == curtab ? firstwin : curtab->tp_firstwin`, a transpiler
+    // tautology that always takes `firstwin`.
+    for mut win in windows() {
+        for jump in win.jumps() {
+            shift.mark_in(jump.fmark(), fnum);
         }
-        i += 1;
-    }
-    let mut i_0: c_int = NMARKS;
-    while i_0 < NGLOBALMARKS {
-        if (*namedfm.ptr())[i_0 as usize].fmark.fnum == fnum {
-            shift.col(
-                &mut (*(namedfm.ptr() as *mut xfmark_T).offset(i_0 as isize))
-                    .fmark
-                    .mark,
-            );
+        if win.w_buffer != buf.raw() {
+            continue;
         }
-        i_0 += 1;
-    }
-    shift.col(&mut (*curbuf.get()).b_last_insert.mark);
-    shift.col(&mut (*curbuf.get()).b_last_change.mark);
-    if bt_prompt(curbuf.get()) {
-        shift.col(&mut (*curbuf.get()).b_prompt_start.mark);
-    }
-    let mut i_1: c_int = 0;
-    while i_1 < (*curbuf.get()).b_changelistlen {
-        shift.col(
-            &mut (*(&raw mut (*curbuf.get()).b_changelist as *mut fmark_T).offset(i_1 as isize))
-                .mark,
-        );
-        i_1 += 1;
-    }
-    shift.col(&mut (*curbuf.get()).b_visual.vi_start);
-    shift.col(&mut (*curbuf.get()).b_visual.vi_end);
-    shift.col(&mut (*curwin.get()).w_pcmark);
-    shift.col(&mut (*curwin.get()).w_prev_pcmark);
-    shift.col(&mut *(saved_cursor.ptr()));
-    let mut win: *mut win_T = if curtab.get() == curtab.get() {
-        firstwin.get()
-    } else {
-        (*curtab.get()).tp_firstwin
-    };
-    while !win.is_null() {
-        let mut i_2: c_int = 0;
-        while i_2 < (*win).w_jumplistlen {
-            if (*win).w_jumplist[i_2 as usize].fmark.fnum == fnum {
-                shift.col(
-                    &mut (*(&raw mut (*win).w_jumplist as *mut xfmark_T).offset(i_2 as isize))
-                        .fmark
-                        .mark,
-                );
-            }
-            i_2 += 1;
+        for tag in win.tag_marks() {
+            shift.mark_in(tag, fnum);
         }
-        if (*win).w_buffer == curbuf.get() {
-            let mut i_3: c_int = 0;
-            while i_3 < (*win).w_tagstacklen {
-                if (*win).w_tagstack[i_3 as usize].fmark.fnum == fnum {
-                    shift.col(
-                        &mut (*(&raw mut (*win).w_tagstack as *mut taggy_T).offset(i_3 as isize))
-                            .fmark
-                            .mark,
-                    );
-                }
-                i_3 += 1;
-            }
-            if win != curwin.get() {
-                shift.col(&mut (*win).w_cursor);
-            }
+        if !win.is_current() {
+            let mut cursor = win.w_cursor;
+            shift.col(&mut cursor);
+            win.w_cursor = cursor;
         }
-        win = (*win).w_next;
     }
 }
 
@@ -468,7 +534,7 @@ mod tests {
     const DELETE_56_57: LineShift = LineShift {
         line1: 56,
         line2: 57,
-        amount: MAXLNUM as c_int,
+        amount: MAXLNUM.cast_signed(),
         amount_after: -2,
     };
 
@@ -477,7 +543,7 @@ mod tests {
     const INSERT_TWO_BELOW_55: LineShift = LineShift {
         line1: 56,
         line2: 55,
-        amount: MAXLNUM as c_int,
+        amount: MAXLNUM.cast_signed(),
         amount_after: 2,
     };
 
@@ -516,7 +582,7 @@ mod tests {
         let shift = LineShift {
             line1: 1,
             line2: 3,
-            amount: MAXLNUM as c_int,
+            amount: MAXLNUM.cast_signed(),
             amount_after: -3,
         };
         let mut pos = at(2);
@@ -552,13 +618,35 @@ mod tests {
     fn an_insertion_moves_the_marks_it_covers() {
         let shift = LineShift {
             line1: 56,
-            line2: MAXLNUM as c_int,
+            line2: MAXLNUM.cast_signed(),
             amount: 2,
             amount_after: 0,
         };
         let mut lnum = 60;
         shift.line(&mut lnum);
         assert_eq!(lnum, 62);
+    }
+
+    /// The three rules over one deletion, side by side — which is the whole
+    /// per-store decision `mark_adjust_buf` makes forty times.
+    #[test]
+    fn the_three_rules_disagree_only_inside_the_deleted_range() {
+        let mut invalidated = 57;
+        let mut landed = 57;
+        let mut cursor = at(57);
+        DELETE_56_57.line(&mut invalidated);
+        DELETE_56_57.line_nodel(&mut landed);
+        DELETE_56_57.cursor(&mut cursor);
+        assert_eq!((invalidated, landed, cursor.lnum), (0, 56, 55));
+
+        // Outside it they agree.
+        for lnum in [10, 100] {
+            let (mut a, mut b, mut c) = (lnum, lnum, at(lnum));
+            DELETE_56_57.line(&mut a);
+            DELETE_56_57.line_nodel(&mut b);
+            DELETE_56_57.cursor(&mut c);
+            assert_eq!((a, b), (c.lnum, c.lnum));
+        }
     }
 
     fn col_shift(col_amount: colnr_T, spaces_removed: c_int) -> ColShift {
