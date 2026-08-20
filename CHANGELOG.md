@@ -7,59 +7,23 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+A rewrite of the editor's internal vocabulary, reaching most of the tree
+without changing what any of it does.
+
 ### Changed
 
-- Turned clippy's `style` group on across the whole editor and fixed the
-  850 findings it reported -- redundant returns, duplicated branches,
-  hand-rolled range checks and the like -- so that new code is held to it
-  from here on. Nothing observable changed.
-- Rebuilt the generator behind the API surface: the machine-written RPC and
-  Lua wrappers around every `nvim_*` function are emitted as ordinary Rust
-  with scoped cleanup instead of goto-shaped jumps, and the generator now
-  accepts API functions that return `Result`. Nothing observable changed.
-- Started saying "this did not work" with a type rather than with the
-  integers 0 and 1: the regexp pattern parser, the swap file's allocator,
-  the `getqflist()`/`setqflist()` pair and the delete operator now answer a
-  real result, and the reason a request was refused survives being returned.
-  Nothing observable changed.
-- Gave the editor one definition of each of the constants it had been
-  re-declaring in every file that used them -- success and failure, the
-  string terminator, the path and buffer size limits, the option-scope
-  flags. Nothing observable changed.
-- Took the editor's own hand-written declarations of the C library out and
-  put the `libc` crate in their place, leaving a small module for the
-  handful of things that crate does not carry. Nothing observable changed.
-- Gave most of the editor's internals ordinary Rust signatures: the C
-  calling convention now survives only where something outside the crate
-  really calls in. Nothing observable changed.
-- Rewrote every one of the API's 212 entry points to answer with a result
-  instead of filling in an error the caller had to remember to look at.
-  Every method keeps its name, its arguments and its documented behaviour.
-  Nothing observable changed.
-- Gave the editor's option, command, window, buffer, syntax and highlight
-  flag words types of their own, so that a value belonging to one of them
-  can no longer be passed where another was meant. Two of the C names
-  turned out to cover two unrelated sets of flags each, and those are now
-  two types. Nothing observable changed.
-- Gave the same treatment to the names that stand for one choice rather
-  than a set of flags: what a `:` range counts, what the command line is
-  completing, which `v:` variable is meant, and the several things the
-  editor was tracking as "yes, no, or not decided yet". Several of those
-  turned out to be two unrelated families sharing a prefix, and are now
-  separate types. Nothing observable changed.
-- Gave the editor one way to talk about text: one home for the helpers that
-  read a C string, a real type for the byte strings the API passes around
-  instead of a bare pointer-and-length pair, letters of `'cpoptions'`,
-  `'shortmess'`, `'formatoptions'` and `'backspace'` that can no longer be
-  confused with one another, and option names passed as strings rather than
-  as pointers. Nothing observable changed.
-- Made the editor's "hold off on that for a moment" switches release
-  themselves. Whether errors, messages, the hit-enter prompt, redrawing,
-  key mapping or changes to the text are suspended is counted in a handful
-  of globals that every caller had to remember to put back by hand; the
-  suspension is now tied to the scope that asked for it, so no path out of
-  that scope -- including one that fails -- can leave the editor silent,
-  frozen or unable to be typed at. Nothing observable changed.
+- Rewrote the API layer: all 212 `nvim_*` functions reachable over RPC or
+  from Lua, and the generated bindings in front of them. Each keeps its
+  name, its arguments and its documented behaviour.
+- Reworked how the editor suspends itself, so that no failure can leave it
+  silent, frozen or unable to be typed at, covering errors, messages, the
+  hit-enter prompt, redrawing and key mapping.
+- Reworked the types and shared state the whole tree is built on, covering
+  pattern matching in `/`, `:substitute` and the `match*()` family, the
+  values `:set` writes and the letters of `'cpoptions'`, `'shortmess'`,
+  `'formatoptions'` and `'backspace'`, `v:` variables, command-line
+  completion, `:` ranges, quickfix, the delete operator, swap and undo
+  files, digraphs, window sizing, syntax highlighting and the terminal.
 
 ## [2026.08.18-0975a8efd3]
 
