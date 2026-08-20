@@ -575,19 +575,22 @@ unsafe fn take_marked_branch(mut buf: Buf, fork: Header, mark: c_int) -> Header 
     if last == head {
         return head;
     }
-    // Unlink it from where it sits...
+    // The whole list of alternates may start further back than the marked
+    // run does, and that head is where the branch has to end up.
+    // SAFETY: as above.
+    let mut first = unsafe { header_chain(buf.raw(), head.link(), |uh| uh.uh_alt_prev) }
+        .last()
+        .unwrap_or(head);
+    // Unlink it from where it sits... (`last != head` means it was reached
+    // along `uh_alt_next`, so it has a predecessor; the C dereferences that
+    // without asking.)
     if let Some(mut after) = buf.header(last.uh_alt_next) {
         after.uh_alt_prev = last.uh_alt_prev;
     }
     if let Some(mut before) = buf.header(last.uh_alt_prev) {
         before.uh_alt_next = last.uh_alt_next;
     }
-    // ...and splice it in front of the whole list of alternates, which may
-    // start further back than the marked run does.
-    // SAFETY: as above.
-    let mut first = unsafe { header_chain(buf.raw(), head.link(), |uh| uh.uh_alt_prev) }
-        .last()
-        .unwrap_or(head);
+    // ...and splice it in at the front.
     last.uh_alt_prev = UndoLink::NONE;
     last.uh_alt_next = first.link();
     first.uh_alt_prev = last.link();

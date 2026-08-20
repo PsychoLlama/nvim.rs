@@ -293,7 +293,7 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
         smsg_keep_c!(
             0,
             gettext(c"%ld %s; %s #%ld  %s".as_ptr()),
-            int64_t::from(count.abs()),
+            int64_t::from(count).abs(),
             gettext(what.as_ptr()),
             if did_undo {
                 gettext(c"before".as_ptr())
