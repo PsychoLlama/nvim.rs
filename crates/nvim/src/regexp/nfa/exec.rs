@@ -17,7 +17,7 @@ use super::matcher::nfa_regmatch;
 use super::parse::re2post;
 use super::postfix;
 use super::run::{find_match_text, skip_to_start};
-use super::sub::clear_sub;
+use super::sub::{clear_sub, slots};
 use crate::main::{e_null, re_extmatch_out};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::iemsg;
@@ -87,28 +87,18 @@ fn nfa_regtry(
 }
 
 /// Copy the capture positions of a buffer match into the caller's arrays.
-///
-/// SAFETY: the match context holds the caller's position arrays.
 fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
     // SAFETY: a buffer match's context holds the caller's position arrays,
-    // `NSUBEXP` slots each, and `subs.norm`'s live arm is `multi` because the
-    // match is a buffer one.
-    let (starts, ends, multi) = unsafe {
+    // `NSUBEXP` slots each.
+    let (starts, ends) = unsafe {
         (
             core::slice::from_raw_parts_mut(rex.reg_startpos(), NSUBEXP as usize),
             core::slice::from_raw_parts_mut(rex.reg_endpos(), NSUBEXP as usize),
-            &subs.norm.list.multi,
         )
     };
-    for i in 0..subs.norm.in_use as usize {
-        starts[i] = lpos_T {
-            lnum: multi[i].start_lnum,
-            col: multi[i].start_col,
-        };
-        ends[i] = lpos_T {
-            lnum: multi[i].end_lnum,
-            col: multi[i].end_col,
-        };
+    for i in 0..slots(subs.norm.in_use) {
+        starts[i] = subs.norm.list[i].start.as_pos();
+        ends[i] = subs.norm.list[i].end.as_pos();
     }
     if !rex.reg_mmatch().is_null() {
         // SAFETY: a non-null `reg_mmatch` is the caller's match structure.
@@ -131,18 +121,16 @@ fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
 
 /// As [`report_buffer_match`], for a match over a plain string.
 fn report_string_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
-    // SAFETY: as `report_buffer_match`; a string match's slots are pointers
-    // and `subs.norm`'s live arm is `line`.
-    let (starts, ends, lines) = unsafe {
+    // SAFETY: as `report_buffer_match`; a string match's slots are pointers.
+    let (starts, ends) = unsafe {
         (
             core::slice::from_raw_parts_mut(rex.reg_startp(), NSUBEXP as usize),
             core::slice::from_raw_parts_mut(rex.reg_endp(), NSUBEXP as usize),
-            &subs.norm.list.line,
         )
     };
-    for i in 0..subs.norm.in_use as usize {
-        starts[i] = lines[i].start;
-        ends[i] = lines[i].end;
+    for i in 0..slots(subs.norm.in_use) {
+        starts[i] = subs.norm.list[i].start.as_ptr();
+        ends[i] = subs.norm.list[i].end.as_ptr();
     }
     if starts[0].is_null() {
         // SAFETY: `col` is a byte offset into the line being matched.
@@ -159,24 +147,25 @@ fn report_string_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
 fn save_z_captures(rex: Rex, subs: &regsubs_T) {
     unsafe {
         // Group 0 is the whole match, which the highlighter does not want.
-        for i in 1..subs.synt.in_use as usize {
+        for i in 1..slots(subs.synt.in_use) {
+            let capture = subs.synt.list[i];
             let text = if rex.multi() {
-                let m = subs.synt.list.multi[i];
+                let (start, end) = (capture.start.as_pos(), capture.end.as_pos());
                 // A capture that spans lines cannot be handed over as one
                 // string, so it is dropped.
-                if m.start_lnum < 0 || m.start_lnum != m.end_lnum || m.end_col < m.start_col {
+                if start.lnum < 0 || start.lnum != end.lnum || end.col < start.col {
                     continue;
                 }
                 xstrnsave(
-                    reg_getline(rex, m.start_lnum).offset(m.start_col as isize),
-                    (m.end_col - m.start_col) as usize,
+                    reg_getline(rex, start.lnum).offset(start.col as isize),
+                    (end.col - start.col) as usize,
                 )
             } else {
-                let l = subs.synt.list.line[i];
-                if l.start.is_null() || l.end.is_null() {
+                let (start, end) = (capture.start.as_ptr(), capture.end.as_ptr());
+                if start.is_null() || end.is_null() {
                     continue;
                 }
-                xstrnsave(l.start as *mut c_char, l.end.offset_from(l.start) as usize)
+                xstrnsave(start as *mut c_char, end.offset_from(start) as usize)
             };
             (*re_extmatch_out.get()).matches[i] = text as *mut uint8_t;
         }

@@ -99,15 +99,12 @@ pub(crate) fn nfa_regmatch(
 ///
 /// `m` must be a live capture set and the match context live.
 unsafe fn record_match_start(rex: Rex, m: *mut regsubs_T, off: c_int) {
+    // SAFETY: the caller promises a live capture set.
     unsafe {
+        (*m).norm.list[0].start = rex.at_offset(off);
         if rex.multi() {
-            let col = rex.col() + off;
-            (*m).norm.list.multi[0].start_lnum = rex.lnum();
-            (*m).norm.list.multi[0].start_col = col;
             // The column a `:substitute` resumes scanning from.
-            (*m).norm.orig_start_col = col;
-        } else {
-            (*m).norm.list.line[0].start = rex.input().offset(off as isize);
+            (*m).norm.orig_start_col = rex.col() + off;
         }
     }
 }
@@ -302,9 +299,9 @@ unsafe fn deliver(
                 // of where the whole match starts.
                 // SAFETY: `run.m` is the caller's capture set.
                 let m = unsafe { &*run.m };
-                copy_sub_off(rex, &mut t.pim.subs.norm, &m.norm);
+                copy_sub_off(&mut t.pim.subs.norm, &m.norm);
                 if has_zsubexpr(rex) {
-                    copy_sub_off(rex, &mut t.pim.subs.synt, &m.synt);
+                    copy_sub_off(&mut t.pim.subs.synt, &m.synt);
                 }
             }
             result
@@ -317,9 +314,9 @@ unsafe fn deliver(
             // added anywhere.
             return true;
         }
-        copy_sub_off(rex, &mut t.subs.norm, &t.pim.subs.norm);
+        copy_sub_off(&mut t.subs.norm, &t.pim.subs.norm);
         if has_zsubexpr(rex) {
-            copy_sub_off(rex, &mut t.subs.synt, &t.pim.subs.synt);
+            copy_sub_off(&mut t.subs.synt, &t.pim.subs.synt);
         }
         carries_pim = false;
     }
@@ -340,9 +337,9 @@ unsafe fn deliver(
         // may not be handed a capture set that lives in it.
         let has_z = has_zsubexpr(rex);
         let t = thislist.thread(idx);
-        copy_sub(rex, &mut run.here.norm, &t.subs.norm);
+        copy_sub(&mut run.here.norm, &t.subs.norm);
         if has_z {
-            copy_sub(rex, &mut run.here.synt, &t.subs.synt);
+            copy_sub(&mut run.here.synt, &t.subs.synt);
         }
         addstate_here(thislist, add_state, run.here, pim, listidx)
     } else {

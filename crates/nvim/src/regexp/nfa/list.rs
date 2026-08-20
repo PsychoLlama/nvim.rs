@@ -25,18 +25,18 @@
 
 use core::ffi::c_int;
 
-use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, multi_line, pim_equal, sub_equal};
+use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, pim_equal, slots, sub_equal};
 use crate::main::p_mmp;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    ADDSTATE_HERE_OFFSET, CaptureSlots, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
+    ADDSTATE_HERE_OFFSET, Capture, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
     NFA_BOF, NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN,
     NFA_MOPEN9, NFA_NCLOSE, NFA_NOPEN, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND,
-    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, PimResult, Rex, multipos, nfa_endp, nfa_ll_index, nfa_pim_T,
-    nfa_state_T, nfa_thread_T, regsub_T, regsubs_T,
+    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP, PimResult, PosKind, Rex, nfa_endp, nfa_ll_index,
+    nfa_pim_T, nfa_state_T, nfa_thread_T, regsub_T, regsubs_T,
 };
-use crate::types::{NUL, colnr_T, linenr_T, uint8_t};
+use crate::types::NUL;
 
 /// How deep `addstate` may follow itself before giving up. A machine with a
 /// cycle of states that consume no input would otherwise not terminate.
@@ -95,14 +95,10 @@ const BLANK_THREAD: nfa_thread_T = nfa_thread_T {
 
 const BLANK_SUB: regsub_T = regsub_T {
     in_use: 0,
-    list: CaptureSlots {
-        multi: [multipos {
-            start_lnum: 0,
-            end_lnum: 0,
-            start_col: 0,
-            end_col: 0,
-        }; 10],
-    },
+    list: [Capture {
+        start: MatchPos::NOWHERE,
+        end: MatchPos::NOWHERE,
+    }; NSUBEXP as usize],
     orig_start_col: 0,
 };
 
@@ -214,9 +210,9 @@ impl ThreadList {
             None => thread.pim.result = PimResult::Unused,
             Some(pim) => copy_pim(rex, &mut thread.pim, pim),
         }
-        copy_sub(rex, &mut thread.subs.norm, &subs.norm);
+        copy_sub(&mut thread.subs.norm, &subs.norm);
         if has_z {
-            copy_sub(rex, &mut thread.subs.synt, &subs.synt);
+            copy_sub(&mut thread.subs.synt, &subs.synt);
         }
         self.n += 1;
     }
@@ -496,16 +492,7 @@ fn follow(
 
 /// Has a `\ze` already put group 0's end somewhere?
 fn has_zend_set(rex: Rex, subs: &regsubs_T) -> bool {
-    // SAFETY: `rex` describes a live match; which arm of the capture union is
-    // live is `multi_line`.
-    unsafe {
-        rex.nfa_has_zend() != 0
-            && if multi_line(rex) {
-                subs.norm.list.multi[0].end_lnum >= 0
-            } else {
-                !subs.norm.list.line[0].end.is_null()
-            }
-    }
+    rex.nfa_has_zend() != 0 && subs.norm.list[0].end.is_set(rex.pos_kind())
 }
 
 /// Which capture set a bracket state records into, and which slot of it.
@@ -525,18 +512,54 @@ fn slot_of(c: c_int, open: bool) -> (usize, bool) {
     }
 }
 
-/// What a capture slot held before a bracket state overwrote it, in whichever
-/// of the two shapes this match uses.
-enum SavedPos {
-    Multi(multipos),
-    Line(*mut uint8_t),
+/// A bracket state's snapshot of the slot it is about to write.
+///
+/// A buffer match snapshots the whole slot; a string match only the one end
+/// its state moves. That asymmetry is upstream's and is load-bearing: a
+/// buffer match's opening bracket *also* marks the end unset on the way in,
+/// so it owes both ends back, where a string match's leaves the end for
+/// whatever the walk inside the group records.
+enum SavedSlot {
+    /// A buffer match's slot, both ends of it.
+    Whole(Capture),
+    /// A string match's start alone.
+    Start(MatchPos),
+    /// A string match's end alone.
+    End(MatchPos),
+}
+
+impl SavedSlot {
+    /// Take the snapshot a `\(` is about to overwrite.
+    fn of_start(slot: &Capture, kind: PosKind) -> SavedSlot {
+        match kind {
+            PosKind::Buf => SavedSlot::Whole(*slot),
+            PosKind::Str => SavedSlot::Start(slot.start),
+        }
+    }
+
+    /// Take the snapshot a `\)` is about to overwrite.
+    fn of_end(slot: &Capture, kind: PosKind) -> SavedSlot {
+        match kind {
+            PosKind::Buf => SavedSlot::Whole(*slot),
+            PosKind::Str => SavedSlot::End(slot.end),
+        }
+    }
+
+    /// Put it back.
+    fn restore(self, slot: &mut Capture) {
+        match self {
+            SavedSlot::Whole(was) => *slot = was,
+            SavedSlot::Start(was) => slot.start = was,
+            SavedSlot::End(was) => slot.end = was,
+        }
+    }
 }
 
 /// What an opening bracket has to put back when the walk comes out of it:
-/// either the position the slot already held, or — when the slot was past
-/// `in_use` — the count itself.
+/// either the slot's own snapshot, or — when the slot was past `in_use` —
+/// the count itself.
 enum Saved {
-    Pos(SavedPos),
+    Slot(SavedSlot),
     InUse(c_int),
 }
 
@@ -552,57 +575,30 @@ fn open(
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
+    let kind = rex.pos_kind();
     let (c, out) = (op(state), out_of(state));
     let (subidx, synt) = slot_of(c, true);
-    let multi = multi_line(rex);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
-    let saved = if subidx < sub.in_use as usize {
-        // SAFETY: which arm of the union is live is `multi_line`.
-        unsafe {
-            Saved::Pos(if multi {
-                SavedPos::Multi(sub.list.multi[subidx])
-            } else {
-                SavedPos::Line(sub.list.line[subidx].start)
-            })
-        }
+    let saved = if subidx < slots(sub.in_use) {
+        Saved::Slot(SavedSlot::of_start(&sub.list[subidx], kind))
     } else {
         // The slots between the last one in use and this one have never been
         // reached, and have to read as unset.
         let was = sub.in_use;
-        // SAFETY: as above.
-        unsafe {
-            for i in was as usize..subidx {
-                if multi {
-                    sub.list.multi[i].start_lnum = -1;
-                    sub.list.multi[i].end_lnum = -1;
-                } else {
-                    sub.list.line[i].start = core::ptr::null_mut();
-                    sub.list.line[i].end = core::ptr::null_mut();
-                }
-            }
+        for slot in &mut sub.list[slots(was)..subidx] {
+            slot.mark_unset(kind);
         }
-        sub.in_use = subidx as c_int + 1;
+        sub.in_use = group_count(subidx);
         Saved::InUse(was)
     };
 
-    // SAFETY: as above; `rex` describes a live match.
-    unsafe {
-        if multi {
-            let slot = &mut sub.list.multi[subidx];
-            if off == -1 {
-                // The thread is about to cross a line break, so the group
-                // starts at the beginning of the next line.
-                slot.start_lnum = rex.lnum() + 1 as linenr_T;
-                slot.start_col = 0;
-            } else {
-                slot.start_lnum = rex.lnum();
-                slot.start_col = (rex.input().offset_from(rex.line()) + off as isize) as colnr_T;
-            }
-            slot.end_lnum = -1;
-        } else {
-            sub.list.line[subidx].start = rex.input().offset(off as isize);
-        }
+    let slot = &mut sub.list[subidx];
+    slot.start = rex.at_offset(off);
+    if kind == PosKind::Buf {
+        // Where a string match leaves the end alone, a buffer match declares
+        // it unset until the closing bracket records one.
+        slot.end.mark_unset(kind);
     }
 
     if !walk(l, out, subs, pim, off_arg, depth + 1) {
@@ -610,13 +606,9 @@ fn open(
     }
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
-    // SAFETY: as above.
-    unsafe {
-        match saved {
-            Saved::Pos(SavedPos::Multi(pos)) => sub.list.multi[subidx] = pos,
-            Saved::Pos(SavedPos::Line(start)) => sub.list.line[subidx].start = start,
-            Saved::InUse(was) => sub.in_use = was,
-        }
+    match saved {
+        Saved::Slot(saved) => saved.restore(&mut sub.list[subidx]),
+        Saved::InUse(was) => sub.in_use = was,
     }
     true
 }
@@ -633,47 +625,58 @@ fn close(
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
+    let kind = rex.pos_kind();
     let (c, out) = (op(state), out_of(state));
     let (subidx, synt) = slot_of(c, false);
-    let multi = multi_line(rex);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
     let was_in_use = sub.in_use;
-    if sub.in_use <= subidx as c_int {
-        sub.in_use = subidx as c_int + 1;
-    }
-    // SAFETY: which arm of the union is live is `multi_line`; `rex` describes
-    // a live match.
-    let saved = unsafe {
-        if multi {
-            let was = sub.list.multi[subidx];
-            let slot = &mut sub.list.multi[subidx];
-            if off == -1 {
-                slot.end_lnum = rex.lnum() + 1 as linenr_T;
-                slot.end_col = 0;
-            } else {
-                slot.end_lnum = rex.lnum();
-                slot.end_col = (rex.input().offset_from(rex.line()) + off as isize) as colnr_T;
-            }
-            SavedPos::Multi(was)
-        } else {
-            let was = sub.list.line[subidx].end;
-            sub.list.line[subidx].end = rex.input().offset(off as isize);
-            SavedPos::Line(was)
-        }
-    };
+    sub.in_use = was_in_use.max(group_count(subidx));
+
+    let saved = SavedSlot::of_end(&sub.list[subidx], kind);
+    sub.list[subidx].end = rex.at_offset(off);
 
     let ok = walk(l, out, subs, pim, off_arg, depth + 1);
     if ok {
         let sub = if synt { &mut subs.synt } else { &mut subs.norm };
-        // SAFETY: as above.
-        unsafe {
-            match saved {
-                SavedPos::Multi(pos) => sub.list.multi[subidx] = pos,
-                SavedPos::Line(end) => sub.list.line[subidx].end = end,
-            }
-        }
+        saved.restore(&mut sub.list[subidx]);
         sub.in_use = was_in_use;
     }
     ok
+}
+
+/// The `in_use` a set needs for slot `subidx` to be readable.
+fn group_count(subidx: usize) -> c_int {
+    c_int::try_from(subidx).unwrap_or(0) + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 'maxmempattern' is charged in `nfa_thread_T`s — see the module docs —
+    /// so how large one is decides at what thread count E363 is reported,
+    /// which a user sees. Four capture sets ride in every thread, so a tag
+    /// saying which of the two shapes their positions are in would have cost
+    /// thirty-two bytes a thread and moved that point by about four per cent.
+    /// It is not in there: a set is its ten captures plus its two `int`s.
+    #[test]
+    fn a_thread_carries_no_capture_tag() {
+        assert_eq!(
+            size_of::<regsub_T>(),
+            size_of::<[Capture; NSUBEXP as usize]>() + 2 * size_of::<c_int>()
+        );
+        assert_eq!(size_of::<regsubs_T>(), 2 * size_of::<regsub_T>());
+    }
+
+    /// A slot number and the `in_use` that makes it readable are off by one,
+    /// in both directions.
+    #[test]
+    fn a_group_is_in_use_one_past_its_slot() {
+        assert_eq!(group_count(0), 1);
+        assert_eq!(slots(group_count(9)), 10);
+        // `in_use` never names more slots than there are.
+        assert_eq!(slots(99), NSUBEXP as usize);
+        assert_eq!(slots(-1), 0);
+    }
 }

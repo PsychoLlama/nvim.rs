@@ -111,18 +111,18 @@ pub(crate) fn lookaround_held(state: *mut nfa_state_T, result: c_int) -> bool {
 
 /// Copy the normal and — when the pattern has any — the `\z(` captures.
 fn copy_both(rex: Rex, to: &mut regsubs_T, from: &regsubs_T) {
-    copy_sub(rex, &mut to.norm, &from.norm);
+    copy_sub(&mut to.norm, &from.norm);
     if has_zsubexpr(rex) {
-        copy_sub(rex, &mut to.synt, &from.synt);
+        copy_sub(&mut to.synt, &from.synt);
     }
 }
 
 /// As [`copy_both`], but leaving group 0 alone: a lookaround must not move
 /// the whole match's start or end.
 fn copy_both_off(rex: Rex, to: &mut regsubs_T, from: &regsubs_T) {
-    copy_sub_off(rex, &mut to.norm, &from.norm);
+    copy_sub_off(&mut to.norm, &from.norm);
     if has_zsubexpr(rex) {
-        copy_sub_off(rex, &mut to.synt, &from.synt);
+        copy_sub_off(&mut to.synt, &from.synt);
     }
 }
 
@@ -469,9 +469,9 @@ unsafe fn start_lookaround(
             // capture set that lives in it.
             let has_z = has_zsubexpr(rex);
             let t = thislist.thread(idx);
-            copy_sub(rex, &mut run.here.norm, &t.subs.norm);
+            copy_sub(&mut run.here.norm, &t.subs.norm);
             if has_z {
-                copy_sub(rex, &mut run.here.synt, &t.subs.synt);
+                copy_sub(&mut run.here.synt, &t.subs.synt);
             }
             if !addstate_here(
                 thislist,
@@ -560,11 +560,7 @@ unsafe fn start_pattern(
         }
         copy_both_off(rex, &mut thislist.thread_mut(idx).subs, &*run.m);
         // How far the sub-match reached, which is what the thread consumes.
-        let bytelen = if rex.multi() {
-            (*run.m).norm.list.multi[0].end_col - rex.input().offset_from(rex.line()) as c_int
-        } else {
-            (*run.m).norm.list.line[0].end.offset_from(rex.input()) as c_int
-        };
+        let bytelen = rex.bytes_ahead((*run.m).norm.list[0].end);
         spanning(after, bytelen, clen)
     }
 }

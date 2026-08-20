@@ -174,30 +174,13 @@ pub struct nfa_state {
     pub lastlist: [c_int; 2],
     pub val: c_int,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct linepos {
-    pub start: *mut uint8_t,
-    pub end: *mut uint8_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union CaptureSlots {
-    pub multi: [multipos; 10],
-    pub line: [linepos; 10],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct multipos {
-    pub start_lnum: linenr_T,
-    pub end_lnum: linenr_T,
-    pub start_col: colnr_T,
-    pub end_col: colnr_T,
-}
+/// The `\1`..`\9` captures one thread is carrying, and how many of them it
+/// has reached. Only the entries below `in_use` mean anything.
 #[derive(Copy, Clone)]
 pub(crate) struct regsub_T {
     pub in_use: c_int,
-    pub list: CaptureSlots,
+    pub list: [Capture; NSUBEXP as usize],
+    /// Where a `:substitute` resumes scanning, which travels with group 0.
     pub orig_start_col: colnr_T,
 }
 #[derive(Copy, Clone)]

@@ -346,6 +346,44 @@ impl Rex {
         }
     }
 
+    /// The position `off` bytes past the cursor, in the shape this match
+    /// saves.
+    ///
+    /// `off` is `-1` when a thread is about to cross a line break, and a
+    /// buffer match then names the start of the *next* line rather than the
+    /// byte before the cursor. A string match has no line to cross and steps
+    /// back the one byte, which is what upstream did.
+    #[inline(always)]
+    pub(crate) fn at_offset(self, off: c_int) -> MatchPos {
+        if self.multi() {
+            MatchPos::from_pos(if off == -1 {
+                lpos_T {
+                    lnum: self.lnum() + 1,
+                    col: 0,
+                }
+            } else {
+                lpos_T {
+                    lnum: self.lnum(),
+                    col: self.col() + off,
+                }
+            })
+        } else {
+            MatchPos::from_ptr(unsafe { (*self.0).input.offset(off as isize) })
+        }
+    }
+
+    /// How far past the cursor `at` is, in bytes of the line the cursor is
+    /// on.
+    #[inline(always)]
+    pub(crate) fn bytes_ahead(self, at: MatchPos) -> c_int {
+        if self.multi() {
+            at.as_pos().col - self.col()
+        } else {
+            let bytes = unsafe { at.as_ptr().offset_from((*self.0).input) };
+            c_int::try_from(bytes).unwrap_or(c_int::MAX)
+        }
+    }
+
     /// Is the cursor exactly at `at`?
     #[inline(always)]
     pub(crate) fn is_at(self, at: MatchPos) -> bool {
@@ -401,12 +439,13 @@ impl Rex {
     /// The program being run, from whichever match structure is live.
     #[inline(always)]
     pub(crate) fn regprog(self) -> *mut regprog_T {
-        unsafe {
-            if self.multi() {
-                (*(*self.0).reg_mmatch).regprog
-            } else {
-                (*(*self.0).reg_match).regprog
-            }
+        if self.multi() {
+            // SAFETY: a buffer match's `reg_mmatch` is the caller's match
+            // structure, which outlives the match.
+            unsafe { (*self.reg_mmatch()).regprog }
+        } else {
+            // SAFETY: as above, for a string match's `reg_match`.
+            unsafe { (*self.reg_match()).regprog }
         }
     }
 

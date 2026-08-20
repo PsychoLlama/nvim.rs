@@ -1,50 +1,36 @@
 //! The capture sets a thread carries: clearing, copying and comparing them.
 //!
-//! A `regsub_T` is `NSUBEXP` capture positions plus how many of them are in
-//! use, in one of two shapes — a line/column pair per capture for a match
-//! over buffer lines, a pair of pointers for a match over one string. Which
-//! one is live is `rex.reg_match` being null and nothing else, so every
-//! function here starts by asking.
+//! A `regsub_T` is `NSUBEXP` [`Capture`]s plus how many of them are in use.
+//! A capture is a pair of [`MatchPos`]es, so the two shapes a match records
+//! positions in — a line/column pair over buffer lines, a pointer over one
+//! string — are the same sixteen bytes and the same code; only the handful of
+//! places that have to *interpret* a position ask
+//! [`Rex::pos_kind`](crate::regexp::Rex::pos_kind) which it is.
 //!
 //! Only the entries below `in_use` are ever read, which is why copying one
 //! set over another leaves the rest alone.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::list::{op, out_of, out1_of};
 use core::ffi::c_int;
 
 use crate::regexp::{
-    NFA_ANY, NFA_ANY_COMPOSING, NFA_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG,
+    Capture, NFA_ANY, NFA_ANY_COMPOSING, NFA_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG,
     NFA_END_PATTERN, NFA_IDENT, NFA_MATCH, NFA_MCLOSE, NFA_NEWL, NFA_NUPPER_IC, NFA_SPLIT,
     NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_NEG_COLL,
-    NSUBEXP, PimResult, Rex, linepos, multipos, nfa_pim_T, nfa_state_T, regsub_T,
+    NSUBEXP, PimResult, Rex, nfa_pim_T, nfa_state_T, regsub_T,
 };
 
 /// How far [`match_follows`] follows the machine before giving up.
 const MATCH_FOLLOWS_DEPTH: c_int = 10;
-
-/// An unset multi-line capture position — what the C original memset `0xff`
-/// over, which is `-1` in each of the four fields.
-const NO_MULTIPOS: multipos = multipos {
-    start_lnum: -1,
-    end_lnum: -1,
-    start_col: -1,
-    end_col: -1,
-};
-
-/// An unset string capture position.
-const NO_LINEPOS: linepos = linepos {
-    start: core::ptr::null_mut(),
-    end: core::ptr::null_mut(),
-};
-
-/// Does this match run over a range of buffer lines rather than over one
-/// string?
-#[inline(always)]
-pub(crate) fn multi_line(rex: Rex) -> bool {
-    rex.multi()
-}
 
 /// Does the pattern have `\z(` groups? They are carried in a second capture
 /// set beside the ordinary one, and only copied when there are any.
@@ -63,93 +49,57 @@ pub(crate) fn has_backref(rex: Rex) -> bool {
 
 /// How many captures the pattern can fill.
 fn nsubexpr(rex: Rex) -> usize {
-    let n = rex.nfa_nsubexpr() as usize;
-    n.min(NSUBEXP as usize)
+    slots(rex.nfa_nsubexpr())
+}
+
+/// How many capture slots a `regsub_T`'s `in_use` names. Clamped, so that the
+/// count can index the array: the compiler bounds a group number to nine, so
+/// the clamp never fires on a program this engine built.
+#[inline(always)]
+pub(crate) fn slots(in_use: c_int) -> usize {
+    usize::try_from(in_use).unwrap_or(0).min(NSUBEXP as usize)
 }
 
 /// Forget every capture in `sub`.
 pub(crate) fn clear_sub(rex: Rex, sub: &mut regsub_T) {
     let n = nsubexpr(rex);
-    // SAFETY: which arm of the union is live is `multi_line`, and the same
-    // answer holds for every capture set of one match.
-    unsafe {
-        if multi_line(rex) {
-            sub.list.multi[..n].fill(NO_MULTIPOS);
-        } else {
-            sub.list.line[..n].fill(NO_LINEPOS);
-        }
-    }
+    sub.list[..n].fill(Capture::unset(rex.pos_kind()));
     sub.in_use = 0;
 }
 
 /// Copy the captures `from` has in use over `to`'s.
 #[inline(always)]
-pub(crate) fn copy_sub(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_sub(to: &mut regsub_T, from: &regsub_T) {
     to.in_use = from.in_use;
-    if from.in_use <= 0 {
-        return;
-    }
-    let n = from.in_use as usize;
+    // Where a `:substitute` resumes scanning, which travels with the
+    // whole-match capture. Only a buffer match ever sets it, and then it is
+    // zero on both sides, so the copy needs no test of its own.
+    to.orig_start_col = from.orig_start_col;
     // A plain loop rather than `copy_from_slice`: `in_use` is one or two in
     // almost every match, and at opt-level 0 the slice call chain costs more
     // than the copy. This runs once per thread put on a list.
-    // SAFETY: as `clear_sub`.
-    unsafe {
-        if multi_line(rex) {
-            for i in 0..n {
-                to.list.multi[i] = from.list.multi[i];
-            }
-            // Where a `:substitute` resumes scanning, which travels with the
-            // whole-match capture.
-            to.orig_start_col = from.orig_start_col;
-        } else {
-            for i in 0..n {
-                to.list.line[i] = from.list.line[i];
-            }
-        }
+    for i in 0..slots(from.in_use) {
+        to.list[i] = from.list[i];
     }
 }
 
 /// [`copy_sub`] without group 0: a lookaround may report what its own groups
 /// matched, but must not move the whole match's start or end.
-pub(crate) fn copy_sub_off(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_sub_off(to: &mut regsub_T, from: &regsub_T) {
     if to.in_use < from.in_use {
         to.in_use = from.in_use;
     }
-    if from.in_use <= 1 {
-        return;
-    }
-    let n = from.in_use as usize;
-    // SAFETY: as `clear_sub`.
-    unsafe {
-        if multi_line(rex) {
-            for i in 1..n {
-                to.list.multi[i] = from.list.multi[i];
-            }
-        } else {
-            for i in 1..n {
-                to.list.line[i] = from.list.line[i];
-            }
-        }
+    for i in 1..slots(from.in_use) {
+        to.list[i] = from.list[i];
     }
 }
 
 /// Carry group 0's *end* over, which is the one thing a `\ze` inside a
 /// lookaround is allowed to move.
 pub(crate) fn copy_ze_off(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
-    // SAFETY: as `clear_sub`; `nfa_has_zend` is read from the running match.
-    unsafe {
-        if rex.nfa_has_zend() == 0 {
-            return;
-        }
-        if multi_line(rex) {
-            if from.list.multi[0].end_lnum >= 0 {
-                to.list.multi[0].end_lnum = from.list.multi[0].end_lnum;
-                to.list.multi[0].end_col = from.list.multi[0].end_col;
-            }
-        } else if !from.list.line[0].end.is_null() {
-            to.list.line[0].end = from.list.line[0].end;
-        }
+    let kind = rex.pos_kind();
+    if rex.nfa_has_zend() != 0 && from.list[0].end.is_set(kind) {
+        to.list[0].end = from.list[0].end;
     }
 }
 
@@ -159,62 +109,20 @@ pub(crate) fn copy_ze_off(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
 /// the longer of the two. Ends only count when the pattern has a
 /// back-reference, which is the only thing that reads them mid-match.
 pub(crate) fn sub_equal(rex: Rex, sub1: &regsub_T, sub2: &regsub_T) -> bool {
+    let kind = rex.pos_kind();
     let ends_matter = has_backref(rex);
-    let (n1, n2) = (sub1.in_use, sub2.in_use);
-    let todo = n1.max(n2) as usize;
-    // Written as a plain loop over the fields rather than over a helper that
-    // returns "the position, or the unset one": this is the match loop's
-    // innermost comparison and at opt-level 0 a closure per element is a
-    // call per element.
-    // SAFETY: as `clear_sub`.
-    unsafe {
-        if multi_line(rex) {
-            for i in 0..todo {
-                let a = if (i as c_int) < n1 {
-                    sub1.list.multi[i]
-                } else {
-                    NO_MULTIPOS
-                };
-                let b = if (i as c_int) < n2 {
-                    sub2.list.multi[i]
-                } else {
-                    NO_MULTIPOS
-                };
-                if a.start_lnum != b.start_lnum {
-                    return false;
-                }
-                // A start that is set at all has a column worth comparing.
-                if a.start_lnum != -1 && a.start_col != b.start_col {
-                    return false;
-                }
-                if ends_matter {
-                    if a.end_lnum != b.end_lnum {
-                        return false;
-                    }
-                    if a.end_lnum != -1 && a.end_col != b.end_col {
-                        return false;
-                    }
-                }
-            }
-        } else {
-            for i in 0..todo {
-                let a = if (i as c_int) < n1 {
-                    sub1.list.line[i]
-                } else {
-                    NO_LINEPOS
-                };
-                let b = if (i as c_int) < n2 {
-                    sub2.list.line[i]
-                } else {
-                    NO_LINEPOS
-                };
-                if a.start != b.start {
-                    return false;
-                }
-                if ends_matter && a.end != b.end {
-                    return false;
-                }
-            }
+    let unset = Capture::unset(kind);
+    let (n1, n2) = (slots(sub1.in_use), slots(sub2.in_use));
+    // A plain index walk rather than zipped iterators: this is the match
+    // loop's innermost comparison and the two sets are of different lengths.
+    for i in 0..n1.max(n2) {
+        let a = if i < n1 { sub1.list[i] } else { unset };
+        let b = if i < n2 { sub2.list[i] } else { unset };
+        if !a.start.same_capture(b.start, kind) {
+            return false;
+        }
+        if ends_matter && !a.end.same_capture(b.end, kind) {
+            return false;
         }
     }
     true
@@ -224,9 +132,9 @@ pub(crate) fn sub_equal(rex: Rex, sub1: &regsub_T, sub2: &regsub_T) -> bool {
 pub(crate) fn copy_pim(rex: Rex, to: &mut nfa_pim_T, from: &nfa_pim_T) {
     to.result = from.result;
     to.state = from.state;
-    copy_sub(rex, &mut to.subs.norm, &from.subs.norm);
+    copy_sub(&mut to.subs.norm, &from.subs.norm);
     if has_zsubexpr(rex) {
-        copy_sub(rex, &mut to.subs.synt, &from.subs.synt);
+        copy_sub(&mut to.subs.synt, &from.subs.synt);
     }
     to.end = from.end;
 }

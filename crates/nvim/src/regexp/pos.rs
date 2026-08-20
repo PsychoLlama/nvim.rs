@@ -129,6 +129,101 @@ impl MatchPos {
             }
         }
     }
+
+    /// Where a capture slot nothing has filled in stands: NULL in a string
+    /// match, and line `-1` column `-1` in a buffer one — the C original
+    /// memset the whole slot to `0xff`.
+    #[inline(always)]
+    pub(crate) fn unset(kind: PosKind) -> MatchPos {
+        match kind {
+            PosKind::Str => MatchPos::NOWHERE,
+            PosKind::Buf => MatchPos::from_pos(lpos_T { lnum: -1, col: -1 }),
+        }
+    }
+
+    /// Has a capture slot holding this been filled in?
+    #[inline(always)]
+    pub(crate) fn is_set(self, kind: PosKind) -> bool {
+        match kind {
+            PosKind::Str => !self.as_ptr().is_null(),
+            PosKind::Buf => self.as_pos().lnum >= 0,
+        }
+    }
+
+    /// Make a capture slot holding this read as unset, *without* disturbing a
+    /// buffer match's column.
+    ///
+    /// Not the same as assigning [`MatchPos::unset`]: the walk uses this for
+    /// the slots it stepped over on its way to a later group, and upstream
+    /// wrote only the line numbers there. An unset capture is recognised by
+    /// its line alone, so the column left lying beside it is never compared —
+    /// but it *is* handed back to the caller, so writing one would be a
+    /// change in what a match reports.
+    #[inline(always)]
+    pub(crate) fn mark_unset(&mut self, kind: PosKind) {
+        match kind {
+            PosKind::Str => self.set_ptr(core::ptr::null_mut()),
+            PosKind::Buf => self.pos_mut().lnum = -1,
+        }
+    }
+
+    /// Do two capture positions describe the same place?
+    ///
+    /// As [`MatchPos::same`], except that a buffer match's unset position
+    /// compares equal whatever column happens to sit beside it — see
+    /// [`MatchPos::mark_unset`] for where those stale columns come from.
+    #[inline(always)]
+    pub(crate) fn same_capture(self, other: MatchPos, kind: PosKind) -> bool {
+        match kind {
+            PosKind::Str => self.as_ptr() == other.as_ptr(),
+            PosKind::Buf => {
+                let (a, b) = (self.as_pos(), other.as_pos());
+                a.lnum == b.lnum && (a.lnum < 0 || a.col == b.col)
+            }
+        }
+    }
+}
+
+/// What one capture group matched: where it started and where it ended.
+///
+/// Upstream wrote this twice, as `multipos` (four `int`s: two line numbers
+/// and two columns) and `linepos` (two pointers), and unioned arrays of the
+/// two into `regsub_T.list`. Both arms are a *pair of positions* and
+/// [`MatchPos`] is what a position is, so there is nothing left to union: the
+/// two shapes are one type, sixteen bytes either way, and the arm is still
+/// picked once per match by [`super::rex::Rex::pos_kind`].
+///
+/// That the size did not move is load-bearing. A capture set rides in every
+/// `nfa_thread_T`, twice over, and 'maxmempattern' is charged in threads —
+/// so a tag on the two shapes would have cost eight bytes a set, thirty-two a
+/// thread, and moved the depth at which E363 is reported by about four per
+/// cent.
+#[derive(Clone, Copy)]
+pub(crate) struct Capture {
+    /// Where the group started, or unset.
+    pub(crate) start: MatchPos,
+    /// Where it ended, or unset.
+    pub(crate) end: MatchPos,
+}
+
+impl Capture {
+    /// A capture slot the match has never reached — see [`MatchPos::unset`].
+    #[inline(always)]
+    pub(crate) fn unset(kind: PosKind) -> Capture {
+        let nowhere = MatchPos::unset(kind);
+        Capture {
+            start: nowhere,
+            end: nowhere,
+        }
+    }
+
+    /// Make both ends read as unset, leaving a buffer match's columns alone —
+    /// see [`MatchPos::mark_unset`].
+    #[inline(always)]
+    pub(crate) fn mark_unset(&mut self, kind: PosKind) {
+        self.start.mark_unset(kind);
+        self.end.mark_unset(kind);
+    }
 }
 
 /// Where the input was, and how much of `backpos` belonged to that.
@@ -231,5 +326,67 @@ mod tests {
     fn a_blank_input_save_is_nowhere_with_no_backpos() {
         assert!(SavedInput::NOWHERE.pos.as_ptr().is_null());
         assert_eq!(SavedInput::NOWHERE.backpos_len, 0);
+    }
+
+    /// The measurement the whole design rests on: a capture is two positions
+    /// and no discriminant, so an array of them is the size the C union was.
+    /// A tagged pair would be twenty-four bytes, and 'maxmempattern' is
+    /// charged in the threads that carry ten of them.
+    #[test]
+    fn a_capture_is_two_positions_and_no_tag() {
+        assert_eq!(size_of::<Capture>(), 2 * size_of::<*mut uint8_t>());
+        assert_eq!(size_of::<Capture>(), 2 * size_of::<lpos_T>());
+        assert_eq!(align_of::<Capture>(), align_of::<*mut uint8_t>());
+    }
+
+    #[test]
+    fn an_unset_capture_reads_unset_in_either_shape() {
+        for kind in [PosKind::Str, PosKind::Buf] {
+            let capture = Capture::unset(kind);
+            assert!(!capture.start.is_set(kind));
+            assert!(!capture.end.is_set(kind));
+        }
+        let mut byte = 0u8;
+        assert!(MatchPos::from_ptr(&raw mut byte).is_set(PosKind::Str));
+        assert!(MatchPos::from_pos(lpos_T { lnum: 0, col: 0 }).is_set(PosKind::Buf));
+    }
+
+    /// The slots a walk steps over are marked unset by their line alone, and
+    /// the column beside it is left as it lies — see `MatchPos::mark_unset`.
+    #[test]
+    fn marking_a_buffer_position_unset_leaves_its_column() {
+        let mut capture = Capture {
+            start: MatchPos::from_pos(lpos_T { lnum: 3, col: 11 }),
+            end: MatchPos::from_pos(lpos_T { lnum: 4, col: 12 }),
+        };
+        capture.mark_unset(PosKind::Buf);
+        assert_eq!(capture.start.as_pos().lnum, -1);
+        assert_eq!(capture.start.as_pos().col, 11);
+        assert_eq!(capture.end.as_pos().col, 12);
+
+        let mut line = *b"ab\0";
+        let mut capture = Capture {
+            start: MatchPos::from_ptr(&raw mut line[0]),
+            end: MatchPos::from_ptr(&raw mut line[1]),
+        };
+        capture.mark_unset(PosKind::Str);
+        assert!(capture.start.as_ptr().is_null());
+        assert!(capture.end.as_ptr().is_null());
+    }
+
+    /// Which is why comparing two capture positions has to ignore the column
+    /// of an unset one, where comparing two *input* positions does not.
+    #[test]
+    fn same_capture_ignores_an_unset_position_s_column() {
+        let (a, b) = (
+            MatchPos::from_pos(lpos_T { lnum: -1, col: 5 }),
+            MatchPos::from_pos(lpos_T { lnum: -1, col: 9 }),
+        );
+        assert!(a.same_capture(b, PosKind::Buf));
+        assert!(!a.same(b, PosKind::Buf));
+
+        let set = MatchPos::from_pos(lpos_T { lnum: 2, col: 5 });
+        assert!(!set.same_capture(MatchPos::from_pos(lpos_T { lnum: 2, col: 9 }), PosKind::Buf));
+        assert!(set.same_capture(set, PosKind::Buf));
     }
 }

@@ -94,40 +94,41 @@ pub(crate) fn match_backref(rex: Rex, sub: &regsub_T, subidx: c_int, bytelen: &m
     }
     // SAFETY: the capture slots belong to this match, and `rex.input` points
     // into the line being matched.
+    let capture = sub.list[subidx as usize];
     unsafe {
         if rex.multi() {
-            let m = sub.list.multi[subidx as usize];
-            if m.start_lnum < 0 || m.end_lnum < 0 {
+            let (start, end) = (capture.start.as_pos(), capture.end.as_pos());
+            if start.lnum < 0 || end.lnum < 0 {
                 *bytelen = 0;
                 return true;
             }
-            if m.start_lnum == rex.lnum() && m.end_lnum == rex.lnum() {
+            if start.lnum == rex.lnum() && end.lnum == rex.lnum() {
                 // Wholly on this line: a plain comparison.
-                let mut len = m.end_col - m.start_col;
-                let captured = (rex.line() as *mut c_char).offset(m.start_col as isize);
+                let mut len = end.col - start.col;
+                let captured = (rex.line() as *mut c_char).offset(start.col as isize);
                 if cstrncmp(rex, captured, rex.input_str(), &mut len) == 0 {
                     *bytelen = len;
                     return true;
                 }
             } else if match_with_backref(
                 rex,
-                m.start_lnum,
-                m.start_col,
-                m.end_lnum,
-                m.end_col,
+                start.lnum,
+                start.col,
+                end.lnum,
+                end.col,
                 Some(bytelen),
             ) == RA_MATCH
             {
                 return true;
             }
         } else {
-            let l = sub.list.line[subidx as usize];
-            if l.start.is_null() || l.end.is_null() {
+            let (start, end) = (capture.start.as_ptr(), capture.end.as_ptr());
+            if start.is_null() || end.is_null() {
                 *bytelen = 0;
                 return true;
             }
-            let mut len = l.end.offset_from(l.start) as c_int;
-            if cstrncmp(rex, l.start as *mut c_char, rex.input_str(), &mut len) == 0 {
+            let mut len = end.offset_from(start) as c_int;
+            if cstrncmp(rex, start as *mut c_char, rex.input_str(), &mut len) == 0 {
                 *bytelen = len;
                 return true;
             }
