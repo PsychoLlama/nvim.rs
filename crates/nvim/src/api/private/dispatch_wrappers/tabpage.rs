@@ -328,9 +328,7 @@ pub unsafe fn handle_nvim_tabpage_set_win(
         wrong_type(error, 2, c"nvim_tabpage_set_win", c"Window");
         return NIL;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_tabpage_set_win(arg_1, arg_2) } {
+    if let Err(e) = nvim_tabpage_set_win(arg_1, arg_2) {
         return failure(error, e);
     }
     NIL

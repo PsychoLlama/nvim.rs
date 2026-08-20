@@ -380,8 +380,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_set_win(lstate: *mut lua_S
         }
         let saved_lstate = active_lstate.get();
         active_lstate.set(lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_tabpage_set_win(arg_1, arg_2) } {
+        if let Err(e) = nvim_tabpage_set_win(arg_1, arg_2) {
             active_lstate.set(saved_lstate);
             *err = e;
             return;

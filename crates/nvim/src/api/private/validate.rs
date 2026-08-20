@@ -1,189 +1,221 @@
+//! The four "that argument is wrong" messages the API family shares, and the
+//! one check that needs more than a line to make.
+//!
+//! Each message comes in two spellings, chosen by whether the thing being
+//! named is one word or several: `Invalid 'buffer id'` reads right for a
+//! single name and `Invalid buffer id: 3` for a phrase, so the quoting
+//! follows the space. That rule is upstream's, and every caller depends on
+//! the exact text -- the functional suite asserts these strings.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
 use crate::api::private::helpers::{api_set_error, api_typename};
 
 use crate::main::IObuff;
-use crate::os::cshim::{snprintf, strchr};
+use crate::os::cshim::snprintf;
 use crate::types::{
-    Array, Error, ErrorType, NUL, String_0, int64_t, kErrorTypeValidation, kObjectTypeString,
-    size_t,
+    Array, Error, IOSIZE, String_0, int64_t, kErrorTypeValidation, kObjectTypeString, size_t,
 };
-use ::libc::memchr;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub unsafe fn api_err_invalid(
-    mut err: *mut Error,
-    mut name: *const ::core::ffi::c_char,
-    mut val_s: *const ::core::ffi::c_char,
-    mut val_n: int64_t,
-    mut quote_val: bool,
-) {
-    let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space: *const ::core::ffi::c_char = strchr(name, ' ' as ::core::ffi::c_int);
-    if !val_s.is_null()
-        && *val_s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-    {
-        api_set_error(
-            err,
-            errtype,
-            if !has_space.is_null() {
-                c"Invalid %s".as_ptr()
-            } else {
-                c"Invalid '%s'".as_ptr()
-            },
-            name,
-        );
-        return;
-    }
-    if val_s.is_null() {
-        api_set_error(
-            err,
-            errtype,
-            if !has_space.is_null() {
-                c"Invalid %s: %ld".as_ptr()
-            } else {
-                c"Invalid '%s': %ld".as_ptr()
-            },
-            name,
-            val_n,
-        );
-        return;
-    }
-    if !has_space.is_null() {
-        api_set_error(
-            err,
-            errtype,
-            if quote_val as ::core::ffi::c_int != 0 {
-                c"Invalid %s: '%s'".as_ptr()
-            } else {
-                c"Invalid %s: %s".as_ptr()
-            },
-            name,
-            val_s,
-        );
-    } else {
-        api_set_error(
-            err,
-            errtype,
-            if quote_val as ::core::ffi::c_int != 0 {
-                c"Invalid '%s': '%s'".as_ptr()
-            } else {
-                c"Invalid '%s': %s".as_ptr()
-            },
-            name,
-            val_s,
-        );
-    };
+use core::ffi::{CStr, c_char};
+
+/// Whether `name` is a phrase rather than a single name, which is what
+/// decides between the quoted and unquoted spelling of every message here.
+///
+/// # Safety
+/// `name` must be a C string.
+unsafe fn is_phrase(name: *const c_char) -> bool {
+    // SAFETY: the caller's promise.
+    unsafe { CStr::from_ptr(name) }.to_bytes().contains(&b' ')
 }
-pub unsafe fn api_err_exp(
-    mut err: *mut Error,
-    mut name: *const ::core::ffi::c_char,
-    mut expected: *const ::core::ffi::c_char,
-    mut actual: *const ::core::ffi::c_char,
+
+/// "Invalid `name`", optionally saying what the offending value was: `val_s`
+/// when it is a non-empty string, `val_n` when `val_s` is null, and nothing
+/// at all when `val_s` is the empty string.
+///
+/// # Safety
+/// `err` must be the caller's error slot, `name` a C string, and `val_s` null
+/// or a C string.
+pub unsafe fn api_err_invalid(
+    err: *mut Error,
+    name: *const c_char,
+    val_s: *const c_char,
+    val_n: int64_t,
+    quote_val: bool,
 ) {
-    let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space: *const ::core::ffi::c_char = strchr(name, ' ' as ::core::ffi::c_int);
+    // SAFETY: the caller's promise about `name` and `val_s`.
+    let phrase = unsafe { is_phrase(name) };
+    // SAFETY: as above -- `val_s` is null or the caller's C string.
+    let val = (!val_s.is_null()).then(|| unsafe { CStr::from_ptr(val_s) });
+    match val {
+        Some(val) if val.is_empty() => {
+            let fmt = if phrase {
+                c"Invalid %s"
+            } else {
+                c"Invalid '%s'"
+            };
+            // SAFETY: the caller's promise about `err`; the format takes the
+            // one C string it is given.
+            unsafe { api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), name) };
+        }
+        Some(val) => {
+            let fmt = match (phrase, quote_val) {
+                (true, true) => c"Invalid %s: '%s'",
+                (true, false) => c"Invalid %s: %s",
+                (false, true) => c"Invalid '%s': '%s'",
+                (false, false) => c"Invalid '%s': %s",
+            };
+            // SAFETY: as above, with two C strings.
+            unsafe { api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), name, val.as_ptr()) };
+        }
+        None => {
+            let fmt = if phrase {
+                c"Invalid %s: %ld"
+            } else {
+                c"Invalid '%s': %ld"
+            };
+            // SAFETY: as above, with a C string and an `int64_t`.
+            unsafe { api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), name, val_n) };
+        }
+    }
+}
+
+/// "Invalid `name`: expected `expected`", naming what arrived when `actual`
+/// says.
+///
+/// # Safety
+/// `err` must be the caller's error slot, `name` and `expected` C strings,
+/// and `actual` null or a C string.
+pub unsafe fn api_err_exp(
+    err: *mut Error,
+    name: *const c_char,
+    expected: *const c_char,
+    actual: *const c_char,
+) {
+    // SAFETY: the caller's promise about `name`.
+    let phrase = unsafe { is_phrase(name) };
     if actual.is_null() {
+        let fmt = if phrase {
+            c"Invalid %s: expected %s"
+        } else {
+            c"Invalid '%s': expected %s"
+        };
+        // SAFETY: the caller's promise about `err`; two C strings.
+        unsafe { api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), name, expected) };
+        return;
+    }
+    let fmt = if phrase {
+        c"Invalid %s: expected %s, got %s"
+    } else {
+        c"Invalid '%s': expected %s, got %s"
+    };
+    // SAFETY: as above, with three C strings.
+    unsafe {
         api_set_error(
             err,
-            errtype,
-            if !has_space.is_null() {
-                c"Invalid %s: expected %s".as_ptr()
-            } else {
-                c"Invalid '%s': expected %s".as_ptr()
-            },
+            kErrorTypeValidation,
+            fmt.as_ptr(),
             name,
             expected,
-        );
-        return;
-    }
-    api_set_error(
-        err,
-        errtype,
-        if !has_space.is_null() {
-            c"Invalid %s: expected %s, got %s".as_ptr()
-        } else {
-            c"Invalid '%s': expected %s, got %s".as_ptr()
-        },
-        name,
-        expected,
-        actual,
-    );
+            actual,
+        )
+    };
 }
-pub unsafe fn api_err_required(mut err: *mut Error, mut name: *const ::core::ffi::c_char) {
-    let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space: *const ::core::ffi::c_char = strchr(name, ' ' as ::core::ffi::c_int);
-    api_set_error(
-        err,
-        errtype,
-        if !has_space.is_null() {
-            c"Required: %s".as_ptr()
-        } else {
-            c"Required: '%s'".as_ptr()
-        },
-        name,
-    );
+
+/// "Required: `name`", for an option the caller left out.
+///
+/// # Safety
+/// `err` must be the caller's error slot and `name` a C string.
+pub unsafe fn api_err_required(err: *mut Error, name: *const c_char) {
+    // SAFETY: the caller's promise about `name`.
+    let fmt = if unsafe { is_phrase(name) } {
+        c"Required: %s"
+    } else {
+        c"Required: '%s'"
+    };
+    // SAFETY: the caller's promise about `err`; the format takes one C string.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), name) };
 }
-pub unsafe fn api_err_conflict(
-    mut err: *mut Error,
-    mut name: *const ::core::ffi::c_char,
-    mut name2: *const ::core::ffi::c_char,
-) {
-    let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space2: *const ::core::ffi::c_char = strchr(name2, ' ' as ::core::ffi::c_int);
-    api_set_error(
-        err,
-        errtype,
-        if !has_space2.is_null() {
-            c"Conflict: '%s' not allowed with %s".as_ptr()
-        } else {
-            c"Conflict: '%s' not allowed with '%s'".as_ptr()
-        },
-        name,
-        name2,
-    );
+
+/// "Conflict: `name` not allowed with `name2`", for two options that exclude
+/// each other. `name` is always quoted; only `name2`'s spelling follows the
+/// space rule, as upstream's does.
+///
+/// # Safety
+/// `err` must be the caller's error slot and both names C strings.
+pub unsafe fn api_err_conflict(err: *mut Error, name: *const c_char, name2: *const c_char) {
+    // SAFETY: the caller's promise about `name2`.
+    let fmt = if unsafe { is_phrase(name2) } {
+        c"Conflict: '%s' not allowed with %s"
+    } else {
+        c"Conflict: '%s' not allowed with '%s'"
+    };
+    // SAFETY: the caller's promise about `err`; the format takes two C
+    // strings.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), name, name2) };
 }
+
+/// Whether every element of `arr` is a String, and -- when `disallow_nl` --
+/// one without a newline in it. `name` names the array in whatever message
+/// this leaves in `err`.
+///
+/// # Safety
+/// `arr` must point at its own elements, `name` must be a C string, and `err`
+/// must be the caller's error slot.
 pub unsafe fn check_string_array(
-    mut arr: Array,
-    mut name: *mut ::core::ffi::c_char,
-    mut disallow_nl: bool,
-    mut err: *mut Error,
+    arr: Array,
+    name: *mut c_char,
+    disallow_nl: bool,
+    err: *mut Error,
 ) -> bool {
-    snprintf(
-        IObuff.ptr() as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
-        c"'%s' item".as_ptr(),
-        name,
-    );
-    let mut i: size_t = 0 as size_t;
-    while i < arr.size {
-        if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-            != (*arr.items.add(i)).type_0 as ::core::ffi::c_uint
-        {
-            api_err_exp(
-                err,
-                IObuff.ptr() as *mut ::core::ffi::c_char,
-                api_typename(kObjectTypeString),
-                api_typename((*arr.items.add(i)).type_0),
-            );
+    // The item name is built once into the shared scratch buffer and then
+    // handed to whichever message fires -- upstream does the same, so the two
+    // cannot be built at once.
+    //
+    // SAFETY: `name` is the caller's C string and `IObuff` is the editor's
+    // own fixed-size scratch buffer.
+    let item_name = unsafe {
+        let buf = IObuff.ptr().cast::<c_char>();
+        snprintf(buf, IOSIZE as size_t, c"'%s' item".as_ptr(), name);
+        buf
+    };
+    // SAFETY: `arr` is the caller's array, per this function's contract; an
+    // empty one may carry a null `items`, which no slice may.
+    let items = match arr.size {
+        0 => &[][..],
+        size => unsafe { core::slice::from_raw_parts(arr.items, size) },
+    };
+    for item in items {
+        if item.type_0 != kObjectTypeString {
+            // SAFETY: the caller's promise about `err`; the type names are
+            // static and `item_name` is the scratch buffer above.
+            unsafe {
+                let got = api_typename(item.type_0);
+                api_err_exp(err, item_name, api_typename(kObjectTypeString), got);
+            }
             return false;
         }
-        if disallow_nl {
-            let l: String_0 = (*arr.items.add(i)).data.string;
-            if !memchr(
-                l.data() as *const ::core::ffi::c_void,
-                '\n' as ::core::ffi::c_int,
-                l.len(),
-            )
-            .is_null()
-            {
+        // SAFETY: the tag says the payload is the string, and the string is
+        // the caller's, live for its own length.
+        let l: String_0 = unsafe { item.data.string };
+        if disallow_nl && unsafe { l.as_bytes() }.contains(&b'\n') {
+            // SAFETY: as above; the format takes the one C string.
+            unsafe {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
                     c"'%s' item contains newlines".as_ptr(),
                     name,
                 );
-                return false;
             }
+            return false;
         }
-        i = i.wrapping_add(1);
     }
     true
 }

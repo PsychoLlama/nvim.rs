@@ -41,6 +41,7 @@ use crate::types::{
     kErrorTypeException, kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data,
     pos_T, ptr_t, scid_T, sctx_T, size_t, tabpage_T, uint32_t, uint64_t, win_T,
 };
+use crate::winlayer::{Buf, TabPage, Win};
 
 mod keydict;
 mod text;
@@ -191,6 +192,38 @@ pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *m
     }
 }
 
+// -- Handles, as the entry points take them --------------------------------
+//
+// The three `find_*_by_handle` functions above answer a raw pointer and are
+// what the FFI edge still calls. An `nvim_*` entry point wants the same
+// lookup as a value it can then use without an `unsafe` block per field, and
+// that is what these three give it: the handle is an integer off the wire, so
+// nothing about the *call* is unsafe, and the answer is a `winlayer` wrapper
+// whose construction discharged the liveness promise once.
+//
+// `err` is `&mut` rather than a pointer so that the wrappers are safe to call
+// and do not trip `clippy::not_unsafe_ptr_arg_deref`.
+
+/// The window `handle` names, or the current one for 0. `None` -- with `err`
+/// set, unless there is no current window -- when it names nothing.
+pub(crate) fn window_by_handle(handle: Window, err: &mut Error) -> Option<Win> {
+    // SAFETY: `err` is the caller's own slot, and the lookup answers a live
+    // window or null.
+    unsafe { Win::from_raw(find_window_by_handle(handle, err)) }
+}
+
+/// [`window_by_handle`] for a buffer.
+pub(crate) fn buffer_by_handle(handle: Buffer, err: &mut Error) -> Option<Buf> {
+    // SAFETY: as [`window_by_handle`].
+    unsafe { Buf::from_raw(find_buffer_by_handle(handle, err)) }
+}
+
+/// [`window_by_handle`] for a tab page.
+pub(crate) fn tabpage_by_handle(handle: Tabpage, err: &mut Error) -> Option<TabPage> {
+    // SAFETY: as [`window_by_handle`].
+    unsafe { TabPage::from_raw(find_tab_by_handle(handle, err)) }
+}
+
 // -- Errors and the try/catch bracket --------------------------------------
 
 /// Start catching what Vimscript throws, saving the state to put back into
@@ -279,6 +312,32 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
         need_rethrow.set((*tstate).need_rethrow != 0);
         did_emsg.set((*tstate).did_emsg);
     }
+}
+
+/// Run `body` with whatever it throws caught, and report that through `err`:
+/// the [`try_enter`]/[`try_leave`] pair as one safe call.
+///
+/// The `TryState` the two halves communicate through is this frame's own and
+/// nothing else can name it, which is the whole of what they ask of a caller
+/// -- so every call site that spelled the bracket out by hand was writing
+/// eleven lines of `unsafe` to say what this says in one. `try_enter`
+/// overwrites the state before `try_leave` reads it, so the value handed in
+/// is never read.
+///
+/// `body` runs between the two, exactly as the statements between a
+/// hand-written pair did. It is handed the same slot so that a callee which
+/// reports through one of its own can still be given it -- `try_leave` writes
+/// over whatever the body left there, which is what a hand-written pair did
+/// too.
+pub(crate) fn api_try<T>(err: &mut Error, body: impl FnOnce(&mut Error) -> T) -> T {
+    let mut tstate = TryState::default();
+    // SAFETY: `tstate` is this frame's local, live until `try_leave` below.
+    unsafe { try_enter(&raw mut tstate) };
+    let value = body(err);
+    // SAFETY: `tstate` is what the `try_enter` above filled in, and `err` is
+    // the caller's own slot.
+    unsafe { try_leave(&raw const tstate, err) };
+    value
 }
 
 /// Set `err` from a printf-style message. The message is measured first and

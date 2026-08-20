@@ -2,7 +2,6 @@
   "files": {
     "crates/nvim/src/api/buffer/lines.rs": 2,
     "crates/nvim/src/api/buffer/text.rs": 2,
-    "crates/nvim/src/api/options.rs": 1,
     "crates/nvim/src/autocmd/define.rs": 1,
     "crates/nvim/src/autocmd/fire.rs": 1,
     "crates/nvim/src/buffer_updates.rs": 1,
