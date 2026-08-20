@@ -350,12 +350,6 @@ pub const NFA_EOL: c_int = -1007;
 pub const NFA_START_PATTERN: c_int = -989;
 pub const NFA_MAX_STATES: c_int = 100000;
 pub const AUTOMATIC_ENGINE: c_uint = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union Ptrlist {
-    pub next: *mut Ptrlist,
-    pub s: *mut nfa_state_T,
-}
 pub const NFA_OPT_CHARS: c_int = -982;
 pub const NFA_PREV_ATOM_JUST_BEFORE_NEG: c_int = -978;
 pub const NFA_PREV_ATOM_JUST_BEFORE: c_int = -979;
