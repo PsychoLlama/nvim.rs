@@ -30,7 +30,7 @@ use crate::main::{
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append_flags, ml_delete, ml_get, ml_get_buf, ml_replace, resolve_symlink};
-use crate::memory::{time_to_bytes, xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
+use crate::memory::{time_to_bytes, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
 use crate::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
     msg_putchar, msg_puts, msg_puts_hl, msg_start, verb_msg, verbose_enter, verbose_leave,
@@ -52,8 +52,7 @@ use crate::state::virtual_active;
 use crate::strings::vim_snprintf;
 use crate::types::*;
 use ::libc::{
-    close, fclose, fdopen, fflush, fread, fwrite, getuid, memcmp, memset, strcmp, strftime, strlen,
-    time,
+    close, fclose, fdopen, fflush, fread, fwrite, getuid, memset, strcmp, strftime, strlen, time,
 };
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;

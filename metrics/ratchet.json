@@ -1,7 +1,7 @@
 {
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1049,
-  "files_without_deny_unsafe_op": 78,
+  "files_without_deny_unsafe_op": 76,
   "files_without_deny_casts": 1113,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
@@ -957,9 +957,9 @@
     "crates/nvim/src/undo/apply/mod.rs": {"unsafe_lines": 50},
     "crates/nvim/src/undo/apply/time.rs": {"unsafe_lines": 27},
     "crates/nvim/src/undo/eval.rs": {"unsafe_lines": 64},
-    "crates/nvim/src/undo/file.rs": {"missing_safety_doc": 24, "unsafe_lines": 547},
+    "crates/nvim/src/undo/file.rs": {"unsafe_lines": 437},
     "crates/nvim/src/undo/mod.rs": {"missing_safety_doc": 19, "unsafe_lines": 410},
-    "crates/nvim/src/undo/read.rs": {"missing_safety_doc": 1, "unsafe_lines": 387},
+    "crates/nvim/src/undo/read.rs": {"unsafe_lines": 222},
     "crates/nvim/src/undo/store.rs": {"unsafe_lines": 24},
     "crates/nvim/src/undo/tree.rs": {"unsafe_lines": 195},
     "crates/nvim/src/undo/write.rs": {"unsafe_lines": 133},
