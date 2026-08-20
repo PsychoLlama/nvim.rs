@@ -503,8 +503,8 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
         let mut count = 0;
         let mut uhp = ::core::ptr::null_mut();
         for header in header_chain(curbuf.get(), start, |uh| uh.uh_next) {
-            if (*header).uh_seq as linenr_T <= step {
-                uhp = header;
+            if header.uh_seq as linenr_T <= step {
+                uhp = header.raw();
                 break;
             }
             count += 1;

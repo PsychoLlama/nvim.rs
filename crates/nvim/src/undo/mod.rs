@@ -7,7 +7,7 @@ use crate::change::{
 use crate::cursor::{
     check_cursor, check_cursor_col, check_cursor_lnum, check_pos, coladvance, getviscol,
 };
-use crate::drawscreen::{redraw_later, redraw_win_line};
+use crate::drawscreen::redraw_win_line;
 use crate::edit::beginline;
 use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::{
@@ -24,9 +24,9 @@ use crate::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    IObuff, KeyTyped, VIsual, VIsual_active, curbuf, curtab, curwin, e_modifiable, e_sandbox,
-    e_textlock, fdo_flags, firstbuf, firstwin, global_busy, got_int, no_u_sync, p_fs, p_udir, p_ul,
-    p_verbose, sandbox, textlock,
+    IObuff, KeyTyped, VIsual, VIsual_active, curbuf, curwin, e_modifiable, e_sandbox, e_textlock,
+    fdo_flags, firstbuf, global_busy, got_int, no_u_sync, p_fs, p_udir, p_ul, p_verbose, sandbox,
+    textlock,
 };
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
@@ -100,7 +100,7 @@ pub mod store;
 mod tree;
 mod write;
 
-use store::{header_adopt, header_at, header_chain};
+use store::{Header, header_adopt, header_at, header_chain};
 use tree::*;
 
 pub use apply::{u_redo, u_undo, u_undo_and_forget, undo_time};
@@ -268,8 +268,8 @@ pub unsafe fn u_savecommon(
                 u_freeheader(buf, oldest, &raw mut old_curhead);
             } else {
                 // The far end of the oldest header's alternate chain.
-                let uhfree = header_chain(buf, (*buf).b_u_oldhead, |uh| uh.uh_alt_next).last();
-                u_freebranch(buf, uhfree.unwrap_or(oldest), &raw mut old_curhead);
+                let far = header_chain(buf, (*buf).b_u_oldhead, |uh| uh.uh_alt_next).last();
+                u_freebranch(buf, far.map_or(oldest, Header::raw), &raw mut old_curhead);
             }
         }
         if uhp.is_null() {

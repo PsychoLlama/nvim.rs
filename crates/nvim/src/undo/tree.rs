@@ -18,10 +18,10 @@ use super::*;
 pub(crate) unsafe fn u_unch_branch(buf: *mut buf_T, start: UndoLink) {
     // SAFETY: a live buffer, and nothing here frees a header.
     unsafe {
-        for uh in header_chain(buf, start, |uh| uh.uh_prev) {
-            (*uh).uh_flags |= UH_CHANGED;
-            if (*uh).uh_alt_next.is_some() {
-                u_unch_branch(buf, (*uh).uh_alt_next);
+        for mut uh in header_chain(buf, start, |uh| uh.uh_prev) {
+            uh.uh_flags |= UH_CHANGED;
+            if uh.uh_alt_next.is_some() {
+                u_unch_branch(buf, uh.uh_alt_next);
             }
         }
     }
@@ -105,8 +105,8 @@ pub(crate) unsafe fn u_freeheader(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *
         } else {
             // The alternate headers at `uh_prev` all claim this header's
             // successor.
-            for uhap in header_chain(buf, (*uhp).uh_prev, |uh| uh.uh_alt_next) {
-                (*uhap).uh_next = (*uhp).uh_next;
+            for mut uhap in header_chain(buf, (*uhp).uh_prev, |uh| uh.uh_alt_next) {
+                uhap.uh_next = (*uhp).uh_next;
             }
         }
         u_freeentries(buf, uhp, uhpp);

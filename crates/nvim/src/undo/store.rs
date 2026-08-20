@@ -118,6 +118,88 @@ impl UndoStore {
     }
 }
 
+/// A live undo header, wrapped so that reading and writing its fields is not
+/// an unsafe operation at every use.
+///
+/// This is the trade [`crate::winlayer::Buf`] makes for `buf_T`, for the same
+/// reason. The pointer has to stay raw — the store hands it back, the tree
+/// walks interleave it with reads of the buffer's own link fields, and a
+/// long-lived `&mut` would invalidate a view the caller still holds — but the
+/// *dereference* does not: constructing the wrapper is the unsafe step, and
+/// from there `Deref`/`DerefMut` give ordinary field access.
+///
+/// The promise a `Header` carries is the store's own invariant: a header that
+/// has been freed is gone from the store, so [`Buf::header`] either hands back
+/// a live header or hands back nothing.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Header(*mut u_header_T);
+
+impl core::ops::Deref for Header {
+    type Target = u_header_T;
+
+    #[inline(always)]
+    fn deref(&self) -> &u_header_T {
+        // SAFETY: the constructor's promise — a live header.
+        unsafe { &*self.0 }
+    }
+}
+
+impl core::ops::DerefMut for Header {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut u_header_T {
+        // SAFETY: the constructor's promise — a live header. The borrow lasts
+        // only as long as the field access that asked for it.
+        unsafe { &mut *self.0 }
+    }
+}
+
+impl Header {
+    /// Wraps a header the store handed back, or nothing for a NULL one.
+    ///
+    /// # Safety
+    ///
+    /// `uhp` is NULL, or points at a header that stays live for as long as
+    /// the value is used.
+    #[inline(always)]
+    pub(crate) const unsafe fn new(uhp: *mut u_header_T) -> Option<Self> {
+        if uhp.is_null() { None } else { Some(Self(uhp)) }
+    }
+
+    /// The address the store holds, for the callers that still want one.
+    #[inline(always)]
+    pub(crate) fn raw(self) -> *mut u_header_T {
+        self.0
+    }
+
+    /// The link that names this header.
+    #[inline(always)]
+    pub(crate) fn link(self) -> UndoLink {
+        UndoLink::to_seq(self.uh_seq)
+    }
+
+    /// Whether a tree walk has stamped this header with neither of the two
+    /// marks it is using. A walk that only has one mark passes it twice.
+    #[inline(always)]
+    pub(crate) fn unwalked(self, mark: c_int, nomark: c_int) -> bool {
+        self.uh_walk != mark && self.uh_walk != nomark
+    }
+}
+
+impl crate::winlayer::Buf {
+    /// The header `link` names in this buffer's undo store, if any.
+    ///
+    /// Safe where the free [`header_at`] is not: a [`Buf`](crate::winlayer::Buf)
+    /// already carries the promise that the buffer is live, and that is the
+    /// whole of the lookup's obligation — a link that names nothing, or names
+    /// a header that has been freed, resolves to `None`.
+    #[inline]
+    pub(crate) fn header(self, link: UndoLink) -> Option<Header> {
+        // SAFETY: a live buffer, by `Buf`'s own contract, and the store hands
+        // back only headers it still holds.
+        unsafe { Header::new(header_at(self.raw(), link)) }
+    }
+}
+
 /// The link that names `uhp`, or [`UndoLink::NONE`] for a NULL one.
 ///
 /// # Safety
@@ -164,8 +246,8 @@ pub(crate) unsafe fn cur_header(link: UndoLink) -> *mut u_header_T {
 ///
 /// `uhp` is NULL or points at a live header.
 pub(crate) unsafe fn unwalked(uhp: *mut u_header_T, mark: c_int, nomark: c_int) -> bool {
-    // SAFETY: non-NULL and live by the contract above.
-    !uhp.is_null() && unsafe { (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark }
+    // SAFETY: NULL or live by the contract above.
+    unsafe { Header::new(uhp) }.is_some_and(|uh| uh.unwalked(mark, nomark))
 }
 
 /// `buf`'s store, if it has one yet.
@@ -281,29 +363,26 @@ pub(crate) struct HeaderChain {
 
 enum ChainState {
     Start(UndoLink),
-    At(*mut u_header_T),
+    At(Header),
     Done,
 }
 
 impl Iterator for HeaderChain {
-    type Item = *mut u_header_T;
+    type Item = Header;
 
-    fn next(&mut self) -> Option<*mut u_header_T> {
+    fn next(&mut self) -> Option<Header> {
         let link = match self.state {
             ChainState::Done => return None,
             ChainState::Start(link) => link,
-            // SAFETY: a header the store handed back and that the walk has
-            // not freed, per `header_chain`'s contract.
-            ChainState::At(uhp) => (self.step)(unsafe { &*uhp }),
+            ChainState::At(uh) => (self.step)(&uh),
         };
         // SAFETY: a live buffer, per `header_chain`'s contract.
-        let uhp = unsafe { header_at(self.buf, link) };
-        if uhp.is_null() {
+        let Some(uh) = (unsafe { Header::new(header_at(self.buf, link)) }) else {
             self.state = ChainState::Done;
             return None;
-        }
-        self.state = ChainState::At(uhp);
-        Some(uhp)
+        };
+        self.state = ChainState::At(uh);
+        Some(uh)
     }
 }
 
