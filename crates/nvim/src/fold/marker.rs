@@ -1,3 +1,13 @@
+//! 'foldmethod' = "marker": folds that live in the buffer text as `{{{` and
+//! `}}}`.
+//!
+//! This is the only fold method whose folds are *stored*, so creating and
+//! deleting one edits the buffer (and is undoable). 'foldmarker' is split
+//! into its two halves by [`parse_marker`], which every function here
+//! requires to have run.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::ascii::ascii_isdigit;
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
@@ -18,147 +28,177 @@ use super::*;
 
 /// Create a fold from line "start" to line "end" (inclusive) in window `wp`
 /// by adding markers.
-pub(super) unsafe fn fold_create_markers(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
-    let mut buf: *mut buf_T = (*wp).w_buffer;
-    if (*buf).b_p_ma == 0 {
-        emsg(gettext(&raw const e_modifiable as *const c_char));
+///
+/// # Safety
+/// `wp` must be a live window with a live buffer.
+pub(super) unsafe fn fold_create_markers(wp: *mut win_T, start: pos_T, end: pos_T) {
+    // SAFETY: the caller's promise.
+    let buf = unsafe { (*wp).w_buffer };
+    // SAFETY: a live buffer.
+    if unsafe { (*buf).b_p_ma } == 0 {
+        // SAFETY: a static message.
+        unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
         return;
     }
-    parse_marker(wp);
-    fold_add_marker(
-        buf,
-        start,
-        (*wp).w_onebuf_opt.wo_fmr,
-        foldstartmarkerlen.get(),
-    );
-    fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get());
-    changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
-    let mut num_changed: int64_t = (1 + end.lnum - start.lnum) as int64_t;
-    buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
+    let num_changed = (1 + end.lnum - start.lnum) as int64_t;
+    // SAFETY: the caller's promise; both lines are inside the buffer.
+    unsafe {
+        parse_marker(wp);
+        fold_add_marker(
+            buf,
+            start,
+            (*wp).w_onebuf_opt.wo_fmr,
+            foldstartmarkerlen.get(),
+        );
+        fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get());
+        changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
+        buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
+    }
 }
 
 /// Add "marker[markerlen]" in 'commentstring' to position `pos`.
+///
+/// # Safety
+/// `buf` must be a live buffer, `pos` a line inside it, and
+/// `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_add_marker(
-    mut buf: *mut buf_T,
-    mut pos: pos_T,
-    mut marker: *const c_char,
-    mut markerlen: size_t,
+    buf: *mut buf_T,
+    pos: pos_T,
+    marker: *const c_char,
+    markerlen: size_t,
 ) {
-    let mut cms: *mut c_char = (*buf).b_p_cms;
-    let mut p: *mut c_char = strstr((*buf).b_p_cms, c"%s".as_ptr());
-    let mut line_is_comment: bool = false;
-    let mut lnum: linenr_T = pos.lnum;
-    let mut line: *mut c_char = ml_get_buf(buf, lnum);
-    let mut line_len: size_t = ml_get_buf_len(buf, lnum) as size_t;
-    let mut added: size_t = 0;
-    if u_save(lnum - 1, lnum + 1) != OK {
-        return;
-    }
-    skip_comment(line, false, false, &raw mut line_is_comment);
-    let mut newline: *mut c_char = xmalloc(
-        line_len
-            .wrapping_add(markerlen)
-            .wrapping_add(strlen(cms))
-            .wrapping_add(1),
-    ) as *mut c_char;
-    strcpy(newline, line);
-    if p.is_null() || line_is_comment {
-        xmemcpyz(
-            newline.add(line_len) as *mut c_void,
-            marker as *const c_void,
-            markerlen,
-        );
-        added = markerlen;
-    } else {
-        strcpy(newline.add(line_len), cms);
-        memcpy(
-            newline.add(line_len).offset(p.offset_from(cms)) as *mut c_void,
-            marker as *const c_void,
-            markerlen,
-        );
-        strcpy(
-            newline
-                .add(line_len)
-                .offset(p.offset_from(cms))
-                .add(markerlen),
-            p.offset(2),
-        );
-        added = markerlen.wrapping_add(strlen(cms)).wrapping_sub(2);
-    }
-    ml_replace_buf(buf, lnum, newline, false, false);
-    if added != 0 {
-        extmark_splice_cols(
-            buf,
-            lnum as c_int - 1,
-            line_len as colnr_T,
-            0,
-            added as colnr_T,
-            kExtmarkUndo,
-        );
+    let lnum = pos.lnum;
+    // SAFETY: the caller's promise.
+    unsafe {
+        let cms = (*buf).b_p_cms;
+        // Where 'commentstring' puts the text, if it has a place for it.
+        let p = strstr(cms, c"%s".as_ptr());
+        let line = ml_get_buf(buf, lnum);
+        let line_len = ml_get_buf_len(buf, lnum) as size_t;
+        if u_save(lnum - 1, lnum + 1) != OK {
+            return;
+        }
+        let mut line_is_comment = false;
+        skip_comment(line, false, false, &raw mut line_is_comment);
+        let newline = xmalloc(
+            line_len
+                .wrapping_add(markerlen)
+                .wrapping_add(strlen(cms))
+                .wrapping_add(1),
+        ) as *mut c_char;
+        strcpy(newline, line);
+        let added = if p.is_null() || line_is_comment {
+            // No '%s' in 'commentstring', or the line already is a comment:
+            // the marker goes on bare.
+            xmemcpyz(
+                newline.add(line_len) as *mut c_void,
+                marker as *const c_void,
+                markerlen,
+            );
+            markerlen
+        } else {
+            strcpy(newline.add(line_len), cms);
+            memcpy(
+                newline.add(line_len).offset(p.offset_from(cms)) as *mut c_void,
+                marker as *const c_void,
+                markerlen,
+            );
+            strcpy(
+                newline
+                    .add(line_len)
+                    .offset(p.offset_from(cms))
+                    .add(markerlen),
+                p.offset(2),
+            );
+            markerlen.wrapping_add(strlen(cms)).wrapping_sub(2)
+        };
+        ml_replace_buf(buf, lnum, newline, false, false);
+        if added != 0 {
+            extmark_splice_cols(
+                buf,
+                lnum as c_int - 1,
+                line_len as colnr_T,
+                0,
+                added as colnr_T,
+                kExtmarkUndo,
+            );
+        }
     }
 }
 
 /// Delete the markers for a fold, causing it to be deleted.
 ///
-/// `lnum_off` — offset for fp->fd_top
+/// `lnum_off` — offset for fold.top()
+///
+/// # Safety
+/// `wp` must be a live window, `fold` one of its folds at `lnum_off`, and
+/// [`parse_marker`] must have run for `wp`.
 pub(super) unsafe fn delete_fold_markers(
-    mut wp: *mut win_T,
-    mut fp: *mut fold_T,
-    mut recursive: bool,
-    mut lnum_off: linenr_T,
+    wp: *mut win_T,
+    fold: Fold,
+    recursive: bool,
+    lnum_off: linenr_T,
 ) {
     if recursive {
-        let mut i: c_int = 0;
-        while i < (*fp).fd_nested.ga_len {
-            delete_fold_markers(
-                wp,
-                fold_at(&(*fp).fd_nested, i),
-                true,
-                lnum_off + (*fp).fd_top,
-            );
-            i += 1;
+        for child in fold.nested().folds() {
+            // SAFETY: the caller's promise, one level down.
+            unsafe { delete_fold_markers(wp, child, true, lnum_off + fold.top()) };
         }
     }
-    fold_del_marker(
-        (*wp).w_buffer,
-        (*fp).fd_top + lnum_off,
-        (*wp).w_onebuf_opt.wo_fmr,
-        foldstartmarkerlen.get(),
-    );
-    fold_del_marker(
-        (*wp).w_buffer,
-        (*fp).fd_top + lnum_off + (*fp).fd_len - 1,
-        foldendmarker.get(),
-        foldendmarkerlen.get(),
-    );
+    // SAFETY: the caller's promise.
+    unsafe {
+        fold_del_marker(
+            (*wp).w_buffer,
+            fold.top() + lnum_off,
+            (*wp).w_onebuf_opt.wo_fmr,
+            foldstartmarkerlen.get(),
+        );
+        fold_del_marker(
+            (*wp).w_buffer,
+            fold.last() + lnum_off,
+            foldendmarker.get(),
+            foldendmarkerlen.get(),
+        );
+    }
 }
 
 /// Delete marker "marker[markerlen]" at the end of line "lnum".
 /// Delete 'commentstring' if it matches.
 /// If the marker is not found, there is no error message.  Could be a missing
 /// close-marker.
+///
+/// # Safety
+/// `buf` must be a live buffer and `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_del_marker(
-    mut buf: *mut buf_T,
-    mut lnum: linenr_T,
-    mut marker: *mut c_char,
-    mut markerlen: size_t,
+    buf: *mut buf_T,
+    lnum: linenr_T,
+    marker: *mut c_char,
+    markerlen: size_t,
 ) {
-    if lnum > (*buf).b_ml.ml_line_count {
+    // SAFETY: the caller's promise.
+    if lnum > unsafe { (*buf).b_ml.ml_line_count } {
         return;
     }
-    let mut cms: *mut c_char = (*buf).b_p_cms;
-    let mut line: *mut c_char = ml_get_buf(buf, lnum);
-    let mut p: *mut c_char = line;
-    while *p as c_int != NUL {
-        if strncmp(p, marker, markerlen) != 0 {
-            p = p.offset(1);
-        } else {
-            let mut len: size_t = markerlen;
+    // SAFETY: the caller's promise; `line` is NUL-terminated, so the walk
+    // below stops inside it.
+    unsafe {
+        let cms = (*buf).b_p_cms;
+        let line = ml_get_buf(buf, lnum);
+        let mut p = line;
+        while *p as c_int != NUL {
+            if strncmp(p, marker, markerlen) != 0 {
+                p = p.offset(1);
+                continue;
+            }
+            let mut len = markerlen;
+            // A numbered marker, `{{{2`.
             if ascii_isdigit(*p.add(len) as c_int) {
                 len = len.wrapping_add(1);
             }
             if *cms as c_int != NUL {
-                let mut cms2: *mut c_char = strstr(cms, c"%s".as_ptr());
+                // The marker may be wrapped in 'commentstring'; if it is, the
+                // comment goes with it.
+                let cms2 = strstr(cms, c"%s".as_ptr());
                 if !cms2.is_null()
                     && p.offset_from(line) >= cms2.offset_from(cms)
                     && strncmp(
@@ -173,7 +213,7 @@ pub(super) unsafe fn fold_del_marker(
                 }
             }
             if u_save(lnum - 1, lnum + 1) == OK {
-                let mut newline: *mut c_char = xmalloc(
+                let newline = xmalloc(
                     (ml_get_buf_len(buf, lnum) as size_t)
                         .wrapping_sub(len)
                         .wrapping_add(1),
@@ -203,12 +243,23 @@ pub(super) unsafe fn fold_del_marker(
 /// Parse 'foldmarker' and set "foldendmarker", "foldstartmarkerlen" and
 /// "foldendmarkerlen".
 /// Relies on the option value to have been checked for correctness already.
-pub(super) unsafe fn parse_marker(mut wp: *mut win_T) {
-    foldendmarker.set(vim_strchr((*wp).w_onebuf_opt.wo_fmr, ',' as c_int));
-    let c2rust_fresh0 = foldendmarker.get();
-    foldendmarker.set((*foldendmarker.ptr()).offset(1));
-    foldstartmarkerlen.set(c2rust_fresh0.offset_from((*wp).w_onebuf_opt.wo_fmr) as size_t);
-    foldendmarkerlen.set(strlen(foldendmarker.get()));
+///
+/// Note that `foldendmarker` points *into* 'foldmarker', so it dangles the
+/// moment the option is set again — which is why every caller re-runs this.
+///
+/// # Safety
+/// `wp` must be a live window.
+pub(super) unsafe fn parse_marker(wp: *mut win_T) {
+    // SAFETY: a live window. 'foldmarker' has already been validated as two
+    // non-empty halves separated by a comma, so the comma is there.
+    unsafe {
+        let foldmarker = (*wp).w_onebuf_opt.wo_fmr;
+        let comma = vim_strchr(foldmarker, ',' as c_int);
+        foldstartmarkerlen.set(comma.offset_from(foldmarker) as size_t);
+        let end = comma.offset(1);
+        foldendmarker.set(end);
+        foldendmarkerlen.set(strlen(end));
+    }
 }
 
 /// Low level function to get the foldlevel for the "marker" method.
@@ -218,65 +269,64 @@ pub(super) unsafe fn parse_marker(mut wp: *mut win_T) {
 /// Careful: This means you can't call this function twice on the same line.
 /// Doesn't use any caching.
 /// Sets flp->start when a start marker was found.
-pub(super) unsafe fn foldlevel_marker(mut flp: *mut fline_T) {
-    let mut start_lvl: c_int = (*flp).lvl;
-    let mut startmarker: *mut c_char = (*(*flp).wp).w_onebuf_opt.wo_fmr;
-    let mut cstart: c_char = *startmarker;
-    startmarker = startmarker.offset(1);
-    let mut cend: c_char = *foldendmarker.get();
-    (*flp).start = 0;
-    (*flp).lvl_next = (*flp).lvl;
-    let mut s: *mut c_char = ml_get_buf((*(*flp).wp).w_buffer, (*flp).lnum + (*flp).off);
-    while *s != 0 {
-        if *s as c_int == cstart as c_int
-            && strncmp(
-                s.offset(1),
-                startmarker,
-                (*foldstartmarkerlen.ptr()).wrapping_sub(1),
-            ) == 0
-        {
-            s = s.add(foldstartmarkerlen.get());
-            if ascii_isdigit(*s as c_int) {
-                let mut n: c_int = atoi(s);
-                if n > 0 {
-                    (*flp).lvl = n;
-                    (*flp).lvl_next = n;
-                    (*flp).start = if n - start_lvl > 1 { n - start_lvl } else { 1 };
+///
+/// # Safety
+/// `flp` must be writable and name a live window and a line inside its
+/// buffer, and [`parse_marker`] must have run for that window.
+pub(super) unsafe fn foldlevel_marker(flp: *mut fline_T) {
+    // SAFETY: the caller's promise; the line is NUL-terminated, so the scan
+    // below stops inside it.
+    unsafe {
+        let start_lvl = (*flp).lvl;
+        let startmarker = (*(*flp).wp).w_onebuf_opt.wo_fmr;
+        let cstart = *startmarker;
+        let cend = *foldendmarker.get();
+        (*flp).start = 0;
+        (*flp).lvl_next = (*flp).lvl;
+        let mut s = ml_get_buf((*(*flp).wp).w_buffer, (*flp).lnum + (*flp).off);
+        while *s != 0 {
+            if *s as c_int == cstart as c_int
+                && strncmp(
+                    s.offset(1),
+                    startmarker.offset(1),
+                    foldstartmarkerlen.get().wrapping_sub(1),
+                ) == 0
+            {
+                s = s.add(foldstartmarkerlen.get());
+                if ascii_isdigit(*s as c_int) {
+                    // `{{{N` sets the level outright.
+                    let n = atoi(s);
+                    if n > 0 {
+                        (*flp).lvl = n;
+                        (*flp).lvl_next = n;
+                        (*flp).start = if n - start_lvl > 1 { n - start_lvl } else { 1 };
+                    }
+                } else {
+                    (*flp).lvl += 1;
+                    (*flp).lvl_next += 1;
+                    (*flp).start += 1;
+                }
+            } else if *s as c_int == cend as c_int
+                && strncmp(
+                    s.offset(1),
+                    foldendmarker.get().offset(1),
+                    foldendmarkerlen.get().wrapping_sub(1),
+                ) == 0
+            {
+                s = s.add(foldendmarkerlen.get());
+                if ascii_isdigit(*s as c_int) {
+                    let n = atoi(s);
+                    if n > 0 {
+                        (*flp).lvl = n;
+                        (*flp).lvl_next = (n - 1).min(start_lvl);
+                    }
+                } else {
+                    (*flp).lvl_next -= 1;
                 }
             } else {
-                (*flp).lvl += 1;
-                (*flp).lvl_next += 1;
-                (*flp).start += 1;
+                s = s.offset(utfc_ptr2len(s) as isize);
             }
-        } else if *s as c_int == cend as c_int
-            && strncmp(
-                s.offset(1),
-                (*foldendmarker.ptr()).offset(1),
-                (*foldendmarkerlen.ptr()).wrapping_sub(1),
-            ) == 0
-        {
-            s = s.add(foldendmarkerlen.get());
-            if ascii_isdigit(*s as c_int) {
-                let mut n_0: c_int = atoi(s);
-                if n_0 > 0 {
-                    (*flp).lvl = n_0;
-                    (*flp).lvl_next = n_0 - 1;
-                    (*flp).lvl_next = if (*flp).lvl_next < start_lvl {
-                        (*flp).lvl_next
-                    } else {
-                        start_lvl
-                    };
-                }
-            } else {
-                (*flp).lvl_next -= 1;
-            }
-        } else {
-            s = s.offset(utfc_ptr2len(s) as isize);
         }
+        (*flp).lvl_next = (*flp).lvl_next.max(0);
     }
-    (*flp).lvl_next = if (*flp).lvl_next > 0 {
-        (*flp).lvl_next
-    } else {
-        0
-    };
 }

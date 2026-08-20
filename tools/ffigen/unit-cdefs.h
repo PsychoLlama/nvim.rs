@@ -5887,6 +5887,7 @@ static const int LC_TIME = 2;
 static const int LEFT_AND_RIGHT_MARGINS = 69;
 static const int LEN = 50;
 static const int LIBUV_SUCCESS = 0;
+static const int LINES_DELETED = 2147483647;
 static const int LINE_BUFFER_MIN_SIZE = 4096;
 static const int LINE_CHANGED = -1;
 static const int LINE_INSERTED = -2;
