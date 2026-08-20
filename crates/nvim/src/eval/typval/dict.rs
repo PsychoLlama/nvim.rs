@@ -123,7 +123,7 @@ pub unsafe extern "C" fn tv_dict_alloc() -> *mut dict_T {
         (*d).dv_scope = VAR_NO_SCOPE;
         (*d).dv_refcount = 0;
         (*d).dv_copyID = 0;
-        QUEUE_INIT(&raw mut (*d).watchers);
+        queue_init(&raw mut (*d).watchers);
         (*d).lua_table_ref = LUA_NOREF as LuaRef;
         d
     }
@@ -145,9 +145,9 @@ pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
             tv_dict_item_free(di);
         }
 
-        while !QUEUE_EMPTY(&raw mut (*d).watchers) {
+        while !queue_empty(&raw mut (*d).watchers) {
             let w = (*d).watchers.next;
-            QUEUE_REMOVE(w);
+            queue_remove(w);
             tv_dict_watcher_free(tv_dict_watcher_node_data(w));
         }
 

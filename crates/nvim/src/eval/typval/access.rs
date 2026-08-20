@@ -19,13 +19,13 @@ use super::*;
 
 /// True when an intrusive queue head has no entries.
 #[inline(always)]
-pub unsafe fn QUEUE_EMPTY(q: *const QUEUE) -> bool {
+pub unsafe fn queue_empty(q: *const QUEUE) -> bool {
     unsafe { q == (*q).next }
 }
 
 /// Make `q` an empty queue head, pointing at itself both ways.
 #[inline(always)]
-pub unsafe fn QUEUE_INIT(q: *mut QUEUE) {
+pub unsafe fn queue_init(q: *mut QUEUE) {
     unsafe {
         (*q).next = q;
         (*q).prev = q;
@@ -34,7 +34,7 @@ pub unsafe fn QUEUE_INIT(q: *mut QUEUE) {
 
 /// Splice `q` in as the last entry of the queue headed by `h`.
 #[inline(always)]
-pub(crate) unsafe fn QUEUE_INSERT_TAIL(h: *mut QUEUE, q: *mut QUEUE) {
+pub(crate) unsafe fn queue_insert_tail(h: *mut QUEUE, q: *mut QUEUE) {
     unsafe {
         (*q).next = h;
         (*q).prev = (*h).prev;
@@ -45,7 +45,7 @@ pub(crate) unsafe fn QUEUE_INSERT_TAIL(h: *mut QUEUE, q: *mut QUEUE) {
 
 /// Unlink `q` from whatever queue it is on.
 #[inline(always)]
-pub(crate) unsafe fn QUEUE_REMOVE(q: *mut QUEUE) {
+pub(crate) unsafe fn queue_remove(q: *mut QUEUE) {
     unsafe {
         (*(*q).prev).next = (*q).next;
         (*(*q).next).prev = (*q).prev;
@@ -190,7 +190,7 @@ pub unsafe fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
 pub unsafe fn tv_dict_is_watched(d: *const dict_T) -> bool {
     unsafe {
         d.as_ref()
-            .is_some_and(|d| !QUEUE_EMPTY(&raw const d.watchers))
+            .is_some_and(|d| !queue_empty(&raw const d.watchers))
     }
 }
 

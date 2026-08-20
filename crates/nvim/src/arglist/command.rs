@@ -301,14 +301,14 @@ pub unsafe fn ex_argdedupe(_eap: *mut exarg_T) {
     while i < argcount() {
         // Expand each argument to a full path, to catch different paths
         // leading to the same file.
-        // SAFETY: `i` is in range; `FullName_save` hands back an owned name.
-        let first = unsafe { FullName_save((*arg(i)).ae_fname, false) };
+        // SAFETY: `i` is in range; `full_name_save` hands back an owned name.
+        let first = unsafe { full_name_save((*arg(i)).ae_fname, false) };
         let mut j = i + 1;
         while j < argcount() {
             // SAFETY: `j` is in range, and the second name is freed as soon
             // as the comparison is done with it.
             let duplicate = unsafe {
-                let second = FullName_save((*arg(j)).ae_fname, false);
+                let second = full_name_save((*arg(j)).ae_fname, false);
                 let duplicate = path_fnamecmp(first, second) == 0;
                 xfree(second as *mut c_void);
                 duplicate

@@ -241,7 +241,7 @@ pub unsafe fn showmatches(
         }
 
         if (*xp).xp_numfiles == -1 {
-            FreeWild(numMatches, matches);
+            free_wild(numMatches, matches);
         }
 
         Expanded::Ok

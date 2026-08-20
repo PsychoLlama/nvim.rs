@@ -148,7 +148,7 @@ unsafe fn hgr_search_files_in_dir(
             }
             fi += 1;
         }
-        FreeWild(fcount, fnames);
+        free_wild(fcount, fnames);
     }
 }
 

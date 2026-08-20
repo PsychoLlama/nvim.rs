@@ -39,7 +39,7 @@ use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, os_rmdir};
-use crate::path::{FullName_save, path_tail, path_tail_with_sep};
+use crate::path::{full_name_save, path_tail, path_tail_with_sep};
 use crate::semsg_c;
 use crate::types::{
     CdScope, EvalFuncData, MAXPATHL, OK, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, kCdScopeGlobal,
@@ -528,7 +528,7 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     // The "D" and "R" flags: deferred deletion of the created directory.
     if result == OK as varnumber_T && created.is_null() && (defer || defer_recurse) {
         // SAFETY: `dir` is NUL-terminated; the answer is nvim's heap.
-        created = unsafe { FullName_save(dir, false) };
+        created = unsafe { full_name_save(dir, false) };
     }
     if !created.is_null() {
         defer_delete(created, defer_recurse);

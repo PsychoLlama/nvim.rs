@@ -92,7 +92,7 @@ use crate::os::cshim::{gettext, memmove, strchr, strncasecmp, strncmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::os::time::{os_delay, os_hrtime};
-use crate::path::{FreeWild, expand_wildcards, path_tail, vim_ispathsep};
+use crate::path::{expand_wildcards, free_wild, path_tail, vim_ispathsep};
 use crate::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };

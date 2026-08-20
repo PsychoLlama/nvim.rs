@@ -75,7 +75,7 @@ use crate::os::fs::os_isdir;
 use crate::os::lang::{get_lang_arg, get_locales};
 use crate::os::users::{UserMatch, get_users, match_user};
 use crate::path::{
-    FreeWild, after_pathsep, expand_wildcards, expand_wildcards_eval, match_suffix,
+    after_pathsep, expand_wildcards, expand_wildcards_eval, free_wild, match_suffix,
     path_is_absolute, path_tail, vim_ispathsep,
 };
 use crate::popupmenu::{pum_clear, pum_display, pum_get_height, pum_undisplay, pum_visible};

@@ -133,7 +133,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                         &raw mut dir,
                     );
                     if flags != DICT_EXACT {
-                        FreeWild(count, files);
+                        free_wild(count, files);
                     }
                 }
                 if flags != 0 {

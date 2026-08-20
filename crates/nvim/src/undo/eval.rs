@@ -167,7 +167,7 @@ pub unsafe fn f_undofile(
     if *fname as c_int == NUL {
         (*rettv).vval.v_string = ptr::null_mut();
     } else {
-        let mut ffname: *mut c_char = FullName_save(fname, true);
+        let mut ffname: *mut c_char = full_name_save(fname, true);
         if !ffname.is_null() {
             (*rettv).vval.v_string = u_get_undo_file_name(ffname, false);
         }

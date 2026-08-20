@@ -84,7 +84,7 @@ use crate::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::os::input::line_breakcheck;
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::{
-    FreeWild, add_pathsep, append_path, concat_fnames, fix_fname, gen_expand_wildcards,
+    add_pathsep, append_path, concat_fnames, fix_fname, free_wild, gen_expand_wildcards,
     get_past_head, path_fnamecmp, path_fnamencmp, path_tail, path_with_extension, vim_ispathsep,
     vim_ispathsep_nocolon,
 };

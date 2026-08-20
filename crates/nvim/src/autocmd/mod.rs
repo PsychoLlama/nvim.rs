@@ -55,7 +55,7 @@ use crate::os::cshim::{gettext, snprintf, strchr, strncasecmp, strncmp};
 use crate::os::env::expand_env_save;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_now;
-use crate::path::{FullName_save, path_fnamecmp, path_tail};
+use crate::path::{full_name_save, path_fnamecmp, path_tail};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::runtime::{estack_pop, estack_push, exestack};

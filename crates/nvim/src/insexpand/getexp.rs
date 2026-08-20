@@ -421,9 +421,9 @@ pub(crate) unsafe fn get_next_filename_completion() {
                         max_score = current_score;
                     }
                 }
-                FreeWild(num_matches, matches);
+                free_wild(num_matches, matches);
             } else if leader_len > 0 {
-                FreeWild(num_matches, matches);
+                free_wild(num_matches, matches);
                 num_matches = 0;
             }
 

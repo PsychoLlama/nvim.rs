@@ -186,7 +186,7 @@ pub unsafe fn has_autocmd(
 ) -> bool {
     unsafe {
         let tail = path_tail(sfname);
-        let fname = FullName_save(sfname, false);
+        let fname = full_name_save(sfname, false);
         if fname.is_null() {
             return false;
         }

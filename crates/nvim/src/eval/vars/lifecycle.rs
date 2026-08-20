@@ -261,7 +261,7 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
         (*dict_var).di_tv.v_lock = VAR_FIXED;
         (*dict_var).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
         (*dict_var).di_key[0] = NUL as c_char;
-        QUEUE_INIT(&raw mut (*dict).watchers);
+        queue_init(&raw mut (*dict).watchers);
     }
 }
 

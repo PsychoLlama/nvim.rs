@@ -861,7 +861,7 @@ pub(crate) unsafe fn gen_expand_wildcards_and_cb(
             return FAIL;
         }
         visitor.invoke(num_files, files, all);
-        FreeWild(num_files, files);
+        free_wild(num_files, files);
     }
     OK
 }

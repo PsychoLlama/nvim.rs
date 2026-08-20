@@ -46,7 +46,7 @@ use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::{gettext, strncmp};
 use crate::os::fs::os_fopen;
-use crate::path::FreeWild;
+use crate::path::free_wild;
 use crate::pos::MAXCOL;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
@@ -210,7 +210,7 @@ pub unsafe fn ex_help(eap: *mut exarg_T) {
                 semsg_c!(gettext(c"E661: No '%s' help for %s".as_ptr()), lang, arg);
             }
             if n != FAIL {
-                FreeWild(num_matches, matches);
+                free_wild(num_matches, matches);
             }
             xfree(allocated_arg.cast::<c_void>());
         }
@@ -220,7 +220,7 @@ pub unsafe fn ex_help(eap: *mut exarg_T) {
     // SAFETY: `i` is below `num_matches`.
     let tag = unsafe { xstrdup(*matches.offset(i as isize)) };
     // SAFETY: `matches` is `find_tags`'s allocation.
-    unsafe { FreeWild(num_matches, matches) };
+    unsafe { free_wild(num_matches, matches) };
 
     // SAFETY: the window list is live on the main thread; `tag` is owned.
     unsafe {

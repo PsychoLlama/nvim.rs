@@ -47,7 +47,7 @@ use crate::os::fs::{
 };
 use crate::os::input::fast_breakcheck;
 use crate::os::time::{os_localtime_r, os_time, tm_zeroed};
-use crate::path::{FullName_save, concat_fnames, path_tail, vim_ispathsep};
+use crate::path::{concat_fnames, full_name_save, path_tail, vim_ispathsep};
 use crate::pos::clearpos;
 use crate::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::spell::spell_check_window;

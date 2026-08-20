@@ -354,7 +354,7 @@ pub unsafe fn apply_autocmds_group(
                     // Don't expand it later either.
                     autocmd_fname_full.set(true);
                 } else {
-                    fname = FullName_save(fname, false);
+                    fname = full_name_save(fname, false);
                 }
             }
             if fname.is_null() {

@@ -51,7 +51,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 WriteRequest::filter(),
             ) != FAIL
         {
-            fullname = FullName_save((*eap).arg, false);
+            fullname = full_name_save((*eap).arg, false);
             esc_name = vim_strsave_shellescape(
                 if !fullname.is_null() {
                     fullname

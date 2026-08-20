@@ -32,7 +32,7 @@ use crate::message::emsg;
 use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
-use crate::path::{ExpandFlags, FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
+use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path};
 use crate::semsg_c;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
@@ -229,7 +229,7 @@ fn to_lower(c: c_char) -> c_char {
     }
 }
 
-/// A `gen_expand_wildcards` result, freed with `FreeWild` when dropped.
+/// A `gen_expand_wildcards` result, freed with `free_wild` when dropped.
 struct Wildcards {
     count: c_int,
     names: *mut *mut c_char,
@@ -239,7 +239,7 @@ impl Drop for Wildcards {
     fn drop(&mut self) {
         // SAFETY: `names` is `gen_expand_wildcards`'s own allocation of
         // `count` strings, and nothing else owns it.
-        unsafe { FreeWild(self.count, self.names) };
+        unsafe { free_wild(self.count, self.names) };
     }
 }
 

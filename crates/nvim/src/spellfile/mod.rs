@@ -10,7 +10,7 @@ use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
 use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::fs::{os_isdir, os_path_exists};
-use crate::path::{FreeWild, path_tail};
+use crate::path::{free_wild, path_tail};
 use crate::semsg_c;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
@@ -317,7 +317,7 @@ pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
         return;
     }
     mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false);
-    FreeWild(fcount, fnames);
+    free_wild(fcount, fnames);
 }
 unsafe fn mkspell(
     mut fcount: ::core::ffi::c_int,

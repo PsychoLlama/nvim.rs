@@ -305,7 +305,7 @@ pub(crate) unsafe fn ins_compl_add_matches(
                 dir = FORWARD;
             }
         }
-        FreeWild(num_matches, matches);
+        free_wild(num_matches, matches);
     }
 }
 

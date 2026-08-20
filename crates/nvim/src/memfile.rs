@@ -63,7 +63,7 @@ use crate::os::fs::{
     os_set_cloexec,
 };
 use crate::os::input::{os_breakcheck, os_char_avail};
-use crate::path::FullName_save;
+use crate::path::full_name_save;
 use crate::types::{FileInfo, blocknr_T, buf_T, off_T};
 use ::libc::{__errno_location, close, lseek, strerror};
 
@@ -877,7 +877,7 @@ pub unsafe fn mf_free_fnames(mfp: *mut memfile_T) {
 /// worked out afresh.
 pub unsafe fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut c_char) {
     unsafe {
-        let full = FullName_save(fname, false);
+        let full = full_name_save(fname, false);
         (*mfp).fname = Some(take_cstring(fname));
         (*mfp).ffname = (!full.is_null()).then(|| take_cstring(full));
     }

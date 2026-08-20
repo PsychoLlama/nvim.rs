@@ -31,7 +31,7 @@ use crate::main::{current_sctx, e_invarg2, p_fs};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_flush, file_open, file_write};
-use crate::path::FullName_save;
+use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::semsg_c;
 use crate::types::{
@@ -324,7 +324,7 @@ fn in_lua_script() -> bool {
 fn defer_delete(fname: &CStr) {
     // SAFETY: `fname` is NUL-terminated; the answer is a string in nvim's
     // heap, which the deferred call takes over.
-    let full = unsafe { FullName_save(fname.as_ptr(), false) };
+    let full = unsafe { full_name_save(fname.as_ptr(), false) };
     let mut tv = typval_T {
         v_type: VAR_STRING,
         v_lock: VAR_UNLOCKED,

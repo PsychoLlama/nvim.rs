@@ -744,7 +744,7 @@ pub unsafe fn recover_names(
                         != 0
                     {
                         // Drop it and move the rest down. When the array
-                        // empties it is freed here, since FreeWild() below
+                        // empties it is freed here, since free_wild() below
                         // will not be reached.
                         xfree((*files.offset(i as isize)).cast());
                         num_files -= 1;
@@ -820,7 +820,7 @@ pub unsafe fn recover_names(
                 xfree((*name).cast());
             }
             if num_files > 0 {
-                FreeWild(num_files, files);
+                free_wild(num_files, files);
             }
         }
         msg_ext_skip_flush.set(false);

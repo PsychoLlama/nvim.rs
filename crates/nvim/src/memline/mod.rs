@@ -61,7 +61,7 @@ use crate::os::proc::os_proc_running;
 use crate::os::time::{os_ctime_r, os_time};
 use crate::os::users::{os_get_uname, os_get_username};
 use crate::path::{
-    FreeWild, after_pathsep, concat_fnames, expand_wildcards, fix_fname, path_fnamecmp,
+    after_pathsep, concat_fnames, expand_wildcards, fix_fname, free_wild, path_fnamecmp,
     path_full_compare, path_is_absolute, path_tail, same_directory, shorten_dir, vim_full_name,
     vim_ispathsep,
 };

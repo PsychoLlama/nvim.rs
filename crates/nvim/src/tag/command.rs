@@ -19,7 +19,7 @@ use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
-/// The matches of the tag last looked up. Owned; `FreeWild`d when replaced.
+/// The matches of the tag last looked up. Owned; `free_wild`d when replaced.
 static matches: GlobalCell<*mut *mut c_char> = GlobalCell::new(ptr::null_mut());
 
 /// How many of them there are.
@@ -652,14 +652,14 @@ impl DoTag {
                 emsg(gettext(
                     c"E1299: Window unexpectedly closed while searching for tags".as_ptr(),
                 ));
-                FreeWild(new_num_matches, new_matches);
+                free_wild(new_num_matches, new_matches);
                 return false;
             }
 
             if !self.new_tag && !other {
                 reorder_matches(new_matches, new_num_matches);
             }
-            FreeWild(num_matches.get(), matches.get());
+            free_wild(num_matches.get(), matches.get());
             num_matches.set(new_num_matches);
             matches.set(new_matches);
             true
@@ -952,7 +952,7 @@ unsafe fn reorder_matches(new_matches: *mut *mut c_char, new_num_matches: c_int)
 pub(crate) unsafe fn forget_matches() {
     // SAFETY: the caller's promise; the list is ours.
     unsafe {
-        FreeWild(num_matches.get(), matches.get());
+        free_wild(num_matches.get(), matches.get());
         num_matches.set(0);
     }
 }

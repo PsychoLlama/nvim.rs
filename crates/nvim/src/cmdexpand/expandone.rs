@@ -499,7 +499,7 @@ pub unsafe fn expand_one(
 
         // Free the old names.
         if (*xp).xp_numfiles != -1 && mode != WildMode::All && mode != WildMode::Longest {
-            FreeWild((*xp).xp_numfiles, (*xp).xp_files);
+            free_wild((*xp).xp_numfiles, (*xp).xp_files);
             (*xp).xp_numfiles = -1;
             xfree((*xp).xp_orig as *mut c_void);
             (*xp).xp_orig = ptr::null_mut();
@@ -598,7 +598,7 @@ pub unsafe fn expand_init(xp: *mut expand_T) {
 pub unsafe fn expand_cleanup(xp: *mut expand_T) {
     unsafe {
         if (*xp).xp_numfiles >= 0 {
-            FreeWild((*xp).xp_numfiles, (*xp).xp_files);
+            free_wild((*xp).xp_numfiles, (*xp).xp_files);
             (*xp).xp_numfiles = -1;
         }
         xfree((*xp).xp_orig as *mut c_void);

@@ -45,7 +45,7 @@ pub unsafe extern "C" fn tv_dict_watcher_add(
         (*watcher).callback = callback;
         (*watcher).busy = false;
         (*watcher).needs_free = false;
-        QUEUE_INSERT_TAIL(&raw mut (*dict).watchers, &raw mut (*watcher).node);
+        queue_insert_tail(&raw mut (*dict).watchers, &raw mut (*watcher).node);
     }
 }
 
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn tv_dict_watcher_remove(
         if queue_is_busy {
             (*watcher).needs_free = true;
         } else {
-            QUEUE_REMOVE(w);
+            queue_remove(w);
             tv_dict_watcher_free(watcher);
         }
         true
@@ -309,7 +309,7 @@ pub unsafe fn tv_dict_watcher_notify(
                 let next = (*w).next;
                 let watcher = tv_dict_watcher_node_data(w);
                 if (*watcher).needs_free {
-                    QUEUE_REMOVE(w);
+                    queue_remove(w);
                     tv_dict_watcher_free(watcher);
                 }
                 w = next;

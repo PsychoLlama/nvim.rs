@@ -27,13 +27,13 @@ unsafe fn name_of(p: *const c_char, len: usize) -> Name {
     Name::from_bytes(unsafe { slice::from_raw_parts(p.cast::<u8>(), len) })
 }
 
-/// `FullName_save`'s answer, owned.
+/// `full_name_save`'s answer, owned.
 ///
 /// # Safety
 /// `p` must be a NUL-terminated string.
 unsafe fn full_name_of(p: *const c_char, force: bool) -> Name {
     unsafe {
-        let full = FullName_save(p, force);
+        let full = full_name_save(p, force);
         let name = Name::from_ptr(full);
         xfree(full.cast());
         name

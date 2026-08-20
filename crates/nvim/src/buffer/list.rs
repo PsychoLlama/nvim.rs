@@ -43,7 +43,7 @@ use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptS
 use crate::optionstr::clear_string_option;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_fileid;
-use crate::path::FullName_save;
+use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::semsg_c;
@@ -708,7 +708,7 @@ pub(crate) unsafe fn buflist_getfpos() {
 /// The buffer for `fname`, resolved to a full path first.
 pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> *mut buf_T {
     // SAFETY: a NUL-terminated name; the answer is an allocation or null.
-    let ffname = unsafe { FullName_save(fname, true) };
+    let ffname = unsafe { full_name_save(fname, true) };
     if ffname.is_null() {
         return ptr::null_mut();
     }

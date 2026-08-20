@@ -303,7 +303,7 @@ unsafe fn expand_rtp_entry(
     let mut files: *mut *mut c_char = ptr::null_mut();
     let mut pat = [entry];
     // SAFETY: a one-element pattern array; the matches are ours until
-    // `FreeWild`.
+    // `free_wild`.
     unsafe {
         if gen_expand_wildcards(
             1,
@@ -320,7 +320,7 @@ unsafe fn expand_rtp_entry(
             // strictly increasing.
             push_path(search_path, rtp_used, *files.add(i), after, pos_in_rtp);
         }
-        FreeWild(num_files, files);
+        free_wild(num_files, files);
     }
 }
 

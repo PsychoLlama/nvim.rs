@@ -18,7 +18,7 @@ use core::{ptr, slice};
 
 /// The names one directory's wildcard expansion produced.
 ///
-/// Owns the array `expand_wildcards` handed back; `FreeWild` is the only way
+/// Owns the array `expand_wildcards` handed back; `free_wild` is the only way
 /// to give it back, so the list frees itself when its stack frame is
 /// dropped.
 pub(crate) struct FileList {
@@ -48,7 +48,7 @@ impl FileList {
     /// # Safety
     /// `name` must hold `namelen` readable bytes.
     pub(crate) unsafe fn of_one(name: *const c_char, namelen: usize) -> Self {
-        // SAFETY: the caller's promise. `FreeWild` frees the entry and then
+        // SAFETY: the caller's promise. `free_wild` frees the entry and then
         // the array, so both are taken from the allocator it gives them to.
         unsafe {
             let names = xmalloc(size_of::<*mut c_char>()).cast::<*mut c_char>();
@@ -73,7 +73,7 @@ impl Drop for FileList {
     fn drop(&mut self) {
         // SAFETY: the array and its entries are ours, and nothing else holds
         // them.
-        unsafe { FreeWild(self.len, self.names) };
+        unsafe { free_wild(self.len, self.names) };
     }
 }
 

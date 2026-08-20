@@ -129,7 +129,7 @@ pub const ENV_SEPCHAR: c_int = ':' as c_int;
 ///
 /// # Safety
 /// `fname` must be a NUL-terminated string, or NULL.
-pub unsafe fn FullName_save(fname: *const c_char, force: bool) -> *mut c_char {
+pub unsafe fn full_name_save(fname: *const c_char, force: bool) -> *mut c_char {
     unsafe {
         if fname.is_null() {
             return core::ptr::null_mut();
@@ -143,7 +143,7 @@ pub unsafe fn FullName_save(fname: *const c_char, force: bool) -> *mut c_char {
     }
 }
 
-/// [`FullName_save`] for a name that may already be absolute, in which case
+/// [`full_name_save`] for a name that may already be absolute, in which case
 /// it is only copied.
 ///
 /// # Safety
@@ -153,7 +153,7 @@ pub unsafe fn save_abs_path(name: *const c_char) -> *mut c_char {
         if path_is_absolute(name) {
             xstrdup(name)
         } else {
-            FullName_save(name, true)
+            full_name_save(name, true)
         }
     }
 }
@@ -446,7 +446,7 @@ pub unsafe extern "C" fn vim_full_name(
 /// # Safety
 /// `fname` must be a NUL-terminated string, or NULL.
 pub unsafe fn fix_fname(fname: *const c_char) -> *mut c_char {
-    unsafe { FullName_save(fname, true) }
+    unsafe { full_name_save(fname, true) }
 }
 
 /// Put the absolute name of the directory `directory` — relative to the

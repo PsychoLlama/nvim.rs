@@ -27,7 +27,7 @@ use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::*;
 use crate::os::cshim::{strncmp, strstr};
 use crate::os::env::{os_setenv, vim_getenv};
-use crate::path::{FullName_save, path_tail};
+use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
     BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptIndex, OptVal, OptValData,
@@ -100,7 +100,7 @@ pub unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
             xfree(existing.cast::<c_void>());
             return;
         }
-        let full = FullName_save(fname, false);
+        let full = full_name_save(fname, false);
         if !full.is_null() {
             os_setenv(envname, full, 1);
             xfree(full.cast::<c_void>());

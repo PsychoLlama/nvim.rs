@@ -505,7 +505,7 @@ impl Jump {
             if (*curwin.get()).w_onebuf_opt.wo_pvw == 0 {
                 // Entering a reused window may change directory
                 // (autocommands), so make the name absolute first.
-                self.full_fname = FullName_save(self.fname(), false);
+                self.full_fname = full_name_save(self.fname(), false);
                 prepare_tagpreview(true);
             }
         }

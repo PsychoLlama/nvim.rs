@@ -49,7 +49,7 @@ use crate::option::magic_isset;
 use crate::os::cshim::memmove;
 use crate::os::input::os_breakcheck;
 use crate::path::{
-    ExpandFlags, FullName_save, expand_wildcards, fix_fname, gen_expand_wildcards, path_fnamecmp,
+    ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
 };
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};

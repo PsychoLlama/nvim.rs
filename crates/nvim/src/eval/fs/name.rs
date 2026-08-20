@@ -39,7 +39,7 @@ use crate::memory::xfree;
 use crate::os::env::{expand_env_save, home_replace};
 use crate::os::fs::{os_dirname, os_isdir};
 use crate::path::{
-    FullName_save, add_pathsep, after_pathsep, get_past_head, path_fnamencmp, path_tail,
+    add_pathsep, after_pathsep, full_name_save, get_past_head, path_fnamencmp, path_tail,
     vim_is_abs_name,
 };
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
@@ -243,7 +243,7 @@ fn expand_env(p: *mut c_char) -> *mut c_char {
 /// how an embedded `/.` or `/..` is removed.
 fn full_name(p: *mut c_char, force: bool) -> *mut c_char {
     // SAFETY: `p` is a NUL-terminated name.
-    unsafe { FullName_save(p, force) }
+    unsafe { full_name_save(p, force) }
 }
 
 fn is_abs_name(s: &CStr) -> bool {
@@ -347,7 +347,7 @@ fn full_path_stage(f: Fname, tilde_file: bool) -> Option<()> {
     }
 
     // A "/." or "/.." anywhere forces the expansion, which is what removes
-    // it; `FullName_save` is slow, so it is skipped when nothing needs it.
+    // it; `full_name_save` is slow, so it is skipped when nothing needs it.
     let b = f.cstr().to_bytes();
     let mut i = 0;
     while at(b, i) != 0 {

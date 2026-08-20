@@ -104,7 +104,7 @@ use crate::os::fs::{
 };
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::path::{
-    FreeWild, PATHSEP, after_pathsep, concat_fnames, fix_fname, gen_expand_wildcards,
+    PATHSEP, after_pathsep, concat_fnames, fix_fname, free_wild, gen_expand_wildcards,
     path_fnamecmp, path_is_absolute, path_tail, path_try_shorten_fname, vim_is_abs_name,
 };
 use crate::pos::MAXLNUM;

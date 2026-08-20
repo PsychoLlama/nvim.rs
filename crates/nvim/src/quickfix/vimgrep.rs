@@ -44,7 +44,7 @@ fn vgr_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
 }
 
 /// The files named on the command line, as `get_arglist_exp` expanded them.
-/// Owns the array, which `FreeWild` is the only way to give back.
+/// Owns the array, which `free_wild` is the only way to give back.
 struct Files {
     names: *mut *mut c_char,
     count: c_int,
@@ -86,7 +86,7 @@ impl Drop for Files {
     fn drop(&mut self) {
         // SAFETY: the array and its entries are ours, and nothing else holds
         // them.
-        unsafe { FreeWild(self.count, self.names) };
+        unsafe { free_wild(self.count, self.names) };
     }
 }
 

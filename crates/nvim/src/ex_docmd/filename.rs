@@ -39,7 +39,7 @@ use crate::message::{emsg, msg_make};
 use crate::normal::find_ident_under_cursor;
 use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::os::env::{expand_env_esc, expand_env_save};
-use crate::path::{FullName_save, path_has_wildcard, path_tail, path_try_shorten_fname};
+use crate::path::{full_name_save, path_has_wildcard, path_tail, path_try_shorten_fname};
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
 use crate::strings::{strrep, vim_strchr, vim_strsave_escaped};
@@ -531,7 +531,7 @@ pub unsafe fn eval_vars(
                     // and the shortened form is kept.
                     if !(*autocmd_fname.ptr()).is_null() && !autocmd_fname_full.get() {
                         autocmd_fname_full.set(true);
-                        result = FullName_save(autocmd_fname.get(), false);
+                        result = full_name_save(autocmd_fname.get(), false);
                         xstrlcpy(autocmd_fname.get(), result, MAXPATHL as size_t);
                         xfree(result as *mut c_void);
                     }

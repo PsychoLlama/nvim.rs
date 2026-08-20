@@ -25,7 +25,7 @@ use crate::memory::{xfree, xmemdupz, xstrlcpy};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::path::{
-    FullName_save, dir_of_file_exists, get_past_head, path_tail_with_sep, vim_ispathsep,
+    dir_of_file_exists, full_name_save, get_past_head, path_tail_with_sep, vim_ispathsep,
 };
 use crate::semsg_c;
 use crate::types::{Directory, int32_t, size_t};
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn os_mkdir_recurse(
         // SAFETY: the caller's out-parameter, checked non-null.
         if !created.is_null() && unsafe { (*created).is_null() } {
             // SAFETY: same; it takes the allocation over.
-            unsafe { *created = FullName_save(curdir.as_ptr().cast(), false) };
+            unsafe { *created = full_name_save(curdir.as_ptr().cast(), false) };
         }
     }
     0

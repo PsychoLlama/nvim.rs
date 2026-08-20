@@ -37,7 +37,7 @@ use crate::os::env::expand_env_esc;
 use crate::os::fs::{os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir, os_path_exists};
 use crate::os::input::os_breakcheck;
 use crate::path::{
-    ExpandFlags, FreeWild, FullName_save, after_pathsep, expand_wildcards, path_fnamecmp,
+    ExpandFlags, after_pathsep, expand_wildcards, free_wild, full_name_save, path_fnamecmp,
     path_fnamencmp, path_has_drive_letter, path_is_url, path_shorten_fname, path_tail,
     path_tail_with_sep, path_with_url, pathcmp, simplify_filename, vim_is_abs_name, vim_ispathsep,
 };

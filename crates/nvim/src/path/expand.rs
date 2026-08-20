@@ -233,7 +233,7 @@ unsafe fn wants_path_search(p: *const c_char, flags: ExpandFlags) -> bool {
 ///
 /// Answers OK when names were found, and FAIL otherwise — in which case
 /// `num_file` and `file` are either untouched or set to zero and NULL. What
-/// lands in `file` is the caller's, to be freed with [`FreeWild`].
+/// lands in `file` is the caller's, to be freed with [`free_wild`].
 ///
 /// # Safety
 /// `pat` must hold `num_pat` NUL-terminated strings, and `num_file` and
@@ -369,7 +369,7 @@ pub unsafe fn gen_expand_wildcards(
 ///
 /// # Safety
 /// `files` must be NULL, or an allocated array of `count` allocated strings.
-pub unsafe fn FreeWild(count: c_int, files: *mut *mut c_char) {
+pub unsafe fn free_wild(count: c_int, files: *mut *mut c_char) {
     unsafe {
         if count <= 0 || files.is_null() {
             return;
@@ -550,7 +550,7 @@ pub unsafe fn expand_wildcards(
             for i in 0..*num_files as usize {
                 let name = *(*files).add(i);
                 debug_assert!(!name.is_null(), "path: a match with no name");
-                let ffname = FullName_save(name, false);
+                let ffname = full_name_save(name, false);
                 debug_assert!(!ffname.is_null(), "path: a match with no full name");
                 if match_file_list(p_wig.get(), name, ffname) {
                     xfree(name.cast());

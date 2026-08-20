@@ -85,7 +85,7 @@ use crate::os::cshim::{gettext, snprintf, strncmp};
 use crate::os::env::{os_env_exists, os_unsetenv};
 use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove};
 use crate::os::shell::{ShellOpts, call_shell};
-use crate::path::FullName_save;
+use crate::path::full_name_save;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};

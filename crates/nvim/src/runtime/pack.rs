@@ -644,7 +644,7 @@ unsafe fn pack_has_entries(buf: *mut c_char) -> bool {
             ExpandFlags::DIR,
         ) == OK
         {
-            FreeWild(num_files, files);
+            free_wild(num_files, files);
         }
     }
     num_files > 0
