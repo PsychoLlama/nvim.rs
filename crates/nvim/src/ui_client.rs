@@ -23,7 +23,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::api::private::dispatch::KeyDict_highlight_get_field;
+use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::{
     api_dict_to_keydict, api_free_array, api_metadata, api_set_error, copy_array, cstr_as_string,
 };
@@ -61,7 +61,7 @@ use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
-    KeyDict_highlight, KeySetLink, Object, ObjectType, TUIData, UIClientHandler, dict_T, garray_T,
+    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, dict_T, garray_T,
     kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
 };
@@ -767,7 +767,7 @@ unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
         let mut dict: KeyDict_highlight = core::mem::zeroed();
         if !api_dict_to_keydict(
             (&raw mut dict).cast::<c_void>(),
-            Some(KeyDict_highlight_get_field as unsafe fn(*const c_char, usize) -> *mut KeySetLink),
+            Some(key_dict_highlight_get_field),
             d,
             &raw mut err,
         ) {

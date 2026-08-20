@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::dispatch::{
-    KeyDict_cmd_magic_get_field, KeyDict_cmd_mods_filter_get_field, KeyDict_cmd_mods_get_field,
+    key_dict_cmd_magic_get_field, key_dict_cmd_mods_filter_get_field, key_dict_cmd_mods_get_field,
 };
 use crate::api::private::helpers::{
     api_dict_to_keydict, api_set_error, api_set_sctx, api_typename, arena_array, arena_dict,

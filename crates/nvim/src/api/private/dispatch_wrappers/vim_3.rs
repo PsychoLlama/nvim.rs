@@ -81,15 +81,15 @@ pub unsafe fn handle_nvim_select_popupmenu_item(
         wrong_type(error, 3, c"nvim_select_popupmenu_item", c"Boolean");
         return NIL;
     };
-    let mut arg_4: KeyDict_empty = match read_keydict(Some(KeyDict_empty_get_field), args[3], error)
-    {
-        KeySetArg::Read(v) => v,
-        KeySetArg::Refused => return NIL,
-        KeySetArg::WrongType => {
-            wrong_type(error, 4, c"nvim_select_popupmenu_item", c"Dict(empty) *");
-            return NIL;
-        }
-    };
+    let mut arg_4: KeyDict_empty =
+        match read_keydict(Some(key_dict_empty_get_field), args[3], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 4, c"nvim_select_popupmenu_item", c"Dict(empty) *");
+                return NIL;
+            }
+        };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     unsafe { nvim_select_popupmenu_item(arg_1, arg_2, arg_3, &raw mut arg_4) };
@@ -351,7 +351,7 @@ pub unsafe fn handle_nvim_set_hl(
         return NIL;
     };
     let mut arg_3: KeyDict_highlight =
-        match read_keydict(Some(KeyDict_highlight_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_highlight_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -462,7 +462,7 @@ pub unsafe fn handle_nvim_set_keymap(
         return NIL;
     };
     let mut arg_4: KeyDict_keymap =
-        match read_keydict(Some(KeyDict_keymap_get_field), args[3], error) {
+        match read_keydict(Some(key_dict_keymap_get_field), args[3], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

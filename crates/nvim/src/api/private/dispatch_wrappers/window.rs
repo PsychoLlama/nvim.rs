@@ -675,7 +675,7 @@ pub unsafe fn handle_nvim_win_text_height(
         return NIL;
     };
     let mut arg_2: KeyDict_win_text_height =
-        match read_keydict(Some(KeyDict_win_text_height_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_win_text_height_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

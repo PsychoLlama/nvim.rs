@@ -91,22 +91,23 @@ use crate::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
 use crate::api::private::dispatch::{
-    KeyDict_buf_attach_get_field, KeyDict_buf_delete_get_field, KeyDict_clear_autocmds_get_field,
-    KeyDict_cmd_get_field, KeyDict_cmd_opts_get_field, KeyDict_complete_set_get_field,
-    KeyDict_context_get_field, KeyDict_create_augroup_get_field, KeyDict_create_autocmd_get_field,
-    KeyDict_echo_opts_get_field, KeyDict_empty_get_field, KeyDict_eval_statusline_get_field,
-    KeyDict_exec_autocmds_get_field, KeyDict_exec_opts_get_field, KeyDict_get_autocmds_get_field,
-    KeyDict_get_commands_get_field, KeyDict_get_extmark_get_field, KeyDict_get_extmarks_get_field,
-    KeyDict_get_highlight_get_field, KeyDict_get_ns_get_field, KeyDict_highlight_get_field,
-    KeyDict_keymap_get_field, KeyDict_ns_opts_get_field, KeyDict_open_term_get_field,
-    KeyDict_option_get_field, KeyDict_redraw_get_field, KeyDict_runtime_get_field,
-    KeyDict_set_decoration_provider_get_field, KeyDict_set_extmark_get_field,
-    KeyDict_tabpage_config_get_field, KeyDict_user_command_get_field, KeyDict_win_config_get_field,
-    KeyDict_win_text_height_get_field, buf_attach_table, buf_delete_table, clear_autocmds_table,
-    cmd_opts_table, cmd_table, complete_set_table, context_table, create_augroup_table,
-    create_autocmd_table, echo_opts_table, empty_table, eval_statusline_table, exec_autocmds_table,
-    exec_opts_table, get_autocmds_table, get_commands_table, get_extmark_table, get_extmarks_table,
-    get_highlight_table, get_ns_table, highlight_table, keymap_table, ns_opts_table,
+    buf_attach_table, buf_delete_table, clear_autocmds_table, cmd_opts_table, cmd_table,
+    complete_set_table, context_table, create_augroup_table, create_autocmd_table, echo_opts_table,
+    empty_table, eval_statusline_table, exec_autocmds_table, exec_opts_table, get_autocmds_table,
+    get_commands_table, get_extmark_table, get_extmarks_table, get_highlight_table, get_ns_table,
+    highlight_table, key_dict_buf_attach_get_field, key_dict_buf_delete_get_field,
+    key_dict_clear_autocmds_get_field, key_dict_cmd_get_field, key_dict_cmd_opts_get_field,
+    key_dict_complete_set_get_field, key_dict_context_get_field, key_dict_create_augroup_get_field,
+    key_dict_create_autocmd_get_field, key_dict_echo_opts_get_field, key_dict_empty_get_field,
+    key_dict_eval_statusline_get_field, key_dict_exec_autocmds_get_field,
+    key_dict_exec_opts_get_field, key_dict_get_autocmds_get_field, key_dict_get_commands_get_field,
+    key_dict_get_extmark_get_field, key_dict_get_extmarks_get_field,
+    key_dict_get_highlight_get_field, key_dict_get_ns_get_field, key_dict_highlight_get_field,
+    key_dict_keymap_get_field, key_dict_ns_opts_get_field, key_dict_open_term_get_field,
+    key_dict_option_get_field, key_dict_redraw_get_field, key_dict_runtime_get_field,
+    key_dict_set_decoration_provider_get_field, key_dict_set_extmark_get_field,
+    key_dict_tabpage_config_get_field, key_dict_user_command_get_field,
+    key_dict_win_config_get_field, key_dict_win_text_height_get_field, keymap_table, ns_opts_table,
     open_term_table, option_table, redraw_table, runtime_table, set_decoration_provider_table,
     set_extmark_table, tabpage_config_table, user_command_table, win_config_table,
     win_text_height_table,
@@ -524,363 +525,363 @@ fn expr_map_locked_error(err: &mut Error) {
 // The keysets the bindings name, each tied to its own generated table
 // and lookup.
 
-// SAFETY: `buf_attach_table` and `KeyDict_buf_attach_get_field` are the
+// SAFETY: `buf_attach_table` and `key_dict_buf_attach_get_field` are the
 // generated table and lookup for `KeyDict_buf_attach`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_buf_attach {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_buf_attach_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_buf_attach_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&buf_attach_table)
     }
 }
 
-// SAFETY: `buf_delete_table` and `KeyDict_buf_delete_get_field` are the
+// SAFETY: `buf_delete_table` and `key_dict_buf_delete_get_field` are the
 // generated table and lookup for `KeyDict_buf_delete`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_buf_delete {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_buf_delete_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_buf_delete_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&buf_delete_table)
     }
 }
 
-// SAFETY: `clear_autocmds_table` and `KeyDict_clear_autocmds_get_field` are the
+// SAFETY: `clear_autocmds_table` and `key_dict_clear_autocmds_get_field` are the
 // generated table and lookup for `KeyDict_clear_autocmds`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_clear_autocmds {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_clear_autocmds_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_clear_autocmds_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&clear_autocmds_table)
     }
 }
 
-// SAFETY: `cmd_table` and `KeyDict_cmd_get_field` are the
+// SAFETY: `cmd_table` and `key_dict_cmd_get_field` are the
 // generated table and lookup for `KeyDict_cmd`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_cmd {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_cmd_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_cmd_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&cmd_table)
     }
 }
 
-// SAFETY: `cmd_opts_table` and `KeyDict_cmd_opts_get_field` are the
+// SAFETY: `cmd_opts_table` and `key_dict_cmd_opts_get_field` are the
 // generated table and lookup for `KeyDict_cmd_opts`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_cmd_opts {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_cmd_opts_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_cmd_opts_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&cmd_opts_table)
     }
 }
 
-// SAFETY: `complete_set_table` and `KeyDict_complete_set_get_field` are the
+// SAFETY: `complete_set_table` and `key_dict_complete_set_get_field` are the
 // generated table and lookup for `KeyDict_complete_set`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_complete_set {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_complete_set_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_complete_set_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&complete_set_table)
     }
 }
 
-// SAFETY: `context_table` and `KeyDict_context_get_field` are the
+// SAFETY: `context_table` and `key_dict_context_get_field` are the
 // generated table and lookup for `KeyDict_context`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_context {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_context_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_context_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&context_table)
     }
 }
 
-// SAFETY: `create_augroup_table` and `KeyDict_create_augroup_get_field` are the
+// SAFETY: `create_augroup_table` and `key_dict_create_augroup_get_field` are the
 // generated table and lookup for `KeyDict_create_augroup`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_create_augroup {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_create_augroup_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_create_augroup_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&create_augroup_table)
     }
 }
 
-// SAFETY: `create_autocmd_table` and `KeyDict_create_autocmd_get_field` are the
+// SAFETY: `create_autocmd_table` and `key_dict_create_autocmd_get_field` are the
 // generated table and lookup for `KeyDict_create_autocmd`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_create_autocmd {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_create_autocmd_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_create_autocmd_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&create_autocmd_table)
     }
 }
 
-// SAFETY: `echo_opts_table` and `KeyDict_echo_opts_get_field` are the
+// SAFETY: `echo_opts_table` and `key_dict_echo_opts_get_field` are the
 // generated table and lookup for `KeyDict_echo_opts`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_echo_opts {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_echo_opts_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_echo_opts_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&echo_opts_table)
     }
 }
 
-// SAFETY: `empty_table` and `KeyDict_empty_get_field` are the
+// SAFETY: `empty_table` and `key_dict_empty_get_field` are the
 // generated table and lookup for `KeyDict_empty`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_empty {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_empty_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_empty_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&empty_table)
     }
 }
 
-// SAFETY: `eval_statusline_table` and `KeyDict_eval_statusline_get_field` are the
+// SAFETY: `eval_statusline_table` and `key_dict_eval_statusline_get_field` are the
 // generated table and lookup for `KeyDict_eval_statusline`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_eval_statusline {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_eval_statusline_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_eval_statusline_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&eval_statusline_table)
     }
 }
 
-// SAFETY: `exec_autocmds_table` and `KeyDict_exec_autocmds_get_field` are the
+// SAFETY: `exec_autocmds_table` and `key_dict_exec_autocmds_get_field` are the
 // generated table and lookup for `KeyDict_exec_autocmds`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_exec_autocmds {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_exec_autocmds_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_exec_autocmds_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&exec_autocmds_table)
     }
 }
 
-// SAFETY: `exec_opts_table` and `KeyDict_exec_opts_get_field` are the
+// SAFETY: `exec_opts_table` and `key_dict_exec_opts_get_field` are the
 // generated table and lookup for `KeyDict_exec_opts`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_exec_opts {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_exec_opts_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_exec_opts_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&exec_opts_table)
     }
 }
 
-// SAFETY: `get_autocmds_table` and `KeyDict_get_autocmds_get_field` are the
+// SAFETY: `get_autocmds_table` and `key_dict_get_autocmds_get_field` are the
 // generated table and lookup for `KeyDict_get_autocmds`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_get_autocmds {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_get_autocmds_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_get_autocmds_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&get_autocmds_table)
     }
 }
 
-// SAFETY: `get_commands_table` and `KeyDict_get_commands_get_field` are the
+// SAFETY: `get_commands_table` and `key_dict_get_commands_get_field` are the
 // generated table and lookup for `KeyDict_get_commands`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_get_commands {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_get_commands_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_get_commands_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&get_commands_table)
     }
 }
 
-// SAFETY: `get_extmark_table` and `KeyDict_get_extmark_get_field` are the
+// SAFETY: `get_extmark_table` and `key_dict_get_extmark_get_field` are the
 // generated table and lookup for `KeyDict_get_extmark`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_get_extmark {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_get_extmark_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_get_extmark_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&get_extmark_table)
     }
 }
 
-// SAFETY: `get_extmarks_table` and `KeyDict_get_extmarks_get_field` are the
+// SAFETY: `get_extmarks_table` and `key_dict_get_extmarks_get_field` are the
 // generated table and lookup for `KeyDict_get_extmarks`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_get_extmarks {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_get_extmarks_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_get_extmarks_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&get_extmarks_table)
     }
 }
 
-// SAFETY: `get_highlight_table` and `KeyDict_get_highlight_get_field` are the
+// SAFETY: `get_highlight_table` and `key_dict_get_highlight_get_field` are the
 // generated table and lookup for `KeyDict_get_highlight`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_get_highlight {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_get_highlight_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_get_highlight_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&get_highlight_table)
     }
 }
 
-// SAFETY: `get_ns_table` and `KeyDict_get_ns_get_field` are the
+// SAFETY: `get_ns_table` and `key_dict_get_ns_get_field` are the
 // generated table and lookup for `KeyDict_get_ns`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_get_ns {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_get_ns_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_get_ns_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&get_ns_table)
     }
 }
 
-// SAFETY: `highlight_table` and `KeyDict_highlight_get_field` are the
+// SAFETY: `highlight_table` and `key_dict_highlight_get_field` are the
 // generated table and lookup for `KeyDict_highlight`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_highlight {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_highlight_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_highlight_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&highlight_table)
     }
 }
 
-// SAFETY: `keymap_table` and `KeyDict_keymap_get_field` are the
+// SAFETY: `keymap_table` and `key_dict_keymap_get_field` are the
 // generated table and lookup for `KeyDict_keymap`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_keymap {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_keymap_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_keymap_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&keymap_table)
     }
 }
 
-// SAFETY: `ns_opts_table` and `KeyDict_ns_opts_get_field` are the
+// SAFETY: `ns_opts_table` and `key_dict_ns_opts_get_field` are the
 // generated table and lookup for `KeyDict_ns_opts`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_ns_opts {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_ns_opts_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_ns_opts_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&ns_opts_table)
     }
 }
 
-// SAFETY: `open_term_table` and `KeyDict_open_term_get_field` are the
+// SAFETY: `open_term_table` and `key_dict_open_term_get_field` are the
 // generated table and lookup for `KeyDict_open_term`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_open_term {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_open_term_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_open_term_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&open_term_table)
     }
 }
 
-// SAFETY: `option_table` and `KeyDict_option_get_field` are the
+// SAFETY: `option_table` and `key_dict_option_get_field` are the
 // generated table and lookup for `KeyDict_option`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_option {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_option_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_option_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&option_table)
     }
 }
 
-// SAFETY: `redraw_table` and `KeyDict_redraw_get_field` are the
+// SAFETY: `redraw_table` and `key_dict_redraw_get_field` are the
 // generated table and lookup for `KeyDict_redraw`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_redraw {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_redraw_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_redraw_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&redraw_table)
     }
 }
 
-// SAFETY: `runtime_table` and `KeyDict_runtime_get_field` are the
+// SAFETY: `runtime_table` and `key_dict_runtime_get_field` are the
 // generated table and lookup for `KeyDict_runtime`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_runtime {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_runtime_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_runtime_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&runtime_table)
     }
 }
 
-// SAFETY: `set_decoration_provider_table` and `KeyDict_set_decoration_provider_get_field` are the
+// SAFETY: `set_decoration_provider_table` and `key_dict_set_decoration_provider_get_field` are the
 // generated table and lookup for `KeyDict_set_decoration_provider`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_set_decoration_provider {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_set_decoration_provider_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_set_decoration_provider_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&set_decoration_provider_table)
     }
 }
 
-// SAFETY: `set_extmark_table` and `KeyDict_set_extmark_get_field` are the
+// SAFETY: `set_extmark_table` and `key_dict_set_extmark_get_field` are the
 // generated table and lookup for `KeyDict_set_extmark`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_set_extmark {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_set_extmark_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_set_extmark_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&set_extmark_table)
     }
 }
 
-// SAFETY: `tabpage_config_table` and `KeyDict_tabpage_config_get_field` are the
+// SAFETY: `tabpage_config_table` and `key_dict_tabpage_config_get_field` are the
 // generated table and lookup for `KeyDict_tabpage_config`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_tabpage_config {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_tabpage_config_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_tabpage_config_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&tabpage_config_table)
     }
 }
 
-// SAFETY: `user_command_table` and `KeyDict_user_command_get_field` are the
+// SAFETY: `user_command_table` and `key_dict_user_command_get_field` are the
 // generated table and lookup for `KeyDict_user_command`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_user_command {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_user_command_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_user_command_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&user_command_table)
     }
 }
 
-// SAFETY: `win_config_table` and `KeyDict_win_config_get_field` are the
+// SAFETY: `win_config_table` and `key_dict_win_config_get_field` are the
 // generated table and lookup for `KeyDict_win_config`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_win_config {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_win_config_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_win_config_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&win_config_table)
     }
 }
 
-// SAFETY: `win_text_height_table` and `KeyDict_win_text_height_get_field` are the
+// SAFETY: `win_text_height_table` and `key_dict_win_text_height_get_field` are the
 // generated table and lookup for `KeyDict_win_text_height`, which is all integers
 // and pointers, so all zeroes is one.
 unsafe impl KeySet for KeyDict_win_text_height {
-    const GET_FIELD: FieldHashfn = Some(KeyDict_win_text_height_get_field);
+    const GET_FIELD: FieldHashfn = Some(key_dict_win_text_height_get_field);
 
     fn table() -> *mut KeySetLink {
         keyset_table(&win_text_height_table)

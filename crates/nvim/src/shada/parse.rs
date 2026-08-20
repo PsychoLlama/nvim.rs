@@ -106,7 +106,7 @@ unsafe fn parse_search_pattern(
         let it = &raw mut (*entry).data.search_pattern;
         if !cursor.keydict(
             it.cast::<c_void>(),
-            Some(KeyDict__shada_search_pat_get_field),
+            Some(key_dict__shada_search_pat_get_field),
             extra,
             error,
         ) {
@@ -161,7 +161,7 @@ unsafe fn parse_mark(
         };
         if !cursor.keydict(
             (&raw mut it).cast::<c_void>(),
-            Some(KeyDict__shada_mark_get_field),
+            Some(key_dict__shada_mark_get_field),
             extra,
             error,
         ) {
@@ -258,7 +258,7 @@ unsafe fn parse_register(
         };
         let ok = cursor.keydict(
             (&raw mut it).cast::<c_void>(),
-            Some(KeyDict__shada_register_get_field),
+            Some(key_dict__shada_register_get_field),
             extra,
             error,
         );
@@ -572,7 +572,7 @@ unsafe fn parse_buffer_list(
             let mut item_extra = KV_INITIAL_VALUE;
             if !cursor.keydict(
                 (&raw mut it).cast::<c_void>(),
-                Some(KeyDict__shada_buflist_item_get_field),
+                Some(key_dict__shada_buflist_item_get_field),
                 &mut item_extra,
                 error,
             ) {

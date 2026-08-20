@@ -4,7 +4,7 @@
 //! `crate::types::keysets` plus `tools/apigen/functions.txt`. Do
 //! not edit; run `just apigen` (`just apigen --check` fails on drift).
 //!
-//! Two lookups live here. `KeyDict_<name>_get_field` turns an options-dict
+//! Two lookups live here. `key_dict_<name>_get_field` turns an options-dict
 //! key into the table row that says where the value goes, and
 //! `msgpack_rpc_get_handler_for` turns a method name into the wrapper that
 //! serves it.

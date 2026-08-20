@@ -25,7 +25,7 @@ use super::{
     HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
     hl_get_syn_attr, kHlUI, syn_attr2entry,
 };
-use crate::api::private::dispatch::KeyDict_highlight_get_field;
+use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
@@ -253,7 +253,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
                 fallback = false;
                 let mut dict = KeyDict_highlight::default();
                 let field = Some(
-                    KeyDict_highlight_get_field
+                    key_dict_highlight_get_field
                         as unsafe fn(*const c_char, size_t) -> *mut KeySetLink,
                 );
                 let target = (&raw mut dict).cast();

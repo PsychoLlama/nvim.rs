@@ -169,7 +169,7 @@ pub unsafe fn handle_nvim_exec2(
         return NIL;
     };
     let mut arg_2: KeyDict_exec_opts =
-        match read_keydict(Some(KeyDict_exec_opts_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_exec_opts_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

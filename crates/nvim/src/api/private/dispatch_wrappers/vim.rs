@@ -64,7 +64,7 @@ pub unsafe fn handle_nvim__complete_set(
         return NIL;
     };
     let mut arg_2: KeyDict_complete_set =
-        match read_keydict(Some(KeyDict_complete_set_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_complete_set_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -172,7 +172,7 @@ pub unsafe fn handle_nvim__get_runtime(
         return NIL;
     };
     let mut arg_3: KeyDict_runtime =
-        match read_keydict(Some(KeyDict_runtime_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_runtime_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -393,7 +393,7 @@ pub unsafe fn handle_nvim__redraw(
         return NIL;
     }
     let mut arg_1: KeyDict_redraw =
-        match read_keydict(Some(KeyDict_redraw_get_field), args[0], error) {
+        match read_keydict(Some(key_dict_redraw_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -769,7 +769,7 @@ pub unsafe fn handle_nvim_echo(
         return NIL;
     };
     let mut arg_3: KeyDict_echo_opts =
-        match read_keydict(Some(KeyDict_echo_opts_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_echo_opts_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -810,7 +810,7 @@ pub unsafe fn handle_nvim_eval_statusline(
         return NIL;
     };
     let mut arg_2: KeyDict_eval_statusline =
-        match read_keydict(Some(KeyDict_eval_statusline_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_eval_statusline_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

@@ -89,18 +89,19 @@ use crate::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
 use crate::api::private::dispatch::{
-    KeyDict_buf_attach_get_field, KeyDict_buf_delete_get_field, KeyDict_clear_autocmds_get_field,
-    KeyDict_cmd_get_field, KeyDict_cmd_opts_get_field, KeyDict_complete_set_get_field,
-    KeyDict_context_get_field, KeyDict_create_augroup_get_field, KeyDict_create_autocmd_get_field,
-    KeyDict_echo_opts_get_field, KeyDict_empty_get_field, KeyDict_eval_statusline_get_field,
-    KeyDict_exec_autocmds_get_field, KeyDict_exec_opts_get_field, KeyDict_get_autocmds_get_field,
-    KeyDict_get_commands_get_field, KeyDict_get_extmark_get_field, KeyDict_get_extmarks_get_field,
-    KeyDict_get_highlight_get_field, KeyDict_get_ns_get_field, KeyDict_highlight_get_field,
-    KeyDict_keymap_get_field, KeyDict_ns_opts_get_field, KeyDict_open_term_get_field,
-    KeyDict_option_get_field, KeyDict_redraw_get_field, KeyDict_runtime_get_field,
-    KeyDict_set_extmark_get_field, KeyDict_tabpage_config_get_field,
-    KeyDict_user_command_get_field, KeyDict_win_config_get_field,
-    KeyDict_win_text_height_get_field, cmd_table, ns_opts_table, win_config_table,
+    cmd_table, key_dict_buf_attach_get_field, key_dict_buf_delete_get_field,
+    key_dict_clear_autocmds_get_field, key_dict_cmd_get_field, key_dict_cmd_opts_get_field,
+    key_dict_complete_set_get_field, key_dict_context_get_field, key_dict_create_augroup_get_field,
+    key_dict_create_autocmd_get_field, key_dict_echo_opts_get_field, key_dict_empty_get_field,
+    key_dict_eval_statusline_get_field, key_dict_exec_autocmds_get_field,
+    key_dict_exec_opts_get_field, key_dict_get_autocmds_get_field, key_dict_get_commands_get_field,
+    key_dict_get_extmark_get_field, key_dict_get_extmarks_get_field,
+    key_dict_get_highlight_get_field, key_dict_get_ns_get_field, key_dict_highlight_get_field,
+    key_dict_keymap_get_field, key_dict_ns_opts_get_field, key_dict_open_term_get_field,
+    key_dict_option_get_field, key_dict_redraw_get_field, key_dict_runtime_get_field,
+    key_dict_set_extmark_get_field, key_dict_tabpage_config_get_field,
+    key_dict_user_command_get_field, key_dict_win_config_get_field,
+    key_dict_win_text_height_get_field, ns_opts_table, win_config_table,
 };
 use crate::api::private::helpers::{api_dict_to_keydict, api_keydict_to_dict, api_set_error};
 use crate::api::tabpage::{

@@ -1,4 +1,4 @@
-use crate::api::private::dispatch::KeyDict_xdl_diff_get_field;
+use crate::api::private::dispatch::key_dict_xdl_diff_get_field;
 use crate::api::private::helpers::{api_clear_error, api_free_string, api_set_error};
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
 use crate::lua::converter::nlua_pop_keydict;
@@ -305,7 +305,7 @@ unsafe fn process_xdl_diff_opts(
         lstate,
         &raw mut opts as *mut ::core::ffi::c_void,
         Some(
-            KeyDict_xdl_diff_get_field
+            key_dict_xdl_diff_get_field
                 as unsafe fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
         ),
         &raw mut err_param,

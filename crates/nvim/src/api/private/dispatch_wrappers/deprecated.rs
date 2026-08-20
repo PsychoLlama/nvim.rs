@@ -575,15 +575,15 @@ pub unsafe fn handle_nvim_buf_set_virtual_text(
         wrong_type(error, 4, c"nvim_buf_set_virtual_text", c"Array");
         return NIL;
     };
-    let mut arg_5: KeyDict_empty = match read_keydict(Some(KeyDict_empty_get_field), args[4], error)
-    {
-        KeySetArg::Read(v) => v,
-        KeySetArg::Refused => return NIL,
-        KeySetArg::WrongType => {
-            wrong_type(error, 5, c"nvim_buf_set_virtual_text", c"Dict(empty) *");
-            return NIL;
-        }
-    };
+    let mut arg_5: KeyDict_empty =
+        match read_keydict(Some(key_dict_empty_get_field), args[4], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 5, c"nvim_buf_set_virtual_text", c"Dict(empty) *");
+                return NIL;
+            }
+        };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = match unsafe { nvim_buf_set_virtual_text(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) }

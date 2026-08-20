@@ -16,7 +16,7 @@
 //! keyset's `is_set__highlight_` mask is for.
 
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
-use crate::api::private::dispatch::KeyDict_highlight_cterm_get_field;
+use crate::api::private::dispatch::key_dict_highlight_cterm_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, api_set_error, arena_dict};
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::highlight::HlAttrFlags;
@@ -518,7 +518,7 @@ pub unsafe fn dict2hlattrs(
         if is_set(dict, key::CTERM) {
             let mut cterm = KeyDict_highlight_cterm::default();
             let field = Some(
-                KeyDict_highlight_cterm_get_field
+                key_dict_highlight_cterm_get_field
                     as unsafe fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             );
             let target = (&raw mut cterm).cast();

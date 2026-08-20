@@ -54,7 +54,7 @@ pub unsafe fn handle_nvim_get_context(
         return NIL;
     }
     let mut arg_1: KeyDict_context =
-        match read_keydict(Some(KeyDict_context_get_field), args[0], error) {
+        match read_keydict(Some(key_dict_context_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -218,7 +218,7 @@ pub unsafe fn handle_nvim_get_hl(
         return NIL;
     };
     let mut arg_2: KeyDict_get_highlight =
-        match read_keydict(Some(KeyDict_get_highlight_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_get_highlight_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -286,7 +286,7 @@ pub unsafe fn handle_nvim_get_hl_ns(
         return NIL;
     }
     let mut arg_1: KeyDict_get_ns =
-        match read_keydict(Some(KeyDict_get_ns_get_field), args[0], error) {
+        match read_keydict(Some(key_dict_get_ns_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -357,15 +357,15 @@ pub unsafe fn handle_nvim_get_mark(
         wrong_type(error, 1, c"nvim_get_mark", c"String");
         return NIL;
     };
-    let mut arg_2: KeyDict_empty = match read_keydict(Some(KeyDict_empty_get_field), args[1], error)
-    {
-        KeySetArg::Read(v) => v,
-        KeySetArg::Refused => return NIL,
-        KeySetArg::WrongType => {
-            wrong_type(error, 2, c"nvim_get_mark", c"Dict(empty) *");
-            return NIL;
-        }
-    };
+    let mut arg_2: KeyDict_empty =
+        match read_keydict(Some(key_dict_empty_get_field), args[1], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 2, c"nvim_get_mark", c"Dict(empty) *");
+                return NIL;
+            }
+        };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = match unsafe { nvim_get_mark(arg_1, &raw mut arg_2, arena) } {
@@ -865,7 +865,7 @@ pub unsafe fn handle_nvim_open_term(
         return NIL;
     };
     let mut arg_2: KeyDict_open_term =
-        match read_keydict(Some(KeyDict_open_term_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_open_term_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

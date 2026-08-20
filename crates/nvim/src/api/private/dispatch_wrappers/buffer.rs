@@ -69,7 +69,7 @@ pub unsafe fn handle_nvim_buf_attach(
         return NIL;
     };
     let mut arg_3: KeyDict_buf_attach =
-        match read_keydict(Some(KeyDict_buf_attach_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_buf_attach_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -224,7 +224,7 @@ pub unsafe fn handle_nvim_buf_delete(
         return NIL;
     };
     let mut arg_2: KeyDict_buf_delete =
-        match read_keydict(Some(KeyDict_buf_delete_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_buf_delete_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -550,15 +550,15 @@ pub unsafe fn handle_nvim_buf_get_text(
         wrong_type(error, 5, c"nvim_buf_get_text", c"Integer");
         return NIL;
     };
-    let mut arg_6: KeyDict_empty = match read_keydict(Some(KeyDict_empty_get_field), args[5], error)
-    {
-        KeySetArg::Read(v) => v,
-        KeySetArg::Refused => return NIL,
-        KeySetArg::WrongType => {
-            wrong_type(error, 6, c"nvim_buf_get_text", c"Dict(empty) *");
-            return NIL;
-        }
-    };
+    let mut arg_6: KeyDict_empty =
+        match read_keydict(Some(key_dict_empty_get_field), args[5], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 6, c"nvim_buf_get_text", c"Dict(empty) *");
+                return NIL;
+            }
+        };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = match unsafe {
@@ -746,7 +746,7 @@ pub unsafe fn handle_nvim_buf_set_keymap(
         return NIL;
     };
     let mut arg_5: KeyDict_keymap =
-        match read_keydict(Some(KeyDict_keymap_get_field), args[4], error) {
+        match read_keydict(Some(key_dict_keymap_get_field), args[4], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -855,15 +855,15 @@ pub unsafe fn handle_nvim_buf_set_mark(
         wrong_type(error, 4, c"nvim_buf_set_mark", c"Integer");
         return NIL;
     };
-    let mut arg_5: KeyDict_empty = match read_keydict(Some(KeyDict_empty_get_field), args[4], error)
-    {
-        KeySetArg::Read(v) => v,
-        KeySetArg::Refused => return NIL,
-        KeySetArg::WrongType => {
-            wrong_type(error, 5, c"nvim_buf_set_mark", c"Dict(empty) *");
-            return NIL;
-        }
-    };
+    let mut arg_5: KeyDict_empty =
+        match read_keydict(Some(key_dict_empty_get_field), args[4], error) {
+            KeySetArg::Read(v) => v,
+            KeySetArg::Refused => return NIL,
+            KeySetArg::WrongType => {
+                wrong_type(error, 5, c"nvim_buf_set_mark", c"Dict(empty) *");
+                return NIL;
+            }
+        };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = match unsafe { nvim_buf_set_mark(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) } {

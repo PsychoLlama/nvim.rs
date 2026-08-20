@@ -13,7 +13,7 @@ use super::*;
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_keymap_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_keymap_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"desc" => 0,
@@ -40,7 +40,7 @@ pub static ns_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_ns_opts_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_ns_opts_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"wins" => 0,
@@ -63,7 +63,7 @@ pub static open_term_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_open_term_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_open_term_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"on_input" => 0,
@@ -89,7 +89,7 @@ pub static option_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_option_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_option_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"buf" => 0,
@@ -128,7 +128,7 @@ pub static redraw_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_redraw_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_redraw_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"buf" => 0,
@@ -160,7 +160,7 @@ pub static runtime_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_runtime_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_runtime_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"is_lua" => 0,
@@ -201,7 +201,7 @@ pub static set_decoration_provider_table: GlobalCell<[KeySetLink; 10]> = GlobalC
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_set_decoration_provider_get_field(
+pub unsafe fn key_dict_set_decoration_provider_get_field(
     str: *const c_char,
     len: size_t,
 ) -> *mut KeySetLink {
@@ -332,7 +332,7 @@ pub static set_extmark_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_set_extmark_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_set_extmark_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"id" => 0,
@@ -385,7 +385,10 @@ pub static tabpage_config_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_tabpage_config_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_tabpage_config_get_field(
+    str: *const c_char,
+    len: size_t,
+) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"after" => 0,
@@ -418,7 +421,7 @@ pub static user_command_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_user_command_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_user_command_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"bar" => 0,
@@ -479,7 +482,7 @@ pub static win_config_table: GlobalCell<[KeySetLink; 25]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_win_config_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_win_config_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"col" => 0,
@@ -528,7 +531,7 @@ pub static win_text_height_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new(
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_win_text_height_get_field(
+pub unsafe fn key_dict_win_text_height_get_field(
     str: *const c_char,
     len: size_t,
 ) -> *mut KeySetLink {
@@ -603,7 +606,7 @@ pub static xdl_diff_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
-pub unsafe fn KeyDict_xdl_diff_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
+pub unsafe fn key_dict_xdl_diff_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
         b"ctxlen" => 0,

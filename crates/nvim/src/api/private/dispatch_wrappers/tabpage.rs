@@ -36,7 +36,7 @@ pub unsafe fn handle_nvim_open_tabpage(
         return NIL;
     };
     let mut arg_3: KeyDict_tabpage_config =
-        match read_keydict(Some(KeyDict_tabpage_config_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_tabpage_config_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

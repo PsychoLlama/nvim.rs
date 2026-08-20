@@ -28,7 +28,7 @@ pub unsafe fn handle_nvim_clear_autocmds(
         return NIL;
     }
     let mut arg_1: KeyDict_clear_autocmds =
-        match read_keydict(Some(KeyDict_clear_autocmds_get_field), args[0], error) {
+        match read_keydict(Some(key_dict_clear_autocmds_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -69,7 +69,7 @@ pub unsafe fn handle_nvim_create_augroup(
         return NIL;
     };
     let mut arg_2: KeyDict_create_augroup =
-        match read_keydict(Some(KeyDict_create_augroup_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_create_augroup_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -108,7 +108,7 @@ pub unsafe fn handle_nvim_create_autocmd(
     }
     let arg_1 = args[0];
     let mut arg_2: KeyDict_create_autocmd =
-        match read_keydict(Some(KeyDict_create_autocmd_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_create_autocmd_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -243,7 +243,7 @@ pub unsafe fn handle_nvim_exec_autocmds(
     }
     let arg_1 = args[0];
     let mut arg_2: KeyDict_exec_autocmds =
-        match read_keydict(Some(KeyDict_exec_autocmds_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_exec_autocmds_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -280,7 +280,7 @@ pub unsafe fn handle_nvim_get_autocmds(
         return NIL;
     }
     let mut arg_1: KeyDict_get_autocmds =
-        match read_keydict(Some(KeyDict_get_autocmds_get_field), args[0], error) {
+        match read_keydict(Some(key_dict_get_autocmds_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

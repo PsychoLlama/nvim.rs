@@ -990,7 +990,7 @@ fn emit_fn(
                 writeln!(out, "    let arg_{slot} = args[{index}];").unwrap();
             }
             ApiType::KeyDict(keyset) => {
-                let get_field = format!("KeyDict_{keyset}_get_field");
+                let get_field = format!("key_dict_{keyset}_get_field");
                 writeln!(out, "    let mut arg_{slot}: KeyDict_{keyset} =").unwrap();
                 writeln!(
                     out,
@@ -1724,7 +1724,7 @@ fn generate(
         .chain(
             referenced
                 .iter()
-                .filter(|n| n.starts_with("KeyDict_") && !n.ends_with("_get_field"))
+                .filter(|n| n.starts_with("KeyDict_"))
                 .cloned(),
         )
         .filter(|n| referenced_all.contains(n))
@@ -1781,7 +1781,7 @@ const TABLES_HEADER: &str = r#"//! The msgpack-RPC dispatch tables.
 //! `crate::types::keysets` plus `tools/apigen/functions.txt`. Do
 //! not edit; run `just apigen` (`just apigen --check` fails on drift).
 //!
-//! Two lookups live here. `KeyDict_<name>_get_field` turns an options-dict
+//! Two lookups live here. `key_dict_<name>_get_field` turns an options-dict
 //! key into the table row that says where the value goes, and
 //! `msgpack_rpc_get_handler_for` turns a method name into the wrapper that
 //! serves it.
@@ -2009,7 +2009,7 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     if k.keys.is_empty() {
         writeln!(
             out,
-            "pub unsafe fn KeyDict_{name}_get_field(_str: *const c_char, _len: size_t) -> *mut KeySetLink {{"
+            "pub unsafe fn key_dict_{name}_get_field(_str: *const c_char, _len: size_t) -> *mut KeySetLink {{"
         )
         .unwrap();
         writeln!(out, "    // The keyset has no keys, so nothing matches.").unwrap();
@@ -2020,7 +2020,7 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     }
     writeln!(
         out,
-        "pub unsafe fn KeyDict_{name}_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {{"
+        "pub unsafe fn key_dict_{name}_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {{"
     )
     .unwrap();
     writeln!(
@@ -3218,11 +3218,11 @@ fn generate_lua(
     for keyset in &keysets {
         writeln!(
             impls,
-            "\n// SAFETY: `{keyset}_table` and `KeyDict_{keyset}_get_field` are the\n\
+            "\n// SAFETY: `{keyset}_table` and `key_dict_{keyset}_get_field` are the\n\
              // generated table and lookup for `KeyDict_{keyset}`, which is all integers\n\
              // and pointers, so all zeroes is one.\n\
              unsafe impl KeySet for KeyDict_{keyset} {{\n\
-             \x20   const GET_FIELD: FieldHashfn = Some(KeyDict_{keyset}_get_field);\n\
+             \x20   const GET_FIELD: FieldHashfn = Some(key_dict_{keyset}_get_field);\n\
              \n\
              \x20   fn table() -> *mut KeySetLink {{\n\
              \x20       keyset_table(&{keyset}_table)\n\
@@ -3366,7 +3366,7 @@ fn generate_lua(
     .chain(
         referenced
             .iter()
-            .filter(|n| n.starts_with("KeyDict_") && !n.ends_with("_get_field"))
+            .filter(|n| n.starts_with("KeyDict_"))
             .cloned(),
     )
     .collect();

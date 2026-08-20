@@ -36,7 +36,7 @@ pub unsafe fn handle_nvim_open_win(
         return NIL;
     };
     let mut arg_3: KeyDict_win_config =
-        match read_keydict(Some(KeyDict_win_config_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_win_config_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -131,7 +131,7 @@ pub unsafe fn handle_nvim_win_set_config(
         return NIL;
     };
     let mut arg_2: KeyDict_win_config =
-        match read_keydict(Some(KeyDict_win_config_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_win_config_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

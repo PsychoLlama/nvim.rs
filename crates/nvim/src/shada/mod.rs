@@ -1,8 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::dispatch::{
-    KeyDict__shada_buflist_item_get_field, KeyDict__shada_mark_get_field,
-    KeyDict__shada_register_get_field, KeyDict__shada_search_pat_get_field,
+    key_dict__shada_buflist_item_get_field, key_dict__shada_mark_get_field,
+    key_dict__shada_register_get_field, key_dict__shada_search_pat_get_field,
 };
 use crate::api::private::helpers::{api_free_dict, api_free_string, copy_string, cstr_as_string};
 use crate::ascii::ascii_isdigit;

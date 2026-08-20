@@ -58,7 +58,7 @@ pub unsafe fn handle_nvim_get_option_info2(
         return NIL;
     };
     let mut arg_2: KeyDict_option =
-        match read_keydict(Some(KeyDict_option_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_option_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -100,7 +100,7 @@ pub unsafe fn handle_nvim_get_option_value(
         return NIL;
     };
     let mut arg_2: KeyDict_option =
-        match read_keydict(Some(KeyDict_option_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_option_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -142,7 +142,7 @@ pub unsafe fn handle_nvim_set_option_value(
     };
     let arg_2 = args[1];
     let mut arg_3: KeyDict_option =
-        match read_keydict(Some(KeyDict_option_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_option_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

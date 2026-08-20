@@ -116,7 +116,7 @@ pub unsafe fn handle_nvim__ns_set(
         return NIL;
     };
     let mut arg_2: KeyDict_ns_opts =
-        match read_keydict(Some(KeyDict_ns_opts_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_ns_opts_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -250,7 +250,7 @@ pub unsafe fn handle_nvim_buf_get_extmark_by_id(
         return NIL;
     };
     let mut arg_4: KeyDict_get_extmark =
-        match read_keydict(Some(KeyDict_get_extmark_get_field), args[3], error) {
+        match read_keydict(Some(key_dict_get_extmark_get_field), args[3], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -304,7 +304,7 @@ pub unsafe fn handle_nvim_buf_get_extmarks(
     let arg_3 = args[2];
     let arg_4 = args[3];
     let mut arg_5: KeyDict_get_extmarks =
-        match read_keydict(Some(KeyDict_get_extmarks_get_field), args[4], error) {
+        match read_keydict(Some(key_dict_get_extmarks_get_field), args[4], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {
@@ -359,7 +359,7 @@ pub unsafe fn handle_nvim_buf_set_extmark(
         return NIL;
     };
     let mut arg_5: KeyDict_set_extmark =
-        match read_keydict(Some(KeyDict_set_extmark_get_field), args[4], error) {
+        match read_keydict(Some(key_dict_set_extmark_get_field), args[4], error) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused => return NIL,
             KeySetArg::WrongType => {

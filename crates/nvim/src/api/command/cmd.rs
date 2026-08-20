@@ -594,7 +594,7 @@ fn apply_magic(
         return true;
     }
 
-    let get_field = Some(KeyDict_cmd_magic_get_field as _);
+    let get_field = Some(key_dict_cmd_magic_get_field as _);
     let Some(magic) = sub_keyset::<KeyDict_cmd_magic>(cmd.magic, get_field, err) else {
         return false;
     };
@@ -630,7 +630,7 @@ fn apply_mods(
         return true;
     }
 
-    let get_field = Some(KeyDict_cmd_mods_get_field as _);
+    let get_field = Some(key_dict_cmd_mods_get_field as _);
     let Some(mods) = sub_keyset::<KeyDict_cmd_mods>(cmd.mods, get_field, err) else {
         return false;
     };
@@ -721,7 +721,7 @@ fn split_direction(name: &CStr) -> Option<Option<c_int>> {
 
 /// Unpack `mods.filter` and compile its pattern.
 fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo, err: &mut Error) -> bool {
-    let get_field = Some(KeyDict_cmd_mods_filter_get_field as _);
+    let get_field = Some(key_dict_cmd_mods_filter_get_field as _);
     let Some(filter) = sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter, get_field, err) else {
         return false;
     };
