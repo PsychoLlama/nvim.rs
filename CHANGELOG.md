@@ -12,6 +12,12 @@ and this project adheres to [CalVer](https://calver.org/).
 - Rewrote undo and redo, covering `u`, CTRL-R, `U`, `g-`/`g+`,
   `:earlier`/`:later`, `:undo`, `:undolist`, `:undojoin`, `undotree()` and
   the undo files `'undofile'` writes and `:rundo`/`:wundo` read.
+- Rewrote folding, covering the `z` fold commands, `:fold`, `:foldopen`,
+  `:foldclose` and `:folddoopen`/`:folddoclosed`, all six values of
+  `'foldmethod'`, the fold options from `'foldlevel'` to `'foldminlines'`,
+  `foldclosed()`/`foldclosedend()`/`foldlevel()`/`foldtext()`/
+  `foldtextresult()`, the fold block `:mkview` writes, and how folds follow
+  the buffer when lines are inserted, deleted or moved.
 
 ### Fixed
 

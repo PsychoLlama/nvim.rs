@@ -344,6 +344,14 @@ pub(super) unsafe fn fold_update_computed_recurse(
                 let k = match inner.find(line.lnum() - current.top()) {
                     Ok(k) | Err(k) => k,
                 };
+                // UPSTREAM BUG, preserved: `k` may be `inner.len()`, and
+                // `fold.c` reads it anyway. It is the one `foldFind` caller
+                // that guards its out-parameter against NULL (which is what
+                // `has_data` is here) but not against the end of the array,
+                // though `foldFind`'s own comment warns about it. See
+                // ~/agents/context/1786212071-upstream-neovim-bugs/
+                // fold-iems-recurse-fp2-past-end.md. Fixing it would change
+                // `bot`, i.e. behaviour, which this slice may not do.
                 if inner.has_data() {
                     bot = inner.at(k).last() + current.top();
                 }
