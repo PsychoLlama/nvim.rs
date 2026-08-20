@@ -48,6 +48,13 @@ jobs:
           key: ${{ runner.os }}-target-dev-${{ hashFiles('**/Cargo.lock', 'flake.lock') }}
           restore-keys: |
             ${{ runner.os }}-target-dev-
+
+      # Enter the devshell once for its side effect — realising the flake's
+      # store paths — as its own step, so that download time is attributed
+      # here and doesn't inflate the check step's timing in the CI summary.
+      - name: Hydrate the nix store
+        run: 'true'
+
       - run: just minimal-ci
         env:
           TREEFMT_CI: true
