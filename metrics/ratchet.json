@@ -574,7 +574,7 @@
     "crates/nvim/src/mark/lookup.rs": {"cell_ptr": 1, "unsafe_lines": 40},
     "crates/nvim/src/mark/mod.rs": {"cell_ptr": 3, "unsafe_lines": 146},
     "crates/nvim/src/mark/shada.rs": {"unsafe_lines": 24},
-    "crates/nvim/src/mark/show.rs": {"cell_ptr": 2, "unsafe_lines": 238},
+    "crates/nvim/src/mark/show.rs": {"cell_ptr": 2, "unsafe_lines": 109},
     "crates/nvim/src/mark/store.rs": {"cell_ptr": 1, "unsafe_lines": 33},
     "crates/nvim/src/marktree/check.rs": {"extern_abi": 5, "missing_safety_doc": 1, "no_mangle": 5, "unsafe_lines": 29},
     "crates/nvim/src/marktree/cursor.rs": {"unsafe_lines": 11},

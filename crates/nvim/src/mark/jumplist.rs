@@ -485,7 +485,7 @@ pub unsafe fn ex_changes(_eap: *mut exarg_T) {
                     change.col(),
                 );
                 msg_outtrans(IObuff.ptr().cast::<c_char>(), 0, false);
-                let name = mark_line(change.pos_raw(), 17);
+                let name = mark_line(change.pos(), 17);
                 msg_outtrans(name, HLF_D, false);
                 xfree(name.cast());
                 os_breakcheck();
