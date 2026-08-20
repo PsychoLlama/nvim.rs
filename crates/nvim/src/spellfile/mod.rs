@@ -170,8 +170,15 @@ pub struct spellinfo_T {
     pub si_newprefID: ::core::ffi::c_int,
     pub si_newcompID: ::core::ffi::c_int,
 }
+/// What one `.aff` file declared.
+///
+/// Parse-time only: `:mkspell` reads the affix and dictionary files into
+/// this and the word trees, and [`write::write_vim_spell`] then emits the
+/// `.spl` a field at a time. None of the types below is ever written to a
+/// file as a struct image, none is named by `tools/ffigen/unit-cdefs.h` or
+/// the ABI ledger, and none crosses an `extern` boundary — so none of them
+/// carries `repr(C)`, and the compiler is free to lay them out.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct afffile_T {
     pub af_enc: *mut ::core::ffi::c_char,
     pub af_flagtype: ::core::ffi::c_int,
@@ -192,8 +199,8 @@ pub struct afffile_T {
     pub af_comp: hashtab_T,
 }
 pub type affentry_T = affentry_S;
+/// One `PFX`/`SFX` line: what to chop, what to add, and when.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct affentry_S {
     pub ae_next: *mut affentry_T,
     pub ae_chop: *mut ::core::ffi::c_char,
@@ -204,8 +211,12 @@ pub struct affentry_S {
     pub ae_compforbid: ::core::ffi::c_char,
     pub ae_comppermit: ::core::ffi::c_char,
 }
+/// All the `PFX`/`SFX` blocks that share one affix name.
+///
+/// The `af_pref`/`af_suff` tables key on [`ah_key`](Self::ah_key), which
+/// the header owns, so the table's key pointer points *into* the header;
+/// [`Self::key`] and [`Self::of_key`] are the two directions.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct affheader_T {
     pub ah_key: [::core::ffi::c_char; 17],
     pub ah_flag: ::core::ffi::c_uint,
@@ -215,12 +226,56 @@ pub struct affheader_T {
     pub ah_first: *mut affentry_T,
 }
 
+impl affheader_T {
+    /// This header's affix name, as the NUL-terminated string `af_pref` and
+    /// `af_suff` key on.
+    fn key(this: *mut Self) -> *mut ::core::ffi::c_char {
+        // SAFETY: the offset lands inside the header; nothing is read.
+        unsafe { (&raw mut (*this).ah_key).cast() }
+    }
+
+    /// The header a [`key`](Self::key) came from.
+    ///
+    /// # Safety
+    ///
+    /// `key` must be a pointer [`key`](Self::key) returned for a header
+    /// that is still live.
+    unsafe fn of_key(key: *mut ::core::ffi::c_char) -> *mut Self {
+        // SAFETY: the caller promises the pointer names a live header's key
+        // field, so stepping back over the field's offset lands on it.
+        unsafe { key.byte_sub(::core::mem::offset_of!(Self, ah_key)).cast() }
+    }
+}
+
+/// One `COMPOUNDFLAG` value and the internal id standing in for it.
+///
+/// `af_comp` keys on [`ci_key`](Self::ci_key) exactly as `af_pref` keys on
+/// an affix name; see [`affheader_T`].
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct compitem_T {
     pub ci_key: [::core::ffi::c_char; 17],
     pub ci_flag: ::core::ffi::c_uint,
     pub ci_newID: ::core::ffi::c_int,
+}
+
+impl compitem_T {
+    /// This item's compound flag, as the NUL-terminated string `af_comp`
+    /// keys on.
+    fn key(this: *mut Self) -> *mut ::core::ffi::c_char {
+        // SAFETY: the offset lands inside the item; nothing is read.
+        unsafe { (&raw mut (*this).ci_key).cast() }
+    }
+
+    /// The item a [`key`](Self::key) came from.
+    ///
+    /// # Safety
+    ///
+    /// `key` must be a pointer [`key`](Self::key) returned for an item that
+    /// is still live.
+    unsafe fn of_key(key: *mut ::core::ffi::c_char) -> *mut Self {
+        // SAFETY: as for `affheader_T::of_key`.
+        unsafe { key.byte_sub(::core::mem::offset_of!(Self, ci_key)).cast() }
+    }
 }
 
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
@@ -795,29 +850,33 @@ unsafe fn spell_message(spin: &spellinfo_T, text: *mut ::core::ffi::c_char) {
 ///
 /// `eap` must be a live excommand.
 pub unsafe fn ex_spell(eap: *mut exarg_T) {
-    // SAFETY: the caller promises the excommand; `arg` is its NUL-terminated
-    // argument.
+    // SAFETY: the caller promises the excommand.
+    let (cmdidx, forceit, line2, arg) =
+        unsafe { ((*eap).cmdidx, (*eap).forceit, (*eap).line2, (*eap).arg) };
+
+    let kind = if cmdidx == CMD_spellwrong {
+        SPELL_ADD_BAD
+    } else if cmdidx == CMD_spellrare {
+        SPELL_ADD_RARE
+    } else {
+        SPELL_ADD_GOOD
+    };
+    // `:N spellgood` files the word in the Nth 'spellfile'; `!` means the
+    // internal word list instead.
+    let which = if forceit != 0 {
+        0
+    } else {
+        line2 as ::core::ffi::c_int
+    };
+
+    // SAFETY: `arg` is the excommand's NUL-terminated argument.
     unsafe {
-        let kind = if (*eap).cmdidx == CMD_spellwrong {
-            SPELL_ADD_BAD
-        } else if (*eap).cmdidx == CMD_spellrare {
-            SPELL_ADD_RARE
-        } else {
-            SPELL_ADD_GOOD
-        };
-        // `:N spellgood` files the word in the Nth 'spellfile'; `!` means
-        // the internal word list instead.
-        let which = if (*eap).forceit != 0 {
-            0
-        } else {
-            (*eap).line2 as ::core::ffi::c_int
-        };
         spell_add_word(
-            (*eap).arg,
-            strlen((*eap).arg) as ::core::ffi::c_int,
+            arg,
+            strlen(arg) as ::core::ffi::c_int,
             kind as SpellAddType,
             which,
-            (*eap).cmdidx == CMD_spellundo,
+            cmdidx == CMD_spellundo,
         );
     }
 }
@@ -851,4 +910,43 @@ fn set_spell_finish(new_st: &spelltab_T) -> ::core::ffi::c_int {
         return FAIL;
     }
     OK
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The affix tables store a pointer *into* the header, so the way back
+    /// is the field's offset — which is why dropping `repr(C)` from these
+    /// parse-time structs costs nothing.
+    #[test]
+    fn an_affix_key_names_the_header_it_came_from() {
+        let mut ah = affheader_T {
+            ah_key: [0; 17],
+            ah_flag: 0,
+            ah_newID: 0,
+            ah_combine: 0,
+            ah_follows: 0,
+            ah_first: ::core::ptr::null_mut(),
+        };
+        let at = &raw mut ah;
+        let key = affheader_T::key(at);
+        assert_eq!(key, (&raw mut ah.ah_key).cast());
+        // SAFETY: `key` is this header's key field and the header is alive.
+        assert_eq!(unsafe { affheader_T::of_key(key) }, at);
+    }
+
+    #[test]
+    fn a_compound_key_names_the_item_it_came_from() {
+        let mut ci = compitem_T {
+            ci_key: [0; 17],
+            ci_flag: 0,
+            ci_newID: 0,
+        };
+        let at = &raw mut ci;
+        let key = compitem_T::key(at);
+        assert_eq!(key, (&raw mut ci.ci_key).cast());
+        // SAFETY: `key` is this item's key field and the item is alive.
+        assert_eq!(unsafe { compitem_T::of_key(key) }, at);
+    }
 }

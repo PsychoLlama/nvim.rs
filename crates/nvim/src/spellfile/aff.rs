@@ -602,7 +602,7 @@ unsafe fn handle_line(
         }
         if is_affix
             && st.aff_todo > 0
-            && strcmp((&raw mut (*st.cur_aff).ah_key).cast::<c_char>(), items[1]) == 0
+            && strcmp(affheader_T::key(st.cur_aff), items[1]) == 0
             && items.len() >= 5
         {
             handle_affix_entry(spin, aff, st, items, fname, lnum);

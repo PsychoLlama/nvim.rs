@@ -260,10 +260,10 @@ pub unsafe fn process_compflags(
                 let id = if !(*hi).hi_key.is_null()
                     && (*hi).hi_key != (&raw const hash_removed).cast_mut().cast()
                 {
-                    (*(*hi).hi_key.cast::<compitem_T>()).ci_newID
+                    (*compitem_T::of_key((*hi).hi_key)).ci_newID
                 } else {
                     let ci = (*spin).si_arena.alloc::<compitem_T>();
-                    strcpy((&raw mut (*ci).ci_key).cast::<c_char>(), key.as_mut_ptr());
+                    strcpy(compitem_T::key(ci), key.as_mut_ptr());
                     (*ci).ci_flag = flag;
                     // Ids count downwards, skipping any byte that would be
                     // meaningful in the pattern this becomes.
@@ -276,10 +276,7 @@ pub unsafe fn process_compflags(
                         }
                     };
                     (*ci).ci_newID = id;
-                    hash_add(
-                        &raw mut (*aff).af_comp,
-                        (&raw mut (*ci).ci_key).cast::<c_char>(),
-                    );
+                    hash_add(&raw mut (*aff).af_comp, compitem_T::key(ci));
                     id
                 };
                 *tp = id as uint8_t;
@@ -332,7 +329,7 @@ pub unsafe fn spell_free_aff(aff: *mut afffile_T) {
                     && (*hi).hi_key != (&raw const hash_removed).cast_mut().cast()
                 {
                     todo -= 1;
-                    let ah = (*hi).hi_key.cast::<affheader_T>();
+                    let ah = affheader_T::of_key((*hi).hi_key);
                     let mut ae = (*ah).ah_first;
                     while !ae.is_null() {
                         vim_regfree((*ae).ae_prog);

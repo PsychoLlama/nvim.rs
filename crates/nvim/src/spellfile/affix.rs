@@ -72,7 +72,7 @@ pub unsafe fn handle_affix_header(
 
         if !(*hi).hi_key.is_null() && (*hi).hi_key != (&raw const hash_removed).cast_mut().cast() {
             // A continued block for an affix already defined.
-            st.cur_aff = (*hi).hi_key.cast::<affheader_T>();
+            st.cur_aff = affheader_T::of_key((*hi).hi_key);
             if ((*st.cur_aff).ah_combine != 0) != combines {
                 smsg_c!(
                     0,
@@ -124,8 +124,8 @@ pub unsafe fn handle_affix_header(
                     items[1],
                 );
             }
-            strcpy((&raw mut (*st.cur_aff).ah_key).cast::<c_char>(), items[1]);
-            hash_add(tp, (&raw mut (*st.cur_aff).ah_key).cast::<c_char>());
+            strcpy(affheader_T::key(st.cur_aff), items[1]);
+            hash_add(tp, affheader_T::key(st.cur_aff));
             (*st.cur_aff).ah_combine = combines as c_int;
         }
 

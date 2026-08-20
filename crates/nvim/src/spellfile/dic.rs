@@ -393,7 +393,7 @@ unsafe fn get_pfxlist(
                 {
                     // Only prefixes that were actually postponed have an
                     // id; the rest were expanded into the word list.
-                    let id = (*(*hi).hi_key.cast::<affheader_T>()).ah_newID;
+                    let id = (*affheader_T::of_key((*hi).hi_key)).ah_newID;
                     if id != 0 {
                         *store_afflist.offset(cnt as isize) = id as uint8_t as c_char;
                         cnt += 1;
@@ -433,7 +433,7 @@ unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_affl
                     && (*hi).hi_key != (&raw const hash_removed).cast_mut().cast()
                 {
                     *store_afflist.offset(cnt as isize) =
-                        (*(*hi).hi_key.cast::<compitem_T>()).ci_newID as uint8_t as c_char;
+                        (*compitem_T::of_key((*hi).hi_key)).ci_newID as uint8_t as c_char;
                     cnt += 1;
                 }
             }
@@ -488,7 +488,7 @@ pub unsafe fn store_aff_word(
                 continue;
             }
             todo -= 1;
-            let ah = (*hi).hi_key.cast::<affheader_T>();
+            let ah = affheader_T::of_key((*hi).hi_key);
 
             if (condit & CONDIT_COMB == 0 || (*ah).ah_combine != 0)
                 && flag_in_afflist((*affile).af_flagtype, afflist, (*ah).ah_flag)
