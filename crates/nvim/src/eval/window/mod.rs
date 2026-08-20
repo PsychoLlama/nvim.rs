@@ -49,7 +49,7 @@ pub use view::{
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::buffer::{bt_quickfix, bt_terminal, do_autochdir};
 use crate::cursor::{check_cursor, check_pos};
-use crate::eval::funcs::args::{Args, frame, number_as_int};
+use crate::eval::funcs::args::{Args, frame};
 use crate::eval::funcs::execute_common;
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_nr,
@@ -68,6 +68,7 @@ use crate::r#move::{
     changed_window_setting, check_topfill, set_topline, update_curswant, validate_botline_win,
     validate_cursor, win_col_off,
 };
+use crate::narrow::number_as_int;
 use crate::normal::end_visual_mode;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::strings::vim_snprintf_safelen;

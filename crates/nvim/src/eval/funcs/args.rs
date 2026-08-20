@@ -11,23 +11,8 @@
 //! That is the whole contract, and [`Args`] is it, expressed once.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::types::{VAR_UNKNOWN, VarType, typval_T, varnumber_T};
-use core::ffi::c_int;
+use crate::types::{VAR_UNKNOWN, VarType, typval_T};
 use core::marker::PhantomData;
-
-/// A vimscript Number narrowed to a C `int`, the way upstream's `(int)` casts
-/// do: the low 32 bits, wrapping.
-///
-/// Vimscript numbers are 64-bit and nearly everything a builtin hands back to
-/// the editor — a window id, a buffer number, a tab page number, a count — is
-/// an `int`, so the C writes this narrowing out at well over a hundred sites.
-/// It is deliberate and it is load-bearing: `winnr(0x1_0000_0000)` truncates to
-/// 0, which reads as "the current window", and a differential would see any
-/// other answer. Naming it once is what lets the modules that have adopted
-/// clippy's cast family keep the lints on.
-pub(crate) const fn number_as_int(n: varnumber_T) -> c_int {
-    n as c_int
-}
 
 /// The size of the evaluator's argument buffer, minus its terminator slot.
 /// `MAX_FUNC_ARGS` in the C; both dispatchers declare `typval_T argv[MAX +
@@ -113,24 +98,3 @@ macro_rules! frame {
 }
 
 pub(crate) use frame;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_number_narrows_to_an_int_by_wrapping() {
-        assert_eq!(number_as_int(0), 0);
-        assert_eq!(number_as_int(1000), 1000);
-        assert_eq!(number_as_int(-1), -1);
-        // The load-bearing case: `winnr(0x1_0000_0000)` truncates to 0, which
-        // the window resolver reads as "the current window". Anything that
-        // rejected the value instead -- a `try_from`, a saturating narrow --
-        // would answer differently.
-        assert_eq!(number_as_int(0x1_0000_0000), 0);
-        assert_eq!(number_as_int(0x1_0000_0001), 1);
-        // And the sign wraps rather than saturating.
-        assert_eq!(number_as_int(varnumber_T::from(c_int::MAX) + 1), c_int::MIN);
-        assert_eq!(number_as_int(varnumber_T::MAX), -1);
-    }
-}

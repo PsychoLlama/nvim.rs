@@ -41,7 +41,7 @@ use crate::buffer::{
 use crate::change::{appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes};
 use crate::cursor::check_cursor_col;
 use crate::edit::buf_prompt_text;
-use crate::eval::funcs::args::{Args, frame, number_as_int};
+use crate::eval::funcs::args::{Args, frame};
 use crate::eval::funcs::{get_buf_arg, tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
     callback_free, tv_check_str_or_nr, tv_clear, tv_dict_add_dict, tv_dict_add_list,
@@ -53,6 +53,7 @@ use crate::eval::typval::{
 use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
+use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{mem, ptr};
 

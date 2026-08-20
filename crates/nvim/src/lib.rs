@@ -90,6 +90,7 @@ pub mod mouse;
 pub mod r#move;
 pub mod mpack;
 pub mod msgpack_rpc;
+pub mod narrow;
 pub mod normal;
 pub mod ops;
 pub mod option;
