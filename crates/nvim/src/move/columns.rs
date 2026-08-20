@@ -337,9 +337,9 @@ pub unsafe fn textpos2screenpos(
 pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
     let (dict, wp) = unsafe { (alloc_dict_ret(rettv), find_win_by_nr_or_id(argvars)) };
-    if wp.is_null() {
+    let Some(wp) = wp else {
         return;
-    }
+    };
     // SAFETY: the evaluator's calling convention: three arguments, checked
     // by the builtin table.
     let (lnum, col) = unsafe { (arg_number(argvars, 1), arg_number(argvars, 2)) };
@@ -348,8 +348,7 @@ pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         col: (col as colnr_T - 1).max(0),
         coladd: 0,
     };
-    // SAFETY: `find_win_by_nr_or_id` answered a live window.
-    if pos.lnum > unsafe { Win::new(wp) }.buffer().line_count() {
+    if pos.lnum > wp.buffer().line_count() {
         // SAFETY: a NUL-terminated format string and the one argument it
         // names. Not `semsg!`: this is vim's own `printf`.
         unsafe {
@@ -363,7 +362,7 @@ pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);
     let (r, s, c, e) = (&raw mut row, &raw mut scol, &raw mut ccol, &raw mut ecol);
     // SAFETY: a live window, and five out-params of this frame.
-    unsafe { textpos2screenpos(wp, &raw mut pos, r, s, c, e, false) };
+    unsafe { textpos2screenpos(wp.raw(), &raw mut pos, r, s, c, e, false) };
     for (name, value) in [
         (c"row", row),
         (c"col", scol),
@@ -448,15 +447,12 @@ pub unsafe fn f_virtcol2col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         return;
     }
     // SAFETY: the evaluator's calling convention.
-    let wp = unsafe { find_win_by_nr_or_id(argvars) };
-    if wp.is_null() {
+    let Some(win) = (unsafe { find_win_by_nr_or_id(argvars) }) else {
         return;
-    }
+    };
     let mut error = false;
     // SAFETY: the evaluator's calling convention, and `error` is of this frame.
     let lnum = unsafe { tv_get_number_chk(argvars.offset(1), &raw mut error) } as linenr_T;
-    // SAFETY: `find_win_by_nr_or_id` answered a live window.
-    let win = unsafe { Win::new(wp) };
     if error || lnum < 0 || lnum > win.buffer().line_count() {
         return;
     }

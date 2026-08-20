@@ -1,110 +1,158 @@
+//! The dictionary `getbufinfo()` returns.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use super::*;
 use crate::buffer::buf_get_changedtick;
 use crate::types::{VAR_DICT, VAR_UNKNOWN, kListLenMayKnow};
 
-/// Returns buffer options, variables and other attributes in a dictionary.
-unsafe fn get_buffer_info(buf: *mut buf_T) -> *mut dict_T {
-    let dict: *mut dict_T = tv_dict_alloc();
+/// One `getbufinfo()` entry: a buffer's options, variables and attributes.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
+    // SAFETY: the caller's obligation. The dictionary is handed straight to
+    // the caller's list, so it is not leaked, and it stays alive for every
+    // entry the closure adds.
+    let dict = unsafe { tv_dict_alloc() };
     let nr = |key: &CStr, value: varnumber_T| {
-        tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value);
+        // SAFETY: a live dictionary and a NUL-terminated key.
+        unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+    };
+    let str = |key: &CStr, value: *const c_char| {
+        // SAFETY: a live dictionary, and two NUL-terminated strings.
+        unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
+    };
+    let list = |key: &CStr, value: *mut list_T| {
+        // SAFETY: a live dictionary and a live list, which the dictionary
+        // takes over.
+        unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
-    nr(c"bufnr", (*buf).handle as varnumber_T);
-    tv_dict_add_str(
-        dict,
-        c"name".as_ptr(),
-        c"name".count_bytes(),
-        if !(*buf).b_ffname.is_null() {
-            (*buf).b_ffname as *const c_char
-        } else {
+    nr(c"bufnr", varnumber_T::from(buf.handle));
+    str(
+        c"name",
+        if buf.b_ffname.is_null() {
             c"".as_ptr()
+        } else {
+            buf.b_ffname as *const c_char
         },
     );
+    // The *current* buffer's line is the cursor's; any other's is the one it
+    // will be entered at.
+    let lnum = if buf.raw() == curbuf.get() {
+        // SAFETY: `curwin` is set from startup to exit.
+        unsafe { Win::current() }.w_cursor.lnum
+    } else {
+        // SAFETY: a live buffer.
+        unsafe { buflist_findlnum(buf.raw()) }
+    };
+    nr(c"lnum", varnumber_T::from(lnum));
+    nr(c"linecount", varnumber_T::from(buf.line_count()));
+    nr(c"loaded", varnumber_T::from(!buf.b_ml.ml_mfp.is_null()));
+    nr(c"listed", varnumber_T::from(buf.b_p_bl));
+    // SAFETY: a live buffer.
     nr(
-        c"lnum",
-        (if buf == curbuf.get() {
-            (*curwin.get()).w_cursor.lnum
-        } else {
-            buflist_findlnum(buf)
-        }) as varnumber_T,
+        c"changed",
+        varnumber_T::from(unsafe { buf_is_changed(buf.raw()) }),
     );
-    nr(c"linecount", (*buf).b_ml.ml_line_count as varnumber_T);
-    nr(c"loaded", !(*buf).b_ml.ml_mfp.is_null() as varnumber_T);
-    nr(c"listed", (*buf).b_p_bl as varnumber_T);
-    nr(c"changed", buf_is_changed(buf) as varnumber_T);
-    nr(c"changedtick", buf_get_changedtick(&*buf));
+    // SAFETY: a live buffer.
+    nr(c"changedtick", unsafe { buf_get_changedtick(buf.raw()) });
     nr(
         c"hidden",
-        (!(*buf).b_ml.ml_mfp.is_null() && (*buf).b_nwindows == 0) as varnumber_T,
+        varnumber_T::from(!buf.b_ml.ml_mfp.is_null() && buf.b_nwindows == 0),
     );
-    nr(c"command", (buf == cmdwin_buf.get()) as varnumber_T);
-    tv_dict_add_dict(
-        dict,
-        c"variables".as_ptr(),
-        c"variables".count_bytes(),
-        (*buf).b_vars,
-    );
-
-    // List of windows displaying this buffer.
-    let windows: *mut list_T = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-    for wp in tab_windows().map(Win::raw) {
-        if (*wp).w_buffer == buf {
-            tv_list_append_number(windows, (*wp).handle as varnumber_T);
-        }
-    }
-    tv_dict_add_list(dict, c"windows".as_ptr(), c"windows".count_bytes(), windows);
-
-    if buf_has_signs(buf) {
-        tv_dict_add_list(
+    nr(c"command", varnumber_T::from(buf.raw() == cmdwin_buf.get()));
+    // SAFETY: a live dictionary and the buffer's own variable dictionary.
+    unsafe {
+        tv_dict_add_dict(
             dict,
-            c"signs".as_ptr(),
-            c"signs".count_bytes(),
-            get_buffer_signs(buf),
+            c"variables".as_ptr(),
+            c"variables".count_bytes(),
+            buf.b_vars,
         );
     }
-    nr(c"lastused", (*buf).b_last_used as varnumber_T);
+
+    // The windows displaying this buffer.
+    // SAFETY: the list is handed to the dictionary below, so it is not leaked.
+    let windows = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let append = |handle: handle_T| {
+        // SAFETY: a live list.
+        unsafe { tv_list_append_number(windows, varnumber_T::from(handle)) };
+    };
+    for wp in tab_windows().filter(|wp| wp.w_buffer == buf.raw()) {
+        append(wp.handle);
+    }
+    list(c"windows", windows);
+
+    // SAFETY: a live buffer; `get_buffer_signs` hands back a fresh list the
+    // dictionary takes over.
+    if unsafe { buf_has_signs(buf.raw()) } {
+        list(c"signs", unsafe { get_buffer_signs(buf.raw()) });
+    }
+    nr(c"lastused", buf.b_last_used);
     dict
 }
-/// "getbufinfo()" function
+
+/// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
+/// filter dictionary selects.
 pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    let mut argbuf: *mut buf_T = ptr::null_mut();
-    let mut filtered: bool = false;
-    let mut sel_buflisted: bool = false;
-    let mut sel_bufloaded: bool = false;
-    let mut sel_bufmodified: bool = false;
-    tv_list_alloc_ret(rettv, kListLenMayKnow as c_int as ptrdiff_t);
-    if (*argvars.offset(0)).v_type == VAR_DICT {
-        let mut sel_d: *mut dict_T = (*argvars.offset(0)).vval.v_dict;
-        if !sel_d.is_null() {
-            filtered = true;
-            let flag = |key: &CStr| {
-                let di = tv_dict_find(sel_d, key.as_ptr(), key.count_bytes() as ptrdiff_t);
-                !di.is_null() && tv_get_number(&raw mut (*di).di_tv) != 0
-            };
-            sel_buflisted = flag(c"buflisted");
-            sel_bufloaded = flag(c"bufloaded");
-            sel_bufmodified = flag(c"bufmodified");
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
+    // `rettv` for the whole walk, and `tv_dict_find` hands back a live entry
+    // of the dictionary the argument holds.
+    unsafe {
+        let list = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
+        let mut argbuf: *mut buf_T = ptr::null_mut();
+        let mut filter = Filter::default();
+        if args.ty(0) == VAR_DICT {
+            let sel_d = args.get(0).vval.v_dict;
+            if !sel_d.is_null() {
+                let flag = |key: &CStr| {
+                    let di = tv_dict_find(sel_d, key.as_ptr(), key.count_bytes() as ptrdiff_t);
+                    !di.is_null() && tv_get_number(&raw mut (*di).di_tv) != 0
+                };
+                filter = Filter {
+                    on: true,
+                    buflisted: flag(c"buflisted"),
+                    bufloaded: flag(c"bufloaded"),
+                    bufmodified: flag(c"bufmodified"),
+                };
+            }
+        } else if args.ty(0) != VAR_UNKNOWN {
+            argbuf = tv_get_buf_from_arg(args.ptr(0));
+            if argbuf.is_null() {
+                return;
+            }
         }
-    } else if (*argvars.offset(0)).v_type != VAR_UNKNOWN {
-        argbuf = tv_get_buf_from_arg(argvars.offset(0));
-        if argbuf.is_null() {
-            return;
-        }
-    }
-    let mut buf: *mut buf_T = firstbuf.get();
-    while !buf.is_null() {
-        if !(!argbuf.is_null() && argbuf != buf)
-            && !(filtered
-                && (sel_bufloaded && (*buf).b_ml.ml_mfp.is_null()
-                    || sel_buflisted && (*buf).b_p_bl == 0
-                    || sel_bufmodified && (*buf).b_changed == 0))
-        {
-            let d: *mut dict_T = get_buffer_info(buf);
-            tv_list_append_dict((*rettv).vval.v_list, d);
+        for buf in buffers() {
+            if !argbuf.is_null() && argbuf != buf.raw() || filter.rejects(buf) {
+                continue;
+            }
+            tv_list_append_dict(list, get_buffer_info(buf));
             if !argbuf.is_null() {
                 return;
             }
         }
-        buf = (*buf).b_next;
+    }
+}
+
+/// The `getbufinfo({dict})` selectors. Each is an *additional* requirement,
+/// and `on` is false when no dictionary was given at all.
+#[derive(Default)]
+struct Filter {
+    on: bool,
+    buflisted: bool,
+    bufloaded: bool,
+    bufmodified: bool,
+}
+
+impl Filter {
+    /// Whether `buf` fails one of the selectors that is switched on.
+    fn rejects(&self, buf: Buf) -> bool {
+        self.on
+            && (self.bufloaded && buf.b_ml.ml_mfp.is_null()
+                || self.buflisted && buf.b_p_bl == 0
+                || self.bufmodified && buf.b_changed == 0)
     }
 }

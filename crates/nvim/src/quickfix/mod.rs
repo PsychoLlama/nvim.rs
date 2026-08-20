@@ -45,7 +45,7 @@ use crate::eval::typval::{
     tv_list_append_dict, tv_list_first, tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::set_internal_string_var;
-use crate::eval::window::{find_win_by_nr_or_id, win_id2wp};
+use crate::eval::window::{find_win_by_nr_or_id, win_by_id};
 use crate::eval::{
     callback_call, callback_from_typval, eval_expr, set_ref_in_callback, set_ref_in_item,
 };

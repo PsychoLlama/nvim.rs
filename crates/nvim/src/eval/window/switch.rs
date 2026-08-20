@@ -1,161 +1,245 @@
+//! Making another window current for the duration of a call, which is what
+//! `win_execute()` and the API's window-scoped entry points use.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use super::*;
 use crate::pos::equalpos;
 use crate::types::VAR_STRING;
 
 /// Switch to a window for executing user code.
-/// Caller must call win_execute_after() later regardless of return value.
 ///
-/// Returns whether switching the window succeeded.
+/// The caller must call [`win_execute_after`] afterwards whatever the answer
+/// is, because the saved state is written before the switch is attempted.
+///
+/// # Safety
+/// `args` must point at a writable `win_execute_T`, and `wp`/`tp` must be a
+/// live window and tab page.
 pub unsafe fn win_execute_before(
     args: *mut win_execute_T,
     wp: *mut win_T,
     tp: *mut tabpage_T,
 ) -> bool {
-    (*args).wp = wp;
-    (*args).curpos = (*wp).w_cursor;
-    (*args).cwd_status = FAIL;
-    (*args).apply_acd = false;
-    (*args).save_sfname = ptr::null_mut();
-    if curwin.get() != wp
-        && (!(*curwin.get()).w_localdir.is_null()
-            || !(*wp).w_localdir.is_null()
-            || curtab.get() != tp
-                && (!(*curtab.get()).tp_localdir.is_null() || !(*tp).tp_localdir.is_null())
-            || p_acd.get() != 0)
-    {
-        (*args).cwd_status = os_dirname(&raw mut (*args).cwd as *mut c_char, MAXPATHL as size_t);
-    }
-    if (*args).cwd_status == OK && p_acd.get() != 0 {
-        if !(*curbuf.get()).b_sfname.is_null()
-            && (*curbuf.get()).b_fname == (*curbuf.get()).b_sfname
+    // SAFETY: the caller's obligation. `args` is the caller's own storage and
+    // nothing below can reach it, so the exclusive borrow is sound; `autocwd`
+    // is a live local and `os_dirname` fills at most `MAXPATHL` bytes.
+    let (args, win, tab) = unsafe { (&mut *args, Win::new(wp), TabPage::new(tp)) };
+    args.wp = wp;
+    args.curpos = win.w_cursor;
+    args.cwd_status = FAIL;
+    args.apply_acd = false;
+    args.save_sfname = ptr::null_mut();
+    // SAFETY: live window and tab page handles, and the globals they are
+    // compared against are set from startup to exit.
+    unsafe {
+        // The working directory only has to be saved when running the code
+        // there could change it: a different window or tab page with a
+        // `:lcd`/`:tcd` of its own, or 'autochdir'.
+        if !win.is_current()
+            && (!(*curwin.get()).w_localdir.is_null()
+                || !win.w_localdir.is_null()
+                || !tab.is_current()
+                    && (!(*curtab.get()).tp_localdir.is_null() || !tab.tp_localdir.is_null())
+                || p_acd.get() != 0)
         {
-            (*args).save_sfname = xstrdup((*curbuf.get()).b_sfname);
+            args.cwd_status = os_dirname(args.cwd.as_mut_ptr(), MAXPATHL as size_t);
         }
-        do_autochdir();
-        let mut autocwd: [c_char; 4096] = [0; 4096];
-        if os_dirname(&raw mut autocwd as *mut c_char, MAXPATHL as size_t) == OK {
-            (*args).apply_acd = strcmp(
-                &raw mut (*args).cwd as *mut c_char,
-                &raw mut autocwd as *mut c_char,
-            ) == 0;
+        if args.cwd_status == OK && p_acd.get() != 0 {
+            // 'autochdir' will move the working directory itself when the
+            // window is entered; `apply_acd` records that it has already
+            // landed where the saved one says, so the restore can skip it.
+            let buf = Buf::current();
+            if !buf.b_sfname.is_null() && buf.b_fname == buf.b_sfname {
+                args.save_sfname = xstrdup(buf.b_sfname);
+            }
+            do_autochdir();
+            let mut autocwd: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
+            if os_dirname(autocwd.as_mut_ptr(), MAXPATHL as size_t) == OK {
+                args.apply_acd = strcmp(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) == 0;
+            }
         }
-    }
-    if switch_win_noblock(&raw mut (*args).switchwin, wp, tp, true) == OK {
-        check_cursor(curwin.get());
-        return true;
+        if switch_win_noblock(&raw mut args.switchwin, wp, tp, true) == OK {
+            check_cursor(curwin.get());
+            return true;
+        }
     }
     false
 }
+
 /// Restore the previous window after executing user code.
+///
+/// # Safety
+/// `args` must be the value [`win_execute_before`] was handed.
 pub unsafe fn win_execute_after(args: *mut win_execute_T) {
-    restore_win_noblock(&raw mut (*args).switchwin, true);
-    if (*args).apply_acd {
-        xfree((*args).save_sfname as *mut c_void);
-        do_autochdir();
-    } else if (*args).cwd_status == OK {
-        os_chdir(&raw mut (*args).cwd as *mut c_char);
-        if !(*args).save_sfname.is_null() {
-            xfree((*curbuf.get()).b_sfname as *mut c_void);
-            (*curbuf.get()).b_sfname = (*args).save_sfname;
-            (*curbuf.get()).b_fname = (*curbuf.get()).b_sfname;
+    // SAFETY: the caller's obligation. `args` is the caller's own storage and
+    // nothing below can reach it; `win_valid` re-checks the saved window,
+    // because the code that ran may have closed it.
+    let args = unsafe { &mut *args };
+    unsafe {
+        restore_win_noblock(&raw mut args.switchwin, true);
+        if args.apply_acd {
+            xfree(args.save_sfname as *mut c_void);
+            do_autochdir();
+        } else if args.cwd_status == OK {
+            os_chdir(args.cwd.as_mut_ptr());
+            if !args.save_sfname.is_null() {
+                let mut buf = Buf::current();
+                xfree(buf.b_sfname as *mut c_void);
+                buf.b_sfname = args.save_sfname;
+                buf.b_fname = buf.b_sfname;
+            }
+        }
+        if win_valid(args.wp) {
+            let mut win = Win::new(args.wp);
+            if !equalpos(args.curpos, win.w_cursor) {
+                win.w_redr_status = true;
+            }
+        }
+        check_cursor(curwin.get());
+        if VIsual_active.get() {
+            check_pos(curbuf.get(), VIsual.ptr());
         }
     }
-    if win_valid((*args).wp) && !equalpos((*args).curpos, (*(*args).wp).w_cursor) {
-        (*(*args).wp).w_redr_status = true;
-    }
-    check_cursor(curwin.get());
-    if VIsual_active.get() {
-        check_pos(curbuf.get(), VIsual.ptr());
-    }
 }
-/// "win_execute(win_id, command)" function
+
+/// `win_execute({winid}, {command} [, {silent}])`.
 pub unsafe fn f_win_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    (*rettv).v_type = VAR_STRING;
-    (*rettv).vval.v_string = ptr::null_mut();
-    let mut id: c_int = tv_get_number(argvars) as c_int;
-    let mut tp: *mut tabpage_T = ptr::null_mut();
-    let mut wp: *mut win_T = win_id2wp_tp(id, &raw mut tp);
-    if wp.is_null() || tp.is_null() {
-        return;
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_STRING;
+    rettv.vval.v_string = ptr::null_mut();
+    // SAFETY: the arguments and `rettv` are live typvals; the saved state is a
+    // live local that `win_execute_after` is given whatever happens between.
+    unsafe {
+        let id = number_as_int(tv_get_number(args.ptr(0)));
+        let Some((wp, tp)) = win_and_tab_by_id(id) else {
+            return;
+        };
+        let mut saved: win_execute_T = mem::zeroed();
+        if win_execute_before(&raw mut saved, wp.raw(), tp.raw()) {
+            execute_common(argvars, rettv, 1);
+        }
+        win_execute_after(&raw mut saved);
     }
-    let mut win_execute_args: win_execute_T = mem::zeroed();
-    if win_execute_before(&raw mut win_execute_args, wp, tp) {
-        execute_common(argvars, rettv, 1);
-    }
-    win_execute_after(&raw mut win_execute_args);
 }
-/// Set "win" to be the curwin and "tp" to be the current tab page.
-/// restore_win() MUST be called to undo, also when FAIL is returned.
-/// No autocommands will be executed until restore_win() is called.
+
+/// Make `win` the current window and `tp` the current tab page.
 ///
-/// `no_display` — if true the display won't be affected, no redraw is
-///                    triggered, another tabpage access is limited.
+/// [`restore_win`] MUST be called to undo this, `FAIL` included. No
+/// autocommands run until it is.
 ///
-/// Returns FAIL if switching to "win" failed.
+/// `no_display` keeps the display untouched: no redraw is triggered and
+/// another tab page is only half entered.
+///
+/// # Safety
+/// `switchwin` must be writable, `win` a live window and `tp` a live tab page
+/// or NULL.
 pub unsafe fn switch_win(
     switchwin: *mut switchwin_T,
     win: *mut win_T,
     tp: *mut tabpage_T,
     no_display: bool,
 ) -> c_int {
-    block_autocmds();
-    switch_win_noblock(switchwin, win, tp, no_display)
+    // SAFETY: the caller's obligation.
+    unsafe {
+        block_autocmds();
+        switch_win_noblock(switchwin, win, tp, no_display)
+    }
 }
-/// As switch_win() but without blocking autocommands.
+
+/// [`switch_win`] without blocking autocommands.
+///
+/// # Safety
+/// As [`switch_win`].
 pub unsafe fn switch_win_noblock(
     switchwin: *mut switchwin_T,
     win: *mut win_T,
     tp: *mut tabpage_T,
     no_display: bool,
 ) -> c_int {
-    memset(switchwin as *mut c_void, 0, size_of::<switchwin_T>());
-    (*switchwin).sw_curwin = curwin.get();
+    // SAFETY: the caller's obligation. `switchwin` is the caller's own
+    // storage and nothing below can reach it, so the exclusive borrow is
+    // sound; all-zero is a valid `switchwin_T`.
+    let switchwin = unsafe {
+        memset(switchwin as *mut c_void, 0, size_of::<switchwin_T>());
+        &mut *switchwin
+    };
+    switchwin.sw_curwin = curwin.get();
     if win == curwin.get() {
-        (*switchwin).sw_same_win = true;
+        switchwin.sw_same_win = true;
     } else {
-        (*switchwin).sw_visual_active = VIsual_active.get();
+        // A Visual selection belongs to the window it was made in.
+        switchwin.sw_visual_active = VIsual_active.get();
         VIsual_active.set(false);
     }
-    if !tp.is_null() {
-        (*switchwin).sw_curtab = curtab.get();
-        if no_display {
-            unuse_tabpage(curtab.get());
-            use_tabpage(tp);
-        } else {
-            goto_tabpage_tp(tp, false, false);
+    // SAFETY: a live tab page or NULL, and `win_valid` re-checks the window
+    // before it is entered -- entering the tab page can close it.
+    unsafe {
+        if !tp.is_null() {
+            switchwin.sw_curtab = curtab.get();
+            if no_display {
+                unuse_tabpage(curtab.get());
+                use_tabpage(tp);
+            } else {
+                goto_tabpage_tp(tp, false, false);
+            }
         }
+        if !win_valid(win) {
+            return FAIL;
+        }
+        curwin.set(win);
+        curbuf.set(Win::new(win).w_buffer);
     }
-    if !win_valid(win) {
-        return FAIL;
-    }
-    curwin.set(win);
-    curbuf.set((*curwin.get()).w_buffer);
     OK
 }
-/// Restore current tabpage and window saved by switch_win(), if still valid.
-/// When "no_display" is true the display won't be affected, no redraw is
-/// triggered.
-pub unsafe fn restore_win(switchwin: *mut switchwin_T, mut no_display: bool) {
-    restore_win_noblock(switchwin, no_display);
-    unblock_autocmds();
+
+/// Restore the tab page and window [`switch_win`] saved, if they are still
+/// valid.
+///
+/// # Safety
+/// `switchwin` must be the value [`switch_win`] was handed.
+pub unsafe fn restore_win(switchwin: *mut switchwin_T, no_display: bool) {
+    // SAFETY: the caller's obligation.
+    unsafe {
+        restore_win_noblock(switchwin, no_display);
+        unblock_autocmds();
+    }
 }
-/// As restore_win() but without unblocking autocommands.
+
+/// [`restore_win`] without unblocking autocommands.
+///
+/// # Safety
+/// As [`restore_win`].
 pub unsafe fn restore_win_noblock(switchwin: *mut switchwin_T, no_display: bool) {
-    if !(*switchwin).sw_curtab.is_null() && valid_tabpage((*switchwin).sw_curtab) {
-        if no_display {
-            let old_tp_curwin: *mut win_T = (*curtab.get()).tp_curwin;
-            unuse_tabpage(curtab.get());
-            (*curtab.get()).tp_curwin = old_tp_curwin;
-            use_tabpage((*switchwin).sw_curtab);
-        } else {
-            goto_tabpage_tp((*switchwin).sw_curtab, false, false);
+    // SAFETY: the caller's obligation. `switchwin` is the caller's own
+    // storage and nothing below can reach it; both saved pointers are
+    // re-checked before being entered, because the code that ran may have
+    // closed them.
+    let switchwin = unsafe { &mut *switchwin };
+    unsafe {
+        if !switchwin.sw_curtab.is_null() && valid_tabpage(switchwin.sw_curtab) {
+            if no_display {
+                // `unuse_tabpage` writes the current window back into the tab
+                // page it is leaving; that is the wrong window here, because
+                // the caller only half entered this one.
+                let mut leaving = TabPage::current();
+                let old_tp_curwin = leaving.tp_curwin;
+                unuse_tabpage(leaving.raw());
+                leaving.tp_curwin = old_tp_curwin;
+                use_tabpage(switchwin.sw_curtab);
+            } else {
+                goto_tabpage_tp(switchwin.sw_curtab, false, false);
+            }
         }
     }
-    if !(*switchwin).sw_same_win {
-        VIsual_active.set((*switchwin).sw_visual_active);
+    if !switchwin.sw_same_win {
+        VIsual_active.set(switchwin.sw_visual_active);
     }
-    if win_valid((*switchwin).sw_curwin) {
-        curwin.set((*switchwin).sw_curwin);
-        curbuf.set((*curwin.get()).w_buffer);
+    // SAFETY: the saved window is live or freed, which `win_valid` tells
+    // apart, and a live window's buffer is live.
+    unsafe {
+        if win_valid(switchwin.sw_curwin) {
+            curwin.set(switchwin.sw_curwin);
+            curbuf.set(Win::new(switchwin.sw_curwin).w_buffer);
+        }
     }
 }

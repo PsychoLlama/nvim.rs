@@ -20,7 +20,6 @@ use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::eval::window::win_has_winnr;
 use crate::main::{curbuf, e_invarg, empty_string_option, lastwin};
 use crate::memory::{xcalloc, xmalloc};
 use crate::message::msg_ui_flush;
@@ -405,8 +404,7 @@ fn tab_and_win_number(id: handle_T) -> Option<(c_int, c_int)> {
     for (tnum, tp) in (1..).zip(tabs()) {
         let mut wnum = 1;
         for wp in windows_in_tab(tp) {
-            // SAFETY: a live window and a live tab page.
-            let numbered = unsafe { win_has_winnr(wp.raw(), tp.raw()) };
+            let numbered = wp.has_winnr(tp);
             if wp.handle == id {
                 return Some(if numbered { (tnum, wnum) } else { (0, 0) });
             }

@@ -119,7 +119,7 @@ unsafe fn qf_jump_edit_buffer(
 
         // For a location list, the window it belongs to may be gone.
         if qfl_type == QFLT_LOCATION
-            && win_id2wp(prev_winid).is_null()
+            && win_by_id(prev_winid).is_none()
             && (*curwin.get()).w_llist != qi
         {
             emsg(gettext(c"E924: Current window was closed".as_ptr()));

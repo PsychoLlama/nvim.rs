@@ -47,6 +47,7 @@ use crate::types::{
     typval_vval_union, uint64_t, varnumber_T, win_T,
 };
 use crate::window::find_tabpage;
+use crate::winlayer::{TabPage, Win};
 use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -125,8 +126,9 @@ fn find_tab(n: c_int) -> *mut tabpage_T {
 
 /// The window argument 0 names within `tp`, or NULL when there is none.
 fn find_win(args: Args<'_>, tp: *mut tabpage_T) -> *mut win_T {
-    // SAFETY: a live typval and a live tabpage.
-    unsafe { find_win_by_nr(args.ptr(0), tp) }
+    // SAFETY: a live typval, and a live tab page or NULL -- which the
+    // resolver reads as the current one.
+    unsafe { find_win_by_nr(args.ptr(0), TabPage::from_raw(tp)) }.map_or(ptr::null_mut(), Win::raw)
 }
 
 /// Change to `dir` in `scope`; false -- having reported -- when it fails.

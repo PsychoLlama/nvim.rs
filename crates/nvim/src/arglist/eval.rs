@@ -24,8 +24,7 @@ unsafe fn selected_arglist(arg: *mut typval_T) -> Option<*mut alist_T> {
         if (*arg).v_type == VAR_NUMBER && tv_get_number(arg) == -1 as varnumber_T {
             return Some(global_arglist());
         }
-        let wp = find_win_by_nr_or_id(arg);
-        (!wp.is_null()).then(|| win_alist(wp))
+        find_win_by_nr_or_id(arg).map(|wp| win_alist(wp.raw()))
     }
 }
 
@@ -62,11 +61,9 @@ pub unsafe fn f_arglistid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY: eval-function contract; `find_tabwin` answers a live window or
     // null, and every window has an argument list.
     unsafe {
-        let wp = find_tabwin(argvars.offset(0), argvars.offset(1));
-        (*rettv).vval.v_number = if wp.is_null() {
-            -1 as varnumber_T
-        } else {
-            (*win_alist(wp)).id as varnumber_T
+        (*rettv).vval.v_number = match find_tabwin(argvars.offset(0), argvars.offset(1)) {
+            Some(wp) => (*win_alist(wp.raw())).id as varnumber_T,
+            None => -1 as varnumber_T,
         };
     }
 }

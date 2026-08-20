@@ -18,8 +18,9 @@ use crate::semsg_c;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
     EvalFuncData, FAIL, NUL, OK, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T,
-    typval_T, varnumber_T, win_T,
+    typval_T, varnumber_T,
 };
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -99,7 +100,7 @@ pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // list is compacted before it is read so no entry is stale.
     unsafe {
         let out = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
-        let wp: *mut win_T = find_tabwin(args.ptr(0), args.ptr(1));
+        let wp = find_tabwin(args.ptr(0), args.ptr(1)).map_or(ptr::null_mut(), Win::raw);
         if wp.is_null() {
             return;
         }
@@ -151,7 +152,7 @@ pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         let wp = if !args.has(0) {
             curwin.get()
         } else {
-            find_win_by_nr_or_id(args.ptr(0))
+            find_win_by_nr_or_id(args.ptr(0)).map_or(ptr::null_mut(), Win::raw)
         };
         if wp.is_null() {
             return;
@@ -167,7 +168,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: the arguments are live typvals; after the check argument 1's
     // union holds a Dict pointer, which may still be null.
     unsafe {
-        let wp = find_win_by_nr_or_id(args.ptr(0));
+        let wp = find_win_by_nr_or_id(args.ptr(0)).map_or(ptr::null_mut(), Win::raw);
         if wp.is_null() || tv_check_for_dict_arg(args.ptr(0), 1) == FAIL {
             return;
         }

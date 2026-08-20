@@ -12,7 +12,11 @@
 //! - `switch` makes another window current for the duration of a call, which
 //!   is what `win_execute()` and the API's window-scoped entry points use.
 //!
-//! This file holds only what they share.
+//! This file holds only what they share: the tab-page-scoped window lookups
+//! the numbering questions rest on, hung off [`winlayer`](crate::winlayer)'s
+//! handles rather than written out as a pointer test at every site.
+
+#![deny(unsafe_op_in_unsafe_fn)]
 
 mod info;
 mod resolve;
@@ -23,7 +27,7 @@ pub use info::{f_getcmdwintype, f_gettabinfo, f_getwininfo, f_win_gettype, f_win
 pub use resolve::{
     f_tabpagenr, f_tabpagewinnr, f_win_findbuf, f_win_getid, f_win_gotoid, f_win_id2tabwin,
     f_win_id2win, f_winbufnr, f_winnr, find_tabwin, find_win_by_nr, find_win_by_nr_or_id,
-    win_id2wp, win_id2wp_tp,
+    win_and_tab_by_id, win_by_id,
 };
 pub use switch::{
     f_win_execute, restore_win, restore_win_noblock, switch_win, switch_win_noblock,
@@ -38,6 +42,7 @@ pub use view::{
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::buffer::{bt_quickfix, bt_terminal, do_autochdir};
 use crate::cursor::{check_cursor, check_pos};
+use crate::eval::funcs::args::{Args, frame, number_as_int};
 use crate::eval::funcs::execute_common;
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_nr,
@@ -48,8 +53,8 @@ use crate::eval::typval::{
 use crate::ex_getln::text_or_buf_locked;
 use crate::garray::{ga_append, ga_concat_len, ga_init};
 use crate::main::{
-    VIsual, VIsual_active, cmdwin_type, cmdwin_win, curbuf, curtab, curwin, first_tabpage,
-    firstwin, lastused_tabpage, lastwin, p_acd, prevwin,
+    VIsual, VIsual_active, cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage,
+    lastwin, p_acd, prevwin,
 };
 use crate::memory::{strequal, xfree, xmallocz, xstrdup};
 use crate::r#move::{
@@ -60,31 +65,75 @@ use crate::normal::end_visual_mode;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::strings::vim_snprintf_safelen;
 use crate::types::*;
+use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, tabs, windows_in_tab};
 use ::libc::{memset, strcmp, strtol};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 pub const FR_LEAF: c_int = 0;
 pub const FR_ROW: c_int = 1;
-pub const LOWEST_WIN_ID: c_uint = 1000;
+/// Window handles start here, so a `winnr()`-shaped argument at or above it is
+/// a window id rather than a window number.
+pub const LOWEST_WIN_ID: c_int = 1000;
 use crate::window::{
     check_split_disallowed, find_tabpage, goto_tabpage_tp, goto_tabpage_win, tabpage_index,
     unuse_tabpage, use_tabpage, valid_tabpage, win_drag_status_line, win_drag_vsep_line,
     win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_splitmove,
     win_valid, win_vert_neighbor,
 };
-/// The first window of tab page `tp`. The current tab page's window list lives
-/// in the globals; a background tab page keeps its own.
-unsafe fn tab_firstwin(tp: *mut tabpage_T) -> *mut win_T {
-    if tp == curtab.get() {
-        firstwin.get()
-    } else {
-        (*tp).tp_firstwin
+/// The three window pointers a tab page keeps, read the way upstream reads
+/// them.
+///
+/// While a tab page is the current one its own `tp_curwin`/`tp_lastwin`/
+/// `tp_prevwin` are stale — the live values are in the globals, and the tab
+/// page's fields are only written back when it is left. The C spells the
+/// `tp == curtab ? global : tp->field` test out at every site; here it is
+/// written once per field. (The window *list* has the same rule and is
+/// [`windows_in_tab`], which winlayer already provides.)
+impl TabPage {
+    /// The window that is current in this tab page.
+    fn curwin(self) -> Win {
+        let wp = if self.is_current() {
+            curwin.get()
+        } else {
+            self.tp_curwin
+        };
+        // SAFETY: a live tab page's current window is live, and `curwin` is
+        // set from startup to exit.
+        unsafe { Win::new(wp) }
+    }
+
+    /// The last window of this tab page.
+    fn lastwin(self) -> Win {
+        let wp = if self.is_current() {
+            lastwin.get()
+        } else {
+            self.tp_lastwin
+        };
+        // SAFETY: a live tab page's last window is live, and `lastwin` is set
+        // from startup to exit.
+        unsafe { Win::new(wp) }
+    }
+
+    /// The window that was current before this tab page's current one — `None`
+    /// until something has been left, which is what `winnr("#")` reports as 0.
+    fn prevwin(self) -> Option<Win> {
+        let wp = if self.is_current() {
+            prevwin.get()
+        } else {
+            self.tp_prevwin
+        };
+        // SAFETY: a live tab page's previous window is live or null.
+        unsafe { Win::from_raw(wp) }
     }
 }
-pub unsafe fn win_has_winnr(wp: *mut win_T, mut tp: *mut tabpage_T) -> bool {
-    wp == (if tp == curtab.get() {
-        curwin.get()
-    } else {
-        (*tp).tp_curwin
-    }) || !(*wp).w_config.hide && (*wp).w_config.focusable
+
+impl Win {
+    /// Whether `winnr()`'s numbering counts this window in tab page `tp`.
+    ///
+    /// Every window has a number except a hidden or unfocusable float — and
+    /// even one of those keeps its number while it is the tab page's current
+    /// window, which is the only way the cursor can be inside it.
+    pub fn has_winnr(self, tp: TabPage) -> bool {
+        self == tp.curwin() || !self.w_config.hide && self.w_config.focusable
+    }
 }

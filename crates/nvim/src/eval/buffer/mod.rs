@@ -13,6 +13,8 @@
 //! This file holds what they share: the "make another buffer current for the
 //! duration of a change" dance, and the window walk several of them need.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 mod info;
 mod lines;
 mod lookup;
@@ -39,6 +41,7 @@ use crate::buffer::{
 use crate::change::{appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes};
 use crate::cursor::check_cursor_col;
 use crate::edit::buf_prompt_text;
+use crate::eval::funcs::args::{Args, frame, number_as_int};
 use crate::eval::funcs::{get_buf_arg, tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
     callback_free, tv_check_str_or_nr, tv_clear, tv_dict_add_dict, tv_dict_add_list,
@@ -47,7 +50,6 @@ use crate::eval::typval::{
     tv_list_alloc_ret, tv_list_append_dict, tv_list_append_number, tv_list_append_string,
     tv_list_item_remove,
 };
-use crate::eval::window::win_has_winnr;
 use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
@@ -55,12 +57,9 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{mem, ptr};
 
 use crate::main::{
-    VIsual_active, cmdwin_buf, curbuf, curtab, curwin, did_emsg, firstbuf, firstwin,
-    swap_exists_action, u_sync_once,
+    VIsual_active, cmdwin_buf, curbuf, curwin, did_emsg, swap_exists_action, u_sync_once,
 };
-use crate::memline::{
-    ml_append, ml_delete_flags, ml_get, ml_get_buf, ml_get_buf_len, ml_replace, ml_replace_buf,
-};
+use crate::memline::{ml_append, ml_delete_flags, ml_get, ml_replace, ml_replace_buf};
 use crate::memory::{strnequal, xfree, xstrdup};
 use crate::r#move::update_topline;
 use crate::path::path_with_url;
@@ -71,9 +70,9 @@ use ::libc::{strcmp, strlen};
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const ML_DEL_MESSAGE: c_uint = 1;
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
-use crate::winlayer::{Win, tab_windows};
-/// The editor state `change_other_buffer_prepare` saves so that
-/// `change_other_buffer_restore` can put it back.
+use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, windows_in_tab};
+/// The editor state [`SavedBufferState::prepare`] saves so that
+/// [`SavedBufferState::restore`] can put it back.
 #[derive(Copy, Clone)]
 struct SavedBufferState {
     curwin_save: *mut win_T,
@@ -81,52 +80,81 @@ struct SavedBufferState {
     using_aco: bool,
     save_visual_active: bool,
 }
-/// If there is a window for "curbuf", make it the current window.
+impl SavedBufferState {
+    /// The all-zero state the two halves below start from — `aco_save_T`'s
+    /// own initial value, which `aucmd_prepbuf` overwrites in full.
+    fn new() -> Self {
+        // SAFETY: every field is a raw pointer, an integer or a `bool`, for
+        // all of which all-zero is a valid value.
+        unsafe { mem::zeroed() }
+    }
+
+    /// Make `buf` the current buffer, with a window showing it, so that a
+    /// change to it has its side effects (mark adjustment and the rest) done
+    /// where they belong.
+    ///
+    /// MUST be undone with [`SavedBufferState::restore`].
+    ///
+    /// # Safety
+    /// `curwin`/`curbuf` must be set, which they are from startup to exit.
+    unsafe fn prepare(&mut self, buf: Buf) {
+        self.save_visual_active = VIsual_active.get();
+        VIsual_active.set(false);
+        self.curwin_save = curwin.get();
+        curbuf.set(buf.raw());
+        // SAFETY: `curbuf` was just set to the caller's live buffer.
+        unsafe { find_win_for_curbuf() };
+        // SAFETY: `curwin` is set from startup to exit.
+        let current = unsafe { Win::current() };
+        if current.w_buffer != buf.raw() {
+            // No existing window for this buffer. It is dangerous to have
+            // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
+            // window.
+            curbuf.set(current.w_buffer);
+            // SAFETY: `self.aco` is this frame's, and the buffer is live.
+            unsafe { aucmd_prepbuf(&raw mut self.aco, buf.raw()) };
+            self.using_aco = true;
+        }
+    }
+
+    /// Undo what [`SavedBufferState::prepare`] did.
+    ///
+    /// # Safety
+    /// `self` must be the state `prepare` filled in.
+    unsafe fn restore(&mut self) {
+        if self.using_aco {
+            // SAFETY: the caller's obligation — `aco` is what `prepare` left.
+            unsafe { aucmd_restbuf(&raw mut self.aco) };
+        } else {
+            curwin.set(self.curwin_save);
+            // SAFETY: the saved window is live and so is its buffer.
+            curbuf.set(unsafe { Win::current() }.w_buffer);
+        }
+        VIsual_active.set(self.save_visual_active);
+    }
+}
+
+/// If there is a window for `curbuf`, make it the current window.
+///
+/// # Safety
+/// `curbuf` must be set, which it is from startup to exit.
 unsafe fn find_win_for_curbuf() {
     // The b_wininfo list holds the windows that recently contained the
     // buffer, so walking it is cheaper than walking every window. It can name
     // a window that has moved on, hence the second test.
-    let wininfo = &(*curbuf.get()).b_wininfo;
-    for i in 0..wininfo.size {
-        let wip: *mut WinInfo = *wininfo.items.add(i);
-        if !(*wip).wi_win.is_null() && (*(*wip).wi_win).w_buffer == curbuf.get() {
-            curwin.set((*wip).wi_win);
-            break;
+    // SAFETY: `curbuf` is live and its window-info vector holds `size` live
+    // entries.
+    unsafe {
+        let buf = Buf::current();
+        let wininfo = &buf.b_wininfo;
+        for i in 0..wininfo.size {
+            let wip: *mut WinInfo = *wininfo.items.add(i);
+            if !(*wip).wi_win.is_null() && (*(*wip).wi_win).w_buffer == curbuf.get() {
+                curwin.set((*wip).wi_win);
+                break;
+            }
         }
     }
-}
-/// Used before making a change in "buf", which is not the current one: Make
-/// "buf" the current buffer and find a window for this buffer, so that side
-/// effects are done correctly (e.g., adjusting marks).
-///
-/// Information is saved in "cob" and MUST be restored by calling
-/// change_other_buffer_restore().
-unsafe fn change_other_buffer_prepare(cob: *mut SavedBufferState, buf: *mut buf_T) {
-    cob.write(mem::zeroed());
-    // Set "curbuf" to the buffer being changed. Then make sure there is a
-    // window for it to handle any side effects.
-    (*cob).save_visual_active = VIsual_active.get();
-    VIsual_active.set(false);
-    (*cob).curwin_save = curwin.get();
-    curbuf.set(buf);
-    find_win_for_curbuf();
-    if (*curwin.get()).w_buffer != buf {
-        // No existing window for this buffer. It is dangerous to have
-        // curwin->w_buffer differ from "curbuf", so use the autocmd window.
-        curbuf.set((*curwin.get()).w_buffer);
-        aucmd_prepbuf(&raw mut (*cob).aco, buf);
-        (*cob).using_aco = true;
-    }
-}
-/// Undo what [`change_other_buffer_prepare`] did.
-unsafe fn change_other_buffer_restore(cob: *mut SavedBufferState) {
-    if (*cob).using_aco {
-        aucmd_restbuf(&raw mut (*cob).aco);
-    } else {
-        curwin.set((*cob).curwin_save);
-        curbuf.set((*curwin.get()).w_buffer);
-    }
-    VIsual_active.set((*cob).save_visual_active);
 }
 pub const SEA_NONE: c_int = 0;
 pub const SEA_READONLY: c_int = 4;

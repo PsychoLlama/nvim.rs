@@ -12,6 +12,7 @@ use crate::semsg_c;
 use crate::types::{
     NUL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -175,7 +176,7 @@ unsafe fn get_qf_loc_list(
 pub unsafe fn f_getloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least two values.
     unsafe {
-        let wp = find_win_by_nr_or_id(argvars);
+        let wp = find_win_by_nr_or_id(argvars).map_or(ptr::null_mut(), Win::raw);
         get_qf_loc_list(false, wp, argvars.add(1), rettv);
     }
 }
@@ -277,9 +278,8 @@ pub unsafe fn f_setloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // SAFETY: the caller's argument array holds at least four values.
     unsafe {
         (*rettv).vval.v_number = -1;
-        let win = find_win_by_nr_or_id(argvars);
-        if !win.is_null() {
-            set_qf_ll_list(win, argvars.add(1), rettv);
+        if let Some(win) = find_win_by_nr_or_id(argvars) {
+            set_qf_ll_list(win.raw(), argvars.add(1), rettv);
         }
     }
 }

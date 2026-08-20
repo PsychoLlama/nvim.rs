@@ -11,8 +11,23 @@
 //! That is the whole contract, and [`Args`] is it, expressed once.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::types::{VAR_UNKNOWN, VarType, typval_T};
+use crate::types::{VAR_UNKNOWN, VarType, typval_T, varnumber_T};
+use core::ffi::c_int;
 use core::marker::PhantomData;
+
+/// A vimscript Number narrowed to a C `int`, the way upstream's `(int)` casts
+/// do: the low 32 bits, wrapping.
+///
+/// Vimscript numbers are 64-bit and nearly everything a builtin hands back to
+/// the editor — a window id, a buffer number, a tab page number, a count — is
+/// an `int`, so the C writes this narrowing out at well over a hundred sites.
+/// It is deliberate and it is load-bearing: `winnr(0x1_0000_0000)` truncates to
+/// 0, which reads as "the current window", and a differential would see any
+/// other answer. Naming it once is what lets the modules that have adopted
+/// clippy's cast family keep the lints on.
+pub(crate) const fn number_as_int(n: varnumber_T) -> c_int {
+    n as c_int
+}
 
 /// The size of the evaluator's argument buffer, minus its terminator slot.
 /// `MAX_FUNC_ARGS` in the C; both dispatchers declare `typval_T argv[MAX +

@@ -35,6 +35,7 @@ use crate::types::{
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, expand_T,
     float_T, kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, typval_T, typval_vval_union, win_T,
 };
+use crate::winlayer::Win;
 use crate::{semsg_c, semsg_multiline_c};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int};
@@ -479,9 +480,9 @@ pub unsafe fn get_optional_window(argvars: *mut typval_T, idx: c_int) -> *mut wi
             return curwin.get();
         }
         let win = find_win_by_nr_or_id(argvars.add(idx as usize));
-        if win.is_null() {
+        if win.is_none() {
             emsg(gettext(e_invalwindow.as_ptr()));
         }
-        win
+        win.map_or(ptr::null_mut(), Win::raw)
     }
 }

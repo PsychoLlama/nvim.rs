@@ -15,6 +15,7 @@ use core::ptr;
 use super::*;
 use crate::option::{NIL_OPTVAL, boolean_optval, optval_boolean};
 use crate::types::{NUL, OK, OptionSetFlags};
+use crate::winlayer::{TabPage, Win};
 
 /// The zeroed `switchwin_T` [`switch_win`] fills in.
 const SWITCHWIN_INITIAL_VALUE: switchwin_T = switchwin_T {
@@ -125,7 +126,8 @@ unsafe fn getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, off: c_int) {
         } else {
             curtab.get()
         };
-        let win = find_win_by_nr(argvars.offset(off as isize), tp);
+        let win = find_win_by_nr(argvars.offset(off as isize), TabPage::from_raw(tp))
+            .map_or(ptr::null_mut(), Win::raw);
         let varname = tv_get_string_chk(argvars.offset((off + 1) as isize));
         get_var_from(
             varname,
@@ -320,7 +322,8 @@ unsafe fn setwinvar(argvars: *mut typval_T, off: c_int) {
         } else {
             curtab.get()
         };
-        let win = find_win_by_nr(argvars.offset(off as isize), tp);
+        let win = find_win_by_nr(argvars.offset(off as isize), TabPage::from_raw(tp))
+            .map_or(ptr::null_mut(), Win::raw);
         let varname = tv_get_string_chk(argvars.offset((off + 1) as isize));
         let varp = argvars.offset((off + 2) as isize);
         if win.is_null() || varname.is_null() {

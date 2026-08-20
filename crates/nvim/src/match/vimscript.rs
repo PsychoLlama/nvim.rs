@@ -79,11 +79,11 @@ unsafe fn matchadd_dict_arg(
         if di.is_null() {
             return OK;
         }
-        *win = find_win_by_nr_or_id(&raw mut (*di).di_tv);
-        if (*win).is_null() {
+        let Some(found) = find_win_by_nr_or_id(&raw mut (*di).di_tv) else {
             emsg(gettext(&raw const e_invalwindow as *const c_char));
             return FAIL;
-        }
+        };
+        *win = found.raw();
         OK
     }
 }

@@ -10,7 +10,7 @@ use crate::eval::typval::{
     tv_get_bool, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_chk,
     tv_list_alloc_ret, tv_list_append_number,
 };
-use crate::eval::window::{find_win_by_nr_or_id, win_id2wp_tp};
+use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
 use crate::main::{curbuf, curwin, e_invarg, e_invarg2, p_spk, skip_update_topline};
 use crate::mark::setmark_pos;
@@ -29,7 +29,7 @@ use crate::semsg_c;
 use crate::state::virtual_active;
 use crate::types::{
     Direction, EvalFuncData, FAIL, NUL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T,
-    list_T, pos_T, tabpage_T, typval_T, varnumber_T, win_T,
+    list_T, pos_T, typval_T, varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -108,13 +108,9 @@ unsafe fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut win_T> {
         if !args.has(idx) {
             return Some(curwin.get());
         }
-        let mut tp: *mut tabpage_T = ptr::null_mut();
-        let wp = win_id2wp_tp(tv_get_number(args.ptr(idx)) as c_int, &raw mut tp);
-        if wp.is_null() || tp.is_null() {
-            return None;
-        }
-        check_cursor(wp);
-        Some(wp)
+        let (wp, _) = win_and_tab_by_id(tv_get_number(args.ptr(idx)) as c_int)?;
+        check_cursor(wp.raw());
+        Some(wp.raw())
     }
 }
 
@@ -248,25 +244,25 @@ pub unsafe fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         if !args.has(1) {
             var2fpos(args.ptr(0), true, &raw mut fnum, false, curwin.get())
         } else {
-            let mut tp: *mut tabpage_T = ptr::null_mut();
-            let wp = win_id2wp_tp(tv_get_number(args.ptr(1)) as c_int, &raw mut tp);
-            if wp.is_null() || tp.is_null() {
-                ptr::null_mut()
-            } else {
-                // Resolving a position in another window moves its cursor,
-                // and 'splitkeep' decides whether that is allowed to
-                // scroll it. Diff-mode windows are always exempt because
-                // their scroll is bound to this one's.
-                if *p_spk.get() != b'c' as c_char
-                    || ((*wp).w_onebuf_opt.wo_diff != 0
-                        && (*curwin.get()).w_onebuf_opt.wo_diff != 0)
-                {
-                    skip_update_topline.set(true);
+            match win_and_tab_by_id(tv_get_number(args.ptr(1)) as c_int) {
+                None => ptr::null_mut(),
+                Some((wp, _)) => {
+                    let wp = wp.raw();
+                    // Resolving a position in another window moves its
+                    // cursor, and 'splitkeep' decides whether that is allowed
+                    // to scroll it. Diff-mode windows are always exempt
+                    // because their scroll is bound to this one's.
+                    if *p_spk.get() != b'c' as c_char
+                        || ((*wp).w_onebuf_opt.wo_diff != 0
+                            && (*curwin.get()).w_onebuf_opt.wo_diff != 0)
+                    {
+                        skip_update_topline.set(true);
+                    }
+                    check_cursor(wp);
+                    let fp = var2fpos(args.ptr(0), true, &raw mut fnum, false, wp);
+                    skip_update_topline.set(false);
+                    fp
                 }
-                check_cursor(wp);
-                let fp = var2fpos(args.ptr(0), true, &raw mut fnum, false, wp);
-                skip_update_topline.set(false);
-                fp
             }
         }
     };
@@ -328,8 +324,8 @@ unsafe fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, cha
         } else {
             let mut fp: *mut pos_T = ptr::null_mut();
             if args.has(0) {
-                wp = find_win_by_nr_or_id(args.ptr(0));
-                if !wp.is_null() {
+                if let Some(found) = find_win_by_nr_or_id(args.ptr(0)) {
+                    wp = found.raw();
                     fp = &raw mut (*wp).w_cursor;
                 }
             } else {

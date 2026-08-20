@@ -1,208 +1,288 @@
+//! The prompt-buffer surface: `prompt_appendbuf()`, `prompt_setcallback()`,
+//! `prompt_setinterrupt()` and `prompt_setprompt()`.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use super::lines::set_buffer_lines;
 use super::*;
 use crate::eval::typval::kCallbackNone;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
 
-/// "prompt_appendbuf({buffer}, string/list)" function
+/// Whether `s` ends in a newline — which asks the *next* `prompt_appendbuf()`
+/// to start a fresh line rather than extending this one.
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+unsafe fn ends_in_newline(s: *const c_char) -> bool {
+    // SAFETY: the caller's obligation; the index is within the string because
+    // `strlen` measured it.
+    unsafe {
+        let len = strlen(s);
+        len > 0 && *s.add(len - 1) == b'\n' as c_char
+    }
+}
+
+/// The last item of the List `lines` holds, or NULL when it is not a non-empty
+/// List.
+///
+/// # Safety
+/// `lines` must be a live typval.
+unsafe fn list_last(lines: *mut typval_T) -> *mut listitem_T {
+    // SAFETY: the caller's obligation; under `VAR_LIST` the union's live arm
+    // is `v_list`, a live list or NULL.
+    unsafe {
+        let l = (*lines).vval.v_list;
+        if l.is_null() || (*l).lv_len == 0 {
+            ptr::null_mut()
+        } else {
+            (*l).lv_last
+        }
+    }
+}
+
+/// `prompt_appendbuf({buf}, {string/list})` — 0 when the text went in.
+///
+/// Text appended while the prompt line is being edited joins onto the last
+/// line rather than starting a new one, unless the previous append ended in a
+/// newline.
 pub unsafe fn f_prompt_appendbuf(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    let did_emsg_before: c_int = did_emsg.get();
-    (*rettv).v_type = VAR_NUMBER;
-    (*rettv).vval.v_number = 1;
-    let buf: *mut buf_T = tv_get_buf_from_arg(argvars.offset(0));
-    if buf.is_null() || !bt_prompt(buf) {
-        return;
-    }
-    let lnum: linenr_T = ((*buf).b_prompt_start.mark.lnum - 1).max(0);
-    let lines: *mut typval_T = argvars.offset(1);
-    let mut did_concat: bool = false;
-    if !(*buf).b_prompt_append_new_line {
-        let text: *const c_char = if lnum > 0 {
-            ml_get_buf(buf, lnum) as *const c_char
-        } else {
-            c"".as_ptr()
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_NUMBER;
+    rettv.vval.v_number = 1;
+    // SAFETY: the arguments and `rettv` are live typvals; every list item
+    // reached below belongs to the argument's own list, and `concat_str`
+    // hands back an owned string the typval takes over.
+    unsafe {
+        let did_emsg_before = did_emsg.get();
+        let Some(buf) = Buf::from_raw(tv_get_buf_from_arg(args.ptr(0))) else {
+            return;
         };
-        if (*lines).v_type == VAR_LIST {
-            let mut l: *mut list_T = (*lines).vval.v_list;
-            if !l.is_null() && (*l).lv_len > 0 {
-                let li: *mut listitem_T = (*l).lv_first;
-                let new_str = concat_str(text, tv_get_string(&raw mut (*li).li_tv));
-                tv_clear(&raw mut (*li).li_tv);
-                (*li).li_tv.v_type = VAR_STRING;
-                (*li).li_tv.vval.v_string = new_str;
-                did_concat = true;
-            }
-        } else if (*lines).v_type == VAR_STRING {
-            let new_str = concat_str(text, tv_get_string(lines));
-            tv_clear(lines);
-            (*lines).v_type = VAR_STRING;
-            (*lines).vval.v_string = new_str;
+        if !bt_prompt(buf.raw()) {
+            return;
         }
-    }
-    if did_emsg.get() == did_emsg_before {
-        if did_concat && (*(*lines).vval.v_list).lv_len > 1 {
-            let l_0: *mut list_T = (*lines).vval.v_list;
-            let li_0: *mut listitem_T = (*l_0).lv_first;
-            set_buffer_lines(buf, lnum, false, &raw mut (*li_0).li_tv, rettv);
-            if (*rettv).vval.v_number == 0 {
-                tv_list_item_remove(l_0, li_0);
-                set_buffer_lines(buf, lnum, true, lines, rettv);
+        let lnum: linenr_T = (buf.b_prompt_start.mark.lnum - 1).max(0);
+        let lines = args.ptr(1);
+        let mut did_concat = false;
+        if !buf.b_prompt_append_new_line {
+            // The text so far on the prompt's last line, which the first item
+            // of the new text is glued onto.
+            let text: *const c_char = if lnum > 0 {
+                buf.line(lnum).raw()
+            } else {
+                c"".as_ptr()
+            };
+            if (*lines).v_type == VAR_LIST {
+                let l = (*lines).vval.v_list;
+                if !l.is_null() && (*l).lv_len > 0 {
+                    let li = (*l).lv_first;
+                    let joined = concat_str(text, tv_get_string(&raw mut (*li).li_tv));
+                    tv_clear(&raw mut (*li).li_tv);
+                    (*li).li_tv.v_type = VAR_STRING;
+                    (*li).li_tv.vval.v_string = joined;
+                    did_concat = true;
+                }
+            } else if (*lines).v_type == VAR_STRING {
+                let joined = concat_str(text, tv_get_string(lines));
+                tv_clear(lines);
+                (*lines).v_type = VAR_STRING;
+                (*lines).vval.v_string = joined;
             }
-        } else {
-            set_buffer_lines(buf, lnum, (*buf).b_prompt_append_new_line, lines, rettv);
         }
-    }
-    if (*rettv).vval.v_number == 0 {
-        // A trailing newline on the last line appended asks the next append
-        // to start a fresh line rather than extending this one.
-        let ends_in_newline = |s: *const c_char| {
-            let len = strlen(s);
-            len > 0 && *s.add(len - 1) == b'\n' as c_char
-        };
-        (*buf).b_prompt_append_new_line = if (*lines).v_type == VAR_LIST {
-            let l: *mut list_T = (*lines).vval.v_list;
-            !l.is_null()
-                && (*l).lv_len > 0
-                && ends_in_newline(tv_get_string(&raw mut (*(*l).lv_last).li_tv))
-        } else {
-            (*lines).v_type == VAR_STRING && ends_in_newline(tv_get_string(lines))
-        };
+        if did_emsg.get() == did_emsg_before {
+            if did_concat && (*(*lines).vval.v_list).lv_len > 1 {
+                // The joined first item replaces the prompt line; the rest is
+                // appended after it, but only once the replacement worked.
+                let l = (*lines).vval.v_list;
+                let li = (*l).lv_first;
+                set_buffer_lines(buf.raw(), lnum, false, &raw mut (*li).li_tv, rettv);
+                if rettv.vval.v_number == 0 {
+                    tv_list_item_remove(l, li);
+                    set_buffer_lines(buf.raw(), lnum, true, lines, rettv);
+                }
+            } else {
+                set_buffer_lines(buf.raw(), lnum, buf.b_prompt_append_new_line, lines, rettv);
+            }
+        }
+        if rettv.vval.v_number == 0 {
+            let mut buf = buf;
+            buf.b_prompt_append_new_line = if (*lines).v_type == VAR_LIST {
+                let last = list_last(lines);
+                !last.is_null() && ends_in_newline(tv_get_string(&raw mut (*last).li_tv))
+            } else {
+                (*lines).v_type == VAR_STRING && ends_in_newline(tv_get_string(lines))
+            };
+        }
     }
 }
-/// "prompt_setcallback({buffer}, {callback})" function
+
+/// `prompt_setcallback({buf}, {callback})`.
 pub unsafe fn f_prompt_setcallback(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    let mut prompt_callback: Callback = Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    };
-    if check_secure() {
-        return;
-    }
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
-    if buf.is_null() {
-        return;
-    }
-    if !callback_from_typval(&raw mut prompt_callback, argvars.offset(1)) {
-        return;
-    }
-    callback_free(&raw mut (*buf).b_prompt_callback);
-    (*buf).b_prompt_callback = prompt_callback;
+    let (args, _) = frame!(argvars, _rettv);
+    // SAFETY: the arguments are live typvals, and the buffer is live.
+    unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_callback) };
 }
-/// "prompt_setinterrupt({buffer}, {callback})" function
+
+/// `prompt_setinterrupt({buf}, {callback})`.
 pub unsafe fn f_prompt_setinterrupt(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    let mut interrupt_callback: Callback = Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    };
-    if check_secure() {
-        return;
-    }
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
-    if buf.is_null() {
-        return;
-    }
-    if !callback_from_typval(&raw mut interrupt_callback, argvars.offset(1)) {
-        return;
-    }
-    callback_free(&raw mut (*buf).b_prompt_interrupt);
-    (*buf).b_prompt_interrupt = interrupt_callback;
+    let (args, _) = frame!(argvars, _rettv);
+    // SAFETY: the arguments are live typvals, and the buffer is live.
+    unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_interrupt) };
 }
-/// "prompt_setprompt({buffer}, {text})" function
+
+/// The half `prompt_setcallback()` and `prompt_setinterrupt()` share: resolve
+/// the buffer, build the callback, then free the one `slot` held.
+///
+/// Nothing is freed until the new callback has been built, so a bad second
+/// argument leaves the old one in place.
+///
+/// # Safety
+/// The arguments must be live typvals, and `slot` must answer a field of the
+/// buffer it is handed.
+unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut buf_T) -> *mut Callback) {
+    // SAFETY: the caller's obligation.
+    unsafe {
+        let mut callback = Callback {
+            data: Callback_data {
+                funcref: ptr::null_mut(),
+            },
+            type_0: kCallbackNone,
+        };
+        if check_secure() {
+            return;
+        }
+        let Some(mut buf) = Buf::from_raw(tv_get_buf(args.ptr(0), 0)) else {
+            return;
+        };
+        if !callback_from_typval(&raw mut callback, args.ptr(1)) {
+            return;
+        }
+        let slot = slot(&mut buf);
+        callback_free(slot);
+        *slot = callback;
+    }
+}
+
+/// `prompt_setprompt({buf}, {text})`.
+///
+/// The prompt is stored on the buffer *and* written into the prompt line, so
+/// changing it has to rewrite the line the old prompt is sitting in — unless
+/// that line no longer starts with the old prompt, in which case the whole
+/// line is replaced.
 pub unsafe fn f_prompt_setprompt(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    if check_secure() {
-        return;
+    let (args, _) = frame!(argvars, _rettv);
+    // SAFETY: the arguments are live typvals; every line index below is
+    // clamped into the buffer first, and `concat_str` hands back an owned
+    // string which `ml_replace_buf` takes over or which is freed here.
+    unsafe {
+        if check_secure() {
+            return;
+        }
+        let Some(mut buf) = Buf::from_raw(tv_get_buf(args.ptr(0), 0)) else {
+            return;
+        };
+        let new_prompt = tv_get_string(args.ptr(1));
+        let new_prompt_len = strlen(new_prompt) as c_int;
+        if bt_prompt(buf.raw()) && !buf.b_ml.ml_mfp.is_null() {
+            rewrite_prompt_line(buf, new_prompt, new_prompt_len);
+        }
+        xfree(buf.b_prompt_text as *mut c_void);
+        buf.b_prompt_text = xstrdup(new_prompt);
+        buf.b_prompt_start.mark.col = new_prompt_len;
     }
-    let buf: *mut buf_T = tv_get_buf(argvars.offset(0), 0);
-    if buf.is_null() {
-        return;
-    }
-    let new_prompt: *const c_char = tv_get_string(argvars.offset(1));
-    let new_prompt_len: c_int = strlen(new_prompt) as c_int;
-    if bt_prompt(buf) && !(*buf).b_ml.ml_mfp.is_null() {
-        if (*buf).b_prompt_start.mark.lnum < 1
-            || (*buf).b_prompt_start.mark.lnum > (*curbuf.get()).b_ml.ml_line_count
+}
+
+/// Put `new_prompt` in place of the old one on the buffer's prompt line.
+///
+/// # Safety
+/// `buf` must be a live, loaded prompt buffer and `new_prompt` a
+/// NUL-terminated string of `new_prompt_len` bytes.
+unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_prompt_len: c_int) {
+    // SAFETY: the caller's obligation.
+    unsafe {
+        if buf.b_prompt_start.mark.lnum < 1
+            || buf.b_prompt_start.mark.lnum > Buf::current().line_count()
         {
             // MAX(1, MIN(lnum, line_count)); spelled with min-then-max
             // because an empty buffer makes the two bounds cross.
-            (*buf).b_prompt_start.mark.lnum = (*buf)
-                .b_prompt_start
-                .mark
-                .lnum
-                .min((*buf).b_ml.ml_line_count)
-                .max(1);
-            (*curbuf.get()).b_prompt_append_new_line = true;
+            buf.b_prompt_start.mark.lnum =
+                buf.b_prompt_start.mark.lnum.min(buf.line_count()).max(1);
+            Buf::current().b_prompt_append_new_line = true;
         }
-        let prompt_lno: linenr_T = (*buf).b_prompt_start.mark.lnum;
-        let old_prompt: *mut c_char = buf_prompt_text(buf);
-        let old_line: *mut c_char = ml_get_buf(buf, prompt_lno);
-        let old_line_len: colnr_T = ml_get_buf_len(buf, prompt_lno);
-        let old_prompt_len: c_int = strlen(old_prompt) as c_int;
-        let mut cursor_col: colnr_T = (*curwin.get()).w_cursor.col;
-        if (*buf).b_prompt_start.mark.col < old_prompt_len
-            || (*buf).b_prompt_start.mark.col > old_line_len
-            || !strnequal(
+        let prompt_lno = buf.b_prompt_start.mark.lnum;
+        let old_prompt = buf_prompt_text(buf.raw());
+        let old_line = buf.line(prompt_lno).raw();
+        let old_line_len = buf.line_len(prompt_lno);
+        let old_prompt_len = strlen(old_prompt) as c_int;
+        let mut cursor_col = Win::current().w_cursor.col;
+        // Does the line still start with the prompt it was given? When it
+        // does, only the prompt itself is swapped; when it does not — the
+        // user has edited it away — the whole line goes.
+        let intact = buf.b_prompt_start.mark.col >= old_prompt_len
+            && buf.b_prompt_start.mark.col <= old_line_len
+            && strnequal(
                 old_prompt,
                 old_line
-                    .offset((*buf).b_prompt_start.mark.col as isize)
+                    .offset(buf.b_prompt_start.mark.col as isize)
                     .offset(-(old_prompt_len as isize)),
                 old_prompt_len as size_t,
-            )
-        {
-            ml_replace_buf(buf, prompt_lno, new_prompt as *mut c_char, true, false);
-            extmark_splice_cols(
-                buf,
-                prompt_lno as c_int - 1,
-                0,
-                old_line_len,
-                new_prompt_len as colnr_T,
-                kExtmarkNoUndo,
             );
-            cursor_col = new_prompt_len as colnr_T;
-        } else {
-            let new_line: *mut c_char = concat_str(
+        if intact {
+            let new_line = concat_str(
                 new_prompt,
-                old_line.offset((*buf).b_prompt_start.mark.col as isize),
+                old_line.offset(buf.b_prompt_start.mark.col as isize),
             );
-            if ml_replace_buf(buf, prompt_lno, new_line, false, false) != OK {
+            if ml_replace_buf(buf.raw(), prompt_lno, new_line, false, false) != OK {
                 xfree(new_line as *mut c_void);
             }
             extmark_splice_cols(
-                buf,
-                prompt_lno as c_int - 1,
+                buf.raw(),
+                prompt_lno - 1,
                 0,
-                (*buf).b_prompt_start.mark.col,
-                new_prompt_len as colnr_T,
+                buf.b_prompt_start.mark.col,
+                new_prompt_len,
                 kExtmarkNoUndo,
             );
-            cursor_col += (new_prompt_len as colnr_T - (*buf).b_prompt_start.mark.col) as c_int;
+            cursor_col += new_prompt_len - buf.b_prompt_start.mark.col;
+        } else {
+            ml_replace_buf(
+                buf.raw(),
+                prompt_lno,
+                new_prompt as *mut c_char,
+                true,
+                false,
+            );
+            extmark_splice_cols(
+                buf.raw(),
+                prompt_lno - 1,
+                0,
+                old_line_len,
+                new_prompt_len,
+                kExtmarkNoUndo,
+            );
+            cursor_col = new_prompt_len;
         }
-        if (*curwin.get()).w_buffer == buf && (*curwin.get()).w_cursor.lnum == prompt_lno {
-            (*curwin.get()).w_cursor.col = cursor_col;
-            check_cursor_col(curwin.get());
+        let mut win = Win::current();
+        if win.w_buffer == buf.raw() && win.w_cursor.lnum == prompt_lno {
+            win.w_cursor.col = cursor_col;
+            check_cursor_col(win.raw());
         }
-        changed_lines(buf, prompt_lno, 0, prompt_lno + 1, 0, true);
-        u_clearallandblockfree(buf);
+        changed_lines(buf.raw(), prompt_lno, 0, prompt_lno + 1, 0, true);
+        u_clearallandblockfree(buf.raw());
     }
-    xfree((*buf).b_prompt_text as *mut c_void);
-    (*buf).b_prompt_text = xstrdup(new_prompt);
-    (*buf).b_prompt_start.mark.col = new_prompt_len;
 }
