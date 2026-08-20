@@ -35,6 +35,12 @@ and this project adheres to [CalVer](https://calver.org/).
   `win_execute()`/`win_splitmove()`/`win_move_separator()`, the
   `prompt_setprompt()` family, and the compound assignments `:let x += y` and
   `:let s .= t`.
+- Rewrote the window, tab page and option entry points of the API, covering
+  `nvim_win_get_buf()` and the rest of the `nvim_win_*` family,
+  `nvim_tabpage_*()` and `nvim_open_tabpage()`, `nvim_get_option_value()`/
+  `nvim_set_option_value()`/`nvim_get_option_info2()`/
+  `nvim_get_all_options_info()`, and the wording of every "invalid argument"
+  message the API answers with.
 
 ### Fixed
 
