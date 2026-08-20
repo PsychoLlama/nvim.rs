@@ -1,6 +1,13 @@
 //! The dictionary `getbufinfo()` returns.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::buffer::buf_get_changedtick;
@@ -109,7 +116,7 @@ pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             let sel_d = args.get(0).vval.v_dict;
             if !sel_d.is_null() {
                 let flag = |key: &CStr| {
-                    let di = tv_dict_find(sel_d, key.as_ptr(), key.count_bytes() as ptrdiff_t);
+                    let di = tv_dict_find(sel_d, key.as_ptr(), key.count_bytes().cast_signed());
                     !di.is_null() && tv_get_number(&raw mut (*di).di_tv) != 0
                 };
                 filter = Filter {

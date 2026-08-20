@@ -2,6 +2,13 @@
 //! `gettabinfo()`, `winlayout()` and `win_gettype()`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
@@ -197,7 +204,7 @@ unsafe fn get_framelayout(fr: Frame, l: *mut list_T, outer: bool) {
     };
     let word = |s: &CStr| {
         // SAFETY: a live list and a NUL-terminated string.
-        unsafe { tv_list_append_string(fr_list, s.as_ptr(), s.count_bytes() as ssize_t) };
+        unsafe { tv_list_append_string(fr_list, s.as_ptr(), s.count_bytes().cast_signed()) };
     };
     if c_int::from(fr.fr_layout) == FR_LEAF {
         // A leaf frame with no window is a frame being taken apart; it is
@@ -292,8 +299,8 @@ pub unsafe fn f_getcmdwintype(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
     // two writable bytes, the second already NUL.
     unsafe {
         (*rettv).v_type = VAR_STRING;
-        let s = xmallocz(1) as *mut c_char;
-        *s = cmdwin_type.get() as c_char;
+        let s = xmallocz(1).cast::<c_char>();
+        *s = cmdwin_type.get().to_le_bytes()[0].cast_signed();
         (*rettv).vval.v_string = s;
     }
 }

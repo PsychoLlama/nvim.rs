@@ -10,6 +10,13 @@
 //! given" for a tab page, except in `win_getid()`, which rejects it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::types::{VAR_UNKNOWN, kListLenMayKnow};
@@ -168,7 +175,7 @@ unsafe fn relative_win(tp: TabPage, twin: Win, arg: *const c_char) -> Option<Win
         }
         let mut endp: *mut c_char = ptr::null_mut();
         let count = number_as_int(strtol(arg, &raw mut endp, 10)).max(1);
-        let direction = (!endp.is_null() && *endp as c_int != NUL).then(|| {
+        let direction = (!endp.is_null() && c_int::from(*endp) != NUL).then(|| {
             // "j"/"k" walk the layout tree vertically, "h"/"l" horizontally;
             // `count` says how many neighbours to step.
             if strequal(endp, c"j".as_ptr()) {

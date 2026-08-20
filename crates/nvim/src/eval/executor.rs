@@ -11,6 +11,13 @@
 //! would be unsound.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::eval::typval::{
     tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
@@ -74,15 +81,15 @@ unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int 
         }
         let len = (*b2).bv_ga.ga_len;
         if len > 0 {
-            ga_grow(&raw mut (*b1).bv_ga, len);
-            memmove(
-                ((*b1).bv_ga.ga_data as *mut uint8_t)
-                    .offset((*b1).bv_ga.ga_len as isize)
-                    .cast(),
-                (*b2).bv_ga.ga_data,
-                len as usize,
-            );
-            (*b1).bv_ga.ga_len += len;
+            let ga = &raw mut (*b1).bv_ga;
+            ga_grow(ga, len);
+            let end = (*ga)
+                .ga_data
+                .cast::<uint8_t>()
+                .offset((*ga).ga_len as isize);
+            // `len > 0` above, so the narrowing cannot lose a sign.
+            memmove(end.cast(), (*b2).bv_ga.ga_data, len.unsigned_abs() as usize);
+            (*ga).ga_len += len;
         }
         OK
     }

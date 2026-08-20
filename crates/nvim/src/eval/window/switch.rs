@@ -2,6 +2,13 @@
 //! `win_execute()` and the API's window-scoped entry points use.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::pos::equalpos;
@@ -42,7 +49,7 @@ pub unsafe fn win_execute_before(
                     && (!(*curtab.get()).tp_localdir.is_null() || !tab.tp_localdir.is_null())
                 || p_acd.get() != 0)
         {
-            args.cwd_status = os_dirname(args.cwd.as_mut_ptr(), MAXPATHL as size_t);
+            args.cwd_status = os_dirname(args.cwd.as_mut_ptr(), size_of_val(&args.cwd));
         }
         if args.cwd_status == OK && p_acd.get() != 0 {
             // 'autochdir' will move the working directory itself when the
@@ -54,7 +61,7 @@ pub unsafe fn win_execute_before(
             }
             do_autochdir();
             let mut autocwd: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-            if os_dirname(autocwd.as_mut_ptr(), MAXPATHL as size_t) == OK {
+            if os_dirname(autocwd.as_mut_ptr(), size_of_val(&autocwd)) == OK {
                 args.apply_acd = strcmp(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) == 0;
             }
         }
@@ -78,13 +85,13 @@ pub unsafe fn win_execute_after(args: *mut win_execute_T) {
     unsafe {
         restore_win_noblock(&raw mut args.switchwin, true);
         if args.apply_acd {
-            xfree(args.save_sfname as *mut c_void);
+            xfree(args.save_sfname.cast());
             do_autochdir();
         } else if args.cwd_status == OK {
             os_chdir(args.cwd.as_mut_ptr());
             if !args.save_sfname.is_null() {
                 let mut buf = Buf::current();
-                xfree(buf.b_sfname as *mut c_void);
+                xfree(buf.b_sfname.cast());
                 buf.b_sfname = args.save_sfname;
                 buf.b_fname = buf.b_sfname;
             }
@@ -160,7 +167,7 @@ pub unsafe fn switch_win_noblock(
     // storage and nothing below can reach it, so the exclusive borrow is
     // sound; all-zero is a valid `switchwin_T`.
     let switchwin = unsafe {
-        memset(switchwin as *mut c_void, 0, size_of::<switchwin_T>());
+        memset(switchwin.cast(), 0, size_of::<switchwin_T>());
         &mut *switchwin
     };
     switchwin.sw_curwin = curwin.get();

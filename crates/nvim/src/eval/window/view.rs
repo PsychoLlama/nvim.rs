@@ -2,6 +2,13 @@
 //! or one of its separators.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::types::VAR_STRING;
@@ -116,14 +123,14 @@ unsafe fn splitmove_options(opts: *mut typval_T) -> (c_int, c_int) {
         let d = (*opts).vval.v_dict;
         let mut flags = 0;
         if tv_dict_get_number(d, c"vertical".as_ptr()) != 0 {
-            flags |= WSP_VERT as c_int;
+            flags |= WSP_VERT.cast_signed();
         }
         let di = tv_dict_find(d, c"rightbelow".as_ptr(), -1);
         if !di.is_null() {
             flags |= if tv_get_number(&raw mut (*di).di_tv) != 0 {
-                WSP_BELOW as c_int
+                WSP_BELOW.cast_signed()
             } else {
-                WSP_ABOVE as c_int
+                WSP_ABOVE.cast_signed()
             };
         }
         (
@@ -233,7 +240,8 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // freed.
     let (mut buf, mut ga, tp) = unsafe {
         let mut ga: garray_T = mem::zeroed();
-        ga_init(&raw mut ga, size_of::<c_char>() as c_int, 70);
+        // One byte per item: the answer is built as text.
+        ga_init(&raw mut ga, 1, 70);
         ([0 as c_char; 50], ga, TabPage::current())
     };
     // Scoped so the growarray it borrows is free again for the tail below.
@@ -263,8 +271,8 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     }
     // SAFETY: a live growarray, whose buffer `rettv` takes over.
     unsafe {
-        ga_append(&raw mut ga, NUL as uint8_t);
-        (*rettv).vval.v_string = ga.ga_data as *mut c_char;
+        ga_append(&raw mut ga, b'\0');
+        (*rettv).vval.v_string = ga.ga_data.cast::<c_char>();
         (*rettv).v_type = VAR_STRING;
     }
 }
@@ -285,38 +293,38 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
         // entry of it or NULL.
         unsafe {
-            let di = tv_dict_find(dict, key.as_ptr(), key.count_bytes() as ptrdiff_t);
+            let di = tv_dict_find(dict, key.as_ptr(), key.count_bytes().cast_signed());
             (!di.is_null()).then(|| tv_get_number(&raw mut (*di).di_tv))
         }
     };
 
     if let Some(v) = entry(c"lnum") {
-        win.w_cursor.lnum = v as linenr_T;
+        win.w_cursor.lnum = number_as_int(v);
     }
     if let Some(v) = entry(c"col") {
-        win.w_cursor.col = v as colnr_T;
+        win.w_cursor.col = number_as_int(v);
     }
     if let Some(v) = entry(c"coladd") {
-        win.w_cursor.coladd = v as colnr_T;
+        win.w_cursor.coladd = number_as_int(v);
     }
     if let Some(v) = entry(c"curswant") {
-        win.w_curswant = v as colnr_T;
+        win.w_curswant = number_as_int(v);
         win.w_set_curswant = 0;
     }
     if let Some(v) = entry(c"topline") {
         // Not a plain assignment: 'scrolloff' and folds decide where the
         // window can actually start.
         // SAFETY: a live window.
-        unsafe { set_topline(win.raw(), v as linenr_T) };
+        unsafe { set_topline(win.raw(), number_as_int(v)) };
     }
     if let Some(v) = entry(c"topfill") {
-        win.w_topfill = v as c_int;
+        win.w_topfill = number_as_int(v);
     }
     if let Some(v) = entry(c"leftcol") {
-        win.w_leftcol = v as colnr_T;
+        win.w_leftcol = number_as_int(v);
     }
     if let Some(v) = entry(c"skipcol") {
-        win.w_skipcol = v as colnr_T;
+        win.w_skipcol = number_as_int(v);
     }
 
     // SAFETY: a live window, and `curbuf` is set.

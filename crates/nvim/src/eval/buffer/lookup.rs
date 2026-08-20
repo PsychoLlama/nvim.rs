@@ -2,6 +2,13 @@
 //! about one: `bufnr()`, `bufname()`, `bufwinid()`, ...
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::guard::Suppress;
@@ -47,11 +54,7 @@ pub unsafe fn f_bufadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     unsafe {
         let name = tv_get_string(args.ptr(0)) as *mut c_char;
         // An empty name asks for an unnamed buffer.
-        let name = if *name == NUL as c_char {
-            ptr::null_mut()
-        } else {
-            name
-        };
+        let name = if *name == 0 { ptr::null_mut() } else { name };
         rettv.vval.v_number = varnumber_T::from(buflist_add(name, 0));
     }
 }

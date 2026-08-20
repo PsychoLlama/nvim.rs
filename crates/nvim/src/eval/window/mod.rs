@@ -17,6 +17,13 @@
 //! handles rather than written out as a pointer test at every site.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod info;
 mod resolve;
@@ -67,7 +74,7 @@ use crate::strings::vim_snprintf_safelen;
 use crate::types::*;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, tabs, windows_in_tab};
 use ::libc::{memset, strcmp, strtol};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 pub const FR_LEAF: c_int = 0;
 pub const FR_ROW: c_int = 1;
