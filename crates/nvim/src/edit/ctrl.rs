@@ -284,7 +284,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
                 }
                 start_redo_ins();
                 if single_char_insert {
-                    stuffRedoReadbuff(ESC_STR.as_ptr()); // no ESC in the redo buffer
+                    stuff_redo_readbuf(ESC_STR.as_ptr()); // no ESC in the redo buffer
                 }
                 (*RedrawingDisabled.ptr()) += 1;
                 disabled_redraw.set(true);

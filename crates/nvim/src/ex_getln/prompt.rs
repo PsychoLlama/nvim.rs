@@ -234,7 +234,7 @@ pub unsafe fn get_user_input(
         }
         cmdline_row.set(msg_row.get());
 
-        stuffReadbuffSpec(defstr);
+        stuff_readbuf_one_line(defstr);
 
         let save_ex_normal_busy = ex_normal_busy.get();
         ex_normal_busy.set(0);

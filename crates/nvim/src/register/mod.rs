@@ -51,7 +51,7 @@ use crate::file_search::file_name_at_cursor;
 use crate::fold::hasFolding;
 use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_init, ga_set_growsize};
 use crate::getchar::{
-    AppendCharToRedobuff, beep_flush, get_recorded, ins_typebuf, stuffReadbuff, stuffcharReadbuff,
+    AppendCharToRedobuff, beep_flush, get_recorded, ins_typebuf, stuff_readbuf, stuff_readbuf_char,
     stuffescaped,
 };
 use crate::global_cell::GlobalCell;

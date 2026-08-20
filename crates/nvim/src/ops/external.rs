@@ -31,15 +31,15 @@ use crate::types::{FAIL, NUL};
 /// `oap` must point to a live `oparg_T`.
 pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
     unsafe {
-        stuffcharReadbuff(':' as c_int);
+        stuff_readbuf_char(':' as c_int);
         if (*oap).is_VIsual {
-            stuffReadbuff(c"'<,'>".as_ptr());
+            stuff_readbuf(c"'<,'>".as_ptr());
         } else {
             // Make the range look nice, so it can be repeated.
             if (*oap).start.lnum == (*curwin.get()).w_cursor.lnum {
-                stuffcharReadbuff('.' as c_int);
+                stuff_readbuf_char('.' as c_int);
             } else {
-                stuffnumReadbuff((*oap).start.lnum as c_int);
+                stuff_readbuf_number((*oap).start.lnum as c_int);
             }
 
             // When using !! on a closed fold the range ".!" works best to
@@ -53,11 +53,11 @@ pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
             );
             if (*oap).end.lnum != (*oap).start.lnum && (*oap).end.lnum != end_of_start_fold {
                 // Make it a range with the end line.
-                stuffcharReadbuff(',' as c_int);
+                stuff_readbuf_char(',' as c_int);
                 if (*oap).end.lnum == (*curwin.get()).w_cursor.lnum {
-                    stuffcharReadbuff('.' as c_int);
+                    stuff_readbuf_char('.' as c_int);
                 } else if (*oap).end.lnum == (*curbuf.get()).b_ml.ml_line_count {
-                    stuffcharReadbuff('$' as c_int);
+                    stuff_readbuf_char('$' as c_int);
                 } else if (*oap).start.lnum == (*curwin.get()).w_cursor.lnum
                     // Not ".+number" for a closed fold: that would count the
                     // folded lines twice.
@@ -68,30 +68,30 @@ pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
                         ::core::ptr::null_mut(),
                     )
                 {
-                    stuffReadbuff(c".+".as_ptr());
-                    stuffnumReadbuff((*oap).line_count as c_int - 1);
+                    stuff_readbuf(c".+".as_ptr());
+                    stuff_readbuf_number((*oap).line_count as c_int - 1);
                 } else {
-                    stuffnumReadbuff((*oap).end.lnum as c_int);
+                    stuff_readbuf_number((*oap).end.lnum as c_int);
                 }
             }
         }
         if (*oap).op_type != OP_COLON {
-            stuffReadbuff(c"!".as_ptr());
+            stuff_readbuf(c"!".as_ptr());
         }
         if (*oap).op_type == OP_INDENT {
-            stuffReadbuff(get_equalprg());
-            stuffReadbuff(c"\n".as_ptr());
+            stuff_readbuf(get_equalprg());
+            stuff_readbuf(c"\n".as_ptr());
         } else if (*oap).op_type == OP_FORMAT {
             if *(*curbuf.get()).b_p_fp as c_int != NUL {
-                stuffReadbuff((*curbuf.get()).b_p_fp);
+                stuff_readbuf((*curbuf.get()).b_p_fp);
             } else if *p_fp.get() as c_int != NUL {
-                stuffReadbuff(p_fp.get());
+                stuff_readbuf(p_fp.get());
             } else {
-                stuffReadbuff(c"fmt".as_ptr());
+                stuff_readbuf(c"fmt".as_ptr());
             }
             // The trailing `']` puts the cursor back at the end of the range
             // once the filter has replaced it.
-            stuffReadbuff(c"\n']".as_ptr());
+            stuff_readbuf(c"\n']".as_ptr());
         }
     }
 }

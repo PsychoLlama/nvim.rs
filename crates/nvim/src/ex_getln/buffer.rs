@@ -127,7 +127,7 @@ fn same_prefix(
 
 fn stuff_char(c: ::core::ffi::c_int) {
     // SAFETY: appends to the typeahead.
-    unsafe { stuffcharReadbuff(c) };
+    unsafe { stuff_readbuf_char(c) };
 }
 
 // ---------------------------------------------------------------------------

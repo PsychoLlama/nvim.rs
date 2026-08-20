@@ -33,7 +33,7 @@ const SCTX_INIT: sctx_T = sctx_T {
     sc_chan: 0,
 };
 
-/// A zeroed `buffheader_T`; `saveRedobuff` fills it in.
+/// A zeroed `buffheader_T`; `save_redobuff` fills it in.
 const BUFFHEADER_INIT: buffheader_T = buffheader_T {
     bh_first: buffblock_T {
         b_next: ::core::ptr::null_mut(),
@@ -393,7 +393,7 @@ pub unsafe fn apply_autocmds_group(
             if !autocmd_busy.get() {
                 save_search_patterns();
                 if !ins_compl_active() {
-                    saveRedobuff(&raw mut save_redo);
+                    save_redobuff(&raw mut save_redo);
                     did_save_redobuff = true;
                 }
                 (*curbuf.get()).b_did_filetype = (*curbuf.get()).b_keep_filetype;
@@ -525,7 +525,7 @@ pub unsafe fn apply_autocmds_group(
             if !autocmd_busy.get() {
                 restore_search_patterns();
                 if did_save_redobuff {
-                    restoreRedobuff(&raw mut save_redo);
+                    restore_redobuff(&raw mut save_redo);
                 }
                 (*curbuf.get()).b_did_filetype = false;
                 while !au_pending_free_buf.get().is_null() {

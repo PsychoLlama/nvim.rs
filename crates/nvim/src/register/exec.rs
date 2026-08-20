@@ -535,7 +535,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
             } else {
                 stuffescaped((*(*reg).y_array.add(i)).data(), literally);
                 if (*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) {
-                    stuffcharReadbuff('\n' as c_int);
+                    stuff_readbuf_char('\n' as c_int);
                 }
             }
         }

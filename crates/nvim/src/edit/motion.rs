@@ -50,7 +50,7 @@ pub(crate) unsafe fn ins_start_select(c: c_int) -> bool {
         }
 
         start_selection();
-        stuffcharReadbuff(Ctrl_O);
+        stuff_readbuf_char(Ctrl_O);
         if mod_mask.get() != 0 {
             // The modifiers have to be stuffed back too, as the three-byte
             // K_SPECIAL sequence that carries them.
@@ -60,9 +60,9 @@ pub(crate) unsafe fn ins_start_select(c: c_int) -> bool {
                 mod_mask.get() as uint8_t as c_char,
                 NUL as c_char,
             ];
-            stuffReadbuffLen(buf.as_ptr(), 3);
+            stuff_readbuf_len(buf.as_ptr(), 3);
         }
-        stuffcharReadbuff(c);
+        stuff_readbuf_char(c);
         true
     }
 }

@@ -97,7 +97,7 @@ pub(crate) unsafe fn insert_handle_key(s: *mut InsertState) -> c_int {
 
             // Help key works like CTRL-O.
             K_HELP | K_F1 | K_XF1 => {
-                stuffcharReadbuff(K_HELP);
+                stuff_readbuf_char(K_HELP);
                 Next::Leave
             }
 
@@ -158,7 +158,7 @@ pub(crate) unsafe fn insert_handle_key(s: *mut InsertState) -> c_int {
                 // In a prompt buffer plain CTRL-W is the window prefix, so
                 // Shift-CTRL-W is what deletes a word.
                 if bt_prompt(curbuf.get()) && mod_mask.get() & MOD_MASK_SHIFT == 0 {
-                    stuffcharReadbuff(Ctrl_W);
+                    stuff_readbuf_char(Ctrl_W);
                     restart_edit.set('A' as c_int);
                     (*s).nomove = true;
                     (*s).count = 0;

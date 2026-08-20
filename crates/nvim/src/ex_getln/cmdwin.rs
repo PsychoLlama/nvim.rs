@@ -304,7 +304,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         trigger_cmd_autocmd(cmdwin_type.get(), EVENT_CMDWINENTER);
         if restart_edit.get() != 0 {
             // An autocmd ran ":startinsert".
-            stuffcharReadbuff(K_NOP);
+            stuff_readbuf_char(K_NOP);
         }
 
         let redraw = Allow::redraw();
@@ -365,9 +365,9 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
                     cmdwin_result.set(CAR);
                 } else {
                     // First need to cancel what we were doing.
-                    stuffcharReadbuff(':' as ::core::ffi::c_int);
-                    stuffReadbuff(p.as_ptr());
-                    stuffcharReadbuff(CAR);
+                    stuff_readbuf_char(':' as ::core::ffi::c_int);
+                    stuff_readbuf(p.as_ptr());
+                    stuff_readbuf_char(CAR);
                 }
             } else if cmdwin_result.get() == Ctrl_C {
                 // ":q" or ":close": don't execute any command and don't

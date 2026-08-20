@@ -67,7 +67,7 @@ pub unsafe fn call_user_func(
         let mut did_save_redo = false;
         save_search_patterns();
         if !ins_compl_active() {
-            saveRedobuff(&raw mut save_redo);
+            save_redobuff(&raw mut save_redo);
             did_save_redo = true;
         }
         (*fp).uf_calls += 1;
@@ -462,7 +462,7 @@ pub unsafe fn call_user_func(
         }
 
         if did_save_redo {
-            restoreRedobuff(&raw mut save_redo);
+            restore_redobuff(&raw mut save_redo);
         }
         restore_search_patterns();
     }

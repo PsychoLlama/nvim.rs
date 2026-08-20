@@ -304,7 +304,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
             // the loop wakes up and sees `stop_insert_mode`.
             stop_insert_mode.set(true);
             restart_edit.set('I' as c_int);
-            stuffcharReadbuff(K_NOP);
+            stuff_readbuf_char(K_NOP);
         }
         if stop_insert_mode.get() && !ins_compl_active() {
             // `:stopinsert` was used, or a terminal buffer was entered.

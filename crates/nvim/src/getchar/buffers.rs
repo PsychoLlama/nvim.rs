@@ -3,7 +3,7 @@
 //! A `buffheader_T` is a linked list of [`buffblock_T`]s holding a byte string
 //! that is appended to at the tail ([`add_buff`]) and consumed from the head
 //! ([`read_readbuf`]).  Five of them exist — the two read buffers behind
-//! `stuffReadbuff`, the record buffer behind `q`, and the redo pair — and
+//! `stuff_readbuf`, the record buffer behind `q`, and the redo pair — and
 //! every one of them is filled by the functions here.
 //!
 //! `buffblock_T::b_str` is a flexible array member: the type declares one
@@ -443,7 +443,7 @@ pub unsafe fn beep_flush() {
 ///
 /// # Safety
 /// `s` must point at a NUL-terminated string.
-pub unsafe fn stuffReadbuff(s: *const c_char) {
+pub unsafe fn stuff_readbuf(s: *const c_char) {
     unsafe { add_buff(readbuf1.ptr(), s, -1) };
 }
 
@@ -451,7 +451,7 @@ pub unsafe fn stuffReadbuff(s: *const c_char) {
 ///
 /// # Safety
 /// `s` must point at a NUL-terminated string.
-pub unsafe fn stuffRedoReadbuff(s: *const c_char) {
+pub unsafe fn stuff_redo_readbuf(s: *const c_char) {
     unsafe { add_buff(readbuf2.ptr(), s, -1) };
 }
 
@@ -459,7 +459,7 @@ pub unsafe fn stuffRedoReadbuff(s: *const c_char) {
 ///
 /// # Safety
 /// `s` must point at `len` readable bytes.
-pub unsafe fn stuffReadbuffLen(s: *const c_char, len: ptrdiff_t) {
+pub unsafe fn stuff_readbuf_len(s: *const c_char, len: ptrdiff_t) {
     unsafe { add_buff(readbuf1.ptr(), s, len) };
 }
 
@@ -471,7 +471,7 @@ pub unsafe fn stuffReadbuffLen(s: *const c_char, len: ptrdiff_t) {
 ///
 /// # Safety
 /// `s` must point at a NUL-terminated string.
-pub unsafe fn stuffReadbuffSpec(mut s: *const c_char) {
+pub unsafe fn stuff_readbuf_one_line(mut s: *const c_char) {
     unsafe {
         while c_int::from(*s) != NUL {
             if c_int::from(*s as u8) == K_SPECIAL
@@ -479,11 +479,11 @@ pub unsafe fn stuffReadbuffSpec(mut s: *const c_char) {
                 && c_int::from(*s.add(2)) != NUL
             {
                 // Copy an escaped key code through untouched.
-                stuffReadbuffLen(s, 3);
+                stuff_readbuf_len(s, 3);
                 s = s.add(3);
             } else {
                 let c = mb_cptr2char_adv(&raw mut s);
-                stuffcharReadbuff(if c == CAR || c == NL || c == ESC {
+                stuff_readbuf_char(if c == CAR || c == NL || c == ESC {
                     ' ' as c_int
                 } else {
                     c
@@ -497,7 +497,7 @@ pub unsafe fn stuffReadbuffSpec(mut s: *const c_char) {
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn stuffcharReadbuff(c: c_int) {
+pub unsafe fn stuff_readbuf_char(c: c_int) {
     unsafe { add_char_buff(readbuf1.ptr(), c) };
 }
 
@@ -505,7 +505,7 @@ pub unsafe fn stuffcharReadbuff(c: c_int) {
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn stuffnumReadbuff(n: c_int) {
+pub unsafe fn stuff_readbuf_number(n: c_int) {
     unsafe { add_num_buff(readbuf1.ptr(), n) };
 }
 
@@ -528,16 +528,16 @@ pub unsafe fn stuffescaped(mut arg: *const c_char, literally: bool) {
                 arg = arg.add(1);
             }
             if arg > start {
-                stuffReadbuffLen(start, arg.offset_from(start));
+                stuff_readbuf_len(start, arg.offset_from(start));
             }
 
             // Then the character that stopped it, one at a time.
             if c_int::from(*arg) != NUL {
                 let c = mb_cptr2char_adv(&raw mut arg);
                 if literally && ((c < ' ' as c_int && c != TAB) || c == DEL) {
-                    stuffcharReadbuff(Ctrl_V);
+                    stuff_readbuf_char(Ctrl_V);
                 }
-                stuffcharReadbuff(c);
+                stuff_readbuf_char(c);
             }
         }
     }

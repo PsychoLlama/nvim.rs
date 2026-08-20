@@ -34,7 +34,7 @@ use crate::ex_eval::{
 };
 use crate::ex_getln::{getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
-use crate::getchar::{restoreRedobuff, saveRedobuff};
+use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_add, hash_find, hash_find_len, hash_init, hash_remove};
 use crate::insexpand::ins_compl_active;

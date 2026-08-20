@@ -13,7 +13,7 @@ use core::ptr;
 use crate::buffer::bt_prompt;
 use crate::edit::{BeginlineOpts, beginline, cursor_down, prompt_curpos_editable};
 use crate::eval::vars::{set_reg_var, set_vim_var_string};
-use crate::getchar::{plain_vgetc, start_redo, stuffcharReadbuff};
+use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
 use crate::main::{
@@ -282,8 +282,8 @@ pub(crate) unsafe fn nv_record(cap: *mut cmdarg_T) {
                 emsg(gettext(e_cmdline_window_already_open.as_ptr()));
                 return;
             }
-            stuffcharReadbuff((*cap).nchar);
-            stuffcharReadbuff(-(253 + ((KE_CMDWIN as c_int) << 8)));
+            stuff_readbuf_char((*cap).nchar);
+            stuff_readbuf_char(-(253 + ((KE_CMDWIN as c_int) << 8)));
         } else if reg_executing.get() == 0 && do_record((*cap).nchar) == FAIL {
             clearopbeep((*cap).oap);
         }

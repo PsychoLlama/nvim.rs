@@ -53,7 +53,7 @@ use crate::extmark::extmark_clear;
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
 use crate::getchar::{
     beep_flush, char_avail, getcmdkeycmd, ins_typebuf, map_execute_lua, plain_vgetc, stuff_empty,
-    stuffReadbuff, stuffReadbuffSpec, stuffcharReadbuff, vgetc, vpeekc, vpeekc_any, vungetc,
+    stuff_readbuf, stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
 };
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};

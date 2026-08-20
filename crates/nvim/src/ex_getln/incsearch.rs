@@ -543,7 +543,7 @@ pub(crate) unsafe fn may_add_char_to_search(
                     .is_null()
                 {
                     // Put a backslash before the special characters.
-                    stuffcharReadbuff(*c);
+                    stuff_readbuf_char(*c);
                     *c = '\\' as ::core::ffi::c_int;
                 }
                 // Add any composing characters.
@@ -552,7 +552,7 @@ pub(crate) unsafe fn may_add_char_to_search(
                     while utf_char2len(*c) != utfc_ptr2len(get_cursor_pos_ptr()) {
                         (*curwin.get()).w_cursor.col += utf_char2len(*c);
                         *c = gchar_cursor();
-                        stuffcharReadbuff(*c);
+                        stuff_readbuf_char(*c);
                     }
                     *c = save_c;
                 }

@@ -33,7 +33,7 @@ use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{deleteFold, foldCreate, foldOpenCursor, hasFolding, opFoldRange};
 use crate::getchar::{
     AppendNumberToRedobuff, AppendToRedobuff, AppendToRedobuffLit, AppendToRedobuffSpec,
-    CancelRedo, ResetRedobuff, beep_flush, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff,
+    CancelRedo, ResetRedobuff, beep_flush, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
 };
 use crate::global_cell::GlobalCell;
 use crate::indent::{

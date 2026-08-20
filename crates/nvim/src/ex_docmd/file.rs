@@ -27,7 +27,7 @@ use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
 use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::fileio::readfile;
-use crate::getchar::stuffReadbuff;
+use crate::getchar::stuff_readbuf;
 use crate::main::{
     curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active, global_busy,
     msg_scroll, need_wait_return, p_awa, p_shada, pending_exmode_active, readonlymode,
@@ -334,7 +334,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                 // the line and Ex mode resumes afterwards.
                 if global_busy.get() != 0 {
                     if !ea.nextcmd.is_null() {
-                        stuffReadbuff(ea.nextcmd);
+                        stuff_readbuf(ea.nextcmd);
                         ea.nextcmd = ptr::null_mut();
                     }
                     let _redraw = Allow::redraw();

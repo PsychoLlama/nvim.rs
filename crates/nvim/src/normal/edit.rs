@@ -20,8 +20,8 @@ use crate::edit::{
 };
 use crate::fold::{foldUpdateAfterInsert, hasFolding};
 use crate::getchar::{
-    AppendCharToRedobuff, AppendToRedobuff, stuff_empty, stuffReadbuff, stuffcharReadbuff,
-    stuffnumReadbuff,
+    AppendCharToRedobuff, AppendToRedobuff, stuff_empty, stuff_readbuf, stuff_readbuf_char,
+    stuff_readbuf_number,
 };
 use crate::guard::Suppress;
 use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, K_DEL, K_INS, K_KDEL, K_KINS};
@@ -165,10 +165,10 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
             && (*cap).nchar == '\t' as c_int
             && ((*curbuf.get()).b_p_et != 0 || p_sta.get() != 0)
         {
-            stuffnumReadbuff((*cap).count1);
-            stuffcharReadbuff('R' as c_int);
-            stuffcharReadbuff('\t' as c_int);
-            stuffcharReadbuff(ESC);
+            stuff_readbuf_number((*cap).count1);
+            stuff_readbuf_char('R' as c_int);
+            stuff_readbuf_char('\t' as c_int);
+            stuff_readbuf_char(ESC);
             return;
         }
         if u_save_cursor() == 0 {
@@ -177,8 +177,8 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         if literal != Ctrl_V && ((*cap).nchar == '\r' as c_int || (*cap).nchar == '\n' as c_int) {
             // Replacing with a line break splits the line, which is an insert.
             del_chars((*cap).count1, 0);
-            stuffcharReadbuff('\r' as c_int);
-            stuffcharReadbuff(ESC);
+            stuff_readbuf_char('\r' as c_int);
+            stuff_readbuf_char(ESC);
             invoke_edit(cap, 1, 'r' as c_int, 0);
             foldUpdateAfterInsert();
             return;
@@ -294,10 +294,10 @@ pub(crate) unsafe fn nv_vreplace(cap: *mut cmdarg_T) {
         // Replay the character through virtual replace mode. A control
         // character needs its own CTRL-V to survive the replay.
         if (*cap).extra_char < ' ' as c_int {
-            stuffcharReadbuff(Ctrl_V);
+            stuff_readbuf_char(Ctrl_V);
         }
-        stuffcharReadbuff((*cap).extra_char);
-        stuffcharReadbuff(ESC);
+        stuff_readbuf_char((*cap).extra_char);
+        stuff_readbuf_char(ESC);
         if virtual_active(curwin.get()) {
             coladvance(curwin.get(), getviscol());
         }
@@ -422,11 +422,11 @@ pub(crate) unsafe fn nv_optrans(cap: *mut cmdarg_T) {
     unsafe {
         if !checkclearopq((*cap).oap) {
             if (*cap).count0 != 0 {
-                stuffnumReadbuff((*cap).count0);
+                stuff_readbuf_number((*cap).count0);
             }
             for (key, keys) in TRANSLATIONS {
                 if key == (*cap).cmdchar {
-                    stuffReadbuff(keys.as_ptr());
+                    stuff_readbuf(keys.as_ptr());
                     break;
                 }
             }

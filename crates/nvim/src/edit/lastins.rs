@@ -72,7 +72,7 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
 
         // May want to stuff the command character, to start Insert mode.
         if c != NUL {
-            stuffcharReadbuff(c);
+            stuff_readbuf_char(c);
         }
 
         // Cut the text at the last ESC: what follows it is not part of the
@@ -102,12 +102,12 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
         }
 
         loop {
-            stuffReadbuffLen(insert.data(), insert.len() as ptrdiff_t);
+            stuff_readbuf_len(insert.data(), insert.len() as ptrdiff_t);
             // The quoted forms: `0` as `<C-V>048`, `^` as `<C-V>^`.
             if last == b'0' as c_char {
-                stuffReadbuffLen(c"\x16048".as_ptr(), 4);
+                stuff_readbuf_len(c"\x16048".as_ptr(), 4);
             } else if last == b'^' as c_char {
-                stuffReadbuffLen(c"\x16^".as_ptr(), 2);
+                stuff_readbuf_len(c"\x16^".as_ptr(), 2);
             }
             count -= 1;
             if count <= 0 {
@@ -117,7 +117,7 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
 
         // May want to stuff a trailing ESC, to get out of Insert mode.
         if no_esc == 0 {
-            stuffcharReadbuff(ESC);
+            stuff_readbuf_char(ESC);
         }
         OK
     }

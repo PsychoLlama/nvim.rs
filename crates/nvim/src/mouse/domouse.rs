@@ -30,8 +30,8 @@ use crate::eval::eval_has_provider;
 use crate::ex_docmd::{do_cmdline_cmd, tabpage_new};
 use crate::fold::{closeFold, openFold};
 use crate::getchar::{
-    AppendCharToRedobuff, safe_vgetc, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff, vpeekc,
-    vungetc,
+    AppendCharToRedobuff, safe_vgetc, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
+    vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{
@@ -446,7 +446,7 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
         }
         if count > 1 {
             // SAFETY: appends to the stuff buffer.
-            unsafe { stuffnumReadbuff(count) };
+            unsafe { stuff_readbuf_number(count) };
         }
         stuff_char(Ctrl_T);
         got_click.set(false); // ignore drag&release now
@@ -501,7 +501,7 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
             if VIsual_select.get() {
                 stuff_char(Ctrl_G);
                 // SAFETY: a NUL-terminated literal.
-                unsafe { stuffReadbuff(c"\"+p".as_ptr()) };
+                unsafe { stuff_readbuf(c"\"+p".as_ptr()) };
             } else {
                 stuff_char('y' as c_int);
                 stuff_char(K_MIDDLEMOUSE);
@@ -939,7 +939,7 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
 /// Push `c` back onto the input, so it is read as the next key.
 fn stuff_char(c: c_int) {
     // SAFETY: appends to the stuff buffer.
-    unsafe { stuffcharReadbuff(c) };
+    unsafe { stuff_readbuf_char(c) };
 }
 
 /// The character at `pos`, or NUL past the end of the line.

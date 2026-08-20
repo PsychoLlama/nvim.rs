@@ -11,7 +11,8 @@ use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_lat
 use crate::ex_docmd::{DoCmdOpts, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{compute_cmdrow, getexline};
 use crate::getchar::{
-    getcmdkeycmd, map_execute_lua, paste_repeat, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff,
+    getcmdkeycmd, map_execute_lua, paste_repeat, stuff_readbuf, stuff_readbuf_char,
+    stuff_readbuf_number,
 };
 use crate::help::ex_help;
 use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, K_COMMAND, K_IGNORE, K_LUA};
@@ -82,10 +83,10 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
             (*oap).inclusive = false;
         } else if (*cap).count0 != 0 && !is_cmdkey && !is_lua {
             // A count in front of `:` becomes a range: `3:` is `:.,.+2`.
-            stuffcharReadbuff('.' as c_int);
+            stuff_readbuf_char('.' as c_int);
             if (*cap).count0 > 1 {
-                stuffReadbuff(c",.+".as_ptr());
-                stuffnumReadbuff((*cap).count0 - 1);
+                stuff_readbuf(c",.+".as_ptr());
+                stuff_readbuf_number((*cap).count0 - 1);
             }
         }
         // A typed `:` scrolls the message area up to make room for the

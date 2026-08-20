@@ -63,8 +63,8 @@ pub unsafe fn CancelRedo() {
 ///
 /// # Safety
 /// `save_redo` must point at writable storage that outlives the matching
-/// [`restoreRedobuff`].
-pub unsafe fn saveRedobuff(save_redo: *mut save_redo_T) {
+/// [`restore_redobuff`].
+pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
     unsafe {
         (*save_redo).sr_redobuff = redobuff.get();
         (*redobuff.ptr()).bh_first.b_next = ptr::null_mut();
@@ -80,11 +80,11 @@ pub unsafe fn saveRedobuff(save_redo: *mut save_redo_T) {
     }
 }
 
-/// Put back what [`saveRedobuff`] moved aside.
+/// Put back what [`save_redobuff`] moved aside.
 ///
 /// # Safety
-/// `save_redo` must be the one a matching [`saveRedobuff`] filled.
-pub unsafe fn restoreRedobuff(save_redo: *mut save_redo_T) {
+/// `save_redo` must be the one a matching [`save_redobuff`] filled.
+pub unsafe fn restore_redobuff(save_redo: *mut save_redo_T) {
     unsafe {
         free_buff(redobuff.ptr());
         redobuff.set((*save_redo).sr_redobuff);

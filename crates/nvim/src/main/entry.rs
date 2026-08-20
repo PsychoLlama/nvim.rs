@@ -32,7 +32,7 @@ use crate::event::proc::proc_teardown;
 use crate::ex_docmd::{filetype_maybe_enable, filetype_plugin_enable};
 use crate::ex_getln::cmdline_init;
 use crate::fileio::shorten_fnames;
-use crate::getchar::{open_scriptin, stuffcharReadbuff};
+use crate::getchar::{open_scriptin, stuff_readbuf_char};
 use crate::highlight::highlight_init;
 use crate::highlight_group::init_highlight;
 use crate::keycodes::KE_NOP;
@@ -538,7 +538,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
         if restart_edit.get() != 0 {
             // A `-c startinsert` and friends: push the key that gets there.
-            stuffcharReadbuff(-(253 + ((KE_NOP as c_int) << 8)));
+            stuff_readbuf_char(-(253 + ((KE_NOP as c_int) << 8)));
         }
 
         if cb_flags.get() & (kOptCbFlagUnnamed as c_int | kOptCbFlagUnnamedplus as c_int) as c_uint

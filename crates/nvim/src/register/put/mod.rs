@@ -91,7 +91,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
                 PUT_LINE as c_int,
             );
 
-            stuffcharReadbuff(command_start_char);
+            stuff_readbuf_char(command_start_char);
             while count > 0 {
                 stuff_inserted(NUL, 1, (count != 1) as c_int);
                 if count != 1 {
@@ -99,8 +99,8 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
                     // would add. CTRL-U on its own would go back to the
                     // previous line under 'nobackspace'-`eol`, so it is given
                     // a space to consume.
-                    stuffReadbuff(c"\n ".as_ptr());
-                    stuffcharReadbuff(Ctrl_U);
+                    stuff_readbuf(c"\n ".as_ptr());
+                    stuff_readbuf_char(Ctrl_U);
                 }
                 count -= 1;
             }
@@ -112,7 +112,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
         // motion commands stuffed after the insert do it instead.
         if flags & PUT_CURSEND as c_int != 0 {
             if flags & PUT_LINE as c_int != 0 {
-                stuffReadbuff(c"j0".as_ptr());
+                stuff_readbuf(c"j0".as_ptr());
             } else {
                 // Stuffing `l` would ring the bell at the end of a line, so
                 // only do it when the cursor can actually move right:
@@ -129,11 +129,11 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
                 let eof = (*curbuf.get()).b_ml.ml_line_count == (*curwin.get()).w_cursor.lnum
                     && one_past_line;
                 if ve_allows || !(eol || eof) {
-                    stuffcharReadbuff('l' as c_int);
+                    stuff_readbuf_char('l' as c_int);
                 }
             }
         } else if flags & PUT_LINE as c_int != 0 {
-            stuffReadbuff(c"g'[".as_ptr());
+            stuff_readbuf(c"g'[".as_ptr());
         }
 
         // Save the cursor position now (though no text), so that `u` after
