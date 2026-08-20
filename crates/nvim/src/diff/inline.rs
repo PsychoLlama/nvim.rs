@@ -4,7 +4,7 @@
 //! changed column ranges the drawer paints `DiffText` over.
 //! [`diff_find_change_simple`] is the `inline:simple` rule -- one range, from
 //! the first differing byte to the last -- and [`diff_change_parse`] is how
-//! the drawer reads a range back out.  [`f_diff_hlID`] is the Vimscript front
+//! the drawer reads a range back out.  [`f_diff_hl_id`] is the Vimscript front
 //! door to the same answer, and the only way to observe any of it without a
 //! screen.
 
@@ -307,7 +307,7 @@ pub unsafe fn diff_find_change(wp: *mut win_T, lnum: linenr_T, diffline: *mut di
 /// column of a line -- but only under `inline:none`/`inline:simple`, where
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
-pub unsafe fn f_diff_hlID(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
         static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);

@@ -195,7 +195,7 @@ pub unsafe fn f_screenstring(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 }
 
 /// `hlID({name})` — the highlight group's id, or 0.
-pub unsafe fn f_hlID(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
     rettv.vval.v_number = unsafe { syn_name2id(tv_get_string(args.ptr(0))) } as varnumber_T;
@@ -266,7 +266,7 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
 }
 
 /// `synIDattr({id}, {what} [, {mode}])`
-pub unsafe fn f_synIDattr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_syn_id_attr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live; `what` is the string an argument owns and
     // outlives the `highlight_color` call, and `modebuf` outlives the string
@@ -307,7 +307,7 @@ pub unsafe fn f_synIDattr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
 /// `synID({lnum}, {col}, {trans})` — the syntax id at a position, 0 off the
 /// buffer or when the `{trans}` argument does not coerce.
-pub unsafe fn f_synID(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_syn_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live, and `curbuf`/`curwin` are live for the
     // whole call.
@@ -332,7 +332,7 @@ pub unsafe fn f_synID(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 }
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
-pub unsafe fn f_synIDtrans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_syn_id_trans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
     unsafe {

@@ -1967,6 +1967,7 @@ M.funcs = {
       syntax information about the highlighting.
 
     ]=],
+    func = 'f_diff_hl_id',
     name = 'diff_hlID',
     params = { { 'lnum', 'integer|string' }, { 'col', 'integer' } },
     signature = 'diff_hlID({lnum}, {col})',
@@ -5351,7 +5352,7 @@ M.funcs = {
     desc = [=[
       Obsolete name for |hlID()|.
     ]=],
-    func = 'f_hlID',
+    func = 'f_hl_id',
     params = { { 'name', 'string' } },
     signature = 'highlightID({name})',
   },
@@ -5492,6 +5493,7 @@ M.funcs = {
       	echo synIDattr(synIDtrans(hlID("Comment")), "bg")
       <
     ]=],
+    func = 'f_hl_id',
     name = 'hlID',
     params = { { 'name', 'string' } },
     returns = 'integer',
@@ -12141,6 +12143,7 @@ M.funcs = {
       	echo synIDattr(synID(line("."), col("."), 1), "name")
       <
     ]=],
+    func = 'f_syn_id',
     name = 'synID',
     params = { { 'lnum', 'integer|string' }, { 'col', 'integer' }, { 'trans', '0|1' } },
     returns = 'integer',
@@ -12199,6 +12202,7 @@ M.funcs = {
       	echo synID(line("."), col("."), 1)->synIDtrans()->synIDattr("fg")
       <
     ]=],
+    func = 'f_syn_id_attr',
     name = 'synIDattr',
     params = { { 'synID', 'integer' }, { 'what', 'string' }, { 'mode', 'string' } },
     returns = 'string',
@@ -12216,6 +12220,7 @@ M.funcs = {
       Returns zero on error.
 
     ]=],
+    func = 'f_syn_id_trans',
     name = 'synIDtrans',
     params = { { 'synID', 'integer' } },
     returns = 'integer',

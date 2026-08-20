@@ -28,7 +28,7 @@ use crate::api::private::dispatch::method_handlers;
 use crate::arglist::{f_argc, f_argidx, f_arglistid, f_argv};
 use crate::cmdexpand::{f_cmdcomplete_info, f_getcompletion, f_getcompletiontype};
 use crate::cmdhist::{f_histadd, f_histdel, f_histget, f_histnr};
-use crate::diff::{f_diff_filler, f_diff_hlID};
+use crate::diff::{f_diff_filler, f_diff_hl_id};
 use crate::digraph::{f_digraph_get, f_digraph_getlist, f_digraph_set, f_digraph_setlist};
 use crate::eval::buffer::{
     f_append, f_appendbufline, f_bufadd, f_bufexists, f_buflisted, f_bufload, f_bufloaded,
@@ -54,7 +54,7 @@ use crate::eval::funcs::{
     f_garbagecollect, f_get, f_getchangelist, f_getcharpos, f_getcharsearch, f_getcurpos,
     f_getcursorcharpos, f_getenv, f_getfontname, f_getjumplist, f_getmarklist, f_getpid, f_getpos,
     f_getreg, f_getreginfo, f_getregion, f_getregionpos, f_getregtype, f_gettagstack, f_gettext,
-    f_has, f_hlID, f_hlexists, f_hostname, f_id, f_index, f_indexof, f_input, f_inputdialog,
+    f_has, f_hl_id, f_hlexists, f_hostname, f_id, f_index, f_indexof, f_input, f_inputdialog,
     f_inputlist, f_inputrestore, f_inputsave, f_inputsecret, f_interrupt, f_invert, f_isinf,
     f_islocked, f_isnan, f_jobpid, f_jobresize, f_jobstart, f_jobstop, f_jobwait, f_json_decode,
     f_json_encode, f_keytrans, f_len, f_libcall, f_libcallnr, f_line, f_line2byte, f_localtime,
@@ -69,11 +69,11 @@ use crate::eval::funcs::{
     f_setcharsearch, f_setcursorcharpos, f_setenv, f_setfperm, f_setpos, f_setreg, f_settagstack,
     f_sha256, f_shellescape, f_shiftwidth, f_sockconnect, f_soundfold, f_spellbadword,
     f_spellsuggest, f_split, f_srand, f_state, f_stdioopen, f_stdpath, f_str2float, f_strftime,
-    f_strptime, f_submatch, f_substitute, f_swapfilelist, f_swapinfo, f_swapname, f_synID,
-    f_synIDattr, f_synIDtrans, f_synconcealed, f_synstack, f_tabpagebuflist, f_tagfiles, f_taglist,
-    f_timer_info, f_timer_pause, f_timer_start, f_timer_stop, f_timer_stopall, f_type, f_virtcol,
-    f_visualmode, f_wait, f_wildmenumode, f_windowsversion, f_wordcount, f_xor, float_op_wrapper,
-    floor, log, log10, round, sin, sinh, sqrt, tan, tanh, trunc,
+    f_strptime, f_submatch, f_substitute, f_swapfilelist, f_swapinfo, f_swapname, f_syn_id,
+    f_syn_id_attr, f_syn_id_trans, f_synconcealed, f_synstack, f_tabpagebuflist, f_tagfiles,
+    f_taglist, f_timer_info, f_timer_pause, f_timer_start, f_timer_stop, f_timer_stopall, f_type,
+    f_virtcol, f_visualmode, f_wait, f_wildmenumode, f_windowsversion, f_wordcount, f_xor,
+    float_op_wrapper, floor, log, log10, round, sin, sinh, sqrt, tan, tanh, trunc,
 };
 use crate::eval::list::{
     f_add, f_count, f_extend, f_extendnew, f_filter, f_foreach, f_insert, f_map, f_mapnew,
