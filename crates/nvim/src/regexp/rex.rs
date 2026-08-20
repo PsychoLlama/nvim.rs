@@ -21,6 +21,13 @@
 //! call that pushes and pops a debug borrow-table entry.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_char, c_int};
 
@@ -159,9 +166,13 @@ impl Rex {
     }
 
     /// The column the cursor is in, zero-based, in bytes.
+    ///
+    /// The cursor is never before the start of its line and a line is at most
+    /// `MAXCOL` bytes, so the difference always is a `colnr_T`.
     #[inline(always)]
     pub(crate) fn col(self) -> colnr_T {
-        unsafe { (*self.0).input.offset_from((*self.0).line) as colnr_T }
+        let bytes = unsafe { (*self.0).input.offset_from((*self.0).line) };
+        colnr_T::try_from(bytes).unwrap_or(colnr_T::MAX)
     }
 
     /// Put the cursor in column `col` of the line it is already on.

@@ -27,6 +27,13 @@
 //! so E363 fires at exactly the depth it used to.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::global_cell::GlobalCell;
 use crate::main::p_mmp;
@@ -125,7 +132,10 @@ impl RegStack {
     /// Would `bytes` more put the stack over 'maxmempattern'? Reports E363
     /// and refuses if so.
     fn charge(&mut self, bytes: usize) -> bool {
-        if (self.bytes >> 10) as i64 >= p_mmp.get() {
+        // 'maxmempattern' is bounded far below `i64::MAX`, so a stack that
+        // does not fit in one is over any limit there could be.
+        let kbytes = i64::try_from(self.bytes >> 10).unwrap_or(i64::MAX);
+        if kbytes >= p_mmp.get() {
             // SAFETY: a `&CStr`'s pointer, handed to the message layer.
             unsafe {
                 emsg(gettext(
