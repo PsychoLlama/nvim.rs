@@ -25,7 +25,7 @@ use crate::ex_cmds2::autowrite_all;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{readfile, vim_tempname, write_lnum_adjust};
-use crate::fold::foldUpdate;
+use crate::fold::fold_update;
 use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
@@ -315,7 +315,7 @@ unsafe fn do_filter(
     let stmp = p_stmp.get();
 
     // Temporarily disable lockmarks since that's needed to propagate changed
-    // regions of the buffer for foldUpdate(), linecount, etc.
+    // regions of the buffer for fold_update(), linecount, etc.
     // Released at four different exits, one of them past the end of the
     // block below, so the guard is held in an `Option` rather than by scope.
     let mut no_prompt = None;
@@ -556,7 +556,7 @@ unsafe fn do_filter(
                     (*curbuf.get()).b_op_end.lnum -= linecount;
                     // adjust last line for next write
                     write_lnum_adjust(-linecount);
-                    foldUpdate(
+                    fold_update(
                         curwin.get(),
                         (*curbuf.get()).b_op_start.lnum,
                         (*curbuf.get()).b_op_end.lnum,

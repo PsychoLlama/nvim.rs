@@ -247,7 +247,7 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
     unsafe {
         let mut old_curwin: *mut win_T = curwin.get();
         curwin.set(wp);
-        newFoldLevel();
+        new_fold_level();
         curwin.set(old_curwin);
         if (*wp).w_onebuf_opt.wo_diff == 0 {
             (*wp).w_onebuf_opt.wo_scb_save = (*wp).w_onebuf_opt.wo_scb;
@@ -307,7 +307,7 @@ pub unsafe fn diff_win_options(wp: *mut win_T, addbuf: bool) {
         );
         (*wp).w_onebuf_opt.wo_fen = 1;
         (*wp).w_onebuf_opt.wo_fdl = 0 as OptInt;
-        foldUpdateAll(wp);
+        fold_update_all(wp);
         changed_window_setting(wp);
         if vim_strchr(p_sbo.get(), 'h' as c_int).is_null() {
             do_cmdline_cmd(c"set sbo+=hor".as_ptr());
@@ -375,13 +375,13 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
                         (*wp).w_onebuf_opt.wo_fdl = (*wp).w_onebuf_opt.wo_fdl_save;
                     }
                     if (*wp).w_onebuf_opt.wo_fen != 0 {
-                        (*wp).w_onebuf_opt.wo_fen = if foldmethodIsManual(wp) as c_int != 0 {
+                        (*wp).w_onebuf_opt.wo_fen = if foldmethod_is_manual(wp) as c_int != 0 {
                             0
                         } else {
                             (*wp).w_onebuf_opt.wo_fen_save
                         };
                     }
-                    foldUpdateAll(wp);
+                    fold_update_all(wp);
                 }
                 (*wp).w_topfill = 0;
                 changed_window_setting(wp);

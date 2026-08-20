@@ -8,7 +8,7 @@ use super::*;
 ///
 /// Returns fAIL if writing fails.
 pub unsafe fn put_folds(mut fd: *mut FILE, mut wp: *mut win_T) -> c_int {
-    if foldmethodIsManual(wp)
+    if foldmethod_is_manual(wp)
         && (put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) == FAIL
             || put_folds_recurse(fd, &raw mut (*wp).w_folds, 0) == FAIL
             || put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) == FAIL)
@@ -86,7 +86,7 @@ pub(super) unsafe fn put_foldopen_recurse(
                     return FAIL;
                 }
             } else {
-                let mut level: c_int = foldLevelWin(wp, off + (*fp).fd_top);
+                let mut level: c_int = fold_level_win(wp, off + (*fp).fd_top);
                 if ((*fp).fd_flags as c_int == FD_CLOSED as c_int
                     && (*wp).w_onebuf_opt.wo_fdl >= level as OptInt
                     || (*fp).fd_flags as c_int != FD_CLOSED as c_int

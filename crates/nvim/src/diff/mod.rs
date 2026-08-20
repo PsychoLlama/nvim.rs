@@ -53,7 +53,8 @@ use crate::ex_docmd::{do_cmdline_cmd, do_exedit, get_address};
 use crate::extmark::extmark_adjust;
 use crate::fileio::{buf_check_timestamp, shorten_fnames, vim_fgets, vim_gettempdir, vim_tempname};
 use crate::fold::{
-    foldUpdate, foldUpdateAll, foldmethodIsDiff, foldmethodIsManual, hasFolding, newFoldLevel,
+    fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, has_folding,
+    new_fold_level,
 };
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;

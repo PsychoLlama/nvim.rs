@@ -89,7 +89,7 @@ describe('Folding', function()
       insert(insert_string)
       command(move_command)
       local after_move_folds = get_folds()
-      -- Doesn't change anything, but does call foldUpdateAll()
+      -- Doesn't change anything, but does call fold_update_all()
       command('setlocal foldminlines=0')
       eq(after_move_folds, get_folds())
       -- Set up the buffer with insert_string for the manual fold testing.

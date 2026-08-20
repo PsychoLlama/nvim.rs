@@ -265,9 +265,9 @@ impl Put {
             // Correct for a closed fold. The cursor must not move yet:
             // u_save() reads it.
             if self.dir == BACKWARD {
-                hasFolding(curwin.get(), lnum, &raw mut lnum, ::core::ptr::null_mut());
+                has_folding(curwin.get(), lnum, &raw mut lnum, ::core::ptr::null_mut());
             } else {
-                hasFolding(curwin.get(), lnum, ::core::ptr::null_mut(), &raw mut lnum);
+                has_folding(curwin.get(), lnum, ::core::ptr::null_mut(), &raw mut lnum);
             }
             if self.dir == FORWARD {
                 lnum += 1;

@@ -255,7 +255,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
                     && *(*wp).w_onebuf_opt.wo_fdm as c_int == 'd' as c_int
                     && (*wp).w_onebuf_opt.wo_fen != 0
                 {
-                    foldUpdateAll(wp);
+                    fold_update_all(wp);
                 }
                 wp = (*wp).w_next;
             }

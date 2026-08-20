@@ -10,9 +10,9 @@ use crate::cursor::{check_cursor_col, set_leftcol};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::{
-    clearFolding, closeFold, closeFoldRecurse, deleteFold, foldManualAllowed, foldMoveTo,
-    foldOpenCursor, foldmethodIsDiff, foldmethodIsManual, foldmethodIsMarker, getDeepestNesting,
-    hasFolding, newFoldLevel, openFold, openFoldRecurse,
+    clear_folding, close_fold, close_fold_recurse, deepest_fold_nesting, delete_fold,
+    fold_manual_allowed, fold_move_to, fold_open_cursor, foldmethod_is_diff, foldmethod_is_manual,
+    foldmethod_is_marker, has_folding, new_fold_level, open_fold, open_fold_recurse,
 };
 use crate::guard::Suppress;
 use crate::main::{VIsual_active, curbuf, curwin, finish_op, firstwin};
@@ -210,7 +210,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
         let siso = get_sidescrolloff_value(win);
         let mut col: colnr_T = 0;
         // A closed fold shows one line of its own, which starts at column 0.
-        if !hasFolding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut()) {
+        if !has_folding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut()) {
             if to_left {
                 getvcol(
                     win,
@@ -259,12 +259,12 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
         let win = curwin.get();
         // Whether the cursor is inside a fold, which is what decides between
         // opening and closing for the toggles.
-        let in_fold = || hasFolding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut());
+        let in_fold = || has_folding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut());
         match u8::try_from(nchar) {
             // `zf`/`zF`: create a fold. `zF` folds `count1` lines, which is
             // the operator applied to itself.
             Ok(b'F' | b'f') => {
-                if foldManualAllowed(true) != 0 {
+                if fold_manual_allowed(true) != 0 {
                     (*cap).nchar = 'f' as c_int;
                     nv_operator(cap);
                     (*win).w_onebuf_opt.wo_fen = 1;
@@ -278,11 +278,11 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
             }
             // `zd`/`zD`: delete a fold, recursively for `zD`.
             Ok(b'd' | b'D') => {
-                if foldManualAllowed(false) != 0 {
+                if fold_manual_allowed(false) != 0 {
                     if VIsual_active.get() {
                         nv_operator(cap);
                     } else {
-                        deleteFold(
+                        delete_fold(
                             win,
                             (*win).w_cursor.lnum,
                             (*win).w_cursor.lnum,
@@ -294,11 +294,11 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
             }
             // `zE`: delete every fold.
             Ok(b'E') => {
-                if foldmethodIsManual(win) {
-                    clearFolding(win);
+                if foldmethod_is_manual(win) {
+                    clear_folding(win);
                     changed_window_setting(win);
-                } else if foldmethodIsMarker(win) {
-                    deleteFold(win, 1, (*curbuf.get()).b_ml.ml_line_count, 1, false);
+                } else if foldmethod_is_marker(win) {
+                    delete_fold(win, 1, (*curbuf.get()).b_ml.ml_line_count, 1, false);
                 } else {
                     emsg(gettext(
                         c"E352: Cannot erase folds with current 'foldmethod'".as_ptr(),
@@ -312,17 +312,17 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
             // `za`/`zA`: toggle this fold, recursively for `zA`.
             Ok(b'a') => {
                 if in_fold() {
-                    openFold((*win).w_cursor, (*cap).count1);
+                    open_fold((*win).w_cursor, (*cap).count1);
                 } else {
-                    closeFold((*win).w_cursor, (*cap).count1);
+                    close_fold((*win).w_cursor, (*cap).count1);
                     (*win).w_onebuf_opt.wo_fen = 1;
                 }
             }
             Ok(b'A') => {
                 if in_fold() {
-                    openFoldRecurse((*win).w_cursor);
+                    open_fold_recurse((*win).w_cursor);
                 } else {
-                    closeFoldRecurse((*win).w_cursor);
+                    close_fold_recurse((*win).w_cursor);
                     (*win).w_onebuf_opt.wo_fen = 1;
                 }
             }
@@ -331,14 +331,14 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 if VIsual_active.get() {
                     nv_operator(cap);
                 } else {
-                    openFold((*win).w_cursor, (*cap).count1);
+                    open_fold((*win).w_cursor, (*cap).count1);
                 }
             }
             Ok(b'O') => {
                 if VIsual_active.get() {
                     nv_operator(cap);
                 } else {
-                    openFoldRecurse((*win).w_cursor);
+                    open_fold_recurse((*win).w_cursor);
                 }
             }
             // `zc`/`zC`: close. Closing always turns 'foldenable' back on --
@@ -347,7 +347,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 if VIsual_active.get() {
                     nv_operator(cap);
                 } else {
-                    closeFold((*win).w_cursor, (*cap).count1);
+                    close_fold((*win).w_cursor, (*cap).count1);
                 }
                 (*win).w_onebuf_opt.wo_fen = 1;
             }
@@ -355,23 +355,23 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 if VIsual_active.get() {
                     nv_operator(cap);
                 } else {
-                    closeFoldRecurse((*win).w_cursor);
+                    close_fold_recurse((*win).w_cursor);
                 }
                 (*win).w_onebuf_opt.wo_fen = 1;
             }
             // `zv`: open just enough to see the cursor line.
-            Ok(b'v') => foldOpenCursor(),
+            Ok(b'v') => fold_open_cursor(),
             // `zx`/`zX`: recompute the folds. `zx` also reopens to the cursor.
             Ok(b'x') => {
                 (*win).w_onebuf_opt.wo_fen = 1;
                 (*win).w_foldinvalid = true;
-                newFoldLevel();
-                foldOpenCursor();
+                new_fold_level();
+                fold_open_cursor();
             }
             Ok(b'X') => {
                 (*win).w_onebuf_opt.wo_fen = 1;
                 (*win).w_foldinvalid = true;
-                // Force the tail's `newFoldLevel`.
+                // Force the tail's `new_fold_level`.
                 *old_fdl = -1;
             }
             // `zm`/`zM`: fold more, or all the way.
@@ -391,11 +391,11 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
             // `zr`/`zR`: reduce the folding, or open everything.
             Ok(b'r') => {
                 (*win).w_onebuf_opt.wo_fdl += (*cap).count1 as OptInt;
-                let deepest = getDeepestNesting(win);
+                let deepest = deepest_fold_nesting(win);
                 (*win).w_onebuf_opt.wo_fdl = (*win).w_onebuf_opt.wo_fdl.min(deepest as OptInt);
             }
             Ok(b'R') => {
-                (*win).w_onebuf_opt.wo_fdl = getDeepestNesting(win) as OptInt;
+                (*win).w_onebuf_opt.wo_fdl = deepest_fold_nesting(win) as OptInt;
                 *old_fdl = -1;
             }
             // `zj`/`zk`: to the next or previous fold's edge.
@@ -405,7 +405,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 } else {
                     BACKWARD as c_int
                 };
-                if foldMoveTo(true, dir, (*cap).count1) == 0 {
+                if fold_move_to(true, dir, (*cap).count1) == 0 {
                     clearopbeep((*cap).oap);
                 }
             }
@@ -574,10 +574,10 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
         if old_fen != (*win).w_onebuf_opt.wo_fen {
             // Windows bound by 'scrollbind' in diff mode have to fold alike,
             // or the same line is at a different height in each.
-            if foldmethodIsDiff(win) && (*win).w_onebuf_opt.wo_scb != 0 {
+            if foldmethod_is_diff(win) && (*win).w_onebuf_opt.wo_scb != 0 {
                 let mut wp = firstwin.get();
                 while !wp.is_null() {
-                    if wp != win && foldmethodIsDiff(wp) && (*wp).w_onebuf_opt.wo_scb != 0 {
+                    if wp != win && foldmethod_is_diff(wp) && (*wp).w_onebuf_opt.wo_scb != 0 {
                         (*wp).w_onebuf_opt.wo_fen = (*win).w_onebuf_opt.wo_fen;
                         changed_window_setting(wp);
                     }
@@ -587,7 +587,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
             changed_window_setting(win);
         }
         if old_fdl as OptInt != (*win).w_onebuf_opt.wo_fdl {
-            newFoldLevel();
+            new_fold_level();
         }
     }
 }

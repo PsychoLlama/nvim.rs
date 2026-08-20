@@ -665,8 +665,8 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
                 (*tp).tp_firstwin
             };
             while !wp.is_null() {
-                if (*wp).w_buffer == (*curwin.get()).w_buffer && !foldmethodIsManual(wp) {
-                    foldUpdateAll(wp);
+                if (*wp).w_buffer == (*curwin.get()).w_buffer && !foldmethod_is_manual(wp) {
+                    fold_update_all(wp);
                 }
                 wp = (*wp).w_next;
             }

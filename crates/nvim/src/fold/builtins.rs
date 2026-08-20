@@ -27,7 +27,7 @@ pub(super) unsafe fn foldclosed_both(
     if lnum >= 1 && lnum <= (*curbuf.get()).b_ml.ml_line_count {
         let mut first: linenr_T = 0;
         let mut last: linenr_T = 0;
-        if hasFoldingWin(
+        if has_folding_win(
             curwin.get(),
             lnum,
             &raw mut first,
@@ -68,7 +68,7 @@ pub unsafe fn f_foldlevel(
 ) {
     let lnum: linenr_T = tv_get_lnum(argvars);
     if lnum >= 1 && lnum <= (*curbuf.get()).b_ml.ml_line_count {
-        (*rettv).vval.v_number = foldLevel(lnum) as varnumber_T;
+        (*rettv).vval.v_number = fold_level(lnum) as varnumber_T;
     }
 }
 

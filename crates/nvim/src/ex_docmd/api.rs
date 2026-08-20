@@ -38,7 +38,7 @@ use crate::ex_docmd::{
 use crate::ex_getln::{
     cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg, text_locked,
 };
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::guard::Suppress;
 use crate::main::{
     IObuff, cmdmod, cmdwin_type, curbuf, curwin, e_cmdwin, e_command_too_recursive, e_modifiable,
@@ -396,8 +396,8 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
                 && global_busy.get() == 0
                 && ea.addr_type == CmdAddr::Lines
             {
-                hasFolding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
-                hasFolding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
+                has_folding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
+                has_folding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
             }
 
             if parse_count(eap, &raw mut errormsg, true) == FAIL {

@@ -28,7 +28,7 @@ use crate::cursor::get_cursor_pos_ptr;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::eval::eval_has_provider;
 use crate::ex_docmd::{do_cmdline_cmd, tabpage_new};
-use crate::fold::{closeFold, openFold};
+use crate::fold::{close_fold, open_fold};
 use crate::getchar::{
     append_to_redobuff_char, safe_vgetc, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
     vpeekc, vungetc,
@@ -315,9 +315,9 @@ pub unsafe fn do_mouse(
     {
         // Open or close a fold at this line.
         let fold: unsafe extern "C" fn(pos_T, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
-            openFold
+            open_fold
         } else {
-            closeFold
+            close_fold
         };
         // SAFETY: a live position in the current buffer.
         unsafe { fold(win.w_cursor, 1) };

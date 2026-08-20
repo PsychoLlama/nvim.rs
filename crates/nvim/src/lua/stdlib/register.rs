@@ -17,7 +17,7 @@ use super::{
 };
 use crate::api::private::helpers::handle_get_window;
 use crate::cjson::lua_cjson::lua_cjson_new;
-use crate::fold::foldUpdate;
+use crate::fold::fold_update;
 use crate::lua::base64::luaopen_base64;
 use crate::lua::ffi::{
     lua_concat, lua_getfield, lua_getglobal, lua_pop, lua_pushcfunction, lua_pushvalue,
@@ -56,7 +56,7 @@ unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, c"invalid bot".as_ptr());
         }
 
-        foldUpdate(win, top, bot);
+        fold_update(win, top, bot);
         0
     }
 }

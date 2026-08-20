@@ -17,7 +17,7 @@ use crate::ascii::ascii_isdigit;
 use crate::autocmd::{EVENT_MARKSET, aucmd_defer, has_event};
 use crate::buffer::{bt_prompt, buflist_findnr, buflist_new};
 use crate::charset::{ptr2cells, vim_isprintc};
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::global_cell::GlobalCell;
 use crate::main::{
     IObuff, NameBuff, curbuf, curtab, curwin, e_markinval, e_marknotset, e_umark, firstwin, namedfm,
@@ -394,7 +394,7 @@ pub unsafe fn mark_view_restore(mut fm: *mut fmark_T) {
         if topline >= 1 {
             set_topline(curwin.get(), topline);
             (*curwin.get()).w_skipcol = (if (*fm).view.skipcol > 0
-                && !hasFolding(curwin.get(), topline, ptr::null_mut(), ptr::null_mut())
+                && !has_folding(curwin.get(), topline, ptr::null_mut(), ptr::null_mut())
                 && (*fm).view.skipcol < linetabsize_eol(curwin.get(), topline)
             {
                 (*fm).view.skipcol as c_int

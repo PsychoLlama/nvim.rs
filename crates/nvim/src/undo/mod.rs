@@ -32,7 +32,7 @@ use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
 use crate::fileio::{get2c, get4c, get8ctime, read_eintr};
-use crate::fold::foldOpenCursor;
+use crate::fold::fold_open_cursor;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{

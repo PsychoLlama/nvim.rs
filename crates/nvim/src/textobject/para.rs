@@ -11,7 +11,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::main::{VIsual, VIsual_active, VIsual_mode, curbuf, curwin, p_para, p_sections};
 use crate::mark::setpcmark;
 use crate::mbyte::utf_head_off;
@@ -56,7 +56,7 @@ pub unsafe fn findpar(
                 }
                 // Skip over a closed fold, which counts as one line.
                 let mut fold_skipped = false;
-                if first && hasFolding(curwin.get(), curr, &raw mut fold_first, &raw mut fold_last)
+                if first && has_folding(curwin.get(), curr, &raw mut fold_first, &raw mut fold_last)
                 {
                     curr = (if dir > 0 { fold_last } else { fold_first }) + dir as linenr_T;
                     fold_skipped = true;

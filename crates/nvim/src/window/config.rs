@@ -25,7 +25,7 @@ use crate::buffer::do_buffer;
 use crate::decoration::clear_virttext;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
-use crate::fold::getDeepestNesting;
+use crate::fold::deepest_fold_nesting;
 use crate::grid::{grid_adjust, win_grid_alloc};
 use crate::guard::Suppress;
 use crate::main::{Columns, Rows, default_grid, float_anchor_str, p_acd, p_ch};
@@ -136,7 +136,7 @@ fn fdccol_count(wp: Win) -> c_int {
         1
     };
     // SAFETY: a live window.
-    fdccol.min(unsafe { getDeepestNesting(wp.raw()) })
+    fdccol.min(unsafe { deepest_fold_nesting(wp.raw()) })
 }
 
 pub unsafe fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {

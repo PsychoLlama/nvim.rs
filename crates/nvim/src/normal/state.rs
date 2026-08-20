@@ -29,7 +29,7 @@ use crate::ex_docmd::do_exmode;
 use crate::ex_eval::discard_current_exception;
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::fileio::check_timestamps;
-use crate::fold::{foldAdjustVisual, foldCheckClose, foldOpenCursor, hasAnyFolding};
+use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::{
     char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typebuf_maplen, typebuf_typed, vgetc,
 };
@@ -437,11 +437,11 @@ fn normal_check_safe_state() {
 fn normal_check_folds() {
     // SAFETY: reads and adjusts the current window's folds.
     unsafe {
-        foldAdjustVisual();
-        if hasAnyFolding(curwin.get()) != 0 && !char_avail() {
-            foldCheckClose();
+        fold_adjust_visual();
+        if has_any_folding(curwin.get()) != 0 && !char_avail() {
+            fold_check_close();
             if fdo_flags.get() & kOptFdoFlagAll as c_int as c_uint != 0 {
-                foldOpenCursor();
+                fold_open_cursor();
             }
         }
     }

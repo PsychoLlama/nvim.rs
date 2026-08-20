@@ -192,7 +192,7 @@ pub unsafe fn diff_set_topline(fromwin: *mut win_T, towin: *mut win_T) {
         invalidate_botline_win(towin);
         changed_line_abv_curs_win(towin);
         check_topfill(towin, false);
-        hasFolding(
+        has_folding(
             towin,
             (*towin).w_topline,
             &raw mut (*towin).w_topline,

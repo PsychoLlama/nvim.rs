@@ -292,13 +292,13 @@ unsafe fn redraw_win_for_change(
 
         // Can't postpone the fold update: a following operator might work on
         // the whole fold, as `>>dd` does.
-        foldUpdate(wp, lnum, last);
+        fold_update(wp, lnum, last);
 
         // The change may pull the lines above or below it into a fold, so widen
         // lnum/last to what might now be displayed differently. Setting
         // w_cline_folded here is the cheap way to keep it right when inserting
         // just above a closed fold.
-        let mut folded = hasFoldingWin(
+        let mut folded = has_folding_win(
             wp,
             lnum,
             &raw mut lnum,
@@ -309,7 +309,7 @@ unsafe fn redraw_win_for_change(
         if (*wp).w_cursor.lnum == lnum {
             (*wp).w_cline_folded = folded;
         }
-        folded = hasFoldingWin(
+        folded = has_folding_win(
             wp,
             last,
             ::core::ptr::null_mut(),
@@ -325,7 +325,7 @@ unsafe fn redraw_win_for_change(
 
         // Setting w_topline has side effects once the folds have changed --
         // especially when the buffer was changed in another window.
-        if hasAnyFolding(wp) != 0 {
+        if has_any_folding(wp) != 0 {
             set_topline(wp, (*wp).w_topline);
         }
 

@@ -12,7 +12,7 @@ use crate::cursor::{
 use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, oneright};
 use crate::ex_cmds::do_ascii;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
-use crate::fold::hasAnyFolding;
+use crate::fold::has_any_folding;
 use crate::main::{VIsual_active, VIsual_reselect, curbuf, curwin, mod_mask};
 use crate::mbyte::{show_utf8, utf_find_illegal, utf_ptr2cells};
 use crate::memline::goto_byte;
@@ -107,7 +107,7 @@ pub unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
         (*win).w_set_curswant = 1;
         // Inside a closed fold the wanted column is the one that was asked
         // for, not the one the fold's single displayed line has.
-        if hasAnyFolding(win) != 0 {
+        if has_any_folding(win) != 0 {
             validate_cheight(win);
             if (*win).w_cline_folded {
                 update_curswant_force();

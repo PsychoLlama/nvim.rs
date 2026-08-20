@@ -15,7 +15,7 @@ use crate::edit::{
     oneright,
 };
 use crate::eval::prompt_invoke_callback;
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::getchar::beep_flush;
 use crate::main::{
     VIsual_active, VIsual_mode, VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, curbuf,
@@ -119,7 +119,7 @@ pub unsafe fn nv_screengo(
                 dist -= 1;
                 if dir == BACKWARD as c_int {
                     if (*win).w_curswant >= width1
-                        && !hasFolding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut())
+                        && !has_folding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut())
                     {
                         // Still inside this line: back one row.
                         (*win).w_curswant -= width2;
@@ -139,7 +139,7 @@ pub unsafe fn nv_screengo(
                 } else {
                     let n = line_end!();
                     if (*win).w_curswant + width2 < n
-                        && !hasFolding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut())
+                        && !has_folding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut())
                     {
                         (*win).w_curswant += width2;
                     } else if (*win).w_cursor.lnum >= (*(*win).w_buffer).b_ml.ml_line_count {
@@ -219,7 +219,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
                 // walked rather than subtracted.
                 let mut n = (*cap).count1 - 1;
                 while n > 0 && (*win).w_cursor.lnum > (*win).w_topline {
-                    hasFolding(
+                    has_folding(
                         win,
                         (*win).w_cursor.lnum,
                         &raw mut (*win).w_cursor.lnum,
@@ -255,7 +255,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
                         break;
                     }
                     let mut last: linenr_T = 0;
-                    if hasFolding(
+                    if has_folding(
                         win,
                         (*win).w_topline + n as linenr_T,
                         ptr::null_mut(),
@@ -281,7 +281,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
                         before > 0
                     }) && lnum < (*win).w_botline - 1
                     {
-                        hasFolding(win, lnum, ptr::null_mut(), &raw mut lnum);
+                        has_folding(win, lnum, ptr::null_mut(), &raw mut lnum);
                         lnum += 1;
                     }
                     n = (lnum - (*win).w_topline) as c_int;

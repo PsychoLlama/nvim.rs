@@ -53,7 +53,7 @@ use crate::drawscreen::{
     UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, conceal_cursor_line, number_width, redraw_buf_later,
     redraw_win_line, redrawing, win_cursorline_standout,
 };
-use crate::fold::foldAdjustCursor;
+use crate::fold::fold_adjust_cursor;
 use crate::main::{VIsual_active, cmdwin_win, curbuf};
 use crate::option::{cpo_has, get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
 use crate::options::kOptCuloptFlagScreenline;
@@ -198,7 +198,7 @@ impl Win {
     /// Move the cursor to the first line of the fold it landed in.
     pub(super) fn fold_adjust_cursor(self) {
         // SAFETY: a live window.
-        unsafe { foldAdjustCursor(self.raw()) };
+        unsafe { fold_adjust_cursor(self.raw()) };
     }
 
     /// Screen lines line `lnum` takes, folds, filler lines and 'wrap' all

@@ -394,7 +394,7 @@ unsafe fn qf_jump_to_buffer(
             (*qf_ptr).qf_pattern,
         );
         if fdo_flags.get() & kOptFdoFlagQuickfix as c_uint != 0 && openfold {
-            foldOpenCursor();
+            fold_open_cursor();
         }
         if print_message {
             qf_jump_print_msg(qi, qf_index, qf_ptr, old_curbuf, old_lnum);

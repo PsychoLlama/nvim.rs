@@ -47,7 +47,7 @@ use crate::eval::typval::{
 };
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::extmark::{extmark_del, extmark_del_id, extmark_set};
-use crate::fold::foldOpenCursor;
+use crate::fold::fold_open_cursor;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_get;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
@@ -983,6 +983,6 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *mut c_char, buf: *mut buf_T) -
     }
 
     // SAFETY: the editor's own fold state.
-    unsafe { foldOpenCursor() };
+    unsafe { fold_open_cursor() };
     lnum
 }

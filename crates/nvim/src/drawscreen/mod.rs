@@ -19,7 +19,7 @@ use crate::digraph::keymap_str;
 use crate::drawline::win_line;
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, get_cmdline_info, redrawcmdline};
-use crate::fold::{fold_info, foldmethodIsSyntax, hasAnyFolding, hasFolding};
+use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding};
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{

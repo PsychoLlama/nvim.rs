@@ -30,7 +30,7 @@ use crate::edit::{beginline, display_dollar, edit};
 use crate::eval::typval::{kCallbackNone, tv_clear, tv_dict_add_nr};
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
-use crate::fold::{deleteFold, foldCreate, foldOpenCursor, hasFolding, opFoldRange};
+use crate::fold::{delete_fold, fold_create, fold_open_cursor, has_folding, op_fold_range};
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_keys, append_to_redobuff_literally,
     append_to_redobuff_number, beep_flush, cancel_redo, reset_redobuff, stuff_readbuf,

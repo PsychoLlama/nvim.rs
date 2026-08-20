@@ -66,8 +66,8 @@ pub unsafe fn syn_stack_free_all(block: *mut synblock_T) {
         // With 'foldmethod' "syntax", every fold has to be recomputed too.
         let mut wp = firstwin.get();
         while !wp.is_null() {
-            if (*wp).w_s == block && foldmethodIsSyntax(wp) {
-                foldUpdateAll(wp);
+            if (*wp).w_s == block && foldmethod_is_syntax(wp) {
+                fold_update_all(wp);
             }
             wp = (*wp).w_next;
         }

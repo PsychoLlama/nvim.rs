@@ -246,7 +246,7 @@ pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_
         // closed fold -- with 'foldmethod' indent, deleting the first
         // non-white character before a TAB can put it in one.
         if did_backspace {
-            foldOpenCursor();
+            fold_open_cursor();
         }
         did_backspace
     }

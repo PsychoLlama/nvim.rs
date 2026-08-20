@@ -680,7 +680,7 @@ unsafe fn insert_normal_char(s: *mut InsertState) {
         auto_format(false, true);
 
         // The cursor line must never be in a closed fold after an insert.
-        foldOpenCursor();
+        fold_open_cursor();
 
         // Autocompletion, on the character just inserted.
         if ins_compl_has_autocomplete() && !char_avail() && vim_isprintc((*s).c) {

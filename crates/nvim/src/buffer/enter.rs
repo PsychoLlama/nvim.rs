@@ -358,9 +358,9 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
         restore_winopts(buf);
     } else {
         // Remove all folds in the window.
-        clear_folding(win);
+        clear_window_folds(win);
     }
-    fold_update_all(win); // update folds (later).
+    invalidate_window_folds(win); // update folds (later).
 
     if win.w_onebuf_opt.wo_diff != 0 {
         diff_add(cur_buf());

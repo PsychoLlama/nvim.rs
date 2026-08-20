@@ -27,7 +27,7 @@ use crate::ex_docmd::{
     INT32_MAX, cmdnames, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors,
     e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
 };
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::main::{curbuf, curtab, curwin, firstbuf, lastbuf};
 use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::message::iemsg;
@@ -751,7 +751,7 @@ pub unsafe fn get_address(
                         && (i == '-' as c_int || i == '+' as c_int)
                         && address_count >= 2
                     {
-                        hasFolding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum);
+                        has_folding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum);
                     }
                     if i == '-' as c_int {
                         lnum -= n;

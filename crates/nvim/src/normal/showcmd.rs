@@ -14,7 +14,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_isprintc};
 use crate::cursor::get_cursor_pos_ptr;
 use crate::drawscreen::setcursor;
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::main::{
@@ -116,8 +116,8 @@ fn visual_line_range(cursor_bot: bool) -> (linenr_T, linenr_T) {
         } else {
             ((*curwin.get()).w_cursor.lnum, (*VIsual.ptr()).lnum)
         };
-        hasFolding(curwin.get(), top, &raw mut top, ptr::null_mut());
-        hasFolding(curwin.get(), bot, ptr::null_mut(), &raw mut bot);
+        has_folding(curwin.get(), top, &raw mut top, ptr::null_mut());
+        has_folding(curwin.get(), bot, ptr::null_mut(), &raw mut bot);
         (top, bot)
     }
 }

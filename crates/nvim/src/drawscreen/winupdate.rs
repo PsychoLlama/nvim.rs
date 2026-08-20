@@ -444,12 +444,12 @@ unsafe fn widen_over_folds(wp: *mut win_T, rg: &mut Regions) {
             }
         }
 
-        hasFolding(wp, rg.mod_top, &raw mut rg.mod_top, ::core::ptr::null_mut());
+        has_folding(wp, rg.mod_top, &raw mut rg.mod_top, ::core::ptr::null_mut());
         rg.mod_top = rg.mod_top.min(lnumt);
 
         // The same for the bottom, on the line one above `mod_bot`.
         rg.mod_bot -= 1;
-        hasFolding(wp, rg.mod_bot, ::core::ptr::null_mut(), &raw mut rg.mod_bot);
+        has_folding(wp, rg.mod_bot, ::core::ptr::null_mut(), &raw mut rg.mod_bot);
         rg.mod_bot += 1;
         rg.mod_bot = rg.mod_bot.max(lnumb);
     }
@@ -483,7 +483,7 @@ unsafe fn plan_scroll(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) {
             && decor_conceal_line(wp, topline_conceal - 1, false)
         {
             topline_conceal += 1;
-            hasFolding(
+            has_folding(
                 wp,
                 topline_conceal,
                 ::core::ptr::null_mut(),
@@ -544,7 +544,7 @@ unsafe fn scroll_down(wp: *mut win_T, rg: &mut Regions) {
                 if count >= (*wp).w_view_height - 2 {
                     break;
                 }
-                hasFolding(wp, ln, ::core::ptr::null_mut(), &raw mut ln);
+                has_folding(wp, ln, ::core::ptr::null_mut(), &raw mut ln);
                 ln += 1;
             }
             count

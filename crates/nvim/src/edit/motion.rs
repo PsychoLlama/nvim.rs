@@ -75,7 +75,7 @@ pub(crate) unsafe fn ins_start_select(c: c_int) -> bool {
 unsafe fn may_open_fold_hor() {
     unsafe {
         if fdo_flags.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KeyTyped.get() {
-            foldOpenCursor();
+            fold_open_cursor();
         }
     }
 }

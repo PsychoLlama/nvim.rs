@@ -368,7 +368,7 @@ unsafe fn order_region(oap: *mut oparg_T) {
     unsafe {
         if lt((*oap).start, (*curwin.get()).w_cursor) {
             if !VIsual_active.get() {
-                if hasFolding(
+                if has_folding(
                     curwin.get(),
                     (*oap).start.lnum,
                     &raw mut (*oap).start.lnum,
@@ -379,7 +379,7 @@ unsafe fn order_region(oap: *mut oparg_T) {
                 if ((*curwin.get()).w_cursor.col > 0
                     || (*oap).inclusive
                     || (*oap).motion_type == kMTLineWise)
-                    && hasFolding(
+                    && has_folding(
                         curwin.get(),
                         (*curwin.get()).w_cursor.lnum,
                         ::core::ptr::null_mut(),
@@ -396,7 +396,7 @@ unsafe fn order_region(oap: *mut oparg_T) {
             (*curwin.get()).w_valid.clear(WinValid::VIRTCOL);
         } else {
             if !VIsual_active.get() && (*oap).motion_type == kMTLineWise {
-                if hasFolding(
+                if has_folding(
                     curwin.get(),
                     (*curwin.get()).w_cursor.lnum,
                     &raw mut (*curwin.get()).w_cursor.lnum,
@@ -404,7 +404,7 @@ unsafe fn order_region(oap: *mut oparg_T) {
                 ) {
                     (*curwin.get()).w_cursor.col = 0;
                 }
-                if hasFolding(
+                if has_folding(
                     curwin.get(),
                     (*oap).start.lnum,
                     ::core::ptr::null_mut(),
@@ -808,11 +808,11 @@ unsafe fn run_operator(
 
             OP_FOLD => {
                 VIsual_reselect.set(0);
-                foldCreate(curwin.get(), (*oap).start, (*oap).end);
+                fold_create(curwin.get(), (*oap).start, (*oap).end);
             }
             OP_FOLDOPEN | OP_FOLDOPENREC | OP_FOLDCLOSE | OP_FOLDCLOSEREC => {
                 VIsual_reselect.set(0);
-                opFoldRange(
+                op_fold_range(
                     (*oap).start,
                     (*oap).end,
                     c_int::from((*oap).op_type == OP_FOLDOPEN || (*oap).op_type == OP_FOLDOPENREC),
@@ -824,7 +824,7 @@ unsafe fn run_operator(
             }
             OP_FOLDDEL | OP_FOLDDELREC => {
                 VIsual_reselect.set(0);
-                deleteFold(
+                delete_fold(
                     curwin.get(),
                     (*oap).start.lnum,
                     (*oap).end.lnum,

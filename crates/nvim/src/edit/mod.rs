@@ -67,7 +67,7 @@ use crate::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, expr_map_locked};
 use crate::fileio::check_timestamps;
 use crate::fold::{
-    foldCheckClose, foldOpenCursor, foldUpdateAfterInsert, hasFolding, hasFoldingWin,
+    fold_check_close, fold_open_cursor, fold_update_after_insert, has_folding, has_folding_win,
 };
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally,

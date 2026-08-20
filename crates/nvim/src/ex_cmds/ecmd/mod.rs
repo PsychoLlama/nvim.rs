@@ -45,7 +45,7 @@ use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::{aborting, should_abort};
-use crate::fold::foldUpdateAll;
+use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::main::{
@@ -642,7 +642,7 @@ unsafe fn enter_new_buffer(
     for win in tab_windows() {
         if win.w_buffer == curbuf.get() {
             // SAFETY: `win` is a live window.
-            unsafe { foldUpdateAll(win.raw()) };
+            unsafe { fold_update_all(win.raw()) };
         }
     }
 

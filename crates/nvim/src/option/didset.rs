@@ -29,7 +29,7 @@ use crate::drawscreen::{
 use crate::eval::vars::set_vim_var_string;
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fold::{
-    foldUpdateAll, foldmethodIsDiff, foldmethodIsIndent, foldmethodIsSyntax, newFoldLevel,
+    fold_update_all, foldmethod_is_diff, foldmethod_is_indent, foldmethod_is_syntax, new_fold_level,
 };
 use crate::global_cell::GlobalCell;
 use crate::highlight::hl_invalidate_blends;
@@ -255,8 +255,8 @@ pub unsafe fn did_set_diff(args: *mut optset_T) -> *const c_char {
     unsafe {
         let win = Frame::read(args).win;
         diff_buf_adjust(win);
-        if foldmethodIsDiff(win) {
-            foldUpdateAll(win);
+        if foldmethod_is_diff(win) {
+            fold_update_all(win);
         }
     }
     ptr::null()
@@ -284,14 +284,14 @@ pub unsafe fn did_set_equalalways(args: *mut optset_T) -> *const c_char {
 /// 'foldlevel': open or close folds to match.
 pub unsafe fn did_set_foldlevel(_args: *mut optset_T) -> *const c_char {
     // SAFETY: `curwin` is live.
-    unsafe { newFoldLevel() };
+    unsafe { new_fold_level() };
     ptr::null()
 }
 
 /// 'foldminlines': the fold sizes all change.
 pub unsafe fn did_set_foldminlines(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window it names is live.
-    unsafe { foldUpdateAll(Frame::read(args).win) };
+    unsafe { fold_update_all(Frame::read(args).win) };
     ptr::null()
 }
 
@@ -300,8 +300,8 @@ pub unsafe fn did_set_foldnestmax(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window it names is live.
     unsafe {
         let win = Frame::read(args).win;
-        if foldmethodIsSyntax(win) || foldmethodIsIndent(win) {
-            foldUpdateAll(win);
+        if foldmethod_is_syntax(win) || foldmethod_is_indent(win) {
+            fold_update_all(win);
         }
     }
     ptr::null()
@@ -573,8 +573,8 @@ pub unsafe fn did_set_shiftwidth_tabstop(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the window and buffer it names.
     unsafe {
         let f = Frame::read(args);
-        if foldmethodIsIndent(f.win) {
-            foldUpdateAll(f.win);
+        if foldmethod_is_indent(f.win) {
+            fold_update_all(f.win);
         }
         // A zero 'shiftwidth' means "use 'tabstop'", so 'tabstop' feeds the
         // C indent options too.

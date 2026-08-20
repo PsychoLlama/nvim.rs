@@ -424,7 +424,7 @@ fn open_buffer_inner(read_stdin: bool, eap: *mut exarg_T, flags_arg: c_int) -> c
 
     // Need to update automatic folding.  Do this before the autocommands, they
     // may use the fold info.
-    fold_update_all(cur_win());
+    invalidate_window_folds(cur_win());
 
     // need to set w_topline, unless some autocommand already did that.
     let mut win = cur_win();

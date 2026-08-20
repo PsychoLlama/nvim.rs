@@ -22,7 +22,7 @@ use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
 
 use super::*;
-use crate::fold::{clearFolding, cloneFoldGrowArray, deleteFoldRecurse};
+use crate::fold::{clear_folding, clone_fold_list, delete_fold_recurse};
 use crate::global_cell::GlobalCell;
 use crate::main::p_fdls;
 use crate::mark::mark_view_make;
@@ -193,17 +193,17 @@ fn copy_options(from: *mut winopt_T, to: *mut winopt_T) {
 
 fn delete_folds(folds: *mut garray_T) {
     // SAFETY: a fold array inside a live entry.
-    unsafe { deleteFoldRecurse(folds) };
+    unsafe { delete_fold_recurse(folds) };
 }
 
 fn clone_folds(from: *mut garray_T, to: *mut garray_T) {
     // SAFETY: two fold arrays inside a live entry or window.
-    unsafe { cloneFoldGrowArray(from, to) };
+    unsafe { clone_fold_list(from, to) };
 }
 
-fn clear_folding(mut win: Win) {
+fn clear_window_folds(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { clearFolding(win.raw()) };
+    unsafe { clear_folding(win.raw()) };
 }
 
 fn didset_options(mut win: Win) {
@@ -355,7 +355,7 @@ pub unsafe fn get_winopts(buf: *mut buf_T) {
     let mut buf = unsafe { Buf::new(buf) };
     let mut cur = current_win();
     clear_options(&raw mut cur.w_onebuf_opt);
-    clear_folding(cur);
+    clear_window_folds(cur);
 
     let entry = find_wininfo(&mut buf, true, true);
     // SAFETY: a live window, or null, which `Option` keeps out of the

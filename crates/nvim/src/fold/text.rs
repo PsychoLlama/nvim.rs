@@ -172,7 +172,7 @@ pub(super) unsafe fn foldtext_cleanup(mut str: *mut c_char) {
         cms_elen = cms_elen.wrapping_sub(s.offset_from(cms_end) as size_t);
         cms_end = s;
     }
-    parseMarker(curwin.get());
+    parse_marker(curwin.get());
     let mut did1: bool = false;
     let mut did2: bool = false;
     let mut s_0: *mut c_char = str;

@@ -34,11 +34,14 @@ mod open_close;
 mod session;
 mod text;
 
-pub use adjust::{foldAdjustCursor, foldAdjustVisual, foldMarkAdjust, foldMoveRange, foldMoveTo};
+pub use adjust::{
+    fold_adjust_cursor, fold_adjust_visual, fold_mark_adjust, fold_move_range, fold_move_to,
+};
 pub use builtins::{f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult};
 pub use open_close::{
-    closeFold, closeFoldRecurse, deleteFold, foldCheckClose, foldCreate, foldManualAllowed,
-    foldOpenCursor, newFoldLevel, opFoldRange, openFold, openFoldRecurse,
+    close_fold, close_fold_recurse, delete_fold, fold_check_close, fold_create,
+    fold_manual_allowed, fold_open_cursor, new_fold_level, op_fold_range, open_fold,
+    open_fold_recurse,
 };
 pub use session::put_folds;
 pub use text::get_foldtext;
@@ -46,7 +49,7 @@ pub use text::get_foldtext;
 use crate::pos::MAXLNUM;
 use crate::state::MODE_INSERT;
 
-use level::foldUpdateIEMS;
+use level::fold_update_computed;
 use open_close::check_closed;
 
 pub const TAB: c_int = '\t' as c_int;
@@ -69,7 +72,7 @@ pub const FD_OPEN: c_uint = 0;
 pub const FD_CLOSED: c_uint = 1;
 pub const FD_LEVEL: c_uint = 2;
 
-/// What `setManualFold` and friends did, so the caller knows whether to
+/// What `set_manual_fold` and friends did, so the caller knows whether to
 /// keep looking for a fold to act on.
 pub const DONE_NOTHING: c_int = 0;
 pub const DONE_ACTION: c_int = 1;
@@ -102,7 +105,7 @@ pub struct fline_T {
     pub lnum: linenr_T,
     /// Offset between `lnum` and the real line number.
     pub off: linenr_T,
-    /// Line number used by `foldUpdateIEMSRecurse`.
+    /// Line number used by `fold_update_computed_recurse`.
     pub lnum_save: linenr_T,
     /// Current level; -1 for undefined.
     pub lvl: c_int,
@@ -158,33 +161,33 @@ static invalid_bot: GlobalCell<linenr_T> = GlobalCell::new(0);
 static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
 static prev_lnum_lvl: GlobalCell<c_int> = GlobalCell::new(-1);
 
-/// 'foldmarker' split into its two halves, refreshed by `parseMarker`.
+/// 'foldmarker' split into its two halves, refreshed by `parse_marker`.
 static foldstartmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
 static foldendmarker: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 static foldendmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
 /// Copy that folding state from window "wp_from" to window "wp_to".
-pub unsafe fn copyFoldingState(mut wp_from: *mut win_T, mut wp_to: *mut win_T) {
+pub unsafe fn copy_folding_state(mut wp_from: *mut win_T, mut wp_to: *mut win_T) {
     (*wp_to).w_fold_manual = (*wp_from).w_fold_manual;
     (*wp_to).w_foldinvalid = (*wp_from).w_foldinvalid;
-    cloneFoldGrowArray(&raw mut (*wp_from).w_folds, &raw mut (*wp_to).w_folds);
+    clone_fold_list(&raw mut (*wp_from).w_folds, &raw mut (*wp_to).w_folds);
 }
 /// Returns true if there may be folded lines in window "win".
-pub unsafe fn hasAnyFolding(mut win: *mut win_T) -> c_int {
+pub unsafe fn has_any_folding(mut win: *mut win_T) -> c_int {
     ((*(*win).w_buffer).terminal.is_null()
         && (*win).w_onebuf_opt.wo_fen != 0
-        && (!foldmethodIsManual(win) || !((*win).w_folds.ga_len <= 0))) as c_int
+        && (!foldmethod_is_manual(win) || !((*win).w_folds.ga_len <= 0))) as c_int
 }
 /// When returning true, *firstp and *lastp are set to the first and last
 /// lnum of the sequence of folded lines (skipped when NULL).
 ///
 /// Returns true if line "lnum" in window "win" is part of a closed fold.
-pub unsafe fn hasFolding(
+pub unsafe fn has_folding(
     mut win: *mut win_T,
     mut lnum: linenr_T,
     mut firstp: *mut linenr_T,
     mut lastp: *mut linenr_T,
 ) -> bool {
-    hasFoldingWin(win, lnum, firstp, lastp, true, ptr::null_mut())
+    has_folding_win(win, lnum, firstp, lastp, true, ptr::null_mut())
 }
 /// Search folds starting at lnum
 /// `lnum` — first line to search
@@ -194,7 +197,7 @@ pub unsafe fn hasFolding(
 /// `infop` — where to store fold info
 ///
 /// Returns true if range contains folds
-pub unsafe fn hasFoldingWin(
+pub unsafe fn has_folding_win(
     win: *mut win_T,
     lnum: linenr_T,
     firstp: *mut linenr_T,
@@ -203,7 +206,7 @@ pub unsafe fn hasFoldingWin(
     infop: *mut foldinfo_T,
 ) -> bool {
     checkupdate(win);
-    if hasAnyFolding(win) == 0 {
+    if has_any_folding(win) == 0 {
         if !infop.is_null() {
             (*infop).fi_level = 0;
         }
@@ -228,7 +231,7 @@ pub unsafe fn hasFoldingWin(
     let mut use_level: bool = false;
     if first == 0 {
         let mut gap: *mut garray_T = &raw mut (*win).w_folds;
-        while foldFind(gap, lnum_rel, &raw mut fp) {
+        while fold_find(gap, lnum_rel, &raw mut fp) {
             if lnum_rel == (*fp).fd_top && low_level == 0 {
                 low_level = level + 1;
             }
@@ -279,7 +282,7 @@ pub unsafe fn hasFoldingWin(
     true
 }
 /// Returns fold level at line number "lnum" in the current window.
-unsafe fn foldLevel(mut lnum: linenr_T) -> c_int {
+unsafe fn fold_level(mut lnum: linenr_T) -> c_int {
     if invalid_top.get() == 0 {
         checkupdate(curwin.get());
     } else if lnum == prev_lnum.get() && prev_lnum_lvl.get() >= 0 {
@@ -287,16 +290,16 @@ unsafe fn foldLevel(mut lnum: linenr_T) -> c_int {
     } else if lnum >= invalid_top.get() && lnum <= invalid_bot.get() {
         return -1;
     }
-    if hasAnyFolding(curwin.get()) == 0 {
+    if has_any_folding(curwin.get()) == 0 {
         return 0;
     }
-    foldLevelWin(curwin.get(), lnum)
+    fold_level_win(curwin.get(), lnum)
 }
 /// Low level function to check if a line is folded.  Doesn't use any caching.
 ///
 /// Returns true if line is folded or,
 ///          false if line is not folded.
-pub unsafe fn lineFolded(win: *mut win_T, lnum: linenr_T) -> bool {
+pub unsafe fn line_folded(win: *mut win_T, lnum: linenr_T) -> bool {
     fold_info(win, lnum).fi_lines != 0
 }
 ///
@@ -316,7 +319,7 @@ pub unsafe fn fold_info(mut win: *mut win_T, mut lnum: linenr_T) -> foldinfo_T {
         fi_lines: 0,
     };
     let mut last: linenr_T = 0;
-    if hasFoldingWin(
+    if has_folding_win(
         win,
         lnum,
         ptr::null_mut(),
@@ -331,43 +334,44 @@ pub unsafe fn fold_info(mut win: *mut win_T, mut lnum: linenr_T) -> foldinfo_T {
     info
 }
 /// Returns true if 'foldmethod' is "manual"
-pub unsafe fn foldmethodIsManual(mut wp: *mut win_T) -> bool {
+pub unsafe fn foldmethod_is_manual(mut wp: *mut win_T) -> bool {
     *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
         && *(*wp).w_onebuf_opt.wo_fdm.offset(3) as c_int == 'u' as c_int
 }
 /// Returns true if 'foldmethod' is "indent"
-pub unsafe fn foldmethodIsIndent(mut wp: *mut win_T) -> bool {
+pub unsafe fn foldmethod_is_indent(mut wp: *mut win_T) -> bool {
     *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 'i' as c_int
 }
 /// Returns true if 'foldmethod' is "expr"
-pub unsafe fn foldmethodIsExpr(mut wp: *mut win_T) -> bool {
+pub unsafe fn foldmethod_is_expr(mut wp: *mut win_T) -> bool {
     *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
         && *(*wp).w_onebuf_opt.wo_fdm.offset(1) as c_int == 'x' as c_int
 }
 /// Returns true if 'foldmethod' is "marker"
-pub unsafe fn foldmethodIsMarker(mut wp: *mut win_T) -> bool {
+pub unsafe fn foldmethod_is_marker(mut wp: *mut win_T) -> bool {
     *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int != NUL
         && *(*wp).w_onebuf_opt.wo_fdm.offset(2) as c_int == 'r' as c_int
 }
 /// Returns true if 'foldmethod' is "syntax"
-pub unsafe fn foldmethodIsSyntax(mut wp: *mut win_T) -> bool {
+pub unsafe fn foldmethod_is_syntax(mut wp: *mut win_T) -> bool {
     *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 's' as c_int
 }
 /// Returns true if 'foldmethod' is "diff"
-pub unsafe fn foldmethodIsDiff(mut wp: *mut win_T) -> bool {
+pub unsafe fn foldmethod_is_diff(mut wp: *mut win_T) -> bool {
     *(*wp).w_onebuf_opt.wo_fdm.offset(0) as c_int == 'd' as c_int
 }
 /// Remove all folding for window "win".
-pub unsafe fn clearFolding(mut win: *mut win_T) {
-    deleteFoldRecurse(&raw mut (*win).w_folds);
+pub unsafe fn clear_folding(mut win: *mut win_T) {
+    delete_fold_recurse(&raw mut (*win).w_folds);
     (*win).w_foldinvalid = false;
 }
 /// Update folds for changes in the buffer of a window.
 /// Note that inserted/deleted lines must have already been taken care of by
-/// calling foldMarkAdjust().
+/// calling fold_mark_adjust().
 /// The changes in lines from top to bot (inclusive).
-pub unsafe fn foldUpdate(mut wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
-    if disable_fold_update.get() != 0 || State.get() & MODE_INSERT != 0 && !foldmethodIsIndent(wp) {
+pub unsafe fn fold_update(mut wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
+    if disable_fold_update.get() != 0 || State.get() & MODE_INSERT != 0 && !foldmethod_is_indent(wp)
+    {
         return;
     }
     if need_diff_redraw.get() {
@@ -377,45 +381,45 @@ pub unsafe fn foldUpdate(mut wp: *mut win_T, mut top: linenr_T, mut bot: linenr_
         let mut maybe_small_start: linenr_T = if top < bot { top } else { bot };
         let mut maybe_small_end: linenr_T = if top > bot { top } else { bot };
         let mut fp: *mut fold_T = ptr::null_mut();
-        foldFind(&raw mut (*wp).w_folds, maybe_small_start, &raw mut fp);
+        fold_find(&raw mut (*wp).w_folds, maybe_small_start, &raw mut fp);
         while fp < folds_end(&(*wp).w_folds) && (*fp).fd_top <= maybe_small_end {
             (*fp).fd_small = None;
             fp = fp.offset(1);
         }
     }
-    if foldmethodIsIndent(wp)
-        || foldmethodIsExpr(wp)
-        || foldmethodIsMarker(wp)
-        || foldmethodIsDiff(wp)
-        || foldmethodIsSyntax(wp)
+    if foldmethod_is_indent(wp)
+        || foldmethod_is_expr(wp)
+        || foldmethod_is_marker(wp)
+        || foldmethod_is_diff(wp)
+        || foldmethod_is_syntax(wp)
     {
         let mut save_got_int: c_int = got_int.get() as c_int;
         got_int.set(false);
-        foldUpdateIEMS(wp, top, bot);
+        fold_update_computed(wp, top, bot);
         got_int.set(got_int.get() as c_int | save_got_int != 0);
     }
 }
 /// Updates folds when leaving insert-mode.
-pub unsafe fn foldUpdateAfterInsert() {
-    if foldmethodIsManual(curwin.get())
-        || foldmethodIsSyntax(curwin.get())
-        || foldmethodIsExpr(curwin.get())
+pub unsafe fn fold_update_after_insert() {
+    if foldmethod_is_manual(curwin.get())
+        || foldmethod_is_syntax(curwin.get())
+        || foldmethod_is_expr(curwin.get())
     {
         return;
     }
-    foldUpdateAll(curwin.get());
-    foldOpenCursor();
+    fold_update_all(curwin.get());
+    fold_open_cursor();
 }
 /// Update all lines in a window for folding.
 /// Used when a fold setting changes or after reloading the buffer.
 /// The actual updating is postponed until fold info is used, to avoid doing
 /// every time a setting is changed or a syntax item is added.
-pub unsafe fn foldUpdateAll(mut win: *mut win_T) {
+pub unsafe fn fold_update_all(mut win: *mut win_T) {
     (*win).w_foldinvalid = true;
     redraw_later(win, UPD_NOT_VALID);
 }
 /// Init the fold info in a new window.
-pub unsafe fn foldInitWin(mut new_win: *mut win_T) {
+pub unsafe fn fold_init_win(mut new_win: *mut win_T) {
     ga_init(
         &raw mut (*new_win).w_folds,
         size_of::<fold_T>() as c_int,
@@ -443,7 +447,7 @@ pub unsafe fn find_wl_entry(mut win: *mut win_T, mut lnum: linenr_T) -> c_int {
     -1
 }
 /// Will "clone" (i.e deep copy) a garray_T of folds.
-pub unsafe fn cloneFoldGrowArray(mut from: *mut garray_T, mut to: *mut garray_T) {
+pub unsafe fn clone_fold_list(mut from: *mut garray_T, mut to: *mut garray_T) {
     ga_init(to, (*from).ga_itemsize, (*from).ga_growsize);
     if (*from).ga_len <= 0 {
         return;
@@ -457,7 +461,7 @@ pub unsafe fn cloneFoldGrowArray(mut from: *mut garray_T, mut to: *mut garray_T)
         (*to_p).fd_len = (*from_p).fd_len;
         (*to_p).fd_flags = (*from_p).fd_flags;
         (*to_p).fd_small = (*from_p).fd_small;
-        cloneFoldGrowArray(&raw mut (*from_p).fd_nested, &raw mut (*to_p).fd_nested);
+        clone_fold_list(&raw mut (*from_p).fd_nested, &raw mut (*to_p).fd_nested);
         (*to).ga_len += 1;
         from_p = from_p.offset(1);
         to_p = to_p.offset(1);
@@ -469,7 +473,7 @@ pub unsafe fn cloneFoldGrowArray(mut from: *mut garray_T, mut to: *mut garray_T)
 /// the first fold below it (careful: it can be beyond the end of the array!).
 ///
 /// Returns false when there is no fold that contains "lnum".
-unsafe fn foldFind(
+unsafe fn fold_find(
     mut gap: *const garray_T,
     mut lnum: linenr_T,
     mut fpp: *mut *mut fold_T,
@@ -496,12 +500,12 @@ unsafe fn foldFind(
     false
 }
 /// Returns fold level at line number "lnum" in window "wp".
-unsafe fn foldLevelWin(mut wp: *mut win_T, mut lnum: linenr_T) -> c_int {
+unsafe fn fold_level_win(mut wp: *mut win_T, mut lnum: linenr_T) -> c_int {
     let mut fp: *mut fold_T = ptr::null_mut();
     let mut lnum_rel: linenr_T = lnum;
     let mut level: c_int = 0;
     let mut gap: *mut garray_T = &raw mut (*wp).w_folds;
-    while foldFind(gap, lnum_rel, &raw mut fp) {
+    while fold_find(gap, lnum_rel, &raw mut fp) {
         gap = &raw mut (*fp).fd_nested;
         lnum_rel -= (*fp).fd_top;
         level += 1;
@@ -513,17 +517,17 @@ unsafe fn checkupdate(mut wp: *mut win_T) {
     if !(*wp).w_foldinvalid {
         return;
     }
-    foldUpdate(wp, 1, MAXLNUM as c_int as linenr_T);
+    fold_update(wp, 1, MAXLNUM as c_int as linenr_T);
     (*wp).w_foldinvalid = false;
 }
 /// Delete fold "idx" from growarray "gap".
 ///
 /// `recursive` — when true, also delete all the folds contained in it.
 ///                   when false, contained folds are moved one level up.
-unsafe fn deleteFoldEntry(gap: *mut garray_T, idx: c_int, recursive: bool) {
+unsafe fn delete_fold_entry(gap: *mut garray_T, idx: c_int, recursive: bool) {
     let mut fp: *mut fold_T = fold_at(&*gap, idx);
     if recursive || (*fp).fd_nested.ga_len <= 0 {
-        deleteFoldRecurse(&raw mut (*fp).fd_nested);
+        delete_fold_recurse(&raw mut (*fp).fd_nested);
         (*gap).ga_len -= 1;
         if idx < (*gap).ga_len {
             memmove(
@@ -565,27 +569,26 @@ unsafe fn deleteFoldEntry(gap: *mut garray_T, idx: c_int, recursive: bool) {
     };
 }
 /// Free `gap` and every fold nested inside it.
-pub unsafe fn deleteFoldRecurse(gap: *mut garray_T) {
+pub unsafe fn delete_fold_recurse(gap: *mut garray_T) {
     if !(*gap).ga_data.is_null() {
         for i in 0..(*gap).ga_len {
-            deleteFoldRecurse(&raw mut (*fold_at(&*gap, i)).fd_nested);
+            delete_fold_recurse(&raw mut (*fold_at(&*gap, i)).fd_nested);
         }
     }
     ga_clear(gap);
 }
 /// Get the lowest 'foldlevel' value that makes the deepest nested fold in
 /// window `wp`.
-pub unsafe fn getDeepestNesting(mut wp: *mut win_T) -> c_int {
+pub unsafe fn deepest_fold_nesting(mut wp: *mut win_T) -> c_int {
     checkupdate(wp);
-    getDeepestNestingRecurse(&raw mut (*wp).w_folds)
+    deepest_nesting_of(&raw mut (*wp).w_folds)
 }
-unsafe fn getDeepestNestingRecurse(mut gap: *mut garray_T) -> c_int {
+unsafe fn deepest_nesting_of(mut gap: *mut garray_T) -> c_int {
     let mut maxlevel: c_int = 0;
     let mut fp: *mut fold_T = folds(&*gap);
     let mut i: c_int = 0;
     while i < (*gap).ga_len {
-        let mut level: c_int =
-            getDeepestNestingRecurse(&raw mut (*fp.offset(i as isize)).fd_nested) + 1;
+        let mut level: c_int = deepest_nesting_of(&raw mut (*fp.offset(i as isize)).fd_nested) + 1;
         maxlevel = if maxlevel > level { maxlevel } else { level };
         i += 1;
     }
@@ -594,11 +597,11 @@ unsafe fn getDeepestNestingRecurse(mut gap: *mut garray_T) -> c_int {
 /// Update fd_small field of fold "fp".
 ///
 /// `lnum_off` — offset for fp->fd_top
-unsafe fn checkSmall(wp: *mut win_T, fp: *mut fold_T, lnum_off: linenr_T) {
+unsafe fn check_small(wp: *mut win_T, fp: *mut fold_T, lnum_off: linenr_T) {
     if (*fp).fd_small.is_some() {
         return;
     }
-    setSmallMaybe(&raw mut (*fp).fd_nested);
+    forget_small_flags(&raw mut (*fp).fd_nested);
     if (*fp).fd_len as OptInt > (*wp).w_onebuf_opt.wo_fml {
         (*fp).fd_small = Some(false);
     } else {
@@ -616,7 +619,7 @@ unsafe fn checkSmall(wp: *mut win_T, fp: *mut fold_T, lnum_off: linenr_T) {
     };
 }
 /// Set small flags in "gap" to None.
-unsafe fn setSmallMaybe(mut gap: *mut garray_T) {
+unsafe fn forget_small_flags(mut gap: *mut garray_T) {
     let mut fp: *mut fold_T = folds(&*gap);
     let mut i: c_int = 0;
     while i < (*gap).ga_len {

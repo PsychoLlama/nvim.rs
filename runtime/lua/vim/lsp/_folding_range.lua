@@ -142,7 +142,7 @@ function State:multi_handler(results, ctx)
 
   self:evaluate()
   if api.nvim_get_mode().mode:match('^i') then
-    -- `foldUpdate()` is guarded in insert mode.
+    -- `fold_update()` is guarded in insert mode.
     schedule_foldupdate(self.bufnr)
   else
     foldupdate(self.bufnr)

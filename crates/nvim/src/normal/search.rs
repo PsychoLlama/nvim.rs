@@ -12,7 +12,7 @@ use core::ptr;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_later};
 use crate::ex_getln::getcmdline;
-use crate::fold::foldOpenCursor;
+use crate::fold::fold_open_cursor;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{HLF_L, HLF_LC};
 use crate::main::{KeyTyped, curbuf, curwin, fdo_flags, jop_flags, mod_mask, no_hlsearch, p_hls};
@@ -173,7 +173,7 @@ pub(crate) unsafe fn normal_search(
                 && fdo_flags.get() & kOptFdoFlagSearch as c_int as c_uint != 0
                 && KeyTyped.get()
             {
-                foldOpenCursor();
+                fold_open_cursor();
             }
         }
         if !equalpos((*curwin.get()).w_cursor, prev_cursor) && current_match_is_distinct() {
@@ -248,7 +248,7 @@ unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
             && fdo_flags.get() & kOptFdoFlagMark as c_int as c_uint != 0
             && old_key_typed
         {
-            foldOpenCursor();
+            fold_open_cursor();
         }
     }
 }

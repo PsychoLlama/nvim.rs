@@ -17,7 +17,7 @@ use crate::cursor::{
 use crate::drawscreen::{
     UPD_INVERTED, UPD_VALID, conceal_check_cursor_line, redraw_curbuf_later, showmode,
 };
-use crate::fold::foldAdjustVisual;
+use crate::fold::fold_adjust_visual;
 use crate::getchar::{beep_flush, stuff_empty, typebuf_typed};
 use crate::main::{
     VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, VIsual_select_exclu_adj,
@@ -435,7 +435,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
             coladvance(curwin.get(), (*curwin.get()).w_virtcol);
         }
         VIsual.set((*curwin.get()).w_cursor);
-        foldAdjustVisual();
+        fold_adjust_visual();
         may_trigger_modechanged();
         setmouse();
         conceal_check_cursor_line();

@@ -40,8 +40,8 @@ pub unsafe fn diff_redraw(dofold: bool) {
                 if wp != curwin.get() {
                     wp_other = wp;
                 }
-                if dofold && foldmethodIsDiff(wp) {
-                    foldUpdateAll(wp);
+                if dofold && foldmethod_is_diff(wp) {
+                    fold_update_all(wp);
                 }
                 // Only the current window's topfill may *grow*, and only up
                 // to what the block at its topline needs.
@@ -112,7 +112,7 @@ pub unsafe fn diff_check_with_linestatus(
         }
         // A line inside a closed fold or concealed away has no status of its
         // own to report.
-        if hasFolding(wp, lnum, ::core::ptr::null_mut(), ::core::ptr::null_mut())
+        if has_folding(wp, lnum, ::core::ptr::null_mut(), ::core::ptr::null_mut())
             || decor_conceal_line(wp, lnum - 1, false)
         {
             return 0;
@@ -260,7 +260,7 @@ pub(crate) unsafe fn diff_fold_update(dp: *mut diff_T, skip_idx: c_int) {
         while !wp.is_null() {
             for i in 0..DB_COUNT as usize {
                 if (*tp).tp_diffbuf[i] == (*wp).w_buffer && i as c_int != skip_idx {
-                    foldUpdate(wp, (*dp).df_lnum[i], (*dp).df_lnum[i] + (*dp).df_count[i]);
+                    fold_update(wp, (*dp).df_lnum[i], (*dp).df_lnum[i] + (*dp).df_count[i]);
                 }
             }
             wp = (*wp).w_next;

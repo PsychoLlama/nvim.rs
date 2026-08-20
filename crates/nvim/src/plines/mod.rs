@@ -20,7 +20,7 @@ use crate::buffer::buf_meta_total;
 use crate::charset::{ptr2cells, vim_isbreak, vim_isprintc, vim_strsize};
 use crate::decoration::{decor_conceal_line, decor_virt_lines, mark_virt_chain, ns_in_win};
 use crate::diff::{diff_check_fill, diffopt_filler};
-use crate::fold::{hasFolding, hasFoldingWin, lineFolded};
+use crate::fold::{has_folding, has_folding_win, line_folded};
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::main::{State, VIsual, VIsual_active, curwin, p_sel};
 use crate::marktree::cursor::Cursor;

@@ -22,7 +22,7 @@ use crate::edit::beginline;
 use crate::eval::vars::{eval_charconvert, get_vim_var_str, set_vim_var_string};
 use crate::event::libuv::uv_strerror;
 use crate::ex_eval::aborting;
-use crate::fold::{foldUpdateAll, foldmethodIsManual};
+use crate::fold::{fold_update_all, foldmethod_is_manual};
 use crate::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::{stuff_empty, typebuf_typed};
 use crate::global_cell::GlobalCell;

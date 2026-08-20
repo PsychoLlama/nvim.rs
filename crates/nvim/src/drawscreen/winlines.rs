@@ -228,7 +228,7 @@ unsafe fn line_needs_drawing(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &
                         || w.did_update == DidUpdate::Fold
                         || (w.did_update == DidUpdate::Line
                             && syntax_present(wp)
-                            && ((foldmethodIsSyntax(wp) && hasAnyFolding(wp) != 0)
+                            && ((foldmethod_is_syntax(wp) && has_any_folding(wp) != 0)
                                 || syntax_check_changed(w.lnum)))
                         // A match at a fixed position may need redrawing when
                         // lines were inserted or deleted.
@@ -367,7 +367,7 @@ unsafe fn draw_one_line(
             {
                 virt_below = false;
                 (*wl).wl_lastlnum += 1;
-                hasFolding(
+                has_folding(
                     wp,
                     (*wl).wl_lastlnum,
                     ::core::ptr::null_mut(),

@@ -16,7 +16,7 @@ use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_getln::vim_strsave_fnameescape;
 use crate::file_search::grab_file_name;
-use crate::fold::foldOpenCursor;
+use crate::fold::fold_open_cursor;
 use crate::keycodes::Ctrl_RSB;
 use crate::main::{
     KeyTyped, VIsual_active, clear_cmdline, curbuf, curwin, e_noident, fdo_flags, g_tag_at_cursor,
@@ -277,7 +277,7 @@ pub(crate) unsafe fn nv_gd(oap: *mut oparg_T, nchar: c_int, thisblock: c_int) {
             && KeyTyped.get()
             && (*oap).op_type == OP_NOP
         {
-            foldOpenCursor();
+            fold_open_cursor();
         }
         // The search left a "search hit" message that has nothing to say
         // here, unless 'shortmess' has already suppressed it.

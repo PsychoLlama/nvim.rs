@@ -18,27 +18,27 @@ use super::*;
 
 /// Create a fold from line "start" to line "end" (inclusive) in window `wp`
 /// by adding markers.
-pub(super) unsafe fn foldCreateMarkers(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
+pub(super) unsafe fn fold_create_markers(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
     let mut buf: *mut buf_T = (*wp).w_buffer;
     if (*buf).b_p_ma == 0 {
         emsg(gettext(&raw const e_modifiable as *const c_char));
         return;
     }
-    parseMarker(wp);
-    foldAddMarker(
+    parse_marker(wp);
+    fold_add_marker(
         buf,
         start,
         (*wp).w_onebuf_opt.wo_fmr,
         foldstartmarkerlen.get(),
     );
-    foldAddMarker(buf, end, foldendmarker.get(), foldendmarkerlen.get());
+    fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get());
     changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
     let mut num_changed: int64_t = (1 + end.lnum - start.lnum) as int64_t;
     buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
 }
 
 /// Add "marker[markerlen]" in 'commentstring' to position `pos`.
-pub(super) unsafe fn foldAddMarker(
+pub(super) unsafe fn fold_add_marker(
     mut buf: *mut buf_T,
     mut pos: pos_T,
     mut marker: *const c_char,
@@ -101,7 +101,7 @@ pub(super) unsafe fn foldAddMarker(
 /// Delete the markers for a fold, causing it to be deleted.
 ///
 /// `lnum_off` — offset for fp->fd_top
-pub(super) unsafe fn deleteFoldMarkers(
+pub(super) unsafe fn delete_fold_markers(
     mut wp: *mut win_T,
     mut fp: *mut fold_T,
     mut recursive: bool,
@@ -110,7 +110,7 @@ pub(super) unsafe fn deleteFoldMarkers(
     if recursive {
         let mut i: c_int = 0;
         while i < (*fp).fd_nested.ga_len {
-            deleteFoldMarkers(
+            delete_fold_markers(
                 wp,
                 fold_at(&(*fp).fd_nested, i),
                 true,
@@ -119,13 +119,13 @@ pub(super) unsafe fn deleteFoldMarkers(
             i += 1;
         }
     }
-    foldDelMarker(
+    fold_del_marker(
         (*wp).w_buffer,
         (*fp).fd_top + lnum_off,
         (*wp).w_onebuf_opt.wo_fmr,
         foldstartmarkerlen.get(),
     );
-    foldDelMarker(
+    fold_del_marker(
         (*wp).w_buffer,
         (*fp).fd_top + lnum_off + (*fp).fd_len - 1,
         foldendmarker.get(),
@@ -137,7 +137,7 @@ pub(super) unsafe fn deleteFoldMarkers(
 /// Delete 'commentstring' if it matches.
 /// If the marker is not found, there is no error message.  Could be a missing
 /// close-marker.
-pub(super) unsafe fn foldDelMarker(
+pub(super) unsafe fn fold_del_marker(
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
     mut marker: *mut c_char,
@@ -203,7 +203,7 @@ pub(super) unsafe fn foldDelMarker(
 /// Parse 'foldmarker' and set "foldendmarker", "foldstartmarkerlen" and
 /// "foldendmarkerlen".
 /// Relies on the option value to have been checked for correctness already.
-pub(super) unsafe fn parseMarker(mut wp: *mut win_T) {
+pub(super) unsafe fn parse_marker(mut wp: *mut win_T) {
     foldendmarker.set(vim_strchr((*wp).w_onebuf_opt.wo_fmr, ',' as c_int));
     let c2rust_fresh0 = foldendmarker.get();
     foldendmarker.set((*foldendmarker.ptr()).offset(1));
@@ -218,7 +218,7 @@ pub(super) unsafe fn parseMarker(mut wp: *mut win_T) {
 /// Careful: This means you can't call this function twice on the same line.
 /// Doesn't use any caching.
 /// Sets flp->start when a start marker was found.
-pub(super) unsafe fn foldlevelMarker(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevel_marker(mut flp: *mut fline_T) {
     let mut start_lvl: c_int = (*flp).lvl;
     let mut startmarker: *mut c_char = (*(*flp).wp).w_onebuf_opt.wo_fmr;
     let mut cstart: c_char = *startmarker;

@@ -29,7 +29,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline};
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
-use crate::fold::hasAnyFolding;
+use crate::fold::has_any_folding;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_check_group;
 use crate::main::{
@@ -691,7 +691,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
 
     // SAFETY: the current window is live.
-    if subflags.with(|flags| flags.do_ask) && unsafe { hasAnyFolding(curwin.get()) } != 0 {
+    if subflags.with(|flags| flags.do_ask) && unsafe { has_any_folding(curwin.get()) } != 0 {
         // The cursor position may require updating.
         // SAFETY: as above.
         unsafe { changed_window_setting(curwin.get()) };

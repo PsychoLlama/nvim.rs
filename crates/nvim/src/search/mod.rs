@@ -32,7 +32,7 @@ use crate::ex_docmd::set_no_hlsearch;
 use crate::ex_getln::gotocmdline;
 use crate::file_search::{file_name_in_line, find_file_name_in_path};
 use crate::fileio::vim_fgets;
-use crate::fold::{foldOpenCursor, hasFolding};
+use crate::fold::{fold_open_cursor, has_folding};
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::indent_c::is_pos_in_string;

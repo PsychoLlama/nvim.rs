@@ -148,7 +148,7 @@ unsafe fn insert_enter(s: *mut InsertState) {
         if did_restart_edit.get() == 0 {
             // Open a fold at the cursor line, unless it was already open when
             // CTRL-O left.
-            foldOpenCursor();
+            fold_open_cursor();
         }
 
         // `showmode`'s answer is how many lines the message took, which
@@ -186,7 +186,7 @@ unsafe fn insert_enter(s: *mut InsertState) {
             o_lnum.set((*curwin.get()).w_cursor.lnum);
         }
         pum_check_clear();
-        foldUpdateAfterInsert();
+        fold_update_after_insert();
         if (*s).cmdchar != 'r' as c_int && (*s).cmdchar != 'v' as c_int && (*s).c != Ctrl_C {
             ins_apply_autocmds(EVENT_INSERTLEAVE);
         }
@@ -325,10 +325,10 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         // The mode message is not scrolled away.
         msg_scroll.set(0);
         if fdo_flags.get() & kOptFdoFlagInsert as ::core::ffi::c_uint != 0 {
-            foldOpenCursor();
+            fold_open_cursor();
         }
         if !char_avail() {
-            foldCheckClose();
+            fold_check_close();
         }
         if bt_prompt(curbuf.get()) {
             init_prompt((*s).cmdchar_todo);
@@ -430,7 +430,7 @@ unsafe fn may_scroll_for_wrap(s: *mut InsertState) {
         {
             if (*curwin.get()).w_topfill > 0 {
                 (*curwin.get()).w_topfill -= 1;
-            } else if hasFolding(
+            } else if has_folding(
                 curwin.get(),
                 (*curwin.get()).w_topline,
                 ::core::ptr::null_mut(),

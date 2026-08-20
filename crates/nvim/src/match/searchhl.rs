@@ -344,7 +344,7 @@ pub unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, lnum: l
             if (*shl).first_lnum == 0 {
                 (*shl).first_lnum = lnum;
                 while (*shl).first_lnum > (*wp).w_topline {
-                    if hasFolding(
+                    if has_folding(
                         wp,
                         (*shl).first_lnum - 1,
                         ::core::ptr::null_mut(),

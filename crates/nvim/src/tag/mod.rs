@@ -21,7 +21,7 @@ use crate::file_search::{
     vim_findfile, vim_findfile_cleanup, vim_findfile_init, vim_findfile_stopdir,
 };
 use crate::fileio::vim_fgets;
-use crate::fold::foldOpenCursor;
+use crate::fold::fold_open_cursor;
 use crate::global_cell::GlobalCell;
 use crate::help::help_heuristic;
 use crate::input::prompt_for_input;

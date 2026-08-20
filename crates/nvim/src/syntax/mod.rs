@@ -30,7 +30,7 @@ use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var};
 use crate::ex_docmd::{
     check_nextcmd, do_cmdline_cmd, ends_excmd, expand_filename, find_nextcmd, separate_nextcmd,
 };
-use crate::fold::{foldUpdateAll, foldmethodIsSyntax};
+use crate::fold::{fold_update_all, foldmethod_is_syntax};
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{

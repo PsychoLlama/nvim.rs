@@ -13,7 +13,7 @@ use super::*;
 use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, inc_cursor};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::global_cell::GlobalCell;
 use crate::main::{
     VIsual, VIsual_active, VIsual_mode, VIsual_select_exclu_adj, curbuf, curwin, p_sel,
@@ -109,7 +109,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
                 break;
             }
             // Inside a fold, move to the last character of the last line.
-            if hasFolding(
+            if has_folding(
                 curwin.get(),
                 (*curwin.get()).w_cursor.lnum,
                 ::core::ptr::null_mut::<linenr_T>(),
@@ -173,7 +173,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
                 break;
             }
             // Inside a fold, move to the first character of the first line.
-            if hasFolding(
+            if has_folding(
                 curwin.get(),
                 (*curwin.get()).w_cursor.lnum,
                 &raw mut (*curwin.get()).w_cursor.lnum,
@@ -245,7 +245,7 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
                 break;
             }
             // Inside a fold, move to the last character of the last line.
-            if hasFolding(
+            if has_folding(
                 curwin.get(),
                 (*curwin.get()).w_cursor.lnum,
                 ::core::ptr::null_mut::<linenr_T>(),

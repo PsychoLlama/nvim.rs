@@ -24,7 +24,7 @@ use crate::ex_docmd::{
     REMAP_NONE, REMAP_YES, kMTLineWise,
 };
 use crate::ex_getln::getexline;
-use crate::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
+use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
 use crate::getchar::{
     beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuff_empty, typebuf_typed, vpeekc,
 };
@@ -859,8 +859,8 @@ pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
 /// `:fold`.
 pub(crate) unsafe fn ex_fold(eap: *mut exarg_T) {
     unsafe {
-        if foldManualAllowed(true) != 0 {
-            foldCreate(curwin.get(), range_start(eap), range_end(eap));
+        if fold_manual_allowed(true) != 0 {
+            fold_create(curwin.get(), range_start(eap), range_end(eap));
         }
     }
 }
@@ -868,7 +868,7 @@ pub(crate) unsafe fn ex_fold(eap: *mut exarg_T) {
 /// `:foldopen` and `:foldclose`.
 pub(crate) unsafe fn ex_foldopen(eap: *mut exarg_T) {
     unsafe {
-        opFoldRange(
+        op_fold_range(
             range_start(eap),
             range_end(eap),
             ((*eap).cmdidx as c_int == CMD_foldopen as c_int) as c_int,
@@ -903,7 +903,7 @@ pub(crate) unsafe fn ex_folddo(eap: *mut exarg_T) {
         let want_closed = ((*eap).cmdidx as c_int == CMD_folddoclosed as c_int) as c_int;
         let mut lnum = (*eap).line1;
         while lnum <= (*eap).line2 {
-            if hasFolding(curwin.get(), lnum, ptr::null_mut(), ptr::null_mut()) as c_int
+            if has_folding(curwin.get(), lnum, ptr::null_mut(), ptr::null_mut()) as c_int
                 == want_closed
             {
                 ml_setmarked(lnum);

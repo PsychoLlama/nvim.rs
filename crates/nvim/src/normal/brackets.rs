@@ -8,7 +8,7 @@ use core::ptr;
 use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::diff::diff_move_to;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::fold::foldMoveTo;
+use crate::fold::fold_move_to;
 use crate::keycodes::{K_LEFTMOUSE, K_RIGHTRELEASE};
 use crate::main::{curbuf, curwin};
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
@@ -353,7 +353,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
                 PUT_FIXINDENT as c_int != 0,
             );
         } else if nchar == 'z' as c_int {
-            if foldMoveTo(false, direction(cap), (*cap).count1) == 0 {
+            if fold_move_to(false, direction(cap), (*cap).count1) == 0 {
                 clearopbeep((*cap).oap);
             }
         } else if nchar == 'c' as c_int {

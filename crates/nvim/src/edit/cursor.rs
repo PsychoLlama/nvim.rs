@@ -184,7 +184,7 @@ pub(crate) unsafe fn cursor_up_inner(wp: *mut win_T, mut n: linenr_T, skip_conce
         } else if win_lines_concealed(wp) {
             // Count each sequence of folded lines as one logical line: go to
             // the start of the fold the cursor is in first.
-            hasFolding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut());
+            has_folding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut());
 
             while n != 0 {
                 n -= 1;
@@ -199,7 +199,7 @@ pub(crate) unsafe fn cursor_up_inner(wp: *mut win_T, mut n: linenr_T, skip_conce
                     || !(State.get() & MODE_INSERT != 0
                         || fdo_flags.get() & kOptFdoFlagAll as ::core::ffi::c_uint != 0)
                 {
-                    hasFolding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut());
+                    has_folding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut());
                 }
             }
             lnum = lnum.max(1);
@@ -252,7 +252,7 @@ pub(crate) unsafe fn cursor_down_inner(wp: *mut win_T, mut n: c_int, skip_concea
             let mut last: linenr_T = 0;
             while n != 0 {
                 n -= 1;
-                if hasFoldingWin(
+                if has_folding_win(
                     wp,
                     lnum,
                     ::core::ptr::null_mut(),
@@ -289,7 +289,7 @@ pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> c_int {
     unsafe {
         let win = curwin.get();
         let mut lnum = (*win).w_cursor.lnum;
-        hasFoldingWin(
+        has_folding_win(
             win,
             lnum,
             ::core::ptr::null_mut(),

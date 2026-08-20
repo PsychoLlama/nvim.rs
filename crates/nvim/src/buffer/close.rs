@@ -726,7 +726,7 @@ pub unsafe fn buf_freeall(buf: *mut buf_T, flags: c_int) {
     // No folds in an empty buffer.
     for win in tab_windows() {
         if win.w_buffer == buf.raw() {
-            clear_folding(win);
+            clear_window_folds(win);
         }
     }
 

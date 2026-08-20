@@ -19,7 +19,7 @@ use crate::drawscreen::showmode;
 use crate::edit::edit;
 use crate::eval::vars::{set_reg_var, set_vcount};
 use crate::ex_docmd::do_sleep;
-use crate::fold::foldOpenCursor;
+use crate::fold::fold_open_cursor;
 use crate::getchar::{
     beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
     typebuf_maplen, ungetchars, vpeekc, vungetc,
@@ -866,7 +866,7 @@ pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && (*(*cap).oap).op_type == OP_NOP {
-            foldOpenCursor();
+            fold_open_cursor();
         }
     }
 }

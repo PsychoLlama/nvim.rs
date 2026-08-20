@@ -20,7 +20,7 @@ use core::ptr;
 use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
-use crate::fold::copyFoldingState;
+use crate::fold::copy_folding_state;
 use crate::main::{
     Columns, Rows, cmdmod, e_noroom, firstwin, msg_col, msg_row, p_ch, p_ea, p_ead, p_ls, p_sb,
     p_spk, p_spr, p_wh, p_wiw, p_wmh, p_wmw, sc_col,
@@ -820,7 +820,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_tagstacklen = oldp.w_tagstacklen;
     newp.w_changelistidx = oldp.w_changelistidx;
     // SAFETY: two live windows.
-    unsafe { copyFoldingState(oldp.raw(), newp.raw()) };
+    unsafe { copy_folding_state(oldp.raw(), newp.raw()) };
     // The options and the argument list, which `win_new_tabpage` also copies
     // on its own (upstream's `win_init_some`).
     newp.w_alist = oldp.w_alist;

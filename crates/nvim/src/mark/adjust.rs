@@ -2,7 +2,7 @@ use crate::buffer::bt_prompt;
 use crate::diff::diff_mark_adjust;
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_adjust;
-use crate::fold::foldMarkAdjust;
+use crate::fold::fold_mark_adjust;
 use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curtab, curwin, first_tabpage, firstwin, namedfm, saved_cursor};
 use crate::pos::{MAXLNUM, equalpos};
@@ -126,7 +126,7 @@ pub unsafe fn mark_adjust(
 /// mark_adjust_nofold() does the same as mark_adjust() but without adjusting
 /// folds in any way. Folds must be adjusted manually by the caller.
 /// This is only useful when folds need to be moved in a way different to
-/// calling foldMarkAdjust() with arguments line1, line2, amount, amount_after,
+/// calling fold_mark_adjust() with arguments line1, line2, amount, amount_after,
 /// for an example of why this may be necessary, see do_move().
 pub unsafe fn mark_adjust_nofold(
     mut line1: linenr_T,
@@ -335,7 +335,7 @@ pub unsafe fn mark_adjust_buf(
                     shift.cursor(&mut (*win_0).w_cursor);
                 }
                 if adjust_folds {
-                    foldMarkAdjust(win_0, line1, line2, amount, amount_after);
+                    fold_mark_adjust(win_0, line1, line2, amount, amount_after);
                 }
             }
             win_0 = (*win_0).w_next;

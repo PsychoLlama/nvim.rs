@@ -819,7 +819,7 @@ pub unsafe fn readfile(
                     diff_invalidate(curbuf.get());
                     // All folds in the window are invalid now. Mark them for
                     // update before triggering autocommands.
-                    foldUpdateAll(curwin.get());
+                    fold_update_all(curwin.get());
                 } else if linecnt != 0 {
                     // At least one line was appended.
                     appended_lines_mark(from, linecnt);

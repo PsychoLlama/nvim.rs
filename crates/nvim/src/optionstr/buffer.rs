@@ -18,8 +18,8 @@ use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_later, status_redraw_buf,
 };
 use crate::fold::{
-    foldUpdateAll, foldmethodIsDiff, foldmethodIsExpr, foldmethodIsIndent, foldmethodIsMarker,
-    newFoldLevel,
+    fold_update_all, foldmethod_is_diff, foldmethod_is_expr, foldmethod_is_indent,
+    foldmethod_is_marker, new_fold_level,
 };
 use crate::indent::tabstop_set;
 use crate::indent_c::parse_cino;
@@ -457,8 +457,8 @@ pub unsafe fn did_set_foldexpr(args: *mut optset_T) -> *const c_char {
     unsafe {
         did_set_optexpr(args);
         let wp = win(args);
-        if foldmethodIsExpr(wp) {
-            foldUpdateAll(wp);
+        if foldmethod_is_expr(wp) {
+            fold_update_all(wp);
         }
     }
     ptr::null()
@@ -470,8 +470,8 @@ pub unsafe fn did_set_foldignore(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's window.
     unsafe {
         let wp = win(args);
-        if foldmethodIsIndent(wp) {
-            foldUpdateAll(wp);
+        if foldmethod_is_indent(wp) {
+            fold_update_all(wp);
         }
     }
     ptr::null()
@@ -492,8 +492,8 @@ pub unsafe fn did_set_foldmarker(args: *mut optset_T) -> *const c_char {
             return invalid();
         }
         let wp = win(args);
-        if foldmethodIsMarker(wp) {
-            foldUpdateAll(wp);
+        if foldmethod_is_marker(wp) {
+            fold_update_all(wp);
         }
     }
     ptr::null()
@@ -509,11 +509,11 @@ pub unsafe fn did_set_foldmethod(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's window.
     unsafe {
         let wp = win(args);
-        foldUpdateAll(wp);
+        fold_update_all(wp);
         // Diff folds are closed to whatever 'foldlevel' says as soon as
         // they exist.
-        if foldmethodIsDiff(wp) {
-            newFoldLevel();
+        if foldmethod_is_diff(wp) {
+            new_fold_level();
         }
     }
     ptr::null()
@@ -690,8 +690,8 @@ pub unsafe fn did_set_vartabstop(args: *mut optset_T) -> *const c_char {
         if errmsg.is_null() {
             // Indent folds are computed from the tab stops.
             let wp = win(args);
-            if foldmethodIsIndent(wp) {
-                foldUpdateAll(wp);
+            if foldmethod_is_indent(wp) {
+                fold_update_all(wp);
             }
         }
         errmsg

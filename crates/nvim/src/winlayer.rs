@@ -34,7 +34,7 @@ use core::ops::{Deref, DerefMut};
 use core::{iter, ptr};
 
 use crate::drawscreen::redraw_later;
-use crate::fold::{hasAnyFolding, hasFolding};
+use crate::fold::{has_any_folding, has_folding};
 use crate::main::{curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin};
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
@@ -256,7 +256,7 @@ impl Win {
         let mut first = lnum;
         // SAFETY: a live window. `firstp` is written only when the answer is
         // true, so the seed survives a line that is in no fold.
-        let folded = unsafe { hasFolding(self.0, lnum, &raw mut first, ptr::null_mut()) };
+        let folded = unsafe { has_folding(self.0, lnum, &raw mut first, ptr::null_mut()) };
         folded.then_some(first)
     }
 
@@ -265,7 +265,7 @@ impl Win {
     pub fn fold_last(self, lnum: linenr_T) -> linenr_T {
         let mut last = lnum;
         // SAFETY: a live window; `lastp` is written only when folded.
-        unsafe { hasFolding(self.0, lnum, ptr::null_mut(), &raw mut last) };
+        unsafe { has_folding(self.0, lnum, ptr::null_mut(), &raw mut last) };
         last
     }
 
@@ -275,14 +275,14 @@ impl Win {
     pub fn fold_span(self, lnum: linenr_T) -> (bool, linenr_T, linenr_T) {
         let (mut first, mut last) = (lnum, lnum);
         // SAFETY: a live window; both out-params are written only when folded.
-        let folded = unsafe { hasFolding(self.0, lnum, &raw mut first, &raw mut last) };
+        let folded = unsafe { has_folding(self.0, lnum, &raw mut first, &raw mut last) };
         (folded, first, last)
     }
 
     #[inline(always)]
     pub fn has_any_folding(self) -> bool {
         // SAFETY: a live window.
-        unsafe { hasAnyFolding(self.0) != 0 }
+        unsafe { has_any_folding(self.0) != 0 }
     }
 
     /// First and last virtual column of the character at `pos`.

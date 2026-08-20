@@ -45,7 +45,7 @@ pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
             // When using !! on a closed fold the range ".!" works best to
             // operate on: it is made the whole closed fold later.
             let mut end_of_start_fold: linenr_T = (*oap).start.lnum;
-            hasFolding(
+            has_folding(
                 curwin.get(),
                 (*oap).start.lnum,
                 ::core::ptr::null_mut(),
@@ -61,7 +61,7 @@ pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
                 } else if (*oap).start.lnum == (*curwin.get()).w_cursor.lnum
                     // Not ".+number" for a closed fold: that would count the
                     // folded lines twice.
-                    && !hasFolding(
+                    && !has_folding(
                         curwin.get(),
                         (*oap).end.lnum,
                         ::core::ptr::null_mut(),

@@ -18,7 +18,7 @@ use crate::edit::{
     BeginlineOpts, beginline, edit, get_literal, ins_copychar, prompt_curpos_editable,
     set_last_insert,
 };
-use crate::fold::{foldUpdateAfterInsert, hasFolding};
+use crate::fold::{fold_update_after_insert, has_folding};
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, stuff_empty, stuff_readbuf, stuff_readbuf_char,
     stuff_readbuf_number,
@@ -180,7 +180,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
             stuff_readbuf_char('\r' as c_int);
             stuff_readbuf_char(ESC);
             invoke_edit(cap, 1, 'r' as c_int, 0);
-            foldUpdateAfterInsert();
+            fold_update_after_insert();
             return;
         }
 
@@ -231,7 +231,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
         (*curwin.get()).w_set_curswant = 1;
         set_last_insert((*cap).nchar);
-        foldUpdateAfterInsert();
+        fold_update_after_insert();
     }
 }
 
@@ -448,14 +448,14 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
         let opening_above = (*cap).cmdchar == 'O' as c_int;
         // Open outside a closed fold rather than inside it.
         if opening_above {
-            hasFolding(
+            has_folding(
                 win,
                 (*win).w_cursor.lnum,
                 &raw mut (*win).w_cursor.lnum,
                 ptr::null_mut(),
             );
         } else {
-            hasFolding(
+            has_folding(
                 win,
                 (*win).w_cursor.lnum,
                 ptr::null_mut(),

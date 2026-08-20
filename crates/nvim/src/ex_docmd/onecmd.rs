@@ -43,7 +43,7 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::input::ask_yesno;
 use crate::main::{
     IObuff, check_cstack, cmdmod, cmdwin_type, curbuf, curwin, did_emsg, did_emsg_syntax,
@@ -408,8 +408,8 @@ pub(crate) unsafe fn do_one_cmd(
                 && global_busy.get() == 0
                 && ea.addr_type == CmdAddr::Lines
             {
-                hasFolding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
-                hasFolding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
+                has_folding(curwin.get(), ea.line1, &raw mut ea.line1, ptr::null_mut());
+                has_folding(curwin.get(), ea.line2, ptr::null_mut(), &raw mut ea.line2);
             }
 
             // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line

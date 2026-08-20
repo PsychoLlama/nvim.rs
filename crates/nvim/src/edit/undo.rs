@@ -119,7 +119,7 @@ pub(crate) unsafe fn stop_arrow() -> c_int {
         }
 
         // Always open a fold at the cursor line when inserting something.
-        foldOpenCursor();
+        fold_open_cursor();
 
         if arrow_used.get() || ins_need_undo.get() {
             FAIL

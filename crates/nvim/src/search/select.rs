@@ -191,7 +191,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
         }
 
         if fdo_flags.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
-            foldOpenCursor();
+            fold_open_cursor();
         }
 
         may_start_select('c' as c_int);

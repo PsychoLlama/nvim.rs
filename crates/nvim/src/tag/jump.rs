@@ -475,7 +475,7 @@ impl Jump {
                     set_topline(curwin.get(), (*curwin.get()).w_cursor.lnum);
                 }
                 if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
-                    foldOpenCursor();
+                    fold_open_cursor();
                 }
             }
             if self.preview && curwin.get() != self.saved_win && win_valid(self.saved_win) {

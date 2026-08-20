@@ -705,7 +705,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
         // Reading the files may have messed up the folds of the window the
         // command was given in.
         if out.redraw_for_dummy {
-            foldUpdateAll(curwin.get());
+            fold_update_all(curwin.get());
         }
     }
 }

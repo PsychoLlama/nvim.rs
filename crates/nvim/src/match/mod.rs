@@ -28,7 +28,7 @@ use crate::eval::typval::{
 };
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
-use crate::fold::hasFolding;
+use crate::fold::has_folding;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,

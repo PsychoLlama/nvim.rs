@@ -36,7 +36,7 @@ use crate::drawscreen::{
 use crate::edit::{prompt_text, replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
-use crate::fold::{find_wl_entry, foldUpdate, hasAnyFolding, hasFoldingWin};
+use crate::fold::{find_wl_entry, fold_update, has_any_folding, has_folding_win};
 use crate::highlight_group::HLF_W;
 use crate::indent::{
     copy_indent, fixthisline, get_indent, get_lisp_indent, get_sw_value, indent_size_ts, may_do_si,

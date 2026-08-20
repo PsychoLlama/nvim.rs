@@ -70,7 +70,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
             (*curwin.get()).w_cursor.lnum -= 1;
         }
         // The cursor line must not be in a closed fold.
-        foldOpenCursor();
+        fold_open_cursor();
 
         if (*oap).line_count as OptInt > p_report.get() {
             // Two plural forms, nested: "line"/"lines" on the line count and

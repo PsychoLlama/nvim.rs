@@ -50,7 +50,7 @@ use crate::change::unchanged;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::aborting;
-use crate::fold::{clearFolding, foldUpdateAll};
+use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
 use crate::main::{c_bytes, curbuf, curwin, firstbuf, lastbuf};
 use crate::map::{map_put_ref_int_ptr_t, mh_get_int};
@@ -548,14 +548,14 @@ pub(crate) fn recheck_colorcolumn(mut win: Win) {
     unsafe { check_colorcolumn(ptr::null_mut(), win.raw()) };
 }
 
-pub(crate) fn clear_folding(mut win: Win) {
+pub(crate) fn clear_window_folds(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { clearFolding(win.raw()) };
+    unsafe { clear_folding(win.raw()) };
 }
 
-pub(crate) fn fold_update_all(mut win: Win) {
+pub(crate) fn invalidate_window_folds(mut win: Win) {
     // SAFETY: a live window.
-    unsafe { foldUpdateAll(win.raw()) };
+    unsafe { fold_update_all(win.raw()) };
 }
 
 /// Drop the window's own syntax state (`:ownsyntax`).

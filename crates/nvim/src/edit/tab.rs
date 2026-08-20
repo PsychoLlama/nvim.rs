@@ -404,7 +404,7 @@ pub(crate) unsafe fn ins_eol(c: c_int) -> bool {
         old_indent.set(0);
         can_cindent.set(true);
         // The new line may be in a closed fold.
-        foldOpenCursor();
+        fold_open_cursor();
         ok
     }
 }

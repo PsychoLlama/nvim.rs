@@ -519,10 +519,10 @@ pub unsafe fn do_search(
         // If the cursor is in a closed fold, don't find another match in
         // the same fold.
         if cmd.dirc == '/' as c_int {
-            if hasFolding(curwin.get(), pos.lnum, ptr::null_mut(), &raw mut pos.lnum) {
+            if has_folding(curwin.get(), pos.lnum, ptr::null_mut(), &raw mut pos.lnum) {
                 pos.col = (MAXCOL - 2) as colnr_T; // avoid overflow when adding 1
             }
-        } else if hasFolding(curwin.get(), pos.lnum, &raw mut pos.lnum, ptr::null_mut()) {
+        } else if has_folding(curwin.get(), pos.lnum, &raw mut pos.lnum, ptr::null_mut()) {
             pos.col = 0;
         }
 
@@ -675,7 +675,7 @@ pub unsafe fn do_search(
                     let inexact = count != 1
                         || has_offset
                         || (fdo_flags.get() & kOptFdoFlagSearch == 0
-                            && hasFolding(
+                            && has_folding(
                                 curwin.get(),
                                 (*curwin.get()).w_cursor.lnum,
                                 ptr::null_mut(),

@@ -17,13 +17,13 @@ use crate::pos::MAXLNUM;
 
 /// Close fold for current window at position "pos".
 /// Repeat "count" times.
-pub unsafe extern "C" fn closeFold(mut pos: pos_T, mut count: c_int) {
-    setFoldRepeat(pos, count, 0);
+pub unsafe extern "C" fn close_fold(mut pos: pos_T, mut count: c_int) {
+    set_fold_repeat(pos, count, 0);
 }
 
 /// Close fold for current window at position `pos` recursively.
-pub unsafe fn closeFoldRecurse(mut pos: pos_T) {
-    setManualFold(pos, false, true, ptr::null_mut());
+pub unsafe fn close_fold_recurse(mut pos: pos_T) {
+    set_manual_fold(pos, false, true, ptr::null_mut());
 }
 
 ///
@@ -33,7 +33,7 @@ pub unsafe fn closeFoldRecurse(mut pos: pos_T) {
 /// `opening` — true to open, false to close
 /// `recurse` — true to do it recursively
 /// `had_visual` — true when Visual selection used
-pub unsafe fn opFoldRange(
+pub unsafe fn op_fold_range(
     mut firstpos: pos_T,
     mut lastpos: pos_T,
     mut opening: c_int,
@@ -53,11 +53,11 @@ pub unsafe fn opFoldRange(
         };
         lnum_next = lnum;
         if opening != 0 && recurse == 0 {
-            hasFolding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum_next);
+            has_folding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum_next);
         }
-        setManualFold(temp, opening != 0, recurse != 0, &raw mut done);
+        set_manual_fold(temp, opening != 0, recurse != 0, &raw mut done);
         if opening == 0 && recurse == 0 {
-            hasFolding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum_next);
+            has_folding(curwin.get(), lnum, ptr::null_mut(), &raw mut lnum_next);
         }
         lnum = lnum_next + 1;
     }
@@ -71,22 +71,22 @@ pub unsafe fn opFoldRange(
 
 /// Open fold for current window at position "pos".
 /// Repeat "count" times.
-pub unsafe extern "C" fn openFold(mut pos: pos_T, mut count: c_int) {
-    setFoldRepeat(pos, count, 1);
+pub unsafe extern "C" fn open_fold(mut pos: pos_T, mut count: c_int) {
+    set_fold_repeat(pos, count, 1);
 }
 
 /// Open fold for current window at position `pos` recursively.
-pub unsafe fn openFoldRecurse(mut pos: pos_T) {
-    setManualFold(pos, true, true, ptr::null_mut());
+pub unsafe fn open_fold_recurse(mut pos: pos_T) {
+    set_manual_fold(pos, true, true, ptr::null_mut());
 }
 
 /// Open folds until the cursor line is not in a closed fold.
-pub unsafe fn foldOpenCursor() {
+pub unsafe fn fold_open_cursor() {
     checkupdate(curwin.get());
-    if hasAnyFolding(curwin.get()) != 0 {
+    if has_any_folding(curwin.get()) != 0 {
         loop {
             let mut done: c_int = DONE_NOTHING;
-            setManualFold((*curwin.get()).w_cursor, true, false, &raw mut done);
+            set_manual_fold((*curwin.get()).w_cursor, true, false, &raw mut done);
             if done & DONE_ACTION == 0 {
                 break;
             }
@@ -95,25 +95,25 @@ pub unsafe fn foldOpenCursor() {
 }
 
 /// Set new foldlevel for current window.
-pub unsafe fn newFoldLevel() {
-    newFoldLevelWin(curwin.get());
-    if foldmethodIsDiff(curwin.get()) && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
+pub unsafe fn new_fold_level() {
+    new_fold_level_win(curwin.get());
+    if foldmethod_is_diff(curwin.get()) && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
         let mut wp: *mut win_T = if curtab.get() == curtab.get() {
             firstwin.get()
         } else {
             (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
-            if wp != curwin.get() && foldmethodIsDiff(wp) && (*wp).w_onebuf_opt.wo_scb != 0 {
+            if wp != curwin.get() && foldmethod_is_diff(wp) && (*wp).w_onebuf_opt.wo_scb != 0 {
                 (*wp).w_onebuf_opt.wo_fdl = (*curwin.get()).w_onebuf_opt.wo_fdl;
-                newFoldLevelWin(wp);
+                new_fold_level_win(wp);
             }
             wp = (*wp).w_next;
         }
     }
 }
 
-pub(super) unsafe fn newFoldLevelWin(mut wp: *mut win_T) {
+pub(super) unsafe fn new_fold_level_win(mut wp: *mut win_T) {
     checkupdate(wp);
     if (*wp).w_fold_manual {
         let mut fp: *mut fold_T = folds(&(*wp).w_folds);
@@ -128,12 +128,12 @@ pub(super) unsafe fn newFoldLevelWin(mut wp: *mut win_T) {
 }
 
 /// Apply 'foldlevel' to all folds that don't contain the cursor.
-pub unsafe fn foldCheckClose() {
+pub unsafe fn fold_check_close() {
     if *p_fcl.get() as c_int == NUL {
         return;
     }
     checkupdate(curwin.get());
-    if checkCloseRec(
+    if close_folds_off_cursor(
         &raw mut (*curwin.get()).w_folds,
         (*curwin.get()).w_cursor.lnum,
         (*curwin.get()).w_onebuf_opt.wo_fdl as c_int,
@@ -142,7 +142,7 @@ pub unsafe fn foldCheckClose() {
     }
 }
 
-pub(super) unsafe fn checkCloseRec(
+pub(super) unsafe fn close_folds_off_cursor(
     mut gap: *mut garray_T,
     mut lnum: linenr_T,
     mut level: c_int,
@@ -160,7 +160,7 @@ pub(super) unsafe fn checkCloseRec(
                 retval = true;
             } else {
                 retval = retval as c_int
-                    | checkCloseRec(
+                    | close_folds_off_cursor(
                         &raw mut (*fp.offset(i as isize)).fd_nested,
                         lnum - (*fp.offset(i as isize)).fd_top,
                         level - 1,
@@ -175,8 +175,8 @@ pub(super) unsafe fn checkCloseRec(
 
 /// Returns true if it's allowed to manually create or delete a fold or,
 ///          give an error message and return false if not.
-pub unsafe fn foldManualAllowed(mut create: bool) -> c_int {
-    if foldmethodIsManual(curwin.get()) || foldmethodIsMarker(curwin.get()) {
+pub unsafe fn fold_manual_allowed(mut create: bool) -> c_int {
+    if foldmethod_is_manual(curwin.get()) || foldmethod_is_marker(curwin.get()) {
         return 1;
     }
     if create {
@@ -193,7 +193,7 @@ pub unsafe fn foldManualAllowed(mut create: bool) -> c_int {
 
 /// Create a fold from line "start" to line "end" (inclusive) in the current
 /// window.
-pub unsafe fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
+pub unsafe fn fold_create(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
     let mut use_level: bool = false;
     let mut closed: bool = false;
     let mut level: c_int = 0;
@@ -205,8 +205,8 @@ pub unsafe fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
         start_rel = start;
         end_rel = end;
     }
-    if foldmethodIsMarker(wp) {
-        foldCreateMarkers(wp, start, end);
+    if foldmethod_is_marker(wp) {
+        fold_create_markers(wp, start, end);
         return;
     }
     checkupdate(wp);
@@ -216,7 +216,7 @@ pub unsafe fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
         i = 0;
     } else {
         let mut fp: *mut fold_T = ptr::null_mut();
-        while foldFind(gap, start_rel.lnum, &raw mut fp) {
+        while fold_find(gap, start_rel.lnum, &raw mut fp) {
             if (*fp).fd_top + (*fp).fd_len <= end_rel.lnum {
                 break;
             }
@@ -299,7 +299,7 @@ pub unsafe fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
     (*fp_0).fd_top = start_rel.lnum;
     (*fp_0).fd_len = end_rel.lnum - start_rel.lnum + 1;
     if use_level && !closed && (level as OptInt) < (*wp).w_onebuf_opt.wo_fdl {
-        closeFold(start, 1);
+        close_fold(start, 1);
     }
     if !use_level {
         (*wp).w_fold_manual = true;
@@ -313,7 +313,7 @@ pub unsafe fn foldCreate(mut wp: *mut win_T, mut start: pos_T, mut end: pos_T) {
 /// `end` — delete all folds from start to end when not 0
 /// `recursive` — delete recursively if true
 /// `had_visual` — true when Visual selection used
-pub unsafe fn deleteFold(
+pub unsafe fn delete_fold(
     wp: *mut win_T,
     start: linenr_T,
     end: linenr_T,
@@ -336,7 +336,7 @@ pub unsafe fn deleteFold(
         let mut use_level: bool = false;
         loop {
             let mut fp: *mut fold_T = ptr::null_mut();
-            if !foldFind(gap, lnum - lnum_off, &raw mut fp) {
+            if !fold_find(gap, lnum - lnum_off, &raw mut fp) {
                 break;
             }
             found_ga = gap;
@@ -360,8 +360,8 @@ pub unsafe fn deleteFold(
             lnum += 1;
         } else {
             lnum = (*found_fp).fd_top + (*found_fp).fd_len + found_off;
-            if foldmethodIsManual(wp) {
-                deleteFoldEntry(found_ga, fold_index(&*found_ga, found_fp), recursive != 0);
+            if foldmethod_is_manual(wp) {
+                delete_fold_entry(found_ga, fold_index(&*found_ga, found_fp), recursive != 0);
             } else {
                 first_lnum = if first_lnum < (*found_fp).fd_top + found_off {
                     first_lnum
@@ -370,9 +370,9 @@ pub unsafe fn deleteFold(
                 };
                 last_lnum = if last_lnum > lnum { last_lnum } else { lnum };
                 if !did_one {
-                    parseMarker(wp);
+                    parse_marker(wp);
                 }
-                deleteFoldMarkers(wp, found_fp, recursive != 0, found_off);
+                delete_fold_markers(wp, found_fp, recursive != 0, found_off);
             }
             did_one = true;
             changed_window_setting(wp);
@@ -395,11 +395,11 @@ pub unsafe fn deleteFold(
 
 /// Open or close fold for current window at position `pos`.
 /// Repeat "count" times.
-pub(super) unsafe fn setFoldRepeat(mut pos: pos_T, mut count: c_int, mut do_open: c_int) {
+pub(super) unsafe fn set_fold_repeat(mut pos: pos_T, mut count: c_int, mut do_open: c_int) {
     let mut n: c_int = 0;
     while n < count {
         let mut done: c_int = DONE_NOTHING;
-        setManualFold(pos, do_open != 0, false, &raw mut done);
+        set_manual_fold(pos, do_open != 0, false, &raw mut done);
         if done & DONE_ACTION == 0 {
             if n == 0 && done & DONE_FOLD == 0 {
                 emsg(gettext(e_nofold.get()));
@@ -416,13 +416,13 @@ pub(super) unsafe fn setFoldRepeat(mut pos: pos_T, mut count: c_int, mut do_open
 ///
 /// `opening` — true when opening, false when closing
 /// `recurse` — true when closing/opening recursive
-pub(super) unsafe fn setManualFold(
+pub(super) unsafe fn set_manual_fold(
     mut pos: pos_T,
     mut opening: bool,
     mut recurse: bool,
     mut donep: *mut c_int,
 ) -> linenr_T {
-    if foldmethodIsDiff(curwin.get()) && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
+    if foldmethod_is_diff(curwin.get()) && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
         let mut dlnum: linenr_T = 0;
         let mut wp: *mut win_T = if curtab.get() == curtab.get() {
             firstwin.get()
@@ -430,16 +430,16 @@ pub(super) unsafe fn setManualFold(
             (*curtab.get()).tp_firstwin
         };
         while !wp.is_null() {
-            if wp != curwin.get() && foldmethodIsDiff(wp) && (*wp).w_onebuf_opt.wo_scb != 0 {
+            if wp != curwin.get() && foldmethod_is_diff(wp) && (*wp).w_onebuf_opt.wo_scb != 0 {
                 dlnum = diff_lnum_win((*curwin.get()).w_cursor.lnum, wp);
                 if dlnum != 0 {
-                    setManualFoldWin(wp, dlnum, opening, recurse, ptr::null_mut());
+                    set_manual_fold_win(wp, dlnum, opening, recurse, ptr::null_mut());
                 }
             }
             wp = (*wp).w_next;
         }
     }
-    setManualFoldWin(curwin.get(), pos.lnum, opening, recurse, donep)
+    set_manual_fold_win(curwin.get(), pos.lnum, opening, recurse, donep)
 }
 
 /// Open or close the fold in window "wp" which contains "lnum".
@@ -453,7 +453,7 @@ pub(super) unsafe fn setManualFold(
 ///
 /// Returns the line number of the next line that could be closed.
 ///                 It's only valid when "opening" is true!
-pub(super) unsafe fn setManualFoldWin(
+pub(super) unsafe fn set_manual_fold_win(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
     mut opening: bool,
@@ -472,7 +472,7 @@ pub(super) unsafe fn setManualFoldWin(
     checkupdate(wp);
     let mut gap: *mut garray_T = &raw mut (*wp).w_folds;
     loop {
-        if !foldFind(gap, lnum, &raw mut fp) {
+        if !fold_find(gap, lnum, &raw mut fp) {
             if !fp.is_null() && fp < folds_end(&*gap) {
                 next = (*fp).fd_top + off;
             }
@@ -506,7 +506,7 @@ pub(super) unsafe fn setManualFoldWin(
                     (*fp).fd_flags = FD_OPEN as c_int as c_char;
                     done |= DONE_ACTION;
                     if recurse {
-                        foldOpenNested(fp);
+                        fold_open_nested(fp);
                     }
                 }
                 break;
@@ -538,11 +538,11 @@ pub(super) unsafe fn setManualFoldWin(
 }
 
 /// Open all nested folds in fold "fpr" recursively.
-pub(super) unsafe fn foldOpenNested(mut fpr: *mut fold_T) {
+pub(super) unsafe fn fold_open_nested(mut fpr: *mut fold_T) {
     let mut fp: *mut fold_T = folds(&(*fpr).fd_nested);
     let mut i: c_int = 0;
     while i < (*fpr).fd_nested.ga_len {
-        foldOpenNested(fp.offset(i as isize));
+        fold_open_nested(fp.offset(i as isize));
         (*fp.offset(i as isize)).fd_flags = FD_OPEN as c_int as c_char;
         i += 1;
     }
@@ -580,7 +580,7 @@ pub(super) unsafe fn check_closed(
         if *maybe_smallp {
             (*fp).fd_small = None;
         }
-        checkSmall(wp, fp, lnum_off);
+        check_small(wp, fp, lnum_off);
         if (*fp).fd_small == Some(true) {
             closed = false;
         }

@@ -239,7 +239,7 @@ fn undo_report(oldcount: c_int, newcount: c_int) -> (c_int, &'static CStr) {
 pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     if fdo_flags.get() & kOptFdoFlagUndo as c_uint != 0 && KeyTyped.get() {
         // SAFETY: a live current window, by the contract above.
-        unsafe { foldOpenCursor() };
+        unsafe { fold_open_cursor() };
     }
     // No messages until :global has finished, and none while 'lazyredraw'
     // holds them back.

@@ -203,7 +203,7 @@ fn a_virtual_column_the_clamp_caught_up_with_is_dropped() {
 
 // ------------------------------------------------------------ folded_line_span
 //
-// `for (; from_line < to_line; from_line++, retval++) { hasFolding(wp,
+// `for (; from_line < to_line; from_line++, retval++) { has_folding(wp,
 // from_line, NULL, &from_line); } if (from_line > to_line) retval--;`
 
 /// The `fold_last` of a buffer with no folds at all.

@@ -56,7 +56,7 @@ use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::get_list_range;
 use crate::extmark::extmark_splice;
 use crate::fileio::{readfile, shorten_buf_fname, shorten_fnames, vim_fgets, vim_tempname};
-use crate::fold::{foldOpenCursor, foldUpdateAll};
+use crate::fold::{fold_open_cursor, fold_update_all};
 use crate::fuzzy::fuzzy_match;
 use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;

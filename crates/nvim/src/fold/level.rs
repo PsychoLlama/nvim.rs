@@ -27,7 +27,7 @@ pub(super) fn getlevel_is(getlevel: LevelGetter, f: unsafe fn(*mut fline_T)) -> 
 
 /// Update the folding for window "wp", at least from lines "top" to "bot".
 /// IEMS = "Indent Expr Marker Syntax"
-pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
+pub(super) unsafe fn fold_update_computed(wp: *mut win_T, mut top: linenr_T, mut bot: linenr_T) {
     if invalid_top.get() != 0 {
         return;
     }
@@ -35,9 +35,9 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
         top = 1;
         bot = (*(*wp).w_buffer).b_ml.ml_line_count;
         (*wp).w_foldinvalid = false;
-        setSmallMaybe(&raw mut (*wp).w_folds);
+        forget_small_flags(&raw mut (*wp).w_folds);
     }
-    if foldmethodIsDiff(wp) {
+    if foldmethod_is_diff(wp) {
         if top > diff_context.get() as linenr_T {
             top = (top as c_int - diff_context.get()) as linenr_T;
         } else {
@@ -72,11 +72,11 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
     invalid_top.set(top);
     invalid_bot.set(bot);
     let mut getlevel: LevelGetter = None;
-    if foldmethodIsMarker(wp) {
-        getlevel = Some(foldlevelMarker as unsafe fn(*mut fline_T) -> ());
-        parseMarker(wp);
+    if foldmethod_is_marker(wp) {
+        getlevel = Some(foldlevel_marker as unsafe fn(*mut fline_T) -> ());
+        parse_marker(wp);
         if top > 1 {
-            let level: c_int = foldLevelWin(wp, top - 1);
+            let level: c_int = fold_level_win(wp, top - 1);
             fline.lnum = top - 1;
             fline.lvl = level;
             getlevel.expect("non-null function pointer")(&raw mut fline);
@@ -90,17 +90,17 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
         getlevel.expect("non-null function pointer")(&raw mut fline);
     } else {
         fline.lnum = top;
-        if foldmethodIsExpr(wp) {
-            getlevel = Some(foldlevelExpr as unsafe fn(*mut fline_T) -> ());
+        if foldmethod_is_expr(wp) {
+            getlevel = Some(foldlevel_expr as unsafe fn(*mut fline_T) -> ());
             if top > 1 {
                 fline.lnum -= 1;
             }
-        } else if foldmethodIsSyntax(wp) {
-            getlevel = Some(foldlevelSyntax as unsafe fn(*mut fline_T) -> ());
-        } else if foldmethodIsDiff(wp) {
-            getlevel = Some(foldlevelDiff as unsafe fn(*mut fline_T) -> ());
+        } else if foldmethod_is_syntax(wp) {
+            getlevel = Some(foldlevel_syntax as unsafe fn(*mut fline_T) -> ());
+        } else if foldmethod_is_diff(wp) {
+            getlevel = Some(foldlevel_diff as unsafe fn(*mut fline_T) -> ());
         } else {
-            getlevel = Some(foldlevelIndent as unsafe fn(*mut fline_T) -> ());
+            getlevel = Some(foldlevel_indent as unsafe fn(*mut fline_T) -> ());
             if top > 1 {
                 fline.lnum -= 1;
             }
@@ -115,14 +115,14 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
             fline.lnum -= 1;
         }
     }
-    if getlevel_is(getlevel, foldlevelSyntax) {
+    if getlevel_is(getlevel, foldlevel_syntax) {
         let mut gap: *mut garray_T = &raw mut (*wp).w_folds;
         let mut fpn: *mut fold_T = ptr::null_mut();
         let mut current_fdl: c_int = 0;
         let mut fold_start_lnum: linenr_T = 0;
         let mut lnum_rel: linenr_T = fline.lnum;
         while current_fdl < fline.lvl {
-            if !foldFind(gap, lnum_rel, &raw mut fpn) {
+            if !fold_find(gap, lnum_rel, &raw mut fpn) {
                 break;
             }
             current_fdl += 1;
@@ -150,23 +150,23 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
             break;
         }
         if fline.lnum > end {
-            if !getlevel_is(getlevel, foldlevelMarker)
-                && !getlevel_is(getlevel, foldlevelSyntax)
-                && !getlevel_is(getlevel, foldlevelExpr)
+            if !getlevel_is(getlevel, foldlevel_marker)
+                && !getlevel_is(getlevel, foldlevel_syntax)
+                && !getlevel_is(getlevel, foldlevel_expr)
             {
                 break;
             }
             if start <= end
-                && foldFind(&raw mut (*wp).w_folds, end, &raw mut fp)
+                && fold_find(&raw mut (*wp).w_folds, end, &raw mut fp)
                 && (*fp).fd_top + (*fp).fd_len - 1 > end
                 || fline.lvl == 0
-                    && foldFind(&raw mut (*wp).w_folds, fline.lnum, &raw mut fp)
+                    && fold_find(&raw mut (*wp).w_folds, fline.lnum, &raw mut fp)
                     && (*fp).fd_top < fline.lnum
             {
                 end = (*fp).fd_top + (*fp).fd_len - 1;
             } else {
-                if !(getlevel_is(getlevel, foldlevelSyntax)
-                    && foldLevelWin(wp, fline.lnum) != fline.lvl)
+                if !(getlevel_is(getlevel, foldlevel_syntax)
+                    && fold_level_win(wp, fline.lnum) != fline.lvl)
                 {
                     break;
                 }
@@ -176,7 +176,7 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
         if fline.lvl > 0 {
             invalid_top.set(fline.lnum);
             invalid_bot.set(end);
-            end = foldUpdateIEMSRecurse(
+            end = fold_update_computed_recurse(
                 &raw mut (*wp).w_folds,
                 1,
                 start,
@@ -195,7 +195,7 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
             getlevel.expect("non-null function pointer")(&raw mut fline);
         }
     }
-    foldRemove(wp, &raw mut (*wp).w_folds, start, end);
+    fold_remove(wp, &raw mut (*wp).w_folds, start, end);
     if fold_changed.get() && (*wp).w_onebuf_opt.wo_fen != 0 {
         changed_window_setting(wp);
     }
@@ -229,7 +229,7 @@ pub(super) unsafe fn foldUpdateIEMS(wp: *mut win_T, mut top: linenr_T, mut bot: 
 ///
 /// Returns bot, which may have been increased for lines that also need to be
 /// updated as a result of a detected change in the fold.
-pub(super) unsafe fn foldUpdateIEMSRecurse(
+pub(super) unsafe fn fold_update_computed_recurse(
     gap: *mut garray_T,
     level: c_int,
     startlnum: linenr_T,
@@ -239,11 +239,11 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
     topflags: c_char,
 ) -> linenr_T {
     let mut fp: *mut fold_T = ptr::null_mut();
-    if getlevel_is(getlevel, foldlevelMarker)
+    if getlevel_is(getlevel, foldlevel_marker)
         && (*flp).start <= (*flp).lvl - level
         && (*flp).lvl > 0
     {
-        foldFind(gap, startlnum - 1, &raw mut fp);
+        fold_find(gap, startlnum - 1, &raw mut fp);
         if !fp.is_null() && (fp >= folds_end(&*gap) || (*fp).fd_top >= startlnum) {
             fp = ptr::null_mut();
         }
@@ -262,9 +262,9 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
             lvl = 0;
         }
         if (*flp).lnum > bot && !finish && !fp.is_null() {
-            if !getlevel_is(getlevel, foldlevelMarker)
-                && !getlevel_is(getlevel, foldlevelExpr)
-                && !getlevel_is(getlevel, foldlevelSyntax)
+            if !getlevel_is(getlevel, foldlevel_marker)
+                && !getlevel_is(getlevel, foldlevel_expr)
+                && !getlevel_is(getlevel, foldlevel_syntax)
             {
                 break;
             }
@@ -272,13 +272,13 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
             fp2 = fp;
             if lvl >= level {
                 let mut ll: c_int = (*flp).lnum as c_int - (*fp).fd_top as c_int;
-                while foldFind(&raw mut (*fp2).fd_nested, ll as linenr_T, &raw mut fp2) {
+                while fold_find(&raw mut (*fp2).fd_nested, ll as linenr_T, &raw mut fp2) {
                     i += 1;
                     ll -= (*fp2).fd_top as c_int;
                 }
             }
             if lvl < level + i {
-                foldFind(
+                fold_find(
                     &raw mut (*fp).fd_nested,
                     (*flp).lnum - (*fp).fd_top,
                     &raw mut fp2,
@@ -307,9 +307,9 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                     1
                 };
                 if (*gap).ga_len > 0
-                    && (foldFind(gap, startlnum, &raw mut fp)
+                    && (fold_find(gap, startlnum, &raw mut fp)
                         || fp < folds_end(&*gap) && (*fp).fd_top <= firstlnum
-                        || foldFind(gap, firstlnum - concat as linenr_T, &raw mut fp)
+                        || fold_find(gap, firstlnum - concat as linenr_T, &raw mut fp)
                         || fp < folds_end(&*gap)
                             && (lvl < level && (*fp).fd_top < (*flp).lnum
                                 || lvl >= level && (*fp).fd_top <= (*flp).lnum_save))
@@ -318,7 +318,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                         if (*fp).fd_top != firstlnum {
                             if (*fp).fd_top >= startlnum {
                                 if (*fp).fd_top > firstlnum {
-                                    foldMarkAdjustRecurse(
+                                    fold_mark_adjust_recurse(
                                         &raw mut (*fp).fd_nested,
                                         0,
                                         MAXLNUM as c_int as linenr_T,
@@ -326,7 +326,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                                         0,
                                     );
                                 } else {
-                                    foldMarkAdjustRecurse(
+                                    fold_mark_adjust_recurse(
                                         &raw mut (*fp).fd_nested,
                                         0,
                                         firstlnum - (*fp).fd_top - 1,
@@ -348,14 +348,14 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                                     breakstart = (*flp).lnum;
                                     breakend = (*flp).lnum;
                                 }
-                                foldRemove(
+                                fold_remove(
                                     (*flp).wp,
                                     &raw mut (*fp).fd_nested,
                                     breakstart - (*fp).fd_top,
                                     breakend - (*fp).fd_top,
                                 );
                                 let mut i_0: c_int = fold_index(&*gap, fp);
-                                foldSplit(
+                                fold_split(
                                     (*(*flp).wp).w_buffer,
                                     gap,
                                     i_0,
@@ -363,9 +363,9 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                                     breakend - 1,
                                 );
                                 fp = fold_at(&*gap, i_0).offset(1);
-                                if getlevel_is(getlevel, foldlevelMarker)
-                                    || getlevel_is(getlevel, foldlevelExpr)
-                                    || getlevel_is(getlevel, foldlevelSyntax)
+                                if getlevel_is(getlevel, foldlevel_marker)
+                                    || getlevel_is(getlevel, foldlevel_expr)
+                                    || getlevel_is(getlevel, foldlevel_syntax)
                                 {
                                     finish = true;
                                 }
@@ -376,17 +376,17 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                             if i_1 != 0 {
                                 fp2 = fp.offset(-1);
                                 if (*fp2).fd_top + (*fp2).fd_len == (*fp).fd_top {
-                                    foldMerge(fp2, gap, fp);
+                                    fold_merge(fp2, gap, fp);
                                     fp = fp2;
                                 }
                             }
                         }
                         break;
                     } else if (*fp).fd_top >= startlnum {
-                        deleteFoldEntry(gap, fold_index(&*gap, fp), true);
+                        delete_fold_entry(gap, fold_index(&*gap, fp), true);
                     } else {
                         (*fp).fd_len = startlnum - (*fp).fd_top;
-                        foldMarkAdjustRecurse(
+                        fold_mark_adjust_recurse(
                             &raw mut (*fp).fd_nested,
                             (*fp).fd_len,
                             MAXLNUM as c_int as linenr_T,
@@ -402,7 +402,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                     } else {
                         i_2 = fold_index(&*gap, fp);
                     }
-                    foldInsert(gap, i_2);
+                    fold_insert(gap, i_2);
                     fp = fold_at(&*gap, i_2);
                     (*fp).fd_top = firstlnum;
                     (*fp).fd_len = bot - firstlnum + 1;
@@ -418,9 +418,9 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                         (*fp).fd_flags = (*fp.offset(-1)).fd_flags;
                     }
                     (*fp).fd_small = None;
-                    if getlevel_is(getlevel, foldlevelMarker)
-                        || getlevel_is(getlevel, foldlevelExpr)
-                        || getlevel_is(getlevel, foldlevelSyntax)
+                    if getlevel_is(getlevel, foldlevel_marker)
+                        || getlevel_is(getlevel, foldlevel_expr)
+                        || getlevel_is(getlevel, foldlevel_syntax)
                     {
                         finish = true;
                     }
@@ -437,7 +437,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
             (*flp).lnum = (*flp).lnum_save - (*fp).fd_top;
             (*flp).off += (*fp).fd_top;
             let mut i_3: c_int = fold_index(&*gap, fp);
-            bot = foldUpdateIEMSRecurse(
+            bot = fold_update_computed_recurse(
                 &raw mut (*fp).fd_nested,
                 level + 1,
                 startlnum2 - (*fp).fd_top,
@@ -486,7 +486,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
     } else if (*fp).fd_top + (*fp).fd_len > linecount {
         (*fp).fd_len = linecount - (*fp).fd_top + 1;
     }
-    foldRemove(
+    fold_remove(
         (*flp).wp,
         &raw mut (*fp).fd_nested,
         startlnum2 - (*fp).fd_top,
@@ -494,15 +494,15 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
     );
     if lvl < level && (*fp).fd_len != (*flp).lnum - (*fp).fd_top {
         if (*fp).fd_top + (*fp).fd_len - 1 > bot {
-            if getlevel_is(getlevel, foldlevelMarker)
-                || getlevel_is(getlevel, foldlevelExpr)
-                || getlevel_is(getlevel, foldlevelSyntax)
+            if getlevel_is(getlevel, foldlevel_marker)
+                || getlevel_is(getlevel, foldlevel_expr)
+                || getlevel_is(getlevel, foldlevel_syntax)
             {
                 bot = (*fp).fd_top + (*fp).fd_len - 1;
                 (*fp).fd_len = (*flp).lnum - (*fp).fd_top;
             } else {
                 let mut i_4: c_int = fold_index(&*gap, fp);
-                foldSplit((*(*flp).wp).w_buffer, gap, i_4, (*flp).lnum, bot);
+                fold_split((*(*flp).wp).w_buffer, gap, i_4, (*flp).lnum, bot);
                 fp = fold_at(&*gap, i_4);
             }
         } else {
@@ -517,7 +517,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
         }
         if (*fp2).fd_top + (*fp2).fd_len > (*flp).lnum {
             if (*fp2).fd_top < (*flp).lnum {
-                foldMarkAdjustRecurse(
+                fold_mark_adjust_recurse(
                     &raw mut (*fp2).fd_nested,
                     0,
                     (*flp).lnum - (*fp2).fd_top - 1,
@@ -529,12 +529,12 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
                 fold_changed.set(true);
             }
             if lvl >= level {
-                foldMerge(fp, gap, fp2);
+                fold_merge(fp, gap, fp2);
             }
             break;
         } else {
             fold_changed.set(true);
-            deleteFoldEntry(gap, fold_index(&*gap, fp2), true);
+            delete_fold_entry(gap, fold_index(&*gap, fp2), true);
         }
     }
     bot = if bot > (*flp).lnum - 1 {
@@ -549,7 +549,7 @@ pub(super) unsafe fn foldUpdateIEMSRecurse(
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-pub(super) unsafe fn foldlevelIndent(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevel_indent(mut flp: *mut fline_T) {
     let mut lnum: linenr_T = (*flp).lnum + (*flp).off;
     let mut buf: *mut buf_T = (*(*flp).wp).w_buffer;
     let mut s: *mut c_char = skipwhite(ml_get_buf(buf, lnum));
@@ -583,7 +583,7 @@ pub(super) unsafe fn foldlevelIndent(mut flp: *mut fline_T) {
 
 /// Low level function to get the foldlevel for the "diff" method.
 /// Doesn't use any caching.
-pub(super) unsafe fn foldlevelDiff(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevel_diff(mut flp: *mut fline_T) {
     (*flp).lvl = if diff_infold((*flp).wp, (*flp).lnum + (*flp).off) {
         1
     } else {
@@ -595,7 +595,7 @@ pub(super) unsafe fn foldlevelDiff(mut flp: *mut fline_T) {
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-pub(super) unsafe fn foldlevelExpr(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevel_expr(mut flp: *mut fline_T) {
     let mut lnum: linenr_T = (*flp).lnum + (*flp).off;
     let mut win: *mut win_T = curwin.get();
     curwin.set((*flp).wp);
@@ -669,7 +669,7 @@ pub(super) unsafe fn foldlevelExpr(mut flp: *mut fline_T) {
 
 /// Low level function to get the foldlevel for the "syntax" method.
 /// Doesn't use any caching.
-pub(super) unsafe fn foldlevelSyntax(mut flp: *mut fline_T) {
+pub(super) unsafe fn foldlevel_syntax(mut flp: *mut fline_T) {
     let mut lnum: linenr_T = (*flp).lnum + (*flp).off;
     (*flp).lvl = syn_get_foldlevel((*flp).wp, lnum);
     (*flp).start = 0;

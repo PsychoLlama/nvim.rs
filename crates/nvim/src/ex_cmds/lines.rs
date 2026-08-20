@@ -15,7 +15,7 @@ use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_move_region;
-use crate::fold::foldMoveRange;
+use crate::fold::fold_move_range;
 use crate::main::{
     VIsual, VIsual_active, curbuf, curwin, disable_fold_update, global_busy, p_report,
 };
@@ -130,7 +130,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
         // SAFETY: the lines the move stepped over are still in the buffer.
         unsafe {
             mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP);
-            fold_move_range(line1, line2, dest);
+            move_folds_in_windows(line1, line2, dest);
         }
         // SAFETY: `curbuf` is live.
         unsafe { set_op_range(dest - num_lines + 1, dest) };
@@ -139,7 +139,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
         // SAFETY: as above.
         unsafe {
             mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP);
-            fold_move_range(dest + 1, line1 - 1, line2);
+            move_folds_in_windows(dest + 1, line1 - 1, line2);
         }
         // SAFETY: `curbuf` is live.
         unsafe { set_op_range(dest + 1, dest + num_lines) };
@@ -248,7 +248,7 @@ fn last_moved_line(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> linenr_T
 
 /// Run `f` with the fold update held off.
 ///
-/// `:move` repairs the folds itself with `foldMoveRange`, so the
+/// `:move` repairs the folds itself with `move_folds_in_windows`, so the
 /// `changed_lines` calls that only shuffle line numbers past each other must
 /// not have a fold update run over the half-moved buffer.
 fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
@@ -262,14 +262,14 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 /// current buffer -- a window on another tab page holds folds of its own.
 ///
 /// # Safety
-/// The three line numbers must be a `foldMoveRange` range of the current
+/// The three line numbers must be a `:move` range of the current
 /// buffer.
-unsafe fn fold_move_range(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
+unsafe fn move_folds_in_windows(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
         unsafe {
             if (*wp).w_buffer == curbuf.get() {
-                foldMoveRange(wp, &raw mut (*wp).w_folds, line1, line2, dest);
+                fold_move_range(wp, &raw mut (*wp).w_folds, line1, line2, dest);
             }
         }
     }

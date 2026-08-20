@@ -69,7 +69,7 @@ pub unsafe fn plines_win_nofill(wp: *mut win_T, lnum: linenr_T, limit_winheight:
             return 1;
         }
         // A folded line is handled just like an empty one.
-        if lineFolded(wp, lnum) {
+        if line_folded(wp, lnum) {
             return 1;
         }
 
@@ -203,7 +203,7 @@ pub unsafe fn plines_win_full(
     limit_winheight: bool,
 ) -> c_int {
     unsafe {
-        let folded = hasFoldingWin(
+        let folded = has_folding_win(
             wp,
             lnum,
             &raw mut lnum,
@@ -335,7 +335,7 @@ pub unsafe fn win_text_height(
 
         if start_vcol >= 0 {
             let mut lnum_next = lnum;
-            cur_folded = hasFolding(wp, lnum, &raw mut lnum, &raw mut lnum_next);
+            cur_folded = has_folding(wp, lnum, &raw mut lnum, &raw mut lnum_next);
             height_cur_nofill = plines_win_nofill(wp, lnum, false) as int64_t;
             height_sum_nofill += height_cur_nofill;
             let row_off = if start_vcol < width1 as int64_t || width2 <= 0 {
@@ -349,7 +349,7 @@ pub unsafe fn win_text_height(
 
         while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
             let mut lnum_next = lnum;
-            cur_folded = hasFolding(wp, lnum, &raw mut lnum, &raw mut lnum_next);
+            cur_folded = has_folding(wp, lnum, &raw mut lnum, &raw mut lnum_next);
             height_sum_fill += win_get_fill(wp, lnum) as int64_t;
             height_cur_nofill = plines_win_nofill(wp, lnum, false) as int64_t;
             height_sum_nofill += height_cur_nofill;

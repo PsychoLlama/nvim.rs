@@ -416,7 +416,7 @@
     "crates/nvim/src/fileio/report.rs": {"cell_ptr": 1, "missing_safety_doc": 1, "unsafe_lines": 90},
     "crates/nvim/src/fileio/tempfile.rs": {"extern_abi": 3, "missing_safety_doc": 10, "no_mangle": 3, "unsafe_lines": 243},
     "crates/nvim/src/fileio/timestamp.rs": {"cell_ptr": 2, "missing_safety_doc": 8, "unsafe_lines": 432},
-    "crates/nvim/src/fold/adjust.rs": {"cell_ptr": 2, "missing_safety_doc": 12, "unsafe_lines": 481},
+    "crates/nvim/src/fold/adjust.rs": {"cell_ptr": 2, "missing_safety_doc": 12, "unsafe_lines": 485},
     "crates/nvim/src/fold/builtins.rs": {"missing_safety_doc": 6, "unsafe_lines": 144},
     "crates/nvim/src/fold/level.rs": {"missing_safety_doc": 6, "unsafe_lines": 613},
     "crates/nvim/src/fold/marker.rs": {"cell_ptr": 4, "missing_safety_doc": 6, "unsafe_lines": 239},

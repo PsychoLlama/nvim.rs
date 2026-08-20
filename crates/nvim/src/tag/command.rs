@@ -398,7 +398,7 @@ impl DoTag {
             }
             check_cursor(curwin.get());
             if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
-                foldOpenCursor();
+                fold_open_cursor();
             }
 
             // The remembered matches are for a tag we have left.

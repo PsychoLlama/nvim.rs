@@ -23,7 +23,7 @@ use crate::buffer::{WinInfos, buflist_new};
 use crate::decoration::clear_virttext;
 use crate::eval::typval::tv_dict_alloc;
 use crate::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
-use crate::fold::{clearFolding, deleteFoldRecurse, foldInitWin};
+use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
 use crate::grid::{grid_assign_handle, grid_free};
 use crate::hashtab::hash_init;
 use crate::main::{
@@ -230,7 +230,7 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_fraction = 0;
     new_wp.w_prev_fraction_row = -1;
     // SAFETY: a live window.
-    unsafe { foldInitWin(new_wp.raw()) };
+    unsafe { fold_init_win(new_wp.raw()) };
     // SAFETY: matches the `block_autocmds` above.
     unsafe { unblock_autocmds() };
     // Up to 1000 can be picked by the user.
@@ -249,7 +249,7 @@ pub unsafe fn free_wininfo(wip: *mut WinInfo) {
     if unsafe { (*wip).wi_optset } {
         clear_options(unsafe { &raw mut (*wip).wi_opt });
         // SAFETY: as above -- the entry's own fold array.
-        unsafe { deleteFoldRecurse(&raw mut (*wip).wi_folds) };
+        unsafe { delete_fold_recurse(&raw mut (*wip).wi_folds) };
     }
     free(wip);
 }
@@ -267,7 +267,7 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     // SAFETY: the handle map is the editor's own.
     unsafe { map_del_int_ptr_t(map, key, ptr::null_mut()) };
     // SAFETY: a live window; reduces the reference count to its argument list.
-    unsafe { clearFolding(wp.raw()) };
+    unsafe { clear_folding(wp.raw()) };
     // SAFETY: the window's own argument list.
     unsafe { alist_unlink(wp.w_alist) };
     // Don't execute autocommands while the window is halfway deleted.
@@ -363,7 +363,7 @@ fn forget_window(buf: Buf, wp: Win) {
     if wp.w_config.style == kWinStyleMinimal && entry.wi_optset {
         clear_options(entry.opt());
         // SAFETY: the entry's own fold array.
-        unsafe { deleteFoldRecurse(entry.folds()) };
+        unsafe { delete_fold_recurse(entry.folds()) };
         entry.wi_optset = false;
     }
     if pos_null < len {
