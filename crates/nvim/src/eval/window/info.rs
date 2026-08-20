@@ -146,6 +146,11 @@ pub unsafe fn f_gettabinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
 /// `getwininfo([{winid}])` — every window of every tab page, or just the one
 /// the id names.
+///
+/// The two counters are `int` here and `int16_t` upstream, which is the one
+/// place this function knowingly differs: past 32,767 tab pages upstream's
+/// `tabnr` wraps negative while `tabpagenr()`, an `int`, stays right. Reaching
+/// that takes 33,000 `:tabnew`s, so no test can see either answer.
 pub unsafe fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to

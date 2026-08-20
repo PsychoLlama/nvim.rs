@@ -26,6 +26,15 @@ and this project adheres to [CalVer](https://calver.org/).
   `:lockmarks`/`:keepjumps`/`:keepmarks`, the marks a ShaDa file carries
   between sessions, and how every one of those follows the buffer when lines
   or columns move.
+- Rewrote the vimscript functions that ask about buffers and windows, covering
+  `bufadd()`/`bufexists()`/`bufname()`/`bufnr()` and the rest of the `buf*()`
+  family, `getline()`/`getbufline()`/`setline()`/`setbufline()`/
+  `appendbufline()`/`deletebufline()`, `getbufinfo()`/`getwininfo()`/
+  `gettabinfo()`/`winlayout()`, `winnr()`/`tabpagenr()`/`win_getid()` and the
+  window-id family, `winsaveview()`/`winrestview()`/`winrestcmd()`,
+  `win_execute()`/`win_splitmove()`/`win_move_separator()`, the
+  `prompt_setprompt()` family, and the compound assignments `:let x += y` and
+  `:let s .= t`.
 
 ### Fixed
 
