@@ -41,6 +41,7 @@ mod equi_class;
 mod mbyte;
 mod nfa;
 mod parse;
+mod pos;
 mod rex;
 mod submatch;
 mod substitute;
@@ -52,6 +53,7 @@ pub use self::context::*;
 pub(crate) use self::mbyte::*;
 pub(crate) use self::nfa::*;
 pub use self::parse::*;
+pub(crate) use self::pos::*;
 pub(crate) use self::rex::*;
 pub(crate) use self::submatch::*;
 pub(crate) use self::substitute::*;
@@ -193,47 +195,32 @@ pub struct multipos {
     pub end_col: colnr_T,
 }
 #[derive(Copy, Clone)]
-pub struct regsub_T {
+pub(crate) struct regsub_T {
     pub in_use: c_int,
     pub list: CaptureSlots,
     pub orig_start_col: colnr_T,
 }
 #[derive(Copy, Clone)]
-pub struct regsubs_T {
+pub(crate) struct regsubs_T {
     pub norm: regsub_T,
     pub synt: regsub_T,
 }
 #[derive(Copy, Clone)]
-pub struct nfa_thread_T {
+pub(crate) struct nfa_thread_T {
     pub state: *mut nfa_state_T,
     pub count: c_int,
     pub pim: nfa_pim_T,
     pub subs: regsubs_T,
 }
-pub type nfa_pim_T = nfa_pim_S;
+pub(crate) type nfa_pim_T = nfa_pim_S;
 #[derive(Copy, Clone)]
-pub struct nfa_pim_S {
+pub(crate) struct nfa_pim_S {
     pub result: PimResult,
     pub state: *mut nfa_state_T,
     pub subs: regsubs_T,
-    pub end: PimEnd,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union PimEnd {
-    pub pos: lpos_T,
-    pub ptr: *mut uint8_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union SavedPos {
-    pub ptr: *mut uint8_t,
-    pub pos: lpos_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct save_se_T {
-    pub se_u: SavedPos,
+    /// Where the thread stood when the lookaround was postponed, which is
+    /// where it has to run from once something settles it.
+    pub end: MatchPos,
 }
 pub const NFA_TOO_EXPENSIVE: c_int = -1;
 pub const NFA_ZCLOSE9: c_int = -918;
@@ -379,31 +366,22 @@ pub struct parse_state_T {
 }
 pub const NFA_LAST_NL: c_int = -856;
 pub const NFA_FIRST_NL: c_int = -886;
-pub type regitem_T = regitem_S;
+pub(crate) type regitem_T = regitem_S;
+/// One decision the forward walk made, and what undoing it needs.
 #[derive(Copy, Clone)]
-pub struct regitem_S {
+pub(crate) struct regitem_S {
+    /// Which decision, and so which of the fields below mean anything.
     pub rs_state: regstate_T,
+    /// The capture slot, the `\{n,m}` counter or the lookaround opcode the
+    /// state is about, depending on the state.
     pub rs_no: int16_t,
+    /// The program node the frame was pushed for.
     pub rs_scan: *mut uint8_t,
-    pub rs_un: FrameSave,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union FrameSave {
-    pub sesave: save_se_T,
-    pub regsave: regsave_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct regsave_T {
-    pub rs_u: InputPos,
-    pub rs_len: c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union InputPos {
-    pub ptr: *mut uint8_t,
-    pub pos: lpos_T,
+    /// What the frame has to put back. The capture states (`RS_MOPEN` and
+    /// friends) saved the slot's old value and read [`SavedInput::pos`]
+    /// alone; every other state saved the input position and reads both
+    /// fields. Upstream made those two a union; they differ by one `int`.
+    pub rs_saved: SavedInput,
 }
 pub type regstate_T = regstate_E;
 pub type regstate_E = c_uint;
@@ -430,20 +408,20 @@ pub struct regstar_S {
     pub minval: int64_t,
     pub maxval: int64_t,
 }
-pub type regbehind_T = regbehind_S;
+pub(crate) type regbehind_T = regbehind_S;
 #[derive(Copy, Clone)]
-pub struct regbehind_S {
-    pub save_after: regsave_T,
-    pub save_behind: regsave_T,
+pub(crate) struct regbehind_S {
+    pub save_after: SavedInput,
+    pub save_behind: SavedInput,
     pub save_need_clear_subexpr: c_int,
-    pub save_start: [save_se_T; 10],
-    pub save_end: [save_se_T; 10],
+    pub save_start: [MatchPos; 10],
+    pub save_end: [MatchPos; 10],
 }
-pub type backpos_T = backpos_S;
+pub(crate) type backpos_T = backpos_S;
 #[derive(Copy, Clone)]
-pub struct backpos_S {
+pub(crate) struct backpos_S {
     pub bp_scan: *mut uint8_t,
-    pub bp_pos: regsave_T,
+    pub bp_pos: SavedInput,
 }
 pub const BACKTRACKING_ENGINE: c_uint = 1;
 pub const NFA_ENGINE: c_uint = 2;
@@ -647,12 +625,7 @@ static brace_count: GlobalCell<[c_int; 10]> = GlobalCell::new([0; 10]);
 static one_exactly: GlobalCell<c_int> = GlobalCell::new(0);
 pub const JUST_CALC_SIZE: *mut uint8_t = -1i64 as *mut uint8_t;
 static backpos: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
-static behind_pos: GlobalCell<regsave_T> = GlobalCell::new(regsave_T {
-    rs_u: InputPos {
-        ptr: core::ptr::null_mut::<uint8_t>(),
-    },
-    rs_len: 0,
-});
+static behind_pos: GlobalCell<SavedInput> = GlobalCell::new(SavedInput::NOWHERE);
 pub const REGSTACK_INITIAL: c_int = 2048;
 pub const BACKPOS_INITIAL: c_int = 64;
 static bl_minval: GlobalCell<int64_t> = GlobalCell::new(0);
@@ -662,7 +635,7 @@ static nfa_re_flags: GlobalCell<c_int> = GlobalCell::new(0);
 static wants_nfa: GlobalCell<bool> = GlobalCell::new(false);
 static nstate: GlobalCell<c_int> = GlobalCell::new(0);
 static istate: GlobalCell<c_int> = GlobalCell::new(0);
-static nfa_endp: GlobalCell<*mut save_se_T> = GlobalCell::new(core::ptr::null_mut::<save_se_T>());
+static nfa_endp: GlobalCell<*mut MatchPos> = GlobalCell::new(core::ptr::null_mut::<MatchPos>());
 static nfa_ll_index: GlobalCell<c_int> = GlobalCell::new(0);
 pub const CLASS_not: c_int = 0x80 as c_int;
 pub const CLASS_af: c_int = 0x40 as c_int;

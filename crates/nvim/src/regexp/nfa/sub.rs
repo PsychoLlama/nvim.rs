@@ -244,18 +244,11 @@ pub(crate) fn pim_equal(rex: Rex, one: Option<&nfa_pim_T>, two: Option<&nfa_pim_
     if unused(Some(two)) {
         return false;
     }
-    // SAFETY: a pim in use names a live state of the running program, and
-    // which arm of `end` is live is `multi_line`.
-    unsafe {
-        if (*one.state).id != (*two.state).id {
-            return false;
-        }
-        if multi_line(rex) {
-            one.end.pos.lnum == two.end.pos.lnum && one.end.pos.col == two.end.pos.col
-        } else {
-            one.end.ptr == two.end.ptr
-        }
+    // SAFETY: a pim in use names a live state of the running program.
+    if unsafe { (*one.state).id != (*two.state).id } {
+        return false;
     }
+    one.end.same(two.end, rex.pos_kind())
 }
 
 /// Would the pattern be over if a thread reached `startstate`?

@@ -335,18 +335,10 @@ fn spanning(out: *mut nfa_state_T, bytelen: c_int, clen: c_int) -> Step {
 ///
 /// The match context must be live.
 unsafe fn at_sub_match_end(rex: Rex) -> bool {
-    unsafe {
-        let endp = nfa_endp.get();
-        if endp.is_null() {
-            return true;
-        }
-        if rex.multi() {
-            rex.lnum() == (*endp).se_u.pos.lnum
-                && rex.input().offset_from(rex.line()) as c_int == (*endp).se_u.pos.col
-        } else {
-            rex.input() == (*endp).se_u.ptr
-        }
-    }
+    let endp = nfa_endp.get();
+    // SAFETY: `nfa_endp` is null or the caller's stopping point, which lives
+    // for the whole of the lookaround it was set for.
+    endp.is_null() || rex.is_at(unsafe { *endp })
 }
 
 /// `\<`: a keyword character with something that is not one in front of it.
@@ -472,12 +464,7 @@ unsafe fn start_lookaround(
             pim.result = PimResult::Todo;
             pim.subs.norm.in_use = 0;
             pim.subs.synt.in_use = 0;
-            if rex.multi() {
-                pim.end.pos.col = rex.input().offset_from(rex.line()) as c_int;
-                pim.end.pos.lnum = rex.lnum();
-            } else {
-                pim.end.ptr = rex.input();
-            }
+            pim.end = rex.here();
             // `addstate_here` rewrites this list, so it may not be handed a
             // capture set that lives in it.
             let has_z = has_zsubexpr(rex);

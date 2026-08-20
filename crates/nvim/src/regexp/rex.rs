@@ -24,6 +24,7 @@
 
 use core::ffi::{c_char, c_int};
 
+use super::pos::{MatchPos, PosKind};
 use super::{regexec_T, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
@@ -306,6 +307,62 @@ impl Rex {
     #[inline(always)]
     pub(crate) fn multi(self) -> bool {
         unsafe { (*self.0).reg_match.is_null() }
+    }
+
+    /// Which shape this match saves positions in — the one answer every
+    /// [`MatchPos`] in the run is read through. Fixed before the first
+    /// position is saved, because it is fixed by which match structure the
+    /// caller handed in.
+    #[inline(always)]
+    pub(crate) fn pos_kind(self) -> PosKind {
+        if self.multi() {
+            PosKind::Buf
+        } else {
+            PosKind::Str
+        }
+    }
+
+    /// Where the cursor is now, in the shape this match saves.
+    #[inline(always)]
+    pub(crate) fn here(self) -> MatchPos {
+        if self.multi() {
+            MatchPos::from_pos(lpos_T {
+                lnum: self.lnum(),
+                col: self.col(),
+            })
+        } else {
+            MatchPos::from_ptr(self.input())
+        }
+    }
+
+    /// Is the cursor exactly at `at`?
+    #[inline(always)]
+    pub(crate) fn is_at(self, at: MatchPos) -> bool {
+        self.here().same(at, self.pos_kind())
+    }
+
+    /// Is the cursor strictly before `at`?
+    #[inline(always)]
+    pub(crate) fn is_before(self, at: MatchPos) -> bool {
+        if self.multi() {
+            let stop = at.as_pos();
+            self.lnum() < stop.lnum || (self.lnum() == stop.lnum && self.col() < stop.col)
+        } else {
+            self.input() < at.as_ptr()
+        }
+    }
+
+    /// Put the cursor at `at`'s column of the line it is already on.
+    ///
+    /// A buffer match's line number is ignored: the caller has already put
+    /// the cursor on the right line, or knows `at` is on it.
+    #[inline(always)]
+    pub(crate) fn seek_col_of(self, at: MatchPos) {
+        if self.multi() {
+            self.set_col(at.as_pos().col);
+        } else {
+            self.set_input(at.as_ptr());
+        }
     }
 
     /// The string match's structure, null for a buffer match.

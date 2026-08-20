@@ -19,7 +19,7 @@ use crate::mbyte::{
 use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, NFA_ANY, NFA_ANY_COMPOSING,
+    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_ANY, NFA_ANY_COMPOSING,
     NFA_BACKREF1, NFA_BOF, NFA_BOL, NFA_BOW, NFA_CLASS_ALNUM, NFA_CLASS_ALPHA, NFA_CLASS_BACKSPACE,
     NFA_CLASS_BLANK, NFA_CLASS_CNTRL, NFA_CLASS_DIGIT, NFA_CLASS_ESCAPE, NFA_CLASS_FNAME,
     NFA_CLASS_GRAPH, NFA_CLASS_IDENT, NFA_CLASS_KEYWORD, NFA_CLASS_LOWER, NFA_CLASS_PRINT,
@@ -32,7 +32,7 @@ use crate::regexp::{
     NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZCLOSE9, NFA_ZREF9, RA_MATCH, Rex, cleanup_subexpr,
     cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, nfa_endp, nfa_ll_index, nfa_match,
     nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out, reg_getline,
-    reg_getline_len, reg_iswordc, regsub_T, regsubs_T, save_se_T,
+    reg_getline_len, reg_iswordc, regsub_T, regsubs_T,
 };
 use crate::types::{FAIL, OK, colnr_T, uint8_t};
 use ::libc::strlen;
@@ -216,22 +216,21 @@ pub(crate) fn recursive_regmatch(
         let save_nfa_listid = rex.nfa_listid();
         let save_nfa_endp = nfa_endp.get();
 
+        // Where the lookaround runs from: where the thread stood when it was
+        // postponed, or — with no pim — where the outer match stands now.
+        let from = if pim.is_null() {
+            rex.here()
+        } else {
+            (*pim).end
+        };
         if !pim.is_null() {
-            rex.set_input(if rex.multi() {
-                rex.line().offset((*pim).end.pos.col as isize)
-            } else {
-                (*pim).end.ptr
-            });
+            rex.seek_col_of(from);
         }
 
         // A lookbehind has to start earlier in the line and stop where the
         // outer match stands; `endpos` is that stopping point.
-        let mut endpos = save_se_T {
-            se_u: crate::regexp::SavedPos {
-                ptr: core::ptr::null_mut(),
-            },
-        };
-        let mut endposp = core::ptr::null_mut::<save_se_T>();
+        let mut endpos = MatchPos::NOWHERE;
+        let mut endposp = core::ptr::null_mut::<MatchPos>();
         if matches!(
             op(state),
             NFA_START_INVISIBLE_BEFORE
@@ -239,23 +238,8 @@ pub(crate) fn recursive_regmatch(
                 | NFA_START_INVISIBLE_BEFORE_NEG
                 | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
         ) {
+            endpos = from;
             endposp = &raw mut endpos;
-            if rex.multi() {
-                endpos.se_u.pos = if pim.is_null() {
-                    crate::types::lpos_T {
-                        lnum: rex.lnum(),
-                        col: rex.col(),
-                    }
-                } else {
-                    (*pim).end.pos
-                };
-            } else {
-                endpos.se_u.ptr = if pim.is_null() {
-                    rex.input()
-                } else {
-                    (*pim).end.ptr
-                };
-            }
             start_lookbehind(rex, state);
         }
 

@@ -242,10 +242,10 @@ fn out_of_time() -> bool {
 ///
 /// The match context must be live.
 unsafe fn sub_match_spans_lines(rex: Rex) -> bool {
-    unsafe {
-        let endp = nfa_endp.get();
-        !endp.is_null() && rex.multi() && rex.lnum() < (*endp).se_u.pos.lnum
-    }
+    let endp = nfa_endp.get();
+    // SAFETY: `nfa_endp` is null or the stopping point of the lookaround
+    // being matched, which outlives it.
+    !endp.is_null() && rex.multi() && rex.lnum() < unsafe { (*endp).as_pos() }.lnum
 }
 
 /// Put the state a thread decided on onto a list.
@@ -453,13 +453,6 @@ fn wants_restart(rex: Rex, toplevel: bool, clen: c_int) -> bool {
         return false;
     }
     // SAFETY: `nfa_endp` holds the position the lookaround was told to stop
-    // at, whose live union arm is the one this match's own kind picks.
-    unsafe {
-        if rex.multi() {
-            let stop = (*endp).se_u.pos;
-            rex.lnum() < stop.lnum || (rex.lnum() == stop.lnum && rex.col() < stop.col)
-        } else {
-            rex.input() < (*endp).se_u.ptr
-        }
-    }
+    // at, which outlives the lookaround.
+    rex.is_before(unsafe { *endp })
 }

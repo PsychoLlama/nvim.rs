@@ -30,10 +30,10 @@ use crate::main::p_mmp;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    ADDSTATE_HERE_OFFSET, CaptureSlots, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, NFA_BOF,
-    NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN9,
-    NFA_NCLOSE, NFA_NOPEN, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN,
-    NFA_ZOPEN9, NFA_ZSTART, PimEnd, PimResult, Rex, multipos, nfa_endp, nfa_ll_index, nfa_pim_T,
+    ADDSTATE_HERE_OFFSET, CaptureSlots, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
+    NFA_BOF, NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN,
+    NFA_MOPEN9, NFA_NCLOSE, NFA_NOPEN, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND,
+    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, PimResult, Rex, multipos, nfa_endp, nfa_ll_index, nfa_pim_T,
     nfa_state_T, nfa_thread_T, regsub_T, regsubs_T,
 };
 use crate::types::{NUL, colnr_T, linenr_T, uint8_t};
@@ -88,9 +88,7 @@ const BLANK_THREAD: nfa_thread_T = nfa_thread_T {
         result: PimResult::Unused,
         state: core::ptr::null_mut(),
         subs: BLANK_SUBS,
-        end: PimEnd {
-            ptr: core::ptr::null_mut(),
-        },
+        end: MatchPos::NOWHERE,
     },
     subs: BLANK_SUBS,
 };
@@ -450,14 +448,12 @@ fn place(
 /// The extra condition is upstream's: inside a multi-line lookaround the
 /// `^` may belong to a later line than the one the lookaround started on.
 fn past_line_start(rex: Rex) -> bool {
-    // SAFETY: `rex` describes a live match and `nfa_endp` the position a
-    // lookaround was told to stop at, when there is one.
-    unsafe {
-        let endp = nfa_endp.get();
-        rex.input() > rex.line()
-            && rex.byte() as c_int != NUL
-            && (endp.is_null() || !rex.multi() || rex.lnum() == (*endp).se_u.pos.lnum)
-    }
+    let endp = nfa_endp.get();
+    rex.input() > rex.line()
+        && rex.byte() as c_int != NUL
+        // SAFETY: `nfa_endp` is null or the position a lookaround was told
+        // to stop at, which outlives the lookaround.
+        && (endp.is_null() || !rex.multi() || rex.lnum() == unsafe { (*endp).as_pos() }.lnum)
 }
 
 /// Follow everything that consumes no input from `state`, recording what the

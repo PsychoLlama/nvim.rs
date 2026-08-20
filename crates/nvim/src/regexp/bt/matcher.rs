@@ -33,8 +33,8 @@ use crate::regexp::{
     RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT,
     RS_ZCLOSE, RS_ZOPEN, Rex, STAR, SUBPAT, ZCLOSE, ZOPEN, backpos, backpos_T, bl_maxval,
     bl_minval, brace_count, brace_max, brace_min, cleanup_subexpr, cleanup_zsubexpr,
-    reg_breakcheck, reg_endzp, reg_endzpos, reg_nextline, reg_save, reg_save_equal, reg_startzp,
-    reg_startzpos, regstar_T, regstate_T, save_se_multi, save_se_one, save_subexpr,
+    reg_breakcheck, reg_endzp, reg_endzpos, reg_nextline, reg_save, reg_startzp, reg_startzpos,
+    regstar_T, regstate_T, save_capture, save_subexpr,
 };
 use crate::types::{NUL, int16_t, int64_t, lpos_T, proftime_T, uint8_t};
 
@@ -200,7 +200,7 @@ fn push_frame(
                     let fresh = ga_append_via_ptr(backpos.ptr(), size_of::<backpos_T>())
                         .cast::<backpos_T>();
                     (*fresh).bp_scan = scan;
-                } else if reg_save_equal(rex, &(*seen().add(i as usize)).bp_pos) {
+                } else if rex.is_at((*seen().add(i as usize)).bp_pos.pos) {
                     status = RA_NOMATCH;
                 }
                 if status != RA_NOMATCH {
@@ -302,7 +302,7 @@ fn push_frame(
                     return RA_FAIL;
                 };
                 rp.rs_no = op as int16_t;
-                reg_save(rex, &mut rp.rs_un.regsave, backpos.ptr());
+                reg_save(rex, &mut rp.rs_saved, backpos.ptr());
                 *next = scan.add(3);
                 RA_CONT
             }
@@ -317,7 +317,7 @@ fn push_frame(
                 let (rp, bp) = stack.top_behind();
                 save_subexpr(rex, bp);
                 rp.rs_no = op as int16_t;
-                reg_save(rex, &mut rp.rs_un.regsave, backpos.ptr());
+                reg_save(rex, &mut rp.rs_saved, backpos.ptr());
                 RA_CONT
             }
 
@@ -347,16 +347,11 @@ unsafe fn push_capture(
     // SAFETY: as `push_frame`.
     unsafe {
         let (pos, ptr) = slots(no as usize);
-        let multi = rex.multi();
         let Some(rp) = stack.push(state, scan) else {
             return RA_FAIL;
         };
         rp.rs_no = no as int16_t;
-        if multi {
-            save_se_multi(rex, &mut rp.rs_un.sesave, pos);
-        } else {
-            save_se_one(rex, &mut rp.rs_un.sesave, ptr);
-        }
+        save_capture(rex, &mut rp.rs_saved.pos, pos, ptr);
         RA_CONT
     }
 }
@@ -391,7 +386,7 @@ unsafe fn brace_complex(
                 return RA_FAIL;
             };
             rp.rs_no = no as int16_t;
-            reg_save(rex, &mut rp.rs_un.regsave, backpos.ptr());
+            reg_save(rex, &mut rp.rs_saved, backpos.ptr());
             *next = scan.add(3);
         } else if greedy {
             // Another pass is allowed; try it, and fall back to stopping.
@@ -400,7 +395,7 @@ unsafe fn brace_complex(
                     return RA_FAIL;
                 };
                 rp.rs_no = no as int16_t;
-                reg_save(rex, &mut rp.rs_un.regsave, backpos.ptr());
+                reg_save(rex, &mut rp.rs_saved, backpos.ptr());
                 *next = scan.add(3);
             }
         } else if count <= min {
@@ -408,7 +403,7 @@ unsafe fn brace_complex(
             let Some(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
                 return RA_FAIL;
             };
-            reg_save(rex, &mut rp.rs_un.regsave, backpos.ptr());
+            reg_save(rex, &mut rp.rs_saved, backpos.ptr());
         }
         RA_CONT
     }

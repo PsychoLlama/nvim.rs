@@ -25,7 +25,7 @@ use crate::regexp::{
     RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex, SFNAME, SIDENT, SKWORD,
     SPRINT, UPPER, WHITE, WORD, ZREF, behind_pos, cleanup_subexpr, cleanup_zsubexpr, cstrchr,
     cstrncmp, kMarkBufLocal, match_with_backref, reg_getline, reg_getline_len, reg_match_visual,
-    reg_nextline, reg_prev_class, reg_save_equal,
+    reg_nextline, reg_prev_class,
 };
 use crate::types::{GraphemeState, NUL, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
 use ::libc::strlen;
@@ -146,7 +146,7 @@ pub(crate) fn match_one(
 
         // The position a `\@<=` look-behind has to end at.
         // SAFETY: `behind_pos` is this engine's own saved position.
-        BHPOS => nomatch_unless(reg_save_equal(rex, unsafe { &*behind_pos.ptr() })),
+        BHPOS => nomatch_unless(rex.is_at(behind_pos.get().pos)),
 
         NEWL => {
             let lbr = rex.reg_line_lbr();
