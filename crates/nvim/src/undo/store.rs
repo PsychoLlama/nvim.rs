@@ -326,8 +326,10 @@ mod tests {
 
     /// A header carrying `seq` and nothing else, owned by the caller.
     fn header(seq: c_int) -> NonNull<u_header_T> {
-        let mut uh = u_header_T::default();
-        uh.uh_seq = seq;
+        let uh = u_header_T {
+            uh_seq: seq,
+            ..Default::default()
+        };
         NonNull::from(Box::leak(Box::new(uh)))
     }
 
