@@ -31,6 +31,7 @@ use crate::types::{
     Direction, EvalFuncData, FAIL, NUL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T,
     list_T, pos_T, typval_T, varnumber_T, win_T,
 };
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -324,8 +325,11 @@ unsafe fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, cha
         } else {
             let mut fp: *mut pos_T = ptr::null_mut();
             if args.has(0) {
-                if let Some(found) = find_win_by_nr_or_id(args.ptr(0)) {
-                    wp = found.raw();
+                // `wp` is overwritten even when the lookup fails: a
+                // `getcurpos()` on a window that does not exist answers 0
+                // for 'curswant' rather than the current window's.
+                wp = find_win_by_nr_or_id(args.ptr(0)).map_or(ptr::null_mut(), Win::raw);
+                if !wp.is_null() {
                     fp = &raw mut (*wp).w_cursor;
                 }
             } else {
