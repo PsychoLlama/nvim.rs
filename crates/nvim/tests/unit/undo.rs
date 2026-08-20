@@ -65,6 +65,30 @@ fn an_oversized_value_truncates_from_the_top() {
     assert_eq!(&encode_be(0x1_0000_0001, 4)[..4], &[0, 0, 0, 1]);
 }
 
+/// A header link is the same four-byte big-endian sequence number the file
+/// carries, both ways round. `put_header_link` writes `link.seq()` and
+/// `unserialize_uhp` reads it back through `UndoLink::to_seq`, so this is the
+/// whole of the on-disk link format.
+#[test]
+fn a_link_round_trips_through_its_four_byte_field() {
+    use c2rust_neovim::types::UndoLink;
+
+    for seq in [1, 2, 0x7f, 0x80, 0xffff, 0x0100_0000, i32::MAX] {
+        let link = UndoLink::to_seq(seq);
+        let field = encode_be(link.seq() as u64, 4);
+        let read_back = i32::from_be_bytes([field[0], field[1], field[2], field[3]]);
+        assert_eq!(UndoLink::to_seq(read_back), link, "seq {seq}");
+    }
+    // "No link" is the zero the writer put down for a NULL pointer, and a
+    // negative field -- which no writer produces and only a corrupt file
+    // has -- reads back as no link rather than as a lookup.
+    assert_eq!(
+        &encode_be(UndoLink::NONE.seq() as u64, 4)[..4],
+        &[0, 0, 0, 0]
+    );
+    assert!(UndoLink::to_seq(-1).is_none());
+}
+
 // ---------------------------------------------------------------- u_write_undo
 //
 // Ported from `test/unit/undo_spec.lua`, which drove the same three entry

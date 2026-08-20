@@ -95,6 +95,51 @@ pub struct u_header {
     pub uh_save_nr: ::core::ffi::c_int,
 }
 pub type u_header_T = u_header;
+
+impl Default for u_header {
+    /// A header linked to nothing, with every other field zero — what
+    /// `xmalloc` plus a `memset` left behind, spelled out so that getting
+    /// one does not mean writing zeroes through a pointer.
+    fn default() -> Self {
+        let unset_mark = fmark_T {
+            mark: pos_T::default(),
+            fnum: 0,
+            timestamp: 0,
+            view: fmarkv_T {
+                topline_offset: 0,
+                skipcol: 0,
+            },
+            additional_data: ::core::ptr::null_mut(),
+        };
+        Self {
+            uh_next: UndoLink::NONE,
+            uh_prev: UndoLink::NONE,
+            uh_alt_next: UndoLink::NONE,
+            uh_alt_prev: UndoLink::NONE,
+            uh_seq: 0,
+            uh_walk: 0,
+            uh_entry: ::core::ptr::null_mut(),
+            uh_getbot_entry: ::core::ptr::null_mut(),
+            uh_cursor: pos_T::default(),
+            uh_cursor_vcol: 0,
+            uh_flags: 0,
+            uh_namedm: [unset_mark; 26],
+            uh_extmark: extmark_undo_vec_t {
+                size: 0,
+                capacity: 0,
+                items: ::core::ptr::null_mut(),
+            },
+            uh_visual: visualinfo_T {
+                vi_start: pos_T::default(),
+                vi_end: pos_T::default(),
+                vi_mode: 0,
+                vi_curswant: 0,
+            },
+            uh_time: 0,
+            uh_save_nr: 0,
+        }
+    }
+}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct visualinfo_T {

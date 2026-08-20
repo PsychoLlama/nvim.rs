@@ -17,6 +17,7 @@
     "crates/nvim/src/lua/xdiff.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
     "crates/nvim/src/search/command.rs": 1,
-    "crates/nvim/src/search/find.rs": 1
+    "crates/nvim/src/search/find.rs": 1,
+    "crates/nvim/src/undo/store.rs": 1
   }
 }

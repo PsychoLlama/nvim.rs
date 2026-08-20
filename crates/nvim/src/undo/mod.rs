@@ -246,9 +246,7 @@ pub unsafe fn u_savecommon(
         let mut uhp_link = UndoLink::NONE;
         if get_undolevel(buf) >= 0 {
             uhp = xmalloc(size_of::<u_header_T>()) as *mut u_header_T;
-            (*uhp).uh_extmark.capacity = 0;
-            (*uhp).uh_extmark.size = (*uhp).uh_extmark.capacity;
-            (*uhp).uh_extmark.items = ptr::null_mut();
+            uhp.write(u_header_T::default());
             (*buf).b_u_seq_last += 1;
             (*uhp).uh_seq = (*buf).b_u_seq_last;
             uhp_link = header_adopt(buf, uhp);

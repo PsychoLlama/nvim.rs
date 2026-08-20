@@ -319,3 +319,131 @@ pub(crate) unsafe fn store_release(buf: *mut buf_T) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A header carrying `seq` and nothing else, owned by the caller.
+    fn header(seq: c_int) -> NonNull<u_header_T> {
+        let mut uh = u_header_T::default();
+        uh.uh_seq = seq;
+        NonNull::from(Box::leak(Box::new(uh)))
+    }
+
+    fn release(uhp: NonNull<u_header_T>) {
+        // SAFETY: `header` made this with `Box::leak` and the store only ever
+        // hands the same pointer back.
+        drop(unsafe { Box::from_raw(uhp.as_ptr()) });
+    }
+
+    #[test]
+    fn a_link_is_the_sequence_number_and_zero_is_no_link() {
+        assert_eq!(UndoLink::NONE.seq(), 0);
+        assert!(UndoLink::NONE.is_none());
+        assert!(!UndoLink::NONE.is_some());
+        assert_eq!(UndoLink::to_seq(7).seq(), 7);
+        assert!(UndoLink::to_seq(7).is_some());
+        // Nothing a buffer could have handed out, so: no link. A corrupt
+        // undo file's link field lands here.
+        assert_eq!(UndoLink::to_seq(0), UndoLink::NONE);
+        assert_eq!(UndoLink::to_seq(-1), UndoLink::NONE);
+        assert_eq!(UndoLink::default(), UndoLink::NONE);
+    }
+
+    #[test]
+    fn an_empty_store_names_no_header() {
+        let store = UndoStore::new();
+        assert!(store.is_empty());
+        assert_eq!(store.len(), 0);
+        assert!(!store.contains(UndoLink::to_seq(1)));
+        assert!(store.at(UndoLink::to_seq(1)).is_null());
+        assert!(store.at(UndoLink::NONE).is_null());
+    }
+
+    #[test]
+    fn a_header_is_found_by_the_number_it_was_stored_under() {
+        let mut store = UndoStore::new();
+        let first = header(1);
+        let second = header(2);
+        assert!(store.insert(1, first).is_none());
+        assert!(store.insert(2, second).is_none());
+        assert_eq!(store.len(), 2);
+        assert!(core::ptr::eq(store.at(UndoLink::to_seq(1)), first.as_ptr()));
+        assert!(core::ptr::eq(
+            store.at(UndoLink::to_seq(2)),
+            second.as_ptr()
+        ));
+        // A number nobody stored, and the "no link" number, both name
+        // nothing rather than something arbitrary.
+        assert!(store.at(UndoLink::to_seq(3)).is_null());
+        assert!(store.at(UndoLink::NONE).is_null());
+        release(first);
+        release(second);
+    }
+
+    #[test]
+    fn a_header_taken_out_stops_being_found() {
+        let mut store = UndoStore::new();
+        let only = header(4);
+        store.insert(4, only);
+        let taken = store
+            .take(UndoLink::to_seq(4))
+            .expect("the header is there");
+        assert!(core::ptr::eq(taken.as_ptr(), only.as_ptr()));
+        // The link that named it now names nothing: this is why a stale
+        // link cannot be a dangling pointer.
+        assert!(store.at(UndoLink::to_seq(4)).is_null());
+        assert!(store.is_empty());
+        // And taking it again is harmless, which is what makes a double
+        // free in the tree walk a no-op instead of a crash.
+        assert!(store.take(UndoLink::to_seq(4)).is_none());
+        release(only);
+    }
+
+    #[test]
+    fn two_headers_cannot_share_a_sequence_number() {
+        let mut store = UndoStore::new();
+        let first = header(9);
+        let second = header(9);
+        assert!(store.insert(9, first).is_none());
+        let displaced = store.insert(9, second).expect("the first one comes back");
+        assert!(core::ptr::eq(displaced.as_ptr(), first.as_ptr()));
+        assert_eq!(store.len(), 1);
+        assert!(core::ptr::eq(
+            store.at(UndoLink::to_seq(9)),
+            second.as_ptr()
+        ));
+        release(first);
+        release(second);
+    }
+
+    #[test]
+    fn links_names_every_header_held() {
+        let mut store = UndoStore::new();
+        let headers: Vec<NonNull<u_header_T>> = (1..=3).map(header).collect();
+        for (i, uhp) in headers.iter().enumerate() {
+            let seq = c_int::try_from(i).expect("three fits") + 1;
+            store.insert(seq, *uhp);
+        }
+        let mut seqs: Vec<c_int> = store.links().map(UndoLink::seq).collect();
+        seqs.sort_unstable();
+        assert_eq!(seqs, vec![1, 2, 3]);
+        for uhp in headers {
+            release(uhp);
+        }
+    }
+
+    #[test]
+    fn a_fresh_header_is_linked_to_nothing() {
+        let uh = u_header_T::default();
+        assert!(uh.uh_next.is_none());
+        assert!(uh.uh_prev.is_none());
+        assert!(uh.uh_alt_next.is_none());
+        assert!(uh.uh_alt_prev.is_none());
+        assert_eq!(uh.uh_seq, 0);
+        assert!(uh.uh_entry.is_null());
+        assert!(uh.uh_extmark.items.is_null());
+        assert_eq!(uh.uh_extmark.size, 0);
+    }
+}
