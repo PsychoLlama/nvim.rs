@@ -247,7 +247,11 @@ pub unsafe fn u_savecommon(
         if get_undolevel(buf) >= 0 {
             uhp = xmalloc(size_of::<u_header_T>()) as *mut u_header_T;
             uhp.write(u_header_T::default());
-            (*buf).b_u_seq_last += 1;
+            // `.max(0)`: a sequence number is a header's name and 0 means
+            // "no link", so it has to be positive. `b_u_seq_last` is read
+            // out of the undo file unvalidated and a corrupt one can make
+            // it negative.
+            (*buf).b_u_seq_last = (*buf).b_u_seq_last.max(0) + 1;
             (*uhp).uh_seq = (*buf).b_u_seq_last;
             uhp_link = header_adopt(buf, uhp);
         }

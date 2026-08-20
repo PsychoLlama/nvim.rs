@@ -83,6 +83,11 @@ impl UndoStore {
     /// Safe because handing back an address is not reading through it; the
     /// caller's dereference is where the obligation starts.
     pub fn at(&self, link: UndoLink) -> *mut u_header_T {
+        if link.is_none() {
+            // Not a lookup: "no link" is not a key, and refusing it here is
+            // what keeps a store that somehow held key 0 from answering it.
+            return core::ptr::null_mut();
+        }
         match self.headers.get(&link.seq()) {
             Some(uhp) => uhp.as_ptr(),
             None => core::ptr::null_mut(),
@@ -201,7 +206,10 @@ unsafe fn store_for<'a>(buf: *mut buf_T) -> &'a mut UndoStore {
 pub(crate) unsafe fn header_adopt(buf: *mut buf_T, uhp: *mut u_header_T) -> UndoLink {
     // SAFETY: a live header by the contract above.
     let seq = unsafe { (*uhp).uh_seq };
-    let Some(uhp) = NonNull::new(uhp) else {
+    debug_assert!(seq > 0, "an undo header's sequence number is positive");
+    let Some(uhp) = NonNull::new(uhp).filter(|_| seq > 0) else {
+        // Nothing can name a header whose number is not one a buffer hands
+        // out, so it would be unreachable in the store as well as leaked.
         return UndoLink::NONE;
     };
     // SAFETY: a live buffer by the contract above.

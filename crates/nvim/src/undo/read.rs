@@ -290,8 +290,13 @@ pub unsafe fn u_read_undo(
                                             // in the four O(n^2) scans that
                                             // used to turn each link's
                                             // sequence number into a pointer.
-                                            let mut seqs: HashSet<c_int> =
-                                                HashSet::with_capacity(num_head as usize);
+                                            // Sized off what was actually
+                                            // read, not off the file's claim:
+                                            // `num_head` is a signed field a
+                                            // corrupt file chooses.
+                                            let mut seqs: HashSet<c_int> = HashSet::with_capacity(
+                                                num_read_uhps.max(0) as usize,
+                                            );
                                             let mut duplicate = false;
                                             let mut i: c_int = 0;
                                             while i < num_head {
@@ -370,7 +375,15 @@ pub unsafe fn u_read_undo(
                                             (*curbuf.get()).b_u_line_lnum = line_lnum;
                                             (*curbuf.get()).b_u_line_colnr = line_colnr;
                                             (*curbuf.get()).b_u_numhead = num_head;
-                                            (*curbuf.get()).b_u_seq_last = seq_last;
+                                            // Every header the file carried
+                                            // has already been handed out, so
+                                            // the next one must come after
+                                            // them all. A well-formed file
+                                            // says so itself; a corrupt one
+                                            // would otherwise hand out a
+                                            // number some header already has.
+                                            (*curbuf.get()).b_u_seq_last = seq_last
+                                                .max(seqs.iter().copied().max().unwrap_or(0));
                                             (*curbuf.get()).b_u_seq_cur = seq_cur;
                                             (*curbuf.get()).b_u_time_cur = seq_time;
                                             (*curbuf.get()).b_u_save_nr_last = last_save_nr;
