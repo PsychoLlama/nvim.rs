@@ -7,6 +7,18 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote undo and redo, covering `u`, CTRL-R, `U`, `g-`/`g+`,
+  `:earlier`/`:later`, `:undo`, `:undolist`, `:undojoin`, `undotree()` and
+  the undo files `'undofile'` writes and `:rundo`/`:wundo` read.
+
+### Fixed
+
+- An undo file whose extmark records had been tampered with could crash the
+  editor when the change was undone. Such a record is now rejected as a
+  corrupt undo file, like every other field that does not make sense.
+
 ## [2026.08.20-6fa6afd7b2]
 
 A rewrite of the editor's internal vocabulary, reaching most of the tree
