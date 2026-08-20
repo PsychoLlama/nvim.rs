@@ -143,11 +143,11 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 eap,
             );
         } else if mode.req.reset_changed && mode.whole {
-            let was_changed = curbufIsChanged();
+            let was_changed = curbuf_is_changed();
             did_cmd =
                 apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf.get(), eap);
             if did_cmd {
-                if was_changed && !curbufIsChanged() {
+                if was_changed && !curbuf_is_changed() {
                     // BufWriteCmd wrote everything correctly and reset
                     // 'modified': correct the undo information so that an
                     // undo now sets it again.

@@ -52,7 +52,9 @@ use crate::types::{
     CpoFlag, FAIL, NUL, OK, cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T,
 };
 use crate::ui::ui_has;
-use crate::undo::{curbufIsChanged, u_compute_hash, u_read_undo, u_save, u_savedel, u_write_undo};
+use crate::undo::{
+    curbuf_is_changed, u_compute_hash, u_read_undo, u_save, u_savedel, u_write_undo,
+};
 use crate::window::{check_can_set_curbuf_forceit, win_close, win_valid};
 use crate::winfloat::win_float_remove;
 use ::libc::strlen;
@@ -437,7 +439,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                 // cleanup pair keeps an exception from the failed edit from
                 // being lost while the window is closed.
                 if !old_curwin.is_null() {
-                    let need_hide = curbufIsChanged() && (*curbuf.get()).b_nwindows <= 1;
+                    let need_hide = curbuf_is_changed() && (*curbuf.get()).b_nwindows <= 1;
                     if !need_hide || buf_hide(curbuf.get()) {
                         let mut cs: cleanup_T = core::mem::zeroed();
                         enter_cleanup(&raw mut cs);

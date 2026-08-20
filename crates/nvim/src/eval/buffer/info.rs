@@ -31,7 +31,7 @@ unsafe fn get_buffer_info(buf: *mut buf_T) -> *mut dict_T {
     nr(c"linecount", (*buf).b_ml.ml_line_count as varnumber_T);
     nr(c"loaded", !(*buf).b_ml.ml_mfp.is_null() as varnumber_T);
     nr(c"listed", (*buf).b_p_bl as varnumber_T);
-    nr(c"changed", bufIsChanged(buf) as varnumber_T);
+    nr(c"changed", buf_is_changed(buf) as varnumber_T);
     nr(c"changedtick", buf_get_changedtick(&*buf));
     nr(
         c"hidden",

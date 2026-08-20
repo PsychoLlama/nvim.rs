@@ -58,7 +58,7 @@ use crate::types::{
     NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, Vv, buf_T, colnr_T,
     event_T, linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
 };
-use crate::undo::{bufIsChanged, u_compute_hash, u_read_undo, u_sync};
+use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
     check_colorcolumn, command_height, frame_new_height, global_stl_height, last_status, min_rows,
     tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
@@ -681,7 +681,7 @@ pub unsafe fn did_set_undofile(args: *mut optset_T) -> *const c_char {
             // A `:setlocal` only reaches its own buffer; `:set` and
             // `:setglobal` reach all of them.
             let reaches = bp == f.buf || f.flags.has(OptionSetFlags::GLOBAL) || f.flags.is_empty();
-            if reaches && !bufIsChanged(bp) && !(*bp).b_ml.ml_mfp.is_null() {
+            if reaches && !buf_is_changed(bp) && !(*bp).b_ml.ml_mfp.is_null() {
                 u_compute_hash(bp, hash.as_mut_ptr());
                 u_read_undo(ptr::null_mut(), hash.as_mut_ptr(), (*bp).b_fname);
             }

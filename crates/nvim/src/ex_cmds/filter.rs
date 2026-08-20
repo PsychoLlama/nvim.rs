@@ -57,7 +57,7 @@ use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, CpoFlag, NUL, OK, OptInt, buf_T, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
-use crate::undo::{bufIsChanged, u_save};
+use crate::undo::{buf_is_changed, u_save};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -661,7 +661,7 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
         // SAFETY: the buffer list is the editor's own and is live.
         unsafe {
             while !buf.is_null() {
-                if bufIsChanged(buf) {
+                if buf_is_changed(buf) {
                     msg_puts(gettext(c"[No write since last change]\n".as_ptr()));
                     break;
                 }

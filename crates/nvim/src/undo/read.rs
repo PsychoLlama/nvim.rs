@@ -1,8 +1,11 @@
 //! `u_read_undo`: reading an undo tree back in, and grafting it onto a
 //! buffer whose contents still hash the same.
 
+use std::collections::HashSet;
+
 use super::file::*;
 use super::format::*;
+use super::store::header_adopt;
 use super::tree::*;
 use super::*;
 use crate::{semsg_c, smsg_c};
@@ -33,9 +36,6 @@ pub unsafe fn u_read_undo(
     let mut last_save_nr: c_int = 0;
     let mut num_read_uhps: c_int = 0;
     let mut c: c_int = 0;
-    let mut old_idx: int16_t = 0;
-    let mut new_idx: int16_t = 0;
-    let mut cur_idx: int16_t = 0;
     let mut uhp_table: *mut *mut u_header_T = ptr::null_mut();
     let mut line_ptr: *mut c_char = ptr::null_mut();
     let mut file_name: *mut c_char = ptr::null_mut();
@@ -280,148 +280,92 @@ pub unsafe fn u_read_undo(
                                         } else if c != UF_HEADER_END_MAGIC {
                                             corruption_error(c"end marker".as_ptr(), file_name);
                                         } else {
-                                            old_idx = -1 as int16_t;
-                                            new_idx = -1 as int16_t;
-                                            cur_idx = -1 as int16_t;
+                                            // A sequence number is a
+                                            // header's name, so two headers
+                                            // carrying the same one are
+                                            // indistinguishable: corrupt.
+                                            // Collecting them also answers
+                                            // "is there a header for this
+                                            // link?" in one lookup instead of
+                                            // in the four O(n^2) scans that
+                                            // used to turn each link's
+                                            // sequence number into a pointer.
+                                            let mut seqs: HashSet<c_int> =
+                                                HashSet::with_capacity(num_head as usize);
+                                            let mut duplicate = false;
                                             let mut i: c_int = 0;
                                             while i < num_head {
-                                                let mut uhp_0: *mut u_header_T =
+                                                let uhp_0: *mut u_header_T =
+                                                    *uhp_table.offset(i as isize);
+                                                if !uhp_0.is_null() && !seqs.insert((*uhp_0).uh_seq)
+                                                {
+                                                    duplicate = true;
+                                                    break;
+                                                }
+                                                i += 1;
+                                            }
+                                            if duplicate {
+                                                corruption_error(
+                                                    c"duplicate uh_seq".as_ptr(),
+                                                    file_name,
+                                                );
+                                                break '_error;
+                                            }
+                                            // A link to the header's own
+                                            // sequence number, or to one no
+                                            // header in this file carries,
+                                            // links to nothing -- what the
+                                            // scans worked out to, since they
+                                            // skipped `i == j` and left NULL
+                                            // when nothing matched.
+                                            let resolve = |from: c_int, link: UndoLink| {
+                                                if link.seq() == from || !seqs.contains(&link.seq())
+                                                {
+                                                    UndoLink::NONE
+                                                } else {
+                                                    link
+                                                }
+                                            };
+                                            let mut i: c_int = 0;
+                                            while i < num_head {
+                                                let uhp_0: *mut u_header_T =
                                                     *uhp_table.offset(i as isize);
                                                 if !uhp_0.is_null() {
-                                                    let mut j: c_int = 0;
-                                                    while j < num_head {
-                                                        if !(*uhp_table.offset(j as isize))
-                                                            .is_null()
-                                                            && i != j
-                                                            && (**uhp_table.offset(i as isize))
-                                                                .uh_seq
-                                                                == (**uhp_table.offset(j as isize))
-                                                                    .uh_seq
-                                                        {
-                                                            corruption_error(
-                                                                c"duplicate uh_seq".as_ptr(),
-                                                                file_name,
-                                                            );
-                                                            break '_error;
-                                                        } else {
-                                                            j += 1;
-                                                        }
-                                                    }
-                                                    let seq: c_int = (*uhp_0).uh_next.seq;
-                                                    (*uhp_0).uh_next.ptr = ptr::null_mut();
-                                                    let mut j_0: c_int = 0;
-                                                    while j_0 < num_head {
-                                                        if !(*uhp_table.offset(j_0 as isize))
-                                                            .is_null()
-                                                            && i != j_0
-                                                            && (**uhp_table.offset(j_0 as isize))
-                                                                .uh_seq
-                                                                == seq
-                                                        {
-                                                            (*uhp_0).uh_next.ptr =
-                                                                *uhp_table.offset(j_0 as isize);
-                                                            break;
-                                                        } else {
-                                                            j_0 += 1;
-                                                        }
-                                                    }
-                                                    let seq_0: c_int = (*uhp_0).uh_prev.seq;
-                                                    (*uhp_0).uh_prev.ptr = ptr::null_mut();
-                                                    let mut j_1: c_int = 0;
-                                                    while j_1 < num_head {
-                                                        if !(*uhp_table.offset(j_1 as isize))
-                                                            .is_null()
-                                                            && i != j_1
-                                                            && (**uhp_table.offset(j_1 as isize))
-                                                                .uh_seq
-                                                                == seq_0
-                                                        {
-                                                            (*uhp_0).uh_prev.ptr =
-                                                                *uhp_table.offset(j_1 as isize);
-                                                            break;
-                                                        } else {
-                                                            j_1 += 1;
-                                                        }
-                                                    }
-                                                    let seq_1: c_int = (*uhp_0).uh_alt_next.seq;
-                                                    (*uhp_0).uh_alt_next.ptr = ptr::null_mut();
-                                                    let mut j_2: c_int = 0;
-                                                    while j_2 < num_head {
-                                                        if !(*uhp_table.offset(j_2 as isize))
-                                                            .is_null()
-                                                            && i != j_2
-                                                            && (**uhp_table.offset(j_2 as isize))
-                                                                .uh_seq
-                                                                == seq_1
-                                                        {
-                                                            (*uhp_0).uh_alt_next.ptr =
-                                                                *uhp_table.offset(j_2 as isize);
-                                                            break;
-                                                        } else {
-                                                            j_2 += 1;
-                                                        }
-                                                    }
-                                                    let seq_2: c_int = (*uhp_0).uh_alt_prev.seq;
-                                                    (*uhp_0).uh_alt_prev.ptr = ptr::null_mut();
-                                                    let mut j_3: c_int = 0;
-                                                    while j_3 < num_head {
-                                                        if !(*uhp_table.offset(j_3 as isize))
-                                                            .is_null()
-                                                            && i != j_3
-                                                            && (**uhp_table.offset(j_3 as isize))
-                                                                .uh_seq
-                                                                == seq_2
-                                                        {
-                                                            (*uhp_0).uh_alt_prev.ptr =
-                                                                *uhp_table.offset(j_3 as isize);
-                                                            break;
-                                                        } else {
-                                                            j_3 += 1;
-                                                        }
-                                                    }
-                                                    if old_header_seq > 0
-                                                        && (old_idx as c_int) < 0
-                                                        && (*uhp_0).uh_seq == old_header_seq
-                                                    {
-                                                        debug_assert!(i <= 32767, "i <= INT16_MAX");
-                                                        old_idx = i as int16_t;
-                                                    }
-                                                    if new_header_seq > 0
-                                                        && (new_idx as c_int) < 0
-                                                        && (*uhp_0).uh_seq == new_header_seq
-                                                    {
-                                                        debug_assert!(i <= 32767, "i <= INT16_MAX");
-                                                        new_idx = i as int16_t;
-                                                    }
-                                                    if cur_header_seq > 0
-                                                        && (cur_idx as c_int) < 0
-                                                        && (*uhp_0).uh_seq == cur_header_seq
-                                                    {
-                                                        debug_assert!(i <= 32767, "i <= INT16_MAX");
-                                                        cur_idx = i as int16_t;
-                                                    }
+                                                    let seq: c_int = (*uhp_0).uh_seq;
+                                                    (*uhp_0).uh_next =
+                                                        resolve(seq, (*uhp_0).uh_next);
+                                                    (*uhp_0).uh_prev =
+                                                        resolve(seq, (*uhp_0).uh_prev);
+                                                    (*uhp_0).uh_alt_next =
+                                                        resolve(seq, (*uhp_0).uh_alt_next);
+                                                    (*uhp_0).uh_alt_prev =
+                                                        resolve(seq, (*uhp_0).uh_alt_prev);
                                                 }
                                                 i += 1;
                                             }
                                             u_blockfree(curbuf.get());
-                                            (*curbuf.get()).b_u_oldhead = if (old_idx as c_int) < 0
-                                            {
-                                                ptr::null_mut()
-                                            } else {
-                                                *uhp_table.offset(old_idx as isize)
+                                            // The links already name these
+                                            // headers; the store is what
+                                            // turns a name back into one.
+                                            let mut i: c_int = 0;
+                                            while i < num_head {
+                                                let uhp_0: *mut u_header_T =
+                                                    *uhp_table.offset(i as isize);
+                                                if !uhp_0.is_null() {
+                                                    header_adopt(curbuf.get(), uhp_0);
+                                                }
+                                                i += 1;
+                                            }
+                                            let head = |seq: c_int| {
+                                                if seq > 0 && seqs.contains(&seq) {
+                                                    UndoLink::to_seq(seq)
+                                                } else {
+                                                    UndoLink::NONE
+                                                }
                                             };
-                                            (*curbuf.get()).b_u_newhead = if (new_idx as c_int) < 0
-                                            {
-                                                ptr::null_mut()
-                                            } else {
-                                                *uhp_table.offset(new_idx as isize)
-                                            };
-                                            (*curbuf.get()).b_u_curhead = if (cur_idx as c_int) < 0
-                                            {
-                                                ptr::null_mut()
-                                            } else {
-                                                *uhp_table.offset(cur_idx as isize)
-                                            };
+                                            (*curbuf.get()).b_u_oldhead = head(old_header_seq);
+                                            (*curbuf.get()).b_u_newhead = head(new_header_seq);
+                                            (*curbuf.get()).b_u_curhead = head(cur_header_seq);
                                             (*curbuf.get()).b_u_line_ptr = line_ptr;
                                             (*curbuf.get()).b_u_line_lnum = line_lnum;
                                             (*curbuf.get()).b_u_line_colnr = line_colnr;

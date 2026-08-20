@@ -54,7 +54,7 @@ use crate::types::{
     CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, CpoFlag, MAXPATHL, NUL, OK, OptionSetFlags,
     ShmFlag, buf_T, bufref_T, exarg_T, int32_t, int64_t, linenr_T,
 };
-use crate::undo::{bufIsChanged, curbufIsChanged};
+use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
 use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
@@ -191,7 +191,7 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
 pub unsafe fn ex_update(eap: *mut exarg_T) {
     // SAFETY: caller's contract; `curbuf` is live.
     unsafe {
-        if curbufIsChanged()
+        if curbuf_is_changed()
             || (!bt_nofilename(curbuf.get())
                 && !(*curbuf.get()).b_ffname.is_null()
                 && !os_path_exists((*curbuf.get()).b_ffname))
@@ -716,7 +716,7 @@ unsafe fn write_one_buffer(
         {
             no_write_message_buf(buf);
             *error += 1;
-        } else if !bufIsChanged(buf) || bt_dontwrite(buf) {
+        } else if !buf_is_changed(buf) || bt_dontwrite(buf) {
             return WriteAll::Next;
         }
 
@@ -884,7 +884,7 @@ pub unsafe fn getfile(
         && !forceit
         && unsafe { (*curbuf.get()).b_nwindows } == 1
         && !unsafe { buf_hide(curbuf.get()) }
-        && unsafe { curbufIsChanged() }
+        && unsafe { curbuf_is_changed() }
         && unsafe { autowrite(curbuf.get(), forceit) } == FAIL
     {
         if p_confirm.get() != 0 && p_write.get() != 0 {
@@ -892,7 +892,7 @@ pub unsafe fn getfile(
             unsafe { dialog_changed(curbuf.get(), false) };
         }
         // SAFETY: as above.
-        if unsafe { curbufIsChanged() } {
+        if unsafe { curbuf_is_changed() } {
             drop(no_prompt.take());
             // File has been changed.
             no_write_message();

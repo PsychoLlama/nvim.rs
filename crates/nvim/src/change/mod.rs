@@ -88,7 +88,7 @@ use crate::types::{
     fmarkv_T, int64_t, linenr_T, pos_T, size_t, ssize_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_active, ui_has};
-use crate::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};
+use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
 use ::libc::{strcat, strcmp, strlen};
 
 // The carve of the transpiled module; see each child's docs.

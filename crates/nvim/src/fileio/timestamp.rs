@@ -407,7 +407,7 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
             } else {
                 p_ar.get()
             }) != 0
-                && !bufIsChanged(buf)
+                && !buf_is_changed(buf)
                 && file_info_ok
             {
                 // If 'autoread' is set, the buffer has no changes and the file
@@ -417,7 +417,7 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
             } else {
                 let reason = if !file_info_ok {
                     Reason::Deleted
-                } else if bufIsChanged(buf) {
+                } else if buf_is_changed(buf) {
                     Reason::Conflict
                 } else if orig_size != (*buf).b_orig_size || buf_contents_changed(buf) {
                     Reason::Changed

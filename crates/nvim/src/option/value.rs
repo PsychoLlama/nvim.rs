@@ -22,7 +22,7 @@ use crate::types::{
     Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, kObjectTypeBoolean,
     kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, object, object_data, size_t,
 };
-use crate::undo::curbufIsChanged;
+use crate::undo::curbuf_is_changed;
 
 use super::{
     NUMBUFLEN, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
@@ -153,7 +153,7 @@ pub unsafe fn optval_from_varp(opt_idx: OptIndex, varp: *mut c_void) -> OptVal {
     // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
     if varp.cast::<c_int>() == unsafe { &raw mut (*curbuf.get()).b_changed } {
         // SAFETY: reading the current buffer's change state.
-        return boolean_optval(Some(unsafe { curbufIsChanged() }));
+        return boolean_optval(Some(unsafe { curbuf_is_changed() }));
     }
     let type_0 = option_get_type(opt_idx);
     let data = match type_0 {

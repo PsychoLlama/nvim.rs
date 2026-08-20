@@ -48,7 +48,7 @@ use crate::types::{
     NUL, OK, OP_NOP, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t,
     uint8_t, win_T,
 };
-use crate::undo::curbufIsChanged;
+use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
 use ::libc::{strcmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -882,7 +882,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
         }
         // Leaving the only window on a changed buffer that cannot be hidden
         // means writing it first.
-        if curbufIsChanged() && (*curbuf.get()).b_nwindows <= 1 && !buf_hide(curbuf.get()) {
+        if curbuf_is_changed() && (*curbuf.get()).b_nwindows <= 1 && !buf_hide(curbuf.get()) {
             autowrite(curbuf.get(), false);
         }
         setpcmark();

@@ -12,6 +12,7 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::r#move::WinValid;
+use crate::undo::store::UndoStore;
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
@@ -198,9 +199,13 @@ pub struct file_buffer {
     pub b_did_filetype: bool,
     pub b_keep_filetype: bool,
     pub b_au_did_filetype: bool,
-    pub b_u_oldhead: *mut u_header_T,
-    pub b_u_newhead: *mut u_header_T,
-    pub b_u_curhead: *mut u_header_T,
+    /// Owns every header the three links below (and the tree they hang off)
+    /// name; NULL until the buffer's first undoable change. See
+    /// [`crate::undo::store`].
+    pub b_u_store: *mut UndoStore,
+    pub b_u_oldhead: UndoLink,
+    pub b_u_newhead: UndoLink,
+    pub b_u_curhead: UndoLink,
     pub b_u_numhead: ::core::ffi::c_int,
     pub b_u_synced: bool,
     pub b_u_seq_last: ::core::ffi::c_int,

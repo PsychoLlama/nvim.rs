@@ -32,7 +32,7 @@ const W_READONLY: *const c_char = c"W10: Warning: Changing a readonly file".as_p
 /// which can reload the buffer and even change `curbuf`.
 pub unsafe fn change_warning(buf: *mut buf_T, col: c_int) {
     unsafe {
-        if (*buf).b_did_warn || curbufIsChanged() || autocmd_busy.get() || (*buf).b_p_ro == 0 {
+        if (*buf).b_did_warn || curbuf_is_changed() || autocmd_busy.get() || (*buf).b_p_ro == 0 {
             return;
         }
         (*buf).b_ro_locked += 1;

@@ -78,7 +78,7 @@ use crate::types::{
     size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
-use crate::undo::bufIsChanged;
+use crate::undo::buf_is_changed;
 use crate::version::min_vim_version_name;
 use ::libc::{__errno_location, close, lseek, readlink, strcasecmp, strcmp, strcpy, strlen};
 
@@ -552,7 +552,7 @@ pub unsafe fn ml_close_notmod() {
     unsafe {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
-            if !bufIsChanged(buf) {
+            if !buf_is_changed(buf) {
                 ml_close(buf, 1);
             }
             buf = (*buf).b_next;

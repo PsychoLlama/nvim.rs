@@ -33,7 +33,7 @@ use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::syn_stack_free_all;
 use crate::types::{LineGetter, NUL, OP_NOP, cmdarg_T, linenr_T};
 use crate::ui::vim_beep;
-use crate::undo::anyBufIsChanged;
+use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
 use core::ffi::{c_int, c_uint};
 
@@ -281,7 +281,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
                 && !VIsual_active.get()
                 && no_reason
             {
-                let hint = if anyBufIsChanged() {
+                let hint = if any_buf_is_changed() {
                     c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
                 } else {
                     c"Type  :qa  and press <Enter> to exit Nvim"

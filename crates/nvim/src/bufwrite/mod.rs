@@ -58,7 +58,7 @@ use crate::types::{
     uv_uid_t, vim_acl_T,
 };
 use crate::ui::ui_flush;
-use crate::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
+use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close, strlen};
 
 // The carve of the transpiled module; see each child's docs.

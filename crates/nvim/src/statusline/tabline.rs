@@ -40,7 +40,7 @@ use crate::types::{
     tabpage_T, win_T,
 };
 use crate::ui::{ui_call_tabline_update, ui_has};
-use crate::undo::bufIsChanged;
+use crate::undo::buf_is_changed;
 use crate::window::tabline_height;
 
 /// The tab pages, in order. C spells this `FOR_ALL_TABS`.
@@ -271,7 +271,7 @@ unsafe fn draw_default_tabline() {
             if !win.w_config.focusable || win.w_config.hide {
                 wincount -= 1;
             // SAFETY: a live window's buffer.
-            } else if unsafe { bufIsChanged(win.buffer().raw()) } {
+            } else if unsafe { buf_is_changed(win.buffer().raw()) } {
                 modified = true;
             }
             wincount += 1;

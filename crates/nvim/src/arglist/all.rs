@@ -178,7 +178,7 @@ unsafe fn close_unused_window(
 ) -> *mut win_T {
     // SAFETY: caller contract; `buf` is the window's own buffer.
     let (hide, changed, nwindows) =
-        unsafe { (buf_hide(buf), bufIsChanged(buf), (*buf).b_nwindows) };
+        unsafe { (buf_hide(buf), buf_is_changed(buf), (*buf).b_nwindows) };
     if !(hide || aall.forceit || nwindows > 1 || !changed) {
         return wpnext;
     }
@@ -212,7 +212,7 @@ unsafe fn close_unused_window(
     // asked again here rather than reused from above: a successful
     // `autowrite` leaves it unchanged, and then it is the close's to free.
     unsafe {
-        win_close(wp, !buf_hide(buf) && !bufIsChanged(buf), false);
+        win_close(wp, !buf_hide(buf) && !buf_is_changed(buf), false);
         if win_valid(wpnext) {
             return wpnext;
         }
@@ -383,7 +383,7 @@ unsafe fn open_window_for_arg(
     // SAFETY: as above; `i` is an entry of the locked argument list.
     unsafe {
         let buf = (*curwin.get()).w_buffer;
-        let flags = flag_if(buf_hide(buf) || bufIsChanged(buf), ECMD_HIDE) | ECMD_OLDBUF as c_int;
+        let flags = flag_if(buf_hide(buf) || buf_is_changed(buf), ECMD_HIDE) | ECMD_OLDBUF as c_int;
         do_ecmd(
             0,
             alist_name(alist_arg(aall.alist, i)),

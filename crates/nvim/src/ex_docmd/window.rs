@@ -50,7 +50,7 @@ use crate::types::{
     CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CmdModFlags,
     FAIL, IOSIZE, NUL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
 };
-use crate::undo::bufIsChanged;
+use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
     tabpage_move, valid_tab, valid_win,
@@ -513,7 +513,7 @@ fn msg_iobuff(hl_id: c_int) {
 
 fn is_changed(buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { bufIsChanged(buf.raw()) }
+    unsafe { buf_is_changed(buf.raw()) }
 }
 
 // ---------------------------------------------------------------------------

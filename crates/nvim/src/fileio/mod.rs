@@ -88,7 +88,7 @@ use crate::types::{
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
-    bufIsChanged, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
+    buf_is_changed, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
 use ::libc::{

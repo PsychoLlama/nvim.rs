@@ -29,7 +29,7 @@ use crate::types::{
     CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, buf_T, bufref_T, cleanup_T, exarg_T, except_T,
     linenr_T, tabpage_T, win_T,
 };
-use crate::undo::bufIsChanged;
+use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tabpage_tp, lastwin_nofloating,
     tabline_height, tabpage_index, win_close, win_enter, win_locked, win_move_after, win_split,
@@ -140,7 +140,7 @@ fn global_stl_rows() -> c_int {
 
 fn buf_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { bufIsChanged(buf.raw()) }
+    unsafe { buf_is_changed(buf.raw()) }
 }
 
 fn buf_hidden(mut buf: Buf) -> bool {

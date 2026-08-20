@@ -157,9 +157,9 @@ pub(crate) unsafe fn serialize_header(mut bi: *mut bufinfo_T, mut hash: *mut uin
     }
     undo_write_bytes(bi, (*buf).b_u_line_lnum as uintmax_t, 4);
     undo_write_bytes(bi, (*buf).b_u_line_colnr as uintmax_t, 4);
-    put_header_ptr(bi, (*buf).b_u_oldhead);
-    put_header_ptr(bi, (*buf).b_u_newhead);
-    put_header_ptr(bi, (*buf).b_u_curhead);
+    put_header_link(bi, (*buf).b_u_oldhead);
+    put_header_link(bi, (*buf).b_u_newhead);
+    put_header_link(bi, (*buf).b_u_curhead);
     undo_write_bytes(bi, (*buf).b_u_numhead as uintmax_t, 4);
     undo_write_bytes(bi, (*buf).b_u_seq_last as uintmax_t, 4);
     undo_write_bytes(bi, (*buf).b_u_seq_cur as uintmax_t, 4);
@@ -180,10 +180,10 @@ pub(crate) unsafe fn serialize_uhp(mut bi: *mut bufinfo_T, mut uhp: *mut u_heade
     if !undo_write_bytes(bi, UF_HEADER_MAGIC as uintmax_t, 2) {
         return false;
     }
-    put_header_ptr(bi, (*uhp).uh_next.ptr);
-    put_header_ptr(bi, (*uhp).uh_prev.ptr);
-    put_header_ptr(bi, (*uhp).uh_alt_next.ptr);
-    put_header_ptr(bi, (*uhp).uh_alt_prev.ptr);
+    put_header_link(bi, (*uhp).uh_next);
+    put_header_link(bi, (*uhp).uh_prev);
+    put_header_link(bi, (*uhp).uh_alt_next);
+    put_header_link(bi, (*uhp).uh_alt_prev);
     undo_write_bytes(bi, (*uhp).uh_seq as uintmax_t, 4);
     serialize_pos(bi, (*uhp).uh_cursor);
     undo_write_bytes(bi, (*uhp).uh_cursor_vcol as uintmax_t, 4);
@@ -230,10 +230,10 @@ pub(crate) unsafe fn unserialize_uhp(
 ) -> *mut u_header_T {
     let mut uhp: *mut u_header_T = xmalloc(size_of::<u_header_T>()) as *mut u_header_T;
     memset(uhp as *mut c_void, 0, size_of::<u_header_T>());
-    (*uhp).uh_next.seq = undo_read_4c(bi);
-    (*uhp).uh_prev.seq = undo_read_4c(bi);
-    (*uhp).uh_alt_next.seq = undo_read_4c(bi);
-    (*uhp).uh_alt_prev.seq = undo_read_4c(bi);
+    (*uhp).uh_next = UndoLink::to_seq(undo_read_4c(bi));
+    (*uhp).uh_prev = UndoLink::to_seq(undo_read_4c(bi));
+    (*uhp).uh_alt_next = UndoLink::to_seq(undo_read_4c(bi));
+    (*uhp).uh_alt_prev = UndoLink::to_seq(undo_read_4c(bi));
     (*uhp).uh_seq = undo_read_4c(bi);
     if (*uhp).uh_seq <= 0 {
         corruption_error(c"uh_seq".as_ptr(), file_name);
@@ -520,16 +520,12 @@ pub(crate) unsafe fn undo_write_bytes(bi: *mut bufinfo_T, nr: uintmax_t, len: si
     let mut buf = encode_be(nr, len);
     undo_write(bi, buf.as_mut_ptr(), len)
 }
-pub(crate) unsafe fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: *mut u_header_T) {
-    debug_assert!(
-        uhp.is_null() || (*uhp).uh_seq >= 0,
-        "uhp == NULL || uhp->uh_seq >= 0"
-    );
-    undo_write_bytes(
-        bi,
-        (if !uhp.is_null() { (*uhp).uh_seq } else { 0 }) as uintmax_t,
-        4,
-    );
+/// Writes one link as the four big-endian bytes of the sequence number it
+/// already holds -- 0 for a link to nothing, which is what the reader takes
+/// it back as.
+pub(crate) unsafe fn put_header_link(bi: *mut bufinfo_T, link: UndoLink) {
+    debug_assert!(link.seq() >= 0, "an undo link is 0 or a sequence number");
+    undo_write_bytes(bi, link.seq() as uintmax_t, 4);
 }
 pub(crate) unsafe fn undo_read_4c(mut bi: *mut bufinfo_T) -> c_int {
     get4c((*bi).bi_fp)

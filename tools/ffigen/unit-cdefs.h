@@ -9,6 +9,7 @@ typedef struct Scrollback Scrollback;
 typedef struct SignTextAttrs SignTextAttrs;
 typedef struct TermKeyCsi TermKeyCsi;
 typedef struct TerminfoEntry TerminfoEntry;
+typedef struct UndoStore UndoStore;
 typedef struct VimMenu VimMenu;
 typedef struct VirtTextChunk VirtTextChunk;
 typedef struct alist_T alist_T;
@@ -48,6 +49,7 @@ typedef struct slang_S slang_S;
 typedef struct socket_watcher socket_watcher;
 typedef struct syn_state syn_state;
 typedef struct tabpage_S tabpage_S;
+typedef struct u_header u_header;
 typedef struct vim_exception vim_exception;
 typedef struct virt_line virt_line;
 typedef struct wbuffer wbuffer;
@@ -232,6 +234,7 @@ typedef union uv_timer_s_u uv_timer_s_u;
 typedef struct uv_timer_s uv_timer_s;
 typedef struct time_watcher time_watcher;
 typedef struct UIClientHandler UIClientHandler;
+typedef struct UndoLink UndoLink;
 typedef union mpack_data_t mpack_data_t;
 typedef struct mpack_value_s mpack_value_s;
 typedef union mpack_token_s_data mpack_token_s_data;
@@ -358,11 +361,6 @@ typedef struct stl_hlrec stl_hlrec;
 typedef union syn_state_sst_union syn_state_sst_union;
 typedef struct taggy_T taggy_T;
 typedef struct u_entry u_entry;
-typedef union u_header_uh_alt_next u_header_uh_alt_next;
-typedef union u_header_uh_alt_prev u_header_uh_alt_prev;
-typedef union u_header_uh_next u_header_uh_next;
-typedef union u_header_uh_prev u_header_uh_prev;
-typedef struct u_header u_header;
 typedef struct ufunc_S ufunc_S;
 typedef struct uv__work uv__work;
 typedef union uv_async_s_u uv_async_s_u;
@@ -688,7 +686,7 @@ typedef void (*terminal_write_cb)(const char *, size_t, void *);
 typedef void (*time_cb)(TimeWatcher *, void *);
 typedef long time_t;
 typedef struct u_entry u_entry_T;
-typedef struct u_header u_header_T;
+typedef u_header u_header_T;
 typedef unsigned int uid_t;
 typedef void (*uv__io_cb)(uv_loop_s *, uv__io_s *, unsigned int);
 typedef struct uv__io_s uv__io_t;
@@ -2055,6 +2053,9 @@ struct UIClientHandler {
   const char *name;
   void (*fn)(Array);
 };
+struct UndoLink {
+  int seq;
+};
 union mpack_data_t {
   void *p;
   mpack_uintmax_t u;
@@ -2673,9 +2674,10 @@ struct file_buffer {
   bool b_did_filetype;
   bool b_keep_filetype;
   bool b_au_did_filetype;
-  u_header_T *b_u_oldhead;
-  u_header_T *b_u_newhead;
-  u_header_T *b_u_curhead;
+  UndoStore *b_u_store;
+  UndoLink b_u_oldhead;
+  UndoLink b_u_newhead;
+  UndoLink b_u_curhead;
   int b_u_numhead;
   bool b_u_synced;
   int b_u_seq_last;
@@ -3372,40 +3374,6 @@ struct u_entry {
   linenr_T ue_lcount;
   char **ue_array;
   linenr_T ue_size;
-};
-union u_header_uh_alt_next {
-  u_header_T *ptr;
-  int seq;
-};
-union u_header_uh_alt_prev {
-  u_header_T *ptr;
-  int seq;
-};
-union u_header_uh_next {
-  u_header_T *ptr;
-  int seq;
-};
-union u_header_uh_prev {
-  u_header_T *ptr;
-  int seq;
-};
-struct u_header {
-  u_header_uh_next uh_next;
-  u_header_uh_prev uh_prev;
-  u_header_uh_alt_next uh_alt_next;
-  u_header_uh_alt_prev uh_alt_prev;
-  int uh_seq;
-  int uh_walk;
-  u_entry_T *uh_entry;
-  u_entry_T *uh_getbot_entry;
-  pos_T uh_cursor;
-  colnr_T uh_cursor_vcol;
-  int uh_flags;
-  fmark_T uh_namedm[26];
-  extmark_undo_vec_t uh_extmark;
-  visualinfo_T uh_visual;
-  time_t uh_time;
-  int uh_save_nr;
 };
 struct ufunc_S {
   int uf_varargs;

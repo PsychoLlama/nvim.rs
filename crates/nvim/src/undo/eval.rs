@@ -1,6 +1,7 @@
 //! `:undolist` and the `undofile()`/`undotree()` builtins.
 
 use super::file::*;
+use super::store::{cur_header, header_at, unwalked};
 use super::*;
 use crate::highlight_group::HLF_T;
 use crate::types::{VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
@@ -19,9 +20,9 @@ pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
         ga_data: ptr::null_mut(),
     };
     ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 20);
-    let mut uhp: *mut u_header_T = (*curbuf.get()).b_u_oldhead;
+    let mut uhp: *mut u_header_T = cur_header((*curbuf.get()).b_u_oldhead);
     while !uhp.is_null() {
-        if (*uhp).uh_prev.ptr.is_null() && (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark {
+        if (*uhp).uh_prev.is_none() && (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark {
             vim_snprintf(
                 IObuff.ptr() as *mut c_char,
                 IOSIZE as size_t,
@@ -51,30 +52,21 @@ pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
             ga.ga_len += 1;
         }
         (*uhp).uh_walk = mark;
-        if !(*uhp).uh_prev.ptr.is_null()
-            && (*(*uhp).uh_prev.ptr).uh_walk != nomark
-            && (*(*uhp).uh_prev.ptr).uh_walk != mark
-        {
-            uhp = (*uhp).uh_prev.ptr;
+        if unwalked(cur_header((*uhp).uh_prev), mark, nomark) {
+            uhp = cur_header((*uhp).uh_prev);
             changes += 1;
-        } else if !(*uhp).uh_alt_next.ptr.is_null()
-            && (*(*uhp).uh_alt_next.ptr).uh_walk != nomark
-            && (*(*uhp).uh_alt_next.ptr).uh_walk != mark
+        } else if unwalked(cur_header((*uhp).uh_alt_next), mark, nomark) {
+            uhp = cur_header((*uhp).uh_alt_next);
+        } else if (*uhp).uh_alt_prev.is_none() && unwalked(cur_header((*uhp).uh_next), mark, nomark)
         {
-            uhp = (*uhp).uh_alt_next.ptr;
-        } else if !(*uhp).uh_next.ptr.is_null()
-            && (*uhp).uh_alt_prev.ptr.is_null()
-            && (*(*uhp).uh_next.ptr).uh_walk != nomark
-            && (*(*uhp).uh_next.ptr).uh_walk != mark
-        {
-            uhp = (*uhp).uh_next.ptr;
+            uhp = cur_header((*uhp).uh_next);
             changes -= 1;
         } else {
             (*uhp).uh_walk = nomark;
-            if !(*uhp).uh_alt_prev.ptr.is_null() {
-                uhp = (*uhp).uh_alt_prev.ptr;
+            if (*uhp).uh_alt_prev.is_some() {
+                uhp = cur_header((*uhp).uh_alt_prev);
             } else {
-                uhp = (*uhp).uh_next.ptr;
+                uhp = cur_header((*uhp).uh_next);
                 changes -= 1;
             }
         }
@@ -103,9 +95,9 @@ pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
         ga_clear_strings(&raw mut ga);
     };
 }
-pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) -> *mut list_T {
+pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first: UndoLink) -> *mut list_T {
     let list: *mut list_T = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
-    let mut uhp: *const u_header_T = first_uhp;
+    let mut uhp: *const u_header_T = header_at(buf, first);
     while !uhp.is_null() {
         let dict: *mut dict_T = tv_dict_alloc();
         tv_dict_add_nr(
@@ -120,7 +112,7 @@ pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
             size_of::<[c_char; 5]>().wrapping_sub(1),
             (*uhp).uh_time as varnumber_T,
         );
-        if core::ptr::eq(uhp, (*buf).b_u_newhead) {
+        if (*uhp).uh_seq == (*buf).b_u_newhead.seq() {
             tv_dict_add_nr(
                 dict,
                 c"newhead".as_ptr(),
@@ -128,7 +120,7 @@ pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
                 1 as varnumber_T,
             );
         }
-        if core::ptr::eq(uhp, (*buf).b_u_curhead) {
+        if (*uhp).uh_seq == (*buf).b_u_curhead.seq() {
             tv_dict_add_nr(
                 dict,
                 c"curhead".as_ptr(),
@@ -144,16 +136,16 @@ pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
                 (*uhp).uh_save_nr as varnumber_T,
             );
         }
-        if !(*uhp).uh_alt_next.ptr.is_null() {
+        if (*uhp).uh_alt_next.is_some() {
             tv_dict_add_list(
                 dict,
                 c"alt".as_ptr(),
                 size_of::<[c_char; 4]>().wrapping_sub(1),
-                u_eval_tree(buf, (*uhp).uh_alt_next.ptr),
+                u_eval_tree(buf, (*uhp).uh_alt_next),
             );
         }
         tv_list_append_dict(list, dict);
-        uhp = (*uhp).uh_prev.ptr;
+        uhp = header_at(buf, (*uhp).uh_prev);
     }
     list
 }
@@ -235,16 +227,16 @@ pub unsafe fn f_undotree(
 }
 pub unsafe fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_header_T {
     let mut uhp: *mut u_header_T = ptr::null_mut();
-    if !(*buf).b_u_curhead.is_null() {
-        uhp = (*buf).b_u_curhead;
-    } else if !(*buf).b_u_newhead.is_null() {
-        uhp = (*buf).b_u_newhead;
+    if (*buf).b_u_curhead.is_some() {
+        uhp = header_at(buf, (*buf).b_u_curhead);
+    } else if (*buf).b_u_newhead.is_some() {
+        uhp = header_at(buf, (*buf).b_u_newhead);
     }
     if uhp.is_null() {
         u_savecommon(buf, 0, 1, 1, true);
-        uhp = (*buf).b_u_curhead;
+        uhp = header_at(buf, (*buf).b_u_curhead);
         if uhp.is_null() {
-            uhp = (*buf).b_u_newhead;
+            uhp = header_at(buf, (*buf).b_u_newhead);
             if get_undolevel(buf) > 0 && uhp.is_null() {
                 abort();
             }

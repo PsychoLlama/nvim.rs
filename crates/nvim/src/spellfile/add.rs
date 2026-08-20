@@ -50,7 +50,7 @@ use crate::types::{
     FILE, MAXPATHL, NUL, OptVal, OptValData, OptionSetFlags, SpellAddType, buf_T, int32_t, langp_T,
     size_t, uint8_t,
 };
-use crate::undo::bufIsChanged;
+use crate::undo::buf_is_changed;
 use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror, strlen};
 
 use super::wordtree::valid_spell_word;
@@ -137,7 +137,7 @@ pub unsafe fn spell_add_word(
             if !buf.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                 buf = core::ptr::null_mut();
             }
-            if !buf.is_null() && bufIsChanged(buf) {
+            if !buf.is_null() && buf_is_changed(buf) {
                 emsg(gettext(&raw const e_bufloaded as *const c_char));
                 xfree(fnamebuf as *mut c_void);
                 return;

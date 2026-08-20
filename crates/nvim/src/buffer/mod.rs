@@ -68,7 +68,7 @@ use crate::types::{
     dobuf_action_values, dobuf_start_values, etype_T, event_T, exarg_T, getf_values, linenr_T,
     ptr_t, uint32_t, varnumber_T,
 };
-use crate::undo::bufIsChanged;
+use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
 use crate::winlayer::{Buf, Win};
 
@@ -573,7 +573,7 @@ pub(crate) fn set_pcmark() {
 /// Whether `buf` has unsaved changes.
 pub(crate) fn is_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { bufIsChanged(buf.raw()) }
+    unsafe { buf_is_changed(buf.raw()) }
 }
 
 /// `semsg(fmt, n)`, for the three errors that name a buffer number.

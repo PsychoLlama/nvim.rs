@@ -22,13 +22,65 @@ pub struct u_entry {
     pub ue_size: linenr_T,
 }
 pub type u_entry_T = u_entry;
-#[derive(Copy, Clone)]
+
+/// A link from one undo header to another, or to nothing.
+///
+/// The link *is* the target header's `uh_seq`, which is also exactly what the
+/// undo file stores: `put_header_ptr` writes this number and
+/// `unserialize_uhp` reads it straight back. In-memory the number is resolved
+/// against the buffer's `UndoStore`, which is keyed by the same number, so
+/// there is one representation instead of the "sequence number on disk,
+/// pointer in memory" union this type replaced.
+///
+/// Sequence numbers a buffer hands out start at 1 (`b_u_seq_last` is
+/// pre-incremented) and a header read from a file with `uh_seq <= 0` is
+/// rejected as corrupt, so **zero is free to mean "no link"** and every
+/// `UndoLink` this type builds is either zero or positive.
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Hash)]
 #[repr(C)]
+pub struct UndoLink {
+    /// The target's `uh_seq`, or 0 for no target.
+    seq: ::core::ffi::c_int,
+}
+
+impl UndoLink {
+    /// No target: what a NULL `uh_*` pointer used to be, and the 0 the undo
+    /// file carries for one.
+    pub const NONE: Self = Self { seq: 0 };
+
+    /// The link naming sequence number `seq`.
+    ///
+    /// Anything that is not a number a buffer could have handed out — zero
+    /// and the negatives — is [`NONE`](Self::NONE), which is how a corrupt
+    /// undo file's link field lands as "no link" rather than as a wild
+    /// lookup.
+    pub const fn to_seq(seq: ::core::ffi::c_int) -> Self {
+        if seq > 0 { Self { seq } } else { Self::NONE }
+    }
+
+    /// The sequence number this link names, or 0. This is the number that
+    /// goes into the undo file.
+    pub const fn seq(self) -> ::core::ffi::c_int {
+        self.seq
+    }
+
+    /// Whether the link names no header at all.
+    pub const fn is_none(self) -> bool {
+        self.seq == 0
+    }
+
+    /// Whether the link names some header.
+    pub const fn is_some(self) -> bool {
+        self.seq != 0
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct u_header {
-    pub uh_next: u_header_uh_next,
-    pub uh_prev: u_header_uh_prev,
-    pub uh_alt_next: u_header_uh_alt_next,
-    pub uh_alt_prev: u_header_uh_alt_prev,
+    pub uh_next: UndoLink,
+    pub uh_prev: UndoLink,
+    pub uh_alt_next: UndoLink,
+    pub uh_alt_prev: UndoLink,
     pub uh_seq: ::core::ffi::c_int,
     pub uh_walk: ::core::ffi::c_int,
     pub uh_entry: *mut u_entry_T,
@@ -43,30 +95,6 @@ pub struct u_header {
     pub uh_save_nr: ::core::ffi::c_int,
 }
 pub type u_header_T = u_header;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union u_header_uh_alt_next {
-    pub ptr: *mut u_header_T,
-    pub seq: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union u_header_uh_alt_prev {
-    pub ptr: *mut u_header_T,
-    pub seq: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union u_header_uh_next {
-    pub ptr: *mut u_header_T,
-    pub seq: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union u_header_uh_prev {
-    pub ptr: *mut u_header_T,
-    pub seq: ::core::ffi::c_int,
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct visualinfo_T {

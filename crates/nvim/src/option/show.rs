@@ -43,7 +43,7 @@ use crate::types::{
     uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
-use crate::undo::curbufIsChanged;
+use crate::undo::curbuf_is_changed;
 use ::libc::{fprintf, fputs, strlen};
 
 use super::{
@@ -204,7 +204,7 @@ pub(crate) unsafe fn showoneopt(opt: *mut vimoption_T, opt_flags: OptionSetFlags
         // variable worth reading either; the undo state decides.
         let is_off = || {
             if varp.cast::<c_int>() == &raw mut (*curbuf.get()).b_changed {
-                !curbufIsChanged()
+                !curbuf_is_changed()
             } else {
                 *varp.cast::<c_int>() == 0
             }

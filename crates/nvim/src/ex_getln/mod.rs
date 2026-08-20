@@ -148,20 +148,20 @@ use crate::types::{
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
     ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
     OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, RemapValues, Set_ptr_t, String_0, TryState, UndoObjectType,
-    VimState, aco_save_T, buf_T, bufref_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T,
-    dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T,
-    handle_T, hashitem_T, hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T,
-    msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T,
-    regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
-    typval_vval_union, u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
-    xp_prefix_T,
+    ParserPosition, ParserState, RemapValues, Set_ptr_t, String_0, TryState, UndoLink,
+    UndoObjectType, VimState, aco_save_T, buf_T, bufref_T, cmdmod_T, colnr_T, cstack_T, dict_T,
+    disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T, expand_T,
+    garray_T, handle_T, hashitem_T, hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T,
+    magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
+    regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t,
+    typval_T, typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
     ui_call_cmdline_block_show, ui_call_cmdline_hide, ui_call_cmdline_pos, ui_call_cmdline_show,
     ui_call_cmdline_special_char, ui_cursor_shape, ui_flush, ui_has, vim_beep,
 };
+use crate::undo::store::header_chain;
 use crate::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};
 use crate::viml::parser::expressions::{viml_pexpr_free_ast, viml_pexpr_parse};
@@ -376,9 +376,9 @@ pub struct CpBufInfo {
 }
 #[derive(Copy, Clone)]
 pub struct CpUndoInfo {
-    pub save_b_u_oldhead: *mut u_header_T,
-    pub save_b_u_newhead: *mut u_header_T,
-    pub save_b_u_curhead: *mut u_header_T,
+    pub save_b_u_oldhead: UndoLink,
+    pub save_b_u_newhead: UndoLink,
+    pub save_b_u_curhead: UndoLink,
     pub save_b_u_numhead: ::core::ffi::c_int,
     pub save_b_u_synced: bool,
     pub save_b_u_seq_last: ::core::ffi::c_int,
@@ -697,9 +697,9 @@ pub(crate) const CMD_PARSE_INFO_INIT: CmdParseInfo = CmdParseInfo {
 
 /// An all-zero [`CpUndoInfo`], which `cmdpreview_save_undo` fills.
 pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
-    save_b_u_oldhead: ::core::ptr::null_mut::<u_header_T>(),
-    save_b_u_newhead: ::core::ptr::null_mut::<u_header_T>(),
-    save_b_u_curhead: ::core::ptr::null_mut::<u_header_T>(),
+    save_b_u_oldhead: UndoLink::NONE,
+    save_b_u_newhead: UndoLink::NONE,
+    save_b_u_curhead: UndoLink::NONE,
     save_b_u_numhead: 0,
     save_b_u_synced: false,
     save_b_u_seq_last: 0,

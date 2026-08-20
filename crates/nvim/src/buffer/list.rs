@@ -52,7 +52,7 @@ use crate::types::{
     event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, pos_T, ptr_t, regprog_T,
     size_t, uint64_t,
 };
-use crate::undo::curbufIsChanged;
+use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
 use crate::winlayer::{Buf, Win, windows};
 use ::libc::strlen;
@@ -488,7 +488,7 @@ pub unsafe fn curbuf_reusable() -> bool {
         && buf.terminal.is_null()
         && empty
         && !unsafe { bt_quickfix(buf.raw()) }
-        && !unsafe { curbufIsChanged() }
+        && !unsafe { curbuf_is_changed() }
 }
 
 // ---------------------------------------------------------------------------

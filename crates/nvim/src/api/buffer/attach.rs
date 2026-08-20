@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
+use crate::undo::store::header_at;
 
 pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
     unsafe {
@@ -180,10 +181,10 @@ pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<Dict, Er
             Object::integer(buf_meta_total(b, kMTMetaLines) as Integer),
         );
         let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
-        if !(*b).b_u_curhead.is_null() {
-            uhp = (*b).b_u_curhead;
-        } else if !(*b).b_u_newhead.is_null() {
-            uhp = (*b).b_u_newhead;
+        if (*b).b_u_curhead.is_some() {
+            uhp = header_at(b, (*b).b_u_curhead);
+        } else if (*b).b_u_newhead.is_some() {
+            uhp = header_at(b, (*b).b_u_newhead);
         }
         if !uhp.is_null() {
             dict_put(

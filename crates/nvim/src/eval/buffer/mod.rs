@@ -70,7 +70,7 @@ use crate::types::*;
 use ::libc::{strcmp, strlen};
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const ML_DEL_MESSAGE: c_uint = 1;
-use crate::undo::{bufIsChanged, u_clearallandblockfree, u_save, u_savesub, u_sync};
+use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
 use crate::winlayer::{Win, tab_windows};
 /// The editor state `change_other_buffer_prepare` saves so that
 /// `change_other_buffer_restore` can put it back.

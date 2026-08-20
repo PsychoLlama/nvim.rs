@@ -96,9 +96,11 @@ mod eval;
 mod file;
 pub mod format;
 mod read;
+pub mod store;
 mod tree;
 mod write;
 
+use store::{header_adopt, header_at, header_chain};
 use tree::*;
 
 pub use apply::{u_redo, u_undo, u_undo_and_forget, undo_time};
@@ -236,60 +238,66 @@ pub unsafe fn u_savecommon(
     let mut size: linenr_T = bot - top - 1;
     if (*buf).b_u_synced {
         (*buf).b_new_change = true;
+        // The sequence number is the header's name, so it has to be handed
+        // out and the header handed to the store *before* anything can link
+        // to it. The transpiled code did this at the end, when a link was a
+        // pointer and the number was only for the undo file.
         let mut uhp: *mut u_header_T = ptr::null_mut();
+        let mut uhp_link = UndoLink::NONE;
         if get_undolevel(buf) >= 0 {
             uhp = xmalloc(size_of::<u_header_T>()) as *mut u_header_T;
             (*uhp).uh_extmark.capacity = 0;
             (*uhp).uh_extmark.size = (*uhp).uh_extmark.capacity;
             (*uhp).uh_extmark.items = ptr::null_mut();
-        } else {
-            uhp = ptr::null_mut();
+            (*buf).b_u_seq_last += 1;
+            (*uhp).uh_seq = (*buf).b_u_seq_last;
+            uhp_link = header_adopt(buf, uhp);
         }
-        let mut old_curhead: *mut u_header_T = (*buf).b_u_curhead;
-        if !old_curhead.is_null() {
-            (*buf).b_u_newhead = (*old_curhead).uh_next.ptr;
-            (*buf).b_u_curhead = ptr::null_mut();
+        let mut old_curhead: UndoLink = (*buf).b_u_curhead;
+        if old_curhead.is_some() {
+            (*buf).b_u_newhead = (*header_at(buf, old_curhead)).uh_next;
+            (*buf).b_u_curhead = UndoLink::NONE;
         }
-        while (*buf).b_u_numhead as OptInt > get_undolevel(buf) && !(*buf).b_u_oldhead.is_null() {
-            let mut uhfree: *mut u_header_T = (*buf).b_u_oldhead;
-            if uhfree == old_curhead {
-                u_freebranch(buf, uhfree, &raw mut old_curhead);
-            } else if (*uhfree).uh_alt_next.ptr.is_null() {
-                u_freeheader(buf, uhfree, &raw mut old_curhead);
+        while (*buf).b_u_numhead as OptInt > get_undolevel(buf) && (*buf).b_u_oldhead.is_some() {
+            let oldest: *mut u_header_T = header_at(buf, (*buf).b_u_oldhead);
+            if (*buf).b_u_oldhead == old_curhead {
+                u_freebranch(buf, oldest, &raw mut old_curhead);
+            } else if (*oldest).uh_alt_next.is_none() {
+                u_freeheader(buf, oldest, &raw mut old_curhead);
             } else {
-                while !(*uhfree).uh_alt_next.ptr.is_null() {
-                    uhfree = (*uhfree).uh_alt_next.ptr;
-                }
-                u_freebranch(buf, uhfree, &raw mut old_curhead);
+                // The far end of the oldest header's alternate chain.
+                let uhfree = header_chain(buf, (*buf).b_u_oldhead, |uh| uh.uh_alt_next).last();
+                u_freebranch(buf, uhfree.unwrap_or(oldest), &raw mut old_curhead);
             }
         }
         if uhp.is_null() {
-            if !old_curhead.is_null() {
-                u_freebranch(buf, old_curhead, ptr::null_mut());
+            if old_curhead.is_some() {
+                u_freebranch(buf, header_at(buf, old_curhead), ptr::null_mut());
             }
             (*buf).b_u_synced = false;
             return OK;
         }
-        (*uhp).uh_prev.ptr = ptr::null_mut();
-        (*uhp).uh_next.ptr = (*buf).b_u_newhead;
-        (*uhp).uh_alt_next.ptr = old_curhead;
-        if !old_curhead.is_null() {
-            (*uhp).uh_alt_prev.ptr = (*old_curhead).uh_alt_prev.ptr;
-            if !(*uhp).uh_alt_prev.ptr.is_null() {
-                (*(*uhp).uh_alt_prev.ptr).uh_alt_next.ptr = uhp;
+        (*uhp).uh_prev = UndoLink::NONE;
+        (*uhp).uh_next = (*buf).b_u_newhead;
+        (*uhp).uh_alt_next = old_curhead;
+        if old_curhead.is_some() {
+            let old_curhead_p: *mut u_header_T = header_at(buf, old_curhead);
+            (*uhp).uh_alt_prev = (*old_curhead_p).uh_alt_prev;
+            let alt_prev: *mut u_header_T = header_at(buf, (*uhp).uh_alt_prev);
+            if !alt_prev.is_null() {
+                (*alt_prev).uh_alt_next = uhp_link;
             }
-            (*old_curhead).uh_alt_prev.ptr = uhp;
+            (*old_curhead_p).uh_alt_prev = uhp_link;
             if (*buf).b_u_oldhead == old_curhead {
-                (*buf).b_u_oldhead = uhp;
+                (*buf).b_u_oldhead = uhp_link;
             }
         } else {
-            (*uhp).uh_alt_prev.ptr = ptr::null_mut();
+            (*uhp).uh_alt_prev = UndoLink::NONE;
         }
-        if !(*buf).b_u_newhead.is_null() {
-            (*(*buf).b_u_newhead).uh_prev.ptr = uhp;
+        let newhead: *mut u_header_T = header_at(buf, (*buf).b_u_newhead);
+        if !newhead.is_null() {
+            (*newhead).uh_prev = uhp_link;
         }
-        (*buf).b_u_seq_last += 1;
-        (*uhp).uh_seq = (*buf).b_u_seq_last;
         (*buf).b_u_seq_cur = (*uhp).uh_seq;
         (*uhp).uh_time = time(ptr::null_mut());
         (*uhp).uh_save_nr = 0;
@@ -319,9 +327,9 @@ pub unsafe fn u_savecommon(
             size_of::<fmark_T>().wrapping_mul(NMARKS as size_t),
         );
         (*uhp).uh_visual = (*buf).b_visual;
-        (*buf).b_u_newhead = uhp;
-        if (*buf).b_u_oldhead.is_null() {
-            (*buf).b_u_oldhead = uhp;
+        (*buf).b_u_newhead = uhp_link;
+        if (*buf).b_u_oldhead.is_none() {
+            (*buf).b_u_oldhead = uhp_link;
         }
         (*buf).b_u_numhead += 1;
     } else {
@@ -331,12 +339,13 @@ pub unsafe fn u_savecommon(
         if size == 1 {
             uep = u_get_headentry(buf);
             prev_uep = ptr::null_mut();
+            let newhead: *mut u_header_T = header_at(buf, (*buf).b_u_newhead);
             let mut i: c_int = 0;
             while i < 10 {
                 if uep.is_null() {
                     break;
                 }
-                if (if (*(*buf).b_u_newhead).uh_getbot_entry != uep {
+                if (if (*newhead).uh_getbot_entry != uep {
                     ((*uep).ue_top + (*uep).ue_size + 1
                         != (if (*uep).ue_bot == 0 {
                             (*buf).b_ml.ml_line_count + 1
@@ -357,8 +366,8 @@ pub unsafe fn u_savecommon(
                         u_getbot(buf);
                         (*buf).b_u_synced = false;
                         (*prev_uep).ue_next = (*uep).ue_next;
-                        (*uep).ue_next = (*(*buf).b_u_newhead).uh_entry;
-                        (*(*buf).b_u_newhead).uh_entry = uep;
+                        (*uep).ue_next = (*newhead).uh_entry;
+                        (*newhead).uh_entry = uep;
                     }
                     if newbot != 0 {
                         (*uep).ue_bot = newbot;
@@ -366,7 +375,7 @@ pub unsafe fn u_savecommon(
                         (*uep).ue_bot = 0;
                     } else {
                         (*uep).ue_lcount = (*buf).b_ml.ml_line_count;
-                        (*(*buf).b_u_newhead).uh_getbot_entry = uep;
+                        (*newhead).uh_getbot_entry = uep;
                     }
                     return OK;
                 }
@@ -381,13 +390,14 @@ pub unsafe fn u_savecommon(
     memset(uep as *mut c_void, 0, size_of::<u_entry_T>());
     (*uep).ue_size = size;
     (*uep).ue_top = top;
+    let newhead: *mut u_header_T = header_at(buf, (*buf).b_u_newhead);
     if newbot != 0 {
         (*uep).ue_bot = newbot;
     } else if bot > (*buf).b_ml.ml_line_count {
         (*uep).ue_bot = 0;
     } else {
         (*uep).ue_lcount = (*buf).b_ml.ml_line_count;
-        (*(*buf).b_u_newhead).uh_getbot_entry = uep;
+        (*newhead).uh_getbot_entry = uep;
     }
     if size > 0 {
         (*uep).ue_array =
@@ -410,10 +420,10 @@ pub unsafe fn u_savecommon(
     } else {
         (*uep).ue_array = ptr::null_mut();
     }
-    (*uep).ue_next = (*(*buf).b_u_newhead).uh_entry;
-    (*(*buf).b_u_newhead).uh_entry = uep;
+    (*uep).ue_next = (*newhead).uh_entry;
+    (*newhead).uh_entry = uep;
     if reload {
-        (*(*buf).b_u_newhead).uh_flags |= UH_RELOAD as c_int;
+        (*newhead).uh_flags |= UH_RELOAD;
     }
     (*buf).b_u_synced = false;
     undo_undoes.set(false);
@@ -454,14 +464,14 @@ pub unsafe fn u_sync(mut force: bool) {
         (*curbuf.get()).b_u_synced = true;
     } else {
         u_getbot(curbuf.get());
-        (*curbuf.get()).b_u_curhead = ptr::null_mut();
+        (*curbuf.get()).b_u_curhead = UndoLink::NONE;
     };
 }
 pub unsafe fn ex_undojoin(mut _eap: *mut exarg_T) {
-    if (*curbuf.get()).b_u_newhead.is_null() {
+    if (*curbuf.get()).b_u_newhead.is_none() {
         return;
     }
-    if !(*curbuf.get()).b_u_curhead.is_null() {
+    if (*curbuf.get()).b_u_curhead.is_some() {
         emsg(gettext(
             c"E790: undojoin is not allowed after undo".as_ptr(),
         ));
@@ -476,12 +486,12 @@ pub unsafe fn ex_undojoin(mut _eap: *mut exarg_T) {
     (*curbuf.get()).b_u_synced = false;
 }
 pub unsafe fn u_unchanged(mut buf: *mut buf_T) {
-    u_unch_branch((*buf).b_u_oldhead);
+    u_unch_branch(buf, (*buf).b_u_oldhead);
     (*buf).b_did_warn = false;
 }
 pub unsafe fn u_find_first_changed() {
-    let mut uhp: *mut u_header_T = (*curbuf.get()).b_u_newhead;
-    if !(*curbuf.get()).b_u_curhead.is_null() || uhp.is_null() {
+    let uhp: *mut u_header_T = header_at(curbuf.get(), (*curbuf.get()).b_u_newhead);
+    if (*curbuf.get()).b_u_curhead.is_some() || uhp.is_null() {
         return;
     }
     let mut uep: *mut u_entry_T = (*uhp).uh_entry;
@@ -510,33 +520,35 @@ pub unsafe fn u_find_first_changed() {
 pub unsafe fn u_update_save_nr(mut buf: *mut buf_T) {
     (*buf).b_u_save_nr_last += 1;
     (*buf).b_u_save_nr_cur = (*buf).b_u_save_nr_last;
-    let mut uhp: *mut u_header_T = (*buf).b_u_curhead;
-    if !uhp.is_null() {
-        uhp = (*uhp).uh_next.ptr;
+    let curhead: *mut u_header_T = header_at(buf, (*buf).b_u_curhead);
+    let uhp: *mut u_header_T = if !curhead.is_null() {
+        header_at(buf, (*curhead).uh_next)
     } else {
-        uhp = (*buf).b_u_newhead;
-    }
+        header_at(buf, (*buf).b_u_newhead)
+    };
     if !uhp.is_null() {
         (*uhp).uh_save_nr = (*buf).b_u_save_nr_last;
     }
 }
-pub unsafe fn bufIsChanged(mut buf: *mut buf_T) -> bool {
-    (if bt_prompt(buf) {
-        (*buf).b_modified_was_set as c_int
-    } else {
-        (!bt_dontwrite(buf) && ((*buf).b_changed != 0 || file_ff_differs(buf, true))) as c_int
-    } != 0)
+/// Whether `buf` holds changes that writing it out would save.
+pub unsafe fn buf_is_changed(mut buf: *mut buf_T) -> bool {
+    if bt_prompt(buf) {
+        return (*buf).b_modified_was_set;
+    }
+    !bt_dontwrite(buf) && ((*buf).b_changed != 0 || file_ff_differs(buf, true))
 }
-pub unsafe fn anyBufIsChanged() -> bool {
+/// Whether any buffer at all holds unsaved changes.
+pub unsafe fn any_buf_is_changed() -> bool {
     let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
-        if bufIsChanged(buf) {
+        if buf_is_changed(buf) {
             return true;
         }
         buf = (*buf).b_next;
     }
     false
 }
-pub unsafe fn curbufIsChanged() -> bool {
-    bufIsChanged(curbuf.get())
+/// [`buf_is_changed`] for the current buffer.
+pub unsafe fn curbuf_is_changed() -> bool {
+    buf_is_changed(curbuf.get())
 }

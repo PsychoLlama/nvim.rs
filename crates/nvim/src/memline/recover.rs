@@ -803,7 +803,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                 ml_flush_line(buf, false); // flush the buffered line
                 ml_find_line(buf, 0, ML_FLUSH as c_int); // flush the locked block
 
-                if bufIsChanged(buf)
+                if buf_is_changed(buf)
                     && check_file != 0
                     && mf_need_trans((*buf).b_ml.ml_mfp)
                     && !(*buf).b_ffname.is_null()
@@ -831,7 +831,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                             MFS_STOP as c_int
                         } else {
                             0
-                        }) | (if do_fsync && bufIsChanged(buf) {
+                        }) | (if do_fsync && buf_is_changed(buf) {
                             MFS_FLUSH as c_int
                         } else {
                             0

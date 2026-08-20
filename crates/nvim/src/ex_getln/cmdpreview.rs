@@ -164,7 +164,7 @@ pub(crate) unsafe fn cmdpreview_restore_undo(cp_undoinfo: *const CpUndoInfo, buf
         (*buf).b_u_line_ptr = (*cp_undoinfo).save_b_u_line_ptr;
         (*buf).b_u_line_lnum = (*cp_undoinfo).save_b_u_line_lnum;
         (*buf).b_u_line_colnr = (*cp_undoinfo).save_b_u_line_colnr;
-        if (*buf).b_u_curhead.is_null() {
+        if (*buf).b_u_curhead.is_none() {
             (*buf).b_u_synced = (*cp_undoinfo).save_b_u_synced;
         }
     }
@@ -295,15 +295,12 @@ pub(crate) unsafe fn cmdpreview_restore_state(cpinfo: *mut CpInfo) {
             // Undo all the changes the preview made to this buffer.
             if (*buf).b_u_seq_cur != cp_bufinfo.undo_info.save_b_u_seq_cur {
                 let mut count = 0;
-                let mut uhp = if !(*buf).b_u_curhead.is_null() {
+                let start = if (*buf).b_u_curhead.is_some() {
                     (*buf).b_u_curhead
                 } else {
                     (*buf).b_u_newhead
                 };
-                while !uhp.is_null() {
-                    uhp = (*uhp).uh_next.ptr;
-                    count += 1;
-                }
+                count = header_chain(buf, start, |uh| uh.uh_next).count() as ::core::ffi::c_int;
 
                 let mut aco = aco_save_T::default();
                 aucmd_prepbuf(&raw mut aco, buf);

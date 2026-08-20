@@ -65,6 +65,7 @@ use crate::types::{
     ssize_t, uint8_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
+use crate::undo::store::header_chain;
 use crate::undo::{u_clearline, u_redo, u_undo, u_undo_and_forget, undo_time};
 use ::libc::strlen;
 
@@ -494,14 +495,18 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
             return;
         }
         // Count how many states back `step` is along this branch.
-        let mut uhp = if (*curbuf.get()).b_u_curhead.is_null() {
+        let start = if (*curbuf.get()).b_u_curhead.is_none() {
             (*curbuf.get()).b_u_newhead
         } else {
             (*curbuf.get()).b_u_curhead
         };
         let mut count = 0;
-        while !uhp.is_null() && (*uhp).uh_seq as linenr_T > step {
-            uhp = (*uhp).uh_next.ptr;
+        let mut uhp = ::core::ptr::null_mut();
+        for header in header_chain(curbuf.get(), start, |uh| uh.uh_next) {
+            if (*header).uh_seq as linenr_T <= step {
+                uhp = header;
+                break;
+            }
             count += 1;
         }
         // Running past it, or off the end, means `step` is on another

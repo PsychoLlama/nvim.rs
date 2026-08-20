@@ -83,7 +83,7 @@ use crate::types::{
     MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VAR_UNLOCKED, Vv, colnr_T, int64_t, linenr_T,
     schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, varnumber_T, win_T,
 };
-use crate::undo::bufIsChanged;
+use crate::undo::buf_is_changed;
 use crate::winlayer::{Buf, Win};
 use ::libc::{atoi, toupper};
 
@@ -297,7 +297,7 @@ impl Env {
     /// `%m`/`%M`: whether the buffer has unsaved changes.
     pub fn is_changed(&self) -> bool {
         // SAFETY: a live buffer.
-        unsafe { bufIsChanged(self.buf.raw()) }
+        unsafe { buf_is_changed(self.buf.raw()) }
     }
 
     /// `%b`/`%B`: the character under the cursor, with the line ending the

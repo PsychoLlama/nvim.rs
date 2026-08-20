@@ -52,7 +52,7 @@ use crate::types::{
     size_t, time_t, win_T,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
-use crate::undo::{bufIsChanged, curbufIsChanged, undo_fmt_time};
+use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
 use crate::winlayer::{Buf, Win, buffers};
 use ::libc::{qsort, strcmp, strcpy, strlen};
 
@@ -98,7 +98,7 @@ fn has_flag(arg: *const c_char, c: u8) -> bool {
 
 fn buf_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { bufIsChanged(buf.raw()) }
+    unsafe { buf_is_changed(buf.raw()) }
 }
 
 /// Whether `buf`'s terminal, if it has one, still has a job attached.
@@ -482,7 +482,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
 
 fn curbuf_changed() -> bool {
     // SAFETY: reads the current buffer's undo state.
-    unsafe { curbufIsChanged() }
+    unsafe { curbuf_is_changed() }
 }
 
 fn percentage(part: linenr_T, whole: linenr_T) -> c_int {

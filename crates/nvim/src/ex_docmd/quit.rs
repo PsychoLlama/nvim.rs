@@ -41,7 +41,7 @@ use crate::types::{
     tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
-use crate::undo::{bufIsChanged, curbufIsChanged};
+use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::{
     close_others, find_tabpage, goto_tabpage, only_one_window, tabpage_index, trigger_tabclosedpre,
     valid_tabpage, win_close, win_close_othertab, win_goto, win_valid, window_layout_locked,
@@ -344,14 +344,14 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) 
 
         let buf = (*win).w_buffer;
         // Only the last window on a changed buffer has to ask.
-        let mut need_hide = bufIsChanged(buf) && (*buf).b_nwindows <= 1;
+        let mut need_hide = buf_is_changed(buf) && (*buf).b_nwindows <= 1;
         if need_hide && !buf_hide(buf) && forceit == 0 {
             if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
                 let mut bufref: bufref_T = core::mem::zeroed();
                 set_bufref(&raw mut bufref, buf);
                 dialog_changed(buf, false);
                 // The dialog may have wiped the buffer, or written it.
-                if bufref_valid(&raw mut bufref) && bufIsChanged(buf) {
+                if bufref_valid(&raw mut bufref) && buf_is_changed(buf) {
                     return;
                 }
                 need_hide = false;
@@ -604,7 +604,8 @@ pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
             exiting.set(true);
         }
         // `:wq` always writes; `:x` only writes a changed buffer.
-        if ((*eap).cmdidx as c_int == CMD_wq as c_int || curbufIsChanged()) && do_write(eap) == FAIL
+        if ((*eap).cmdidx as c_int == CMD_wq as c_int || curbuf_is_changed())
+            && do_write(eap) == FAIL
             || before_quit_autocmds(curwin.get(), false, (*eap).forceit != 0)
             || check_more(true, (*eap).forceit != 0) == FAIL
             || only_one_window() && check_changed_any((*eap).forceit != 0, false)

@@ -2,6 +2,7 @@
 
 use super::file::*;
 use super::format::*;
+use super::store::{header_at, unwalked};
 use super::*;
 use crate::{semsg_c, smsg_c};
 
@@ -279,7 +280,7 @@ pub unsafe fn u_write_undo(
                         if serialize_header(&raw mut bi, hash) {
                             (*lastmark.ptr()) += 1;
                             mark = lastmark.get();
-                            uhp = (*buf).b_u_oldhead;
+                            uhp = header_at(buf, (*buf).b_u_oldhead);
                             while !uhp.is_null() {
                                 if (*uhp).uh_walk != mark {
                                     (*uhp).uh_walk = mark;
@@ -287,23 +288,19 @@ pub unsafe fn u_write_undo(
                                         break '_write_error;
                                     }
                                 }
-                                if !(*uhp).uh_prev.ptr.is_null()
-                                    && (*(*uhp).uh_prev.ptr).uh_walk != mark
+                                let step = |link: UndoLink| header_at(buf, link);
+                                if unwalked(step((*uhp).uh_prev), mark, mark) {
+                                    uhp = step((*uhp).uh_prev);
+                                } else if unwalked(step((*uhp).uh_alt_next), mark, mark) {
+                                    uhp = step((*uhp).uh_alt_next);
+                                } else if (*uhp).uh_alt_prev.is_none()
+                                    && unwalked(step((*uhp).uh_next), mark, mark)
                                 {
-                                    uhp = (*uhp).uh_prev.ptr;
-                                } else if !(*uhp).uh_alt_next.ptr.is_null()
-                                    && (*(*uhp).uh_alt_next.ptr).uh_walk != mark
-                                {
-                                    uhp = (*uhp).uh_alt_next.ptr;
-                                } else if !(*uhp).uh_next.ptr.is_null()
-                                    && (*uhp).uh_alt_prev.ptr.is_null()
-                                    && (*(*uhp).uh_next.ptr).uh_walk != mark
-                                {
-                                    uhp = (*uhp).uh_next.ptr;
-                                } else if !(*uhp).uh_alt_prev.ptr.is_null() {
-                                    uhp = (*uhp).uh_alt_prev.ptr;
+                                    uhp = step((*uhp).uh_next);
+                                } else if (*uhp).uh_alt_prev.is_some() {
+                                    uhp = step((*uhp).uh_alt_prev);
                                 } else {
-                                    uhp = (*uhp).uh_next.ptr;
+                                    uhp = step((*uhp).uh_next);
                                 }
                             }
                             if undo_write_bytes(&raw mut bi, UF_HEADER_END_MAGIC as uintmax_t, 2) {
