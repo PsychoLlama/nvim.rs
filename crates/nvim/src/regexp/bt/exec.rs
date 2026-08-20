@@ -5,13 +5,19 @@
 //! line has to contain somewhere, an anchored pattern that only tries column
 //! 0, and a known first character to skip to — and `regtry` is one attempt at
 //! one column.
+//!
+//! The program is reached through [`BtProg`] and the match context through
+//! [`Rex`], so the `unsafe` in this file is down to the three things neither
+//! handle can speak for: the caller's match structure, the `\z(` arrays, and
+//! walking a line's bytes.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_char, c_int};
 
+use super::compile::BtProg;
 use super::matcher::regmatch;
-use super::state::regstack;
+use super::state::{capture_slot, regstack};
 use crate::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::main::{e_null, got_int, re_extmatch_out};
 use crate::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
@@ -20,15 +26,15 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    BACKPOS_INITIAL, NSUBEXP, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, backpos, backpos_T,
-    bt_regprog_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec,
+    BACKPOS_INITIAL, MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN,
+    Rex, backpos, backpos_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec,
     init_regexec_multi, make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos, reg_getline,
     reg_startzp, reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, unref_extmatch,
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
-    NUL, buf_T, colnr_T, linenr_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
-    uint32_t, win_T,
+    NUL, buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    uint8_t, uint32_t, win_T,
 };
 
 /// How many start columns may be tried between two reads of the caller's
@@ -44,65 +50,73 @@ const REG_TOFREE_KEEP: u32 = 400;
 /// Returns 0 for no match, or one more than the line the match ended on.
 fn regtry(
     rex: Rex,
-    prog: *mut bt_regprog_T,
+    prog: BtProg,
     col: colnr_T,
     tm: *const proftime_T,
     timed_out: *mut c_int,
 ) -> c_int {
-    // SAFETY: `prog` is a live program of this engine and `rex` the match
-    // context `bt_regexec_both` set up, including the caller's capture
-    // arrays.
+    rex.set_col(col);
+    rex.set_need_clear_subexpr(1);
+    rex.set_need_clear_zsubexpr(prog.has_z() as c_int);
+
+    if !regmatch(rex, prog.first_node(), tm, timed_out) {
+        return 0;
+    }
+
+    cleanup_subexpr(rex);
+    settle_group_zero(rex, col);
+
+    // The `\z(` captures go to the syntax highlighter as fresh copies,
+    // because it keeps them past the end of this match.
+    // SAFETY: `re_extmatch_out` holds the previous match's set, or null.
+    unsafe { unref_extmatch(re_extmatch_out.get()) };
+    re_extmatch_out.set(core::ptr::null_mut::<reg_extmatch_T>());
+    if prog.has_z() {
+        cleanup_zsubexpr(rex);
+        re_extmatch_out.set(make_extmatch());
+        save_z_captures(rex);
+    }
+    1 + rex.lnum() as c_int
+}
+
+/// Fill in whatever group 0 does not already say.
+///
+/// A `\zs` before the start, or a `\ze` before the end, can leave it unset;
+/// it then covers what the matcher actually walked.
+fn settle_group_zero(rex: Rex, col: colnr_T) {
+    let kind = rex.pos_kind();
+    // SAFETY: group 0's slots are the ones the caller's match structure holds
+    // and `bt_regexec_both` pointed the context at, and the match that just
+    // succeeded is the one that filled them.
+    let (start, end) = unsafe {
+        (
+            capture_slot(rex, RS_MOPEN, 0),
+            capture_slot(rex, RS_MCLOSE, 0),
+        )
+    };
+    // SAFETY: as above, for each of the four reads and writes below.
     unsafe {
-        rex.set_input(rex.line().offset(col as isize));
-        rex.set_need_clear_subexpr(1);
-        rex.set_need_clear_zsubexpr(((*prog).reghasz as c_int == REX_SET) as c_int);
-
-        // The program starts one byte in: the first byte is the `MAGIC`
-        // stamp `prog_magic_wrong` checks.
-        if !regmatch(
-            rex,
-            (&raw mut (*prog).program).cast::<uint8_t>().add(1),
-            tm,
-            timed_out,
-        ) {
-            return 0;
+        if !start.get().is_set(kind) {
+            start.set(match_start(rex, col));
         }
-
-        cleanup_subexpr(rex);
-        if rex.multi() {
-            // A `\zs` before the start, or a `\ze` before the end, can leave
-            // group 0 unset; it then covers what the matcher actually walked.
-            let start = rex.reg_startpos();
-            let end = rex.reg_endpos();
-            if (*start).lnum < 0 {
-                (*start).lnum = 0;
-                (*start).col = col;
-            }
-            if (*end).lnum < 0 {
-                (*end).lnum = rex.lnum();
-                (*end).col = rex.col();
-            } else {
-                rex.set_lnum((*end).lnum);
-            }
-        } else {
-            if (*rex.reg_startp()).is_null() {
-                *rex.reg_startp() = rex.line().offset(col as isize);
-            }
-            if (*rex.reg_endp()).is_null() {
-                *rex.reg_endp() = rex.input();
-            }
+        if !end.get().is_set(kind) {
+            end.set(rex.here());
+        } else if rex.multi() {
+            // The matcher may have walked past the line the match ends on.
+            rex.set_lnum(end.get().as_pos().lnum);
         }
+    }
+}
 
-        // The `\z(` captures go to the syntax highlighter as fresh copies,
-        // because it keeps them past the end of this match.
-        unref_extmatch(re_extmatch_out.get());
-        re_extmatch_out.set(core::ptr::null_mut::<reg_extmatch_T>());
-        if (*prog).reghasz as c_int == REX_SET {
-            cleanup_zsubexpr(rex);
-            re_extmatch_out.set(make_extmatch());
-            save_z_captures(rex);
-        }
-        1 + rex.lnum() as c_int
+/// Column `col` of the line the match was attempted from, in the shape this
+/// match records. A buffer match counts its lines from the one it started on,
+/// so that is line zero.
+fn match_start(rex: Rex, col: colnr_T) -> MatchPos {
+    if rex.multi() {
+        MatchPos::from_pos(lpos_T { lnum: 0, col })
+    } else {
+        // SAFETY: `col` is a byte offset into the line being matched.
+        MatchPos::from_ptr(unsafe { rex.line().offset(col as isize) })
     }
 }
 
@@ -137,21 +151,35 @@ fn save_z_captures(rex: Rex) {
     }
 }
 
-/// Match `rex`'s program against `line`, starting at `startcol`.
+/// Point the match context at the caller's capture arrays, and hand back the
+/// line a buffer match starts on.
 ///
-/// SAFETY: `rex` has been pointed at the caller's match structure.
-fn bt_regexec_both(
-    rex: Rex,
-    mut line: *mut uint8_t,
-    startcol: colnr_T,
-    tm: *const proftime_T,
-    timed_out: *mut c_int,
-) -> c_int {
+/// # Safety
+///
+/// The context must already name the caller's match structure.
+unsafe fn aim_at_capture_arrays(rex: Rex, line: *mut uint8_t) -> *mut uint8_t {
+    // SAFETY: the caller promises the match structure, and the arrays are
+    // fields of it.
     unsafe {
-        // The loop back-edge record is kept between calls, so that an
-        // ordinary match never allocates. `bt_regexec_both` is not
-        // re-entered: nothing the matcher runs calls back into the editor.
-        // The saved-state stack does the same for itself, in `RegStack`.
+        if rex.multi() {
+            rex.set_reg_startpos((&raw mut (*rex.reg_mmatch()).startpos).cast());
+            rex.set_reg_endpos((&raw mut (*rex.reg_mmatch()).endpos).cast());
+            reg_getline(rex, 0).cast()
+        } else {
+            rex.set_reg_startp((&raw mut (*rex.reg_match()).startp).cast());
+            rex.set_reg_endp((&raw mut (*rex.reg_match()).endp).cast());
+            line
+        }
+    }
+}
+
+/// The loop back-edge record is kept between calls, so that an ordinary match
+/// never allocates. `bt_regexec_both` is not re-entered: nothing the matcher
+/// runs calls back into the editor. The saved-state stack does the same for
+/// itself, in `RegStack`.
+fn open_backpos() {
+    // SAFETY: `backpos` is this engine's own garray, live for the process.
+    unsafe {
         if (*backpos.ptr()).ga_data.is_null() {
             ga_init(
                 backpos.ptr(),
@@ -161,80 +189,98 @@ fn bt_regexec_both(
             ga_grow(backpos.ptr(), BACKPOS_INITIAL);
             ga_set_growsize(backpos.ptr(), BACKPOS_INITIAL * 8);
         }
+    }
+}
 
-        let mut col = startcol;
-        let prog: *mut bt_regprog_T = if rex.multi() {
-            line = reg_getline(rex, 0) as *mut uint8_t;
-            rex.set_reg_startpos((&raw mut (*rex.reg_mmatch()).startpos).cast());
-            rex.set_reg_endpos((&raw mut (*rex.reg_mmatch()).endpos).cast());
-            (*rex.reg_mmatch()).regprog.cast()
-        } else {
-            rex.set_reg_startp((&raw mut (*rex.reg_match()).startp).cast());
-            rex.set_reg_endp((&raw mut (*rex.reg_match()).endp).cast());
-            (*rex.reg_match()).regprog.cast()
-        };
-
-        let mut retval = 0;
-        if prog.is_null() || line.is_null() {
-            iemsg(gettext(&raw const e_null as *const c_char));
-        } else if prog_magic_wrong(rex) == 0 && !(rex.reg_maxcol() > 0 && col >= rex.reg_maxcol()) {
-            // The pattern's own `\c`/`\C`/`\Z` override what the caller asked
-            // for.
-            if (*prog).regflags & RF_ICASE as u32 != 0 {
-                rex.set_reg_ic(true);
-            } else if (*prog).regflags & RF_NOICASE as u32 != 0 {
-                rex.set_reg_ic(false);
-            }
-            if (*prog).regflags & RF_ICOMBINE as u32 != 0 {
-                rex.set_reg_icombine(true);
-            }
-
-            // A pattern with a literal run in it cannot match a line that
-            // does not hold that run anywhere past `col`.
-            if (*prog).regmust.is_null() || has_regmust(rex, prog, line, col) {
-                rex.set_line(line);
-                rex.set_lnum(0);
-                reg_toolong.set(0);
-                retval = if (*prog).reganch != 0 {
-                    try_anchored(rex, prog, col, tm, timed_out)
-                } else {
-                    scan_columns(rex, prog, &mut col, tm, timed_out)
-                };
-            }
-        }
-
-        // The line copy a `\n`-crossing match works over is kept for the next
-        // one, but not when it grew large.
-        if reg_tofreelen.get() > REG_TOFREE_KEEP {
-            xfree(reg_tofree.get().cast());
-            reg_tofree.set(core::ptr::null_mut());
-        }
-        // Likewise the two stacks: a pathological pattern must not leave its
-        // working set behind.
+/// Hand back what a pathological pattern made the working set grow to.
+fn trim_working_set() {
+    if reg_tofreelen.get() > REG_TOFREE_KEEP {
+        // SAFETY: `reg_tofree` is this engine's own line copy.
+        unsafe { xfree(reg_tofree.get().cast()) };
+        reg_tofree.set(core::ptr::null_mut());
+    }
+    // SAFETY: the two stacks are this engine's own and no match is running.
+    unsafe {
         (*regstack.ptr()).trim();
         if (*backpos.ptr()).ga_maxlen > BACKPOS_INITIAL {
             ga_clear(backpos.ptr());
         }
+    }
+}
 
-        if retval > 0 {
-            // A `\ze` can put the end before the start; report an empty match
-            // rather than a backwards one.
-            if rex.multi() {
-                let rmm = rex.reg_mmatch();
-                let (start, end) = ((*rmm).startpos[0], (*rmm).endpos[0]);
-                if end.lnum < start.lnum || (end.lnum == start.lnum && end.col < start.col) {
-                    (*rmm).endpos[0] = start;
+/// Match `rex`'s program against `line`, starting at `startcol`.
+///
+/// SAFETY: `rex` has been pointed at the caller's match structure.
+fn bt_regexec_both(
+    rex: Rex,
+    line: *mut uint8_t,
+    startcol: colnr_T,
+    tm: *const proftime_T,
+    timed_out: *mut c_int,
+) -> c_int {
+    open_backpos();
+
+    let mut col = startcol;
+    // SAFETY: the caller pointed the context at a live match structure.
+    let line = unsafe { aim_at_capture_arrays(rex, line) };
+    let prog = unsafe { BtProg::of_match(rex) };
+
+    let mut retval = 0;
+    match prog {
+        Some(prog) if !line.is_null() => {
+            if prog_magic_wrong(rex) == 0 && !(rex.reg_maxcol() > 0 && col >= rex.reg_maxcol()) {
+                // The pattern's own `\c`/`\C`/`\Z` override what the caller
+                // asked for.
+                if prog.regflags() & RF_ICASE as u32 != 0 {
+                    rex.set_reg_ic(true);
+                } else if prog.regflags() & RF_NOICASE as u32 != 0 {
+                    rex.set_reg_ic(false);
                 }
-                (*rmm).rmm_matchcol = col;
-            } else {
-                let rm = rex.reg_match();
-                if (*rm).endp[0] < (*rm).startp[0] {
-                    (*rm).endp[0] = (*rm).startp[0];
+                if prog.regflags() & RF_ICOMBINE as u32 != 0 {
+                    rex.set_reg_icombine(true);
                 }
-                (*rm).rm_matchcol = col;
+
+                // A pattern with a literal run in it cannot match a line that
+                // does not hold that run anywhere past `col`.
+                if prog.regmust().is_null() || has_regmust(rex, prog, line, col) {
+                    rex.set_line(line);
+                    rex.set_lnum(0);
+                    reg_toolong.set(0);
+                    retval = if prog.is_anchored() {
+                        try_anchored(rex, prog, col, tm, timed_out)
+                    } else {
+                        scan_columns(rex, prog, &mut col, tm, timed_out)
+                    };
+                }
             }
         }
-        retval
+        // SAFETY: a static message.
+        _ => unsafe { iemsg(gettext(&raw const e_null as *const c_char)) },
+    }
+
+    trim_working_set();
+
+    if retval > 0 {
+        clamp_group_zero(rex);
+        rex.set_matchcol(col);
+    }
+    retval
+}
+
+/// A `\ze` can put the end before the start; report an empty match rather
+/// than a backwards one.
+fn clamp_group_zero(rex: Rex) {
+    let kind = rex.pos_kind();
+    // SAFETY: as `settle_group_zero`.
+    unsafe {
+        let (start, end) = (
+            capture_slot(rex, RS_MOPEN, 0),
+            capture_slot(rex, RS_MCLOSE, 0),
+        );
+        let (start, end_slot) = (start.get(), end);
+        if end_slot.get().is_before(start, kind) {
+            end_slot.set(start);
+        }
     }
 }
 
@@ -242,9 +288,9 @@ fn bt_regexec_both(
 ///
 /// SAFETY: as `bt_regexec_both`. `regmust` is a NUL-terminated run the
 /// compiler kept and the walk below stops at `line`'s terminator.
-fn has_regmust(rex: Rex, prog: *mut bt_regprog_T, line: *mut uint8_t, col: colnr_T) -> bool {
+fn has_regmust(rex: Rex, prog: BtProg, line: *mut uint8_t, col: colnr_T) -> bool {
     unsafe {
-        let c = utf_ptr2char((*prog).regmust as *mut c_char);
+        let c = utf_ptr2char(prog.regmust().cast::<c_char>());
         let mut s = line.offset(col as isize).cast::<c_char>();
         loop {
             // Case-insensitively, the first character has to be looked for
@@ -257,7 +303,12 @@ fn has_regmust(rex: Rex, prog: *mut bt_regprog_T, line: *mut uint8_t, col: colnr
             if s.is_null() {
                 return false;
             }
-            if cstrncmp(rex, s, (*prog).regmust as *mut c_char, &mut (*prog).regmlen) == 0 {
+            // `cstrncmp` reports back how much it compared, and upstream let
+            // it write straight into the program's own `regmlen`.
+            let mut mlen = prog.regmlen();
+            let same = cstrncmp(rex, s, prog.regmust().cast::<c_char>(), &mut mlen) == 0;
+            prog.set_regmlen(mlen);
+            if same {
                 return true;
             }
             s = s.add(utfc_ptr2len(s) as usize);
@@ -271,25 +322,23 @@ fn has_regmust(rex: Rex, prog: *mut bt_regprog_T, line: *mut uint8_t, col: colnr
 /// SAFETY: as `bt_regexec_both`; `rex.line` is set and `col` inside it.
 fn try_anchored(
     rex: Rex,
-    prog: *mut bt_regprog_T,
+    prog: BtProg,
     col: colnr_T,
     tm: *const proftime_T,
     timed_out: *mut c_int,
 ) -> c_int {
-    unsafe {
-        let start = (*prog).regstart;
-        let c = utf_ptr2char((rex.line() as *mut c_char).offset(col as isize));
-        let matches = start == NUL
-            || start == c
-            || (rex.reg_ic()
-                && (utf_fold(start) == utf_fold(c)
-                    // Latin-1 has case pairs that do not fold together.
-                    || (c < 255 && start < 255 && mb_tolower(start) == mb_tolower(c))));
-        if matches {
-            regtry(rex, prog, col, tm, timed_out)
-        } else {
-            0
-        }
+    let start = prog.regstart();
+    let c = unsafe { utf_ptr2char((rex.line() as *mut c_char).offset(col as isize)) };
+    let matches = start == NUL
+        || start == c
+        || (rex.reg_ic()
+            && (utf_fold(start) == utf_fold(c)
+                // Latin-1 has case pairs that do not fold together.
+                || (c < 255 && start < 255 && mb_tolower(start) == mb_tolower(c))));
+    if matches {
+        regtry(rex, prog, col, tm, timed_out)
+    } else {
+        0
     }
 }
 
@@ -300,7 +349,7 @@ fn try_anchored(
 /// SAFETY: as `bt_regexec_both`.
 fn scan_columns(
     rex: Rex,
-    prog: *mut bt_regprog_T,
+    prog: BtProg,
     col: &mut colnr_T,
     tm: *const proftime_T,
     timed_out: *mut c_int,
@@ -310,9 +359,9 @@ fn scan_columns(
         while !got_int.get() {
             // The pattern's first character is known: skip straight to the
             // next place it occurs.
-            if (*prog).regstart != NUL {
+            if prog.regstart() != NUL {
                 let from = (rex.line() as *mut c_char).offset(*col as isize);
-                let s = cstrchr(rex, from, (*prog).regstart);
+                let s = cstrchr(rex, from, prog.regstart());
                 if s.is_null() {
                     return 0;
                 }

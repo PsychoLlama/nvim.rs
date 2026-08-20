@@ -393,12 +393,7 @@ impl Rex {
     /// Is the cursor strictly before `at`?
     #[inline(always)]
     pub(crate) fn is_before(self, at: MatchPos) -> bool {
-        if self.multi() {
-            let stop = at.as_pos();
-            self.lnum() < stop.lnum || (self.lnum() == stop.lnum && self.col() < stop.col)
-        } else {
-            self.input() < at.as_ptr()
-        }
+        self.here().is_before(at, self.pos_kind())
     }
 
     /// Put the cursor at `at`'s column of the line it is already on.
@@ -446,6 +441,19 @@ impl Rex {
         } else {
             // SAFETY: as above, for a string match's `reg_match`.
             unsafe { (*self.reg_match()).regprog }
+        }
+    }
+
+    /// Record the column the reported match starts at, for a `:substitute`
+    /// or a search to resume from.
+    #[inline(always)]
+    pub(crate) fn set_matchcol(self, col: colnr_T) {
+        if self.multi() {
+            // SAFETY: a buffer match's `reg_mmatch` is the caller's structure.
+            unsafe { (*self.reg_mmatch()).rmm_matchcol = col };
+        } else {
+            // SAFETY: as above, for a string match's `reg_match`.
+            unsafe { (*self.reg_match()).rm_matchcol = col };
         }
     }
 

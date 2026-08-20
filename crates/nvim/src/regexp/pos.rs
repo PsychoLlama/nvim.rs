@@ -167,6 +167,19 @@ impl MatchPos {
         }
     }
 
+    /// Is this position strictly before `other`? Both must come from the
+    /// same match, so that `kind` describes both.
+    #[inline(always)]
+    pub(crate) fn is_before(self, other: MatchPos, kind: PosKind) -> bool {
+        match kind {
+            PosKind::Str => self.as_ptr() < other.as_ptr(),
+            PosKind::Buf => {
+                let (a, b) = (self.as_pos(), other.as_pos());
+                a.lnum < b.lnum || (a.lnum == b.lnum && a.col < b.col)
+            }
+        }
+    }
+
     /// Do two capture positions describe the same place?
     ///
     /// As [`MatchPos::same`], except that a buffer match's unset position

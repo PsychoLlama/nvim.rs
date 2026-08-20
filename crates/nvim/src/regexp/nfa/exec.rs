@@ -289,11 +289,7 @@ fn try_match(
                 && !rex.reg_icombine()
             {
                 let retval = find_match_text(rex, col, (*prog).regstart, (*prog).match_text);
-                if rex.multi() {
-                    (*rex.reg_mmatch()).rmm_matchcol = *col;
-                } else {
-                    (*rex.reg_match()).rm_matchcol = *col;
-                }
+                rex.set_matchcol(*col);
                 return Attempt::Done(retval);
             }
         }

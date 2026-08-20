@@ -11,16 +11,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
 
 use super::atom::regatom;
 use super::compile::{
-    regc, regcomp_start, reginsert, reginsert_limits, reginsert_nr, regnext, regnode, regoptail,
-    regtail,
+    BtProg, regc, regcomp_start, reginsert, reginsert_limits, reginsert_nr, regnext, regnode,
+    regoptail, regtail,
 };
 use crate::main::{e_null, rc_did_emsg};
 use crate::mbyte::utf_ptr2char;
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xfree;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
@@ -29,13 +28,13 @@ use crate::regexp::{
     MAGIC_ON, MATCH, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, NOT_MULTI, NOTHING, NSUBEXP,
     PLUS, RE_BOF, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL, RF_ICASE,
     RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, Rex, SIMPLE, SPSTART, STAR, SUBPAT, WORST, ZCLOSE, ZOPEN,
-    bt_regengine, bt_regprog_T, curchr, getchr, getdecchrs, gethexchrs, getoctchrs, had_endbrace,
-    had_eol, magic, magic_prefix, num_complex_braces, peekchr, re_has_z, re_multi_type,
-    read_limits, reg_magic, reg_toolong, regcode, regflags, regnpar, regnzpar, regparse, regsize,
-    skipchr, skipchr_keepstart, unmagic,
+    bt_regengine, curchr, getchr, getdecchrs, gethexchrs, getoctchrs, had_endbrace, had_eol, magic,
+    magic_prefix, num_complex_braces, peekchr, re_has_z, re_multi_type, read_limits, reg_magic,
+    reg_toolong, regcode, regflags, regnpar, regnzpar, regparse, regsize, skipchr,
+    skipchr_keepstart, unmagic,
 };
 use crate::semsg;
-use crate::types::{NUL, int64_t, regprog_T, size_t, uint8_t, uint32_t};
+use crate::types::{NUL, int64_t, regprog_T, uint8_t, uint32_t};
 use ::libc::strlen;
 
 const M_AMP: c_int = magic(b'&');
@@ -447,17 +446,13 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
             return core::ptr::null_mut();
         }
 
-        let r: *mut bt_regprog_T = xmalloc(
-            (offset_of!(bt_regprog_T, program) as size_t).wrapping_add(regsize.get() as size_t),
-        )
-        .cast();
-        (*r).re_in_use = false;
+        let prog = BtProg::alloc(regsize.get() as usize);
 
         regcomp_start(expr, re_flags);
-        regcode.set((&raw mut (*r).program).cast());
+        regcode.set(prog.text());
         regc(REGMAGIC);
         if reg(rex, REG_NOPAREN, &mut flags).is_null() || reg_toolong.get() != 0 {
-            xfree(r.cast());
+            prog.discard();
             if reg_toolong.get() != 0 {
                 semsg!("E339: Pattern too long");
                 rc_did_emsg.set(true);
@@ -465,21 +460,20 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
             return core::ptr::null_mut();
         }
 
-        (*r).regstart = NUL;
-        (*r).reganch = 0;
-        (*r).regmust = core::ptr::null_mut();
-        (*r).regmlen = 0;
-        (*r).regflags = regflags.get();
+        prog.set_regstart(NUL);
+        prog.set_anchored(false);
+        prog.set_regmust(core::ptr::null_mut(), 0);
+        prog.set_regflags(regflags.get());
         if flags & HASNL != 0 {
-            (*r).regflags |= RF_HASNL as u32;
+            prog.add_regflags(RF_HASNL as u32);
         }
         if flags & HASLOOKBH != 0 {
-            (*r).regflags |= RF_LOOKBH as u32;
+            prog.add_regflags(RF_LOOKBH as u32);
         }
-        (*r).reghasz = re_has_z.get() as uint8_t;
-        find_shortcuts(r, flags);
-        (*r).engine = bt_regengine.ptr();
-        r.cast()
+        prog.set_reghasz(re_has_z.get() as uint8_t);
+        find_shortcuts(prog, flags);
+        prog.set_engine(bt_regengine.ptr());
+        prog.into_regprog()
     }
 }
 
@@ -489,12 +483,11 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
 /// Only worth doing when the whole pattern is one branch: `regnext` past the
 /// leading `BRANCH` landing on `END` is what proves there is no `\|`.
 ///
-/// `r` must be a program this module has just finished writing.
-fn find_shortcuts(r: *mut bt_regprog_T, flags: c_int) {
+/// `prog` must be a program this module has just finished writing.
+fn find_shortcuts(prog: BtProg, flags: c_int) {
     // SAFETY: walking the program just written, whose nodes are well formed.
     unsafe {
-        // Past the REGMAGIC byte.
-        let mut scan = (&raw mut (*r).program).cast::<uint8_t>().add(1);
+        let mut scan = prog.first_node();
         if *regnext(scan) as c_int != END {
             return;
         }
@@ -502,18 +495,18 @@ fn find_shortcuts(r: *mut bt_regprog_T, flags: c_int) {
 
         // A pattern anchored at the start only has to be tried there.
         if *scan as c_int == BOL || *scan as c_int == RE_BOF {
-            (*r).reganch += 1;
+            prog.set_anchored(true);
             scan = regnext(scan);
         }
 
         // A known first character lets the executor use a memchr-style skip.
         if *scan as c_int == EXACTLY {
-            (*r).regstart = utf_ptr2char(scan.add(3).cast());
+            prog.set_regstart(utf_ptr2char(scan.add(3).cast()));
         } else if [BOW, EOW, NOTHING, MOPEN, NOPEN, MCLOSE, NCLOSE].contains(&(*scan as c_int)) {
             // Those all match empty, so look one node further.
             let next = regnext(scan);
             if *next as c_int == EXACTLY {
-                (*r).regstart = utf_ptr2char(next.add(3).cast());
+                prog.set_regstart(utf_ptr2char(next.add(3).cast()));
             }
         }
 
@@ -538,8 +531,7 @@ fn find_shortcuts(r: *mut bt_regprog_T, flags: c_int) {
                 }
                 scan = regnext(scan);
             }
-            (*r).regmust = longest;
-            (*r).regmlen = len;
+            prog.set_regmust(longest, len);
         }
     }
 }

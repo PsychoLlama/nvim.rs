@@ -14,22 +14,195 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::c_int;
+use core::ffi::{c_int, c_uint};
+use core::mem::offset_of;
 
 use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing_legacy};
+use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     BACK, BRACE_COMPLEX, BRANCH, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC,
-    RE_STRICT, RE_STRING, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,
-    re_multi_type, refresh_cpo_flags, reg_magic, reg_strict, reg_string, reg_toolong, regcode,
-    regflags, regnpar, regnzpar, regparse, regsize,
+    RE_STRICT, RE_STRING, REX_SET, Rex, bt_regprog_T, had_endbrace, had_eol, initchr,
+    num_complex_braces, peekchr, re_has_z, re_multi_type, refresh_cpo_flags, reg_magic, reg_strict,
+    reg_string, reg_toolong, regcode, regflags, regnpar, regnzpar, regparse, regsize,
 };
-use crate::types::{NUL, int64_t, uint8_t, uint32_t};
+use crate::types::{NUL, int64_t, regengine_T, regprog_T, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
 const NODE_HDR: usize = 3;
+
+/// A compiled backtracking program.
+///
+/// One `xmalloc` block: a fixed head, then the `REGMAGIC` stamp, then the
+/// nodes. The head opens with the same five fields `regprog_T` and the NFA's
+/// `nfa_regprog_T` open with — C's single inheritance, and what lets
+/// `vim_regexec` hand any program to any engine and lets each engine cast the
+/// pointer back to its own shape. **That prefix is the layout and stays
+/// exactly as it is**: this is a handle round the pointer, not a new
+/// representation of what is behind it.
+///
+/// What it buys is the same thing [`Rex`](crate::regexp::Rex) buys for the
+/// match context. Each field is named once, here, with the promise that comes
+/// with reading it stated once; the compiler and the matcher stop spelling
+/// out `(*prog).` inside `unsafe` regions of their own, and several of their
+/// functions stop being one `unsafe` block from brace to brace.
+#[derive(Clone, Copy)]
+pub(crate) struct BtProg(*mut bt_regprog_T);
+
+impl BtProg {
+    /// The program the running match is for, or `None` if the caller handed
+    /// in a match structure with no program.
+    ///
+    /// # Safety
+    ///
+    /// The context must name a program *this* engine compiled. That is what
+    /// the engine table promises: `vim_regexec` dispatches through the
+    /// program's own `engine` field, so a `bt_regexec_*` entry point is only
+    /// ever reached for a backtracking program.
+    #[inline(always)]
+    pub(crate) unsafe fn of_match(rex: Rex) -> Option<BtProg> {
+        let prog = rex.regprog();
+        (!prog.is_null()).then(|| BtProg(prog.cast()))
+    }
+
+    /// A fresh program with room for `nodes` bytes of program text.
+    ///
+    /// Only the fields [`bt_regcomp`](super::piece::bt_regcomp) does not go
+    /// on to write are initialised here.
+    pub(crate) fn alloc(nodes: usize) -> BtProg {
+        // SAFETY: `xmalloc` returns a block of the size asked for or does not
+        // return, so the head is inside it.
+        let prog =
+            unsafe { xmalloc(offset_of!(bt_regprog_T, program) + nodes) }.cast::<bt_regprog_T>();
+        unsafe { (*prog).re_in_use = false };
+        BtProg(prog)
+    }
+
+    /// Hand the block back to the caller of `bt_regcomp`, as the engine's
+    /// shared shape.
+    pub(crate) fn into_regprog(self) -> *mut regprog_T {
+        self.0.cast()
+    }
+
+    /// Free a program that turned out not to compile after all.
+    pub(crate) fn discard(self) {
+        // SAFETY: one `xmalloc` block, with nothing owned inside it.
+        unsafe { xfree(self.0.cast()) };
+    }
+
+    // ------------------------------------------------- what the compiler wrote
+
+    /// The pattern's own `\c`/`\C`/`\Z` and the `RF_*` findings.
+    #[inline(always)]
+    pub(crate) fn regflags(self) -> c_uint {
+        // SAFETY: the handle is a live program of this engine — see
+        // `of_match`. Every accessor below reads or writes one field of that
+        // block and this note covers all of them.
+        unsafe { (*self.0).regflags }
+    }
+
+    #[inline(always)]
+    pub(crate) fn add_regflags(self, bits: c_uint) {
+        unsafe { (*self.0).regflags |= bits };
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_regflags(self, flags: c_uint) {
+        unsafe { (*self.0).regflags = flags };
+    }
+
+    /// Can the pattern only match at the start of the line?
+    #[inline(always)]
+    pub(crate) fn is_anchored(self) -> bool {
+        unsafe { (*self.0).reganch != 0 }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_anchored(self, anchored: bool) {
+        unsafe { (*self.0).reganch = uint8_t::from(anchored) };
+    }
+
+    /// The character the pattern must start with, or `NUL` if unknown.
+    #[inline(always)]
+    pub(crate) fn regstart(self) -> c_int {
+        unsafe { (*self.0).regstart }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_regstart(self, c: c_int) {
+        unsafe { (*self.0).regstart = c };
+    }
+
+    /// A literal run the line must hold somewhere for the pattern to match,
+    /// or null.
+    #[inline(always)]
+    pub(crate) fn regmust(self) -> *mut uint8_t {
+        unsafe { (*self.0).regmust }
+    }
+
+    /// How long that run is. The matcher *writes* it back: `cstrncmp` reports
+    /// the byte length it actually compared, which differs from the byte
+    /// length of the pattern under 'ignorecase' folding.
+    #[inline(always)]
+    pub(crate) fn regmlen(self) -> c_int {
+        unsafe { (*self.0).regmlen }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_regmlen(self, len: c_int) {
+        unsafe { (*self.0).regmlen = len };
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_regmust(self, run: *mut uint8_t, len: c_int) {
+        unsafe { (*self.0).regmust = run };
+        self.set_regmlen(len);
+    }
+
+    /// Does the pattern have `\z(` groups?
+    #[inline(always)]
+    pub(crate) fn has_z(self) -> bool {
+        unsafe { (*self.0).reghasz as c_int == REX_SET }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_reghasz(self, hasz: uint8_t) {
+        unsafe { (*self.0).reghasz = hasz };
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_engine(self, engine: *mut regengine_T) {
+        unsafe { (*self.0).engine = engine };
+    }
+
+    // ---------------------------------------------------------- the program
+
+    /// Where the program text begins, `REGMAGIC` stamp and all. What the
+    /// emitter's output cursor is aimed at.
+    #[inline(always)]
+    pub(crate) fn text(self) -> *mut uint8_t {
+        // SAFETY: `program` is the flexible array the block ends with; taking
+        // its address reads nothing.
+        unsafe { (&raw mut (*self.0).program).cast::<uint8_t>() }
+    }
+
+    /// The stamp the block opens with, which is how a program compiled by the
+    /// other engine is spotted.
+    #[inline(always)]
+    pub(crate) fn magic(self) -> c_int {
+        // SAFETY: the block always holds at least the stamp.
+        unsafe { *self.text() as c_int }
+    }
+
+    /// The first node, one byte past the stamp.
+    #[inline(always)]
+    pub(crate) fn first_node(self) -> *mut uint8_t {
+        // SAFETY: as `magic`; a program always has an `END` node after it.
+        unsafe { self.text().add(1) }
+    }
+}
 
 /// Is this the sizing pass rather than the writing one?
 fn sizing() -> bool {

@@ -20,7 +20,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, Rex, bt_regprog_T, cstrncmp,
+    BtProg, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, Rex, cstrncmp,
     nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp, reg_startzpos,
     reg_tofree, reg_tofreelen, rsm,
 };
@@ -282,14 +282,11 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
 /// Does the running program belong to the backtracking engine, and has its
 /// magic number survived? Only that engine's programs carry one.
 pub(crate) fn prog_magic_wrong(rex: Rex) -> c_int {
-    let prog = rex.regprog();
-    // SAFETY: a running match holds a live program, and a backtracking one
-    // opens with the magic byte this reads.
-    let wrong = unsafe {
-        (*prog).engine != nfa_regengine.ptr()
-            && *(&raw mut (*prog.cast::<bt_regprog_T>()).program).cast::<uint8_t>() as c_int
-                != REGMAGIC
-    };
+    // SAFETY: a running match holds a live program.
+    let nfa = unsafe { (*rex.regprog()).engine } == nfa_regengine.ptr();
+    // SAFETY: anything that is not the NFA's is this engine's, and opens with
+    // the magic byte.
+    let wrong = !nfa && unsafe { BtProg::of_match(rex) }.is_some_and(|p| p.magic() != REGMAGIC);
     if wrong {
         // SAFETY: a static message.
         unsafe { emsg(gettext(&raw const e_re_corr as *const c_char)) };
