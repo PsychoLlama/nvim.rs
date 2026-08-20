@@ -1,7 +1,7 @@
 {
   "internal_exports": 0,
-  "files_without_forbid_unsafe": 1051,
-  "files_without_deny_unsafe_op": 41,
+  "files_without_forbid_unsafe": 1052,
+  "files_without_deny_unsafe_op": 38,
   "files_without_deny_casts": 1095,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
@@ -648,9 +648,10 @@
     "crates/nvim/src/mpack/mpack_core.rs": {"unsafe_lines": 55},
     "crates/nvim/src/mpack/object.rs": {"unsafe_lines": 155},
     "crates/nvim/src/mpack/rpc.rs": {"unsafe_lines": 146},
-    "crates/nvim/src/msgpack_rpc/channel/envelope.rs": {"missing_safety_doc": 5, "unsafe_lines": 133},
-    "crates/nvim/src/msgpack_rpc/channel/mod.rs": {"cell_ptr": 4, "extern_abi": 3, "missing_safety_doc": 24, "unsafe_lines": 568},
-    "crates/nvim/src/msgpack_rpc/channel/trace.rs": {"missing_safety_doc": 2, "unsafe_lines": 54},
+    "crates/nvim/src/msgpack_rpc/channel/envelope.rs": {"unsafe_lines": 96},
+    "crates/nvim/src/msgpack_rpc/channel/mod.rs": {"cell_ptr": 4, "extern_abi": 2, "unsafe_lines": 230},
+    "crates/nvim/src/msgpack_rpc/channel/receive.rs": {"extern_abi": 1, "unsafe_lines": 179},
+    "crates/nvim/src/msgpack_rpc/channel/trace.rs": {"unsafe_lines": 17},
     "crates/nvim/src/msgpack_rpc/packer/mod.rs": {"missing_safety_doc": 1, "unsafe_lines": 165},
     "crates/nvim/src/msgpack_rpc/server.rs": {"cell_ptr": 3, "missing_safety_doc": 3, "unsafe_lines": 241},
     "crates/nvim/src/msgpack_rpc/unpacker/mod.rs": {"cell_ptr": 2, "extern_abi": 6, "missing_safety_doc": 20, "no_mangle": 4, "unsafe_lines": 711},
