@@ -554,8 +554,8 @@ pub unsafe fn clear_node(node: *mut wordnode_T) {
     unsafe {
         let mut np = node;
         while !np.is_null() {
-            (*np).wn_u1.index = 0;
-            (*np).wn_u2.wnode = core::ptr::null_mut();
+            (*np).wn_index = 0;
+            (*np).wn_link = core::ptr::null_mut();
             if (*np).wn_byte as c_int != NUL {
                 clear_node((*np).wn_child);
             }
@@ -571,9 +571,9 @@ pub unsafe fn clear_node(node: *mut wordnode_T) {
 /// node count, which is what the caller needs before it can write.
 ///
 /// A shared sub-tree is written once, under whichever parent reaches it
-/// first; the others emit a [`BY_INDEX`] reference to it. `wn_u2.wnode`
-/// records that first parent, so the second pass makes the same choice as
-/// the first.
+/// first; the others emit a [`BY_INDEX`] reference to it.
+/// [`wn_link`](wordnode_T::wn_link) records that first parent, so the
+/// second pass makes the same choice as the first.
 ///
 /// # Safety
 ///
@@ -593,7 +593,7 @@ pub unsafe fn put_node(
         if node.is_null() {
             return 0;
         }
-        (*node).wn_u1.index = idx;
+        (*node).wn_index = idx;
 
         let mut siblingcount = 0;
         let mut np = node;
@@ -613,15 +613,15 @@ pub unsafe fn put_node(
                 }
             } else {
                 let child = (*np).wn_child;
-                if (*child).wn_u1.index != 0 && (*child).wn_u2.wnode != node {
+                if (*child).wn_index != 0 && (*child).wn_link != node {
                     // Already written under a different parent.
                     if !fd.is_null() {
                         putc(BY_INDEX as c_int, fd);
-                        put_bytes(fd, (*child).wn_u1.index as uintmax_t, 3);
+                        put_bytes(fd, (*child).wn_index as uintmax_t, 3);
                     }
-                } else if (*child).wn_u2.wnode.is_null() {
+                } else if (*child).wn_link.is_null() {
                     // Claim it: this chain will write it out below.
-                    (*child).wn_u2.wnode = node;
+                    (*child).wn_link = node;
                 }
                 if !fd.is_null() && putc((*np).wn_byte as c_int, fd) == EOF {
                     emsg(gettext((&raw const e_write).cast()));
@@ -636,7 +636,7 @@ pub unsafe fn put_node(
         let mut newindex = idx + siblingcount + 1;
         let mut np = node;
         while !np.is_null() {
-            if (*np).wn_byte as c_int != 0 && (*(*np).wn_child).wn_u2.wnode == node {
+            if (*np).wn_byte as c_int != 0 && (*(*np).wn_child).wn_link == node {
                 newindex = put_node(fd, (*np).wn_child, newindex, regionmask, prefixtree);
             }
             np = (*np).wn_sibling;

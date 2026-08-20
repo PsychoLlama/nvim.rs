@@ -17,9 +17,9 @@
 //! [`wordtree_compress`] walks it bottom-up and replaces each child chain
 //! with an identical one already seen, bumping that one's reference count.
 //! The lookup is a hash table keyed on a five-byte digest stored inside the
-//! node itself ([`wordnode_S::wn_u1`]), so no separate key allocation is
-//! needed — the table's key pointer *is* the node pointer, which is how
-//! [`node_compress`] casts one back to the other.
+//! node itself ([`wordnode_S::wn_digest`]), so no separate key allocation is
+//! needed — the table's key pointer points *into* the node, and
+//! [`node_of_digest_key`] is how [`node_compress`] gets back out.
 //!
 //! Because a compressed sub-tree is shared, [`tree_add_word`] has to
 //! un-share any node it is about to modify: a node with more than one
@@ -152,17 +152,46 @@ pub type wordnode_T = wordnode_S;
 
 /// One byte of one word, or — when [`wn_byte`](Self::wn_byte) is NUL — the
 /// end of a word and the properties that go with it.
+///
+/// # Two phases, three scratch fields
+///
+/// A node is scribbled on twice over its life, and upstream overlays each
+/// pair of uses in a union. Both overlays are gone here, for different
+/// reasons.
+///
+/// The digest and the index are genuinely different types — five bytes the
+/// hash table reads as a string, against an `int` — so they are two fields
+/// ([`wn_digest`](Self::wn_digest), [`wn_index`](Self::wn_index)). That
+/// costs nothing: the union's own tail padding was four bytes wide, so the
+/// node is the same size either way, which
+/// `a_node_costs_no_more_than_the_union` pins down.
+///
+/// [`wn_link`](Self::wn_link) is the other overlay, whose two arms were
+/// *both* `*mut wordnode_T` — documentation of the phase change rather
+/// than a representation. It is one field, and the phases are written down
+/// on it instead.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct wordnode_S {
-    /// The compression digest while compressing, then the node's index in
-    /// the written tree while the file is being put together. Must stay
-    /// first: [`node_compress`] relies on a node's address and its
-    /// digest's address being the same.
-    pub wn_u1: WordNodeKey,
-    /// The next node with the same digest while compressing, then the
-    /// already-written twin while the file is being put together.
-    pub wn_u2: WordNodeLink,
+    /// Compression phase: five digest bytes over this node's whole sibling
+    /// chain, plus a terminator, so the hash table can key on it as a
+    /// string. None of the five is ever zero. See [`node_compress`].
+    pub wn_digest: [uint8_t; 6],
+    /// Write phase: this node's index in the written tree, or 0 while it
+    /// has not been placed. See [`put_node`](super::write::put_node).
+    pub wn_index: c_int,
+    /// Whichever node currently has a claim on this one — the two phases
+    /// mean different things by that, and never overlap:
+    ///
+    /// - while compressing, the next node whose sibling chain hashes to the
+    ///   same [`wn_digest`](Self::wn_digest), so that [`node_compress`] can
+    ///   walk a bucket looking for a chain worth sharing;
+    /// - while writing, the sibling chain that claimed this node and will
+    ///   therefore emit it; every other parent emits a
+    ///   [`BY_INDEX`](super::BY_INDEX) reference instead.
+    ///
+    /// [`clear_node`](super::write::clear_node) is the handover: it drops
+    /// the compression meaning and starts the write one.
+    pub wn_link: *mut wordnode_T,
     pub wn_child: *mut wordnode_T,
     pub wn_sibling: *mut wordnode_T,
     /// How many parents point here; above one the sub-tree is shared.
@@ -173,23 +202,26 @@ pub struct wordnode_S {
     pub wn_region: int16_t,
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union WordNodeKey {
-    /// Five digest bytes and a terminator, so the hash table can treat it
-    /// as a string. None of the five is ever zero.
-    pub hashkey: [uint8_t; 6],
-    pub index: c_int,
+/// The digest of `node`'s sibling chain, as the NUL-terminated string the
+/// compression hash table keys on.
+///
+/// The table stores key *pointers*, so this is also how a node gets into
+/// the table at all: [`node_of_digest_key`] is the way back.
+fn digest_key(node: *mut wordnode_T) -> *mut c_char {
+    // SAFETY: the offset lands inside the node; nothing is read.
+    unsafe { (&raw mut (*node).wn_digest).cast::<c_char>() }
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union WordNodeLink {
-    pub next: *mut wordnode_T,
-    pub wnode: *mut wordnode_T,
+/// The node a [`digest_key`] came from.
+///
+/// # Safety
+///
+/// `key` must be a pointer [`digest_key`] returned for a still-live node.
+unsafe fn node_of_digest_key(key: *mut c_char) -> *mut wordnode_T {
+    // SAFETY: the caller promises the pointer names a live node's digest
+    // field, so stepping back over the field's offset lands on the node.
+    unsafe { key.byte_sub(mem::offset_of!(wordnode_S, wn_digest)).cast() }
 }
-
-const _: () = assert!(mem::offset_of!(wordnode_S, wn_u1) == 0);
 
 /// Arena blocks in use before the first compression run.
 static compress_start: GlobalCell<c_int> = GlobalCell::new(30_000);
@@ -279,39 +311,60 @@ pub unsafe fn store_word(
             MAXWLEN as c_int,
         );
 
+        let root = spin.si_foldroot;
+        res = add_per_affix(
+            spin,
+            foldword.as_ptr(),
+            root,
+            ct | flags,
+            region,
+            pfxlist,
+            need_affix,
+        );
+        spin.si_foldwcount += 1;
+
+        if res == OK && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {
+            let root = spin.si_keeproot;
+            res = add_per_affix(spin, word, root, flags, region, pfxlist, need_affix);
+            spin.si_keepwcount += 1;
+        }
+        res
+    }
+}
+
+/// Add `word` to `root` once per affix id in `pfxlist`, stopping at the
+/// first failure.
+///
+/// A null or empty `pfxlist` still adds the word once, under affix id 0 —
+/// unless `need_affix`, which means only real ids count.
+///
+/// # Safety
+///
+/// `word` must be NUL-terminated, `pfxlist` null or NUL-terminated, and
+/// `root` a node of this arena's tree.
+unsafe fn add_per_affix(
+    spin: &mut spellinfo_T,
+    word: *const c_char,
+    root: *mut wordnode_T,
+    flags: c_int,
+    region: c_int,
+    pfxlist: *const c_char,
+    need_affix: bool,
+) -> c_int {
+    // SAFETY: the caller promises the strings and the root; the walk stops
+    // at `pfxlist`'s NUL.
+    unsafe {
+        let mut res = OK;
         let mut p = pfxlist;
         while res == OK {
-            if !need_affix || (!p.is_null() && *p as c_int != NUL) {
-                let affix_id = if p.is_null() { 0 } else { *p as c_int };
-                res = tree_add_word(
-                    spin,
-                    foldword.as_ptr(),
-                    spin.si_foldroot,
-                    ct | flags,
-                    region,
-                    affix_id,
-                );
+            let affix_id = if p.is_null() { 0 } else { *p as c_int };
+            if !need_affix || affix_id != NUL {
+                res = tree_add_word(spin, word, root, flags, region, affix_id);
             }
             if p.is_null() || *p as c_int == NUL {
                 break;
             }
             p = p.add(1);
-        }
-        spin.si_foldwcount += 1;
-
-        if res == OK && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {
-            let mut p = pfxlist;
-            while res == OK {
-                if !need_affix || (!p.is_null() && *p as c_int != NUL) {
-                    let affix_id = if p.is_null() { 0 } else { *p as c_int };
-                    res = tree_add_word(spin, word, spin.si_keeproot, flags, region, affix_id);
-                }
-                if p.is_null() || *p as c_int == NUL {
-                    break;
-                }
-                p = p.add(1);
-            }
-            spin.si_keepwcount += 1;
         }
         res
     }
@@ -606,14 +659,7 @@ pub unsafe fn wordtree_compress(
         let n = node_compress(spin, (*root).wn_sibling, &raw mut ht, &mut tot);
 
         if spin.si_verbose != 0 || p_verbose.get() > 2 {
-            // Scale down first on big trees so the product cannot overflow.
-            let perc: core::ffi::c_long = if tot > 1000000 {
-                ((tot - n) / (tot / 100)) as core::ffi::c_long
-            } else if tot == 0 {
-                0
-            } else {
-                ((tot - n) * 100 / tot) as core::ffi::c_long
-            };
+            let perc = remaining_percentage(n, tot);
             vim_snprintf(
                 IObuff.ptr().cast::<c_char>(),
                 IOSIZE as usize,
@@ -627,6 +673,23 @@ pub unsafe fn wordtree_compress(
             spell_message(spin, IObuff.ptr().cast::<c_char>());
         }
         hash_clear(&raw mut ht);
+    }
+}
+
+/// What share of `total` nodes survived compression, as a percentage, given
+/// that `compressed` of them were shared away.
+///
+/// Big trees are scaled down before the multiply rather than after, so the
+/// product cannot overflow; the two arms therefore disagree by a rounding
+/// step, which is what the reported figure has always done.
+fn remaining_percentage(compressed: c_int, total: c_int) -> core::ffi::c_long {
+    let remaining = total - compressed;
+    if total > 1_000_000 {
+        (remaining / (total / 100)).into()
+    } else if total == 0 {
+        0
+    } else {
+        (remaining * 100 / total).into()
     }
 }
 
@@ -649,8 +712,10 @@ unsafe fn node_compress(
         let mut compressed = 0;
         let mut len = 0;
 
-        let mut np = node;
-        while !np.is_null() && !got_int.get() {
+        for np in siblings(node) {
+            if got_int.get() {
+                break;
+            }
             len += 1;
             let child = (*np).wn_child;
             if !child.is_null() {
@@ -658,23 +723,22 @@ unsafe fn node_compress(
                 // everything below it has been compressed.
                 compressed += node_compress(spin, child, ht, tot);
 
-                // The key is the node's own digest, so the table's key
-                // pointer doubles as the node pointer. `wn_u1` sits at
-                // offset zero, which the assertion above pins down.
-                let key = child.cast::<c_char>();
+                // The key is the node's own digest field, so the table
+                // borrows storage the node already owns and every entry
+                // names a node.
+                let key = digest_key(child);
                 let hash = hash_hash(key);
                 let hi = hash_lookup(ht, key, strlen(key), hash);
                 if (*hi).hi_key.is_null()
                     || (*hi).hi_key == (&raw const hash_removed).cast_mut().cast()
                 {
                     hash_add_item(ht, hi, key, hash);
-                    np = (*np).wn_sibling;
                     continue;
                 }
 
                 // Same digest: walk the chain of nodes sharing it looking
                 // for a genuinely equal sub-tree to point at instead.
-                let mut tp = (*hi).hi_key.cast::<wordnode_T>();
+                let mut tp = node_of_digest_key((*hi).hi_key);
                 while !tp.is_null() {
                     if node_equal(child, tp) {
                         (*tp).wn_refs += 1;
@@ -682,27 +746,42 @@ unsafe fn node_compress(
                         (*np).wn_child = tp;
                         break;
                     }
-                    tp = (*tp).wn_u2.next;
+                    tp = (*tp).wn_link;
                 }
                 if tp.is_null() {
                     // No match; join the chain for the next comer.
-                    let head = (*hi).hi_key.cast::<wordnode_T>();
-                    (*child).wn_u2.next = (*head).wn_u2.next;
-                    (*head).wn_u2.next = child;
+                    let head = node_of_digest_key((*hi).hi_key);
+                    (*child).wn_link = (*head).wn_link;
+                    (*head).wn_link = child;
                 }
             }
-            np = (*np).wn_sibling;
         }
         *tot += len + 1;
+        write_digest(node, len);
 
-        // Digest this chain: its length, then a rolling hash over every
-        // sibling's byte and either its child pointer or, at a word end,
-        // its flags. Each byte is forced non-zero so the five together form
-        // a string the hash table can key on.
-        (*node).wn_u1.hashkey[0] = len as uint8_t;
+        veryfast_breakcheck();
+        compressed
+    }
+}
+
+/// Digest `node`'s whole sibling chain into [`wordnode_S::wn_digest`]: the
+/// chain's length, then a rolling hash over every sibling's byte and either
+/// its child pointer or, at a word end, its flags.
+///
+/// Each of the five bytes is forced non-zero so that together they form a
+/// NUL-terminated string the hash table can key on. `len` is the chain's
+/// length as [`node_compress`] counted it, truncated — a longer chain only
+/// collides more often, and [`node_equal`] is what decides equality.
+///
+/// # Safety
+///
+/// `node` must head a live sibling chain.
+unsafe fn write_digest(node: *mut wordnode_T, len: c_int) {
+    // SAFETY: the caller promises a live chain, and `siblings` walks it to
+    // its null terminator without changing it.
+    unsafe {
         let mut nr: c_uint = 0;
-        let mut np = node;
-        while !np.is_null() {
+        for np in siblings(node) {
             let n: c_uint = if (*np).wn_byte as c_int == NUL {
                 ((*np).wn_flags as c_int
                     + (((*np).wn_region as c_int) << 8)
@@ -713,17 +792,36 @@ unsafe fn node_compress(
                     as c_uint
             };
             nr = nr.wrapping_mul(101).wrapping_add(n);
-            np = (*np).wn_sibling;
         }
+
+        let digest = &mut (*node).wn_digest;
+        digest[0] = len as uint8_t;
         for (i, shift) in [0, 8, 16, 24].into_iter().enumerate() {
             let b = (nr >> shift & 0xff) as uint8_t;
-            (*node).wn_u1.hashkey[i + 1] = if b == 0 { 1 } else { b };
+            digest[i + 1] = if b == 0 { 1 } else { b };
         }
-        (*node).wn_u1.hashkey[5] = NUL as uint8_t;
-
-        veryfast_breakcheck();
-        compressed
+        digest[5] = NUL as uint8_t;
     }
+}
+
+/// The nodes of a sibling chain, `node` first.
+///
+/// # Safety
+///
+/// `node` must be null or head a live sibling chain, and nothing may change
+/// a `wn_sibling` link in it while the iterator is alive.
+unsafe fn siblings(node: *mut wordnode_T) -> impl Iterator<Item = *mut wordnode_T> {
+    let mut next = node;
+    core::iter::from_fn(move || {
+        let cur = next;
+        if cur.is_null() {
+            return None;
+        }
+        // SAFETY: the caller promises a live chain, so every node reached
+        // this way is live and its sibling link readable.
+        next = unsafe { (*cur).wn_sibling };
+        Some(cur)
+    })
 }
 
 /// Are two sibling chains interchangeable?
@@ -758,5 +856,93 @@ unsafe fn node_equal(n1: *mut wordnode_T, n2: *mut wordnode_T) -> bool {
             p2 = (*p2).wn_sibling;
         }
         p1.is_null() && p2.is_null()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn blank_node() -> wordnode_S {
+        wordnode_S {
+            wn_digest: [0; 6],
+            wn_index: 0,
+            wn_link: ptr::null_mut(),
+            wn_child: ptr::null_mut(),
+            wn_sibling: ptr::null_mut(),
+            wn_refs: 0,
+            wn_byte: 0,
+            wn_affixID: 0,
+            wn_flags: 0,
+            wn_region: 0,
+        }
+    }
+
+    /// What the overlay was worth, measured rather than assumed: the union
+    /// of `[u8; 6]` and `c_int` was eight bytes with four of them padding,
+    /// which is exactly what an `int` beside the array costs. One node per
+    /// byte of dictionary is why anyone cares.
+    #[test]
+    fn a_node_costs_no_more_than_the_union() {
+        /// `wordnode_S` as upstream lays it out, with both overlays.
+        #[repr(C)]
+        struct AsUnion {
+            u1: [uint8_t; 8],
+            u2: *mut u8,
+            child: *mut u8,
+            sibling: *mut u8,
+            refs: c_int,
+            byte: uint8_t,
+            affix_id: uint8_t,
+            flags: uint16_t,
+            region: int16_t,
+        }
+        assert!(mem::size_of::<wordnode_S>() <= mem::size_of::<AsUnion>());
+        assert_eq!(mem::align_of::<wordnode_S>(), mem::align_of::<AsUnion>());
+    }
+
+    /// The compression table stores a pointer into the node, not to it, so
+    /// the way back is the field's offset — no longer a promise that the
+    /// digest sits first.
+    #[test]
+    fn a_digest_key_names_the_node_it_came_from() {
+        let mut node = blank_node();
+        let at = &raw mut node;
+        let key = digest_key(at);
+        assert_eq!(key.cast::<uint8_t>(), (&raw mut node.wn_digest).cast());
+        // SAFETY: `key` is this node's digest field and the node is alive.
+        assert_eq!(unsafe { node_of_digest_key(key) }, at);
+    }
+
+    /// The five digest bytes have to read as a NUL-terminated string of
+    /// length five, whatever the chain hashes to: the table calls `strlen`
+    /// on them.
+    #[test]
+    fn a_digest_is_five_non_zero_bytes_and_a_terminator() {
+        let mut tail = blank_node();
+        tail.wn_byte = b'x';
+        let mut head = blank_node();
+        head.wn_sibling = &raw mut tail;
+        // SAFETY: the two nodes form a live chain that outlives the call.
+        unsafe { write_digest(&raw mut head, 2) };
+        assert_eq!(head.wn_digest[0], 2);
+        assert!(head.wn_digest[1..5].iter().all(|&b| b != 0));
+        assert_eq!(head.wn_digest[5], NUL as uint8_t);
+    }
+
+    /// The point of the split: the write phase's index no longer lands on
+    /// top of the compression phase's digest. Under the union, storing an
+    /// index cleared the first four digest bytes, which is why
+    /// `clear_node` could be read as "forget the digests" as well.
+    #[test]
+    fn the_index_and_the_digest_are_separate_storage() {
+        let mut node = blank_node();
+        // SAFETY: a one-node chain, alive for the call.
+        unsafe { write_digest(&raw mut node, 1) };
+        let digest = node.wn_digest;
+        node.wn_index = 0x0102_0304;
+        node.wn_link = &raw mut node;
+        assert_eq!(node.wn_digest, digest);
+        assert_ne!(node.wn_digest[0], 0);
     }
 }
