@@ -292,7 +292,7 @@
     "crates/nvim/src/eval/typval/listops.rs": {"extern_abi": 18, "missing_safety_doc": 21, "no_mangle": 18, "unsafe_lines": 354},
     "crates/nvim/src/eval/typval/listrange.rs": {"extern_abi": 1, "missing_safety_doc": 10, "no_mangle": 1, "unsafe_lines": 303},
     "crates/nvim/src/eval/typval/nothing.rs": {"missing_safety_doc": 19, "unsafe_lines": 118},
-    "crates/nvim/src/eval/typval/sort.rs": {"extern_abi": 4, "missing_safety_doc": 12, "unsafe_lines": 285},
+    "crates/nvim/src/eval/typval/sort.rs": {"extern_abi": 4, "missing_safety_doc": 12, "unsafe_lines": 282},
     "crates/nvim/src/eval/typval/value.rs": {"cell_ptr": 9, "extern_abi": 7, "missing_safety_doc": 8, "no_mangle": 7, "unsafe_lines": 212},
     "crates/nvim/src/eval/typval/watcher.rs": {"extern_abi": 3, "missing_safety_doc": 10, "no_mangle": 3, "unsafe_lines": 215},
     "crates/nvim/src/eval/typval_encode/mod.rs": {"missing_safety_doc": 27, "unsafe_lines": 4},

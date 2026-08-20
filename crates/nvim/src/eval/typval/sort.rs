@@ -245,6 +245,12 @@ fn sorter(info: *const sortinfo_T, keep_zero: bool) -> ListSorter {
     })
 }
 
+/// The record a comparator reads for one list item, at its position in the
+/// list.  Only a `_not_keeping_zero` comparator reads `idx`.
+fn sort_item(item: *mut listitem_T, idx: ::core::ffi::c_int) -> ListSortItem {
+    ListSortItem { item, idx }
+}
+
 /// `sort()` over `l`, in place.
 pub(crate) unsafe fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
     unsafe {
@@ -256,8 +262,7 @@ pub(crate) unsafe fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
 
         // f_sort(): ptrs will be the list to sort
         for (i, li) in tv_list_iter(l.as_ref()).enumerate() {
-            (*ptrs.add(i)).item = li;
-            (*ptrs.add(i)).idx = i as ::core::ffi::c_int;
+            *ptrs.add(i) = sort_item(li, i as ::core::ffi::c_int);
         }
 
         (*info).item_compare_func_err = false;
@@ -299,19 +304,25 @@ pub(crate) unsafe fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
             xmalloc(len as usize * ::core::mem::size_of::<ListSortItem>()) as *mut ListSortItem;
 
         (*info).item_compare_func_err = false;
-        let item_compare_func = sorter(info, true);
+        let compare = sorter(info, true).expect("non-null function pointer");
 
         let mut li = (*tv_list_first(l)).li_next;
         while !li.is_null() {
-            let prev_li = (*li).li_prev;
-            // Upstream hands the comparator the addresses of these two
-            // `listitem_T *` locals, which it reads as `ListSortItem *`: the
-            // `item` field lines up and `idx` is never touched, because only
-            // the `_keeping_zero` comparators reach here.
-            let equal = item_compare_func.expect("non-null function pointer")(
-                (&raw const prev_li).cast(),
-                (&raw const li).cast(),
-            ) == 0;
+            // Upstream hands the comparator the addresses of two bare
+            // `listitem_T *` locals and lets it read them as `ListSortItem *`,
+            // relying on `item` sitting at offset 0 and on `idx` never being
+            // touched (only the `_keeping_zero` comparators reach here).  That
+            // pun reads eight bytes past a pointer-sized local unless
+            // `ListSortItem` happens to have C's field order, so it is
+            // out of bounds under `-Zrandomize-layout` -- which is what made
+            // `uniq()` compare garbage there.  Building the two records costs
+            // the same and promises nothing about the layout, so
+            // `ListSortItem` stays free to be reordered.  The indexes are only
+            // read by the `_not_keeping_zero` comparators, which never reach
+            // here; they are still filled in list order so that would work.
+            let prev = sort_item((*li).li_prev, 0);
+            let cur = sort_item(li, 1);
+            let equal = compare((&raw const prev).cast(), (&raw const cur).cast()) == 0;
             li = if equal {
                 tv_list_item_remove(l, li)
             } else {
