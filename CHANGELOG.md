@@ -18,6 +18,14 @@ and this project adheres to [CalVer](https://calver.org/).
   `foldclosed()`/`foldclosedend()`/`foldlevel()`/`foldtext()`/
   `foldtextresult()`, the fold block `:mkview` writes, and how folds follow
   the buffer when lines are inserted, deleted or moved.
+- Rewrote marks, the jump list and the change list, covering `m` and every
+  mark name from `'a` to `'Z`, `'0`-`'9` and the whole `'.`/`'^`/`'"`/`'[`/
+  `']`/`'<`/`'>` family, `:marks`, `:delmarks`, `:jumps`, `:changes`,
+  `:clearjumps`, CTRL-O/CTRL-I and `g;`/`g,`, `getpos()`/`setpos()`/
+  `getmarklist()`/`getjumplist()`/`getchangelist()`, the `nvim_*_mark` API,
+  `:lockmarks`/`:keepjumps`/`:keepmarks`, the marks a ShaDa file carries
+  between sessions, and how every one of those follows the buffer when lines
+  or columns move.
 
 ### Fixed
 
