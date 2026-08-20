@@ -1,3 +1,12 @@
+//! Vimscript evaluation: values, expressions, variables and the builtin
+//! function table.
+//!
+//! The deny below reaches the whole subtree — a lint attribute at a `mod.rs`
+//! propagates into every `mod foo;` under it — which is why it could only
+//! land once every module in `eval/` had been converted.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod buffer;
 pub mod decode;
 pub mod deprecated;
