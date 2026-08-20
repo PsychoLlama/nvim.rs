@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::store::{header_at, header_chain, header_free, link_of, store_release};
+use super::store::{Header, header_chain, header_free, store_release};
 use super::*;
+use crate::winlayer::Buf;
 
 /// Marks `start` and everything reachable from it backwards as changed.
 ///
@@ -35,13 +36,15 @@ pub(crate) unsafe fn u_unch_branch(buf: *mut buf_T, start: UndoLink) {
 pub(crate) unsafe fn u_get_headentry(buf: *mut buf_T) -> *mut u_entry_T {
     // SAFETY: a live buffer; `b_u_newhead` is resolved through the store, so
     // it is either a live header or nothing.
-    unsafe {
-        let newhead = header_at(buf, (*buf).b_u_newhead);
-        if newhead.is_null() || (*newhead).uh_entry.is_null() {
-            iemsg(gettext(c"E439: Undo list corrupt".as_ptr()));
-            return ptr::null_mut();
+    // SAFETY: a live buffer, by the contract above.
+    let newhead = unsafe { Buf::new(buf) }.header(unsafe { (*buf).b_u_newhead });
+    match newhead.filter(|uh| !uh.uh_entry.is_null()) {
+        Some(uh) => uh.uh_entry,
+        None => {
+            // SAFETY: a NUL-terminated literal.
+            unsafe { iemsg(gettext(c"E439: Undo list corrupt".as_ptr())) };
+            ptr::null_mut()
         }
-        (*newhead).uh_entry
     }
 }
 
@@ -58,8 +61,10 @@ pub(crate) unsafe fn u_getbot(buf: *mut buf_T) {
         if u_get_headentry(buf).is_null() {
             return;
         }
-        let newhead = header_at(buf, (*buf).b_u_newhead);
-        let uep = (*newhead).uh_getbot_entry;
+        let mut newhead = Buf::new(buf)
+            .header((*buf).b_u_newhead)
+            .expect("u_get_headentry proved it is there");
+        let uep = newhead.uh_getbot_entry;
         if !uep.is_null() {
             let extra: linenr_T = (*buf).b_ml.ml_line_count - (*uep).ue_lcount;
             (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 + extra;
@@ -67,7 +72,7 @@ pub(crate) unsafe fn u_getbot(buf: *mut buf_T) {
                 iemsg(gettext(c"E440: Undo line missing".as_ptr()));
                 (*uep).ue_bot = (*uep).ue_top + 1;
             }
-            (*newhead).uh_getbot_entry = ptr::null_mut();
+            newhead.uh_getbot_entry = ptr::null_mut();
         }
         (*buf).b_u_synced = true;
     }
@@ -87,18 +92,16 @@ pub(crate) unsafe fn u_freeheader(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *
     // SAFETY: a live buffer and a header it owns; every link below is
     // resolved through the store, so a stale one reads as "nothing".
     unsafe {
-        if (*uhp).uh_alt_next.is_some() {
-            u_freebranch(buf, header_at(buf, (*uhp).uh_alt_next), uhpp);
+        let b = Buf::new(buf);
+        if let Some(alt) = b.header((*uhp).uh_alt_next) {
+            u_freebranch(buf, alt.raw(), uhpp);
         }
-        let alt_prev = header_at(buf, (*uhp).uh_alt_prev);
-        if !alt_prev.is_null() {
-            (*alt_prev).uh_alt_next = UndoLink::NONE;
+        if let Some(mut alt_prev) = b.header((*uhp).uh_alt_prev) {
+            alt_prev.uh_alt_next = UndoLink::NONE;
         }
-        let next = header_at(buf, (*uhp).uh_next);
-        if next.is_null() {
-            (*buf).b_u_oldhead = (*uhp).uh_prev;
-        } else {
-            (*next).uh_prev = (*uhp).uh_prev;
+        match b.header((*uhp).uh_next) {
+            Some(mut next) => next.uh_prev = (*uhp).uh_prev,
+            None => (*buf).b_u_oldhead = (*uhp).uh_prev,
         }
         if (*uhp).uh_prev.is_none() {
             (*buf).b_u_newhead = (*uhp).uh_next;
@@ -123,27 +126,25 @@ pub(crate) unsafe fn u_freebranch(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: *
     unsafe {
         // Freeing the oldest header takes the whole tree with it, so let
         // `u_freeheader` do the unlinking rather than walking here.
-        if link_of(uhp) == (*buf).b_u_oldhead {
-            while (*buf).b_u_oldhead.is_some() {
-                let oldhead = header_at(buf, (*buf).b_u_oldhead);
-                u_freeheader(buf, oldhead, uhpp);
+        let b = Buf::new(buf);
+        if Header::new(uhp).map(Header::link).unwrap_or_default() == (*buf).b_u_oldhead {
+            while let Some(oldhead) = b.header((*buf).b_u_oldhead) {
+                u_freeheader(buf, oldhead.raw(), uhpp);
             }
             return;
         }
-        let alt_prev = header_at(buf, (*uhp).uh_alt_prev);
-        if !alt_prev.is_null() {
-            (*alt_prev).uh_alt_next = UndoLink::NONE;
+        if let Some(mut alt_prev) = b.header((*uhp).uh_alt_prev) {
+            alt_prev.uh_alt_next = UndoLink::NONE;
         }
         // Not `header_chain`: the step would have to read a header this loop
         // has already freed.
-        let mut next = uhp;
-        while !next.is_null() {
-            let tofree = next;
-            if (*tofree).uh_alt_next.is_some() {
-                u_freebranch(buf, header_at(buf, (*tofree).uh_alt_next), uhpp);
+        let mut next = Header::new(uhp);
+        while let Some(tofree) = next {
+            if let Some(alt) = b.header(tofree.uh_alt_next) {
+                u_freebranch(buf, alt.raw(), uhpp);
             }
-            next = header_at(buf, (*tofree).uh_prev);
-            u_freeentries(buf, tofree, uhpp);
+            next = b.header(tofree.uh_prev);
+            u_freeentries(buf, tofree.raw(), uhpp);
         }
     }
 }
@@ -157,7 +158,7 @@ pub(crate) unsafe fn u_freeentries(buf: *mut buf_T, uhp: *mut u_header_T, uhpp: 
     // SAFETY: a live buffer and a header it owns; the entry list is that
     // header's and is walked one node ahead of the free.
     unsafe {
-        let link = link_of(uhp);
+        let link = UndoLink::to_seq((*uhp).uh_seq);
         if (*buf).b_u_curhead == link {
             (*buf).b_u_curhead = UndoLink::NONE;
         }
@@ -228,9 +229,10 @@ pub unsafe fn u_blockfree(buf: *mut buf_T) {
     // SAFETY: a live buffer; each pass frees the oldest header, and the
     // assert is the transpiled loop's own guard against not making progress.
     unsafe {
-        while (*buf).b_u_oldhead.is_some() {
+        let b = Buf::new(buf);
+        while let Some(oldhead) = b.header((*buf).b_u_oldhead) {
             let previous_oldhead = (*buf).b_u_oldhead;
-            u_freeheader(buf, header_at(buf, previous_oldhead), ptr::null_mut());
+            u_freeheader(buf, oldhead.raw(), ptr::null_mut());
             debug_assert!(
                 (*buf).b_u_oldhead != previous_oldhead,
                 "buf->b_u_oldhead != previous_oldhead"

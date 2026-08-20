@@ -43,7 +43,7 @@ use crate::types::{
     WinSplit, WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values,
     dobuf_start_values, except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, linenr_T, lua_State, msglist_T, pos_T, ptrdiff_t, size_t, tabpage_T,
-    u_header_T, uint64_t, win_T,
+    uint64_t, win_T,
 };
 use crate::undo::u_save_buf;
 use ::libc::{memcpy, strlen};

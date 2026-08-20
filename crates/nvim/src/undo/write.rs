@@ -1,168 +1,79 @@
 //! `u_write_undo`: writing a buffer's undo tree out to its undo file.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use super::file::*;
 use super::format::*;
-use super::store::{header_at, unwalked};
+use super::store::Marks;
 use super::*;
+use crate::winlayer::Buf;
 use crate::{semsg_c, smsg_c};
 
+/// Writes `buf`'s undo tree to `name`, or to the file `'undodir'` picks for
+/// it when `name` is NULL.
+///
+/// `forceit` is `:wundo!`: overwrite whatever is there without checking that
+/// it looks like an undo file first.
+///
+/// # Safety
+///
+/// `buf` points at a live buffer, `name` is NULL or a NUL-terminated path,
+/// and `hash` at [`UNDO_HASH_SIZE`] readable bytes.
 pub unsafe fn u_write_undo(
     name: *const c_char,
     forceit: bool,
     buf: *mut buf_T,
     hash: *mut uint8_t,
 ) {
-    let mut mark: c_int = 0;
-    let mut uhp: *mut u_header_T = ptr::null_mut();
-    let mut fd_0: c_int = 0;
-    let mut file_info_old: FileInfo = FileInfo {
-        stat: uv_stat_t {
-            st_dev: 0,
-            st_mode: 0,
-            st_nlink: 0,
-            st_uid: 0,
-            st_gid: 0,
-            st_rdev: 0,
-            st_ino: 0,
-            st_size: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-            st_flags: 0,
-            st_gen: 0,
-            st_atim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_mtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_ctim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_birthtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-        },
-    };
-    let mut file_info_new: FileInfo = FileInfo {
-        stat: uv_stat_t {
-            st_dev: 0,
-            st_mode: 0,
-            st_nlink: 0,
-            st_uid: 0,
-            st_gid: 0,
-            st_rdev: 0,
-            st_ino: 0,
-            st_size: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-            st_flags: 0,
-            st_gen: 0,
-            st_atim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_mtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_ctim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_birthtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-        },
-    };
-    let mut bi: bufinfo_T = bufinfo_T {
-        bi_buf: ptr::null_mut(),
-        bi_fp: ptr::null_mut(),
-    };
-    let mut file_name: *mut c_char = ptr::null_mut();
-    let mut fp: *mut FILE = ptr::null_mut();
-    let mut write_ok: bool = false;
-    if name.is_null() {
-        file_name = u_get_undo_file_name((*buf).b_ffname, false);
-        if file_name.is_null() {
-            if p_verbose.get() > 0 {
-                verbose_enter();
-                smsg_c!(
-                    0,
-                    c"%s".as_ptr(),
-                    gettext(c"Cannot write undo file in any directory in 'undodir'".as_ptr()),
-                );
-                verbose_leave();
+    let file_name: *mut c_char = if name.is_null() {
+        // SAFETY: a live buffer, by the contract above.
+        let picked = unsafe { u_get_undo_file_name((*buf).b_ffname, false) };
+        if picked.is_null() {
+            // SAFETY: a NUL-terminated literal.
+            unsafe {
+                verbosely(true, || {
+                    smsg_c!(
+                        0,
+                        c"%s".as_ptr(),
+                        gettext(c"Cannot write undo file in any directory in 'undodir'".as_ptr(),),
+                    );
+                });
             }
             return;
         }
+        picked
     } else {
-        file_name = name as *mut c_char;
+        name.cast_mut()
+    };
+    // SAFETY: a live buffer and a NUL-terminated path, by the above.
+    unsafe { write_undo_file(file_name, name.is_null(), forceit, buf, hash) };
+    if !core::ptr::eq(file_name.cast_const(), name) {
+        // SAFETY: `u_get_undo_file_name`'s allocation, which the caller's own
+        // `name` is never.
+        unsafe { xfree(file_name.cast()) };
     }
-    let mut perm: c_int = 0o600;
-    if !(*buf).b_ffname.is_null() {
-        perm = os_getperm((*buf).b_ffname) as c_int;
-        if perm < 0 {
-            perm = 0o600;
-        }
-    }
-    perm &= 0o666;
-    '_theend: {
+}
+
+/// The write itself, once the target path is known.
+///
+/// # Safety
+///
+/// As [`u_write_undo`], with `file_name` the resolved path and `automatic`
+/// saying whether the caller left the name to `'undodir'`.
+unsafe fn write_undo_file(
+    file_name: *mut c_char,
+    automatic: bool,
+    forceit: bool,
+    buf: *mut buf_T,
+    hash: *mut uint8_t,
+) {
+    // SAFETY: a live buffer and a NUL-terminated path, by the contract above.
+    unsafe {
         if os_path_exists(file_name) {
-            if name.is_null() || !forceit {
-                let mut fd: c_int = os_open(file_name, O_RDONLY, 0);
-                if fd < 0 {
-                    if !name.is_null() || p_verbose.get() > 0 {
-                        if name.is_null() {
-                            verbose_enter();
-                        }
-                        smsg_c!(
-                            0,
-                            gettext(c"Will not overwrite with undo file, cannot read: %s".as_ptr()),
-                            file_name,
-                        );
-                        if name.is_null() {
-                            verbose_leave();
-                        }
-                    }
-                    break '_theend;
-                } else {
-                    let mut mbuf: [c_char; 9] = [0; 9];
-                    let mut len: ssize_t = read_eintr(
-                        fd,
-                        &raw mut mbuf as *mut c_char as *mut c_void,
-                        UF_START_MAGIC_LEN as size_t,
-                    );
-                    close(fd);
-                    if len < UF_START_MAGIC_LEN as ssize_t
-                        || memcmp(
-                            &raw mut mbuf as *mut c_char as *const c_void,
-                            UF_START_MAGIC.as_ptr() as *const c_void,
-                            UF_START_MAGIC_LEN as size_t,
-                        ) != 0
-                    {
-                        if !name.is_null() || p_verbose.get() > 0 {
-                            if name.is_null() {
-                                verbose_enter();
-                            }
-                            smsg_c!(
-                                0,
-                                gettext(
-                                    c"Will not overwrite, this is not an undo file: %s".as_ptr(),
-                                ),
-                                file_name,
-                            );
-                            if name.is_null() {
-                                verbose_leave();
-                            }
-                        }
-                        break '_theend;
-                    }
-                }
+            // Never clobber a file that is not an undo file, unless `:wundo!`
+            // said to.
+            if (automatic || !forceit) && !looks_like_undo_file(file_name, automatic) {
+                return;
             }
             os_remove(file_name);
         }
@@ -172,169 +83,175 @@ pub unsafe fn u_write_undo(
                     c"Skipping undo file write, nothing to undo".as_ptr(),
                 ));
             }
-        } else {
-            fd_0 = os_open(file_name, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm);
-            if fd_0 < 0 {
-                semsg_c!(
-                    gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
-                    file_name,
-                );
-            } else {
-                os_setperm(file_name, perm);
-                if p_verbose.get() > 0 {
-                    verbose_enter();
-                    smsg_c!(0, gettext(c"Writing undo file: %s".as_ptr()), file_name);
-                    verbose_leave();
-                }
-                file_info_old = FileInfo {
-                    stat: uv_stat_t {
-                        st_dev: 0,
-                        st_mode: 0,
-                        st_nlink: 0,
-                        st_uid: 0,
-                        st_gid: 0,
-                        st_rdev: 0,
-                        st_ino: 0,
-                        st_size: 0,
-                        st_blksize: 0,
-                        st_blocks: 0,
-                        st_flags: 0,
-                        st_gen: 0,
-                        st_atim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                        st_mtim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                        st_ctim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                        st_birthtim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                    },
-                };
-                file_info_new = FileInfo {
-                    stat: uv_stat_t {
-                        st_dev: 0,
-                        st_mode: 0,
-                        st_nlink: 0,
-                        st_uid: 0,
-                        st_gid: 0,
-                        st_rdev: 0,
-                        st_ino: 0,
-                        st_size: 0,
-                        st_blksize: 0,
-                        st_blocks: 0,
-                        st_flags: 0,
-                        st_gen: 0,
-                        st_atim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                        st_mtim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                        st_ctim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                        st_birthtim: uv_timespec_t {
-                            tv_sec: 0,
-                            tv_nsec: 0,
-                        },
-                    },
-                };
-                if !(*buf).b_ffname.is_null()
-                    && os_fileinfo((*buf).b_ffname, &raw mut file_info_old) as c_int != 0
-                    && os_fileinfo(file_name, &raw mut file_info_new)
-                    && file_info_old.stat.st_gid != file_info_new.stat.st_gid
-                    && os_fchown(
-                        fd_0,
-                        u32::MAX as uv_uid_t,
-                        file_info_old.stat.st_gid as uv_gid_t,
-                    ) != 0
-                {
-                    os_setperm(file_name, perm & 0o707 | (perm & 0o7) << 3);
-                }
-                fp = fdopen(fd_0, c"w".as_ptr());
-                if fp.is_null() {
-                    semsg_c!(
-                        gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
-                        file_name,
-                    );
-                    close(fd_0);
-                    os_remove(file_name);
-                } else {
-                    u_sync(true);
-                    bi = bufinfo_T {
-                        bi_buf: buf,
-                        bi_fp: fp,
-                    };
-                    '_write_error: {
-                        if serialize_header(&raw mut bi, hash) {
-                            (*lastmark.ptr()) += 1;
-                            mark = lastmark.get();
-                            uhp = header_at(buf, (*buf).b_u_oldhead);
-                            while !uhp.is_null() {
-                                if (*uhp).uh_walk != mark {
-                                    (*uhp).uh_walk = mark;
-                                    if !serialize_uhp(&raw mut bi, uhp) {
-                                        break '_write_error;
-                                    }
-                                }
-                                let step = |link: UndoLink| header_at(buf, link);
-                                if unwalked(step((*uhp).uh_prev), mark, mark) {
-                                    uhp = step((*uhp).uh_prev);
-                                } else if unwalked(step((*uhp).uh_alt_next), mark, mark) {
-                                    uhp = step((*uhp).uh_alt_next);
-                                } else if (*uhp).uh_alt_prev.is_none()
-                                    && unwalked(step((*uhp).uh_next), mark, mark)
-                                {
-                                    uhp = step((*uhp).uh_next);
-                                } else if (*uhp).uh_alt_prev.is_some() {
-                                    uhp = step((*uhp).uh_alt_prev);
-                                } else {
-                                    uhp = step((*uhp).uh_next);
-                                }
-                            }
-                            if undo_write_bytes(&raw mut bi, UF_HEADER_END_MAGIC as uintmax_t, 2) {
-                                write_ok = true;
-                            }
-                            if (if (*buf).b_p_fs >= 0 {
-                                (*buf).b_p_fs
-                            } else {
-                                p_fs.get()
-                            }) != 0
-                                && fflush(fp) == 0
-                                && os_fsync(fd_0) != 0
-                            {
-                                write_ok = false;
-                            }
-                        }
-                    }
-                    fclose(fp);
-                    if !write_ok {
-                        semsg_c!(
-                            gettext(c"E829: Write error in undo file: %s".as_ptr()),
-                            file_name,
-                        );
-                    }
-                    if !(*buf).b_ffname.is_null() {
-                        let mut acl: vim_acl_T = os_get_acl((*buf).b_ffname);
-                        os_set_acl(file_name, acl);
-                        os_free_acl(acl);
-                    }
-                }
+            return;
+        }
+
+        // The undo file inherits the edited file's permissions, minus
+        // anything but read/write: it holds the same text.
+        let mut perm: c_int = 0o600;
+        if !(*buf).b_ffname.is_null() {
+            perm = os_getperm((*buf).b_ffname) as c_int;
+            if perm < 0 {
+                perm = 0o600;
             }
         }
+        perm &= 0o666;
+
+        let fd = os_open(file_name, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm);
+        if fd < 0 {
+            semsg_c!(
+                gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
+                file_name,
+            );
+            return;
+        }
+        os_setperm(file_name, perm);
+        // Always under 'verbose', even when the user named the file.
+        verbosely(true, || {
+            smsg_c!(0, gettext(c"Writing undo file: %s".as_ptr()), file_name);
+        });
+        match_group(fd, file_name, perm, buf);
+
+        let fp: *mut FILE = fdopen(fd, c"w".as_ptr());
+        if fp.is_null() {
+            semsg_c!(
+                gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
+                file_name,
+            );
+            close(fd);
+            os_remove(file_name);
+            return;
+        }
+        u_sync(true);
+        let mut bi = bufinfo_T {
+            bi_buf: buf,
+            bi_fp: fp,
+        };
+        let write_ok = write_tree(&raw mut bi, buf, hash, fd, fp);
+        fclose(fp);
+        if !write_ok {
+            semsg_c!(
+                gettext(c"E829: Write error in undo file: %s".as_ptr()),
+                file_name,
+            );
+        }
+        if !(*buf).b_ffname.is_null() {
+            let acl: vim_acl_T = os_get_acl((*buf).b_ffname);
+            os_set_acl(file_name, acl);
+            os_free_acl(acl);
+        }
     }
-    if !core::ptr::eq(file_name, name) {
-        xfree(file_name as *mut c_void);
+}
+
+/// Whether the file already at `file_name` starts with [`UF_START_MAGIC`],
+/// saying so when it does not.
+///
+/// # Safety
+///
+/// `file_name` is a NUL-terminated path to an existing file.
+unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool {
+    // SAFETY: a NUL-terminated path, by the contract above.
+    let fd = unsafe { os_open(file_name, O_RDONLY, 0) };
+    if fd < 0 {
+        // SAFETY: a NUL-terminated literal and path.
+        unsafe {
+            verbosely(automatic, || {
+                smsg_c!(
+                    0,
+                    gettext(c"Will not overwrite with undo file, cannot read: %s".as_ptr()),
+                    file_name,
+                );
+            });
+        }
+        return false;
+    }
+    let mut magic = [0u8; UF_START_MAGIC.len()];
+    // SAFETY: an open descriptor and a buffer of exactly that many bytes.
+    let len = unsafe { read_eintr(fd, magic.as_mut_ptr().cast(), magic.len()) };
+    // SAFETY: our own descriptor.
+    unsafe { close(fd) };
+    if len == magic.len() as ssize_t && magic == UF_START_MAGIC {
+        return true;
+    }
+    // SAFETY: a NUL-terminated literal and path.
+    unsafe {
+        verbosely(automatic, || {
+            smsg_c!(
+                0,
+                gettext(c"Will not overwrite, this is not an undo file: %s".as_ptr()),
+                file_name,
+            );
+        });
+    }
+    false
+}
+
+/// Gives the undo file the edited file's group when they differ, and drops
+/// the group's read bit if it cannot.
+///
+/// # Safety
+///
+/// `fd` is open on `file_name` and `buf` points at a live buffer.
+unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buf: *mut buf_T) {
+    // SAFETY: a live buffer and an open descriptor, by the contract above.
+    unsafe {
+        if (*buf).b_ffname.is_null() {
+            return;
+        }
+        let mut edited = FileInfo::default();
+        let mut written = FileInfo::default();
+        if os_fileinfo((*buf).b_ffname, &raw mut edited)
+            && os_fileinfo(file_name, &raw mut written)
+            && edited.stat.st_gid != written.stat.st_gid
+            && os_fchown(fd, u32::MAX as uv_uid_t, edited.stat.st_gid as uv_gid_t) != 0
+        {
+            // The group could not be changed: make sure it cannot read the
+            // undo file either.
+            os_setperm(file_name, perm & 0o707 | (perm & 0o7) << 3);
+        }
+    }
+}
+
+/// Lays down the file header, every header in the tree, and the end marker.
+///
+/// # Safety
+///
+/// `bi` is open on `buf`'s undo file, `buf` points at a live buffer, `hash`
+/// at [`UNDO_HASH_SIZE`] readable bytes, and `fd`/`fp` are the same open
+/// file as `bi`.
+unsafe fn write_tree(
+    bi: *mut bufinfo_T,
+    buf: *mut buf_T,
+    hash: *mut uint8_t,
+    fd: c_int,
+    fp: *mut FILE,
+) -> bool {
+    // SAFETY: an open undo file and a live buffer, by the contract above.
+    unsafe {
+        if !serialize_header(bi, hash) {
+            return false;
+        }
+        // Every header exactly once, in whatever order the depth-first walk
+        // reaches them: the links are sequence numbers, so the reader does
+        // not care which order they arrive in. One stamp does for both of the
+        // walk's marks, because "reached" is the whole question here.
+        let tree = Buf::new(buf).tree_walk((*buf).b_u_oldhead, Marks::next_once());
+        for visit in tree {
+            if visit.first && !serialize_uhp(bi, visit.header.raw()) {
+                return false;
+            }
+        }
+        let mut write_ok = undo_write_bytes(bi, UF_HEADER_END_MAGIC as uintmax_t, 2);
+        // 'fsync' asks for the bytes to be on the disk before we call the
+        // write done.
+        let fsync_wanted = if (*buf).b_p_fs >= 0 {
+            (*buf).b_p_fs
+        } else {
+            p_fs.get()
+        };
+        if fsync_wanted != 0 && fflush(fp) == 0 && os_fsync(fd) != 0 {
+            write_ok = false;
+        }
+        write_ok
     }
 }

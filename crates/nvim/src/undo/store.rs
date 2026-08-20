@@ -20,10 +20,16 @@
 //!   displaced.
 //!
 //! Headers are still individually `xmalloc`ed rather than held inline: the
-//! files this slice converted mechanically (`apply.rs`, `file.rs`,
-//! `read.rs`, `write.rs`) still walk a header through a `*mut u_header_T`,
-//! and a stable address is what lets the store change underneath them.
-//! [`header_at`] is that view.
+//! tree still walks a header through a `*mut u_header_T` in the places that
+//! free one, and a stable address is what lets the store change underneath
+//! them. [`Header`] is that view, and [`crate::winlayer::Buf::header`] is
+//! the only way to get one.
+//!
+//! The tree itself is walked in exactly two shapes, and both live here:
+//! [`header_chain`] follows one link field until it names nothing, and
+//! [`TreeWalk`] is the depth-first pass over the *whole* tree that
+//! `:undolist`, `:earlier`/`:later` and the undo-file writer each used to
+//! spell out for themselves.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -38,9 +44,11 @@ use core::ffi::{c_int, c_void};
 use core::ptr::NonNull;
 use std::collections::HashMap;
 
-use crate::main::curbuf;
 use crate::memory::xfree;
 use crate::types::{UndoLink, buf_T, u_header_T};
+use crate::winlayer::Buf;
+
+use super::lastmark;
 
 /// Every undo header one buffer owns, keyed by `uh_seq`.
 ///
@@ -185,32 +193,32 @@ impl Header {
     }
 }
 
-impl crate::winlayer::Buf {
+impl Buf {
     /// The header `link` names in this buffer's undo store, if any.
     ///
-    /// Safe where the free [`header_at`] is not: a [`Buf`](crate::winlayer::Buf)
-    /// already carries the promise that the buffer is live, and that is the
-    /// whole of the lookup's obligation — a link that names nothing, or names
-    /// a header that has been freed, resolves to `None`.
+    /// Safe, where a bare lookup through a `*mut buf_T` would not be: a
+    /// [`Buf`] already carries the promise that the buffer is live, and that
+    /// is the whole of the lookup's obligation — a link that names nothing,
+    /// or names a header that has been freed, resolves to `None`.
     #[inline]
     pub(crate) fn header(self, link: UndoLink) -> Option<Header> {
         // SAFETY: a live buffer, by `Buf`'s own contract, and the store hands
         // back only headers it still holds.
         unsafe { Header::new(header_at(self.raw(), link)) }
     }
-}
 
-/// The link that names `uhp`, or [`UndoLink::NONE`] for a NULL one.
-///
-/// # Safety
-///
-/// `uhp` is NULL or points at a live header.
-pub(crate) unsafe fn link_of(uhp: *const u_header_T) -> UndoLink {
-    if uhp.is_null() {
-        return UndoLink::NONE;
+    /// A depth-first walk of this buffer's whole undo tree, from the header
+    /// `start` names. See [`TreeWalk`].
+    #[inline]
+    pub(crate) fn tree_walk(self, start: UndoLink, marks: Marks) -> TreeWalk {
+        TreeWalk {
+            buf: self,
+            marks,
+            stop_above: UndoLink::NONE,
+            state: WalkState::Start(start),
+            depth: 1,
+        }
     }
-    // SAFETY: non-NULL and live by the contract above.
-    UndoLink::to_seq(unsafe { (*uhp).uh_seq })
 }
 
 /// The header `link` names in `buf`'s store, or NULL.
@@ -218,7 +226,7 @@ pub(crate) unsafe fn link_of(uhp: *const u_header_T) -> UndoLink {
 /// # Safety
 ///
 /// `buf` points at a live buffer.
-pub(crate) unsafe fn header_at(buf: *mut buf_T, link: UndoLink) -> *mut u_header_T {
+unsafe fn header_at(buf: *mut buf_T, link: UndoLink) -> *mut u_header_T {
     // SAFETY: a live buffer; `b_u_store` is NULL or a store this module
     // allocated and nothing else writes it.
     match unsafe { store_of(buf) } {
@@ -227,27 +235,159 @@ pub(crate) unsafe fn header_at(buf: *mut buf_T, link: UndoLink) -> *mut u_header
     }
 }
 
-/// The header `link` names in the *current* buffer, or NULL. The tree walks
-/// in `apply.rs` and `eval.rs` all run on `curbuf`.
+/// The pair of stamps one pass over the tree leaves behind: `mark` on a
+/// header the walk has reached, `nomark` on one it has finished backing out
+/// of. Numbers no walk has used before, so the stamps a previous pass left
+/// cannot be mistaken for this one's.
 ///
-/// # Safety
-///
-/// A live current buffer.
-pub(crate) unsafe fn cur_header(link: UndoLink) -> *mut u_header_T {
-    // SAFETY: a live current buffer, by the contract above.
-    unsafe { header_at(curbuf.get(), link) }
+/// A walk that does not care about the difference — the undo-file writer only
+/// asks "have I written this header yet" — passes one number as both.
+#[derive(Clone, Copy)]
+pub(crate) struct Marks {
+    pub(crate) mark: c_int,
+    pub(crate) nomark: c_int,
 }
 
-/// Whether there is a header here that a tree walk has not stamped with
-/// either of the two marks it is using. A walk that only has one mark passes
-/// it twice.
+impl Marks {
+    /// Two fresh stamps.
+    pub(crate) fn next() -> Self {
+        Self {
+            mark: next_mark(),
+            nomark: next_mark(),
+        }
+    }
+
+    /// One fresh stamp, used for both: "reached" and "finished with" are the
+    /// same answer to a walk that visits every header exactly once.
+    pub(crate) fn next_once() -> Self {
+        let mark = next_mark();
+        Self { mark, nomark: mark }
+    }
+
+    /// Whether the walk has yet to reach `link`'s header — and that header,
+    /// when it has not.
+    pub(crate) fn unwalked(self, buf: Buf, link: UndoLink) -> Option<Header> {
+        buf.header(link)
+            .filter(|uh| uh.unwalked(self.mark, self.nomark))
+    }
+}
+
+/// The next unused tree-walk mark.
+fn next_mark() -> c_int {
+    let mark = lastmark.get() + 1;
+    lastmark.set(mark);
+    mark
+}
+
+/// One header, as a depth-first [`TreeWalk`] arrives at it.
+#[derive(Clone, Copy)]
+pub(crate) struct Visit {
+    /// The header itself, already stamped with the walk's `mark`.
+    pub(crate) header: Header,
+    /// Whether the walk had not stamped this header before now. A tree whose
+    /// links run in four directions is backed out of through headers it has
+    /// already seen, so this is what "each header once" means.
+    pub(crate) first: bool,
+    /// How many changes down the branch this header is, counting the header
+    /// the walk started from as 1. `:undolist` prints it.
+    pub(crate) depth: c_int,
+}
+
+/// A depth-first pass over one buffer's whole undo tree.
 ///
-/// # Safety
+/// The undo tree is not a tree a plain recursion can walk: `uh_prev` goes
+/// down a branch, `uh_alt_next`/`uh_alt_prev` across a run of alternates and
+/// `uh_next` back up, and the same header is reached from several of those.
+/// What keeps the pass finite is the pair of stamps in [`Marks`] — `mark` on
+/// arrival, `nomark` on the way back out — which is why the walk owns them.
 ///
-/// `uhp` is NULL or points at a live header.
-pub(crate) unsafe fn unwalked(uhp: *mut u_header_T, mark: c_int, nomark: c_int) -> bool {
-    // SAFETY: NULL or live by the contract above.
-    unsafe { Header::new(uhp) }.is_some_and(|uh| uh.unwalked(mark, nomark))
+/// Three callers spelled this out for themselves before: `:undolist`, the
+/// `:earlier`/`:later` search and the undo-file writer. They differ only in
+/// what they do at each header, plus one flag ([`TreeWalk::stopping_above`])
+/// the search needs.
+pub(crate) struct TreeWalk {
+    buf: Buf,
+    marks: Marks,
+    stop_above: UndoLink,
+    state: WalkState,
+    depth: c_int,
+}
+
+enum WalkState {
+    Start(UndoLink),
+    At(Header),
+    Done,
+}
+
+impl TreeWalk {
+    /// Un-stamps the header this link names when the walk leaves it going
+    /// *up*, so that a later pass treats it as unreached.
+    ///
+    /// The `:earlier`/`:later` search passes its `b_u_curhead`: the change
+    /// the cursor already sits above is not one the move goes through, and
+    /// leaving it stamped would make the walk up stop there.
+    pub(crate) fn stopping_above(mut self, link: UndoLink) -> Self {
+        self.stop_above = link;
+        self
+    }
+
+    /// Where the walk goes after `uh`, stamping `uh` with `nomark` when it is
+    /// backing out of it rather than descending further.
+    fn advance(&mut self, mut uh: Header) -> Option<Header> {
+        if let Some(down) = self.marks.unwalked(self.buf, uh.uh_prev) {
+            // Down into the branch.
+            self.depth += 1;
+            return Some(down);
+        }
+        if let Some(across) = self.marks.unwalked(self.buf, uh.uh_alt_next) {
+            // Or across into an alternate branch, at the same depth.
+            return Some(across);
+        }
+        if uh.uh_alt_prev.is_none()
+            && let Some(up) = self.marks.unwalked(self.buf, uh.uh_next)
+        {
+            // Or up, but only from the start of a run of alternates.
+            if uh.link() == self.stop_above {
+                uh.uh_walk = self.marks.nomark;
+            }
+            self.depth -= 1;
+            return Some(up);
+        }
+        // A dead end: stamp it finished and back out.
+        uh.uh_walk = self.marks.nomark;
+        if uh.uh_alt_prev.is_some() {
+            return self.buf.header(uh.uh_alt_prev);
+        }
+        self.depth -= 1;
+        self.buf.header(uh.uh_next)
+    }
+}
+
+impl Iterator for TreeWalk {
+    type Item = Visit;
+
+    fn next(&mut self) -> Option<Visit> {
+        let here = match self.state {
+            WalkState::Done => return None,
+            WalkState::Start(link) => self.buf.header(link),
+            // The step is taken here rather than after the last header was
+            // handed out, so that a caller who stops early leaves the tree
+            // stamped exactly as far as it walked.
+            WalkState::At(uh) => self.advance(uh),
+        };
+        let Some(mut uh) = here else {
+            self.state = WalkState::Done;
+            return None;
+        };
+        let first = uh.unwalked(self.marks.mark, self.marks.nomark);
+        uh.uh_walk = self.marks.mark;
+        self.state = WalkState::At(uh);
+        Some(Visit {
+            header: uh,
+            first,
+            depth: self.depth,
+        })
+    }
 }
 
 /// `buf`'s store, if it has one yet.
@@ -315,7 +455,7 @@ pub(crate) unsafe fn header_adopt(buf: *mut buf_T, uhp: *mut u_header_T) -> Undo
 /// `xmalloc`, and nothing else holds a pointer to that header.
 pub(crate) unsafe fn header_free(buf: *mut buf_T, uhp: *mut u_header_T) {
     // SAFETY: a live header by the contract above.
-    let link = unsafe { link_of(uhp) };
+    let link = UndoLink::to_seq(unsafe { (*uhp).uh_seq });
     // SAFETY: a live buffer.
     if let Some(store) = unsafe { store_of(buf) } {
         let dropped = store.take(link);

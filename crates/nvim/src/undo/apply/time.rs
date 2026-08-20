@@ -11,7 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::super::store::{Header, header_chain};
+use super::super::store::{Header, Marks, header_chain};
 use super::super::*;
 use super::{u_undo_end, u_undoredo};
 use crate::semsg_c;
@@ -124,33 +124,6 @@ struct UndoCounters {
     save_nr_last: c_int,
 }
 
-/// The pair of stamps one pass of the search leaves on the tree: `mark` on a
-/// header the target could still be under, `nomark` on one the walk has
-/// finished with. Numbers a walk has never used, so the stamps a previous
-/// `:earlier` left behind cannot be mistaken for this one's.
-#[derive(Clone, Copy)]
-struct Marks {
-    mark: c_int,
-    nomark: c_int,
-}
-
-impl Marks {
-    /// Two fresh stamps.
-    fn next() -> Self {
-        Self {
-            mark: next_mark(),
-            nomark: next_mark(),
-        }
-    }
-
-    /// Whether the walk has yet to reach `link`'s header — and that header,
-    /// when it has not.
-    fn unwalked(self, buf: Buf, link: UndoLink) -> Option<Header> {
-        buf.header(link)
-            .filter(|uh| uh.unwalked(self.mark, self.nomark))
-    }
-}
-
 /// Where a move through the tree decided to go.
 struct UndoDest {
     /// The sequence number to stop at. Zero is the state before any change.
@@ -162,13 +135,6 @@ struct UndoDest {
     above: bool,
     /// The search reached a header carrying `target`.
     found: bool,
-}
-
-/// The next unused tree-walk mark.
-fn next_mark() -> c_int {
-    let mark = lastmark.get() + 1;
-    lastmark.set(mark);
-    mark
 }
 
 /// Moves through the undo tree by time, by file write, or by sequence
@@ -410,9 +376,12 @@ fn undo_search(
 
 /// One depth-first pass over the whole tree from `start`.
 ///
-/// Every header reached is stamped with `marks.mark`, and every header the walk
-/// has exhausted with `marks.nomark`, which is what keeps a tree whose links
-/// run in four directions from being walked twice.
+/// [`TreeWalk`](super::super::store::TreeWalk) stamps every header it
+/// reaches with `marks.mark` and every one it has exhausted with
+/// `marks.nomark`, which is what keeps a tree whose links run in four
+/// directions from being walked twice. `stopping_above` un-stamps the header
+/// the buffer already sits on, because that change is not one the move goes
+/// through.
 ///
 /// Answers whether the target was reached; when it was, `aim.target` has been
 /// rewritten to the target's *sequence number*, which is a different number
@@ -426,9 +395,8 @@ fn walk_to_target(
     closest: &mut Closest,
     marks: Marks,
 ) -> bool {
-    let mut here = buf.header(start);
-    while let Some(mut uhp) = here {
-        uhp.uh_walk = marks.mark;
+    for visit in buf.tree_walk(start, marks).stopping_above(buf.b_u_curhead) {
+        let uhp = visit.header;
         let val = aim.value_of(&uhp);
         if scoring {
             closest.consider(*aim, val, uhp.uh_seq, step, buf.b_u_seq_cur);
@@ -439,31 +407,6 @@ fn walk_to_target(
             aim.target = uhp.uh_seq;
             return true;
         }
-        here = if let Some(down) = marks.unwalked(buf, uhp.uh_prev) {
-            // Down into the branch.
-            Some(down)
-        } else if let Some(alt) = marks.unwalked(buf, uhp.uh_alt_next) {
-            // Or across into an alternate branch.
-            Some(alt)
-        } else if uhp.uh_alt_prev.is_none()
-            && let Some(up) = marks.unwalked(buf, uhp.uh_next)
-        {
-            // Or up, but only from the start of a run of alternates.
-            if uhp.link() == buf.b_u_curhead {
-                // Still where we began, so this change is not one we go
-                // through.
-                uhp.uh_walk = marks.nomark;
-            }
-            Some(up)
-        } else {
-            // A dead end: mark it useless and back out.
-            uhp.uh_walk = marks.nomark;
-            if uhp.uh_alt_prev.is_some() {
-                buf.header(uhp.uh_alt_prev)
-            } else {
-                buf.header(uhp.uh_next)
-            }
-        };
     }
     false
 }

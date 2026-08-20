@@ -20,20 +20,17 @@ use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
 use crate::fileio::{get2c, get4c, get8ctime, read_eintr};
 use crate::fold::foldOpenCursor;
-use crate::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    IObuff, KeyTyped, VIsual, VIsual_active, curbuf, curwin, e_modifiable, e_sandbox, e_textlock,
+    KeyTyped, VIsual, VIsual_active, curbuf, curwin, e_modifiable, e_sandbox, e_textlock,
     fdo_flags, firstbuf, global_busy, got_int, no_u_sync, p_fs, p_udir, p_ul, p_verbose, sandbox,
     textlock,
 };
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append_flags, ml_delete, ml_get, ml_get_buf, ml_replace, resolve_symlink};
-use crate::memory::{
-    time_to_bytes, xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup, xstrlcat,
-};
+use crate::memory::{time_to_bytes, xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
 use crate::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
     msg_putchar, msg_puts, msg_puts_hl, msg_start, verb_msg, verbose_enter, verbose_leave,
@@ -52,11 +49,11 @@ use crate::pos::clearpos;
 use crate::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::spell::spell_check_window;
 use crate::state::virtual_active;
-use crate::strings::{sort_strings, vim_snprintf, vim_snprintf_add};
+use crate::strings::vim_snprintf;
 use crate::types::*;
 use ::libc::{
-    abort, close, fclose, fdopen, fflush, fread, fwrite, getuid, memcmp, memset, strcmp, strftime,
-    strlen, time,
+    close, fclose, fdopen, fflush, fread, fwrite, getuid, memcmp, memset, strcmp, strftime, strlen,
+    time,
 };
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
@@ -100,7 +97,8 @@ pub mod store;
 mod tree;
 mod write;
 
-use store::{Header, header_adopt, header_at, header_chain};
+use crate::winlayer::Buf;
+use store::{header_adopt, header_chain};
 use tree::*;
 
 pub use apply::{u_redo, u_undo, u_undo_and_forget, undo_time};
@@ -112,6 +110,30 @@ pub use write::u_write_undo;
 
 /// The length of an undo file's buffer hash, in bytes: a SHA-256 digest.
 pub const UNDO_HASH_SIZE: c_int = 32;
+
+/// Says something about an undo file, quietly.
+///
+/// A read or write the editor decided on by itself (`automatic`) reports
+/// only under `'verbose'`, and inside a `verbose_enter`/`verbose_leave` pair;
+/// one the user asked for by name reports outright.
+///
+/// # Safety
+///
+/// `say` emits messages, so there must be a live message state.
+pub(crate) unsafe fn verbosely(automatic: bool, say: impl FnOnce()) {
+    if automatic && p_verbose.get() <= 0 {
+        return;
+    }
+    if automatic {
+        // SAFETY: nothing here holds a borrow of the message state.
+        unsafe { verbose_enter() };
+    }
+    say();
+    if automatic {
+        // SAFETY: as above.
+        unsafe { verbose_leave() };
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct bufinfo_T {
@@ -255,26 +277,29 @@ pub unsafe fn u_savecommon(
             (*uhp).uh_seq = (*buf).b_u_seq_last;
             uhp_link = header_adopt(buf, uhp);
         }
+        let b = Buf::new(buf);
         let mut old_curhead: UndoLink = (*buf).b_u_curhead;
-        if old_curhead.is_some() {
-            (*buf).b_u_newhead = (*header_at(buf, old_curhead)).uh_next;
+        if let Some(old_cur) = b.header(old_curhead) {
+            (*buf).b_u_newhead = old_cur.uh_next;
             (*buf).b_u_curhead = UndoLink::NONE;
         }
-        while (*buf).b_u_numhead as OptInt > get_undolevel(buf) && (*buf).b_u_oldhead.is_some() {
-            let oldest: *mut u_header_T = header_at(buf, (*buf).b_u_oldhead);
+        while (*buf).b_u_numhead as OptInt > get_undolevel(buf) {
+            let Some(oldest) = b.header((*buf).b_u_oldhead) else {
+                break;
+            };
             if (*buf).b_u_oldhead == old_curhead {
-                u_freebranch(buf, oldest, &raw mut old_curhead);
-            } else if (*oldest).uh_alt_next.is_none() {
-                u_freeheader(buf, oldest, &raw mut old_curhead);
+                u_freebranch(buf, oldest.raw(), &raw mut old_curhead);
+            } else if oldest.uh_alt_next.is_none() {
+                u_freeheader(buf, oldest.raw(), &raw mut old_curhead);
             } else {
                 // The far end of the oldest header's alternate chain.
                 let far = header_chain(buf, (*buf).b_u_oldhead, |uh| uh.uh_alt_next).last();
-                u_freebranch(buf, far.map_or(oldest, Header::raw), &raw mut old_curhead);
+                u_freebranch(buf, far.unwrap_or(oldest).raw(), &raw mut old_curhead);
             }
         }
         if uhp.is_null() {
-            if old_curhead.is_some() {
-                u_freebranch(buf, header_at(buf, old_curhead), ptr::null_mut());
+            if let Some(old_cur) = b.header(old_curhead) {
+                u_freebranch(buf, old_cur.raw(), ptr::null_mut());
             }
             (*buf).b_u_synced = false;
             return OK;
@@ -282,23 +307,20 @@ pub unsafe fn u_savecommon(
         (*uhp).uh_prev = UndoLink::NONE;
         (*uhp).uh_next = (*buf).b_u_newhead;
         (*uhp).uh_alt_next = old_curhead;
-        if old_curhead.is_some() {
-            let old_curhead_p: *mut u_header_T = header_at(buf, old_curhead);
-            (*uhp).uh_alt_prev = (*old_curhead_p).uh_alt_prev;
-            let alt_prev: *mut u_header_T = header_at(buf, (*uhp).uh_alt_prev);
-            if !alt_prev.is_null() {
-                (*alt_prev).uh_alt_next = uhp_link;
+        if let Some(mut old_cur) = b.header(old_curhead) {
+            (*uhp).uh_alt_prev = old_cur.uh_alt_prev;
+            if let Some(mut alt_prev) = b.header((*uhp).uh_alt_prev) {
+                alt_prev.uh_alt_next = uhp_link;
             }
-            (*old_curhead_p).uh_alt_prev = uhp_link;
+            old_cur.uh_alt_prev = uhp_link;
             if (*buf).b_u_oldhead == old_curhead {
                 (*buf).b_u_oldhead = uhp_link;
             }
         } else {
             (*uhp).uh_alt_prev = UndoLink::NONE;
         }
-        let newhead: *mut u_header_T = header_at(buf, (*buf).b_u_newhead);
-        if !newhead.is_null() {
-            (*newhead).uh_prev = uhp_link;
+        if let Some(mut newhead) = b.header((*buf).b_u_newhead) {
+            newhead.uh_prev = uhp_link;
         }
         (*buf).b_u_seq_cur = (*uhp).uh_seq;
         (*uhp).uh_time = time(ptr::null_mut());
@@ -341,13 +363,15 @@ pub unsafe fn u_savecommon(
         if size == 1 {
             uep = u_get_headentry(buf);
             prev_uep = ptr::null_mut();
-            let newhead: *mut u_header_T = header_at(buf, (*buf).b_u_newhead);
+            let mut newhead = Buf::new(buf)
+                .header((*buf).b_u_newhead)
+                .expect("u_get_headentry proved the newest header is there");
             let mut i: c_int = 0;
             while i < 10 {
                 if uep.is_null() {
                     break;
                 }
-                if (if (*newhead).uh_getbot_entry != uep {
+                if (if newhead.uh_getbot_entry != uep {
                     ((*uep).ue_top + (*uep).ue_size + 1
                         != (if (*uep).ue_bot == 0 {
                             (*buf).b_ml.ml_line_count + 1
@@ -368,8 +392,8 @@ pub unsafe fn u_savecommon(
                         u_getbot(buf);
                         (*buf).b_u_synced = false;
                         (*prev_uep).ue_next = (*uep).ue_next;
-                        (*uep).ue_next = (*newhead).uh_entry;
-                        (*newhead).uh_entry = uep;
+                        (*uep).ue_next = newhead.uh_entry;
+                        newhead.uh_entry = uep;
                     }
                     if newbot != 0 {
                         (*uep).ue_bot = newbot;
@@ -377,7 +401,7 @@ pub unsafe fn u_savecommon(
                         (*uep).ue_bot = 0;
                     } else {
                         (*uep).ue_lcount = (*buf).b_ml.ml_line_count;
-                        (*newhead).uh_getbot_entry = uep;
+                        newhead.uh_getbot_entry = uep;
                     }
                     return OK;
                 }
@@ -392,14 +416,16 @@ pub unsafe fn u_savecommon(
     memset(uep as *mut c_void, 0, size_of::<u_entry_T>());
     (*uep).ue_size = size;
     (*uep).ue_top = top;
-    let newhead: *mut u_header_T = header_at(buf, (*buf).b_u_newhead);
+    let mut newhead = Buf::new(buf)
+        .header((*buf).b_u_newhead)
+        .expect("the newest header is the one this change is recorded against");
     if newbot != 0 {
         (*uep).ue_bot = newbot;
     } else if bot > (*buf).b_ml.ml_line_count {
         (*uep).ue_bot = 0;
     } else {
         (*uep).ue_lcount = (*buf).b_ml.ml_line_count;
-        (*newhead).uh_getbot_entry = uep;
+        newhead.uh_getbot_entry = uep;
     }
     if size > 0 {
         (*uep).ue_array =
@@ -422,10 +448,10 @@ pub unsafe fn u_savecommon(
     } else {
         (*uep).ue_array = ptr::null_mut();
     }
-    (*uep).ue_next = (*newhead).uh_entry;
-    (*newhead).uh_entry = uep;
+    (*uep).ue_next = newhead.uh_entry;
+    newhead.uh_entry = uep;
     if reload {
-        (*newhead).uh_flags |= UH_RELOAD;
+        newhead.uh_flags |= UH_RELOAD;
     }
     (*buf).b_u_synced = false;
     undo_undoes.set(false);
@@ -492,11 +518,11 @@ pub unsafe fn u_unchanged(mut buf: *mut buf_T) {
     (*buf).b_did_warn = false;
 }
 pub unsafe fn u_find_first_changed() {
-    let uhp: *mut u_header_T = header_at(curbuf.get(), (*curbuf.get()).b_u_newhead);
-    if (*curbuf.get()).b_u_curhead.is_some() || uhp.is_null() {
+    let b = Buf::current();
+    let Some(mut uhp) = b.header(b.b_u_newhead).filter(|_| b.b_u_curhead.is_none()) else {
         return;
-    }
-    let mut uep: *mut u_entry_T = (*uhp).uh_entry;
+    };
+    let uep: *mut u_entry_T = uhp.uh_entry;
     if (*uep).ue_top != 0 || (*uep).ue_bot != 0 {
         return;
     }
@@ -508,28 +534,27 @@ pub unsafe fn u_find_first_changed() {
             *(*uep).ue_array.offset((lnum - 1) as isize),
         ) != 0
         {
-            clearpos(&mut (*uhp).uh_cursor);
-            (*uhp).uh_cursor.lnum = lnum;
+            clearpos(&mut uhp.uh_cursor);
+            uhp.uh_cursor.lnum = lnum;
             return;
         }
         lnum += 1;
     }
     if (*curbuf.get()).b_ml.ml_line_count != (*uep).ue_size {
-        clearpos(&mut (*uhp).uh_cursor);
-        (*uhp).uh_cursor.lnum = lnum;
+        clearpos(&mut uhp.uh_cursor);
+        uhp.uh_cursor.lnum = lnum;
     }
 }
 pub unsafe fn u_update_save_nr(mut buf: *mut buf_T) {
     (*buf).b_u_save_nr_last += 1;
     (*buf).b_u_save_nr_cur = (*buf).b_u_save_nr_last;
-    let curhead: *mut u_header_T = header_at(buf, (*buf).b_u_curhead);
-    let uhp: *mut u_header_T = if !curhead.is_null() {
-        header_at(buf, (*curhead).uh_next)
-    } else {
-        header_at(buf, (*buf).b_u_newhead)
+    let b = Buf::new(buf);
+    let above = match b.header(b.b_u_curhead) {
+        Some(curhead) => b.header(curhead.uh_next),
+        None => b.header(b.b_u_newhead),
     };
-    if !uhp.is_null() {
-        (*uhp).uh_save_nr = (*buf).b_u_save_nr_last;
+    if let Some(mut uhp) = above {
+        uhp.uh_save_nr = (*buf).b_u_save_nr_last;
     }
 }
 /// Whether `buf` holds changes that writing it out would save.

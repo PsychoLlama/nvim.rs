@@ -1,246 +1,216 @@
 //! `:undolist` and the `undofile()`/`undotree()` builtins.
+//!
+//! The read-only view of the undo tree: three ways of asking what is in it
+//! and one of asking where it would be stored.
 
-use super::file::*;
-use super::store::{cur_header, header_at, unwalked};
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::CStr;
+use std::ffi::CString;
+
+use super::file::u_get_undo_file_name;
+use super::store::Marks;
 use super::*;
 use crate::highlight_group::HLF_T;
 use crate::types::{VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
+use crate::winlayer::Buf;
 
-pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
-    let mut changes: c_int = 1;
-    (*lastmark.ptr()) += 1;
-    let mut mark: c_int = lastmark.get();
-    (*lastmark.ptr()) += 1;
-    let mut nomark: c_int = lastmark.get();
-    let mut ga: garray_T = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 20);
-    let mut uhp: *mut u_header_T = cur_header((*curbuf.get()).b_u_oldhead);
-    while !uhp.is_null() {
-        if (*uhp).uh_prev.is_none() && (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark {
-            vim_snprintf(
-                IObuff.ptr() as *mut c_char,
-                IOSIZE as size_t,
-                c"%6d %7d  ".as_ptr(),
-                (*uhp).uh_seq,
-                changes,
-            );
-            undo_fmt_time(
-                (IObuff.ptr() as *mut c_char).add(strlen(IObuff.ptr() as *mut c_char)),
-                (IOSIZE as size_t).wrapping_sub(strlen(IObuff.ptr() as *mut c_char)),
-                (*uhp).uh_time,
-            );
-            if (*uhp).uh_save_nr > 0 {
-                while strlen(IObuff.ptr() as *mut c_char) < 33 {
-                    xstrlcat(IObuff.ptr() as *mut c_char, c" ".as_ptr(), IOSIZE as size_t);
-                }
-                vim_snprintf_add(
-                    IObuff.ptr() as *mut c_char,
-                    IOSIZE as size_t,
-                    c"  %3d".as_ptr(),
-                    (*uhp).uh_save_nr,
-                );
-            }
-            ga_grow(&raw mut ga, 1);
-            *(ga.ga_data as *mut *mut c_char).offset(ga.ga_len as isize) =
-                xstrdup(IObuff.ptr() as *mut c_char);
-            ga.ga_len += 1;
-        }
-        (*uhp).uh_walk = mark;
-        if unwalked(cur_header((*uhp).uh_prev), mark, nomark) {
-            uhp = cur_header((*uhp).uh_prev);
-            changes += 1;
-        } else if unwalked(cur_header((*uhp).uh_alt_next), mark, nomark) {
-            uhp = cur_header((*uhp).uh_alt_next);
-        } else if (*uhp).uh_alt_prev.is_none() && unwalked(cur_header((*uhp).uh_next), mark, nomark)
-        {
-            uhp = cur_header((*uhp).uh_next);
-            changes -= 1;
-        } else {
-            (*uhp).uh_walk = nomark;
-            if (*uhp).uh_alt_prev.is_some() {
-                uhp = cur_header((*uhp).uh_alt_prev);
-            } else {
-                uhp = cur_header((*uhp).uh_next);
-                changes -= 1;
-            }
-        }
+/// `tv_dict_add_nr` for a literal key, whose length the `CStr` already knows.
+///
+/// Module-private on purpose: a *public* safe fn taking a raw pointer trips
+/// `clippy::not_unsafe_ptr_arg_deref`, which is denied tree-wide.
+fn dict_add_nr(dict: *mut dict_T, key: &CStr, val: varnumber_T) {
+    // SAFETY: a dictionary this module just allocated, and a NUL-terminated
+    // key with its own length.
+    unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), val) };
+}
+
+/// [`dict_add_nr`] for a list value, which the dictionary takes over.
+fn dict_add_list(dict: *mut dict_T, key: &CStr, val: *mut list_T) {
+    // SAFETY: as [`dict_add_nr`], plus a list this module just built.
+    unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), val) };
+}
+
+/// One `:undolist` row: the header's sequence number, how many changes deep
+/// in the tree it sits, when it was made, and — if it was ever written out —
+/// which file write it belongs to.
+fn undolist_row(uh: &u_header_T, changes: c_int) -> CString {
+    let mut row = format!("{:>6} {:>7}  ", uh.uh_seq, changes).into_bytes();
+    let mut when = [0 as c_char; 64];
+    // SAFETY: a buffer of exactly the length passed; `undo_fmt_time` leaves a
+    // NUL-terminated string in it and reads nothing else.
+    unsafe { undo_fmt_time(when.as_mut_ptr(), when.len(), uh.uh_time) };
+    // SAFETY: NUL-terminated, and the NUL is inside the array.
+    row.extend_from_slice(unsafe { CStr::from_ptr(when.as_ptr()) }.to_bytes());
+    if uh.uh_save_nr > 0 {
+        // The "saved" column starts at 33, however long the time took.
+        row.resize(row.len().max(33), b' ');
+        row.extend_from_slice(format!("  {:>3}", uh.uh_save_nr).as_bytes());
     }
-    msg_ext_set_kind(c"list_cmd".as_ptr());
-    if ga.ga_len <= 0 {
-        msg(gettext(c"Nothing to undo".as_ptr()), 0);
-    } else {
-        sort_strings(ga.ga_data as *mut *mut c_char, ga.ga_len);
+    CString::new(row).expect("a row is digits, spaces and one NUL-terminated time")
+}
+
+/// `:undolist` — every leaf of the undo tree, oldest first.
+///
+/// # Safety
+///
+/// A live current buffer.
+pub unsafe fn ex_undolist(_eap: *mut exarg_T) {
+    // SAFETY: a live current buffer, by the contract above.
+    let buf = unsafe { Buf::current() };
+    // A leaf is a header nothing branches off downwards, and the whole tree
+    // has to be walked to find them all.
+    let rows: Vec<CString> = buf
+        .tree_walk(buf.b_u_oldhead, Marks::next())
+        .filter(|visit| visit.first && visit.header.uh_prev.is_none())
+        .map(|visit| undolist_row(&visit.header, visit.depth))
+        .collect();
+
+    // SAFETY: NUL-terminated literals and strings this function owns.
+    unsafe {
+        msg_ext_set_kind(c"list_cmd".as_ptr());
+        if rows.is_empty() {
+            msg(gettext(c"Nothing to undo".as_ptr()), 0);
+            return;
+        }
+        let mut rows = rows;
+        // The walk reaches the branches in tree order, not in sequence order.
+        rows.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
         msg_start();
         msg_puts_hl(
             gettext(c"number changes  when               saved".as_ptr()),
             HLF_T,
             false,
         );
-        let mut i: c_int = 0;
-        while i < ga.ga_len && !got_int.get() {
+        for row in &rows {
+            if got_int.get() {
+                break;
+            }
             msg_putchar('\n' as c_int);
             if got_int.get() {
                 break;
             }
-            msg_puts(*(ga.ga_data as *mut *const c_char).offset(i as isize));
-            i += 1;
+            msg_puts(row.as_ptr());
         }
         msg_end();
-        ga_clear_strings(&raw mut ga);
-    };
+    }
 }
-pub(crate) unsafe fn u_eval_tree(buf: *mut buf_T, first: UndoLink) -> *mut list_T {
-    let list: *mut list_T = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
-    let mut uhp: *const u_header_T = header_at(buf, first);
-    while !uhp.is_null() {
-        let dict: *mut dict_T = tv_dict_alloc();
-        tv_dict_add_nr(
-            dict,
-            c"seq".as_ptr(),
-            size_of::<[c_char; 4]>().wrapping_sub(1),
-            (*uhp).uh_seq as varnumber_T,
-        );
-        tv_dict_add_nr(
-            dict,
-            c"time".as_ptr(),
-            size_of::<[c_char; 5]>().wrapping_sub(1),
-            (*uhp).uh_time as varnumber_T,
-        );
-        if (*uhp).uh_seq == (*buf).b_u_newhead.seq() {
-            tv_dict_add_nr(
-                dict,
-                c"newhead".as_ptr(),
-                size_of::<[c_char; 8]>().wrapping_sub(1),
-                1 as varnumber_T,
-            );
+
+/// One branch of the tree as `undotree()` reports it: a list of dictionaries,
+/// newest change first, each carrying its own alternate branch under `alt`.
+fn eval_tree(buf: Buf, first: UndoLink) -> *mut list_T {
+    // SAFETY: an empty list, whose length is not known up front.
+    let list: *mut list_T = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let mut link = first;
+    while let Some(uh) = buf.header(link) {
+        // SAFETY: a fresh dictionary.
+        let dict: *mut dict_T = unsafe { tv_dict_alloc() };
+        dict_add_nr(dict, c"seq", varnumber_T::from(uh.uh_seq));
+        dict_add_nr(dict, c"time", uh.uh_time);
+        if uh.link() == buf.b_u_newhead {
+            dict_add_nr(dict, c"newhead", 1);
         }
-        if (*uhp).uh_seq == (*buf).b_u_curhead.seq() {
-            tv_dict_add_nr(
-                dict,
-                c"curhead".as_ptr(),
-                size_of::<[c_char; 8]>().wrapping_sub(1),
-                1 as varnumber_T,
-            );
+        if uh.link() == buf.b_u_curhead {
+            dict_add_nr(dict, c"curhead", 1);
         }
-        if (*uhp).uh_save_nr > 0 {
-            tv_dict_add_nr(
-                dict,
-                c"save".as_ptr(),
-                size_of::<[c_char; 5]>().wrapping_sub(1),
-                (*uhp).uh_save_nr as varnumber_T,
-            );
+        if uh.uh_save_nr > 0 {
+            dict_add_nr(dict, c"save", varnumber_T::from(uh.uh_save_nr));
         }
-        if (*uhp).uh_alt_next.is_some() {
-            tv_dict_add_list(
-                dict,
-                c"alt".as_ptr(),
-                size_of::<[c_char; 4]>().wrapping_sub(1),
-                u_eval_tree(buf, (*uhp).uh_alt_next),
-            );
+        if uh.uh_alt_next.is_some() {
+            dict_add_list(dict, c"alt", eval_tree(buf, uh.uh_alt_next));
         }
-        tv_list_append_dict(list, dict);
-        uhp = header_at(buf, (*uhp).uh_prev);
+        // SAFETY: a list and a dictionary this function owns.
+        unsafe { tv_list_append_dict(list, dict) };
+        link = uh.uh_prev;
     }
     list
 }
-pub unsafe fn f_undofile(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    (*rettv).v_type = VAR_STRING;
-    let fname: *const c_char = tv_get_string(argvars.offset(0));
-    if *fname as c_int == NUL {
-        (*rettv).vval.v_string = ptr::null_mut();
-    } else {
-        let mut ffname: *mut c_char = full_name_save(fname, true);
+
+/// `undofile({name})` — where the undo file for `{name}` would be written.
+///
+/// # Safety
+///
+/// The eval-function contract: one argument and a return value to fill in.
+pub unsafe fn f_undofile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY: the eval-function contract, by the contract above.
+    unsafe {
+        (*rettv).v_type = VAR_STRING;
+        let fname: *const c_char = tv_get_string(argvars);
+        if *fname == NUL as c_char {
+            (*rettv).vval.v_string = ptr::null_mut();
+            return;
+        }
+        let ffname: *mut c_char = full_name_save(fname, true);
         if !ffname.is_null() {
             (*rettv).vval.v_string = u_get_undo_file_name(ffname, false);
         }
-        xfree(ffname as *mut c_void);
-    };
-}
-pub unsafe fn f_undotree(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    tv_dict_alloc_ret(rettv);
-    let tv: *mut typval_T = argvars.offset(0);
-    let buf: *mut buf_T = if (*tv).v_type as c_uint == VAR_UNKNOWN as c_int as c_uint {
-        curbuf.get()
-    } else {
-        get_buf_arg(tv)
-    };
-    if buf.is_null() {
-        return;
+        xfree(ffname.cast());
     }
-    let mut dict: *mut dict_T = (*rettv).vval.v_dict;
-    tv_dict_add_nr(
-        dict,
-        c"synced".as_ptr(),
-        size_of::<[c_char; 7]>().wrapping_sub(1),
-        (*buf).b_u_synced as varnumber_T,
-    );
-    tv_dict_add_nr(
-        dict,
-        c"seq_last".as_ptr(),
-        size_of::<[c_char; 9]>().wrapping_sub(1),
-        (*buf).b_u_seq_last as varnumber_T,
-    );
-    tv_dict_add_nr(
-        dict,
-        c"save_last".as_ptr(),
-        size_of::<[c_char; 10]>().wrapping_sub(1),
-        (*buf).b_u_save_nr_last as varnumber_T,
-    );
-    tv_dict_add_nr(
-        dict,
-        c"seq_cur".as_ptr(),
-        size_of::<[c_char; 8]>().wrapping_sub(1),
-        (*buf).b_u_seq_cur as varnumber_T,
-    );
-    tv_dict_add_nr(
-        dict,
-        c"time_cur".as_ptr(),
-        size_of::<[c_char; 9]>().wrapping_sub(1),
-        (*buf).b_u_time_cur as varnumber_T,
-    );
-    tv_dict_add_nr(
-        dict,
-        c"save_cur".as_ptr(),
-        size_of::<[c_char; 9]>().wrapping_sub(1),
-        (*buf).b_u_save_nr_cur as varnumber_T,
-    );
-    tv_dict_add_list(
-        dict,
-        c"entries".as_ptr(),
-        size_of::<[c_char; 8]>().wrapping_sub(1),
-        u_eval_tree(buf, (*buf).b_u_oldhead),
-    );
 }
-pub unsafe fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_header_T {
-    let mut uhp: *mut u_header_T = ptr::null_mut();
-    if (*buf).b_u_curhead.is_some() {
-        uhp = header_at(buf, (*buf).b_u_curhead);
-    } else if (*buf).b_u_newhead.is_some() {
-        uhp = header_at(buf, (*buf).b_u_newhead);
+
+/// `undotree([{buf}])` — the whole tree, plus where in it the buffer sits.
+///
+/// # Safety
+///
+/// The eval-function contract, and a live current buffer.
+pub unsafe fn f_undotree(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY: the eval-function contract, by the contract above.
+    let (dict, buf) = unsafe {
+        tv_dict_alloc_ret(rettv);
+        let tv: *mut typval_T = argvars;
+        let raw = if (*tv).v_type == VAR_UNKNOWN {
+            curbuf.get()
+        } else {
+            get_buf_arg(tv)
+        };
+        (
+            (*rettv).vval.v_dict,
+            // SAFETY: `curbuf` and `get_buf_arg` both answer a live buffer or
+            // NULL.
+            Buf::from_raw(raw),
+        )
+    };
+    let Some(buf) = buf else { return };
+
+    dict_add_nr(dict, c"synced", varnumber_T::from(buf.b_u_synced));
+    dict_add_nr(dict, c"seq_last", varnumber_T::from(buf.b_u_seq_last));
+    dict_add_nr(dict, c"save_last", varnumber_T::from(buf.b_u_save_nr_last));
+    dict_add_nr(dict, c"seq_cur", varnumber_T::from(buf.b_u_seq_cur));
+    dict_add_nr(dict, c"time_cur", buf.b_u_time_cur);
+    dict_add_nr(dict, c"save_cur", varnumber_T::from(buf.b_u_save_nr_cur));
+    dict_add_list(dict, c"entries", eval_tree(buf, buf.b_u_oldhead));
+}
+
+/// The header a change to `buf` would be recorded against, making one if the
+/// buffer has none yet.
+///
+/// The address is what the caller wants — `extmark`'s undo list hangs off
+/// `uh_extmark` — and the store's allocations are stable, so handing one out
+/// is sound.
+///
+/// # Safety
+///
+/// `buf` points at a live buffer, and a live current window.
+pub unsafe fn u_force_get_undo_header(buf: *mut buf_T) -> *mut u_header_T {
+    // SAFETY: a live buffer, by the contract above.
+    let mut b = unsafe { Buf::new(buf) };
+    if let Some(uh) = b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
+        return uh.raw();
     }
-    if uhp.is_null() {
-        u_savecommon(buf, 0, 1, 1, true);
-        uhp = header_at(buf, (*buf).b_u_curhead);
-        if uhp.is_null() {
-            uhp = header_at(buf, (*buf).b_u_newhead);
-            if get_undolevel(buf) > 0 && uhp.is_null() {
-                abort();
-            }
+    // Nothing to hang it on: force an undo header, even for an empty change.
+    // SAFETY: a live buffer and window, by the contract above.
+    unsafe { u_savecommon(buf, 0, 1, 1, true) };
+    // SAFETY: `u_savecommon` may have reloaded the buffer under us.
+    b = unsafe { Buf::new(buf) };
+    match b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
+        Some(uh) => uh.raw(),
+        None => {
+            // SAFETY: a live buffer.
+            assert!(
+                unsafe { get_undolevel(buf) } <= 0,
+                "u_savecommon made no undo header while undo was enabled"
+            );
+            ptr::null_mut()
         }
     }
-    uhp
 }

@@ -23,6 +23,22 @@ pub struct u_entry {
 }
 pub type u_entry_T = u_entry;
 
+impl Default for u_entry {
+    /// An entry holding no lines and linked to nothing — what `xmalloc` plus
+    /// a `memset` left behind, spelled out so that getting one does not mean
+    /// writing zeroes through a pointer.
+    fn default() -> Self {
+        Self {
+            ue_next: ::core::ptr::null_mut(),
+            ue_top: 0,
+            ue_bot: 0,
+            ue_lcount: 0,
+            ue_array: ::core::ptr::null_mut(),
+            ue_size: 0,
+        }
+    }
+}
+
 /// A link from one undo header to another, or to nothing.
 ///
 /// The link *is* the target header's `uh_seq`, which is also exactly what the
