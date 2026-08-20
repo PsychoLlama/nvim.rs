@@ -1,5 +1,7 @@
 //! The bundled `libvterm`: a terminal emulator, used by `:terminal`.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod cell;
 pub mod color;
 pub mod csi;

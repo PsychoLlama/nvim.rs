@@ -1,5 +1,7 @@
 //! The bundled `xdiff` diff engine.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod ffi;
 pub mod xdiffi;
 pub mod xemit;
