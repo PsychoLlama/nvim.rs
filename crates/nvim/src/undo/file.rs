@@ -538,7 +538,7 @@ unsafe fn push_extmark(list: *mut extmark_undo_vec_t, extup: ExtmarkUndoObject) 
 pub(crate) unsafe fn serialize_extmark(bi: *mut bufinfo_T, extup: ExtmarkUndoObject) -> bool {
     // SAFETY: an open file, and a tag that matches the arm, by the above.
     unsafe {
-        let image = if extup.type_0 == kExtmarkSplice {
+        let mut image = if extup.type_0 == kExtmarkSplice {
             encode_splice(&extup.data.splice)
         } else if extup.type_0 == kExtmarkMove {
             encode_move(&extup.data.move_0)
@@ -547,7 +547,7 @@ pub(crate) unsafe fn serialize_extmark(bi: *mut bufinfo_T, extup: ExtmarkUndoObj
         };
         undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2);
         undo_write_bytes(bi, extup.type_0 as uintmax_t, 4);
-        undo_write(bi, image.as_ptr().cast_mut(), image.len())
+        undo_write(bi, image.as_mut_ptr(), image.len())
     }
 }
 

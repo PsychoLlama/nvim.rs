@@ -962,7 +962,7 @@
     "crates/nvim/src/undo/read.rs": {"unsafe_lines": 222},
     "crates/nvim/src/undo/store.rs": {"unsafe_lines": 24},
     "crates/nvim/src/undo/tree.rs": {"unsafe_lines": 195},
-    "crates/nvim/src/undo/write.rs": {"unsafe_lines": 133},
+    "crates/nvim/src/undo/write.rs": {"unsafe_lines": 129},
     "crates/nvim/src/usercmd/attr.rs": {"unsafe_lines": 77},
     "crates/nvim/src/usercmd/complete.rs": {"unsafe_lines": 89},
     "crates/nvim/src/usercmd/expand.rs": {"cell_ptr": 1, "unsafe_lines": 225},

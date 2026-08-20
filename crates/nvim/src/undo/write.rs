@@ -32,11 +32,7 @@ pub unsafe fn u_write_undo(
             // SAFETY: a NUL-terminated literal.
             unsafe {
                 verbosely(true, || {
-                    smsg_c!(
-                        0,
-                        c"%s".as_ptr(),
-                        gettext(c"Cannot write undo file in any directory in 'undodir'".as_ptr(),),
-                    );
+                    smsg_c!(0, c"%s".as_ptr(), gettext(NO_UNDODIR.as_ptr()),);
                 });
             }
             return;
@@ -53,6 +49,10 @@ pub unsafe fn u_write_undo(
         unsafe { xfree(file_name.cast()) };
     }
 }
+
+/// "no directory in 'undodir' will take it", the one message a write can
+/// give before it has a path at all.
+const NO_UNDODIR: &core::ffi::CStr = c"Cannot write undo file in any directory in 'undodir'";
 
 /// The write itself, once the target path is known.
 ///
