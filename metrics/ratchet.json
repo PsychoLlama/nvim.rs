@@ -1,7 +1,7 @@
 {
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1046,
-  "files_without_deny_unsafe_op": 83,
+  "files_without_deny_unsafe_op": 82,
   "files_without_deny_casts": 1111,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
@@ -699,7 +699,7 @@
     "crates/nvim/src/optionstr/buffer.rs": {"cell_ptr": 8, "unsafe_lines": 340},
     "crates/nvim/src/optionstr/chars.rs": {"cell_ptr": 18, "unsafe_lines": 184},
     "crates/nvim/src/optionstr/check.rs": {"cell_ptr": 6, "missing_safety_doc": 1, "unsafe_lines": 121},
-    "crates/nvim/src/optionstr/complete.rs": {"cell_ptr": 6, "unsafe_lines": 165},
+    "crates/nvim/src/optionstr/complete.rs": {"cell_ptr": 6, "unsafe_lines": 164},
     "crates/nvim/src/optionstr/display.rs": {"cell_ptr": 5, "unsafe_lines": 152},
     "crates/nvim/src/optionstr/expand.rs": {"cell_ptr": 5, "unsafe_lines": 104},
     "crates/nvim/src/optionstr/flags.rs": {"cell_ptr": 1, "extern_abi": 1, "no_mangle": 1, "unsafe_lines": 16},
@@ -853,7 +853,7 @@
     "crates/nvim/src/spellfile/affix.rs": {"cell_ptr": 1, "unsafe_lines": 251},
     "crates/nvim/src/spellfile/dic.rs": {"cell_ptr": 2, "unsafe_lines": 545},
     "crates/nvim/src/spellfile/flags.rs": {"unsafe_lines": 199},
-    "crates/nvim/src/spellfile/mod.rs": {"cell_ptr": 8, "missing_safety_doc": 6, "unsafe_lines": 526},
+    "crates/nvim/src/spellfile/mod.rs": {"cell_ptr": 4, "unsafe_lines": 264},
     "crates/nvim/src/spellfile/read.rs": {"missing_safety_doc": 1, "unsafe_lines": 577},
     "crates/nvim/src/spellfile/sections.rs": {"unsafe_lines": 583},
     "crates/nvim/src/spellfile/sugfile.rs": {"cell_ptr": 4, "missing_safety_doc": 1, "unsafe_lines": 245},

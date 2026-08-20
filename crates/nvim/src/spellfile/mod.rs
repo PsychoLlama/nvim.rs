@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::arglist::get_arglist_exp;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, skipwhite};
@@ -18,10 +20,10 @@ use crate::types::{
     CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, IOSIZE, MAXPATHL, NUL, OK,
     OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T,
     file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T,
-    time_t, uint8_t, vimconv_T,
+    time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
-use ::libc::{memset, strcmp, strlen};
+use ::libc::{strcmp, strlen};
 mod add;
 mod aff;
 mod affix;
@@ -212,6 +214,7 @@ pub struct affheader_T {
     pub ah_follows: ::core::ffi::c_int,
     pub ah_first: *mut affentry_T,
 }
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct compitem_T {
@@ -219,6 +222,7 @@ pub struct compitem_T {
     pub ci_flag: ::core::ffi::c_uint,
     pub ci_newID: ::core::ffi::c_int,
 }
+
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
@@ -262,373 +266,250 @@ pub const CONDIT_COMB: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const CONDIT_CFIX: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CONDIT_SUF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONDIT_AFF: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-#[inline(always)]
-pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
-    let mut p: *mut ::core::ffi::c_char = p_msm.get();
-    if !ascii_isdigit(*p as ::core::ffi::c_int) {
-        return FAIL;
+impl spellinfo_T {
+    /// A spell file under construction, with nothing read yet.
+    ///
+    /// The C listed an initialiser and then `memset` the whole struct to
+    /// zero over the top of it, so every field really does start at zero;
+    /// only the four values [`mkspell`] assigns straight afterwards differ.
+    /// Writing it out is also what lets `si_arena` own a `Vec` at all: an
+    /// empty `Vec`'s pointer is dangling-but-aligned rather than null, so
+    /// `memset`ing over one leaves it invalid.
+    fn new() -> Self {
+        const NO_GARRAY: garray_T = garray_T {
+            ga_len: 0,
+            ga_maxlen: 0,
+            ga_itemsize: 0,
+            ga_growsize: 0,
+            ga_data: ::core::ptr::null_mut(),
+        };
+        Self {
+            si_foldroot: ::core::ptr::null_mut(),
+            si_foldwcount: 0,
+            si_keeproot: ::core::ptr::null_mut(),
+            si_keepwcount: 0,
+            si_prefroot: ::core::ptr::null_mut(),
+            si_sugtree: 0,
+            si_arena: SpellArena::new(),
+            si_did_emsg: 0,
+            si_compress_cnt: 0,
+            si_first_free: ::core::ptr::null_mut(),
+            si_free_count: 0,
+            si_spellbuf: ::core::ptr::null_mut(),
+            si_ascii: 0,
+            si_add: 0,
+            si_clear_chartab: 0,
+            si_region: 0,
+            si_conv: vimconv_T {
+                vc_type: 0,
+                vc_factor: 0,
+                vc_fd: ::core::ptr::null_mut(),
+                vc_fail: false,
+            },
+            si_memtot: 0,
+            si_verbose: 0,
+            si_msg_count: 0,
+            si_info: ::core::ptr::null_mut(),
+            si_region_count: 0,
+            si_region_name: [0; 17],
+            si_rep: NO_GARRAY,
+            si_repsal: NO_GARRAY,
+            si_sal: NO_GARRAY,
+            si_sofofr: ::core::ptr::null_mut(),
+            si_sofoto: ::core::ptr::null_mut(),
+            si_nosugfile: 0,
+            si_nosplitsugs: 0,
+            si_nocompoundsugs: 0,
+            si_followup: 0,
+            si_collapse: 0,
+            si_commonwords: hashtab_T {
+                ht_mask: 0,
+                ht_used: 0,
+                ht_filled: 0,
+                ht_changed: 0,
+                ht_locked: 0,
+                ht_array: ::core::ptr::null_mut(),
+                ht_smallarray: [hashitem_T {
+                    hi_hash: 0,
+                    hi_key: ::core::ptr::null_mut(),
+                }; 16],
+            },
+            si_sugtime: 0,
+            si_rem_accents: 0,
+            si_map: NO_GARRAY,
+            si_midword: ::core::ptr::null_mut(),
+            si_compmax: 0,
+            si_compminlen: 0,
+            si_compsylmax: 0,
+            si_compoptions: 0,
+            si_comppat: NO_GARRAY,
+            si_compflags: ::core::ptr::null_mut(),
+            si_nobreak: 0,
+            si_syllable: ::core::ptr::null_mut(),
+            si_prefcond: NO_GARRAY,
+            si_newprefID: 0,
+            si_newcompID: 0,
+        }
     }
-    let mut start: ::core::ffi::c_int = getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int)
-        * 10 as ::core::ffi::c_int
-        / (wordtree::block_size() / 102 as ::core::ffi::c_int);
-    if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
+}
+
+/// Validate `'mkspellmem'` and install the compression limits it names.
+///
+/// The option is three comma-separated numbers: the arena size at which the
+/// first compression run happens, how much more has to be taken before the
+/// next one, and how many words may be added in between. The first two are
+/// given in megabytes and scaled to arena blocks here; the third is in
+/// thousands of words.
+pub fn spell_check_msm() -> ::core::ffi::c_int {
+    // SAFETY: `p_msm` holds the option's value, a NUL-terminated string.
+    let Some((start, incr, added)) = (unsafe { parse_mkspellmem(p_msm.get()) }) else {
         return FAIL;
-    }
-    p = p.offset(1);
-    if !ascii_isdigit(*p as ::core::ffi::c_int) {
-        return FAIL;
-    }
-    let mut incr: ::core::ffi::c_int = getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int)
-        * 102 as ::core::ffi::c_int
-        / (wordtree::block_size() / 10 as ::core::ffi::c_int);
-    if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
-        return FAIL;
-    }
-    p = p.offset(1);
-    if !ascii_isdigit(*p as ::core::ffi::c_int) {
-        return FAIL;
-    }
-    let mut added: ::core::ffi::c_int =
-        getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int) * 1024 as ::core::ffi::c_int;
-    if *p as ::core::ffi::c_int != NUL {
-        return FAIL;
-    }
-    if start == 0 as ::core::ffi::c_int
-        || incr == 0 as ::core::ffi::c_int
-        || added == 0 as ::core::ffi::c_int
-        || incr > start
-    {
+    };
+
+    let block = wordtree::block_size();
+    let start = start * 10 / (block / 102);
+    let incr = incr * 102 / (block / 10);
+    let added = added * 1024;
+    if start == 0 || incr == 0 || added == 0 || incr > start {
         return FAIL;
     }
     set_compression_limits(start, incr, added);
     OK
 }
-pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
-    let mut fcount: ::core::ffi::c_int = 0;
-    let mut fnames: *mut *mut ::core::ffi::c_char =
-        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    let mut ascii: bool = false;
-    if strncmp(arg, c"-ascii".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int {
-        ascii = true;
-        arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
+
+/// The three unscaled numbers of a `'mkspellmem'` value, or `None` when the
+/// string is not exactly `<digits>,<digits>,<digits>`.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
+unsafe fn parse_mkspellmem(
+    p: *mut ::core::ffi::c_char,
+) -> Option<(::core::ffi::c_int, ::core::ffi::c_int, ::core::ffi::c_int)> {
+    // SAFETY: the caller promises a terminated string, and each step below
+    // stops at the first byte that is not a digit — the NUL at the latest.
+    unsafe {
+        let mut p = p;
+        let start = digits_then(&mut p, ',' as ::core::ffi::c_int)?;
+        let incr = digits_then(&mut p, ',' as ::core::ffi::c_int)?;
+        let added = digits_then(&mut p, NUL)?;
+        Some((start, incr, added))
     }
-    if get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) != OK {
-        return;
-    }
-    mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false);
-    free_wild(fcount, fnames);
 }
+
+/// Read a decimal number that `sep` must follow, stepping `p` past both.
+/// A `sep` of [`NUL`] means "and that must be the end of the string", where
+/// there is nothing to step over.
+///
+/// # Safety
+///
+/// `p` must point into a NUL-terminated string.
+unsafe fn digits_then(
+    p: &mut *mut ::core::ffi::c_char,
+    sep: ::core::ffi::c_int,
+) -> Option<::core::ffi::c_int> {
+    // SAFETY: the caller promises the string; `getdigits_int` advances `p`
+    // over the digits it consumed and no further.
+    unsafe {
+        if !ascii_isdigit(**p as ::core::ffi::c_int) {
+            return None;
+        }
+        let n = getdigits_int(&raw mut *p, true, 0);
+        if **p as ::core::ffi::c_int != sep {
+            return None;
+        }
+        if sep != NUL {
+            *p = p.add(1);
+        }
+        Some(n)
+    }
+}
+
+/// `:mkspell[!] [-ascii] {outfile} {infile} ...`
+///
+/// # Safety
+///
+/// `eap` must be a live excommand.
+pub unsafe fn ex_mkspell(eap: *mut exarg_T) {
+    // SAFETY: the caller promises the excommand; `get_arglist_exp` fills in
+    // the count and the vector, which `free_wild` then releases.
+    unsafe {
+        let mut arg = (*eap).arg;
+        let mut ascii = false;
+        if strncmp(arg, c"-ascii".as_ptr(), 6) == 0 {
+            ascii = true;
+            arg = skipwhite(arg.add(6));
+        }
+
+        let mut fcount = 0;
+        let mut fnames = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
+        if get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) != OK {
+            return;
+        }
+        mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false);
+        free_wild(fcount, fnames);
+    }
+}
+
+/// Read `.aff`/`.dic` pairs or word lists and write the `.spl` they make.
+///
+/// `fnames[0]` names the output; the rest are inputs, one per region. A
+/// single name is both the input stem and, with a suffix, the output.
+///
+/// # Safety
+///
+/// `fnames` must hold `fcount` NUL-terminated paths.
 unsafe fn mkspell(
-    mut fcount: ::core::ffi::c_int,
-    mut fnames: *mut *mut ::core::ffi::c_char,
-    mut ascii: bool,
-    mut over_write: bool,
-    mut added_word: bool,
+    fcount: ::core::ffi::c_int,
+    fnames: *mut *mut ::core::ffi::c_char,
+    ascii: bool,
+    over_write: bool,
+    added_word: bool,
 ) {
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut afile: [*mut afffile_T; 8] = [::core::ptr::null_mut::<afffile_T>(); 8];
-    let mut error: bool = false;
-    let mut spin: spellinfo_T = spellinfo_T {
-        si_foldroot: ::core::ptr::null_mut::<wordnode_T>(),
-        si_foldwcount: 0,
-        si_keeproot: ::core::ptr::null_mut::<wordnode_T>(),
-        si_keepwcount: 0,
-        si_prefroot: ::core::ptr::null_mut::<wordnode_T>(),
-        si_sugtree: 0,
-        si_arena: SpellArena::new(),
-        si_did_emsg: 0,
-        si_compress_cnt: 0,
-        si_first_free: ::core::ptr::null_mut::<wordnode_T>(),
-        si_free_count: 0,
-        si_spellbuf: ::core::ptr::null_mut::<buf_T>(),
-        si_ascii: 0,
-        si_add: 0,
-        si_clear_chartab: 0,
-        si_region: 0,
-        si_conv: vimconv_T {
-            vc_type: 0,
-            vc_factor: 0,
-            vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            vc_fail: false,
-        },
-        si_memtot: 0,
-        si_verbose: 0,
-        si_msg_count: 0,
-        si_info: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        si_region_count: 0,
-        si_region_name: [0; 17],
-        si_rep: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        },
-        si_repsal: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        },
-        si_sal: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        },
-        si_sofofr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        si_sofoto: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        si_nosugfile: 0,
-        si_nosplitsugs: 0,
-        si_nocompoundsugs: 0,
-        si_followup: 0,
-        si_collapse: 0,
-        si_commonwords: hashtab_T {
-            ht_mask: 0,
-            ht_used: 0,
-            ht_filled: 0,
-            ht_changed: 0,
-            ht_locked: 0,
-            ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-            ht_smallarray: [hashitem_T {
-                hi_hash: 0,
-                hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            }; 16],
-        },
-        si_sugtime: 0,
-        si_rem_accents: 0,
-        si_map: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        },
-        si_midword: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        si_compmax: 0,
-        si_compminlen: 0,
-        si_compsylmax: 0,
-        si_compoptions: 0,
-        si_comppat: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        },
-        si_compflags: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        si_nobreak: 0,
-        si_syllable: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        si_prefcond: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        },
-        si_newprefID: 0,
-        si_newcompID: 0,
-    };
-    memset(
-        &raw mut spin as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<spellinfo_T>(),
-    );
+    let mut fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut afile = [::core::ptr::null_mut::<afffile_T>(); MAXREGIONS as usize];
+    let mut spin = spellinfo_T::new();
     spin.si_verbose = !added_word as ::core::ffi::c_int;
     spin.si_ascii = ascii as ::core::ffi::c_int;
     spin.si_followup = 1;
     spin.si_rem_accents = 1;
-    ga_init(
-        &raw mut spin.si_rep,
-        ::core::mem::size_of::<fromto_T>() as ::core::ffi::c_int,
-        20 as ::core::ffi::c_int,
-    );
-    ga_init(
-        &raw mut spin.si_repsal,
-        ::core::mem::size_of::<fromto_T>() as ::core::ffi::c_int,
-        20 as ::core::ffi::c_int,
-    );
-    ga_init(
-        &raw mut spin.si_sal,
-        ::core::mem::size_of::<fromto_T>() as ::core::ffi::c_int,
-        20 as ::core::ffi::c_int,
-    );
-    ga_init(
-        &raw mut spin.si_map,
-        ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-        100 as ::core::ffi::c_int,
-    );
-    ga_init(
-        &raw mut spin.si_comppat,
-        ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-        20 as ::core::ffi::c_int,
-    );
-    ga_init(
-        &raw mut spin.si_prefcond,
-        ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-        50 as ::core::ffi::c_int,
-    );
-    hash_init(&raw mut spin.si_commonwords);
-    spin.si_newcompID = 127 as ::core::ffi::c_int;
-    let mut innames: *mut *mut ::core::ffi::c_char = fnames.offset(
-        (if fcount == 1 as ::core::ffi::c_int {
-            0 as ::core::ffi::c_int
-        } else {
-            1 as ::core::ffi::c_int
-        }) as isize,
-    );
-    let mut incount: ::core::ffi::c_int = fcount - 1 as ::core::ffi::c_int;
-    let mut wfname: *mut ::core::ffi::c_char =
-        xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-    if fcount >= 1 as ::core::ffi::c_int {
-        let mut len: ::core::ffi::c_int =
-            strlen(*fnames.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
-        if fcount == 1 as ::core::ffi::c_int
-            && len > 4 as ::core::ffi::c_int
-            && strcmp(
-                (*fnames.offset(0 as ::core::ffi::c_int as isize))
-                    .offset(len as isize)
-                    .offset(-(4 as ::core::ffi::c_int as isize)),
-                c".add".as_ptr(),
-            ) == 0 as ::core::ffi::c_int
-        {
-            incount = 1 as ::core::ffi::c_int;
-            vim_snprintf(
-                wfname,
-                MAXPATHL as size_t,
-                c"%s.spl".as_ptr(),
-                *fnames.offset(0 as ::core::ffi::c_int as isize),
-            );
-        } else if fcount == 1 as ::core::ffi::c_int {
-            incount = 1 as ::core::ffi::c_int;
-            vim_snprintf(
-                wfname,
-                MAXPATHL as size_t,
-                SPL_FNAME_TMPL.as_ptr(),
-                *fnames.offset(0 as ::core::ffi::c_int as isize),
-                if spin.si_ascii != 0 {
-                    c"ascii".as_ptr()
-                } else {
-                    spell_enc() as *const ::core::ffi::c_char
-                },
-            );
-        } else if len > 4 as ::core::ffi::c_int
-            && strcmp(
-                (*fnames.offset(0 as ::core::ffi::c_int as isize))
-                    .offset(len as isize)
-                    .offset(-(4 as ::core::ffi::c_int as isize)),
-                c".spl".as_ptr(),
-            ) == 0 as ::core::ffi::c_int
-        {
-            xstrlcpy(
-                wfname,
-                *fnames.offset(0 as ::core::ffi::c_int as isize),
-                MAXPATHL as size_t,
-            );
-        } else {
-            vim_snprintf(
-                wfname,
-                MAXPATHL as size_t,
-                SPL_FNAME_TMPL.as_ptr(),
-                *fnames.offset(0 as ::core::ffi::c_int as isize),
-                if spin.si_ascii != 0 {
-                    c"ascii".as_ptr()
-                } else {
-                    spell_enc() as *const ::core::ffi::c_char
-                },
-            );
+
+    // SAFETY: the caller promises the paths; `wfname` and `fname` are
+    // MAXPATHL buffers, which is the bound every writer below is given.
+    unsafe {
+        let entry_size = ::core::mem::size_of::<fromto_T>() as ::core::ffi::c_int;
+        ga_init(&raw mut spin.si_rep, entry_size, 20);
+        ga_init(&raw mut spin.si_repsal, entry_size, 20);
+        ga_init(&raw mut spin.si_sal, entry_size, 20);
+        ga_init(&raw mut spin.si_map, 1, 100);
+        let ptr_size = ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int;
+        ga_init(&raw mut spin.si_comppat, ptr_size, 20);
+        ga_init(&raw mut spin.si_prefcond, ptr_size, 50);
+        hash_init(&raw mut spin.si_commonwords);
+        spin.si_newcompID = 127;
+
+        // With one name it is both the input stem and the output; with
+        // more, the first is the output and the rest are the inputs.
+        let innames = fnames.offset(if fcount == 1 { 0 } else { 1 });
+        let mut incount = fcount - 1;
+        let wfname = xmalloc(MAXPATHL as size_t).cast::<::core::ffi::c_char>();
+        if fcount >= 1 {
+            incount = output_name(wfname, fnames, fcount, spin.si_ascii != 0, incount);
+            if !strstr(path_tail(wfname), SPL_FNAME_ASCII.as_ptr()).is_null() {
+                spin.si_ascii = 1;
+            }
+            if !strstr(path_tail(wfname), SPL_FNAME_ADD.as_ptr()).is_null() {
+                spin.si_add = 1;
+            }
         }
-        if !strstr(path_tail(wfname), SPL_FNAME_ASCII.as_ptr()).is_null() {
-            spin.si_ascii = 1;
-        }
-        if !strstr(path_tail(wfname), SPL_FNAME_ADD.as_ptr()).is_null() {
-            spin.si_add = 1;
-        }
-    }
-    '_theend: {
-        if incount <= 0 as ::core::ffi::c_int {
-            emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-        } else if !vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int).is_null() {
-            emsg(gettext(
-                c"E751: Output file name must not have region name".as_ptr(),
-            ));
-        } else if incount > MAXREGIONS as ::core::ffi::c_int {
-            semsg_c!(
-                gettext(c"E754: Only up to %d regions supported".as_ptr()),
-                MAXREGIONS as ::core::ffi::c_int,
-            );
-        } else if !over_write && os_path_exists(wfname) as ::core::ffi::c_int != 0 {
-            emsg(gettext(&raw const e_exists as *const ::core::ffi::c_char));
-        } else if os_isdir(wfname) {
-            semsg_c!(
-                gettext(&raw const e_isadir2 as *const ::core::ffi::c_char),
-                wfname,
-            );
-        } else {
-            fname = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < incount {
-                afile[i as usize] = ::core::ptr::null_mut::<afffile_T>();
-                if incount > 1 as ::core::ffi::c_int {
-                    let mut len_0: ::core::ffi::c_int =
-                        strlen(*innames.offset(i as isize)) as ::core::ffi::c_int;
-                    if strlen(path_tail(*innames.offset(i as isize))) < 5 as size_t
-                        || *(*innames.offset(i as isize))
-                            .offset((len_0 - 3 as ::core::ffi::c_int) as isize)
-                            as ::core::ffi::c_int
-                            != '_' as ::core::ffi::c_int
-                    {
-                        semsg_c!(
-                            gettext(c"E755: Invalid region in %s".as_ptr()),
-                            *innames.offset(i as isize),
-                        );
-                        break '_theend;
-                    } else {
-                        spin.si_region_name[(i * 2 as ::core::ffi::c_int) as usize] =
-                            (if (*(*innames.offset(i as isize))
-                                .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int)
-                                < 'A' as ::core::ffi::c_int
-                                || *(*innames.offset(i as isize))
-                                    .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                                    as ::core::ffi::c_int
-                                    > 'Z' as ::core::ffi::c_int
-                            {
-                                *(*innames.offset(i as isize))
-                                    .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                                    as ::core::ffi::c_int
-                            } else {
-                                *(*innames.offset(i as isize))
-                                    .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                                    as ::core::ffi::c_int
-                                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                            }) as uint8_t as ::core::ffi::c_char;
-                        spin.si_region_name
-                            [(i * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as usize] =
-                            (if (*(*innames.offset(i as isize))
-                                .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int)
-                                < 'A' as ::core::ffi::c_int
-                                || *(*innames.offset(i as isize))
-                                    .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                                    as ::core::ffi::c_int
-                                    > 'Z' as ::core::ffi::c_int
-                            {
-                                *(*innames.offset(i as isize))
-                                    .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                                    as ::core::ffi::c_int
-                            } else {
-                                *(*innames.offset(i as isize))
-                                    .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                                    as ::core::ffi::c_int
-                                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                            }) as uint8_t as ::core::ffi::c_char;
-                    }
-                }
-                i += 1;
+
+        '_theend: {
+            if !output_is_writable(wfname, incount, over_write) {
+                break '_theend;
+            }
+            fname = xmalloc(MAXPATHL as size_t).cast::<::core::ffi::c_char>();
+            if !read_region_names(&mut spin, innames, incount) {
+                break '_theend;
             }
             spin.si_region_count = incount;
             spin.si_foldroot = wordtree_alloc(&mut spin);
@@ -637,50 +518,16 @@ unsafe fn mkspell(
             if spin.si_add == 0 {
                 spin.si_clear_chartab = 1;
             }
-            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < incount && !error {
-                spin.si_conv.vc_type = CONV_NONE;
-                spin.si_region = (1 as ::core::ffi::c_int) << i_0;
-                vim_snprintf(
-                    fname,
-                    MAXPATHL as size_t,
-                    c"%s.aff".as_ptr(),
-                    *innames.offset(i_0 as isize),
-                );
-                if os_path_exists(fname) {
-                    afile[i_0 as usize] = spell_read_aff(&raw mut spin, fname);
-                    if afile[i_0 as usize].is_null() {
-                        error = true;
-                    } else {
-                        vim_snprintf(
-                            fname,
-                            MAXPATHL as size_t,
-                            c"%s.dic".as_ptr(),
-                            *innames.offset(i_0 as isize),
-                        );
-                        if spell_read_dic(&raw mut spin, fname, afile[i_0 as usize]) == FAIL {
-                            error = true;
-                        }
-                    }
-                } else if spell_read_wordfile(&raw mut spin, *innames.offset(i_0 as isize)) == FAIL
-                {
-                    error = true;
-                }
-                convert_setup(
-                    &raw mut spin.si_conv,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                );
-                i_0 += 1;
-            }
-            if !spin.si_compflags.is_null() && spin.si_nobreak as ::core::ffi::c_int != 0 {
+
+            let mut error = read_inputs(&mut spin, innames, incount, fname, &mut afile);
+            if !spin.si_compflags.is_null() && spin.si_nobreak != 0 {
                 msg(
                     gettext(c"Warning: both compounding and NOBREAK specified".as_ptr()),
-                    0 as ::core::ffi::c_int,
+                    0,
                 );
             }
             if !error && !got_int.get() {
-                spell_message(&raw mut spin, gettext(MSG_COMPRESSING.as_ptr()));
+                spell_message(&spin, gettext(MSG_COMPRESSING.as_ptr()));
                 let root = spin.si_foldroot;
                 wordtree_compress(&mut spin, root, c"case-folded");
                 let root = spin.si_keeproot;
@@ -690,102 +537,318 @@ unsafe fn mkspell(
             }
             if !error && !got_int.get() {
                 vim_snprintf(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
+                    IObuff.ptr().cast::<::core::ffi::c_char>(),
                     IOSIZE as size_t,
                     gettext(c"Writing spell file %s...".as_ptr()),
                     wfname,
                 );
-                spell_message(&raw mut spin, IObuff.ptr() as *mut ::core::ffi::c_char);
+                spell_message(&spin, IObuff.ptr().cast::<::core::ffi::c_char>());
                 error = write_vim_spell(&mut spin, wfname) == FAIL;
-                spell_message(&raw mut spin, gettext(c"Done!".as_ptr()));
+                spell_message(&spin, gettext(c"Done!".as_ptr()));
                 vim_snprintf(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
+                    IObuff.ptr().cast::<::core::ffi::c_char>(),
                     IOSIZE as size_t,
                     gettext(c"Estimated runtime memory use: %d bytes".as_ptr()),
                     spin.si_memtot,
                 );
-                spell_message(&raw mut spin, IObuff.ptr() as *mut ::core::ffi::c_char);
+                spell_message(&spin, IObuff.ptr().cast::<::core::ffi::c_char>());
                 if !error {
                     spell_reload_one(wfname, added_word);
                 }
             }
+
             ga_clear(&raw mut spin.si_rep);
             ga_clear(&raw mut spin.si_repsal);
             ga_clear(&raw mut spin.si_sal);
             ga_clear(&raw mut spin.si_map);
             ga_clear(&raw mut spin.si_comppat);
             ga_clear(&raw mut spin.si_prefcond);
-            hash_clear_all(&raw mut spin.si_commonwords, 0 as ::core::ffi::c_uint);
-            let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_1 < incount {
-                if !afile[i_1 as usize].is_null() {
-                    spell_free_aff(afile[i_1 as usize]);
+            hash_clear_all(&raw mut spin.si_commonwords, 0);
+            for aff in afile.iter().take(incount as usize) {
+                if !aff.is_null() {
+                    spell_free_aff(*aff);
                 }
-                i_1 += 1;
             }
+            // The `.sug` pass reads the file back and builds its own tree,
+            // so the arena goes first.
             spin.si_arena.clear();
-            if spin.si_sugtime != 0 as time_t && !error && !got_int.get() {
+            if spin.si_sugtime != 0 && !error && !got_int.get() {
                 spell_make_sugfile(&mut spin, wfname);
             }
         }
+
+        xfree(fname.cast());
+        xfree(wfname.cast());
     }
-    xfree(fname as *mut ::core::ffi::c_void);
-    xfree(wfname as *mut ::core::ffi::c_void);
 }
-unsafe fn spell_message(mut spin: *const spellinfo_T, mut str: *mut ::core::ffi::c_char) {
-    if (*spin).si_verbose != 0 || p_verbose.get() > 2 as OptInt {
-        if (*spin).si_verbose == 0 {
+
+/// Write the output path into `wfname` and say how many inputs there are.
+///
+/// A lone `foo.add` writes `foo.add.spl`; any other lone name is a stem the
+/// encoding is appended to; a first name already ending in `.spl` is taken
+/// as it stands. `default_incount` is what to report when the first name
+/// was only the output.
+///
+/// # Safety
+///
+/// `wfname` must have room for [`MAXPATHL`] bytes and `fnames` hold
+/// `fcount` NUL-terminated paths, at least one.
+unsafe fn output_name(
+    wfname: *mut ::core::ffi::c_char,
+    fnames: *mut *mut ::core::ffi::c_char,
+    fcount: ::core::ffi::c_int,
+    ascii: bool,
+    default_incount: ::core::ffi::c_int,
+) -> ::core::ffi::c_int {
+    // SAFETY: the caller promises the paths and the buffer's size, which is
+    // the bound both writers below are given.
+    unsafe {
+        let first = *fnames;
+        let len = strlen(first);
+        let ends_with =
+            |ext: &::core::ffi::CStr| len > 4 && strcmp(first.add(len).sub(4), ext.as_ptr()) == 0;
+        let enc = if ascii {
+            c"ascii".as_ptr()
+        } else {
+            spell_enc().cast::<::core::ffi::c_char>()
+        };
+
+        if fcount == 1 {
+            if ends_with(c".add") {
+                vim_snprintf(wfname, MAXPATHL as size_t, c"%s.spl".as_ptr(), first);
+            } else {
+                vim_snprintf(
+                    wfname,
+                    MAXPATHL as size_t,
+                    SPL_FNAME_TMPL.as_ptr(),
+                    first,
+                    enc,
+                );
+            }
+            return 1;
+        }
+        if ends_with(c".spl") {
+            xstrlcpy(wfname, first, MAXPATHL as size_t);
+        } else {
+            vim_snprintf(
+                wfname,
+                MAXPATHL as size_t,
+                SPL_FNAME_TMPL.as_ptr(),
+                first,
+                enc,
+            );
+        }
+        default_incount
+    }
+}
+
+/// Can `:mkspell` write here? Reports why not, if not.
+///
+/// # Safety
+///
+/// `wfname` must be a NUL-terminated path.
+unsafe fn output_is_writable(
+    wfname: *mut ::core::ffi::c_char,
+    incount: ::core::ffi::c_int,
+    over_write: bool,
+) -> bool {
+    // SAFETY: the caller promises the path.
+    unsafe {
+        if incount <= 0 {
+            emsg(gettext((&raw const e_invarg).cast()));
+        } else if !vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int).is_null() {
+            emsg(gettext(
+                c"E751: Output file name must not have region name".as_ptr(),
+            ));
+        } else if incount > MAXREGIONS as ::core::ffi::c_int {
+            semsg_c!(
+                gettext(c"E754: Only up to %d regions supported".as_ptr()),
+                MAXREGIONS as ::core::ffi::c_int,
+            );
+        } else if !over_write && os_path_exists(wfname) {
+            emsg(gettext((&raw const e_exists).cast()));
+        } else if os_isdir(wfname) {
+            semsg_c!(gettext((&raw const e_isadir2).cast()), wfname);
+        } else {
+            return true;
+        }
+        false
+    }
+}
+
+/// Fill in `si_region_name` from the `_xy` each input name ends with.
+///
+/// A single input covers every region and carries no suffix. Returns false,
+/// having reported the name, when one of several does not carry one.
+///
+/// # Safety
+///
+/// `innames` must hold `incount` NUL-terminated paths.
+unsafe fn read_region_names(
+    spin: &mut spellinfo_T,
+    innames: *mut *mut ::core::ffi::c_char,
+    incount: ::core::ffi::c_int,
+) -> bool {
+    if incount <= 1 {
+        return true;
+    }
+    // SAFETY: the caller promises the paths; the two bytes read below are
+    // the last two before the terminator of a name at least five long.
+    unsafe {
+        for i in 0..incount as usize {
+            let name = *innames.add(i);
+            let len = strlen(name);
+            if strlen(path_tail(name)) < 5 || *name.add(len - 3) != b'_' as ::core::ffi::c_char {
+                semsg_c!(gettext(c"E755: Invalid region in %s".as_ptr()), name);
+                return false;
+            }
+            spin.si_region_name[i * 2] = to_lower_ascii(*name.add(len - 2));
+            spin.si_region_name[i * 2 + 1] = to_lower_ascii(*name.add(len - 1));
+        }
+        true
+    }
+}
+
+/// Lower-case one ASCII letter, leaving every other byte — including the
+/// high half, where `c_char` is negative — alone.
+fn to_lower_ascii(c: ::core::ffi::c_char) -> ::core::ffi::c_char {
+    if c < b'A' as ::core::ffi::c_char || c > b'Z' as ::core::ffi::c_char {
+        c
+    } else {
+        c + (b'a' - b'A') as ::core::ffi::c_char
+    }
+}
+
+/// Read every input into `spin`: an `.aff`/`.dic` pair where an `.aff`
+/// exists, a plain word list otherwise. Returns whether one of them failed,
+/// which stops the rest.
+///
+/// # Safety
+///
+/// `innames` must hold `incount` NUL-terminated paths, `fname` must have
+/// room for [`MAXPATHL`] bytes, and `afile` at least `incount` slots.
+unsafe fn read_inputs(
+    spin: &mut spellinfo_T,
+    innames: *mut *mut ::core::ffi::c_char,
+    incount: ::core::ffi::c_int,
+    fname: *mut ::core::ffi::c_char,
+    afile: &mut [*mut afffile_T],
+) -> bool {
+    // SAFETY: the caller promises the paths and the buffer's size, which is
+    // the bound `vim_snprintf` is given.
+    unsafe {
+        for (i, aff) in afile.iter_mut().enumerate().take(incount as usize) {
+            spin.si_conv.vc_type = CONV_NONE;
+            spin.si_region = 1 << i;
+            let stem = *innames.add(i);
+            vim_snprintf(fname, MAXPATHL as size_t, c"%s.aff".as_ptr(), stem);
+
+            let failed = if os_path_exists(fname) {
+                *aff = spell_read_aff(spin, fname);
+                aff.is_null() || {
+                    vim_snprintf(fname, MAXPATHL as size_t, c"%s.dic".as_ptr(), stem);
+                    spell_read_dic(spin, fname, *aff) == FAIL
+                }
+            } else {
+                spell_read_wordfile(spin, stem) == FAIL
+            };
+            convert_setup(
+                &raw mut spin.si_conv,
+                ::core::ptr::null_mut(),
+                ::core::ptr::null_mut(),
+            );
+            if failed {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// Show `text` while `:mkspell` runs, quietly unless it was asked to be
+/// verbose or `'verbose'` is high enough to want it anyway.
+///
+/// # Safety
+///
+/// `text` must be a NUL-terminated string.
+unsafe fn spell_message(spin: &spellinfo_T, text: *mut ::core::ffi::c_char) {
+    if spin.si_verbose == 0 && p_verbose.get() <= 2 as OptInt {
+        return;
+    }
+    let quiet = spin.si_verbose == 0;
+    // SAFETY: the caller promises the string.
+    unsafe {
+        if quiet {
             verbose_enter();
         }
-        msg(str, 0 as ::core::ffi::c_int);
+        msg(text, 0);
         ui_flush();
-        if (*spin).si_verbose == 0 {
+        if quiet {
             verbose_leave();
         }
     }
 }
-pub unsafe fn ex_spell(mut eap: *mut exarg_T) {
-    spell_add_word(
-        (*eap).arg,
-        strlen((*eap).arg) as ::core::ffi::c_int,
-        (if (*eap).cmdidx as ::core::ffi::c_int == CMD_spellwrong as ::core::ffi::c_int {
-            SPELL_ADD_BAD as ::core::ffi::c_int
-        } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_spellrare as ::core::ffi::c_int {
-            SPELL_ADD_RARE as ::core::ffi::c_int
+
+/// `:spellgood`, `:spellwrong`, `:spellrare` and their `:spell*undo` forms.
+///
+/// # Safety
+///
+/// `eap` must be a live excommand.
+pub unsafe fn ex_spell(eap: *mut exarg_T) {
+    // SAFETY: the caller promises the excommand; `arg` is its NUL-terminated
+    // argument.
+    unsafe {
+        let kind = if (*eap).cmdidx == CMD_spellwrong {
+            SPELL_ADD_BAD
+        } else if (*eap).cmdidx == CMD_spellrare {
+            SPELL_ADD_RARE
         } else {
-            SPELL_ADD_GOOD as ::core::ffi::c_int
-        }) as SpellAddType,
-        if (*eap).forceit != 0 {
-            0 as ::core::ffi::c_int
+            SPELL_ADD_GOOD
+        };
+        // `:N spellgood` files the word in the Nth 'spellfile'; `!` means
+        // the internal word list instead.
+        let which = if (*eap).forceit != 0 {
+            0
         } else {
             (*eap).line2 as ::core::ffi::c_int
-        },
-        (*eap).cmdidx as ::core::ffi::c_int == CMD_spellundo as ::core::ffi::c_int,
-    );
+        };
+        spell_add_word(
+            (*eap).arg,
+            strlen((*eap).arg) as ::core::ffi::c_int,
+            kind as SpellAddType,
+            which,
+            (*eap).cmdidx == CMD_spellundo,
+        );
+    }
 }
-unsafe fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
-    if did_set_spelltab.get() {
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < 256 as ::core::ffi::c_int {
-            if (*spelltab.ptr()).st_isw[i as usize] as ::core::ffi::c_int
-                != (*new_st).st_isw[i as usize] as ::core::ffi::c_int
-                || (*spelltab.ptr()).st_isu[i as usize] as ::core::ffi::c_int
-                    != (*new_st).st_isu[i as usize] as ::core::ffi::c_int
-                || (*spelltab.ptr()).st_fold[i as usize] as ::core::ffi::c_int
-                    != (*new_st).st_fold[i as usize] as ::core::ffi::c_int
-                || (*spelltab.ptr()).st_upper[i as usize] as ::core::ffi::c_int
-                    != (*new_st).st_upper[i as usize] as ::core::ffi::c_int
-            {
-                emsg(gettext(
-                    c"E763: Word characters differ between spell files".as_ptr(),
-                ));
-                return FAIL;
-            }
-            i += 1;
-        }
-    } else {
+
+/// Adopt `new_st` as the word character table, or check that it agrees with
+/// the one already in force.
+///
+/// The table is global, so two spell files that disagree about which bytes
+/// are word characters cannot be loaded together.
+fn set_spell_finish(new_st: &spelltab_T) -> ::core::ffi::c_int {
+    if !did_set_spelltab.get() {
         spelltab.set(*new_st);
         did_set_spelltab.set(true);
+        return OK;
+    }
+    let agrees = spelltab.with(|st| {
+        (0..256).all(|i| {
+            st.st_isw[i] == new_st.st_isw[i]
+                && st.st_isu[i] == new_st.st_isu[i]
+                && st.st_fold[i] == new_st.st_fold[i]
+                && st.st_upper[i] == new_st.st_upper[i]
+        })
+    });
+    if !agrees {
+        // SAFETY: a static message.
+        unsafe {
+            emsg(gettext(
+                c"E763: Word characters differ between spell files".as_ptr(),
+            ));
+        }
+        return FAIL;
     }
     OK
 }

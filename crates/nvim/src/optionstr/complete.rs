@@ -245,8 +245,7 @@ pub unsafe fn did_set_helplang(_args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_mkspellmem(_args: *mut optset_T) -> *const c_char {
-    // SAFETY: re-reads the option's own value.
-    if unsafe { spell_check_msm() } != OK {
+    if spell_check_msm() != OK {
         return invalid();
     }
     ptr::null()
