@@ -277,7 +277,7 @@ static nv_cmds: GlobalCell<[nv_cmd; 188]> = GlobalCell::new([
     cmd('O' as c_int, Some(nv_open), 0, 0),
     cmd('P' as c_int, Some(nv_put), 0, 0),
     cmd('Q' as c_int, Some(nv_regreplay), 0, 0),
-    cmd('R' as c_int, Some(nv_Replace), 0, 0),
+    cmd('R' as c_int, Some(nv_replace_mode), 0, 0),
     cmd('S' as c_int, Some(nv_subst), NV_KEEPREG, 0),
     cmd(
         'T' as c_int,
@@ -285,11 +285,11 @@ static nv_cmds: GlobalCell<[nv_cmd; 188]> = GlobalCell::new([
         NV_NCH_ALW | NV_LANG,
         BACKWARD as c_int,
     ),
-    cmd('U' as c_int, Some(nv_Undo), 0, 0),
+    cmd('U' as c_int, Some(nv_undo_line), 0, 0),
     cmd('W' as c_int, Some(nv_wordcmd), 0, 1),
     cmd('X' as c_int, Some(nv_abbrev), NV_KEEPREG, 0),
     cmd('Y' as c_int, Some(nv_abbrev), NV_KEEPREG, 0),
-    cmd('Z' as c_int, Some(nv_Zet), NV_NCH_NOP | NV_NCW, 0),
+    cmd('Z' as c_int, Some(nv_exit_command), NV_NCH_NOP | NV_NCW, 0),
     cmd(
         '[' as c_int,
         Some(nv_brackets),

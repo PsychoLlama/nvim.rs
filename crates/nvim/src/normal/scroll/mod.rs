@@ -202,7 +202,7 @@ pub(crate) unsafe fn nv_halfpage(cap: *mut cmdarg_T) {
 }
 
 /// `ZZ`, `ZQ` and `ZR`: the two-key ways out.
-pub(crate) unsafe fn nv_Zet(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_exit_command(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearopq((*cap).oap) {

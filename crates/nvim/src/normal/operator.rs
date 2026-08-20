@@ -114,7 +114,7 @@ pub(crate) unsafe fn nv_kundo(cap: *mut cmdarg_T) {
 }
 
 /// `U`: undo the whole line, or the `gU` operator.
-pub(crate) unsafe fn nv_Undo(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_undo_line(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*(*cap).oap).op_type == OP_UPPER || VIsual_active.get() {

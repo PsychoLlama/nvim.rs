@@ -20,8 +20,8 @@ use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::{
     MOD_MASK_CTRL, adjust_for_sel, check_text_locked, checkclearop, checkclearopq, clearopbeep,
-    invoke_edit, kMTCharWise, kMTLineWise, nv_Replace, nv_addsub, nv_edit, nv_gd, nv_gomark,
-    nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put,
+    invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
+    nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put, nv_replace_mode,
     nv_screengo, nv_visual, nv_vreplace,
 };
 use crate::ops::cursor_pos_info;
@@ -323,7 +323,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             // `gR`: virtual replace mode.
             Ok(b'R') => {
                 (*cap).arg = 1;
-                nv_Replace(cap);
+                nv_replace_mode(cap);
             }
             // `gr`: replace one character virtually.
             Ok(b'r') => nv_vreplace(cap),

@@ -236,7 +236,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
 }
 
 /// `R` and `gR`: replace mode, virtual with the argument set.
-pub(crate) unsafe fn nv_Replace(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_replace_mode(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if VIsual_active.get() {

@@ -496,7 +496,7 @@ pub unsafe fn do_nv_ident(c1: c_int, c2: c_int) {
 /// Answers the length of the identifier still to be appended, or 0 when there
 /// is nothing to look up -- in which case `buf` has already been freed.
 #[allow(clippy::too_many_arguments)]
-unsafe fn nv_K_getcmd(
+unsafe fn build_keywordprg_cmd(
     cap: *mut cmdarg_T,
     kp: *mut c_char,
     kp_help: bool,
@@ -736,7 +736,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
                 no_smartcase.set(true);
             }
             Ok(b'K') => {
-                n = nv_K_getcmd(
+                n = build_keywordprg_cmd(
                     cap,
                     kp,
                     kp_help,
