@@ -112,8 +112,8 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // The marks and visual area from before the move; they go into the header
     // at the end, swapped with the ones it was carrying.
-    // SAFETY: a live buffer, so its mark array is `NMARKS` long.
-    unsafe { zero_fmark_additional_data(buf.b_namedm.as_mut_ptr()) };
+    // SAFETY: this module's own allocations, dropped exactly once.
+    unsafe { zero_fmark_additional_data(&mut buf.b_namedm) };
     let saved_marks = buf.b_namedm;
     let saved_visual = buf.b_visual;
     buf.b_op_start.lnum = buf.b_ml.ml_line_count;
