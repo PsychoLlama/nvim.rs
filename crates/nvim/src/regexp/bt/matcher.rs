@@ -19,7 +19,7 @@ use core::ffi::{c_char, c_int};
 use super::compile::regnext;
 use super::resume::resume;
 use super::single::match_one;
-use super::state::{RegStack, regstack};
+use super::state::{RegStack, capture_slot, regstack};
 use crate::garray::ga_append_via_ptr;
 use crate::main::{e_re_corr, got_int};
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
@@ -33,10 +33,9 @@ use crate::regexp::{
     RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT,
     RS_ZCLOSE, RS_ZOPEN, Rex, STAR, SUBPAT, ZCLOSE, ZOPEN, backpos, backpos_T, bl_maxval,
     bl_minval, brace_count, brace_max, brace_min, cleanup_subexpr, cleanup_zsubexpr,
-    reg_breakcheck, reg_endzp, reg_endzpos, reg_nextline, reg_save, reg_startzp, reg_startzpos,
-    regstar_T, regstate_T, save_capture, save_subexpr,
+    reg_breakcheck, reg_nextline, reg_save, regstar_T, regstate_T, save_capture, save_subexpr,
 };
-use crate::types::{NUL, int16_t, int64_t, lpos_T, proftime_T, uint8_t};
+use crate::types::{NUL, int16_t, int64_t, proftime_T, uint8_t};
 
 /// The four bytes of a node operand at `off`, big-endian, as the compiler
 /// wrote them.
@@ -213,37 +212,19 @@ fn push_frame(
             // about to overwrite so a failure can put it back.
             MOPEN..=MOPEN_9 => {
                 cleanup_subexpr(rex);
-                let no = op - MOPEN;
-                push_capture(rex, stack, RS_MOPEN, scan, no, |no| {
-                    (rex.reg_startpos().add(no), rex.reg_startp().add(no))
-                })
+                push_capture(rex, stack, RS_MOPEN, scan, op - MOPEN)
             }
             MCLOSE..=MCLOSE_9 => {
                 cleanup_subexpr(rex);
-                let no = op - MCLOSE;
-                push_capture(rex, stack, RS_MCLOSE, scan, no, |no| {
-                    (rex.reg_endpos().add(no), rex.reg_endp().add(no))
-                })
+                push_capture(rex, stack, RS_MCLOSE, scan, op - MCLOSE)
             }
             ZOPEN_1..=ZOPEN_9 => {
                 cleanup_zsubexpr(rex);
-                let no = op - ZOPEN;
-                push_capture(rex, stack, RS_ZOPEN, scan, no, |no| {
-                    (
-                        reg_startzpos.ptr().cast::<lpos_T>().add(no),
-                        reg_startzp.ptr().cast::<*mut uint8_t>().add(no),
-                    )
-                })
+                push_capture(rex, stack, RS_ZOPEN, scan, op - ZOPEN)
             }
             ZCLOSE_1..=ZCLOSE_9 => {
                 cleanup_zsubexpr(rex);
-                let no = op - ZCLOSE;
-                push_capture(rex, stack, RS_ZCLOSE, scan, no, |no| {
-                    (
-                        reg_endzpos.ptr().cast::<lpos_T>().add(no),
-                        reg_endzp.ptr().cast::<*mut uint8_t>().add(no),
-                    )
-                })
+                push_capture(rex, stack, RS_ZCLOSE, scan, op - ZCLOSE)
             }
 
             // `\%(` captures nothing, but still needs a frame so that the
@@ -331,27 +312,27 @@ fn push_frame(
     }
 }
 
-/// Push a frame that restores capture slot `no` — the multi-line and the
-/// string form of it — if the rest of the pattern fails.
+/// Push a frame that restores capture group `no`'s slot if the rest of the
+/// pattern fails.
 ///
 /// # Safety
-/// `slots` must hand back the pair of slots for `no`.
+/// `state` must be a capture state and `no` a group of the running match —
+/// see [`capture_slot`].
 unsafe fn push_capture(
     rex: Rex,
     stack: &mut RegStack,
     state: regstate_T,
     scan: *mut uint8_t,
     no: c_int,
-    slots: impl Fn(usize) -> (*mut lpos_T, *mut *mut uint8_t),
 ) -> c_int {
     // SAFETY: as `push_frame`.
     unsafe {
-        let (pos, ptr) = slots(no as usize);
+        let slot = capture_slot(rex, state, no as usize);
         let Some(rp) = stack.push(state, scan) else {
             return RA_FAIL;
         };
         rp.rs_no = no as int16_t;
-        save_capture(rex, &mut rp.rs_saved.pos, pos, ptr);
+        save_capture(rex, &mut rp.rs_saved.pos, slot);
         RA_CONT
     }
 }

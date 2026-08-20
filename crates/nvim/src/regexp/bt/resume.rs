@@ -13,16 +13,15 @@ use core::ffi::{c_char, c_int};
 use super::compile::regnext;
 use super::matcher::operand_u32;
 use super::repeat::regrepeat;
-use super::state::RegStack;
+use super::state::{RegStack, capture_slot};
 use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::regexp::{
     BEHIND, BRANCH, MatchPos, NOBEHIND, NOMATCH, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH,
     RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE,
     RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SUBPAT,
-    SavedInput, backpos, behind_pos, brace_count, reg_breakcheck, reg_endzp, reg_endzpos,
-    reg_getline, reg_getline_len, reg_restore, reg_save, reg_startzp, reg_startzpos, regstate_T,
-    restore_subexpr,
+    SavedInput, backpos, behind_pos, brace_count, reg_breakcheck, reg_getline, reg_getline_len,
+    reg_restore, reg_save, regstate_T, restore_subexpr,
 };
 use crate::types::{NUL, colnr_T, int64_t, uint8_t};
 use ::libc::strlen;
@@ -156,29 +155,11 @@ pub(crate) fn resume(rex: Rex, stack: &mut RegStack, scan: &mut *mut uint8_t, st
 ///
 /// # Safety
 ///
-/// `no` must name a capture group the running match holds slots for.
+/// As [`super::state::capture_slot`].
 unsafe fn undo_capture(rex: Rex, state: regstate_T, no: usize, saved: MatchPos) {
-    // SAFETY: the caller promises the group; only the array this match's own
-    // kind uses is reached, so the null one is never indexed.
-    unsafe {
-        if rex.multi() {
-            let slot = match state {
-                RS_MOPEN => rex.reg_startpos().add(no),
-                RS_MCLOSE => rex.reg_endpos().add(no),
-                RS_ZOPEN => &raw mut (*reg_startzpos.ptr())[no],
-                _ => &raw mut (*reg_endzpos.ptr())[no],
-            };
-            *slot = saved.as_pos();
-        } else {
-            let slot = match state {
-                RS_MOPEN => rex.reg_startp().add(no),
-                RS_MCLOSE => rex.reg_endp().add(no),
-                RS_ZOPEN => &raw mut (*reg_startzp.ptr())[no],
-                _ => &raw mut (*reg_endzp.ptr())[no],
-            };
-            *slot = saved.as_ptr();
-        }
-    }
+    // SAFETY: the caller promises the group; this is the slot the matching
+    // `push_capture` read the saved value out of.
+    unsafe { capture_slot(rex, state, no).set(saved) };
 }
 
 /// Undo one `\{n,m}` pass of the counted repeat in slot `no`.

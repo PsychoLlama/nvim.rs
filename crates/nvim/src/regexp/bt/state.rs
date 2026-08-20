@@ -40,8 +40,9 @@ use crate::main::p_mmp;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP, REGSTACK_INITIAL, Rex,
-    SavedInput, reg_getline, regbehind_T, regitem_T, regstar_T, regstate_T,
+    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP, REGSTACK_INITIAL, RS_MCLOSE,
+    RS_MOPEN, RS_ZOPEN, Rex, SavedInput, reg_endzp, reg_endzpos, reg_getline, reg_startzp,
+    reg_startzpos, regbehind_T, regitem_T, regstar_T, regstate_T,
 };
 use crate::types::{garray_T, lpos_T, uint8_t};
 
@@ -254,35 +255,102 @@ pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, gap: *mut garray_T) {
     unsafe { (*gap).ga_len = save.backpos_len };
 }
 
-/// Move the current position into capture slot `no`, keeping what the slot
-/// held in `savep` so the unwinder can put it back.
+/// One end of one capture group, in whichever of the four slot arrays holds
+/// it.
 ///
-/// A buffer match's slots are the `posp` array and a string match's the `pp`
-/// array; only the one this match's kind names is touched.
+/// A buffer match records `lpos_T`s and a string match pointers, and *only the
+/// pair its own kind names exists*: the other pair is null for the whole run.
+/// So the kind has to be settled before a slot address is formed at all —
+/// `null.add(no)` is undefined even when the address is thrown away
+/// unexamined, which is why this is an enum of two addresses rather than a
+/// pair of them.
+#[derive(Clone, Copy)]
+pub(crate) enum GroupSlot {
+    /// A buffer match's slot.
+    Pos(*mut lpos_T),
+    /// A string match's slot.
+    Ptr(*mut *mut uint8_t),
+}
+
+impl GroupSlot {
+    /// What the slot holds.
+    ///
+    /// # Safety
+    ///
+    /// The slot must still belong to the running match.
+    #[inline(always)]
+    pub(crate) unsafe fn get(self) -> MatchPos {
+        match self {
+            // SAFETY: the caller promises a live slot, and the variant is the
+            // shape it holds because the match's own kind chose it.
+            GroupSlot::Pos(p) => MatchPos::from_pos(unsafe { *p }),
+            GroupSlot::Ptr(p) => MatchPos::from_ptr(unsafe { *p }),
+        }
+    }
+
+    /// Put `at` in the slot.
+    ///
+    /// # Safety
+    ///
+    /// As [`GroupSlot::get`].
+    #[inline(always)]
+    pub(crate) unsafe fn set(self, at: MatchPos) {
+        match self {
+            // SAFETY: as `get`.
+            GroupSlot::Pos(p) => unsafe { *p = at.as_pos() },
+            GroupSlot::Ptr(p) => unsafe { *p = at.as_ptr() },
+        }
+    }
+}
+
+/// Which slot a capture frame is about: its state says which end of which
+/// family, and `no` which group.
+///
+/// The `\z(` groups live in this module's own arrays rather than in the
+/// caller's match structure, which is the only reason there are four families
+/// and not two. Picking the array is safe — it is `no` that has to be in
+/// range, and the *kind* that has to be settled first, because the pair this
+/// match does not use is null for the whole run.
 ///
 /// # Safety
 ///
-/// `posp` and `pp` must be the pair of slots the running match holds for one
-/// capture group.
-pub(crate) unsafe fn save_capture(
-    rex: Rex,
-    savep: &mut MatchPos,
-    posp: *mut lpos_T,
-    pp: *mut *mut uint8_t,
-) {
-    // SAFETY: the caller hands over a live pair of slots, of which this
-    // match's kind picks one.
+/// `state` must be one of `RS_MOPEN`, `RS_MCLOSE`, `RS_ZOPEN`, `RS_ZCLOSE`,
+/// and `no` must name a capture group the running match holds slots for.
+#[inline(always)]
+pub(crate) unsafe fn capture_slot(rex: Rex, state: regstate_T, no: usize) -> GroupSlot {
+    if rex.multi() {
+        let array = match state {
+            RS_MOPEN => rex.reg_startpos(),
+            RS_MCLOSE => rex.reg_endpos(),
+            RS_ZOPEN => reg_startzpos.ptr().cast::<lpos_T>(),
+            _ => reg_endzpos.ptr().cast::<lpos_T>(),
+        };
+        // SAFETY: the caller promises the group, and this is the array a
+        // buffer match fills.
+        GroupSlot::Pos(unsafe { array.add(no) })
+    } else {
+        let array = match state {
+            RS_MOPEN => rex.reg_startp(),
+            RS_MCLOSE => rex.reg_endp(),
+            RS_ZOPEN => reg_startzp.ptr().cast::<*mut uint8_t>(),
+            _ => reg_endzp.ptr().cast::<*mut uint8_t>(),
+        };
+        // SAFETY: as above, for a string match's array.
+        GroupSlot::Ptr(unsafe { array.add(no) })
+    }
+}
+
+/// Move the current position into `slot`, keeping what it held in `savep` so
+/// the unwinder can put it back.
+///
+/// # Safety
+///
+/// `slot` must still belong to the running match.
+pub(crate) unsafe fn save_capture(rex: Rex, savep: &mut MatchPos, slot: GroupSlot) {
+    // SAFETY: the caller promises the slot.
     unsafe {
-        if rex.multi() {
-            *savep = MatchPos::from_pos(*posp);
-            *posp = lpos_T {
-                lnum: rex.lnum(),
-                col: rex.col(),
-            };
-        } else {
-            *savep = MatchPos::from_ptr(*pp);
-            *pp = rex.input();
-        }
+        *savep = slot.get();
+        slot.set(rex.here());
     }
 }
 
