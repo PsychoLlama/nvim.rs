@@ -326,20 +326,28 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
         win_new_width(win.raw(), win.w_width);
         changed_window_setting(win.raw());
     }
-    // A saved view from a buffer that has since shrunk can name a line that no
-    // longer exists. The two tests are deliberately *not* a `clamp`: they are
-    // applied in this order, so a buffer with no lines at all — which only an
-    // unloaded one has — ends at 0, not at 1.
-    if win.w_topline <= 0 {
-        win.w_topline = 1;
-    }
     // SAFETY: `curbuf` is set from startup to exit.
     let line_count = unsafe { Buf::current() }.line_count();
-    if win.w_topline > line_count {
-        win.w_topline = line_count;
-    }
+    win.w_topline = restored_topline(win.w_topline, line_count);
     // SAFETY: a live window.
     unsafe { check_topfill(win.raw(), true) };
+}
+
+/// The line `winrestview()` leaves `w_topline` at: a saved view from a buffer
+/// that has since shrunk can name a line that no longer exists.
+///
+/// The two bounds are deliberately *not* a `clamp`. Upstream applies them in
+/// this order, so when there are no lines at all the second undoes the first
+/// and the answer is 0 rather than 1. Only an unloaded buffer has no lines,
+/// and `winrestview()` cannot reach one, but the order is what upstream does
+/// and a differential would see any other answer.
+fn restored_topline(topline: linenr_T, line_count: linenr_T) -> linenr_T {
+    let topline = if topline <= 0 { 1 } else { topline };
+    if topline > line_count {
+        line_count
+    } else {
+        topline
+    }
 }
 
 /// `winsaveview()` — everything `winrestview()` puts back.
@@ -366,4 +374,29 @@ pub unsafe fn f_winsaveview(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     nr(c"topfill", varnumber_T::from(win.w_topfill));
     nr(c"leftcol", varnumber_T::from(win.w_leftcol));
     nr(c"skipcol", varnumber_T::from(win.w_skipcol));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_restored_topline_is_pulled_inside_the_buffer() {
+        // Inside the buffer, nothing moves.
+        assert_eq!(restored_topline(1, 10), 1);
+        assert_eq!(restored_topline(10, 10), 10);
+        // Above the first line, and past the last.
+        assert_eq!(restored_topline(0, 10), 1);
+        assert_eq!(restored_topline(-5, 10), 1);
+        assert_eq!(restored_topline(11, 10), 10);
+    }
+
+    #[test]
+    fn an_empty_buffer_leaves_the_restored_topline_at_zero() {
+        // Not `clamp(1, line_count)`, which would panic on the crossed
+        // bounds, and not `max(1)`, which would answer 1: the second bound is
+        // applied after the first and wins.
+        assert_eq!(restored_topline(0, 0), 0);
+        assert_eq!(restored_topline(5, 0), 0);
+    }
 }

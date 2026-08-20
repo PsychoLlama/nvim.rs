@@ -113,3 +113,24 @@ macro_rules! frame {
 }
 
 pub(crate) use frame;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_number_narrows_to_an_int_by_wrapping() {
+        assert_eq!(number_as_int(0), 0);
+        assert_eq!(number_as_int(1000), 1000);
+        assert_eq!(number_as_int(-1), -1);
+        // The load-bearing case: `winnr(0x1_0000_0000)` truncates to 0, which
+        // the window resolver reads as "the current window". Anything that
+        // rejected the value instead -- a `try_from`, a saturating narrow --
+        // would answer differently.
+        assert_eq!(number_as_int(0x1_0000_0000), 0);
+        assert_eq!(number_as_int(0x1_0000_0001), 1);
+        // And the sign wraps rather than saturating.
+        assert_eq!(number_as_int(varnumber_T::from(c_int::MAX) + 1), c_int::MIN);
+        assert_eq!(number_as_int(varnumber_T::MAX), -1);
+    }
+}
