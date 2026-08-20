@@ -10,9 +10,9 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{
-    nlua_pop_Array, nlua_pop_Boolean_strict, nlua_pop_Dict, nlua_pop_Float, nlua_pop_Integer,
-    nlua_pop_LuaRef, nlua_pop_Object, nlua_pop_String, nlua_pop_handle, nlua_push_Array,
-    nlua_push_Dict, nlua_push_Object, nlua_push_String, nlua_push_type_idx, nlua_push_val_idx,
+    nlua_pop_array, nlua_pop_boolean_strict, nlua_pop_dict, nlua_pop_float, nlua_pop_handle,
+    nlua_pop_integer, nlua_pop_luaref, nlua_pop_object, nlua_pop_string, nlua_push_array,
+    nlua_push_dict, nlua_push_object, nlua_push_string, nlua_push_type_idx, nlua_push_val_idx,
 };
 use crate::api::private::helpers::api_set_error;
 use crate::highlight_group::syn_check_group;
@@ -123,7 +123,7 @@ pub unsafe fn nlua_pop_keydict(
 
             let mem = retval.cast::<c_char>().add((*field).ptr_off);
             match (*field).type_0 as ObjectTypeInt {
-                T_ANY => *mem.cast::<Object>() = nlua_pop_Object(lstate, true, arena, err),
+                T_ANY => *mem.cast::<Object>() = nlua_pop_object(lstate, true, arena, err),
                 T_INTEGER => {
                     // A highlight-group field takes the group's *name* as
                     // well as its id.
@@ -137,18 +137,18 @@ pub unsafe fn nlua_pop_keydict(
                             0
                         };
                     } else {
-                        *mem.cast::<Integer>() = nlua_pop_Integer(lstate, arena, err);
+                        *mem.cast::<Integer>() = nlua_pop_integer(lstate, arena, err);
                     }
                 }
-                T_BOOLEAN => *mem.cast::<Boolean>() = nlua_pop_Boolean_strict(lstate, err),
-                T_STRING => *mem.cast::<String_0>() = nlua_pop_String(lstate, arena, err),
-                T_FLOAT => *mem.cast::<Float>() = nlua_pop_Float(lstate, arena, err),
+                T_BOOLEAN => *mem.cast::<Boolean>() = nlua_pop_boolean_strict(lstate, err),
+                T_STRING => *mem.cast::<String_0>() = nlua_pop_string(lstate, arena, err),
+                T_FLOAT => *mem.cast::<Float>() = nlua_pop_float(lstate, arena, err),
                 T_BUFFER | T_WINDOW | T_TABPAGE => {
                     *mem.cast::<handle_T>() = nlua_pop_handle(lstate, arena, err);
                 }
-                T_ARRAY => *mem.cast::<Array>() = nlua_pop_Array(lstate, arena, err),
-                T_DICT => *mem.cast::<Dict>() = nlua_pop_Dict(lstate, false, arena, err),
-                T_LUAREF => *mem.cast::<LuaRef>() = nlua_pop_LuaRef(lstate, arena, err),
+                T_ARRAY => *mem.cast::<Array>() = nlua_pop_array(lstate, arena, err),
+                T_DICT => *mem.cast::<Dict>() = nlua_pop_dict(lstate, false, arena, err),
+                T_LUAREF => *mem.cast::<LuaRef>() = nlua_pop_luaref(lstate, arena, err),
                 _ => abort(),
             }
 
@@ -190,16 +190,16 @@ pub unsafe fn nlua_push_keydict(
             let mem = value.cast::<c_char>().add((*field).ptr_off);
             lua_pushstring(lstate, (*field).str);
             match (*field).type_0 as ObjectTypeInt {
-                T_ANY => nlua_push_Object(lstate, mem.cast::<Object>(), 0),
+                T_ANY => nlua_push_object(lstate, mem.cast::<Object>(), 0),
                 T_INTEGER => lua_pushinteger(lstate, *mem.cast::<Integer>() as lua_Integer),
                 T_BUFFER | T_WINDOW | T_TABPAGE => {
                     lua_pushinteger(lstate, *mem.cast::<handle_T>() as lua_Integer);
                 }
                 T_FLOAT => lua_pushnumber(lstate, *mem.cast::<Float>()),
                 T_BOOLEAN => lua_pushboolean(lstate, *mem.cast::<Boolean>() as c_int),
-                T_STRING => nlua_push_String(lstate, *mem.cast::<String_0>(), 0),
-                T_ARRAY => nlua_push_Array(lstate, *mem.cast::<Array>(), 0),
-                T_DICT => nlua_push_Dict(lstate, *mem.cast::<Dict>(), 0),
+                T_STRING => nlua_push_string(lstate, *mem.cast::<String_0>(), 0),
+                T_ARRAY => nlua_push_array(lstate, *mem.cast::<Array>(), 0),
+                T_DICT => nlua_push_dict(lstate, *mem.cast::<Dict>(), 0),
                 T_LUAREF => nlua_pushref(lstate, *mem.cast::<LuaRef>()),
                 _ => abort(),
             }

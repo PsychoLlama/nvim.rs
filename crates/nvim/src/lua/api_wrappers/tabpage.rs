@@ -34,7 +34,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_open_tabpage(lstate: *mut lua_Stat
             return;
         }
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_Boolean(lstate, arena, err) };
+        let arg_2 = unsafe { nlua_pop_boolean(lstate, arena, err) };
         if err.type_0 != kErrorTypeNone {
             *err_param = c"enter".as_ptr().cast_mut();
             return;
@@ -80,7 +80,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_del_var(lstate: *mut lua_S
             err_param,
         } = call;
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_String(lstate, arena, err) };
+        let arg_2 = unsafe { nlua_pop_string(lstate, arena, err) };
         if err.type_0 != kErrorTypeNone {
             *err_param = c"name".as_ptr().cast_mut();
             return;
@@ -137,7 +137,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_get_number(lstate: *mut lu
             }
         };
         // SAFETY: as above.
-        unsafe { nlua_push_Integer(lstate, ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_integer(lstate, ret, PUSH_SPECIAL) };
         active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -160,7 +160,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_get_var(lstate: *mut lua_S
             err_param,
         } = call;
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_String(lstate, arena, err) };
+        let arg_2 = unsafe { nlua_pop_string(lstate, arena, err) };
         if err.type_0 != kErrorTypeNone {
             *err_param = c"name".as_ptr().cast_mut();
             return;
@@ -183,7 +183,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_get_var(lstate: *mut lua_S
             }
         };
         // SAFETY: as above.
-        unsafe { nlua_push_Object(lstate, &raw mut ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
         active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -254,7 +254,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_is_valid(lstate: *mut lua_
         active_lstate.set(lstate);
         let ret = nvim_tabpage_is_valid(arg_1);
         // SAFETY: as above.
-        unsafe { nlua_push_Boolean(lstate, ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_boolean(lstate, ret, PUSH_SPECIAL) };
         active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -294,7 +294,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_list_wins(lstate: *mut lua
             }
         };
         // SAFETY: as above.
-        unsafe { nlua_push_Array(lstate, ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_array(lstate, ret, PUSH_SPECIAL) };
         active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -317,7 +317,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_set_var(lstate: *mut lua_S
             err_param,
         } = call;
         // SAFETY: as above.
-        let arg_3 = unsafe { nlua_pop_Object(lstate, true, arena, err) };
+        let arg_3 = unsafe { nlua_pop_object(lstate, true, arena, err) };
         if err.type_0 != kErrorTypeNone {
             *err_param = c"value".as_ptr().cast_mut();
             return;
@@ -326,7 +326,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_set_var(lstate: *mut lua_S
         // releases them.
         let arg_3 = unsafe { ObjectArg::new(arg_3) };
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_String(lstate, arena, err) };
+        let arg_2 = unsafe { nlua_pop_string(lstate, arena, err) };
         if err.type_0 != kErrorTypeNone {
             *err_param = c"name".as_ptr().cast_mut();
             return;

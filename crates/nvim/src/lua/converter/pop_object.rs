@@ -1,4 +1,4 @@
-//! `nlua_pop_Object()`: a Lua value as an API [`Object`].
+//! `nlua_pop_object()`: a Lua value as an API [`Object`].
 //!
 //! The same explicit-stack walk as [`super::pop_typval`], over
 //! [`ObjPopStackItem`] and producing api types instead of `typval_T`s.  It
@@ -68,7 +68,7 @@ const CANNOT_CONVERT: &CStr = c"Cannot convert given Lua type";
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top, and `err` the
 /// caller's error slot.
-pub unsafe fn nlua_pop_Object(
+pub unsafe fn nlua_pop_object(
     lstate: *mut lua_State,
     ref_0: bool,
     arena: *mut Arena,

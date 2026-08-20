@@ -12,7 +12,7 @@
 use crate::semsg_c;
 use core::ffi::{CStr, c_int, c_void};
 
-use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, nlua_pop_Object};
+use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, nlua_pop_object};
 use crate::api::private::helpers::{
     api_free_array, api_free_dict, api_set_error, api_typename, arena_array, arena_dict,
 };
@@ -165,7 +165,7 @@ pub(crate) unsafe fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top; `err` the caller's
 /// error slot.
-pub unsafe fn nlua_pop_String(
+pub unsafe fn nlua_pop_string(
     lstate: *mut lua_State,
     arena: *mut Arena,
     err: *mut Error,
@@ -189,8 +189,8 @@ pub unsafe fn nlua_pop_String(
 /// Pop a Lua number that is an exact api integer.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
-pub unsafe fn nlua_pop_Integer(
+/// As [`nlua_pop_string`].
+pub unsafe fn nlua_pop_integer(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     err: *mut Error,
@@ -217,8 +217,8 @@ pub unsafe fn nlua_pop_Integer(
 /// Pop any Lua value for its truthiness.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
-pub unsafe fn nlua_pop_Boolean(
+/// As [`nlua_pop_string`].
+pub unsafe fn nlua_pop_boolean(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     _err: *mut Error,
@@ -230,12 +230,12 @@ pub unsafe fn nlua_pop_Boolean(
     }
 }
 
-/// [`nlua_pop_Boolean`] for a keyset field, where only a boolean, a number or
+/// [`nlua_pop_boolean`] for a keyset field, where only a boolean, a number or
 /// nil is accepted.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
-pub unsafe fn nlua_pop_Boolean_strict(lstate: *mut lua_State, err: *mut Error) -> Boolean {
+/// As [`nlua_pop_string`].
+pub unsafe fn nlua_pop_boolean_strict(lstate: *mut lua_State, err: *mut Error) -> Boolean {
     unsafe {
         let ret = match lua_type(lstate, -1) {
             LUA_TBOOLEAN => lua_toboolean(lstate, -1) != 0,
@@ -304,8 +304,8 @@ unsafe fn nlua_check_type(
 /// Pop a Lua number, or the `{_TYPE = float, _VAL = n}` special table.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
-pub unsafe fn nlua_pop_Float(lstate: *mut lua_State, _arena: *mut Arena, err: *mut Error) -> Float {
+/// As [`nlua_pop_string`].
+pub unsafe fn nlua_pop_float(lstate: *mut lua_State, _arena: *mut Arena, err: *mut Error) -> Float {
     unsafe {
         if lua_type(lstate, -1) == LUA_TNUMBER {
             let ret = lua_tonumber(lstate, -1);
@@ -321,11 +321,11 @@ pub unsafe fn nlua_pop_Float(lstate: *mut lua_State, _arena: *mut Arena, err: *m
     }
 }
 
-/// [`nlua_pop_Array`] once the table is known to be one.
+/// [`nlua_pop_array`] once the table is known to be one.
 ///
 /// # Safety
-/// As [`nlua_pop_String`], with `table_props` this table's own.
-unsafe fn nlua_pop_Array_unchecked(
+/// As [`nlua_pop_string`], with `table_props` this table's own.
+unsafe fn nlua_pop_array_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
     arena: *mut Arena,
@@ -340,7 +340,7 @@ unsafe fn nlua_pop_Array_unchecked(
 
         for i in 1..=table_props.maxidx {
             lua_rawgeti(lstate, -1, i as c_int);
-            let val = nlua_pop_Object(lstate, false, arena, err);
+            let val = nlua_pop_object(lstate, false, arena, err);
             if (*err).type_0 != kErrorTypeNone {
                 lua_pop(lstate, 1);
                 if arena.is_null() {
@@ -359,22 +359,22 @@ unsafe fn nlua_pop_Array_unchecked(
 /// Pop an array-shaped Lua table.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
-pub unsafe fn nlua_pop_Array(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Array {
+/// As [`nlua_pop_string`].
+pub unsafe fn nlua_pop_array(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Array {
     unsafe {
         let table_props = nlua_check_type(lstate, err, kObjectTypeArray);
         if table_props.type_0 != kObjectTypeArray {
             return Array::EMPTY;
         }
-        nlua_pop_Array_unchecked(lstate, table_props, arena, err)
+        nlua_pop_array_unchecked(lstate, table_props, arena, err)
     }
 }
 
-/// [`nlua_pop_Dict`] once the table is known to be one.
+/// [`nlua_pop_dict`] once the table is known to be one.
 ///
 /// # Safety
-/// As [`nlua_pop_Array_unchecked`].
-unsafe fn nlua_pop_Dict_unchecked(
+/// As [`nlua_pop_array_unchecked`].
+unsafe fn nlua_pop_dict_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
     ref_0: bool,
@@ -396,9 +396,9 @@ unsafe fn nlua_pop_Dict_unchecked(
             }
             // The key is popped from a copy, so lua_next still has its own.
             lua_pushvalue(lstate, -2);
-            let key = nlua_pop_String(lstate, arena, err);
+            let key = nlua_pop_string(lstate, arena, err);
             if (*err).type_0 == kErrorTypeNone {
-                let value = nlua_pop_Object(lstate, ref_0, arena, err);
+                let value = nlua_pop_object(lstate, ref_0, arena, err);
                 *ret.items.add(ret.size) = key_value_pair { key, value };
                 ret.size = ret.size.wrapping_add(1);
             } else {
@@ -422,8 +422,8 @@ unsafe fn nlua_pop_Dict_unchecked(
 /// a `LuaRef` rather than a refusal.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
-pub unsafe fn nlua_pop_Dict(
+/// As [`nlua_pop_string`].
+pub unsafe fn nlua_pop_dict(
     lstate: *mut lua_State,
     ref_0: bool,
     arena: *mut Arena,
@@ -435,15 +435,15 @@ pub unsafe fn nlua_pop_Dict(
             lua_pop(lstate, 1);
             return Dict::EMPTY;
         }
-        nlua_pop_Dict_unchecked(lstate, table_props, ref_0, arena, err)
+        nlua_pop_dict_unchecked(lstate, table_props, ref_0, arena, err)
     }
 }
 
 /// Pop any Lua value as a global reference to it.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
-pub unsafe fn nlua_pop_LuaRef(
+/// As [`nlua_pop_string`].
+pub unsafe fn nlua_pop_luaref(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     _err: *mut Error,
@@ -458,7 +458,7 @@ pub unsafe fn nlua_pop_LuaRef(
 /// Pop a buffer, window or tab page id.
 ///
 /// # Safety
-/// As [`nlua_pop_String`].
+/// As [`nlua_pop_string`].
 pub unsafe fn nlua_pop_handle(
     lstate: *mut lua_State,
     _arena: *mut Arena,

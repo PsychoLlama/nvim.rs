@@ -20,7 +20,7 @@ use crate::ex_cmds::check_secure;
 use crate::ex_getln::ERROR_INIT;
 use crate::garray::ga_concat_strings;
 use crate::lua::converter::{
-    kNluaPushSpecial, nlua_pop_Object, nlua_pop_typval, nlua_push_Object, nlua_push_typval,
+    kNluaPushSpecial, nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval,
 };
 use crate::lua::ffi::{
     LUA_MULTRET, LUA_TNIL, lua_gettop, lua_pop, lua_pushinteger, lua_pushnil, lua_pushstring,
@@ -285,7 +285,7 @@ pub unsafe fn nlua_exec(
             return Object::NIL;
         }
         for i in 0..args.size {
-            nlua_push_Object(lstate, args.items.add(i), 0);
+            nlua_push_object(lstate, args.items.add(i), 0);
         }
         if nlua_pcall(lstate, args.size as c_int, 1) != 0 {
             set_lua_error(err, kErrorTypeException, lstate);
@@ -356,7 +356,7 @@ pub unsafe fn nlua_call_ref_ctx(
             nargs += 1;
         }
         for i in 0..args.size {
-            nlua_push_Object(lstate, args.items.add(i), 0);
+            nlua_push_object(lstate, args.items.add(i), 0);
         }
 
         if fast {
@@ -409,7 +409,7 @@ unsafe fn nlua_call_pop_retval(
                 lua_pop(lstate, 1);
                 Object::luaref(ref_0)
             }
-            kRetObject => nlua_pop_Object(lstate, false, arena, perr),
+            kRetObject => nlua_pop_object(lstate, false, arena, perr),
             kRetMulti => {
                 // The results come off the stack top-down, so they are stored
                 // back-to-front.
@@ -417,7 +417,7 @@ unsafe fn nlua_call_pop_retval(
                 let mut res: Array = arena_array(arena, nres as size_t);
                 for i in 0..nres {
                     *res.items.offset((nres - i - 1) as isize) =
-                        nlua_pop_Object(lstate, false, arena, perr);
+                        nlua_pop_object(lstate, false, arena, perr);
                     if (*perr).type_0 != kErrorTypeNone {
                         return Object::NIL;
                     }

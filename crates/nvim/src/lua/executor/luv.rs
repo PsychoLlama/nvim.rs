@@ -20,7 +20,7 @@ use crate::api::private::helpers::{api_clear_error, api_free_array};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::ERROR_INIT;
-use crate::lua::converter::{kNluaPushSpecial, nlua_pop_Array, nlua_push_Array};
+use crate::lua::converter::{kNluaPushSpecial, nlua_pop_array, nlua_push_array};
 use crate::lua::ffi::{
     LUA_MULTRET, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TTABLE, lua_close, lua_concat, lua_error,
     lua_getfield, lua_gettop, lua_pcall, lua_pop, lua_pushcclosure, lua_pushlightuserdata,
@@ -217,7 +217,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
         lua_pop(lstate, 1);
 
         let mut err = ERROR_INIT;
-        let pat: Array = nlua_pop_Array(lstate, ptr::null_mut::<Arena>(), &raw mut err);
+        let pat: Array = nlua_pop_array(lstate, ptr::null_mut::<Arena>(), &raw mut err);
         if err.type_0 != kErrorTypeNone {
             luaL_where(lstate, 1);
             lua_pushstring(lstate, err.msg);
@@ -227,7 +227,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
         }
 
         let ret = runtime_get_named_thread(is_lua, pat, all);
-        nlua_push_Array(lstate, ret, kNluaPushSpecial as c_int);
+        nlua_push_array(lstate, ret, kNluaPushSpecial as c_int);
         api_free_array(ret);
         api_free_array(pat);
         1

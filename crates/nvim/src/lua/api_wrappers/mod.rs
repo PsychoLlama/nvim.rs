@@ -154,11 +154,11 @@ use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::global_cell::GlobalCell;
 use crate::lua::converter::{
-    kNluaPushFreeRefs, kNluaPushSpecial, nlua_pop_Array, nlua_pop_Boolean, nlua_pop_Dict,
-    nlua_pop_Float, nlua_pop_Integer, nlua_pop_LuaRef, nlua_pop_Object, nlua_pop_String,
-    nlua_pop_handle, nlua_pop_keydict, nlua_push_Array, nlua_push_Boolean, nlua_push_Dict,
-    nlua_push_Float, nlua_push_Integer, nlua_push_Object, nlua_push_String, nlua_push_handle,
-    nlua_push_keydict,
+    kNluaPushFreeRefs, kNluaPushSpecial, nlua_pop_array, nlua_pop_boolean, nlua_pop_dict,
+    nlua_pop_float, nlua_pop_handle, nlua_pop_integer, nlua_pop_keydict, nlua_pop_luaref,
+    nlua_pop_object, nlua_pop_string, nlua_push_array, nlua_push_boolean, nlua_push_dict,
+    nlua_push_float, nlua_push_handle, nlua_push_integer, nlua_push_keydict, nlua_push_object,
+    nlua_push_string,
 };
 use crate::lua::executor::{
     LUA_INTERNAL_CALL, active_lstate, api_free_luaref, nlua_is_deferred_safe,

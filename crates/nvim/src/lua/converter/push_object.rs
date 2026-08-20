@@ -3,7 +3,7 @@
 //! One `nlua_push_*` per api type.  The three `nlua_push_type*` helpers plus
 //! [`nlua_create_typed_table`] are what build a `{_TYPE, _VAL}` special
 //! dictionary -- the representation a value keeps when it has no Lua
-//! equivalent -- and [`nlua_push_Object`] is the dispatch over `ObjectType`.
+//! equivalent -- and [`nlua_push_object`] is the dispatch over `ObjectType`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -65,7 +65,7 @@ pub(crate) unsafe fn nlua_create_typed_table(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `s` a live api string.
-pub unsafe fn nlua_push_String(lstate: *mut lua_State, s: String_0, _flags: c_int) {
+pub unsafe fn nlua_push_string(lstate: *mut lua_State, s: String_0, _flags: c_int) {
     unsafe {
         // A zero-length api string may carry a null pointer, which
         // lua_pushlstring will not take even for zero bytes.
@@ -80,7 +80,7 @@ pub unsafe fn nlua_push_String(lstate: *mut lua_State, s: String_0, _flags: c_in
 
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe fn nlua_push_Integer(lstate: *mut lua_State, n: Integer, _flags: c_int) {
+pub unsafe fn nlua_push_integer(lstate: *mut lua_State, n: Integer, _flags: c_int) {
     unsafe { lua_pushnumber(lstate, n as lua_Number) };
 }
 
@@ -90,7 +90,7 @@ pub unsafe fn nlua_push_Integer(lstate: *mut lua_State, n: Integer, _flags: c_in
 ///
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe fn nlua_push_Float(lstate: *mut lua_State, f: Float, flags: c_int) {
+pub unsafe fn nlua_push_float(lstate: *mut lua_State, f: Float, flags: c_int) {
     unsafe {
         if flags & kNluaPushSpecial as c_int != 0 {
             nlua_create_typed_table(lstate, 0, 1, kObjectTypeFloat);
@@ -105,7 +105,7 @@ pub unsafe fn nlua_push_Float(lstate: *mut lua_State, f: Float, flags: c_int) {
 
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe fn nlua_push_Boolean(lstate: *mut lua_State, b: Boolean, _flags: c_int) {
+pub unsafe fn nlua_push_boolean(lstate: *mut lua_State, b: Boolean, _flags: c_int) {
     unsafe { lua_pushboolean(lstate, b as c_int) };
 }
 
@@ -115,7 +115,7 @@ pub unsafe fn nlua_push_Boolean(lstate: *mut lua_State, b: Boolean, _flags: c_in
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `dict` a live api dictionary.
-pub unsafe fn nlua_push_Dict(lstate: *mut lua_State, dict: Dict, flags: c_int) {
+pub unsafe fn nlua_push_dict(lstate: *mut lua_State, dict: Dict, flags: c_int) {
     unsafe {
         lua_createtable(lstate, 0, dict.size as c_int);
         if dict.size == 0 {
@@ -123,8 +123,8 @@ pub unsafe fn nlua_push_Dict(lstate: *mut lua_State, dict: Dict, flags: c_int) {
             lua_setmetatable(lstate, -2);
         }
         for i in 0..dict.size {
-            nlua_push_String(lstate, (*dict.items.add(i)).key, flags);
-            nlua_push_Object(lstate, &raw mut (*dict.items.add(i)).value, flags);
+            nlua_push_string(lstate, (*dict.items.add(i)).key, flags);
+            nlua_push_object(lstate, &raw mut (*dict.items.add(i)).value, flags);
             lua_rawset(lstate, -3);
         }
     }
@@ -132,11 +132,11 @@ pub unsafe fn nlua_push_Dict(lstate: *mut lua_State, dict: Dict, flags: c_int) {
 
 /// # Safety
 /// `lstate` must be a live Lua state and `array` a live api array.
-pub unsafe fn nlua_push_Array(lstate: *mut lua_State, array: Array, flags: c_int) {
+pub unsafe fn nlua_push_array(lstate: *mut lua_State, array: Array, flags: c_int) {
     unsafe {
         lua_createtable(lstate, array.size as c_int, 0);
         for i in 0..array.size {
-            nlua_push_Object(lstate, array.items.add(i), flags);
+            nlua_push_object(lstate, array.items.add(i), flags);
             lua_rawseti(lstate, -2, i as c_int + 1);
         }
     }
@@ -156,7 +156,7 @@ pub unsafe fn nlua_push_handle(lstate: *mut lua_State, item: handle_T, _flags: c
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `obj` a live api object.
-pub unsafe fn nlua_push_Object(lstate: *mut lua_State, obj: *mut Object, flags: c_int) {
+pub unsafe fn nlua_push_object(lstate: *mut lua_State, obj: *mut Object, flags: c_int) {
     unsafe {
         match (*obj).type_0 {
             kObjectTypeNil => {
@@ -173,12 +173,12 @@ pub unsafe fn nlua_push_Object(lstate: *mut lua_State, obj: *mut Object, flags: 
                     (*obj).data.luaref = LUA_NOREF as LuaRef;
                 }
             }
-            kObjectTypeBoolean => nlua_push_Boolean(lstate, (*obj).data.boolean, flags),
-            kObjectTypeInteger => nlua_push_Integer(lstate, (*obj).data.integer, flags),
-            kObjectTypeFloat => nlua_push_Float(lstate, (*obj).data.floating, flags),
-            kObjectTypeString => nlua_push_String(lstate, (*obj).data.string, flags),
-            kObjectTypeArray => nlua_push_Array(lstate, (*obj).data.array, flags),
-            kObjectTypeDict => nlua_push_Dict(lstate, (*obj).data.dict, flags),
+            kObjectTypeBoolean => nlua_push_boolean(lstate, (*obj).data.boolean, flags),
+            kObjectTypeInteger => nlua_push_integer(lstate, (*obj).data.integer, flags),
+            kObjectTypeFloat => nlua_push_float(lstate, (*obj).data.floating, flags),
+            kObjectTypeString => nlua_push_string(lstate, (*obj).data.string, flags),
+            kObjectTypeArray => nlua_push_array(lstate, (*obj).data.array, flags),
+            kObjectTypeDict => nlua_push_dict(lstate, (*obj).data.dict, flags),
             kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
                 nlua_push_handle(lstate, (*obj).data.integer as handle_T, flags);
             }

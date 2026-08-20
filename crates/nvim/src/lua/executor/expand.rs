@@ -14,7 +14,7 @@ use crate::api::private::helpers::string_to_cstr;
 use crate::ex_getln::ERROR_INIT;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::lua::converter::{nlua_pop_Array, nlua_pop_Integer};
+use crate::lua::converter::{nlua_pop_array, nlua_pop_integer};
 use crate::lua::ffi::{
     LUA_TFUNCTION, lua_getfield, lua_getglobal, lua_pushlstring, luaL_checktype,
 };
@@ -63,9 +63,9 @@ pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
 
         let mut err = ERROR_INIT;
         let mut arena: Arena = ARENA_EMPTY;
-        let prefix_len = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err) as ptrdiff_t;
+        let prefix_len = nlua_pop_integer(lstate, &raw mut arena, &raw mut err) as ptrdiff_t;
         if err.type_0 == kErrorTypeNone && prefix_len <= patlen {
-            let completions = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
+            let completions = nlua_pop_array(lstate, &raw mut arena, &raw mut err);
             'cleanup_array: {
                 if err.type_0 != kErrorTypeNone {
                     break 'cleanup_array;

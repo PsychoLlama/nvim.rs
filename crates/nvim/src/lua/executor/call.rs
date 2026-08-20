@@ -19,7 +19,7 @@ use crate::api::private::helpers::{
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
 use crate::ex_getln::{ERROR_INIT, TRY_STATE_INIT};
-use crate::lua::converter::{nlua_pop_Object, nlua_pop_typval, nlua_push_Object, nlua_push_typval};
+use crate::lua::converter::{nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval};
 use crate::lua::ffi::{
     lua_error, lua_gettop, lua_pushstring, lua_pushvalue, luaL_checkinteger, luaL_checklstring,
     luaL_error,
@@ -201,7 +201,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                     .cast::<Object>();
                 }
                 *args.items.add(args.size) =
-                    nlua_pop_Object(lstate, false, &raw mut arena, &raw mut err);
+                    nlua_pop_object(lstate, false, &raw mut arena, &raw mut err);
                 args.size = args.size.wrapping_add(1);
                 if err.type_0 != kErrorTypeNone {
                     break 'check_err;
@@ -212,7 +212,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                 let mut res_mem: ArenaMem = ptr::null_mut::<consumed_blk>();
                 let mut result = rpc_send_call(chan_id, name, args, &raw mut res_mem, &raw mut err);
                 if err.type_0 == kErrorTypeNone {
-                    nlua_push_Object(lstate, &raw mut result, 0);
+                    nlua_push_object(lstate, &raw mut result, 0);
                     arena_mem_free(res_mem);
                 }
             } else if !rpc_send_event(chan_id, name, args) {

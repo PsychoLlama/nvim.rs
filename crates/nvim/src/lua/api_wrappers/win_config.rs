@@ -34,7 +34,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_open_win(lstate: *mut lua_State) -
             return;
         }
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_Boolean(lstate, arena, err) };
+        let arg_2 = unsafe { nlua_pop_boolean(lstate, arena, err) };
         if err.type_0 != kErrorTypeNone {
             *err_param = c"enter".as_ptr().cast_mut();
             return;
