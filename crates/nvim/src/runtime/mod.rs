@@ -62,7 +62,7 @@ use crate::main::{
     e_invargNval, e_norange, e_notopen, ex_nesting_level, global_busy, got_int, listcmd_busy,
     msg_col, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
 };
-use crate::map::{map_put_ref_String_int, map_ref_String_int, mh_get_String, mh_put_String};
+use crate::map::{map_put_ref_string_int, map_ref_string_int, mh_get_string, mh_put_string};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::memory::{
@@ -252,18 +252,18 @@ pub const MAP_INIT: Map_String_int = Map_String_int {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe fn set_has_String(mut set: *mut Set_String, mut key: String_0) -> bool {
-    unsafe { mh_get_String(set, key) != MH_TOMBSTONE as uint32_t }
+unsafe fn set_has_string(mut set: *mut Set_String, mut key: String_0) -> bool {
+    unsafe { mh_get_string(set, key) != MH_TOMBSTONE as uint32_t }
 }
 #[inline]
-unsafe fn set_put_String(
+unsafe fn set_put_string(
     mut set: *mut Set_String,
     mut key: String_0,
     mut key_alloc: *mut *mut String_0,
 ) -> bool {
     unsafe {
         let mut status: MHPutStatus = kMHExisting;
-        let mut k: uint32_t = mh_put_String(set, key, &raw mut status);
+        let mut k: uint32_t = mh_put_string(set, key, &raw mut status);
         if !key_alloc.is_null() {
             *key_alloc = (*set).keys.offset(k as isize);
         }
@@ -271,13 +271,13 @@ unsafe fn set_put_String(
     }
 }
 #[inline]
-unsafe fn map_put_String_int(
+unsafe fn map_put_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
     mut value: ::core::ffi::c_int,
 ) {
     unsafe {
-        let mut val: *mut ::core::ffi::c_int = map_put_ref_String_int(
+        let mut val: *mut ::core::ffi::c_int = map_put_ref_string_int(
             map,
             key,
             ::core::ptr::null_mut::<*mut String_0>(),
@@ -287,14 +287,14 @@ unsafe fn map_put_String_int(
     }
 }
 #[inline]
-unsafe fn map_get_String_int(
+unsafe fn map_get_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {
     unsafe {
         // The absent value is `value_init_int`, a `static int` upstream never
         // writes: zero.
-        let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
+        let mut k: uint32_t = mh_get_string(&raw mut (*map).set, key);
         if k == MH_TOMBSTONE as uint32_t {
             0
         } else {

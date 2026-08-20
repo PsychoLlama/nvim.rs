@@ -254,10 +254,10 @@ unsafe fn push_path(
     pos_in_rtp: size_t,
 ) -> bool {
     let mut key_alloc: *mut String_0 = ptr::null_mut();
-    // SAFETY: the caller's live set and vector; `set_put_String` fills
+    // SAFETY: the caller's live set and vector; `set_put_string` fills
     // `key_alloc` in with the slot it claimed.
     unsafe {
-        if !set_put_String(rtp_used, cstr_as_string(entry), &raw mut key_alloc) {
+        if !set_put_string(rtp_used, cstr_as_string(entry), &raw mut key_alloc) {
             return false;
         }
         *key_alloc = cstr_to_string(entry);
@@ -291,7 +291,7 @@ unsafe fn expand_rtp_entry(
 ) {
     // SAFETY: the caller's NUL-terminated entry and live set.
     unsafe {
-        if set_has_String(rtp_used, cstr_as_string(entry)) {
+        if set_has_string(rtp_used, cstr_as_string(entry)) {
             return;
         }
         if *entry == 0 {
@@ -464,7 +464,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                 &mut pack_entries.items,
             )
             .write(the_entry);
-            map_put_String_int(&raw mut pack_used, the_entry, 0);
+            map_put_string_int(&raw mut pack_used, the_entry, 0);
         }
     }
 
@@ -500,7 +500,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                 false,
                 pos_in_rtp,
             );
-            let h = map_ref_String_int(
+            let h = map_ref_string_int(
                 &raw mut pack_used,
                 cstr_as_string(buf.as_ptr()),
                 ptr::null_mut(),
@@ -531,7 +531,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         // SAFETY: the frame's own kvec and index.
         unsafe {
             let item = *pack_entries.items.add(i);
-            if map_get_String_int(&raw mut pack_used, item) == 0 {
+            if map_get_string_int(&raw mut pack_used, item) == 0 {
                 expand_pack_entry(
                     &raw mut search_path,
                     &raw mut rtp_used,

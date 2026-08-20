@@ -23,7 +23,7 @@ use crate::main::{
     next_namespace_id,
 };
 use crate::map::{
-    map_put_ref_String_int, mh_delete_uint32_t, mh_get_String, mh_get_ptr_t, mh_put_ptr_t,
+    map_put_ref_string_int, mh_delete_uint32_t, mh_get_ptr_t, mh_get_string, mh_put_ptr_t,
     mh_put_uint32_t, set_has_uint32_t,
 };
 use crate::marktree::key::{

@@ -38,7 +38,7 @@
 use core::ffi::c_int;
 use core::ptr;
 
-use crate::map::map_put_ref_uint64_t_MTDamagePair;
+use crate::map::map_put_ref_uint64_t_mt_damage_pair;
 use crate::marktree::iter::{
     MT_MAX_DEPTH, marktree_itr_current, marktree_itr_get_ext, marktree_itr_next,
     marktree_itr_next_skip, marktree_itr_pos, marktree_itr_prev, marktree_itr_set_node,
@@ -158,7 +158,7 @@ fn check_damage(damage: &mut MTDamageMap, key: MTKey, itr1: &MarkTreeIter, itr2:
     // SAFETY: `damage` is a live map; the two nulls decline its optional
     // "initial value" and "was it new" out-parameters, and `map_put_ref`
     // answers a live slot of the map it was handed.
-    let p = unsafe { &mut *map_put_ref_uint64_t_MTDamagePair(damage, start_id, init, fresh) };
+    let p = unsafe { &mut *map_put_ref_uint64_t_mt_damage_pair(damage, start_id, init, fresh) };
     let me = if mt_end(key) {
         &mut p.end
     } else {

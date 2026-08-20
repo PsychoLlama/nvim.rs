@@ -55,7 +55,7 @@ use crate::main::{
     curwin, e_argreq, e_dictreq, e_invalid_buffer_name_str, e_invarg, e_invarg2, e_listreq,
     e_trailing_arg, firstbuf, got_int, namespace_ids,
 };
-use crate::map::mh_get_String;
+use crate::map::mh_get_string;
 use crate::marktree::cursor::{Cursor, lookup_ns, tree_of};
 use crate::marktree::key::{
     MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT, mt_decor, mt_decor_sign, mt_end,
@@ -228,7 +228,7 @@ pub(crate) fn sign_nth_group(idx: usize) -> Option<Integer> {
 unsafe fn namespace_id(group: *const c_char) -> c_int {
     let map = namespace_ids.ptr();
     // SAFETY: the caller's group name, and the editor's own namespace table.
-    let k = unsafe { mh_get_String(&raw mut (*map).set, cstr_as_string(group)) };
+    let k = unsafe { mh_get_string(&raw mut (*map).set, cstr_as_string(group)) };
     // SAFETY: `k` is an index that table just answered with.
     if k == u32::MAX {
         0

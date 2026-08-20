@@ -82,7 +82,7 @@ pub unsafe fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t
     table::get(&(*set).h, (*set).keys, &key)
 }
 
-pub unsafe fn mh_get_String(set: *mut Set_String, key: String_0) -> uint32_t {
+pub unsafe fn mh_get_string(set: *mut Set_String, key: String_0) -> uint32_t {
     table::get(&(*set).h, (*set).keys, &key)
 }
 
@@ -115,7 +115,7 @@ pub unsafe fn mh_put_uint32_t(
     table::put(&mut (*set).h, &mut (*set).keys, key, &mut *status)
 }
 
-pub unsafe fn mh_put_String(
+pub unsafe fn mh_put_string(
     set: *mut Set_String,
     key: String_0,
     status: *mut MHPutStatus,
@@ -177,7 +177,7 @@ pub unsafe fn map_ref_uint32_t_uint32_t(
     )
 }
 
-pub unsafe fn map_ref_String_int(
+pub unsafe fn map_ref_string_int(
     map: *mut Map_String_int,
     key: String_0,
     key_alloc: *mut *mut String_0,
@@ -278,7 +278,7 @@ pub unsafe fn map_put_ref_int_ptr_t(
     )
 }
 
-pub unsafe fn map_put_ref_int_String(
+pub unsafe fn map_put_ref_int_string(
     map: *mut Map_int_String,
     key: ::core::ffi::c_int,
     key_alloc: *mut *mut ::core::ffi::c_int,
@@ -312,7 +312,7 @@ pub unsafe fn map_put_ref_ptr_t_ptr_t(
     )
 }
 
-pub unsafe fn map_put_ref_String_int(
+pub unsafe fn map_put_ref_string_int(
     map: *mut Map_String_int,
     key: String_0,
     key_alloc: *mut *mut String_0,
@@ -380,7 +380,7 @@ pub unsafe fn map_put_ref_uint64_t_int(
     )
 }
 
-pub unsafe fn map_put_ref_uint64_t_MTDamagePair(
+pub unsafe fn map_put_ref_uint64_t_mt_damage_pair(
     map: *mut Map_uint64_t_MTDamagePair,
     key: uint64_t,
     key_alloc: *mut *mut uint64_t,
@@ -476,7 +476,7 @@ pub unsafe fn map_del_int_ptr_t(
     )
 }
 
-pub unsafe fn map_del_int_String(
+pub unsafe fn map_del_int_string(
     map: *mut Map_int_String,
     key: ::core::ffi::c_int,
     key_alloc: *mut ::core::ffi::c_int,
@@ -491,7 +491,7 @@ pub unsafe fn map_del_int_String(
     )
 }
 
-pub unsafe fn map_del_String_int(
+pub unsafe fn map_del_string_int(
     map: *mut Map_String_int,
     key: String_0,
     key_alloc: *mut String_0,

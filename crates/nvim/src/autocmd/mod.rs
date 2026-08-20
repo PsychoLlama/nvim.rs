@@ -40,8 +40,8 @@ use crate::main::{
     p_verbose, prevwin, reg_recording, secure, starting, typebuf, window_handles,
 };
 use crate::map::{
-    map_del_String_int, map_del_int_String, map_del_int_ptr_t, map_put_ref_String_int,
-    map_put_ref_int_String, map_put_ref_int_ptr_t, mh_get_String, mh_get_int,
+    map_del_int_ptr_t, map_del_int_string, map_del_string_int, map_put_ref_int_ptr_t,
+    map_put_ref_int_string, map_put_ref_string_int, mh_get_int, mh_get_string,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::{
@@ -311,13 +311,13 @@ unsafe fn map_put_int_ptr_t(
     }
 }
 #[inline]
-unsafe fn map_put_String_int(
+unsafe fn map_put_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
     mut value: ::core::ffi::c_int,
 ) {
     unsafe {
-        let mut val: *mut ::core::ffi::c_int = map_put_ref_String_int(
+        let mut val: *mut ::core::ffi::c_int = map_put_ref_string_int(
             map,
             key,
             ::core::ptr::null_mut::<*mut String_0>(),
@@ -327,12 +327,12 @@ unsafe fn map_put_String_int(
     }
 }
 #[inline]
-unsafe fn map_get_String_int(
+unsafe fn map_get_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
+        let mut k: uint32_t = mh_get_string(&raw mut (*map).set, key);
         if k == MH_TOMBSTONE as uint32_t {
             value_init_int.get()
         } else {
@@ -341,13 +341,13 @@ unsafe fn map_get_String_int(
     }
 }
 #[inline]
-unsafe fn map_put_int_String(
+unsafe fn map_put_int_string(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
     mut value: String_0,
 ) {
     unsafe {
-        let mut val: *mut String_0 = map_put_ref_int_String(
+        let mut val: *mut String_0 = map_put_ref_int_string(
             map,
             key,
             ::core::ptr::null_mut::<*mut ::core::ffi::c_int>(),
@@ -357,7 +357,7 @@ unsafe fn map_put_int_String(
     }
 }
 #[inline]
-unsafe fn map_get_int_String(
+unsafe fn map_get_int_string(
     mut map: *mut Map_int_String,
     mut key: ::core::ffi::c_int,
 ) -> String_0 {

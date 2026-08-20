@@ -61,13 +61,13 @@ unsafe fn set_put_uint32_t(
 }
 
 #[inline]
-unsafe fn map_put_String_int(
+unsafe fn map_put_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
     mut value: ::core::ffi::c_int,
 ) {
     unsafe {
-        let mut val: *mut ::core::ffi::c_int = map_put_ref_String_int(
+        let mut val: *mut ::core::ffi::c_int = map_put_ref_string_int(
             map,
             key,
             ::core::ptr::null_mut::<*mut String_0>(),
@@ -78,12 +78,12 @@ unsafe fn map_put_String_int(
 }
 
 #[inline]
-unsafe fn map_get_String_int(
+unsafe fn map_get_string_int(
     mut map: *mut Map_String_int,
     mut key: String_0,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
+        let mut k: uint32_t = mh_get_string(&raw mut (*map).set, key);
         if k == MH_TOMBSTONE as uint32_t {
             value_init_int.get()
         } else {
@@ -94,7 +94,7 @@ unsafe fn map_get_String_int(
 
 pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
     unsafe {
-        let mut id: handle_T = map_get_String_int(namespace_ids.ptr(), name);
+        let mut id: handle_T = map_get_string_int(namespace_ids.ptr(), name);
         if id > 0 as ::core::ffi::c_int {
             return id as Integer;
         }
@@ -102,7 +102,7 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
         next_namespace_id.set(id + 1);
         if name.len() > 0 as size_t {
             let mut name_alloc: String_0 = copy_string(name, ::core::ptr::null_mut::<Arena>());
-            map_put_String_int(namespace_ids.ptr(), name_alloc, id as ::core::ffi::c_int);
+            map_put_string_int(namespace_ids.ptr(), name_alloc, id as ::core::ffi::c_int);
         }
         id as Integer
     }

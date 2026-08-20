@@ -21,7 +21,7 @@ unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_ch
     unsafe {
         if !name.is_null() {
             let mut key = String_0::NULL;
-            map_del_String_int(
+            map_del_string_int(
                 map_augroup_name_to_id.ptr(),
                 cstr_as_string(name),
                 &raw mut key,
@@ -30,7 +30,7 @@ unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_ch
         }
         if id > 0 {
             let mapped =
-                map_del_int_String(map_augroup_id_to_name.ptr(), id, ::core::ptr::null_mut());
+                map_del_int_string(map_augroup_id_to_name.ptr(), id, ::core::ptr::null_mut());
             api_free_string(mapped);
         }
     }
@@ -70,8 +70,8 @@ pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_in
         let next_id = next_augroup_id.get();
         next_augroup_id.set(next_id + 1);
         // The two maps each own their copy of the name.
-        map_put_String_int(map_augroup_name_to_id.ptr(), cstr_to_string(name), next_id);
-        map_put_int_String(map_augroup_id_to_name.ptr(), next_id, cstr_to_string(name));
+        map_put_string_int(map_augroup_name_to_id.ptr(), cstr_to_string(name), next_id);
+        map_put_int_string(map_augroup_id_to_name.ptr(), next_id, cstr_to_string(name));
         next_id
     }
 }
@@ -110,7 +110,7 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
                         );
                         // Re-point the *name* at the deleted-group id and
                         // give up the old id, leaving the autocommands on it.
-                        map_put_String_int(
+                        map_put_string_int(
                             map_augroup_name_to_id.ptr(),
                             cstr_as_string(name),
                             AUGROUP_DELETED,
@@ -135,7 +135,7 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
 /// belongs to a group `:augroup!` renamed.
 pub unsafe fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
-        let existing_id = map_get_String_int(map_augroup_name_to_id.ptr(), cstr_as_string(name));
+        let existing_id = map_get_string_int(map_augroup_name_to_id.ptr(), cstr_as_string(name));
         if existing_id == AUGROUP_DELETED || existing_id > 0 {
             existing_id
         } else {
@@ -167,7 +167,7 @@ pub unsafe fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c
             return ::core::ptr::null_mut();
         }
 
-        let key = map_get_int_String(map_augroup_id_to_name.ptr(), group);
+        let key = map_get_int_string(map_augroup_id_to_name.ptr(), group);
         if !key.data().is_null() {
             return key.data();
         }
