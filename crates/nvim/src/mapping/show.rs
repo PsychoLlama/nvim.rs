@@ -2,7 +2,7 @@
 //!
 //! [`showmap`] prints one mapping in the four-column `:map` form.
 //! [`translate_mapping`] is the same rendering for completion, which
-//! [`ExpandMappings`] runs over the whole table for `:map <Tab>`.
+//! [`expand_mappings`] runs over the whole table for `:map <Tab>`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -250,7 +250,7 @@ const EXPAND_ARG_BUFFER: usize = 4;
 /// # Safety
 /// Every pointer argument must be live; `matches` and `numMatches` are
 /// written unconditionally.
-pub unsafe fn ExpandMappings(
+pub unsafe fn expand_mappings(
     pat: *mut c_char,
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,

@@ -2,7 +2,7 @@
 //! `readdir()`.
 //!
 //! `f_glob` and `f_globpath` expand a wildcard pattern through the same
-//! `ExpandOne`/`globpath` machinery the command line uses, so they answer to
+//! `expand_one`/`globpath` machinery the command line uses, so they answer to
 //! 'wildignore', 'suffixes' and 'wildignorecase'; `findfilendir` is the shared
 //! body of `finddir()`/`findfile()`, which walk 'path' looking for a name
 //! rather than expanding a pattern; and `f_readdir` lists one directory,
@@ -30,7 +30,7 @@ use super::{
     Args, FAIL, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame, kDirectionNotSet,
     nr_arg, numbuf, ret_string, str_arg, str_arg_buf,
 };
-use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts, globpath};
+use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one, globpath};
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
@@ -86,8 +86,8 @@ impl Expand {
                 coladd: 0,
             },
         };
-        // SAFETY: a fresh local, which is all `ExpandInit` writes over.
-        unsafe { ExpandInit(&raw mut xpc) };
+        // SAFETY: a fresh local, which is all `expand_init` writes over.
+        unsafe { expand_init(&raw mut xpc) };
         xpc.xp_context = ExpandContext::Files;
         Self(xpc)
     }
@@ -97,8 +97,8 @@ impl Expand {
     fn one(&mut self, pat: &CStr, options: WildOpts, mode: WildMode) -> *mut c_char {
         let (p, orig) = (pat.as_ptr().cast_mut(), ptr::null_mut());
         // SAFETY: an initialised expander and a NUL-terminated pattern, which
-        // `ExpandOne` only reads; a NULL `orig` asks for no old match.
-        unsafe { ExpandOne(&raw mut self.0, p, orig, options, mode) }
+        // `expand_one` only reads; a NULL `orig` asks for no old match.
+        unsafe { expand_one(&raw mut self.0, p, orig, options, mode) }
     }
 
     /// The names a `WildMode::AllKeep` expansion left behind, in the order
@@ -120,7 +120,7 @@ impl Expand {
 
     fn cleanup(&mut self) {
         // SAFETY: an initialised expander.
-        unsafe { ExpandCleanup(&raw mut self.0) };
+        unsafe { expand_cleanup(&raw mut self.0) };
     }
 }
 

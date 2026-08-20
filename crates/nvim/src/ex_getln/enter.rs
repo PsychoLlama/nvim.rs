@@ -193,7 +193,7 @@ pub(crate) unsafe fn command_line_enter(
                 &raw const e_command_too_recursive as *const ::core::ffi::c_char,
             ));
         } else {
-            ExpandInit(&raw mut (*s).xpc);
+            expand_init(&raw mut (*s).xpc);
             (*cc).xpc = &raw mut (*s).xpc;
             clear_cmdline_orig();
 
@@ -387,7 +387,7 @@ pub(crate) unsafe fn command_line_enter(
             (*s).did_wild_list = false;
             (*s).wim_index = 0;
 
-            ExpandCleanup(&raw mut (*s).xpc);
+            expand_cleanup(&raw mut (*s).xpc);
             (*cc).xpc = ::core::ptr::null_mut::<expand_T>();
             clear_cmdline_orig();
 

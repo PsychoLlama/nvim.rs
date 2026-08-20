@@ -12,7 +12,7 @@
 //!
 //! The rest is command-line completion of a `:command` line -- the
 //! attribute names, their values, and the command name -- plus the
-//! `ExpandGeneric()` item getters those contexts are answered by. Each
+//! `expand_generic()` item getters those contexts are answered by. Each
 //! getter is called with an increasing `idx` until it answers null, which
 //! is why every bound here is "one past the last item" rather than a
 //! length check the caller could have made.
@@ -263,14 +263,14 @@ pub unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
     }
 }
 
-/// `ExpandGeneric()` item getter: the `-addr=` values.
+/// `expand_generic()` item getter: the `-addr=` values.
 pub fn get_user_cmd_addr_type(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     ADDR_TYPES
         .get(idx as usize)
         .map_or(ptr::null_mut(), |row| row.name.as_ptr().cast_mut())
 }
 
-/// `ExpandGeneric()` item getter: the attribute names.
+/// `expand_generic()` item getter: the attribute names.
 pub fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// Must stay alphabetical bar the last, which upstream appended.
     static USER_CMD_FLAGS: [&CStr; 10] = [
@@ -290,7 +290,7 @@ pub fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
         .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
 }
 
-/// `ExpandGeneric()` item getter: the `-nargs=` values.
+/// `expand_generic()` item getter: the `-nargs=` values.
 pub fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static USER_CMD_NARGS: [&CStr; 5] = [c"0", c"1", c"*", c"?", c"+"];
     USER_CMD_NARGS
@@ -298,7 +298,7 @@ pub fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
         .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
 }
 
-/// `ExpandGeneric()` item getter: the `-complete=` values.
+/// `expand_generic()` item getter: the `-complete=` values.
 ///
 /// The holes in [`COMMAND_COMPLETE`], and the Lua context that has a name
 /// only for display, are answered as the empty string: the getter's null is

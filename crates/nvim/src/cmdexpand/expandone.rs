@@ -1,8 +1,8 @@
 //! The wildcard key: one `<Tab>` press, from key to command line.
 //!
 //! [`nextwild`] is what the command-line key loop calls; it isolates the word
-//! under the cursor, hands it to [`ExpandOne`] and puts the answer back.
-//! [`ExpandOne`] owns the match array across presses — [`expand_one_start`]
+//! under the cursor, hands it to [`expand_one`] and puts the answer back.
+//! [`expand_one`] owns the match array across presses — [`expand_one_start`]
 //! fills it, [`next_match`] cycles it and [`longest_common_match`]
 //! computes the `'wildmode'`=longest answer.
 
@@ -15,7 +15,7 @@ use crate::types::{BackslashEscape, ExpandContext, FAIL, OK};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-/// [`ExpandOne`]'s `str` and `orig` where the caller is only asking it to
+/// [`expand_one`]'s `str` and `orig` where the caller is only asking it to
 /// move within or free an existing match list; neither is read there.
 const NO_PATTERN: *mut c_char = ptr::null_mut();
 
@@ -33,7 +33,7 @@ unsafe fn orig_or_empty(xp: *const expand_T) -> *const c_char {
     }
 }
 
-/// The index [`ExpandOne`] starts the selection at: the first match, or -1
+/// The index [`expand_one`] starts the selection at: the first match, or -1
 /// for "the original text" when the caller asked for nothing selected.
 const fn first_selected(options: WildOpts) -> c_int {
     if options.has(WildOpts::NOSELECT) {
@@ -62,7 +62,7 @@ unsafe fn matches_of(xp: *const expand_T) -> &'static [*mut c_char] {
 /// normal character instead — that is what makes `:s/^I^D` work.  `OK` means
 /// the key was consumed, even when there were no matches.
 ///
-/// `mode` is one of the `WILD_*` modes, passed on to [`ExpandOne`]; `escape`
+/// `mode` is one of the `WILD_*` modes, passed on to [`expand_one`]; `escape`
 /// asks for the matches to be escaped for use on the command line.
 pub(crate) unsafe fn nextwild(
     xp: *mut expand_T,
@@ -136,7 +136,7 @@ pub(crate) unsafe fn nextwild(
         let mut p;
         if wild_navigate {
             // Get the next/previous match of an already expanded pattern.
-            p = ExpandOne(xp, ptr::null_mut(), ptr::null_mut(), WildOpts::NONE, mode);
+            p = expand_one(xp, ptr::null_mut(), ptr::null_mut(), WildOpts::NONE, mode);
         } else {
             let tmp = if cmdline_fuzzy_completion_supported(xp)
                 || (*xp).xp_context == ExpandContext::PatternInBuf
@@ -153,7 +153,7 @@ pub(crate) unsafe fn nextwild(
                 | WildOpts::SILENT
                 | WildOpts::ESCAPE.when(escape)
                 | WildOpts::ICASE.when(p_wic.get() != 0);
-            p = ExpandOne(
+            p = expand_one(
                 xp,
                 tmp,
                 xstrnsave((*ccline).cmdbuff.offset(at as isize), (*xp).xp_pattern_len),
@@ -223,7 +223,7 @@ pub(crate) unsafe fn nextwild(
             beep_flush();
         } else if (*xp).xp_numfiles == 1 && !options.has(WildOpts::NOSELECT) && !wild_navigate {
             // Only one match: free the expanded pattern again.
-            ExpandOne(xp, NO_PATTERN, NO_PATTERN, WildOpts::NONE, WildMode::Free);
+            expand_one(xp, NO_PATTERN, NO_PATTERN, WildOpts::NONE, WildMode::Free);
         }
 
         xfree(p as *mut c_void);
@@ -337,7 +337,7 @@ unsafe fn expand_one_start(
     options: WildOpts,
 ) -> *mut c_char {
     unsafe {
-        if ExpandFromContext(
+        if expand_from_context(
             xp,
             str,
             &raw mut (*xp).xp_files,
@@ -476,7 +476,7 @@ unsafe fn longest_common_match(xp: *mut expand_T, options: WildOpts) -> *mut c_c
 /// `WildOpts::SILENT`, `WildOpts::ESCAPE` and `WildOpts::ICASE`.
 ///
 /// `xp->xp_context` and `xp->xp_backslash` must have been set.
-pub unsafe fn ExpandOne(
+pub unsafe fn expand_one(
     xp: *mut expand_T,
     str: *mut c_char,
     orig: *mut c_char,
@@ -572,7 +572,7 @@ pub unsafe fn ExpandOne(
         }
 
         if mode == WildMode::ExpandFree || mode == WildMode::All {
-            ExpandCleanup(xp);
+            expand_cleanup(xp);
         }
 
         // Free "orig" if it wasn't stored in "xp->xp_orig".
@@ -585,7 +585,7 @@ pub unsafe fn ExpandOne(
 }
 
 /// Prepare an expand structure for use.
-pub unsafe fn ExpandInit(xp: *mut expand_T) {
+pub unsafe fn expand_init(xp: *mut expand_T) {
     unsafe {
         xp.write_bytes(0, 1);
         (*xp).xp_backslash = BackslashEscape::NONE;
@@ -595,7 +595,7 @@ pub unsafe fn ExpandInit(xp: *mut expand_T) {
 }
 
 /// Clean up an expand structure after use.
-pub unsafe fn ExpandCleanup(xp: *mut expand_T) {
+pub unsafe fn expand_cleanup(xp: *mut expand_T) {
     unsafe {
         if (*xp).xp_numfiles >= 0 {
             FreeWild((*xp).xp_numfiles, (*xp).xp_files);

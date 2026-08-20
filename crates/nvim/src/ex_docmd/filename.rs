@@ -14,7 +14,7 @@ use core::ptr;
 use crate::arglist::arg_all;
 use crate::buffer::buflist_findnr;
 use crate::charset::{backslash_halve, getdigits_int, skipwhite};
-use crate::cmdexpand::{ExpandInit, ExpandOne};
+use crate::cmdexpand::{expand_init, expand_one};
 use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
 use crate::eval::typval::tv_list_find_str;
@@ -239,13 +239,13 @@ pub unsafe fn expand_filename(
         }
 
         let mut xpc: expand_T = core::mem::zeroed();
-        ExpandInit(&raw mut xpc);
+        expand_init(&raw mut xpc);
         xpc.xp_context = ExpandContext::Files;
         let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
         if p_wic.get() != 0 {
             options |= WildOpts::ICASE;
         }
-        let expanded = ExpandOne(
+        let expanded = expand_one(
             &raw mut xpc,
             ea.arg,
             ptr::null_mut(),

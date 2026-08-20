@@ -24,7 +24,7 @@
 
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
-use crate::cmdexpand::{ExpandInit, ExpandOne, WildMode, WildOpts};
+use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
 use crate::fileio::vim_fgets;
 use crate::main::{IObuff, NameBuff, e_fnametoolong, got_int, p_rtp};
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
@@ -82,9 +82,9 @@ pub unsafe fn ex_helptags(eap: *mut exarg_T) {
         }
 
         let mut xpc: expand_T = core::mem::zeroed();
-        ExpandInit(&raw mut xpc);
+        expand_init(&raw mut xpc);
         xpc.xp_context = ExpandContext::Directories;
-        let dirname = ExpandOne(
+        let dirname = expand_one(
             &raw mut xpc,
             (*eap).arg,
             ptr::null_mut(),

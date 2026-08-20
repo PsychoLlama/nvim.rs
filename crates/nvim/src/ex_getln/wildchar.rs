@@ -94,7 +94,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
             if got_int.get() {
                 vpeekc(); // remove <C-C> from the input stream
                 got_int.set(false); // don't abandon the command line
-                ExpandOne(
+                expand_one(
                     &raw mut (*s).xpc,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),

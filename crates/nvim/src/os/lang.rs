@@ -325,7 +325,7 @@ fn init_locales() {
 }
 
 /// The `idx`th known locale name, or NULL past the end — the shape
-/// `ExpandGeneric` walks.
+/// `expand_generic` walks.
 fn locale_name(idx: c_int) -> *mut c_char {
     init_locales();
     let idx = usize::try_from(idx).ok();
@@ -338,7 +338,7 @@ fn locale_name(idx: c_int) -> *mut c_char {
     }
 }
 
-/// `ExpandGeneric` source for `:language`'s argument: the four sub-commands
+/// `expand_generic` source for `:language`'s argument: the four sub-commands
 /// first, then every locale (because `:language {name}` takes one directly).
 pub fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match SELECTORS.get(idx as usize) {
@@ -347,7 +347,7 @@ pub fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     }
 }
 
-/// `ExpandGeneric` source for `:language`'s locale names alone.
+/// `expand_generic` source for `:language`'s locale names alone.
 pub fn get_locales(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     locale_name(idx)
 }

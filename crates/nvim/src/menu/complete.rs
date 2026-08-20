@@ -238,7 +238,7 @@ impl Generator {
     }
 }
 
-/// `ExpandGeneric()`'s source for the list of (sub)menus, not entries.
+/// `expand_generic()`'s source for the list of (sub)menus, not entries.
 pub fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
@@ -255,7 +255,7 @@ pub fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     name
 }
 
-/// `ExpandGeneric()`'s source for the list of menus *and* menu entries.
+/// `expand_generic()`'s source for the list of menus *and* menu entries.
 ///
 /// # Safety
 /// As [`get_menu_name`].

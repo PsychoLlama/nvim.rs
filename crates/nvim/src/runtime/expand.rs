@@ -1,8 +1,8 @@
 //! Command-line completion for the runtime commands.
 //!
-//! [`ExpandRTDir`] completes a file name against a set of 'runtimepath'
+//! [`expand_runtime_dir`] completes a file name against a set of 'runtimepath'
 //! subdirectories -- what `:colorscheme`, `:compiler`, `:runtime` and friends
-//! offer -- and [`ExpandPackAddDir`] does the same for `:packadd` against
+//! offer -- and [`expand_packadd_dir`] does the same for `:packadd` against
 //! 'packpath'.  [`expand_runtime_cmd`] is `:runtime`'s own two-stage
 //! completion, where the first word may be one of the `START`/`OPT`/`PACK`/
 //! `ALL` qualifiers and everything after it is a path.
@@ -177,7 +177,7 @@ unsafe fn ga_strings<'a>(gap: *mut garray_T) -> &'a [*mut c_char] {
 /// `pat` must be NUL-terminated with length `pat_len`, `gap` an initialised
 /// array of allocated strings, and `dirnames` a NULL-terminated array of
 /// NUL-terminated directory names.
-unsafe fn ExpandRTDir_int(
+unsafe fn collect_runtime_matches(
     pat: *mut c_char,
     pat_len: size_t,
     flags: RuntimeOpts,
@@ -254,8 +254,8 @@ unsafe fn take_matches(ga: garray_T, num_file: *mut c_int, file: *mut *mut *mut 
 /// equivalent.  `dirnames` is an array of one or more directory names.
 ///
 /// # Safety
-/// As [`ExpandRTDir_int`]; both out-parameters must be writable.
-pub unsafe fn ExpandRTDir(
+/// As [`collect_runtime_matches`]; both out-parameters must be writable.
+pub unsafe fn expand_runtime_dir(
     pat: *mut c_char,
     flags: RuntimeOpts,
     num_file: *mut c_int,
@@ -267,7 +267,7 @@ pub unsafe fn ExpandRTDir(
         *num_file = 0;
         *file = ptr::null_mut();
         let mut ga = new_string_garray();
-        ExpandRTDir_int(pat, strlen(pat), flags, false, &raw mut ga, dirnames);
+        collect_runtime_matches(pat, strlen(pat), flags, false, &raw mut ga, dirnames);
         take_matches(ga, num_file, file)
     }
 }
@@ -295,7 +295,7 @@ pub unsafe fn expand_runtime_cmd(
         let mut ga = new_string_garray();
         let pat_len = strlen(pat);
         let mut dirnames = [c"".as_ptr().cast_mut(), ptr::null_mut()];
-        ExpandRTDir_int(
+        collect_runtime_matches(
             pat,
             pat_len,
             runtime_expand_flags.get(),
@@ -324,7 +324,7 @@ pub unsafe fn expand_runtime_cmd(
 ///
 /// # Safety
 /// `pat` must be NUL-terminated and both out-parameters writable.
-pub unsafe fn ExpandPackAddDir(
+pub unsafe fn expand_packadd_dir(
     pat: *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,

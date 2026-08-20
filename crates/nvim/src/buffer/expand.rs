@@ -1,4 +1,4 @@
-//! Completing a buffer name -- `ExpandBufnames()`.
+//! Completing a buffer name -- `expand_buf_names()`.
 //!
 //! The command-line completion side of the buffer list: match every listed
 //! (or, with `!`, every) buffer against the pattern, either as a regexp or
@@ -114,7 +114,7 @@ fn current_win() -> Win {
 
 /// Every buffer name matching `pat`, for command-line completion of
 /// `:buffer` and `:sbuffer`.
-pub unsafe fn ExpandBufnames(
+pub unsafe fn expand_buf_names(
     pat: *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,

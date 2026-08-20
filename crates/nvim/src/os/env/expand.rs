@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::charset::{vim_is_ident_char, vim_isfilec};
-use crate::cmdexpand::{ExpandInit, ExpandOne, WildMode, WildOpts};
+use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
 use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
@@ -151,9 +151,9 @@ unsafe fn resolve_user_dir(src: *const c_char, dst: *mut c_char, dstlen: c_int) 
             // Not a known user: let the shell expand `~user`, which is slower
             // and may fail on an old /bin/sh.
             let mut xpc: expand_T = core::mem::zeroed();
-            ExpandInit(&raw mut xpc);
+            expand_init(&raw mut xpc);
             xpc.xp_context = ExpandContext::Files;
-            var = ExpandOne(
+            var = expand_one(
                 &raw mut xpc,
                 dst,
                 ptr::null_mut(),

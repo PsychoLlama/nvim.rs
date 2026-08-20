@@ -19,7 +19,7 @@ use crate::os::shell::ShellOpts;
 use crate::types::{FAIL, MAXPATHL, OK};
 
 /// Whether a `gen_expand_wildcards` is already running. The pieces it calls
-/// can come back round to it — `expand_env` falls back on `ExpandOne` — and
+/// can come back round to it — `expand_env` falls back on `expand_one` — and
 /// the inner call has to go straight to the shell instead of recursing.
 static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -247,7 +247,7 @@ pub unsafe fn gen_expand_wildcards(
 ) -> c_int {
     unsafe {
         // `expand_env` is called below to expand things like "~user". If
-        // that fails it calls `ExpandOne`, which brings us back here; go
+        // that fails it calls `expand_one`, which brings us back here; go
         // straight to the machine-specific expansion in that case.
         if RECURSIVE.get() {
             return os_expand_wildcards(num_pat, pat, num_file, file, flags);

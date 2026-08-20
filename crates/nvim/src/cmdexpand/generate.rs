@@ -1,7 +1,7 @@
 //! Per-context match generators for the contexts with no module of their own.
 //!
-//! [`ExpandOther`] is the table of `(context, generator)` pairs that
-//! [`super::fromcontext::ExpandFromContext`] dispatches through, plus the
+//! [`expand_other`] is the table of `(context, generator)` pairs that
+//! [`super::fromcontext::expand_from_context`] dispatches through, plus the
 //! generators small enough to live next to it — `:breakadd`, `:scriptnames`,
 //! `:retab`, `:messages`, `:mapclear`, `:filetype`, `:checkhealth` and the
 //! LSP list.
@@ -151,7 +151,7 @@ pub(crate) fn get_breakadd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// The sourced scripts, for `":scriptnames"`.
 ///
 /// Answers a pointer into the shared `NameBuff`, so the caller must copy it
-/// before asking for the next one — which `ExpandGeneric` does.
+/// before asking for the next one — which `expand_generic` does.
 pub(crate) unsafe fn get_scriptnames_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         let sid = idx + 1;
@@ -273,7 +273,7 @@ pub(crate) unsafe fn get_lsp_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// The contexts whose matches come from walking a list one item at a time.
 /// Everything else has a generator of its own in
-/// [`super::fromcontext::ExpandFromContext`].
+/// [`super::fromcontext::expand_from_context`].
 const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
     (ExpandContext::Commands, get_command_name, false, true),
     (ExpandContext::FiletypeCmd, get_filetypecmd_arg, true, true),
@@ -328,8 +328,8 @@ const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
 /// Do the expansion based on `xp->xp_context` and `rmp`.
 ///
 /// Answers `FAIL` for a context that is not in the table, which is how
-/// [`super::fromcontext::ExpandFromContext`] reports "nothing to complete".
-pub(crate) unsafe fn ExpandOther(
+/// [`super::fromcontext::expand_from_context`] reports "nothing to complete".
+pub(crate) unsafe fn expand_other(
     pat: *mut c_char,
     xp: *mut expand_T,
     rmp: *mut regmatch_T,
@@ -337,7 +337,7 @@ pub(crate) unsafe fn ExpandOther(
     numMatches: *mut c_int,
 ) -> c_int {
     unsafe {
-        // Find the context in the table and call ExpandGeneric() with the
+        // Find the context in the table and call expand_generic() with the
         // right function to do the expansion.
         let Some(&(_, func, ic, escaped)) = GENERATORS
             .iter()
@@ -348,7 +348,7 @@ pub(crate) unsafe fn ExpandOther(
         if ic {
             (*rmp).rm_ic = true;
         }
-        ExpandGeneric(pat, xp, rmp, matches, numMatches, Some(func), escaped);
+        expand_generic(pat, xp, rmp, matches, numMatches, Some(func), escaped);
         OK
     }
 }

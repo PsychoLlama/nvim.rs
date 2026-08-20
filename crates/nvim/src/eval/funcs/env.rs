@@ -7,7 +7,7 @@ use super::{
     ENV_SEPCHAR, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome,
     kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
-use crate::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, WildMode, WildOpts};
+use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one};
 use crate::eval::typval::{
     tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_get_number_chk,
     tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc,
@@ -100,7 +100,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut error = false;
     rettv.v_type = VAR_STRING;
     // SAFETY: `s` points into the argument, which outlives every call here;
-    // `xpc` is cleared by `ExpandInit` before use and cleaned up after.
+    // `xpc` is cleared by `expand_init` before use and cleaned up after.
     unsafe {
         // The `{list}` argument is only honoured when `{nosuf}` was given
         // too, because it is the third.
@@ -151,13 +151,13 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             return;
         }
         let mut xpc: expand_T = core::mem::zeroed();
-        ExpandInit(&raw mut xpc);
+        expand_init(&raw mut xpc);
         xpc.xp_context = ExpandContext::Files;
         if p_wic.get() != 0 {
             options |= WildOpts::ICASE;
         }
         if rettv.v_type == VAR_STRING {
-            rettv.vval.v_string = ExpandOne(
+            rettv.vval.v_string = expand_one(
                 &raw mut xpc,
                 s as *mut c_char,
                 ptr::null_mut(),
@@ -165,7 +165,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 WildMode::All,
             );
         } else {
-            ExpandOne(
+            expand_one(
                 &raw mut xpc,
                 s as *mut c_char,
                 ptr::null_mut(),
@@ -176,7 +176,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             for i in 0..xpc.xp_numfiles {
                 tv_list_append_string(rettv.vval.v_list, *xpc.xp_files.offset(i as isize), -1);
             }
-            ExpandCleanup(&raw mut xpc);
+            expand_cleanup(&raw mut xpc);
         }
     }
 }

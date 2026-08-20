@@ -428,7 +428,7 @@ fn os_uv_homedir() -> *mut c_char {
     }
 }
 
-/// `ExpandGeneric` source for environment variable names.
+/// `expand_generic` source for environment variable names.
 ///
 /// # Safety
 /// Called through the `ItemGetter` table; `xp` must be a live [`expand_T`].

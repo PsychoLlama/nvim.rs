@@ -88,7 +88,7 @@ fn init_users() {
     COMPLETION_USERS.set(all_usernames());
 }
 
-/// Given to `ExpandGeneric()` to obtain user names. NULL past the end.
+/// Given to `expand_generic()` to obtain user names. NULL past the end.
 pub fn get_users(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     init_users();
     COMPLETION_USERS.with(|users| {

@@ -19,8 +19,8 @@ use crate::charset::{
     ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc, vim_str2nr,
 };
 use crate::cmdexpand::{
-    ExpandCleanup, ExpandInit, ExpandOne, clear_cmdline_orig, cmdline_pum_active,
-    cmdline_pum_cleanup, cmdline_pum_remove, nextwild, set_expand_context, showmatches,
+    clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
+    expand_cleanup, expand_init, expand_one, nextwild, set_expand_context, showmatches,
     wildmenu_cleanup, wildmenu_process_key, wildmenu_translate_key,
 };
 use crate::cmdhist::{
@@ -570,7 +570,7 @@ pub(crate) const INCSEARCH_STATE_INIT: incsearch_state_T = incsearch_state_T {
     magic_overruled_save: OPTION_MAGIC_NOT_SET,
 };
 
-/// An all-zero [`expand_T`]; `ExpandInit` fills the fields that matter.
+/// An all-zero [`expand_T`]; `expand_init` fills the fields that matter.
 pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
     xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_context: ExpandContext::Nothing,

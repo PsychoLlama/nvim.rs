@@ -24,7 +24,7 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
     .or(WildOpts::NO_BEEP)
     .or(WildOpts::HOME_REPLACE);
 
-/// `ExpandOne`'s `orig` argument, which this caller never has.
+/// `expand_one`'s `orig` argument, which this caller never has.
 const NO_ORIG: *mut c_char = ptr::null_mut();
 
 pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
@@ -73,7 +73,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             xpc.xp_pattern_len = strlen(xpc.xp_pattern);
             xpc.xp_col = cmdline_len;
         } else {
-            ExpandInit(&raw mut xpc);
+            expand_init(&raw mut xpc);
             xpc.xp_pattern = pattern as *mut c_char;
             xpc.xp_pattern_len = strlen(xpc.xp_pattern);
             xpc.xp_line = pattern as *mut c_char;
@@ -143,14 +143,14 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             addstar(xpc.xp_pattern, xpc.xp_pattern_len, xpc.xp_context)
         };
 
-        ExpandOne(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep);
+        expand_one(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep);
         tv_list_alloc_ret(rettv, xpc.xp_numfiles as ptrdiff_t);
 
         for i in 0..xpc.xp_numfiles {
             tv_list_append_string((*rettv).vval.v_list, *xpc.xp_files.offset(i as isize), -1);
         }
         xfree(pat as *mut c_void);
-        ExpandCleanup(&raw mut xpc);
+        expand_cleanup(&raw mut xpc);
     }
 }
 
@@ -170,7 +170,7 @@ pub unsafe fn f_getcompletiontype(
 
         let pat = tv_get_string(argvars);
         let mut xpc: expand_T = core::mem::zeroed();
-        ExpandInit(&raw mut xpc);
+        expand_init(&raw mut xpc);
 
         let cmdline_len = strlen(pat) as c_int;
         set_cmd_context(
@@ -182,7 +182,7 @@ pub unsafe fn f_getcompletiontype(
         );
         (*rettv).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg);
 
-        ExpandCleanup(&raw mut xpc);
+        expand_cleanup(&raw mut xpc);
     }
 }
 

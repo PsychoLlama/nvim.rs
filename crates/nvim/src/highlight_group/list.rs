@@ -376,7 +376,7 @@ pub unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char
     }
 }
 
-/// `ExpandGeneric`'s callback: the `idx`th completion candidate.
+/// `expand_generic`'s callback: the `idx`th completion candidate.
 ///
 /// Keeps the raw signature because cmdexpand's generator table holds it as a
 /// function pointer of that shape.

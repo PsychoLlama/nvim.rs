@@ -310,9 +310,9 @@ pub(crate) unsafe fn expand_tag_fname(
         let mut expanded = ptr::null_mut::<c_char>();
         if expand && path_has_wildcard(fname) && vim_strchr(fname, '`' as c_int).is_null() {
             let mut xpc: expand_T = core::mem::zeroed();
-            ExpandInit(&raw mut xpc);
+            expand_init(&raw mut xpc);
             xpc.xp_context = ExpandContext::Files;
-            expanded = ExpandOne(
+            expanded = expand_one(
                 &raw mut xpc,
                 fname,
                 ptr::null_mut(),

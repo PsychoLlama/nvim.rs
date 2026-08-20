@@ -5,7 +5,7 @@
 //! an argument name for one of the four subcommands that take them, a
 //! defined sign name, a placed sign group, or something with a completion of
 //! its own (a highlight group, a file, a buffer). [`get_sign_name`] is the
-//! `ExpandGeneric` callback that then enumerates whichever list that answer
+//! `expand_generic` callback that then enumerates whichever list that answer
 //! named.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -36,14 +36,14 @@ enum Expand {
 
 /// What the last [`set_context_in_sign_cmd`] decided.
 ///
-/// A static, because `ExpandGeneric` calls [`get_sign_name`] with nothing but
+/// A static, because `expand_generic` calls [`get_sign_name`] with nothing but
 /// an index: the `expand_T` it also passes carries the *other* completions'
 /// context, not this one.
 static EXPAND_WHAT: GlobalCell<Expand> = GlobalCell::new(Expand::Subcmd);
 
 /// The `idx`'th element of a completion list, or null past its end.
 ///
-/// `ExpandGeneric` walks upwards until it gets a null, which is what the
+/// `expand_generic` walks upwards until it gets a null, which is what the
 /// NULL terminator on each of these arrays upstream is for.
 fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
     usize::try_from(idx)
@@ -52,7 +52,7 @@ fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
         .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
 }
 
-/// The `ExpandGeneric` callback: the `idx`'th completion of whatever
+/// The `expand_generic` callback: the `idx`'th completion of whatever
 /// [`set_context_in_sign_cmd`] decided this `:sign` line wants.
 ///
 /// # Safety

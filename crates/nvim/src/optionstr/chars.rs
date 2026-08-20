@@ -721,7 +721,7 @@ pub fn get_listchars_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 }
 
 /// The `idx`th field name, or null once the table has run out — which is
-/// how `ExpandGeneric` learns the list has ended.
+/// how `expand_generic` learns the list has ended.
 fn field_name(tab: &'static [Field], idx: c_int) -> *mut c_char {
     usize::try_from(idx)
         .ok()

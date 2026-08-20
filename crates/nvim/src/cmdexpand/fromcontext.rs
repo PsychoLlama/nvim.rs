@@ -1,8 +1,8 @@
 //! Turning a context into a match array.
 //!
-//! [`ExpandFromContext`] is the dispatcher: file-like contexts go to
+//! [`expand_from_context`] is the dispatcher: file-like contexts go to
 //! `expand_wildcards`, everything else to a generator, and the answer is
-//! sorted, deduplicated and escaped.  [`ExpandGeneric`] is the generic
+//! sorted, deduplicated and escaped.  [`expand_generic`] is the generic
 //! generator loop every `get_*_name` callback is driven by, and
 //! [`map_wildopts_to_ewflags`] translates `'wildoptions'` into `EW_*`.
 
@@ -47,10 +47,10 @@ const RTP_ONLY: RuntimeOpts = RuntimeOpts::NONE;
 /// Do the expansion based on `xp->xp_context` and `pat`.
 ///
 /// `options` is a set of `WILD_*` flags.  Most contexts have a generator of
-/// their own; the ones that do not fall through to [`ExpandOther`]'s table,
+/// their own; the ones that do not fall through to [`expand_other`]'s table,
 /// and all of those run against a compiled regexp (or, under
 /// `'wildoptions'`=fuzzy, against `fuzzy_match_str`).
-pub(crate) unsafe fn ExpandFromContext(
+pub(crate) unsafe fn expand_from_context(
     xp: *mut expand_T,
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
@@ -77,7 +77,7 @@ pub(crate) unsafe fn ExpandFromContext(
         *matches = ptr::null_mut();
         *numMatches = 0;
 
-        // The contexts with a generator of their own.  Each `ExpandRTDir`
+        // The contexts with a generator of their own.  Each `expand_runtime_dir`
         // arm builds the NULL-terminated `char *[]` it wants in this frame.
         match context {
             ExpandContext::Help => {
@@ -98,17 +98,17 @@ pub(crate) unsafe fn ExpandFromContext(
                 expand_shellcmd(pat, matches, numMatches, flags);
                 return OK;
             }
-            ExpandContext::OldSetting => return ExpandOldSetting(numMatches, matches),
-            ExpandContext::Buffers => return ExpandBufnames(pat, numMatches, matches, options),
+            ExpandContext::OldSetting => return expand_old_setting(numMatches, matches),
+            ExpandContext::Buffers => return expand_buf_names(pat, numMatches, matches, options),
             ExpandContext::DiffBuffers => {
-                return ExpandBufnames(pat, numMatches, matches, options | BUF_DIFF_FILTER);
+                return expand_buf_names(pat, numMatches, matches, options | BUF_DIFF_FILTER);
             }
             ExpandContext::Tags | ExpandContext::TagsListFiles => {
                 return expand_tags(context == ExpandContext::Tags, pat, numMatches, matches);
             }
             ExpandContext::Colors => {
                 let mut dirs = [c"colors".as_ptr() as *mut c_char, ptr::null_mut()];
-                return ExpandRTDir(
+                return expand_runtime_dir(
                     pat,
                     RuntimeOpts::START | RuntimeOpts::OPT,
                     numMatches,
@@ -118,11 +118,11 @@ pub(crate) unsafe fn ExpandFromContext(
             }
             ExpandContext::Compiler => {
                 let mut dirs = [c"compiler".as_ptr() as *mut c_char, ptr::null_mut()];
-                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
+                return expand_runtime_dir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
             ExpandContext::Ownsyntax => {
                 let mut dirs = [c"syntax".as_ptr() as *mut c_char, ptr::null_mut()];
-                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
+                return expand_runtime_dir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
             ExpandContext::Filetype => {
                 let mut dirs = [
@@ -131,15 +131,15 @@ pub(crate) unsafe fn ExpandFromContext(
                     c"ftplugin".as_ptr() as *mut c_char,
                     ptr::null_mut(),
                 ];
-                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
+                return expand_runtime_dir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
             ExpandContext::Keymap => {
                 let mut dirs = [c"keymap".as_ptr() as *mut c_char, ptr::null_mut()];
-                return ExpandRTDir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
+                return expand_runtime_dir(pat, RTP_ONLY, numMatches, matches, dirs.as_mut_ptr());
             }
-            ExpandContext::UserList => return ExpandUserList(xp, matches, numMatches),
-            ExpandContext::UserLua => return ExpandUserLua(xp, numMatches, matches),
-            ExpandContext::Packadd => return ExpandPackAddDir(pat, numMatches, matches),
+            ExpandContext::UserList => return expand_user_list(xp, matches, numMatches),
+            ExpandContext::UserLua => return expand_user_lua(xp, numMatches, matches),
+            ExpandContext::Packadd => return expand_packadd_dir(pat, numMatches, matches),
             ExpandContext::Runtime => return expand_runtime_cmd(pat, numMatches, matches),
             ExpandContext::PatternInBuf => {
                 return expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, numMatches);
@@ -181,20 +181,20 @@ pub(crate) unsafe fn ExpandFromContext(
 
         let ret = match context {
             ExpandContext::Settings | ExpandContext::BoolSettings => {
-                ExpandSettings(xp, &raw mut regmatch, pat, numMatches, matches, fuzzy)
+                expand_settings(xp, &raw mut regmatch, pat, numMatches, matches, fuzzy)
             }
             ExpandContext::StringSetting => {
-                ExpandStringSetting(xp, &raw mut regmatch, numMatches, matches)
+                expand_string_setting(xp, &raw mut regmatch, numMatches, matches)
             }
             ExpandContext::SettingSubtract => {
-                ExpandSettingSubtract(xp, &raw mut regmatch, numMatches, matches)
+                expand_setting_subtract(xp, &raw mut regmatch, numMatches, matches)
             }
-            ExpandContext::Mappings => ExpandMappings(pat, &raw mut regmatch, numMatches, matches),
+            ExpandContext::Mappings => expand_mappings(pat, &raw mut regmatch, numMatches, matches),
             ExpandContext::Argopt => expand_argopt(pat, xp, &raw mut regmatch, matches, numMatches),
             ExpandContext::UserDefined => {
-                ExpandUserDefined(pat, xp, &raw mut regmatch, matches, numMatches)
+                expand_user_defined(pat, xp, &raw mut regmatch, matches, numMatches)
             }
-            _ => ExpandOther(pat, xp, &raw mut regmatch, matches, numMatches),
+            _ => expand_other(pat, xp, &raw mut regmatch, matches, numMatches),
         };
 
         if !fuzzy {
@@ -214,7 +214,7 @@ pub(crate) unsafe fn ExpandFromContext(
 ///
 /// `escaped` asks for spaces, tabs, backslashes and dots to be escaped in
 /// each match.
-pub unsafe fn ExpandGeneric(
+pub unsafe fn expand_generic(
     pat: *const c_char,
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
@@ -224,7 +224,7 @@ pub unsafe fn ExpandGeneric(
     escaped: bool,
 ) {
     unsafe {
-        let get_item = func.expect("ExpandGeneric needs a generator");
+        let get_item = func.expect("expand_generic needs a generator");
         let fuzzy = cmdline_fuzzy_complete(pat);
         *matches = ptr::null_mut();
         *numMatches = 0;

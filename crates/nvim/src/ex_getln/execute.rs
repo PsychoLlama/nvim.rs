@@ -136,7 +136,7 @@ pub(crate) unsafe fn command_line_end_wildmenu(
             cmdline_pum_remove(c != -1 && (*s).skip_pum_redraw);
         }
         if (*s).xpc.xp_numfiles != -1 {
-            ExpandOne(
+            expand_one(
                 &raw mut (*s).xpc,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),

@@ -482,7 +482,7 @@ unsafe fn match_str(
 /// # Safety
 ///
 /// The out-parameters must be writable, and `regmatch`/`fuzzystr` valid.
-pub unsafe fn ExpandSettings(
+pub unsafe fn expand_settings(
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
     fuzzystr: *mut c_char,
@@ -604,7 +604,7 @@ pub(crate) unsafe fn escape_option_str_cmdline(var: *mut c_char) -> *mut c_char 
 /// # Safety
 ///
 /// The out-parameters must be writable.
-pub unsafe fn ExpandOldSetting(numMatches: *mut c_int, matches: *mut *mut *mut c_char) -> c_int {
+pub unsafe fn expand_old_setting(numMatches: *mut c_int, matches: *mut *mut *mut c_char) -> c_int {
     // SAFETY: the caller's out-parameters, and the option table.
     unsafe {
         *numMatches = 0;
@@ -632,7 +632,7 @@ pub unsafe fn ExpandOldSetting(numMatches: *mut c_int, matches: *mut *mut *mut c
 /// # Safety
 ///
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
-pub unsafe fn ExpandStringSetting(
+pub unsafe fn expand_string_setting(
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
@@ -678,7 +678,7 @@ pub unsafe fn ExpandStringSetting(
 /// # Safety
 ///
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
-pub unsafe fn ExpandSettingSubtract(
+pub unsafe fn expand_setting_subtract(
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
@@ -689,7 +689,7 @@ pub unsafe fn ExpandSettingSubtract(
     unsafe {
         let opt_idx = IDX.get();
         if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
-            return ExpandOldSetting(numMatches, matches);
+            return expand_old_setting(numMatches, matches);
         }
         let value = *get_option_varp_scope_from(opt_idx, FLAGS.get(), curbuf.get(), curwin.get())
             .cast::<*mut c_char>();
@@ -774,6 +774,6 @@ pub unsafe fn ExpandSettingSubtract(
             return OK;
         }
 
-        ExpandOldSetting(numMatches, matches)
+        expand_old_setting(numMatches, matches)
     }
 }

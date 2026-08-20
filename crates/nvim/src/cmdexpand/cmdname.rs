@@ -360,7 +360,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
         let mut forceit = false;
         let mut usefilter = false; // Filter instead of file name.
 
-        ExpandInit(xp);
+        expand_init(xp);
         (*xp).xp_pattern = buff as *mut c_char;
         (*xp).xp_line = buff as *mut c_char;
         (*xp).xp_context = ExpandContext::Commands; // Default until we get past command
@@ -661,7 +661,7 @@ pub unsafe fn expand_cmdline(
         }
 
         // Find all files that match the description.
-        if ExpandFromContext(xp, file_str, matches, matchcount, options) == FAIL {
+        if expand_from_context(xp, file_str, matches, matchcount, options) == FAIL {
             *matchcount = 0;
             *matches = ptr::null_mut();
         }

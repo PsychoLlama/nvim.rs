@@ -4,7 +4,7 @@ use crate::api::private::helpers::{api_clear_error, api_free_object, cstr_as_str
 use crate::arglist::get_arglist_name;
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{expand_get_augroup_name, expand_get_event_name, set_context_in_autocmd};
-use crate::buffer::ExpandBufnames;
+use crate::buffer::expand_buf_names;
 use crate::charset::{
     backslash_halve_save, ptr2cells, rem_backslash, skipdigits, skiptowhite, skipwhite, transchar,
     transchar_byte, vim_is_ident_char, vim_isfilec_or_wc, vim_strsize,
@@ -53,7 +53,7 @@ use crate::main::{
     p_wc, p_wic, p_wmh, p_wmnu, pum_want, save_p_ls, save_p_wmh, search_first_line,
     search_last_line, topframe, wild_menu_showing, wop_flags,
 };
-use crate::mapping::{ExpandMappings, set_context_in_map_cmd};
+use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstpcpy, xstrdup};
@@ -63,8 +63,8 @@ use crate::message::{
     msg_puts, msg_puts_hl, msg_scroll_up, msg_start,
 };
 use crate::option::{
-    ExpandOldSetting, ExpandSettingSubtract, ExpandSettings, ExpandStringSetting, copy_option_part,
-    csh_like_shell, get_findfunc, magic_isset, set_context_in_set_cmd,
+    copy_option_part, csh_like_shell, expand_old_setting, expand_setting_subtract, expand_settings,
+    expand_string_setting, get_findfunc, magic_isset, set_context_in_set_cmd,
 };
 use crate::options::{
     kOptBoFlagWildmode, kOptWopFlagExacttext, kOptWopFlagFuzzy, kOptWopFlagPum, kOptWopFlagTagfile,
@@ -86,7 +86,7 @@ use crate::regexp::{
     vim_regfree,
 };
 use crate::runtime::{
-    ExpandPackAddDir, ExpandRTDir, RuntimeOpts, expand_runtime_cmd, script_items,
+    RuntimeOpts, expand_packadd_dir, expand_runtime_cmd, expand_runtime_dir, script_items,
     set_context_in_runtime_cmd,
 };
 use crate::search::{
@@ -151,15 +151,15 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
-/// Not a `WILD_*` at all — `buffer.h`'s, and `ExpandBufnames` reads it out
+/// Not a `WILD_*` at all — `buffer.h`'s, and `expand_buf_names` reads it out
 /// of the same `options` word, so it is spelled as one of them.
 pub const BUF_DIFF_FILTER: WildOpts = WildOpts::from_bits(8192);
 
-/// What [`ExpandOne`] should do — upstream's `WILD_*` *modes*, which are an
+/// What [`expand_one`] should do — upstream's `WILD_*` *modes*, which are an
 /// enumeration and not a flag set: exactly one is passed, and the value space
 /// (1..=13) collides with [`WildOpts`]'s bits one for one.
 ///
-/// c2rust gave both families the same `c_int`, so `ExpandOne(xp, s, o,
+/// c2rust gave both families the same `c_int`, so `expand_one(xp, s, o,
 /// WILD_ALL, WILD_SILENT)` — arguments swapped — compiled. As an enum the
 /// swap does not, and [`next_match`](expandone) can match exhaustively
 /// instead of leaning on a `_` arm.
@@ -206,7 +206,7 @@ impl WildMode {
 
 crate::flag_set! {
     /// How an expansion should behave — upstream's `WILD_*` options, the
-    /// `options` argument to [`ExpandOne`] and [`nextwild`].
+    /// `options` argument to [`expand_one`] and [`nextwild`].
     ///
     /// Distinct from the `mode` argument beside it, which is an enumeration
     /// ([`WildMode`]) whose values run 1..=13 and therefore collide with

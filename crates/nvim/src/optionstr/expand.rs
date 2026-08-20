@@ -11,7 +11,7 @@
 //!   match per letter the value does not already use;
 //! - [`expand_set_opt_generic`] over an editor-side enumerator (highlight
 //!   groups, encodings, autocommand events, …), which goes through
-//!   `ExpandGeneric`.
+//!   `expand_generic`.
 //!
 //! All three optionally offer the option's *current* value as the first
 //! completion, so that `<Tab>` on a bare `:set opt=` starts from what is
@@ -23,7 +23,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::autocmd::get_event_name_no_group;
-use crate::cmdexpand::ExpandGeneric;
+use crate::cmdexpand::expand_generic;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::get_highlight_name;
 use crate::main::{IObuff, curwin, p_ei, p_lcs};
@@ -185,15 +185,15 @@ pub unsafe fn expand_set_str_generic(
 /// whatever the real enumerator produces.
 static ORIGINAL_VALUE: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
-/// The real enumerator, for as long as `ExpandGeneric` is running.
+/// The real enumerator, for as long as `expand_generic` is running.
 static ENUMERATOR: GlobalCell<CompleteListItemGetter> = GlobalCell::new(None);
 
-/// The enumerator `ExpandGeneric` sees: index 0 is the current value (or the
-/// empty string, which `ExpandGeneric` ignores), and everything above it is
+/// The enumerator `expand_generic` sees: index 0 is the current value (or the
+/// empty string, which `expand_generic` ignores), and everything above it is
 /// the real enumerator shifted by one.
 ///
 /// # Safety
-/// Only reached from `ExpandGeneric`, between the two assignments in
+/// Only reached from `expand_generic`, between the two assignments in
 /// [`expand_set_opt_generic`].
 unsafe fn expand_set_opt_callback(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if idx == 0 {
@@ -234,7 +234,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
     // SAFETY: the caller's frame supplies the expansion context and the
     // command line's compiled pattern.
     unsafe {
-        ExpandGeneric(
+        expand_generic(
             c"".as_ptr(),
             (*args).oe_xp,
             (*args).oe_regmatch,
@@ -458,14 +458,14 @@ pub unsafe fn expand_set_winhighlight(
 
 /// Whether the option being completed is a window-local 'eventignorewin'
 /// rather than the global 'eventignore', which decides which events are
-/// eligible. `ExpandGeneric` gives the enumerator no other way to know.
+/// eligible. `expand_generic` gives the enumerator no other way to know.
 static WINDOW_EVENTS: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Enumerate the autocommand event names 'eventignore' accepts, with "all"
 /// ahead of them, and each one prefixed by "-" when the user is subtracting.
 ///
 /// # Safety
-/// Called by `ExpandGeneric` with its expansion context.
+/// Called by `expand_generic` with its expansion context.
 pub(crate) unsafe fn get_eventignore_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: the expansion context's pattern is a C string.
     let subtract = unsafe { *(*xp).xp_pattern } == b'-' as c_char;
@@ -510,10 +510,10 @@ pub unsafe fn expand_set_eventignore(
 /// Enumerate the values 'fileformat' accepts.
 ///
 /// # Safety
-/// Called by `ExpandGeneric`.
+/// Called by `expand_generic`.
 pub unsafe fn get_fileformat_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: the table's own array. Its last entry is the null terminator,
-    // which is also how `ExpandGeneric` learns the list has ended.
+    // which is also how `expand_generic` learns the list has ended.
     unsafe { *opt_ff_values.ptr() }
         .get(idx as usize)
         .map_or(ptr::null_mut(), |value| value.cast_mut())

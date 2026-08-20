@@ -3,7 +3,7 @@
 //! `'shellcmd'` completion ([`expand_shellcmd`]) walks `$PATH`;
 //! [`globpath`] walks a comma-separated directory list; and the
 //! `custom,`/`customlist,`/Lua completion functions of `:command` are called
-//! through [`ExpandUserDefined`], [`ExpandUserList`] and [`ExpandUserLua`].
+//! through [`expand_user_defined`], [`expand_user_list`] and [`expand_user_lua`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -297,7 +297,7 @@ pub(crate) unsafe fn call_user_expand_func(
 
 /// Expand names with a function defined by the user
 /// (`ExpandContext::UserDefined` and `ExpandContext::UserList`).
-pub(crate) unsafe fn ExpandUserDefined(
+pub(crate) unsafe fn expand_user_defined(
     pat: *const c_char,
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
@@ -436,7 +436,7 @@ pub(crate) unsafe fn process_user_list(
 }
 
 /// Expand names with a list returned by a function defined by the user.
-pub(crate) unsafe fn ExpandUserList(
+pub(crate) unsafe fn expand_user_list(
     xp: *mut expand_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
@@ -455,7 +455,7 @@ pub(crate) unsafe fn ExpandUserList(
 }
 
 /// Expand names with a Lua completion function.
-pub(crate) unsafe fn ExpandUserLua(
+pub(crate) unsafe fn expand_user_lua(
     xp: *mut expand_T,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -492,7 +492,7 @@ pub unsafe fn globpath(
         let buf = xmalloc(MAXPATHL as size_t) as *mut c_char;
 
         let mut xpc: expand_T = core::mem::zeroed();
-        ExpandInit(&raw mut xpc);
+        expand_init(&raw mut xpc);
         xpc.xp_context = if dirs {
             ExpandContext::Directories
         } else {
@@ -537,7 +537,7 @@ pub unsafe fn globpath(
 
                 let mut p: *mut *mut c_char = ptr::null_mut();
                 let mut num_p = 0;
-                ExpandFromContext(
+                expand_from_context(
                     &raw mut xpc,
                     buf,
                     &raw mut p,

@@ -336,7 +336,7 @@ const PEXPAND_CMDS: [&[u8]; 7] = [
     b"stop\0",
 ];
 
-/// ExpandGeneric callback for `:profile` subcommands (fn pointer in the
+/// expand_generic callback for `:profile` subcommands (fn pointer in the
 /// cmdexpand context table).
 pub fn get_profile_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     usize::try_from(idx)

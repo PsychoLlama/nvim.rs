@@ -8,7 +8,7 @@ use core::ptr;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::charset::{getdigits, skipwhite};
-use crate::cmdexpand::ExpandGeneric;
+use crate::cmdexpand::expand_generic;
 use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::lookup::checkforcmd;
 use crate::ex_docmd::scan::skip_cmd_arg;
@@ -234,7 +234,7 @@ pub unsafe fn expand_argopt(
             if cb.is_none() {
                 return FAIL;
             }
-            ExpandGeneric(pat, xp, rmp, matches, num_matches, cb, false);
+            expand_generic(pat, xp, rmp, matches, num_matches, cb, false);
             return OK;
         }
         // `++ff` is the only abbreviation worth finishing on its own.
@@ -244,7 +244,7 @@ pub unsafe fn expand_argopt(
             **matches = xstrdup(c"fileformat=".as_ptr());
             return OK;
         }
-        ExpandGeneric(
+        expand_generic(
             pat,
             xp,
             rmp,
