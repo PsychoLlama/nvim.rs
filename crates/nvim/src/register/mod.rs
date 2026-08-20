@@ -70,8 +70,8 @@ use crate::main::{
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
-    mb_charlen, mb_string2cells, mb_string2cells_len, mb_tolower, utf_head_off,
-    utf_ptr2StrCharInfo, utf_ptr2cells_len, utf_ptr2len_len, utfc_next, utfc_ptr2len,
+    mb_charlen, mb_string2cells, mb_string2cells_len, mb_tolower, utf_head_off, utf_ptr2cells_len,
+    utf_ptr2len_len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{decl, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace};
 use crate::memory::{

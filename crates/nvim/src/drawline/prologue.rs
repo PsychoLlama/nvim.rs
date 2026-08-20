@@ -724,7 +724,7 @@ impl LineSetup {
             let cstype = init_charsize_arg(&mut csarg, wp, wlv.lnum, self.line);
             csarg.max_head_vcol = start_vcol;
             let mut vcol = wlv.vcol;
-            let mut ci = utf_ptr2StrCharInfo(self.ptr);
+            let mut ci = utf_ptr2str_char_info(self.ptr);
             while vcol < start_vcol {
                 cs = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg);
                 vcol += cs.width;

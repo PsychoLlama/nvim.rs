@@ -170,7 +170,7 @@ pub unsafe extern "C" fn utf_head_off(base_in: *const c_char, p_in: *const c_cha
 
         let mut start = step_back_to_lead(p, p);
         let last_len = utf8len_tab[*start as usize];
-        let mut cur_code = utf_ptr2CharInfo_impl(start, last_len as uintptr_t);
+        let mut cur_code = utf_ptr2char_info_impl(start, last_len as uintptr_t);
         if cur_code < 0 || p.offset_from(start) >= last_len as isize {
             return 0; // `p` is part of an illegal sequence
         }
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn utf_head_off(base_in: *const c_char, p_in: *const c_cha
             start = step_back_to_lead(start, cur_pos);
 
             let prev_len = utf8len_tab[*start as usize] as c_int;
-            let prev_code = utf_ptr2CharInfo_impl(start, prev_len as uintptr_t);
+            let prev_code = utf_ptr2char_info_impl(start, prev_len as uintptr_t);
             if prev_code < 0 || (prev_len as isize) < cur_pos.offset_from(start) {
                 start = cur_pos; // resume at the valid sequence after the junk
                 break;
@@ -252,7 +252,7 @@ pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
         debug_assert!(*next >= 0x80, "*next >= 0x80");
         loop {
             let next_len = utf8len_tab[*next as usize];
-            let next_code = utf_ptr2CharInfo_impl(next, next_len as uintptr_t);
+            let next_code = utf_ptr2char_info_impl(next, next_len as uintptr_t);
             if !utf_iscomposing(prev_code, next_code, &raw mut state) {
                 return StrCharInfo {
                     ptr: next as *mut c_char,
@@ -484,11 +484,11 @@ pub unsafe fn mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
 ///
 /// `ptr` must point into a NUL-terminated string.
 #[inline(always)]
-pub unsafe fn utf_ptr2StrCharInfo(ptr: *mut c_char) -> StrCharInfo {
+pub unsafe fn utf_ptr2str_char_info(ptr: *mut c_char) -> StrCharInfo {
     unsafe {
         StrCharInfo {
             ptr,
-            chr: utf_ptr2CharInfo(ptr),
+            chr: utf_ptr2char_info(ptr),
         }
     }
 }

@@ -47,8 +47,8 @@ use crate::main::{
 };
 use crate::mapping::{eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb};
 use crate::mbyte::{
-    mb_cptr2char_adv, mb_unescape, utf_char2bytes, utf_head_off, utf_ptr2StrCharInfo,
-    utf_ptr2cells, utf_ptr2char, utf8len_tab, utfc_next, utfc_ptr2len,
+    mb_cptr2char_adv, mb_unescape, utf_char2bytes, utf_head_off, utf_ptr2cells, utf_ptr2char,
+    utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
 use crate::memline::ml_sync_all;
 use crate::memory::{

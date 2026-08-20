@@ -364,7 +364,7 @@ unsafe fn bs_one_shiftwidth(in_indent: bool) {
         // that is preceded by non-white space.
         let mut vcol: colnr_T = 0;
         let mut space_vcol: colnr_T = 0;
-        let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        let mut sci: StrCharInfo = utf_ptr2str_char_info(line);
         let mut space_sci = sci;
         let mut prev_space = false;
         while sci.ptr < cursor_ptr {

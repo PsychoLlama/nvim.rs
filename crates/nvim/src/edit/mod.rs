@@ -129,7 +129,7 @@ use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};
 use crate::mbyte::{
     mb_adjust_cursor, mb_get_class, utf_char2bytes, utf_char2len, utf_composinglike, utf_head_off,
-    utf_ptr2StrCharInfo, utf_ptr2char, utf_ptr2len, utf8len_tab, utfc_next, utfc_ptr2len,
+    utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{gchar_pos, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace};
 use crate::memory::{strnequal, xfree, xmalloc, xmemdupz, xrealloc, xstrdup};

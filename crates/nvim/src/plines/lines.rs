@@ -144,7 +144,7 @@ pub unsafe fn plines_win_col(wp: *mut win_T, lnum: linenr_T, mut column: c_long)
         let cstype = init_charsize_arg(&mut csarg, wp, lnum, line);
 
         let mut vcol: colnr_T = 0;
-        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
         if cstype == CharsizeKind::Fast {
             let use_tabstop = csarg.use_tabstop;
             while *ci.ptr != NUL as c_char && {

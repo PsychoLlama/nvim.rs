@@ -26,7 +26,7 @@ use crate::main::{State, VIsual, VIsual_active, curwin, p_sel};
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
-use crate::mbyte::{utf_ptr2StrCharInfo, utf_ptr2char, utfc_next, utfc_ptr2len};
+use crate::mbyte::{utf_ptr2char, utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{win_col_off, win_col_off2};
 use crate::option::get_showbreak_value;
@@ -771,7 +771,7 @@ pub unsafe fn linesize_regular(
     let mut vcol = vcol_arg as int64_t;
 
     // SAFETY: `csarg` is initialised, so its line is NUL-terminated.
-    let mut ci: StrCharInfo = unsafe { utf_ptr2StrCharInfo(line) };
+    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are
     // inside it.
     while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { byte_at(ci.ptr) } != 0 {
@@ -814,7 +814,7 @@ pub unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: colnr
     let mut vcol = vcol_arg as int64_t;
 
     // SAFETY: `csarg` is initialised, so its line is NUL-terminated.
-    let mut ci: StrCharInfo = unsafe { utf_ptr2StrCharInfo(line) };
+    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are
     // inside it.
     while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { *ci.ptr } != NUL as c_char

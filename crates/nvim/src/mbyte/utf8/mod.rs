@@ -12,13 +12,13 @@
 //!   valid sequence, or a sequence with a bad continuation byte, it answers
 //!   the *first byte's own value*. Nothing is ever an error, so a caller
 //!   walking a buffer of arbitrary bytes always gets something.
-//! - [`utf_ptr2CharInfo_impl`] is strict: it answers a **negative** number
+//! - [`utf_ptr2char_info_impl`] is strict: it answers a **negative** number
 //!   for a sequence it will not accept, which is how the header's inlined
-//!   `utf_ptr2CharInfo` decides to report a length of one. It never handles
+//!   `utf_ptr2char_info` decides to report a length of one. It never handles
 //!   ASCII — its caller must have ruled that out — and its arithmetic is
 //!   branch-light on purpose, because it is the decode on the drawing path.
 //!
-//! `utf_ptr2CharInfo_impl` and `utf8len_tab` are the two symbols
+//! `utf_ptr2char_info_impl` and `utf8len_tab` are the two symbols
 //! `unit-fixtures.so` compiles against, so neither may change signature.
 //!
 //! The `utfc_*` spellings count the composing characters that follow a base
@@ -49,7 +49,7 @@ const LEAD_PAYLOAD: [u32; 7] = [0, 0, 0x1f, 0x0f, 0x07, 0x03, 0x01];
 /// bytes, `0b1110xxxx` for three, and so on.
 const LEAD_PREFIX: [u32; 7] = [0, 0, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc];
 
-/// What [`utf_ptr2CharInfo_impl`] adds to its accumulated bits, per length.
+/// What [`utf_ptr2char_info_impl`] adds to its accumulated bits, per length.
 ///
 /// The accumulator sums whole bytes rather than masking each one, so what is
 /// left over is the sum of the UTF-8 framing bits, and this subtracts it. For
@@ -95,7 +95,7 @@ pub(crate) fn utf_is_trail_byte(byte: u8) -> bool {
 /// because an incomplete one cannot be the last byte of a NUL-terminated
 /// string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_ptr2CharInfo_impl(p: *const uint8_t, len: uintptr_t) -> int32_t {
+pub unsafe extern "C" fn utf_ptr2char_info_impl(p: *const uint8_t, len: uintptr_t) -> int32_t {
     unsafe {
         // The second byte is always read, even for `len` 0 and 1; the
         // correction makes the answer negative either way.
@@ -506,14 +506,14 @@ pub unsafe extern "C" fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
 /// The codepoint at `p` and the number of bytes it occupies. An invalid
 /// sequence reports a negative value with a length of one.
 ///
-/// The Rust twin of the header's inlined `utf_ptr2CharInfo`; the C fixture in
+/// The Rust twin of the header's inlined `utf_ptr2char_info`; the C fixture in
 /// `test/unit/fixtures/shim.h` carries its own copy of the same body.
 ///
 /// # Safety
 ///
 /// `p` must point into a NUL-terminated string.
 #[inline(always)]
-pub unsafe fn utf_ptr2CharInfo(p_in: *const c_char) -> CharInfo {
+pub unsafe fn utf_ptr2char_info(p_in: *const c_char) -> CharInfo {
     unsafe {
         let p = p_in as *const uint8_t;
         let first = *p;
@@ -524,7 +524,7 @@ pub unsafe fn utf_ptr2CharInfo(p_in: *const c_char) -> CharInfo {
             };
         }
         let len = utf8len_tab[first as usize] as c_int;
-        let code_point = utf_ptr2CharInfo_impl(p, len as uintptr_t);
+        let code_point = utf_ptr2char_info_impl(p, len as uintptr_t);
         CharInfo {
             value: code_point,
             len: if code_point < 0 { 1 } else { len },
@@ -538,7 +538,7 @@ mod tests {
 
     /// Masking the lead byte and subtracting upstream's correction are the
     /// same arithmetic, for every lead byte that can reach each length.
-    /// [`utf_ptr2char`] does the first and [`utf_ptr2CharInfo_impl`] the
+    /// [`utf_ptr2char`] does the first and [`utf_ptr2char_info_impl`] the
     /// second, so this is what says the two decoders agree.
     #[test]
     fn lead_masking_matches_the_corrections() {
@@ -636,7 +636,7 @@ mod tests {
             // decoders read no further than the lead byte promises.
             unsafe {
                 assert_eq!(utf_ptr2char(p), bytes[0] as c_int, "{bytes:?}");
-                let info = utf_ptr2CharInfo(p);
+                let info = utf_ptr2char_info(p);
                 if bytes[0] >= 0x80 {
                     assert!(info.value < 0, "{bytes:?}");
                     assert_eq!(info.len, 1, "{bytes:?}");

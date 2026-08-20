@@ -280,7 +280,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
         let mut incr = 0;
         let mut csarg = CharsizeArg::default();
         let mut cstype = init_charsize_arg(&mut csarg, curwin.get(), lnum, line);
-        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
         let mut vcol = (*bdp).start_vcol;
         while vcol < (*oap).start_vcol && *ci.ptr as c_int != NUL {
             incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
@@ -335,7 +335,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
             } else {
                 // Walk on to the block's right edge.
                 cstype = init_charsize_arg(&mut csarg, curwin.get(), lnum, line);
-                ci = utf_ptr2StrCharInfo(pend);
+                ci = utf_ptr2str_char_info(pend);
                 vcol = (*bdp).end_vcol;
                 let mut prev_pend = pend;
                 while vcol <= (*oap).end_vcol && *ci.ptr as c_int != NUL {

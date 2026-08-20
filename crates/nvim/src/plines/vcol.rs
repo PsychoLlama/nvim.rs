@@ -41,7 +41,7 @@ pub unsafe fn getvcol(
         let mut on_nul = false;
         let mut vcol: colnr_T = 0;
         let mut char_size;
-        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
 
         if cstype == CharsizeKind::Fast {
             let use_tabstop = csarg.use_tabstop;

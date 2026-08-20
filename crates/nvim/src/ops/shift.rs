@@ -394,7 +394,7 @@ unsafe fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine
             (*curwin.get()).w_cursor.lnum,
             bd.textstart,
         );
-        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(bd.textstart);
+        let mut ci: StrCharInfo = utf_ptr2str_char_info(bd.textstart);
         let mut vcol = bd.start_vcol as c_int;
         while ascii_iswhite(ci.chr.value) {
             let incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
@@ -516,7 +516,7 @@ unsafe fn shift_block_left(oap: *mut oparg_T, bd: &mut block_def, total: c_int) 
             verbatim_copy_width -= bd.start_char_vcols;
         }
         cstype = init_charsize_arg(&mut csarg, curwin.get(), 0, bd.textstart);
-        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(bd.textstart);
+        let mut ci: StrCharInfo = utf_ptr2str_char_info(bd.textstart);
         while verbatim_copy_width < destination_col {
             let incr = win_charsize(
                 cstype,

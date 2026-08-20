@@ -24,7 +24,7 @@
 //!
 //! **Eleven symbols here are exported by name and may not change
 //! signature.** Nine are FFI'd from the LuaJIT unit specs; `utf8len_tab` and
-//! `utf_ptr2CharInfo_impl` are compiled *against* by `unit-fixtures.so`, so
+//! `utf_ptr2char_info_impl` are compiled *against* by `unit-fixtures.so`, so
 //! changing either is a C compile failure inside `just unittest`.
 
 #![deny(unsafe_op_in_unsafe_fn)]

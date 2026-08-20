@@ -23,7 +23,7 @@ use crate::main::{
     IObuff, Insstart, State, ai_col, can_si, can_si_back, curbuf_splice_pending, did_si, e_interr,
     e_modifiable, e_resulting_text_too_long, got_int, old_indent, p_paste, p_report, trylevel,
 };
-use crate::mbyte::{utf_ptr2StrCharInfo, utfc_next, utfc_ptr2len};
+use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};
 use crate::message::{emsg, msg_progress};
@@ -376,7 +376,7 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
         if *line != 0 {
             let mut csarg = CharsizeArg::default();
             let cstype = init_charsize_arg(&mut csarg, win, 0, line);
-            let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
+            let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
             loop {
                 let next_vcol =
                     vcol + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;

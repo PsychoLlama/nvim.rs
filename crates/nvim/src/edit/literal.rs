@@ -329,7 +329,7 @@ pub(crate) unsafe fn ins_copychar(lnum: linenr_T) -> c_int {
 
         let mut csarg = CharsizeArg::default();
         let cstype = init_charsize_arg(&mut csarg, curwin.get(), lnum, line);
-        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        let mut ci: StrCharInfo = utf_ptr2str_char_info(line);
         let mut vcol = 0;
         while vcol < end_vcol && *ci.ptr as c_int != NUL {
             vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;

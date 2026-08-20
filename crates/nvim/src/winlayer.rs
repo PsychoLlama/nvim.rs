@@ -37,7 +37,7 @@ use crate::drawscreen::redraw_later;
 use crate::fold::{hasAnyFolding, hasFolding};
 use crate::main::{curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin};
 use crate::mark::mark_mb_adjustpos;
-use crate::mbyte::{utf_ptr2StrCharInfo, utfc_next};
+use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
 use crate::types::{StrCharInfo, buf_T, colnr_T, frame_T, linenr_T, pos_T, tabpage_T, win_T};
@@ -608,7 +608,7 @@ impl Line {
     #[inline(always)]
     pub fn first_char(self) -> StrCharInfo {
         // SAFETY: a NUL-terminated line.
-        unsafe { utf_ptr2StrCharInfo(self.0) }
+        unsafe { utf_ptr2str_char_info(self.0) }
     }
 
     /// The character after `ci`.

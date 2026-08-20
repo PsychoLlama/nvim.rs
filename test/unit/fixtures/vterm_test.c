@@ -206,7 +206,7 @@ static void print_schar(FILE *f, schar_T schar)
 {
   char buf[MAX_SCHAR_SIZE];
   schar_get(buf, schar);
-  StrCharInfo ci = utf_ptr2StrCharInfo(buf);
+  StrCharInfo ci = utf_ptr2str_char_info(buf);
   bool did = false;
   while (*ci.ptr != 0) {
     if (did) {
@@ -219,7 +219,7 @@ static void print_schar(FILE *f, schar_T schar)
       fprintf(f, "%x", ci.chr.value);
     }
     did = true;
-    ci = utf_ptr2StrCharInfo(ci.ptr + ci.chr.len);
+    ci = utf_ptr2str_char_info(ci.ptr + ci.chr.len);
   }
 }
 

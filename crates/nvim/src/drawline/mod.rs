@@ -45,8 +45,8 @@ use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
 };
 use crate::mbyte::{
-    mb_charlen, mb_off_next, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2CharInfo,
-    utf_ptr2StrCharInfo, utf_ptr2cells, utfc_next, utfc_ptr2len, utfc_ptr2schar,
+    mb_charlen, mb_off_next, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2cells,
+    utf_ptr2char_info, utf_ptr2str_char_info, utfc_next, utfc_ptr2len, utfc_ptr2schar,
 };
 use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};

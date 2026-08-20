@@ -55,7 +55,7 @@ use crate::main::{
 use crate::mark::{mark_col_adjust, mark_mb_adjustpos};
 use crate::mbyte::{
     bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,
-    utf_char2len, utf_eat_space, utf_head_off, utf_ptr2StrCharInfo, utf_ptr2char, utf_ptr2len,
+    utf_char2len, utf_eat_space, utf_head_off, utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info,
     utfc_next, utfc_ptr2len,
 };
 use crate::memline::{

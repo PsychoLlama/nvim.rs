@@ -13,7 +13,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::slice;
 
 use super::strnlen;
-use crate::mbyte::{mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2CharInfo};
+use crate::mbyte::{mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2char_info};
 use crate::memory::{xmalloc, xrealloc};
 use crate::types::size_t;
 use ::libc::strlen;
@@ -98,7 +98,7 @@ pub unsafe fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
         let mut res_index: size_t = 0;
         let mut p = orig;
         while *p != 0 {
-            let char_info = utf_ptr2CharInfo(p);
+            let char_info = utf_ptr2char_info(p);
             let c = if char_info.value < 0 {
                 *p as u8 as c_int
             } else {

@@ -151,9 +151,10 @@ typedef enum {
 // targets little-endian).
 #define schar_from_ascii(x) ((schar_T)(x))
 
-// nvim/mbyte.h static inlines (their exported dependencies -- utf8len_tab,
-// utf_ptr2CharInfo_impl -- are chunk prototypes).
-static inline CharInfo utf_ptr2CharInfo(char const *const p_in)
+// The `#[inline]` twins from crate::mbyte, which the crate does not export
+// (their exported dependencies -- utf8len_tab, utf_ptr2char_info_impl -- are
+// chunk prototypes).
+static inline CharInfo utf_ptr2char_info(char const *const p_in)
 {
   uint8_t const *const p = (uint8_t const *)p_in;
   uint8_t const first = *p;
@@ -161,16 +162,16 @@ static inline CharInfo utf_ptr2CharInfo(char const *const p_in)
     return (CharInfo){ .value = first, .len = 1 };
   }
   int len = utf8len_tab[first];
-  int32_t const code_point = utf_ptr2CharInfo_impl(p, (uintptr_t)len);
+  int32_t const code_point = utf_ptr2char_info_impl(p, (uintptr_t)len);
   if (code_point < 0) {
     len = 1;
   }
   return (CharInfo){ .value = code_point, .len = len };
 }
 
-static inline StrCharInfo utf_ptr2StrCharInfo(char *ptr)
+static inline StrCharInfo utf_ptr2str_char_info(char *ptr)
 {
-  return (StrCharInfo){ .ptr = ptr, .chr = utf_ptr2CharInfo(ptr) };
+  return (StrCharInfo){ .ptr = ptr, .chr = utf_ptr2char_info(ptr) };
 }
 
 #endif  // NVIM_TEST_UNIT_FIXTURES_SHIM_H

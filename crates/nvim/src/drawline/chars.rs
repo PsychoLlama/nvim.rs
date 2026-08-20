@@ -537,7 +537,7 @@ impl Cells {
             // `lnum` 0: virtual text is not to be counted here.
             let cstype = init_charsize_arg(&mut csarg, wp, 0, self.line);
             wlv.extra_todo =
-                win_charsize(cstype, wlv.vcol, p, utf_ptr2CharInfo(p).value, &mut csarg).width - 1;
+                win_charsize(cstype, wlv.vcol, p, utf_ptr2char_info(p).value, &mut csarg).width - 1;
 
             if self.on_last_col && self.char_code != TAB {
                 // Search and match highlighting do not continue over the line

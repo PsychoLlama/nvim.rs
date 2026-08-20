@@ -135,7 +135,7 @@ pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
             return 1;
         }
         let len = utf8len_tab[*p as usize] as c_int;
-        let c = utf_ptr2CharInfo_impl(p, len as uintptr_t);
+        let c = utf_ptr2char_info_impl(p, len as uintptr_t);
         // An illegal byte is displayed as <xx>.
         if c <= 0 {
             return 4;
@@ -244,7 +244,7 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
         if *p == NUL as c_char || *p.offset(1) == NUL as c_char {
             return false;
         }
-        let info = utf_ptr2CharInfo(p);
+        let info = utf_ptr2char_info(p);
         if info.value >= 0x80 {
             let prop = utf8proc_get_property(info.value);
             if prop.ambiguous_width || prop_is_emojilike(prop) {

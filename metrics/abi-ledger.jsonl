@@ -268,8 +268,8 @@
 {"symbol":"utf_cp_bounds_len","kind":"fn","file":"crates/nvim/src/mbyte/walk.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"utf_fold","kind":"fn","file":"crates/nvim/src/mbyte/case.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"utf_head_off","kind":"fn","file":"crates/nvim/src/mbyte/walk.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"utf_ptr2CharInfo_impl","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","class":"test","refs":["unit-fixtures.so"]}
 {"symbol":"utf_ptr2char","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"utf_ptr2char_info_impl","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","class":"test","refs":["unit-fixtures.so"]}
 {"symbol":"utf_ptr2len","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"utfc_ptr2len","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"utfc_ptr2schar","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","class":"test","refs":["unit-specs"]}

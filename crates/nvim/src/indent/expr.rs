@@ -17,7 +17,7 @@ use crate::indent_c::{cindent_on, do_c_expr_indent};
 use crate::main::{
     State, current_sctx, did_ai, did_throw, p_debug, p_lispwords, p_paste, trylevel,
 };
-use crate::mbyte::{utf_ptr2CharInfo, utf_ptr2StrCharInfo, utfc_next};
+use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
 use crate::memory::{xfree, xstrdup};
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::os::cshim::strncmp;
@@ -236,7 +236,7 @@ unsafe fn indent_after_open(open: &pos_T) -> c_int {
         let cstype = init_charsize_arg(&mut csarg, win, open.lnum, line);
 
         // Walk to `open`'s column, measuring what is before it.
-        let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        let mut sci: StrCharInfo = utf_ptr2str_char_info(line);
         let mut amount = 0;
         let mut col = open.col;
         while *sci.ptr != 0 && col > 0 {
@@ -299,7 +299,7 @@ unsafe fn measure_first_argument(
     // SAFETY: the caller's line, walked one character at a time by
     // `utfc_next` and stopped by the NUL.
     unsafe {
-        let mut ci: CharInfo = utf_ptr2CharInfo(*that);
+        let mut ci: CharInfo = utf_ptr2char_info(*that);
         if ci.value == '"' as int32_t
             || ci.value == '\'' as int32_t
             || ci.value == '#' as int32_t

@@ -45,7 +45,7 @@ unsafe fn land_block(oldp: *mut c_char, col: colnr_T) -> Landing {
             (*curwin.get()).w_cursor.lnum,
             oldp,
         );
-        let mut ci = utf_ptr2StrCharInfo(oldp);
+        let mut ci = utf_ptr2str_char_info(oldp);
         let mut vcol: colnr_T = 0;
         let mut incr = 0;
         while vcol < col && c_int::from(*ci.ptr) != NUL {
@@ -93,7 +93,7 @@ unsafe fn right_padding(line: *mut c_char, y_width: c_int) -> c_int {
     unsafe {
         let mut csarg = CharsizeArg::default();
         let cstype = init_charsize_arg(&mut csarg, curwin.get(), 0, line);
-        let mut ci = utf_ptr2StrCharInfo(line);
+        let mut ci = utf_ptr2str_char_info(line);
         let mut spaces = y_width + 1;
         while c_int::from(*ci.ptr) != NUL {
             spaces -= win_charsize(cstype, 0, ci.ptr, ci.chr.value, &mut csarg).width;
