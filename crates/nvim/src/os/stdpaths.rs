@@ -9,6 +9,15 @@
 //! returns freshly allocated C strings that the caller releases with
 //! `xfree`.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
 use crate::fileio::vim_gettempdir;
 use crate::main::{IObuff, NameBuff};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup};
@@ -67,21 +76,24 @@ pub fn get_appname(namelike: bool) -> *const c_char {
     // returns a pointer to it, or NULL when the variable is unset. No
     // borrow of `NameBuff` may be outstanding across the call.
     let is_set = unsafe { !os_getenv_noalloc(c"NVIM_APPNAME".as_ptr()).is_null() };
+    const SLASH: c_char = b'/'.cast_signed();
+    const BACKSLASH: c_char = b'\\'.cast_signed();
+    const DASH: c_char = b'-'.cast_signed();
     NameBuff.with_mut(|buf| {
         if !is_set {
             for (slot, byte) in buf.iter_mut().zip(b"nvim\0") {
-                *slot = *byte as c_char;
+                *slot = byte.cast_signed();
             }
         }
         if namelike {
             for slot in buf.iter_mut() {
-                if *slot == b'/' as c_char || *slot == b'\\' as c_char {
-                    *slot = b'-' as c_char;
+                if *slot == SLASH || *slot == BACKSLASH {
+                    *slot = DASH;
                 }
             }
         }
     });
-    NameBuff.ptr() as *const c_char
+    NameBuff.ptr().cast::<c_char>()
 }
 
 /// Whether `$NVIM_APPNAME` is usable: a name or a relative path, with no
@@ -150,7 +162,8 @@ fn dedup_dirs(list: &CStr, sep: u8, same: impl Fn(&CStr, &CStr) -> bool) -> Opti
 /// The value of an XDG base directory variable, or NULL when there is
 /// none. The caller owns the result.
 pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
-    let env = XDG_ENV_VARS[idx as usize];
+    let slot = usize::try_from(idx).expect("an XDGVarType is one of the seven");
+    let env = XDG_ENV_VARS[slot];
     // SAFETY: every pointer handed out below is NUL-terminated and either
     // static or freshly allocated; `ret` is owned from here on.
     unsafe {
@@ -159,8 +172,8 @@ pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
             if os_env_exists(env.as_ptr(), false) {
                 // Set but empty: `os_getenv` reports that as unset.
                 ret = xstrdup(c"".as_ptr());
-            } else if let Some(fallback) = XDG_DEFAULTS[idx as usize] {
-                ret = expand_env_save(fallback.as_ptr() as *mut c_char);
+            } else if let Some(fallback) = XDG_DEFAULTS[slot] {
+                ret = expand_env_save(fallback.as_ptr().cast_mut());
             } else if idx == kXDGRuntimeDir {
                 // stdpath('run') is whatever vim_mktempdir() decided at
                 // startup, minus its trailing slash.
@@ -171,7 +184,7 @@ pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
                     tmpdir
                 };
                 let len = CStr::from_ptr(tmpdir).to_bytes().len();
-                ret = xmemdupz(tmpdir.cast(), len.saturating_sub(1)) as *mut c_char;
+                ret = xmemdupz(tmpdir.cast(), len.saturating_sub(1)).cast::<c_char>();
             }
         }
         if ret.is_null() || (idx != kXDGDataDirs && idx != kXDGConfigDirs) {
@@ -196,31 +209,43 @@ pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
         let appname_len = CStr::from_ptr(appname).to_bytes().len();
         // Windows appends "-data" to the data/state homes; the headroom is
         // asserted on every platform.
-        debug_assert!(appname_len < IOSIZE as usize - c"-data".count_bytes() - 1);
+        let iosize = usize::try_from(IOSIZE).expect("the scratch buffer has a positive size");
+        debug_assert!(appname_len < iosize - c"-data".count_bytes() - 1);
         if dir.is_null() {
             return dir;
         }
         xmemcpyz(IObuff.ptr().cast(), appname.cast(), appname_len);
-        concat_fnames_realloc(dir, IObuff.ptr() as *mut c_char, true)
+        concat_fnames_realloc(dir, IObuff.ptr().cast::<c_char>(), true)
     }
 }
 
 /// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`. The caller owns the result.
+///
+/// # Safety
+///
+/// `fname` is NUL-terminated.
 pub unsafe fn stdpaths_user_conf_subpath(fname: *const c_char) -> *mut c_char {
-    concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true)
+    // SAFETY: the caller's name, and an owned directory `concat` consumes.
+    unsafe { concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true) }
 }
 
 /// `$XDG_STATE_HOME/$NVIM_APPNAME/{fname}`, with `trailing_pathseps` path
 /// separators appended and — when `escape_commas` — every comma
 /// backslash-escaped, for the options that take comma-separated lists.
 /// The caller owns the result.
+///
+/// # Safety
+///
+/// `fname` is NUL-terminated.
 pub unsafe fn stdpaths_user_state_subpath(
     fname: *const c_char,
     trailing_pathseps: size_t,
     escape_commas: bool,
 ) -> *mut c_char {
-    let ret = concat_fnames_realloc(get_xdg_home(kXDGStateHome), fname, true);
-    let path = CStr::from_ptr(ret).to_bytes();
+    // SAFETY: the caller's name; `ret` is owned here and NUL-terminated,
+    // and the borrow of it ends before it is freed.
+    let ret = unsafe { concat_fnames_realloc(get_xdg_home(kXDGStateHome), fname, true) };
+    let path = unsafe { CStr::from_ptr(ret) }.to_bytes();
     let commas = if escape_commas {
         path.iter().filter(|&&b| b == b',').count()
     } else {
@@ -237,7 +262,8 @@ pub unsafe fn stdpaths_user_state_subpath(
         out.push(byte);
     }
     out.resize(out.len() + trailing_pathseps, PATHSEP);
-    xfree(ret.cast());
+    // SAFETY: `ret` is owned here and `path`'s borrow of it is over.
+    unsafe { xfree(ret.cast()) };
     CString::new(out)
         .expect("a CStr's bytes hold no NUL")
         .into_raw()

@@ -12,6 +12,15 @@
 //! The `os_get_*` entry points keep their C signatures: the unit suite
 //! calls them through FFI (see `test/unit/os/users_spec.lua`).
 
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
@@ -43,7 +52,8 @@ unsafe fn owned_name(s: *const c_char) -> Option<CString> {
     if s.is_null() {
         return None;
     }
-    let name = CStr::from_ptr(s);
+    // SAFETY: the caller's promise; the copy is taken before returning.
+    let name = unsafe { CStr::from_ptr(s) };
     (!name.is_empty()).then(|| name.to_owned())
 }
 
@@ -128,61 +138,97 @@ fn best_match(users: &[CString], name: &[u8]) -> UserMatch {
 /// garray is a C array of `char *` that callers release with
 /// `ga_clear_strings`, and the unit suite's allocator seam expects to see
 /// those allocations.
+///
+/// # Safety
+///
+/// `users` is null or points to writable `garray_T` storage, which this call
+/// initializes (anything it already held is leaked, as upstream's is).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_usernames(users: *mut garray_T) -> c_int {
     if users.is_null() {
         return FAIL;
     }
-    ga_init(users, size_of::<*mut c_char>() as c_int, 20);
-    for name in all_usernames() {
-        ga_grow(users, 1);
-        let items = (*users).ga_data as *mut *mut c_char;
-        *items.add((*users).ga_len as usize) = xstrdup(name.as_ptr());
-        (*users).ga_len += 1;
+    let item_size = c_int::try_from(size_of::<*mut c_char>()).expect("a pointer is small");
+    // SAFETY: the caller's array, grown by one before each write, and one
+    // fresh `xstrdup` per slot.
+    unsafe {
+        ga_init(users, item_size, 20);
+        for name in all_usernames() {
+            ga_grow(users, 1);
+            let ga = &mut *users;
+            let idx = usize::try_from(ga.ga_len).expect("a garray length is never negative");
+            *ga.ga_data.cast::<*mut c_char>().add(idx) = xstrdup(name.as_ptr());
+            ga.ga_len += 1;
+        }
     }
     OK
 }
 
 /// Write the name of the user running this process into `s` (`len` bytes,
 /// always NUL-terminated). OK when a name was found.
+///
+/// # Safety
+///
+/// `s` is writable for `len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_username(s: *mut c_char, len: size_t) -> c_int {
-    os_get_uname(libc::getuid() as uv_uid_t, s, len)
+    // SAFETY: `getuid` cannot fail and touches nothing; `s` is the
+    // caller's buffer.
+    unsafe { os_get_uname(libc::getuid(), s, len) }
 }
 
 /// Write the name of the user owning `uid` into `s` (`len` bytes, always
 /// NUL-terminated). When the database has no name for it, the decimal uid
 /// is written instead and the result is FAIL — a number is not a name.
+///
+/// # Safety
+///
+/// `s` is writable for `len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> c_int {
-    let name = libc::getpwuid(uid as libc::uid_t)
-        .as_ref()
-        .and_then(|pw| owned_name(pw.pw_name));
+    // SAFETY: `getpwuid` answers null or a pointer into libc's static
+    // entry, whose `pw_name` is null or NUL-terminated and which
+    // `owned_name` copies out of before anything else runs.
+    let name =
+        unsafe { libc::getpwuid(uid).as_ref() }.and_then(|pw| unsafe { owned_name(pw.pw_name) });
     if let Some(name) = name {
-        xstrlcpy(s, name.as_ptr(), len);
+        // SAFETY: `s` is the caller's `len`-byte buffer and `name` is a
+        // NUL-terminated string owned here.
+        unsafe { xstrlcpy(s, name.as_ptr(), len) };
         return OK;
     }
-    let digits = CString::new((uid as c_int).to_string()).expect("decimal digits hold no NUL");
-    xstrlcpy(s, digits.as_ptr(), len);
+    // `%d`, as upstream: a uid past `INT_MAX` prints signed. No password
+    // database issues one, but the digits have to match either way.
+    let digits = CString::new(uid.cast_signed().to_string()).expect("decimal digits hold no NUL");
+    // SAFETY: as above.
+    unsafe { xstrlcpy(s, digits.as_ptr(), len) };
     FAIL
 }
 
 /// The home directory of user `name`, or NULL when there is no such user.
 /// The caller owns the result.
+///
+/// # Safety
+///
+/// `name` is null or NUL-terminated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_userdir(name: *const c_char) -> *mut c_char {
-    if name.is_null() || *name == 0 {
-        return ptr::null_mut();
+    // SAFETY: the caller's name, then libc's static `passwd` entry, whose
+    // `pw_dir` is copied before anything else can invalidate it.
+    unsafe {
+        if name.is_null() || *name == 0 {
+            return ptr::null_mut();
+        }
+        let Some(pw) = libc::getpwnam(name).as_ref() else {
+            return ptr::null_mut();
+        };
+        if pw.pw_dir.is_null() {
+            // The C handed a NULL `pw_dir` straight to `xstrdup`; no
+            // password database produces one, but NULL is the honest answer.
+            return ptr::null_mut();
+        }
+        xstrdup(pw.pw_dir)
     }
-    let Some(pw) = libc::getpwnam(name).as_ref() else {
-        return ptr::null_mut();
-    };
-    if pw.pw_dir.is_null() {
-        // The C handed a NULL `pw_dir` straight to `xstrdup`; no password
-        // database produces one, but NULL is the honest answer.
-        return ptr::null_mut();
-    }
-    xstrdup(pw.pw_dir)
 }
 
 #[cfg(test)]

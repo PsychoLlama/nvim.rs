@@ -1,5 +1,12 @@
 //! The operating-system layer: filesystem, environment, processes, signals,
 //! terminals and clocks, mostly over libuv.
+//!
+//! Every file in this subtree spells its `unsafe` operations out, which is
+//! what the deny below asserts -- it propagates into all of them. There is no
+//! `forbid(unsafe_code)` here and never will be: the layer's whole job is to
+//! call libc and libuv.
+
+#![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod cshim;
 pub mod dl;

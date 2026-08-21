@@ -267,9 +267,13 @@ unsafe fn cbytes<'a>(s: *const c_char) -> &'a [u8] {
 /// `src` is readable and `dst` writable for `len` bytes, and they do not
 /// overlap.
 unsafe fn copy_bytes(dst: *mut c_void, src: *const c_void, len: usize) {
-    // SAFETY: the caller's promise. `copy_nonoverlapping` accepts a zero
-    // length with any pointers, so no guard is needed.
-    unsafe { ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), len) };
+    // The guard is not hygiene: a zero-length `copy_nonoverlapping` still
+    // demands non-null pointers, and several callers here pass a null
+    // source with a zero length.
+    if len != 0 {
+        // SAFETY: the caller's promise.
+        unsafe { ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), len) };
+    }
 }
 
 /// Duplicate `len` bytes into a fresh NUL-terminated allocation.

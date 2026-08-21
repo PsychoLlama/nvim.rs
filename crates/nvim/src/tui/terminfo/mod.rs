@@ -9,6 +9,15 @@
 //! The capability slots every one of those indexes by are defined once, in
 //! [`caps`].
 
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
 pub mod builtin;
 pub mod caps;
 pub mod param;
@@ -35,8 +44,18 @@ pub fn is_term_family(term: &[u8], family: &[u8]) -> bool {
 
 /// `is_term_family` for the transpiled callers, which hold `$TERM` as a
 /// possibly-null C string.
+///
+/// # Safety
+///
+/// `term` is null or NUL-terminated.
 pub unsafe fn terminfo_is_term_family(term: *const c_char, family: &CStr) -> bool {
-    !term.is_null() && is_term_family(CStr::from_ptr(term).to_bytes(), family.to_bytes())
+    // SAFETY: the caller's `$TERM`, tested for null first. The borrow dies
+    // with the comparison, and `is_term_family` allocates nothing.
+    !term.is_null()
+        && is_term_family(
+            unsafe { CStr::from_ptr(term) }.to_bytes(),
+            family.to_bytes(),
+        )
 }
 
 /// Is this one of the BSD system consoles, which claim to be a terminal they
@@ -66,10 +85,17 @@ pub fn terminfo_from_builtin(term: Option<&CStr>) -> (&'static CStr, TerminfoEnt
 ///
 /// The sequences are copied into `arena`, which the TUI keeps for as long as
 /// it keeps the entry.
+///
+/// # Safety
+///
+/// `arena` is null or points to a live `Arena` that outlives the entry.
 pub unsafe fn terminfo_from_database(termname: &CStr, arena: *mut Arena) -> Option<TerminfoEntry> {
     let term = unibi::from_term(termname)?;
+    // The `unsafe` lives in the closure, so the walk below is safe Rust.
+    // SAFETY: the caller's arena, and a NUL-terminated string parsed out of
+    // the terminfo description, which outlives the copy.
     let dup = |val: Option<&CStr>| match val {
-        Some(s) => arena_strdup(arena, s.as_ptr()) as *const c_char,
+        Some(s) => unsafe { arena_strdup(arena, s.as_ptr()) }.cast_const(),
         None => core::ptr::null(),
     };
 
@@ -130,6 +156,11 @@ pub unsafe fn terminfo_from_database(termname: &CStr, arena: *mut Arena) -> Opti
 /// their second entry, so `key_backspace` and `key_f1` never appear.
 ///
 /// The returned string is allocated for the caller to free.
+///
+/// # Safety
+///
+/// `termname` is NUL-terminated, and every non-null sequence in `entry` is a
+/// NUL-terminated string that stays alive for the call.
 pub unsafe fn terminfo_info_msg(
     entry: &TerminfoEntry,
     termname: *const c_char,
@@ -137,7 +168,8 @@ pub unsafe fn terminfo_info_msg(
 ) -> String_0 {
     let mut msg = Vec::new();
     msg.extend_from_slice(b"&term: ");
-    msg.extend_from_slice(CStr::from_ptr(termname).to_bytes());
+    // SAFETY: the caller's terminal name.
+    msg.extend_from_slice(unsafe { CStr::from_ptr(termname) }.to_bytes());
     msg.extend_from_slice(if from_db {
         b"\nusing terminfo database\n\n".as_slice()
     } else {
@@ -166,10 +198,14 @@ pub unsafe fn terminfo_info_msg(
 
     // Most of these are escape sequences, so they are shown the way an
     // unprintable option value is shown.
-    let escaped = |msg: &mut Vec<u8>, seq: *const c_char| {
+    // Again the `unsafe` is inside the closure, so the three walks below are
+    // safe Rust.
+    // SAFETY: the caller's NUL-terminated sequence; `transstr` answers a
+    // fresh NUL-terminated string this closure owns and frees.
+    let escaped = |msg: &mut Vec<u8>, seq: *const c_char| unsafe {
         let printable = transstr(seq, false);
         msg.extend_from_slice(CStr::from_ptr(printable).to_bytes());
-        xfree(printable as *mut c_void);
+        xfree(printable.cast::<c_void>());
     };
 
     let def_names = STRING_CAPS
@@ -212,10 +248,9 @@ pub unsafe fn terminfo_info_msg(
         }
     }
 
-    String_0::from_raw_parts(
-        xmemdupz(msg.as_ptr() as *const c_void, msg.len()) as *mut c_char,
-        msg.len(),
-    )
+    // SAFETY: `msg` is a live `Vec<u8>` of its own length.
+    let owned = unsafe { xmemdupz(msg.as_ptr().cast::<c_void>(), msg.len()) };
+    String_0::from_raw_parts(owned.cast::<c_char>(), msg.len())
 }
 
 /// Expand a parameterised capability into `[buf_start, buf_end)`.
@@ -224,6 +259,12 @@ pub unsafe fn terminfo_info_msg(
 /// that would not fit, or a capability that overflows the operand stack.
 /// `params` is written back through: `%i` increments the first two, which is
 /// why a caller that means to retry hands over a copy.
+///
+/// # Safety
+///
+/// `[buf_start, buf_end)` is one writable range, `capability` is
+/// NUL-terminated, and `params` addresses nine `TPVAR`s whose non-null
+/// strings are NUL-terminated and outlive the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn terminfo_fmt(
     buf_start: *mut c_char,
@@ -231,22 +272,30 @@ pub unsafe extern "C" fn terminfo_fmt(
     capability: *const c_char,
     params: *mut TPVAR,
 ) -> size_t {
-    let buf = core::slice::from_raw_parts_mut(
-        buf_start as *mut u8,
-        buf_end.offset_from(buf_start) as usize,
-    );
+    // SAFETY: the caller's output range, given as a pair of pointers into
+    // one allocation.
+    let len = unsafe { buf_end.offset_from_unsigned(buf_start) };
+    let buf = unsafe { core::slice::from_raw_parts_mut(buf_start.cast::<u8>(), len) };
+
+    // SAFETY: the caller's nine parameters; each borrowed string outlives
+    // the expansion, which does not free them.
     let mut values = [param::Param::default(); 9];
     for (i, value) in values.iter_mut().enumerate() {
-        let given = *params.add(i);
+        let given = unsafe { *params.add(i) };
         value.num = given.num;
-        value.string = (!given.string.is_null()).then(|| CStr::from_ptr(given.string).to_bytes());
+        value.string =
+            (!given.string.is_null()).then(|| unsafe { CStr::from_ptr(given.string) }.to_bytes());
     }
 
     let mut out = param::Out::new(buf);
-    let expanded = param::expand(CStr::from_ptr(capability).to_bytes(), &mut values, &mut out);
+    // SAFETY: the caller's NUL-terminated capability.
+    let cap = unsafe { CStr::from_ptr(capability) }.to_bytes();
+    let expanded = param::expand(cap, &mut values, &mut out);
 
+    // `%i` incremented the first two, and the caller reads them back.
     for (i, value) in values.iter().enumerate() {
-        (*params.add(i)).num = value.num as c_long;
+        // SAFETY: as above.
+        unsafe { (*params.add(i)).num = c_long::from(value.num) };
     }
     if expanded { out.len() } else { 0 }
 }

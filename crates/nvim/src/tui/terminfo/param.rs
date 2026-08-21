@@ -22,8 +22,17 @@
 //!   is.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
+
+use crate::narrow::number_as_int;
 
 /// Nested so these short names stay out of the flat namespace the unit-test
 /// cdefs are generated into.
@@ -202,9 +211,9 @@ impl Spec {
         let mut digits = [0u8; 32];
         let mut n = digits.len();
         let (magnitude, sign) = match radix {
-            Radix::Dec => (value.unsigned_abs() as u64, value < 0),
+            Radix::Dec => (u64::from(value.unsigned_abs()), value < 0),
             // The other conversions read their argument as unsigned.
-            _ => (value as u32 as u64, false),
+            _ => (u64::from(value.cast_unsigned()), false),
         };
         let (base, alphabet) = match radix {
             Radix::Dec => (10, b"0123456789abcdef"),
@@ -215,7 +224,8 @@ impl Spec {
         let mut rest = magnitude;
         loop {
             n -= 1;
-            digits[n] = alphabet[(rest % base) as usize];
+            let digit = usize::try_from(rest % base).expect("a digit is below the radix");
+            digits[n] = alphabet[digit];
             rest /= base;
             if rest == 0 {
                 break;
@@ -320,7 +330,9 @@ pub fn expand(capability: &[u8], params: &mut [Param; 9], out: &mut Out) -> bool
         match command {
             b'c' => {
                 let value = stack.pop().num;
-                if !out.put_char(value as u8) {
+                // `%c` prints the low byte, as upstream's `(char)` did.
+                let [low, ..] = value.cast_unsigned().to_le_bytes();
+                if !out.put_char(low) {
                     return false;
                 }
             }
@@ -336,7 +348,7 @@ pub fn expand(capability: &[u8], params: &mut [Param; 9], out: &mut Out) -> bool
             b'l' => {
                 let len = stack.pop().string.map_or(0, <[u8]>::len);
                 if !stack.push(Slot {
-                    num: len as i64,
+                    num: i64::try_from(len).expect("a terminfo string is short"),
                     string: None,
                 }) {
                     return false;
@@ -356,7 +368,7 @@ pub fn expand(capability: &[u8], params: &mut [Param; 9], out: &mut Out) -> bool
                         _ => Radix::UpperHex,
                     };
                     spec.render_int(
-                        value as c_int,
+                        number_as_int(value),
                         radix,
                         &mut Capped {
                             out,
@@ -479,6 +491,12 @@ pub fn expand(capability: &[u8], params: &mut [Param; 9], out: &mut Out) -> bool
 /// Parse the flags, width and precision between `%` and the command
 /// character, leaving `i` just past the command.
 fn parse_spec(capability: &[u8], i: &mut usize, introducer: u8) -> (Spec, u8) {
+    /// A parsed width or precision. The digit loop below rejects anything
+    /// over 10000, so the value is always small and never negative.
+    fn as_width(value: i64) -> usize {
+        usize::try_from(value).expect("a width is bounded by 10000")
+    }
+
     /// How long a format string upstream could assemble, which bounded this
     /// loop even when nothing terminated it.
     const SPEC_MAX: usize = 64;
@@ -513,7 +531,7 @@ fn parse_spec(capability: &[u8], i: &mut usize, introducer: u8) -> (Spec, u8) {
             b'.' => {
                 written += 1;
                 if spec.precision.is_none() {
-                    spec.width = value as usize;
+                    spec.width = as_width(value);
                     spec.precision = Some(0);
                 } else {
                     spec.invalid = true;
@@ -559,8 +577,8 @@ fn parse_spec(capability: &[u8], i: &mut usize, introducer: u8) -> (Spec, u8) {
     }
     if !spec.invalid {
         match spec.precision {
-            None => spec.width = value as usize,
-            Some(_) => spec.precision = Some(value as usize),
+            None => spec.width = as_width(value),
+            Some(_) => spec.precision = Some(as_width(value)),
         }
     }
     (spec, command)
@@ -745,6 +763,28 @@ mod tests {
     }
 
     #[test]
+    fn a_character_conversion_prints_the_low_byte() {
+        // `%c` is upstream's `(char)`: everything above the low byte is
+        // dropped rather than rejected, and a negative value wraps.
+        assert_eq!(run("%p1%c", &[i64::from(b'A')]).as_deref(), Some("A"));
+        assert_eq!(run("%p1%c", &[0x4141_4141_4141_4141]).as_deref(), Some("A"));
+        assert_eq!(run("%p1%c", &[-191]).as_deref(), Some("A"));
+    }
+
+    #[test]
+    fn the_unsigned_conversions_read_a_negative_parameter_as_an_int() {
+        // `conversions_are_int_wide` pins `%d` and `%x`; the point here is
+        // that `%o` and `%X` read the same 32 unsigned bits, and that a
+        // width above the parameter still pads the wrapped digits.
+        assert_eq!(run("%p1%X", &[-255]).as_deref(), Some("FFFFFF01"));
+        assert_eq!(run("%p1%o", &[-1]).as_deref(), Some("37777777777"));
+        assert_eq!(
+            run("%p1%12x", &[0x1_0000_0007]).as_deref(),
+            Some("           7")
+        );
+    }
+
+    #[test]
     fn conditionals_pick_a_branch() {
         let cap = "%?%p1%tyes%eno%;!";
         assert_eq!(run(cap, &[1]).as_deref(), Some("yes!"));
@@ -799,8 +839,8 @@ mod tests {
     fn the_stack_is_twenty_deep() {
         let fits = "%p1".repeat(20) + "%c";
         let overflows = "%p1".repeat(21) + "%c";
-        assert_eq!(run(&fits, &[b'A' as i64]).as_deref(), Some("A"));
-        assert_eq!(run(&overflows, &[b'A' as i64]), None);
+        assert_eq!(run(&fits, &[i64::from(b'A')]).as_deref(), Some("A"));
+        assert_eq!(run(&overflows, &[i64::from(b'A')]), None);
     }
 
     /// Output that does not fit fails rather than truncating, and a literal
