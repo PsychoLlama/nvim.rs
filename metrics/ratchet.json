@@ -1,8 +1,8 @@
 {
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1058,
-  "files_without_deny_unsafe_op": 9,
-  "files_without_deny_casts": 1061,
+  "files_without_deny_unsafe_op": 6,
+  "files_without_deny_casts": 1060,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
     "crates/nvim/src/api/autocmd/create.rs": {"missing_safety_doc": 4, "unsafe_lines": 339},
@@ -136,8 +136,8 @@
     "crates/nvim/src/channel/term.rs": {"extern_abi": 1, "missing_safety_doc": 6, "unsafe_lines": 66},
     "crates/nvim/src/charset/display.rs": {"cell_ptr": 1, "unsafe_lines": 65},
     "crates/nvim/src/charset/mod.rs": {"cell_ptr": 3, "extern_abi": 2, "missing_safety_doc": 1, "no_mangle": 2, "unsafe_lines": 91},
-    "crates/nvim/src/cjson/lua_cjson/decode.rs": {"extern_abi": 1, "unsafe_lines": 175},
-    "crates/nvim/src/cjson/lua_cjson/encode.rs": {"extern_abi": 1, "unsafe_lines": 336},
+    "crates/nvim/src/cjson/lua_cjson/decode.rs": {"extern_abi": 1, "unsafe_lines": 74},
+    "crates/nvim/src/cjson/lua_cjson/encode.rs": {"extern_abi": 1, "unsafe_lines": 164},
     "crates/nvim/src/cjson/lua_cjson/mod.rs": {"extern_abi": 2, "missing_safety_doc": 4, "unsafe_lines": 54},
     "crates/nvim/src/clipboard.rs": {"unsafe_lines": 120},
     "crates/nvim/src/cmdexpand/bufpat.rs": {"missing_safety_doc": 4, "unsafe_lines": 276},

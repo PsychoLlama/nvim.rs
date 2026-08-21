@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 //! `vim.json.encode`: a Lua value out, JSON text back.
 //!
 //! The walk is the Lua stack's own: the value being encoded is always on
@@ -132,11 +134,12 @@ impl Encoder {
     /// path, the one where a `__len` or `__index` metamethod raises from
     /// under us. Nothing can be done about that one from here.
     fn raise(&mut self, l: *mut lua_State, lindex: c_int, reason: &CStr) -> ! {
-        // SAFETY: `cfg` is the live upvalue userdatum; `lua_typename` takes
-        // the type tag `lua_type` just answered.
+        // SAFETY: `cfg` is the live upvalue userdatum.
+        unsafe { (*self.cfg).restore_buffer(core::mem::take(&mut self.out)) };
+        drop(core::mem::take(&mut self.keys));
+        // SAFETY: `l` is live, `lua_typename` takes the tag `lua_type` just
+        // answered, and neither buffer is owned here any more.
         unsafe {
-            (*self.cfg).restore_buffer(core::mem::take(&mut self.out));
-            drop(core::mem::take(&mut self.keys));
             let name = lua_typename(l, lua_type(l, lindex));
             luaL_error(
                 l,
@@ -217,15 +220,16 @@ impl Encoder {
             return;
         }
         // SAFETY: as `raise`, but the message is this one's own.
+        unsafe { (*self.cfg).restore_buffer(core::mem::take(&mut self.out)) };
+        drop(core::mem::take(&mut self.keys));
+        // SAFETY: `l` is live and neither buffer is owned here any more.
         unsafe {
-            (*self.cfg).restore_buffer(core::mem::take(&mut self.out));
-            drop(core::mem::take(&mut self.keys));
             luaL_error(
                 l,
                 c"Cannot serialise, excessive nesting (%d)".as_ptr(),
                 depth,
-            );
-        }
+            )
+        };
         unreachable_after_raise()
     }
 
@@ -240,7 +244,7 @@ impl Encoder {
             self.append_newline_and_indent(depth);
             // SAFETY: the table is on top; `raw` says whether `__index` is
             // allowed to answer, which is how a table that became an array
-            // through `__len` gets read.
+            // through `__len` gets read. The element is popped here.
             unsafe {
                 if raw {
                     lua_rawgeti(l, -1, index as c_int);
@@ -265,31 +269,34 @@ impl Encoder {
         let mut written = 0;
         // SAFETY: the table is on top, and the key/value pair `lua_next`
         // leaves is popped on every path out of the loop.
-        unsafe {
-            lua_pushnil(l);
-            while lua_next(l, -2) != 0 {
-                if written > 0 {
-                    self.out.push(b',');
-                }
-                written += 1;
-                self.append_newline_and_indent(depth);
+        unsafe { lua_pushnil(l) };
+        // SAFETY: as above.
+        while unsafe { lua_next(l, -2) } != 0 {
+            if written > 0 {
+                self.out.push(b',');
+            }
+            written += 1;
+            self.append_newline_and_indent(depth);
 
-                // .., table, key, value
-                match lua_type(l, -2) {
-                    LUA_TNUMBER => {
-                        self.out.push(b'"');
-                        self.append_number(l, -2, Sink::Document);
-                        self.out.extend_from_slice(b"\":");
-                    }
-                    LUA_TSTRING => {
-                        self.append_string(l, -2);
-                        self.out.push(b':');
-                    }
-                    _ => self.raise(l, -2, c"table key must be a number or string"),
+            // .., table, key, value
+            // SAFETY: as above; the key is at -2 for the whole arm.
+            match unsafe { lua_type(l, -2) } {
+                LUA_TNUMBER => {
+                    self.out.push(b'"');
+                    unsafe { self.append_number(l, -2, Sink::Document) };
+                    self.out.extend_from_slice(b"\":");
                 }
-                if self.indent.is_some() {
-                    self.out.push(b' ');
+                LUA_TSTRING => {
+                    unsafe { self.append_string(l, -2) };
+                    self.out.push(b':');
                 }
+                _ => self.raise(l, -2, c"table key must be a number or string"),
+            }
+            if self.indent.is_some() {
+                self.out.push(b' ');
+            }
+            // SAFETY: as above; the value is on top and popped here.
+            unsafe {
                 self.append_value(l, depth);
                 lua_pop(l, 1);
             }
@@ -320,47 +327,54 @@ impl Encoder {
 
         // SAFETY: the table is on top for both loops; every pushed value is
         // popped before the next iteration.
-        unsafe {
-            lua_pushnil(l);
-            while lua_next(l, -2) != 0 {
-                let offset = self.keys.len();
-                let raw = match lua_type(l, -2) {
-                    LUA_TSTRING => {
-                        self.append_string_contents(l, -2, Sink::Keys);
-                        let mut length: size_t = 0;
-                        let text = lua_tolstring(l, -2, &raw mut length);
-                        RawKey::Text(core::slice::from_raw_parts(text.cast::<u8>(), length).into())
-                    }
-                    LUA_TNUMBER => {
-                        self.append_number(l, -2, Sink::Keys);
-                        RawKey::Number(lua_tointeger(l, -2))
-                    }
-                    _ => self.raise(l, -2, c"table key must be number or string"),
-                };
-                keys.push(Key {
-                    offset,
-                    length: self.keys.len() - offset,
-                    raw,
-                });
-                lua_pop(l, 1);
+        unsafe { lua_pushnil(l) };
+        // SAFETY: as above.
+        while unsafe { lua_next(l, -2) } != 0 {
+            let offset = self.keys.len();
+            // SAFETY: as above; the key is at -2 for the whole arm, and a
+            // Lua string stays put while the table holding it is on the
+            // stack, which is long enough to copy it.
+            let raw = match unsafe { lua_type(l, -2) } {
+                LUA_TSTRING => unsafe {
+                    self.append_string_contents(l, -2, Sink::Keys);
+                    let mut length: size_t = 0;
+                    let text = lua_tolstring(l, -2, &raw mut length);
+                    RawKey::Text(core::slice::from_raw_parts(text.cast::<u8>(), length).into())
+                },
+                LUA_TNUMBER => unsafe {
+                    self.append_number(l, -2, Sink::Keys);
+                    RawKey::Number(lua_tointeger(l, -2))
+                },
+                _ => self.raise(l, -2, c"table key must be number or string"),
+            };
+            keys.push(Key {
+                offset,
+                length: self.keys.len() - offset,
+                raw,
+            });
+            // SAFETY: as above; this drops the value `lua_next` left.
+            unsafe { lua_pop(l, 1) };
+        }
+
+        let text = |key: &Key| &self.keys[key.offset..key.offset + key.length];
+        keys.sort_by(|a, b| text(a).cmp(text(b)));
+
+        for (written, key) in keys.iter().enumerate() {
+            if written > 0 {
+                self.out.push(b',');
+            }
+            self.append_newline_and_indent(depth);
+            self.out.push(b'"');
+            self.out
+                .extend_from_slice(&self.keys[key.offset..key.offset + key.length]);
+            self.out.extend_from_slice(b"\":");
+            if self.indent.is_some() {
+                self.out.push(b' ');
             }
 
-            let text = |key: &Key| &self.keys[key.offset..key.offset + key.length];
-            keys.sort_by(|a, b| text(a).cmp(text(b)));
-
-            for (written, key) in keys.iter().enumerate() {
-                if written > 0 {
-                    self.out.push(b',');
-                }
-                self.append_newline_and_indent(depth);
-                self.out.push(b'"');
-                self.out
-                    .extend_from_slice(&self.keys[key.offset..key.offset + key.length]);
-                self.out.extend_from_slice(b"\":");
-                if self.indent.is_some() {
-                    self.out.push(b' ');
-                }
-
+            // SAFETY: as above; the key is re-pushed, exchanged for its
+            // value by `lua_gettable`, and the value popped again.
+            unsafe {
                 match &key.raw {
                     RawKey::Text(bytes) => {
                         lua_pushlstring(l, bytes.as_ptr().cast::<c_char>(), bytes.len());
@@ -390,23 +404,25 @@ impl Encoder {
         let mut items: i64 = 0;
         // SAFETY: the table is on top, and both exits pop what `lua_next`
         // left.
-        unsafe {
-            lua_pushnil(l);
-            while lua_next(l, -2) != 0 {
-                let key = (lua_type(l, -2) == LUA_TNUMBER).then(|| lua_tonumber(l, -2));
-                // A key of 0 is not an index — and upstream tests the
-                // *number* for truth, which is what makes 0 fall through
-                // here rather than failing the `>= 1` below.
-                match key {
-                    Some(key) if key != 0.0 && key.floor() == key && key >= 1.0 => {
-                        max = max.max(key as i64);
-                        items += 1;
-                        lua_pop(l, 1);
-                    }
-                    _ => {
-                        lua_pop(l, 2);
-                        return -1;
-                    }
+        unsafe { lua_pushnil(l) };
+        // SAFETY: as above.
+        while unsafe { lua_next(l, -2) } != 0 {
+            // SAFETY: as above; the key is at -2.
+            let key = unsafe { (lua_type(l, -2) == LUA_TNUMBER).then(|| lua_tonumber(l, -2)) };
+            // A key of 0 is not an index — and upstream tests the
+            // *number* for truth, which is what makes 0 fall through
+            // here rather than failing the `>= 1` below.
+            match key {
+                Some(key) if key != 0.0 && key.floor() == key && key >= 1.0 => {
+                    max = max.max(key as i64);
+                    items += 1;
+                    // SAFETY: as above; the value goes, the key stays.
+                    unsafe { lua_pop(l, 1) };
+                }
+                _ => {
+                    // SAFETY: as above; the walk ends, so both go.
+                    unsafe { lua_pop(l, 2) };
+                    return -1;
                 }
             }
         }
@@ -425,16 +441,18 @@ impl Encoder {
     unsafe fn append_table(&mut self, l: *mut lua_State, depth: c_int) {
         self.check_depth(l, depth);
 
-        // SAFETY: the table is on top; each branch below pops exactly what
-        // it pushed, which the stack comments track.
-        unsafe {
-            let mut as_array = false;
-            let mut as_empty_dict = false;
-            // Whether the array read may go through `__index`.
-            let mut raw = true;
+        let mut as_array = false;
+        let mut as_empty_dict = false;
+        // Whether the array read may go through `__index`.
+        let mut raw = true;
 
-            let has_metatable = lua_getmetatable(l, -1) != 0;
-            if has_metatable {
+        // SAFETY: the table is on top; each branch below pops exactly what
+        // it pushed, which the stack comments track. `lua_call` on `__len`
+        // may raise, which is upstream's behaviour too.
+        let has_metatable = unsafe { lua_getmetatable(l, -1) } != 0;
+        if has_metatable {
+            // SAFETY: as above, with the metatable at -1.
+            unsafe {
                 // .., table, mt, empty_dict_mt
                 nlua_pushref(l, nlua_get_empty_dict_ref(l));
                 if lua_rawequal(l, -2, -1) != 0 {
@@ -446,49 +464,66 @@ impl Encoder {
                     as_array = lua_rawequal(l, -1, -2) != 0;
                 }
                 lua_pop(l, 2);
+            }
 
-                if !as_array {
-                    raw = false;
-                    if luaL_getmetafield(l, -1, c"__len".as_ptr()) != 0 {
-                        // Upstream reads the result here and then throws it
-                        // away — see `lua_objlen` below. Calling `__len` is
-                        // still what decides the table is an array, and the
-                        // call can raise, so it has to happen.
+            if !as_array {
+                raw = false;
+                // Upstream reads `__len`'s result here and then throws it
+                // away — see `lua_objlen` below. Calling it is still what
+                // decides the table is an array, and the call can raise, so
+                // it has to happen.
+                // SAFETY: as above; the metafield and its result are popped.
+                as_array = unsafe {
+                    let has_len = luaL_getmetafield(l, -1, c"__len".as_ptr()) != 0;
+                    if has_len {
                         lua_pushvalue(l, -2);
                         lua_call(l, 1, 1);
                         lua_pop(l, 1);
-                        as_array = true;
                     }
-                }
+                    has_len
+                };
             }
+        }
 
-            if as_array {
-                let length = lua_objlen(l, -1) as i64;
-                self.append_array(l, depth, length, raw);
-                return;
-            }
+        if as_array {
+            // SAFETY: the table is on top.
+            let length = unsafe { lua_objlen(l, -1) } as i64;
+            unsafe { self.append_array(l, depth, length, raw) };
+            return;
+        }
 
-            let length = self.array_length(l);
-            // `encode_empty_table_as_object` is 0, so an empty plain table
-            // is `[]` — unless it carries `vim.empty_dict()`'s metatable.
-            if length > 0 || (length == 0 && !as_empty_dict) {
-                self.append_array(l, depth, length, raw);
-                return;
-            }
+        // SAFETY: as above.
+        let length = unsafe { self.array_length(l) };
+        // `encode_empty_table_as_object` is 0, so an empty plain table
+        // is `[]` — unless it carries `vim.empty_dict()`'s metatable.
+        if length > 0 || (length == 0 && !as_empty_dict) {
+            // SAFETY: as above.
+            unsafe { self.append_array(l, depth, length, raw) };
+            return;
+        }
 
-            if has_metatable {
-                // .., table, mt, empty_array_mt
+        if has_metatable {
+            // .., table, mt, empty_array_mt
+            // SAFETY: as above; both pushes are popped here.
+            let empty_array = unsafe {
                 lua_getmetatable(l, -1);
                 push_registry(l, empty_array_key());
-                let empty_array = lua_rawequal(l, -1, -2) != 0;
+                let equal = lua_rawequal(l, -1, -2) != 0;
                 lua_pop(l, 2);
-                if empty_array {
+                equal
+            };
+            if empty_array {
+                // SAFETY: as above.
+                unsafe {
                     let length = lua_objlen(l, -1) as i64;
                     self.append_array(l, depth, length, true);
-                    return;
                 }
+                return;
             }
+        }
 
+        // SAFETY: as above.
+        unsafe {
             if self.sort_keys {
                 self.append_object_sorted(l, depth);
             } else {
@@ -502,41 +537,43 @@ impl Encoder {
     unsafe fn append_value(&mut self, l: *mut lua_State, depth: c_int) {
         // SAFETY: the value is on top and every branch leaves the stack as
         // it found it.
-        unsafe {
-            match lua_type(l, -1) {
-                LUA_TSTRING => self.append_string(l, -1),
-                LUA_TNUMBER => self.append_number(l, -1, Sink::Document),
-                LUA_TBOOLEAN => {
-                    let text: &[u8] = if lua_toboolean(l, -1) != 0 {
-                        b"true"
-                    } else {
-                        b"false"
-                    };
-                    self.out.extend_from_slice(text);
+        match unsafe { lua_type(l, -1) } {
+            LUA_TSTRING => unsafe { self.append_string(l, -1) },
+            LUA_TNUMBER => unsafe { self.append_number(l, -1, Sink::Document) },
+            LUA_TBOOLEAN => {
+                let text: &[u8] = if unsafe { lua_toboolean(l, -1) } != 0 {
+                    b"true"
+                } else {
+                    b"false"
+                };
+                self.out.extend_from_slice(text);
+            }
+            LUA_TTABLE => unsafe { self.append_table(l, depth + 1) },
+            LUA_TNIL => self.out.extend_from_slice(b"null"),
+            LUA_TLIGHTUSERDATA => {
+                // Upstream's `empty_array` sentinel. nvim never publishes
+                // it, so nothing can hand it back; and upstream emits
+                // *nothing at all* for any other light userdatum, which
+                // is kept for the same reason.
+                if core::ptr::eq(unsafe { lua_touserdata(l, -1) }, array_key()) {
+                    unsafe { self.append_array(l, depth, 0, true) };
                 }
-                LUA_TTABLE => self.append_table(l, depth + 1),
-                LUA_TNIL => self.out.extend_from_slice(b"null"),
-                LUA_TLIGHTUSERDATA => {
-                    // Upstream's `empty_array` sentinel. nvim never publishes
-                    // it, so nothing can hand it back; and upstream emits
-                    // *nothing at all* for any other light userdatum, which
-                    // is kept for the same reason.
-                    if core::ptr::eq(lua_touserdata(l, -1), array_key()) {
-                        self.append_array(l, depth, 0, true);
-                    }
-                }
-                LUA_TUSERDATA => {
+            }
+            LUA_TUSERDATA => {
+                // SAFETY: as above; `nlua_get_nil_ref`'s push is popped here.
+                let is_nil = unsafe {
                     nlua_pushref(l, nlua_get_nil_ref(l));
                     let is_nil = lua_rawequal(l, -2, -1) != 0;
                     lua_pop(l, 1);
-                    if is_nil {
-                        self.out.extend_from_slice(b"null");
-                    } else {
-                        self.raise(l, -1, c"type not supported");
-                    }
+                    is_nil
+                };
+                if is_nil {
+                    self.out.extend_from_slice(b"null");
+                } else {
+                    self.raise(l, -1, c"type not supported");
                 }
-                _ => self.raise(l, -1, c"type not supported"),
             }
+            _ => self.raise(l, -1, c"type not supported"),
         }
     }
 }
@@ -547,49 +584,63 @@ impl Encoder {
 /// # Safety
 /// `l` must be a live Lua state.
 unsafe fn read_options(l: *mut lua_State, encoder: &mut Encoder) {
-    // SAFETY: `l` is live; the getfield/settop pairs below balance, and the
-    // final `settop` drops the options table so the value is on top.
+    // SAFETY: `l` is live.
+    match unsafe { lua_gettop(l) } {
+        1 => return,
+        2 => {}
+        _ => {
+            // SAFETY: as above.
+            unsafe { luaL_error(l, c"expected 1 or 2 arguments".as_ptr()) };
+            unreachable_after_raise()
+        }
+    }
+    // SAFETY: as above; argument 2 is a table from here on.
+    unsafe { luaL_checktype(l, 2, LUA_TTABLE) };
+
+    // In upstream's order, because `lua_getfield` runs `__index` and a table
+    // that has one can tell how many times, and in which order, it was
+    // asked. Each read below pushes one value and pops it again.
+    // SAFETY: as above.
+    if let Some(set) = unsafe { read_field(l, c"escape_slash") } {
+        encoder.escape_slash = set;
+    }
+    // SAFETY: as above. `luaL_checkstring` also accepts a *number*,
+    // converting it in place: `indent = 2` indents with the character `2`.
     unsafe {
-        match lua_gettop(l) {
-            1 => return,
-            2 => {}
-            _ => {
-                luaL_error(l, c"expected 1 or 2 arguments".as_ptr());
-                unreachable_after_raise()
-            }
-        }
-        luaL_checktype(l, 2, LUA_TTABLE);
-
-        // In upstream's order, because `lua_getfield` runs `__index` and a
-        // table that has one can tell how many times, and in which order,
-        // it was asked.
-        lua_getfield(l, 2, c"escape_slash".as_ptr());
-        if lua_type(l, -1) != LUA_TNIL {
-            luaL_checktype(l, -1, LUA_TBOOLEAN);
-            encoder.escape_slash = lua_toboolean(l, -1) != 0;
-        }
-        lua_pop(l, 1);
-
         lua_getfield(l, 2, c"indent".as_ptr());
         if lua_type(l, -1) != LUA_TNIL {
-            // `luaL_checkstring` also accepts a *number*, converting it in
-            // place: `indent = 2` indents with the character `2`.
             let text = CStr::from_ptr(luaL_checklstring(l, -1, core::ptr::null_mut())).to_bytes();
             if !text.is_empty() {
                 encoder.indent = Some(text.into());
             }
         }
         lua_pop(l, 1);
+    }
+    // SAFETY: as above.
+    if let Some(set) = unsafe { read_field(l, c"sort_keys") } {
+        encoder.sort_keys = set;
+    }
 
-        lua_getfield(l, 2, c"sort_keys".as_ptr());
-        if lua_type(l, -1) != LUA_TNIL {
+    // Drop the options table too, so the value is on top.
+    // SAFETY: as above.
+    unsafe { lua_settop(l, 1) };
+}
+
+/// One of the two boolean options: `None` when it is absent, and a type
+/// error when it is present and not a boolean.
+///
+/// # Safety
+/// `l` must be a live Lua state with the options table at index 2.
+unsafe fn read_field(l: *mut lua_State, field: &CStr) -> Option<bool> {
+    // SAFETY: the caller's state and table; the push is popped here.
+    unsafe {
+        lua_getfield(l, 2, field.as_ptr());
+        let set = (lua_type(l, -1) != LUA_TNIL).then(|| {
             luaL_checktype(l, -1, LUA_TBOOLEAN);
-            encoder.sort_keys = lua_toboolean(l, -1) != 0;
-        }
+            lua_toboolean(l, -1) != 0
+        });
         lua_pop(l, 1);
-
-        // Drop the options table too, so the value is on top.
-        lua_settop(l, 1);
+        set
     }
 }
 
@@ -617,7 +668,8 @@ pub unsafe extern "C-unwind" fn encode(l: *mut lua_State) -> c_int {
         sort_keys: false,
     };
     // SAFETY: `l` is live throughout; `read_options` leaves the value on
-    // top, which is what `append_value` requires.
+    // top, which is what `append_value` requires. The document is copied
+    // into Lua's own string before the buffer goes back to the config.
     unsafe {
         read_options(l, &mut encoder);
         encoder.append_value(l, 0);
@@ -625,4 +677,59 @@ pub unsafe extern "C-unwind" fn encode(l: *mut lua_State) -> c_int {
         (*cfg).restore_buffer(core::mem::take(&mut encoder.out));
     }
     1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The three ranges and seven exceptions upstream spells as a 256-entry
+    /// table of `const char *`.
+    #[test]
+    fn the_escape_table_is_upstreams() {
+        assert_eq!(escape(0x08, false), Some(&b"\\b"[..]));
+        assert_eq!(escape(0x09, false), Some(&b"\\t"[..]));
+        assert_eq!(escape(0x0a, false), Some(&b"\\n"[..]));
+        assert_eq!(escape(0x0c, false), Some(&b"\\f"[..]));
+        assert_eq!(escape(0x0d, false), Some(&b"\\r"[..]));
+        assert_eq!(escape(b'"', false), Some(&b"\\\""[..]));
+        assert_eq!(escape(b'\\', false), Some(&b"\\\\"[..]));
+        // The control bytes with no shorthand, and DEL.
+        assert_eq!(escape(0x00, false), Some(&b"\\u0000"[..]));
+        assert_eq!(escape(0x0b, false), Some(&b"\\u000b"[..]));
+        assert_eq!(escape(0x1f, false), Some(&b"\\u001f"[..]));
+        assert_eq!(escape(0x7f, false), Some(&b"\\u007f"[..]));
+        // Everything else goes out as itself, high bytes included: the
+        // encoder is byte-transparent above ASCII.
+        for byte in [b' ', b'~', 0x80, 0xff] {
+            assert_eq!(escape(byte, false), None, "{byte:#x}");
+        }
+    }
+
+    /// `escape_slash` is the one row the option changes; upstream swaps in a
+    /// whole second copy of the table for it.
+    #[test]
+    fn escape_slash_changes_exactly_one_row() {
+        assert_eq!(escape(b'/', false), None);
+        assert_eq!(escape(b'/', true), Some(&b"\\/"[..]));
+        for byte in 0..=u8::MAX {
+            if byte != b'/' {
+                assert_eq!(escape(byte, false), escape(byte, true), "{byte:#x}");
+            }
+        }
+    }
+
+    /// The `\u00xx` table is built at compile time, indexed by the byte, and
+    /// spells its hex in lower case — which is a wire contract.
+    #[test]
+    fn the_hex_escape_table_is_indexed_by_its_own_byte() {
+        for byte in 0..=u8::MAX {
+            let escape = HEX_ESCAPES[usize::from(byte)];
+            assert_eq!(&escape[..4], b"\\u00");
+            assert_eq!(
+                core::str::from_utf8(&escape).expect("ASCII"),
+                format!("\\u00{byte:02x}")
+            );
+        }
+    }
 }
