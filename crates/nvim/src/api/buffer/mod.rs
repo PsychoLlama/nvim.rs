@@ -15,7 +15,7 @@ use crate::ex_cmds::rename_buffer;
 use crate::extmark::extmark_splice;
 
 use crate::decoration::kMTMetaLines;
-use crate::lua::executor::nlua_call_ref;
+use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
 use crate::main::{
     State, VIsual, VIsual_active, VIsual_mode, curbuf, curtab, curwin, first_tabpage, firstwin,
@@ -39,11 +39,10 @@ use crate::state::MODE_INSERT;
 use crate::types::{
     AlignTextPos, Arena, Array, Boolean, BufUpdateCallbacks, Buffer, Dict, Error, ExtmarkOp,
     Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair,
-    LuaRef, LuaRetMode, MarkAdjustMode, MarkGet, Object, String_0, TryState, UndoObjectType,
-    WinSplit, WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values,
-    dobuf_start_values, except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, linenr_T, lua_State, msglist_T, pos_T, ptrdiff_t, size_t, tabpage_T,
-    uint64_t, win_T,
+    LuaRef, MarkAdjustMode, MarkGet, Object, String_0, TryState, UndoObjectType, WinSplit,
+    WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values, dobuf_start_values,
+    except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    linenr_T, lua_State, msglist_T, pos_T, ptrdiff_t, size_t, tabpage_T, uint64_t, win_T,
 };
 use crate::undo::u_save_buf;
 use ::libc::{memcpy, strlen};
@@ -76,7 +75,6 @@ pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
 pub const kMarkAllNoResolve: MarkGet = 2;
 pub const kMarkBufLocal: MarkGet = 0;
-pub const kRetLuaref: LuaRetMode = 2;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;

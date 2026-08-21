@@ -15,6 +15,7 @@
 # Ratchet
 
 - The ratchet (`just ratchet --check`) constrains per-file unchecked lines (code inside `unsafe` regions), `static mut`/`#[no_mangle]`/variadic/C-ABI-signature counts, `GlobalCell` raw escape-hatch uses (`.ptr()`/`.as_raw()`), `unsafe fn`s with no `# Safety` section, file line counts, and internal exports to only shrink — plus the count of files not carrying `forbid(unsafe_code)`, `deny(unsafe_op_in_unsafe_fn)` or the cast deny.
+- An `unsafe fn` body scores as unchecked _in full_ until its file carries `deny(unsafe_op_in_unsafe_fn)`. Land the deny first to see a file's true count, and take a `mod.rs` last — a lint attribute there reaches the whole subtree.
 - The cast deny is the per-module opt-in to clippy's cast family; a module that has finished its casts writes `#![deny(clippy::cast_lossless, clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss, clippy::ptr_as_ptr)]` and the count of files without it may only fall. Adding it to a file that is not ready makes `just lint` fail outright, which is the point.
 - Narrowing an `unsafe` region is progress even when it adds regions; splitting a transpiled body into functions with tight regions lowers the count. Blank and comment-only lines inside a region are free, so SAFETY notes cost nothing.
 - Lines inside a `#[cfg(test)] mod … { … }` are exempt from the 1,000-line file cap, so tests can sit next to the code they cover. Every other metric still counts them — unchecked code in a test is still unchecked code.
