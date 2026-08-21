@@ -37,82 +37,82 @@ macro_rules! msg_buf {
 /// # Safety
 /// `rbuf` must be null or live; `group` must be null or NUL-terminated.
 pub(crate) unsafe fn sign_list_placed(rbuf: *mut buf_T, group: *mut c_char) {
-    // SAFETY: the caller's buffer and group.
-    unsafe {
-        let mut buf = if !rbuf.is_null() {
-            rbuf
-        } else {
-            firstbuf.get()
-        };
-        let ns = group_get_ns(group);
+    // SAFETY: the caller's group name.
+    let ns = unsafe { group_get_ns(group) };
+    // SAFETY: a static title.
+    unsafe { msg_puts_title(gettext(c"\n--- Signs ---".as_ptr())) };
 
-        msg_puts_title(gettext(c"\n--- Signs ---".as_ptr()));
-
-        while !buf.is_null() && !got_int.get() {
-            if buf_has_signs(buf) {
+    let mut buf = if rbuf.is_null() { firstbuf.get() } else { rbuf };
+    while !buf.is_null() && !got_int.get() {
+        // SAFETY: a live buffer, either the caller's or one off the list.
+        let cbuf = unsafe { Buf::new(buf) };
+        // SAFETY: as above.
+        if unsafe { buf_has_signs(buf) } {
+            // SAFETY: a live buffer's name is a NUL-terminated string.
+            unsafe {
                 msg_putchar('\n' as c_int);
-                let lbuf = msg_buf!(c"Signs for %s:".as_ptr(), (*buf).b_fname);
+                let lbuf = msg_buf!(c"Signs for %s:".as_ptr(), cbuf.b_fname);
                 msg_puts_hl(lbuf.as_ptr(), HLF_D, false);
-            }
-
-            // A group that names no namespace matches nothing, but still
-            // prints the per-buffer header above.
-            if ns >= 0 {
-                let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
-                let mut itr = MarkTreeIter::default();
-                let mut signs: Vec<MTKey> = Vec::new();
-                marktree_itr_get(&mut *tree, 0, 0, &mut itr);
-                while !itr.x.is_null() {
-                    let mark = marktree_itr_current(&mut itr);
-                    if !mt_end(mark)
-                        && mt_decor_sign(mark)
-                        && (ns == ALL_GROUPS || ns == mark.ns as int64_t)
-                    {
-                        signs.push(mark);
-                    }
-                    marktree_itr_next(&mut *tree, &mut itr);
-                }
-
-                if !signs.is_empty() {
-                    sort_signs(&mut signs);
-                    msg_putchar('\n' as c_int);
-                    for (i, mark) in signs.iter().enumerate() {
-                        let sh = decor_find_sign(mt_decor(*mark));
-                        let namebuf = if (*sh).sign_name.is_null() {
-                            [0; MSG_BUF_LEN as usize]
-                        } else {
-                            msg_buf!(c"  name=%s".as_ptr(), sign_get_name(sh))
-                        };
-                        let groupbuf = if mark.ns == 0 {
-                            [0; MSG_BUF_LEN as usize]
-                        } else {
-                            msg_buf!(
-                                c"  group=%s".as_ptr(),
-                                describe_ns(mark.ns as NS, c"".as_ptr()),
-                            )
-                        };
-                        let lbuf = msg_buf!(
-                            c"    line=%d  id=%u%s%s  priority=%d".as_ptr(),
-                            mark.pos.row + 1,
-                            mark.id,
-                            groupbuf.as_ptr(),
-                            namebuf.as_ptr(),
-                            (*sh).priority as c_int,
-                        );
-                        msg_puts(lbuf.as_ptr());
-                        if i + 1 < signs.len() {
-                            msg_putchar('\n' as c_int);
-                        }
-                    }
-                }
-            }
-
-            if !rbuf.is_null() {
-                return;
-            }
-            buf = (*buf).b_next;
+            };
         }
+
+        // A group that names no namespace matches nothing, but still prints
+        // the per-buffer header above.
+        if ns >= 0 {
+            let mut signs = placed_signs(cbuf, 0, ns, |_| Keep::Yes);
+            if !signs.is_empty() {
+                // SAFETY: every mark collected carries a live sign.
+                unsafe { sort_signs(&mut signs) };
+                // SAFETY: as above; each `sh` is that mark's own decoration.
+                unsafe { report_signs(&signs) };
+            }
+        }
+
+        if !rbuf.is_null() {
+            return;
+        }
+        buf = cbuf.b_next;
     }
+}
+
+/// The `line=`/`id=`/`group=`/`name=`/`priority=` lines `:sign place`
+/// prints for one buffer's signs, already sorted.
+///
+/// # Safety
+/// Every mark must carry a live sign decoration.
+unsafe fn report_signs(signs: &[MTKey]) {
+    // SAFETY: a static newline, and the caller's marks.
+    unsafe {
+        msg_putchar('\n' as c_int);
+        for (i, mark) in signs.iter().enumerate() {
+            let sh = Sh::new(decor_find_sign(mt_decor(*mark)));
+            let namebuf = if sh.sign_name.is_null() {
+                [0; MSG_BUF_LEN as usize]
+            } else {
+                msg_buf!(c"  name=%s".as_ptr(), sign_get_name(sh.raw()))
+            };
+            let groupbuf = if mark.ns == 0 {
+                [0; MSG_BUF_LEN as usize]
+            } else {
+                msg_buf!(
+                    c"  group=%s".as_ptr(),
+                    describe_ns(mark.ns as NS, c"".as_ptr()),
+                )
+            };
+            let lbuf = msg_buf!(
+                c"    line=%d  id=%u%s%s  priority=%d".as_ptr(),
+                mark.pos.row + 1,
+                mark.id,
+                groupbuf.as_ptr(),
+                namebuf.as_ptr(),
+                c_int::from(sh.priority),
+            );
+            msg_puts(lbuf.as_ptr());
+            if i + 1 < signs.len() {
+                msg_putchar('\n' as c_int);
+            }
+        }
+    };
 }
 
 /// The index of the `:sign` subcommand named between `begin_cmd` and
@@ -142,32 +142,27 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 ///
 /// # Safety
 /// `sp` must be a live sign definition.
-pub(crate) unsafe fn sign_list_defined(sp: *mut sign_T) {
-    // SAFETY: the caller's definition.
+pub(crate) unsafe fn sign_list_defined(sp: Sign) {
+    // SAFETY: a definition's name, icon and cells are its own.
     unsafe {
-        smsg_c!(0, c"sign %s".as_ptr(), (*sp).sn_name);
-        if !(*sp).sn_icon.is_null() {
+        smsg_c!(0, c"sign %s".as_ptr(), sp.sn_name);
+        if !sp.sn_icon.is_null() {
             msg_puts(c" icon=".as_ptr());
-            msg_outtrans((*sp).sn_icon, 0, false);
+            msg_outtrans(sp.sn_icon, 0, false);
             msg_puts(gettext(c" (not supported)".as_ptr()));
         }
-        if (*sp).sn_text[0] != 0 {
+        if sp.sn_text[0] != 0 {
             msg_puts(c" text=".as_ptr());
             let mut buf = [0 as c_char; SIGN_TEXT_BUF];
-            describe_sign_text(buf.as_mut_ptr(), (&raw mut (*sp).sn_text).cast());
+            describe_sign_text(buf.as_mut_ptr(), sp.cells());
             msg_outtrans(buf.as_ptr(), 0, false);
         }
-        if (*sp).sn_priority > 0 {
-            let lbuf = msg_buf!(c" priority=%d".as_ptr(), (*sp).sn_priority);
+        if sp.sn_priority > 0 {
+            let lbuf = msg_buf!(c" priority=%d".as_ptr(), sp.sn_priority);
             msg_puts(lbuf.as_ptr());
         }
         let labels = [c" linehl=", c" texthl=", c" culhl=", c" numhl="];
-        let ids = [
-            (*sp).sn_line_hl,
-            (*sp).sn_text_hl,
-            (*sp).sn_cul_hl,
-            (*sp).sn_num_hl,
-        ];
+        let ids = [sp.sn_line_hl, sp.sn_text_hl, sp.sn_cul_hl, sp.sn_num_hl];
         for (label, id) in labels.into_iter().zip(ids) {
             if id > 0 {
                 msg_puts(label.as_ptr());
@@ -184,12 +179,12 @@ pub(crate) unsafe fn sign_list_defined(sp: *mut sign_T) {
 /// `name` must be a NUL-terminated string.
 unsafe fn sign_list_by_name(name: *mut c_char) {
     // SAFETY: the caller's name.
-    unsafe {
-        let sp = sign_find(name);
-        if sp.is_null() {
-            semsg_c!(gettext(c"E155: Unknown sign: %s".as_ptr()), name);
-        } else {
-            sign_list_defined(sp);
+    match unsafe { sign_find(name) } {
+        // SAFETY: `sign_find` answered a live definition.
+        Some(sp) => unsafe { sign_list_defined(sp) },
+        None => {
+            // SAFETY: the caller's name, and a format the message takes.
+            unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s".as_ptr()), name) };
         }
     }
 }

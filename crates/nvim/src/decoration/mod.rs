@@ -242,6 +242,16 @@ pub(crate) fn decor_item_count() -> usize {
     DECOR_ITEMS.with(Vec::len)
 }
 
+/// Every slot of the store, in index order, free ones included.
+///
+/// A snapshot of the *count*, not of the items: the two walks that use this
+/// both write through what they are handed, and neither adds a slot, so the
+/// length cannot move underneath them.
+pub(crate) fn decor_items() -> impl Iterator<Item = Sh> {
+    let count = u32::try_from(decor_item_count()).expect("the store is indexed by a u32");
+    (0..count).map(Sh::at)
+}
+
 /// Stores `item` and answers the index other code refers to it by, reusing a
 /// freed slot when there is one.
 ///
@@ -447,21 +457,19 @@ pub unsafe fn clear_virtlines(lines: *mut VirtLines) {
 /// # Safety
 /// Reaches the glyph cache; main thread only.
 pub unsafe fn decor_check_invalid_glyphs() {
-    for i in 0..decor_item_count() {
-        let it = decor_item(i as uint32_t);
-        // SAFETY: an index below `decor_item_count()` is a live item.
-        unsafe {
-            let width = if (*it).flags & kSHIsSign != 0 {
-                SIGN_WIDTH
-            } else if (*it).flags & kSHConceal != 0 {
-                1
-            } else {
-                0
-            };
-            for j in 0..width as usize {
-                if schar_high((*it).text[j]) {
-                    (*it).text[j] = schar_from_char(schar_get_first_codepoint((*it).text[j]));
-                }
+    for mut it in decor_items() {
+        let width = if it.flags & kSHIsSign != 0 {
+            SIGN_WIDTH as usize
+        } else if it.flags & kSHConceal != 0 {
+            1
+        } else {
+            0
+        };
+        for j in 0..width {
+            if schar_high(it.text[j]) {
+                // SAFETY: reaches the glyph cache, which is the caller's
+                // promise.
+                it.text[j] = unsafe { schar_from_char(schar_get_first_codepoint(it.text[j])) };
             }
         }
     }

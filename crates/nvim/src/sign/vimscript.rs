@@ -84,28 +84,23 @@ unsafe fn list_items(l: *const list_T) -> impl Iterator<Item = *mut listitem_T> 
 ///
 /// # Safety
 /// `sp` must be a live sign definition.
-pub(crate) unsafe fn sign_get_info_dict(sp: *mut sign_T) -> *mut dict_T {
-    // SAFETY: the caller's definition.
+pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut dict_T {
+    // SAFETY: a definition's name, icon and cells are its own.
     unsafe {
         let d = tv_dict_alloc();
-        put_str(d, "name", (*sp).sn_name);
-        if !(*sp).sn_icon.is_null() {
-            put_str(d, "icon", (*sp).sn_icon);
+        put_str(d, "name", sp.sn_name);
+        if !sp.sn_icon.is_null() {
+            put_str(d, "icon", sp.sn_icon);
         }
-        if (*sp).sn_text[0] != 0 {
+        if sp.sn_text[0] != 0 {
             let mut buf = [0 as ::core::ffi::c_char; SIGN_TEXT_BUF];
-            describe_sign_text(buf.as_mut_ptr(), (&raw mut (*sp).sn_text).cast());
+            describe_sign_text(buf.as_mut_ptr(), sp.cells());
             put_str(d, "text", buf.as_ptr());
         }
-        if (*sp).sn_priority > 0 {
-            put_nr(d, "priority", (*sp).sn_priority as varnumber_T);
+        if sp.sn_priority > 0 {
+            put_nr(d, "priority", varnumber_T::from(sp.sn_priority));
         }
-        let ids = [
-            (*sp).sn_line_hl,
-            (*sp).sn_text_hl,
-            (*sp).sn_cul_hl,
-            (*sp).sn_num_hl,
-        ];
+        let ids = [sp.sn_line_hl, sp.sn_text_hl, sp.sn_cul_hl, sp.sn_num_hl];
         for (key, id) in HL_KEYS.iter().zip(ids) {
             if id > 0 {
                 put_str(d, key, hl_name(id));
@@ -120,15 +115,15 @@ pub(crate) unsafe fn sign_get_info_dict(sp: *mut sign_T) -> *mut dict_T {
 /// # Safety
 /// `mark` must carry a live sign decoration.
 pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
-    // SAFETY: the caller's mark.
+    // SAFETY: the caller's mark, and the decoration the store names for it.
     unsafe {
         let d = tv_dict_alloc();
-        let sh = decor_find_sign(mt_decor(mark));
-        put_str(d, "name", sign_get_name(sh));
-        put_nr(d, "id", mark.id as ::core::ffi::c_int as varnumber_T);
+        let sh = Sh::new(decor_find_sign(mt_decor(mark)));
+        put_str(d, "name", sign_get_name(sh.raw()));
+        put_nr(d, "id", varnumber_T::from(mark.id.cast_signed()));
         put_str(d, "group", describe_ns(mark.ns as NS, c"".as_ptr()));
-        put_nr(d, "lnum", (mark.pos.row + 1) as varnumber_T);
-        put_nr(d, "priority", (*sh).priority as varnumber_T);
+        put_nr(d, "lnum", varnumber_T::from(mark.pos.row + 1));
+        put_nr(d, "priority", varnumber_T::from(sh.priority));
         d
     }
 }
@@ -139,17 +134,12 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
 /// `buf` must be live.
 pub unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T {
     // SAFETY: the caller's buffer.
+    let signs = placed_signs(unsafe { Buf::new(buf) }, 0, ALL_GROUPS, |_| Keep::Yes);
+    // SAFETY: every mark the walk kept carries a live sign decoration.
     unsafe {
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
-        let mut itr = MarkTreeIter::default();
-        marktree_itr_get(&mut *tree, 0, 0, &mut itr);
-        while !itr.x.is_null() {
-            let mark = marktree_itr_current(&mut itr);
-            if !mt_end(mark) && mt_decor_sign(mark) {
-                tv_list_append_dict(l, sign_get_placed_info_dict(mark));
-            }
-            marktree_itr_next(&mut *tree, &mut itr);
+        for mark in signs {
+            tv_list_append_dict(l, sign_get_placed_info_dict(mark));
         }
         l
     }
@@ -170,49 +160,47 @@ unsafe fn sign_get_placed_in_buf(
     group: *const ::core::ffi::c_char,
     retlist: *mut list_T,
 ) {
-    // SAFETY: the caller's buffer, group and list.
-    unsafe {
+    // SAFETY: the caller's buffer.
+    let cbuf = unsafe { Buf::new(buf) };
+    // SAFETY: the caller's list, and the buffer handle it reports.
+    let l = unsafe {
         let d = tv_dict_alloc();
         tv_list_append_dict(retlist, d);
-        put_nr(d, "bufnr", (*buf).handle as varnumber_T);
+        put_nr(d, "bufnr", varnumber_T::from(cbuf.handle));
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         tv_dict_add_list(d, "signs".as_ptr().cast(), "signs".len(), l);
+        l
+    };
 
-        let ns = group_get_ns(group);
-        if !buf_has_signs(buf) || ns < 0 {
-            return;
+    // SAFETY: the caller's buffer and group name.
+    let ns = unsafe { group_get_ns(group) };
+    if !unsafe { buf_has_signs(buf) } || ns < 0 {
+        return;
+    }
+
+    let first_row = if lnum != 0 { lnum - 1 } else { 0 };
+    let mut signs = placed_signs(cbuf, first_row, ns, |mark| {
+        if lnum != 0 && mark.pos.row >= lnum {
+            // The tree is in row order, so nothing past this row can match.
+            return Keep::Stop;
         }
-
-        let tree: *mut MarkTree = (&raw mut (*buf).b_marktree).cast();
-        let mut itr = MarkTreeIter::default();
-        let mut signs: Vec<MTKey> = Vec::new();
-        let first_row = if lnum != 0 { lnum - 1 } else { 0 };
-        marktree_itr_get(&mut *tree, first_row, 0, &mut itr);
-
-        while !itr.x.is_null() {
-            let mark = marktree_itr_current(&mut itr);
-            if lnum != 0 && mark.pos.row >= lnum {
-                break;
-            }
-            let wanted = (lnum == 0 && sign_id == 0)
-                || (sign_id == 0 && lnum == mark.pos.row + 1)
-                || (lnum == 0 && sign_id == mark.id as ::core::ffi::c_int)
-                || (lnum == mark.pos.row + 1 && sign_id == mark.id as ::core::ffi::c_int);
-            if !mt_end(mark)
-                && (ns == ALL_GROUPS || ns == mark.ns as int64_t)
-                && wanted
-                && mt_decor_sign(mark)
-            {
-                signs.push(mark);
-            }
-            marktree_itr_next(&mut *tree, &mut itr);
+        // A zero `lnum` or `sign_id` means "any"; the two combine.
+        let on_line = lnum == 0 || lnum == mark.pos.row + 1;
+        let is_id = sign_id == 0 || sign_id == mark.id.cast_signed();
+        if on_line && is_id {
+            Keep::Yes
+        } else {
+            Keep::No
         }
+    });
 
+    // SAFETY: every mark the walk kept carries a live sign decoration.
+    unsafe {
         sort_signs(&mut signs);
         for mark in signs {
             tv_list_append_dict(l, sign_get_placed_info_dict(mark));
         }
-    }
+    };
 }
 
 /// Appends the placed-sign report for `buf`, or for every buffer that has
@@ -333,11 +321,8 @@ pub unsafe fn f_sign_getdefined(argvars: *mut typval_T, rettv: *mut typval_T, _f
             for sp in sign_defs() {
                 tv_list_append_dict(l, sign_get_info_dict(sp));
             }
-        } else {
-            let sp = sign_find(tv_get_string(argvars));
-            if !sp.is_null() {
-                tv_list_append_dict(l, sign_get_info_dict(sp));
-            }
+        } else if let Some(sp) = sign_find(tv_get_string(argvars)) {
+            tv_list_append_dict(l, sign_get_info_dict(sp));
         }
     }
 }

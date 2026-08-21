@@ -15,6 +15,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::cmp::{Ordering, Reverse};
+
 use super::{Sh, kSHIsSign, ns_in_win};
 use crate::decoration::{SCL_NUM, SIGN_WIDTH, kMTMetaSignText};
 use crate::global_cell::GlobalCell;
@@ -26,8 +28,8 @@ use crate::marktree::meta::MetaCount;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
 use crate::types::{
-    DecorInline, DecorSignHighlight, MTPos, MarkTreeIter, SignItem, SignTextAttrs, buf_T, linenr_T,
-    win_T,
+    DecorInline, DecorPriority, DecorSignHighlight, MTPos, MarkTreeIter, SignItem, SignTextAttrs,
+    buf_T, linenr_T, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -120,31 +122,25 @@ pub unsafe fn buf_remove_decor_sh(
     }
 }
 
-/// Orders two signs on the same row, highest priority first.
+/// Where one sign sorts among the signs on its row: highest priority first,
+/// then the newest mark id, then the newest placement serial.
 ///
-/// Answers the `qsort` convention (negative means `a` sorts first). The
-/// tiebreaks are the mark id and then the placement serial, both descending,
-/// so the newest sign of equal priority wins the leftmost column.
+/// All three descend, which is what `Reverse` says here — the three
+/// hand-written `if a < b { 1 } else { -1 }` ladders upstream spells them as
+/// were the same fact three times.
+fn sign_rank(priority: DecorPriority, id: uint32_t, add_id: c_int) -> impl Ord {
+    Reverse((priority, id, add_id))
+}
+
+/// Orders two signs on the same row, highest priority first. See
+/// [`sign_rank`].
 ///
 /// # Safety
 /// Both items' `sh` must be live.
-pub unsafe fn sign_item_cmp(a: &SignItem, b: &SignItem) -> c_int {
+pub unsafe fn sign_item_cmp(a: &SignItem, b: &SignItem) -> Ordering {
     // SAFETY: the caller's signs.
     let (sa, sb) = unsafe { (Sh::new(a.sh), Sh::new(b.sh)) };
-    if sa.priority != sb.priority {
-        return if sa.priority < sb.priority { 1 } else { -1 };
-    }
-    if a.id != b.id {
-        return if a.id < b.id { 1 } else { -1 };
-    }
-    if sa.sign_add_id != sb.sign_add_id {
-        return if sa.sign_add_id < sb.sign_add_id {
-            1
-        } else {
-            -1
-        };
-    }
-    0
+    sign_rank(sa.priority, a.id, sa.sign_add_id).cmp(&sign_rank(sb.priority, b.id, sb.sign_add_id))
 }
 
 /// Every sign on `row` of `buf` that `wp` can see, in marktree order.
@@ -233,7 +229,7 @@ pub unsafe fn decor_redraw_signs(
     // `sign_add_id` is handed out one per placement, so two entries can only
     // tie when they are the same sign.
     // SAFETY: as above — the items are live store entries.
-    signs.sort_by(|a, b| unsafe { sign_item_cmp(a, b) }.cmp(&0));
+    signs.sort_by(|a, b| unsafe { sign_item_cmp(a, b) });
 
     // SAFETY: the caller's out-parameter — null, or room for `wp`'s sign
     // column width, which `len` is at most.
@@ -370,6 +366,66 @@ fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, half: 
             if width > buf.b_signcols.max {
                 buf.b_signcols.max = width;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One row's worth of signs, sorted the way `sign_item_cmp` sorts them,
+    /// as `(priority, mark id, placement serial)` triples.
+    fn sorted(
+        mut signs: Vec<(DecorPriority, uint32_t, c_int)>,
+    ) -> Vec<(DecorPriority, uint32_t, c_int)> {
+        signs.sort_by_key(|a| sign_rank(a.0, a.1, a.2));
+        signs
+    }
+
+    #[test]
+    fn the_highest_priority_sign_comes_first() {
+        assert_eq!(
+            vec![(20, 1, 1), (10, 2, 2), (0, 3, 3)],
+            sorted(vec![(10, 2, 2), (0, 3, 3), (20, 1, 1)])
+        );
+    }
+
+    /// Equal priority: the newest mark id wins the leftmost column.
+    #[test]
+    fn the_mark_id_breaks_a_priority_tie_newest_first() {
+        assert_eq!(
+            vec![(10, 9, 1), (10, 5, 1), (10, 1, 1)],
+            sorted(vec![(10, 1, 1), (10, 9, 1), (10, 5, 1)])
+        );
+    }
+
+    /// Equal priority *and* id -- which only `nvim_buf_set_extmark` can
+    /// produce, since `:sign place` hands out distinct ids -- falls through
+    /// to the placement serial, also newest first.
+    #[test]
+    fn the_placement_serial_breaks_the_last_tie() {
+        assert_eq!(
+            vec![(10, 1, 7), (10, 1, 3)],
+            sorted(vec![(10, 1, 3), (10, 1, 7)])
+        );
+    }
+
+    /// The comparator is a total order, which is what lets `sort_signs` use
+    /// a stable sort and still be the permutation `qsort` produced.
+    #[test]
+    fn only_an_identical_triple_ties() {
+        let a = (10, 1, 1);
+        assert_eq!(
+            Ordering::Equal,
+            sign_rank(a.0, a.1, a.2).cmp(&sign_rank(a.0, a.1, a.2))
+        );
+        for b in [(11, 1, 1), (10, 2, 1), (10, 1, 2)] {
+            assert_eq!(
+                Ordering::Greater,
+                sign_rank(a.0, a.1, a.2).cmp(&sign_rank(b.0, b.1, b.2)),
+                "{a:?} must sort after {b:?}"
+            );
         }
     }
 }
