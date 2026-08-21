@@ -4,11 +4,12 @@
 //! helpers here do — but from Rust, so the whole thing runs under Miri.
 
 use std::ffi::{CStr, CString, c_void};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 use c2rust_neovim::event::multiqueue::{
-    multiqueue_empty, multiqueue_free, multiqueue_get, multiqueue_new, multiqueue_new_child,
-    multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event, multiqueue_size,
+    event_create_oneshot, multiqueue_empty, multiqueue_free, multiqueue_get,
+    multiqueue_move_events, multiqueue_new, multiqueue_new_child, multiqueue_process_events,
+    multiqueue_purge_events, multiqueue_put_event, multiqueue_replace_parent, multiqueue_size,
 };
 use c2rust_neovim::types::{Event, MultiQueue};
 
@@ -249,6 +250,102 @@ static HANDLER_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 unsafe extern "C" fn count_handler(_argv: *mut *mut c_void) {
     HANDLER_CALLS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The queue [`requeue_handler`] pushes its follow-up onto.
+static REQUEUE_TARGET: AtomicPtr<MultiQueue> = AtomicPtr::new(std::ptr::null_mut());
+
+/// Queues one more copy of itself, up to four calls in all: draining a queue
+/// has to reach what the draining itself put there.
+unsafe extern "C" fn requeue_handler(_argv: *mut *mut c_void) {
+    if HANDLER_CALLS.fetch_add(1, Ordering::Relaxed) < 3 {
+        let event = Event {
+            handler: Some(requeue_handler),
+            argv: [std::ptr::null_mut(); 10],
+        };
+        unsafe { multiqueue_put_event(REQUEUE_TARGET.load(Ordering::Relaxed), event) };
+    }
+}
+
+#[test]
+fn processing_reaches_what_the_handlers_queue() {
+    let queue = unsafe { multiqueue_new(None, std::ptr::null_mut()) };
+    REQUEUE_TARGET.store(queue, Ordering::Relaxed);
+    HANDLER_CALLS.store(0, Ordering::Relaxed);
+    let event = Event {
+        handler: Some(requeue_handler),
+        argv: [std::ptr::null_mut(); 10],
+    };
+    unsafe {
+        multiqueue_put_event(queue, event);
+        multiqueue_process_events(queue);
+        assert_eq!(HANDLER_CALLS.load(Ordering::Relaxed), 4);
+        assert!(multiqueue_empty(queue));
+        multiqueue_free(queue);
+    }
+}
+
+#[test]
+fn moving_events_preserves_their_order() {
+    let mut labels = Labels::new();
+    let from = unsafe { multiqueue_new(None, std::ptr::null_mut()) };
+    let to = unsafe { multiqueue_new(None, std::ptr::null_mut()) };
+    for label in ["a", "b", "c"] {
+        labels.put(from, label);
+    }
+    unsafe { multiqueue_move_events(to, from) };
+    assert!(unsafe { multiqueue_empty(from) });
+    assert_eq!(unsafe { multiqueue_size(from) }, 0);
+    assert_eq!(unsafe { multiqueue_size(to) }, 3);
+    for expected in ["a", "b", "c"] {
+        assert_eq!(get(to), expected);
+    }
+    unsafe {
+        multiqueue_free(from);
+        multiqueue_free(to);
+    }
+}
+
+#[test]
+fn an_empty_child_can_be_re_homed() {
+    let mut labels = Labels::new();
+    let first = unsafe { multiqueue_new(None, std::ptr::null_mut()) };
+    let second = unsafe { multiqueue_new(None, std::ptr::null_mut()) };
+    let child = unsafe { multiqueue_new_child(first) };
+    unsafe { multiqueue_replace_parent(child, second) };
+    labels.put(child, "after");
+    // The event reaches the new parent and not the old one.
+    assert!(unsafe { multiqueue_empty(first) });
+    assert_eq!(get(second), "after");
+    unsafe {
+        multiqueue_free(child);
+        multiqueue_free(first);
+        multiqueue_free(second);
+    }
+}
+
+#[test]
+fn a_oneshot_event_fires_once_however_many_queues_reach_it() {
+    let left = unsafe { multiqueue_new(None, std::ptr::null_mut()) };
+    let right = unsafe { multiqueue_new(None, std::ptr::null_mut()) };
+    let wrapped = Event {
+        handler: Some(count_handler),
+        argv: [std::ptr::null_mut(); 10],
+    };
+    let shared = event_create_oneshot(wrapped, 2);
+    HANDLER_CALLS.store(0, Ordering::Relaxed);
+    unsafe {
+        multiqueue_put_event(left, shared);
+        multiqueue_put_event(right, shared);
+        multiqueue_process_events(left);
+        assert_eq!(HANDLER_CALLS.load(Ordering::Relaxed), 1);
+        // The second queue reaches it, drops the last reference and releases
+        // the box without firing again.
+        multiqueue_process_events(right);
+        assert_eq!(HANDLER_CALLS.load(Ordering::Relaxed), 1);
+        multiqueue_free(left);
+        multiqueue_free(right);
+    }
 }
 
 #[test]
