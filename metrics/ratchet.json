@@ -2,7 +2,7 @@
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1054,
   "files_without_deny_unsafe_op": 23,
-  "files_without_deny_casts": 1077,
+  "files_without_deny_casts": 1076,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
     "crates/nvim/src/api/autocmd/create.rs": {"missing_safety_doc": 4, "unsafe_lines": 339},
@@ -84,7 +84,7 @@
     "crates/nvim/src/api/vimscript/exec.rs": {"missing_safety_doc": 3, "unsafe_lines": 63},
     "crates/nvim/src/api/vimscript/expression.rs": {"missing_safety_doc": 4, "unsafe_lines": 269},
     "crates/nvim/src/api/win_config/apply.rs": {"missing_safety_doc": 3, "unsafe_lines": 449},
-    "crates/nvim/src/api/win_config/border.rs": {"missing_safety_doc": 3, "unsafe_lines": 486},
+    "crates/nvim/src/api/win_config/border.rs": {"unsafe_lines": 121},
     "crates/nvim/src/api/win_config/get.rs": {"cell_ptr": 3, "missing_safety_doc": 2, "unsafe_lines": 216},
     "crates/nvim/src/api/win_config/open.rs": {"cell_ptr": 5, "missing_safety_doc": 4, "unsafe_lines": 378},
     "crates/nvim/src/api/win_config/parse.rs": {"missing_safety_doc": 7, "unsafe_lines": 636},

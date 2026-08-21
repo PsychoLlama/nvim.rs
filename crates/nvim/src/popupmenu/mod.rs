@@ -6,7 +6,7 @@ use crate::api::buffer::nvim_buf_set_lines;
 use crate::api::private::helpers::{
     api_clear_error, api_free_array, arena_array, cstr_as_string, cstr_to_string,
 };
-use crate::api::win_config::parse_winborder;
+use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder};
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{bt_nofile, buf_clear};
 use crate::charset::{ptr2cells, transstr, vim_strsize};
@@ -53,7 +53,7 @@ use crate::r#move::{update_topline, validate_cheight, validate_cursor, validate_
 use crate::option::set_option_value_give_err;
 use crate::options::{
     kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
-    kOptCotFlagPreview, kOptDiff, kOptSwapfile, opt_winborder_values,
+    kOptCotFlagPreview, kOptDiff, kOptSwapfile,
 };
 use crate::os::cshim::{gettext, strchr};
 use crate::plines::{plines_m_win, win_linetabsize};
@@ -200,10 +200,10 @@ unsafe fn pum_border_width() -> c_int {
     // NUL-terminated strings.
     unsafe {
         let border = p_pumborder.get();
-        if *border == 0 || strequal(border, opt_winborder_values[7].as_ptr()) {
+        if *border == 0 || strequal(border, BORDER_NONE.as_ptr()) {
             return 0;
         }
-        if strequal(border, opt_winborder_values[3].as_ptr()) {
+        if strequal(border, BORDER_SHADOW.as_ptr()) {
             1
         } else {
             2
