@@ -199,30 +199,58 @@ pub unsafe fn virtual_active(wp: *mut win_T) -> bool {
     }
     // SAFETY: the caller's window.
     let flags = unsafe { get_ve_flags(wp) };
-    // `ve=all` is the *whole* value, not one bit of it, exactly as the C
-    // spells it -- which matters because upstream's `Block` (5) and `Insert`
-    // (6) both *contain* `All` (4), so a masked test would answer differently
-    // for `ve=all,onemore`.
+    ve_flags_allow(flags, State.get(), VIsual_active.get(), VIsual_mode.get())
+}
+
+/// The `'virtualedit'` half of [`virtual_active`], as a function of the
+/// window's flags alone.
+///
+/// `ve=all` is the *whole* value, not one bit of it, exactly as the C spells
+/// it -- which matters because upstream's `Block` (5) and `Insert` (6) both
+/// *contain* `All` (4), so a masked test would answer differently for
+/// `ve=all,onemore`.
+fn ve_flags_allow(
+    flags: OptVeFlags,
+    state: ModeFlags,
+    visual_active: bool,
+    visual_mode: c_int,
+) -> bool {
     let has = |flag: OptVeFlags| flags & flag != 0;
     flags == kOptVeFlagAll
-        || has(kOptVeFlagBlock) && VIsual_active.get() && VIsual_mode.get() == Ctrl_V
-        || has(kOptVeFlagInsert) && State.get() & MODE_INSERT != 0
+        || has(kOptVeFlagBlock) && visual_active && visual_mode == Ctrl_V
+        || has(kOptVeFlagInsert) && state & MODE_INSERT != 0
 }
 
 /// `State`, with the visual and operator-pending distinctions `State` alone
 /// does not carry.
 pub fn get_real_state() -> c_int {
-    if State.get() & MODE_NORMAL != 0 {
-        if VIsual_active.get() {
-            if VIsual_select.get() {
+    real_state(
+        State.get(),
+        VIsual_active.get(),
+        VIsual_select.get(),
+        finish_op.get(),
+    )
+}
+
+/// [`get_real_state`] over a snapshot. Only normal mode is refined: the
+/// distinctions live in globals `State` has no bit for.
+fn real_state(
+    state: ModeFlags,
+    visual_active: bool,
+    visual_select: bool,
+    op_pending: bool,
+) -> c_int {
+    if state & MODE_NORMAL != 0 {
+        if visual_active {
+            if visual_select {
                 return MODE_SELECT;
             }
             return MODE_VISUAL;
-        } else if finish_op.get() {
+        } else if op_pending {
             return MODE_OP_PENDING;
         }
     }
-    State.get()
+    state
 }
 
 /// One to three mode letters, NUL-padded — upstream's `char[MODE_MAX_LENGTH]`.
@@ -260,25 +288,55 @@ fn is_restart_key(key: c_int) -> bool {
     b"IRV".map(c_int::from).contains(&key)
 }
 
-/// The current mode as `mode(1)` spells it.
+/// Everything [`mode_name`]'s decision tree reads, snapshotted from the
+/// editor's globals in one place so the tree itself touches none of them.
+#[derive(Clone, Copy)]
+struct ModeInputs {
+    /// The `State` bitmask.
+    state: ModeFlags,
+    /// The command line is prompting for a single keypress.
+    cmdline_one_key: bool,
+    /// The command line is overstriking rather than inserting.
+    cmdline_overstrike: bool,
+    /// Ex mode, i.e. `Q`.
+    exmode_active: bool,
+    /// A completion menu is up.
+    ins_compl_active: bool,
+    /// `CTRL-X` was typed and the sub-mode key has not been.
+    ctrl_x_pending: bool,
+    visual_active: bool,
+    visual_select: bool,
+    /// `v`, `V` or `CTRL-V`.
+    visual_mode: c_int,
+    /// Select mode resumes once the current operator finishes.
+    restart_visual_select: bool,
+    /// The current buffer is a terminal buffer.
+    terminal_buffer: bool,
+    /// An operator is waiting for its motion.
+    finish_op: bool,
+    /// The `v`/`V`/`CTRL-V` that forced the pending operator's motion kind.
+    motion_force: c_int,
+    /// The `:startinsert`-family letter insert mode will resume with, or 0.
+    restart_edit: c_int,
+}
+
+/// The mode `m` describes, as `mode(1)` spells it.
 ///
 /// Upstream fills a caller-provided `char[MODE_MAX_LENGTH]`; answering the
 /// array is the same thing without the raw pointer, and the NUL padding it
 /// carries makes it a C string wherever one is still wanted.
-///
-/// # Safety
-/// The editor must be initialized: this reads the command line's state and
-/// the current buffer.
-pub unsafe fn get_mode() -> ModeName {
-    let state = State.get();
+fn mode_name(m: &ModeInputs) -> ModeName {
+    let state = m.state;
     let mut out = ModeWriter {
         name: [0; 4],
         len: 0,
     };
-    // SAFETY: the editor is initialized, so the command-line state is live.
-    let one_key = state & MODE_CMDLINE != 0 && unsafe { (*get_cmdline_info()).one_key };
 
-    if state == MODE_HITRETURN || state == MODE_ASKMORE || state == MODE_SETWSIZE || one_key {
+    if state == MODE_HITRETURN
+        || state == MODE_ASKMORE
+        || state == MODE_SETWSIZE
+        || m.cmdline_one_key
+    {
         out.push(b'r');
         if state == MODE_ASKMORE {
             out.push(b'm');
@@ -296,48 +354,89 @@ pub unsafe fn get_mode() -> ModeName {
         } else {
             out.push(b'i');
         }
-        if ins_compl_active() {
+        if m.ins_compl_active {
             out.push(b'c');
-        } else if ctrl_x_mode_not_defined_yet() {
+        } else if m.ctrl_x_pending {
             out.push(b'x');
         }
-    } else if state & MODE_CMDLINE != 0 || exmode_active.get() {
+    } else if state & MODE_CMDLINE != 0 || m.exmode_active {
         out.push(b'c');
-        if exmode_active.get() {
+        if m.exmode_active {
             out.push(b'v');
         }
-        if state & MODE_CMDLINE != 0 && cmdline_overstrike() {
+        if state & MODE_CMDLINE != 0 && m.cmdline_overstrike {
             out.push(b'r');
         }
     } else if state & MODE_TERMINAL != 0 {
         out.push(b't');
-    } else if VIsual_active.get() {
-        if VIsual_select.get() {
+    } else if m.visual_active {
+        if m.visual_select {
             // `v`/`V`/`CTRL-V` shifted into the select-mode letters.
-            out.push_key(VIsual_mode.get() + c_int::from(b's') - c_int::from(b'v'));
+            out.push_key(m.visual_mode + c_int::from(b's') - c_int::from(b'v'));
         } else {
-            out.push_key(VIsual_mode.get());
-            if restart_VIsual_select.get() != 0 {
+            out.push_key(m.visual_mode);
+            if m.restart_visual_select {
                 out.push(b's');
             }
         }
     } else {
         out.push(b'n');
-        if finish_op.get() {
+        if m.finish_op {
             out.push(b'o');
-            out.push_key(motion_force.get());
-        // SAFETY: the editor is initialized, so `curbuf` is live.
-        } else if !unsafe { (*curbuf.get()).terminal }.is_null() {
+            out.push_key(m.motion_force);
+        } else if m.terminal_buffer {
             out.push(b't');
-            if restart_edit.get() == c_int::from(b'I') {
+            if m.restart_edit == c_int::from(b'I') {
                 out.push(b'T');
             }
-        } else if is_restart_key(restart_edit.get()) {
+        } else if is_restart_key(m.restart_edit) {
             out.push(b'i');
-            out.push_key(restart_edit.get());
+            out.push_key(m.restart_edit);
         }
     }
     out.name
+}
+
+/// The current mode as `mode(1)` spells it.
+///
+/// # Safety
+/// The editor must be initialized: this reads the command line's state and
+/// the current buffer.
+pub unsafe fn get_mode() -> ModeName {
+    let state = State.get();
+    let in_cmdline = state & MODE_CMDLINE != 0;
+    mode_name(&ModeInputs {
+        state,
+        // SAFETY: the editor is initialized, so the command-line state is live.
+        cmdline_one_key: in_cmdline && unsafe { (*get_cmdline_info()).one_key },
+        cmdline_overstrike: in_cmdline && cmdline_overstrike(),
+        exmode_active: exmode_active.get(),
+        ins_compl_active: ins_compl_active(),
+        ctrl_x_pending: ctrl_x_mode_not_defined_yet(),
+        visual_active: VIsual_active.get(),
+        visual_select: VIsual_select.get(),
+        visual_mode: VIsual_mode.get(),
+        restart_visual_select: restart_VIsual_select.get() != 0,
+        // SAFETY: the editor is initialized, so `curbuf` is live.
+        terminal_buffer: !unsafe { (*curbuf.get()).terminal }.is_null(),
+        finish_op: finish_op.get(),
+        motion_force: motion_force.get(),
+        restart_edit: restart_edit.get(),
+    })
+}
+
+/// The `ModeChanged` autocommand pattern: `old:new`, NUL-padded.
+///
+/// Both halves are at most three letters, so the eight bytes upstream sizes
+/// this at are exactly enough and it never truncates.
+fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [c_char; 2 * size_of::<ModeName>()] {
+    let mut pattern = [0 as c_char; 2 * size_of::<ModeName>()];
+    let colon = [b':'.cast_signed()];
+    let joined = letters(old).iter().chain(&colon).chain(letters(new));
+    for (slot, &letter) in pattern.iter_mut().zip(joined) {
+        *slot = letter;
+    }
+    pattern
 }
 
 /// Fire `ModeChanged` if the mode string has changed since the last time
@@ -357,17 +456,7 @@ pub unsafe fn may_trigger_modechanged() {
         return;
     }
 
-    // `old:new`. Both halves are at most three letters, so the eight bytes
-    // upstream sizes this at are exactly enough and it never truncates.
-    let mut pattern = [0 as c_char; 2 * size_of::<ModeName>()];
-    let colon = [b':'.cast_signed()];
-    let joined = letters(&old_mode)
-        .iter()
-        .chain(&colon)
-        .chain(letters(&curr_mode));
-    for (slot, &letter) in pattern.iter_mut().zip(joined) {
-        *slot = letter;
-    }
+    let mut pattern = modechanged_pattern(&old_mode, &curr_mode);
 
     let mut save_v_event = save_v_event_T {
         sve_did_save: false,
@@ -486,4 +575,401 @@ pub unsafe fn state_no_longer_safe(reason: *const c_char) {
 /// Whether `SafeState` currently stands. Read by `state()`.
 pub fn get_was_safe_state() -> bool {
     was_safe.get()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::options::kOptVeFlagOnemore;
+
+    /// A [`ModeName`] from its letters, NUL-padded as the writer leaves it.
+    fn name(letters: &str) -> ModeName {
+        let mut out = [0 as c_char; 4];
+        for (slot, byte) in out.iter_mut().zip(letters.bytes()) {
+            *slot = byte.cast_signed();
+        }
+        out
+    }
+
+    /// The letters of a mode name, as text.
+    fn text(mode: &ModeName) -> String {
+        letters(mode)
+            .iter()
+            .map(|&c| char::from(c.cast_unsigned()))
+            .collect()
+    }
+
+    /// A quiescent editor in `state`: nothing pending anywhere.
+    fn quiet(state: ModeFlags) -> ModeInputs {
+        ModeInputs {
+            state,
+            cmdline_one_key: false,
+            cmdline_overstrike: false,
+            exmode_active: false,
+            ins_compl_active: false,
+            ctrl_x_pending: false,
+            visual_active: false,
+            visual_select: false,
+            visual_mode: 0,
+            restart_visual_select: false,
+            terminal_buffer: false,
+            finish_op: false,
+            motion_force: 0,
+            restart_edit: 0,
+        }
+    }
+
+    /// The name stops at the first NUL, and a name that fills the array has
+    /// no NUL to stop at.
+    #[test]
+    fn letters_stop_at_the_padding() {
+        assert_eq!(letters(&name("")), &[] as &[c_char]);
+        assert_eq!(text(&name("no")), "no");
+        assert_eq!(text(&[b'n'.cast_signed(); 4]), "nnnn");
+    }
+
+    /// `push_key` takes the low byte of a key, which is all a mode letter
+    /// ever is.
+    #[test]
+    fn a_pushed_key_is_its_low_byte() {
+        let mut out = ModeWriter {
+            name: [0; 4],
+            len: 0,
+        };
+        out.push(b'n');
+        out.push_key(c_int::from(b'o'));
+        // `CTRL-V` is 22, and `motion_force` may hold it.
+        out.push_key(Ctrl_V);
+        assert_eq!(out.name, [110, 111, 22, 0]);
+    }
+
+    /// Only the three `:startinsert`-family letters resume insert mode; the
+    /// idle value 0 must not.
+    #[test]
+    fn only_irv_restart_insert_mode() {
+        for key in *b"IRV" {
+            assert!(is_restart_key(c_int::from(key)));
+        }
+        for key in [0, c_int::from(b'i'), c_int::from(b'n'), c_int::from(b'T')] {
+            assert!(!is_restart_key(key));
+        }
+    }
+
+    /// Normal mode is the only one the visual/operator distinctions refine;
+    /// every other `State` is answered unchanged.
+    #[test]
+    fn real_state_refines_normal_mode_only() {
+        assert_eq!(real_state(MODE_NORMAL, false, false, false), MODE_NORMAL);
+        assert_eq!(real_state(MODE_NORMAL, true, false, false), MODE_VISUAL);
+        assert_eq!(real_state(MODE_NORMAL, true, true, false), MODE_SELECT);
+        assert_eq!(real_state(MODE_NORMAL, false, false, true), MODE_OP_PENDING);
+        // Visual wins over a pending operator, as the nesting says.
+        assert_eq!(real_state(MODE_NORMAL, true, false, true), MODE_VISUAL);
+        for state in [MODE_INSERT, MODE_CMDLINE, MODE_TERMINAL, MODE_REPLACE] {
+            assert_eq!(real_state(state, true, true, true), state);
+        }
+        // `MODE_NORMAL_BUSY` carries `MODE_NORMAL`'s bit, so it refines too.
+        assert_eq!(
+            real_state(MODE_NORMAL_BUSY, true, false, false),
+            MODE_VISUAL
+        );
+    }
+
+    /// The first arm is `==`, not a mask test, because upstream's flag
+    /// values are not disjoint bits: `Block` (5) and `Insert` (6) both
+    /// *contain* `All` (4). `ve=all,onemore` is the value that tells the two
+    /// spellings apart -- it is not `All`, so nothing but block-visual or
+    /// insert mode may make it true.
+    #[test]
+    fn ve_all_is_the_whole_value() {
+        let all_onemore = kOptVeFlagAll | kOptVeFlagOnemore;
+        assert!(ve_flags_allow(kOptVeFlagAll, MODE_NORMAL, false, 0));
+        assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, false, 0));
+        assert!(!ve_flags_allow(all_onemore, MODE_NORMAL, true, Ctrl_V - 1));
+        assert!(ve_flags_allow(all_onemore, MODE_NORMAL, true, Ctrl_V));
+        assert!(ve_flags_allow(all_onemore, MODE_INSERT, false, 0));
+        // `onemore` alone shares no bit with any of the three.
+        assert!(!ve_flags_allow(
+            kOptVeFlagOnemore,
+            MODE_INSERT,
+            true,
+            Ctrl_V
+        ));
+    }
+
+    /// `ve=block` only counts in block-visual, `ve=insert` only in insert.
+    #[test]
+    fn ve_block_and_insert_need_their_mode() {
+        assert!(!ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, false, 0));
+        assert!(!ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, true, 0));
+        assert!(ve_flags_allow(kOptVeFlagBlock, MODE_NORMAL, true, Ctrl_V));
+        assert!(!ve_flags_allow(kOptVeFlagInsert, MODE_NORMAL, false, 0));
+        assert!(ve_flags_allow(kOptVeFlagInsert, MODE_INSERT, false, 0));
+    }
+
+    /// The prompting modes, which are whole `State` values rather than
+    /// bits -- and `r?` is the command line asking for one key.
+    #[test]
+    fn the_prompt_modes_answer_r() {
+        assert_eq!(text(&mode_name(&quiet(MODE_HITRETURN))), "r");
+        assert_eq!(text(&mode_name(&quiet(MODE_ASKMORE))), "rm");
+        assert_eq!(text(&mode_name(&quiet(MODE_SETWSIZE))), "r");
+        assert_eq!(text(&mode_name(&quiet(MODE_EXTERNCMD))), "!");
+        let one_key = ModeInputs {
+            cmdline_one_key: true,
+            ..quiet(MODE_CMDLINE)
+        };
+        assert_eq!(text(&mode_name(&one_key)), "r?");
+    }
+
+    /// Insert, replace and virtual replace, each with the completion
+    /// suffixes that can follow.
+    #[test]
+    fn the_insert_family_and_its_suffixes() {
+        assert_eq!(text(&mode_name(&quiet(MODE_INSERT))), "i");
+        assert_eq!(text(&mode_name(&quiet(MODE_REPLACE))), "R");
+        assert_eq!(text(&mode_name(&quiet(MODE_VREPLACE))), "Rv");
+        for (state, expected) in [
+            (MODE_INSERT, ("ic", "ix")),
+            (MODE_REPLACE, ("Rc", "Rx")),
+            (MODE_VREPLACE, ("Rvc", "Rvx")),
+        ] {
+            let completing = ModeInputs {
+                ins_compl_active: true,
+                ctrl_x_pending: true,
+                ..quiet(state)
+            };
+            assert_eq!(text(&mode_name(&completing)), expected.0);
+            let ctrl_x = ModeInputs {
+                ctrl_x_pending: true,
+                ..quiet(state)
+            };
+            assert_eq!(text(&mode_name(&ctrl_x)), expected.1);
+        }
+    }
+
+    /// The command line, Ex mode, and the two together.
+    #[test]
+    fn the_cmdline_family() {
+        assert_eq!(text(&mode_name(&quiet(MODE_CMDLINE))), "c");
+        let overstrike = ModeInputs {
+            cmdline_overstrike: true,
+            ..quiet(MODE_CMDLINE)
+        };
+        assert_eq!(text(&mode_name(&overstrike)), "cr");
+        let ex = ModeInputs {
+            exmode_active: true,
+            ..quiet(MODE_NORMAL)
+        };
+        assert_eq!(text(&mode_name(&ex)), "cv");
+        // Overstrike is a command-line property: Ex mode alone cannot show
+        // it, because there is no command line to overstrike.
+        let ex_overstrike = ModeInputs {
+            exmode_active: true,
+            cmdline_overstrike: true,
+            ..quiet(MODE_NORMAL)
+        };
+        assert_eq!(text(&mode_name(&ex_overstrike)), "cv");
+        let both = ModeInputs {
+            exmode_active: true,
+            cmdline_overstrike: true,
+            ..quiet(MODE_CMDLINE)
+        };
+        assert_eq!(text(&mode_name(&both)), "cvr");
+    }
+
+    /// Visual mode is named by its own key; select mode shifts that key by
+    /// `s - v`, which is what turns `v`/`V`/`CTRL-V` into `s`/`S`/`CTRL-S`.
+    #[test]
+    fn visual_and_select_are_named_by_their_key() {
+        for key in *b"vV" {
+            let visual = ModeInputs {
+                visual_active: true,
+                visual_mode: c_int::from(key),
+                ..quiet(MODE_NORMAL)
+            };
+            assert_eq!(mode_name(&visual), name(&String::from(char::from(key))));
+            let select = ModeInputs {
+                visual_select: true,
+                ..visual
+            };
+            let shifted = c_int::from(key) - c_int::from(b'v') + c_int::from(b's');
+            assert_eq!(c_int::from(select_letter(&select)), shifted);
+        }
+        // `CTRL-V` (22) becomes `CTRL-S` (19), neither of them printable.
+        let blockwise = ModeInputs {
+            visual_active: true,
+            visual_select: true,
+            visual_mode: Ctrl_V,
+            ..quiet(MODE_NORMAL)
+        };
+        assert_eq!(mode_name(&blockwise), [19, 0, 0, 0]);
+    }
+
+    /// The single letter a select-mode name is.
+    fn select_letter(inputs: &ModeInputs) -> u8 {
+        let mode = mode_name(inputs);
+        assert_eq!(letters(&mode).len(), 1);
+        mode[0].cast_unsigned()
+    }
+
+    /// A visual mode the operator will return to appends `s`; select mode
+    /// never does, because it is already there.
+    #[test]
+    fn a_resuming_select_mode_appends_s() {
+        let resuming = ModeInputs {
+            visual_active: true,
+            visual_mode: c_int::from(b'V'),
+            restart_visual_select: true,
+            ..quiet(MODE_NORMAL)
+        };
+        assert_eq!(text(&mode_name(&resuming)), "Vs");
+        let already = ModeInputs {
+            visual_select: true,
+            ..resuming
+        };
+        assert_eq!(text(&mode_name(&already)), "S");
+    }
+
+    /// Normal mode's four shapes: plain, operator-pending with its forced
+    /// motion, a terminal buffer, and insert resuming after a `CTRL-O`.
+    #[test]
+    fn normal_mode_and_what_hangs_off_it() {
+        assert_eq!(text(&mode_name(&quiet(MODE_NORMAL))), "n");
+        let pending = ModeInputs {
+            finish_op: true,
+            motion_force: c_int::from(b'v'),
+            ..quiet(MODE_NORMAL)
+        };
+        assert_eq!(text(&mode_name(&pending)), "nov");
+        // An unforced motion pads with the NUL `motion_force` holds, so the
+        // name is the two letters `no`.
+        let unforced = ModeInputs {
+            motion_force: 0,
+            ..pending
+        };
+        assert_eq!(text(&mode_name(&unforced)), "no");
+        assert_eq!(mode_name(&unforced), name("no"));
+
+        let terminal = ModeInputs {
+            terminal_buffer: true,
+            ..quiet(MODE_NORMAL)
+        };
+        assert_eq!(text(&mode_name(&terminal)), "nt");
+        let terminal_insert = ModeInputs {
+            restart_edit: c_int::from(b'I'),
+            ..terminal
+        };
+        assert_eq!(text(&mode_name(&terminal_insert)), "ntT");
+
+        for key in *b"IRV" {
+            let restarting = ModeInputs {
+                restart_edit: c_int::from(key),
+                ..quiet(MODE_NORMAL)
+            };
+            // `CTRL-O`'s mode: normal mode, inside the insert it resumes.
+            let expected = format!("ni{}", char::from(key));
+            assert_eq!(text(&mode_name(&restarting)), expected);
+        }
+        // Anything else in `restart_edit` is not a restart at all.
+        let idle = ModeInputs {
+            restart_edit: c_int::from(b'i'),
+            ..quiet(MODE_NORMAL)
+        };
+        assert_eq!(text(&mode_name(&idle)), "n");
+    }
+
+    /// A terminal buffer in normal mode is `nt`; `MODE_TERMINAL` -- the
+    /// terminal's *own* mode -- is `t`, and it is checked first.
+    #[test]
+    fn terminal_mode_outranks_a_terminal_buffer() {
+        let inputs = ModeInputs {
+            terminal_buffer: true,
+            visual_active: true,
+            ..quiet(MODE_TERMINAL)
+        };
+        assert_eq!(text(&mode_name(&inputs)), "t");
+    }
+
+    /// No mode name is longer than three letters, so none of them overruns
+    /// the array `get_mode` answers -- upstream's `MODE_MAX_LENGTH`.
+    #[test]
+    fn no_name_fills_the_array() {
+        let states = [
+            MODE_NORMAL,
+            MODE_VISUAL,
+            MODE_INSERT,
+            MODE_REPLACE,
+            MODE_VREPLACE,
+            MODE_CMDLINE,
+            MODE_TERMINAL,
+            MODE_HITRETURN,
+            MODE_ASKMORE,
+            MODE_SETWSIZE,
+            MODE_EXTERNCMD,
+            MODE_NORMAL_BUSY,
+            MODE_SHOWMATCH,
+            MODE_OP_PENDING,
+            MODE_SELECT,
+            MODE_LREPLACE,
+        ];
+        let flags = [false, true];
+        let mut longest = 0;
+        for state in states {
+            for one_key in flags {
+                for compl in flags {
+                    for visual in flags {
+                        for finish in flags {
+                            let inputs = ModeInputs {
+                                cmdline_one_key: one_key,
+                                cmdline_overstrike: true,
+                                exmode_active: one_key,
+                                ins_compl_active: compl,
+                                ctrl_x_pending: true,
+                                visual_active: visual,
+                                visual_select: compl,
+                                visual_mode: c_int::from(b'V'),
+                                restart_visual_select: true,
+                                terminal_buffer: finish,
+                                finish_op: finish,
+                                motion_force: c_int::from(b'V'),
+                                restart_edit: c_int::from(b'I'),
+                                ..quiet(state)
+                            };
+                            let mode = mode_name(&inputs);
+                            longest = longest.max(letters(&mode).len());
+                            assert_eq!(mode[3], 0, "{mode:?} left no room for the NUL");
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(longest, 3);
+    }
+
+    /// `old:new`, and the longest pair still fits the eight bytes upstream
+    /// sizes the pattern at.
+    #[test]
+    fn the_modechanged_pattern_joins_with_a_colon() {
+        assert_eq!(modechanged_pattern(&name("n"), &name("i")), name2("n:i"));
+        assert_eq!(
+            modechanged_pattern(&name("no"), &name("Rvc")),
+            name2("no:Rvc")
+        );
+        // Three letters each side is 3 + 1 + 3 = 7 of the 8 bytes.
+        let full = modechanged_pattern(&name("Rvc"), &name("ntT"));
+        assert_eq!(full, name2("Rvc:ntT"));
+        assert_eq!(full[7], 0);
+        // An empty old mode is what the very first `ModeChanged` sees.
+        assert_eq!(modechanged_pattern(&name(""), &name("n")), name2(":n"));
+    }
+
+    /// A pattern from its letters, NUL-padded.
+    fn name2(letters: &str) -> [c_char; 2 * size_of::<ModeName>()] {
+        let mut out = [0 as c_char; 2 * size_of::<ModeName>()];
+        for (slot, byte) in out.iter_mut().zip(letters.bytes()) {
+            *slot = byte.cast_signed();
+        }
+        out
+    }
 }
