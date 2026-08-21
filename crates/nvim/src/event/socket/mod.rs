@@ -38,8 +38,9 @@ use crate::event::libuv::{
 };
 use crate::event::r#loop::{one_arg_event, process_events_until};
 use crate::event::multiqueue::multiqueue_put_event;
+use crate::event::rstream::Reader;
 use crate::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
-use crate::event::stream::{stream_init, stream_may_close};
+use crate::event::stream::{may_close, stream_init, stream_may_close};
 use crate::event::{pack_int, unpack_int};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::main::main_loop;
@@ -452,10 +453,12 @@ unsafe fn socket_alive(uv_loop: *mut Loop, addr: *const c_char) -> bool {
 pub unsafe fn socket_watcher_accept(watcher: *mut SocketWatcher, stream: *mut RStream) -> c_int {
     // SAFETY: the caller's promise.
     let watcher = unsafe { Watcher::new(watcher) };
+    // SAFETY: as above.
+    let conn = unsafe { Reader::new(stream) }.conn();
     let client: *mut uv_stream_t = if watcher.is_tcp() {
         // SAFETY: the caller's stream, on the watcher handle's own loop.
         unsafe {
-            let client: *mut uv_tcp_t = &raw mut (*stream).s.uv.tcp;
+            let client = conn.tcp();
             uv_tcp_init((*watcher.tcp()).loop_0, client);
             uv_tcp_nodelay(client, 1);
             client.cast()
@@ -463,7 +466,7 @@ pub unsafe fn socket_watcher_accept(watcher: *mut SocketWatcher, stream: *mut RS
     } else {
         // SAFETY: as above.
         unsafe {
-            let client: *mut uv_pipe_t = &raw mut (*stream).s.uv.pipe;
+            let client = conn.pipe();
             uv_pipe_init((*watcher.pipe()).loop_0, client, 0);
             client.cast()
         }
@@ -477,7 +480,7 @@ pub unsafe fn socket_watcher_accept(watcher: *mut SocketWatcher, stream: *mut RS
         return result;
     }
     // SAFETY: the caller's stream, now holding the accepted connection.
-    unsafe { stream_init(ptr::null_mut(), &raw mut (*stream).s, -1, client) };
+    unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, client) };
     0
 }
 
@@ -516,6 +519,8 @@ pub unsafe fn socket_connect(
     timeout: c_int,
     error: *mut *const c_char,
 ) -> bool {
+    // SAFETY: the caller's stream, live until this returns.
+    let mut conn = unsafe { Reader::new(stream) }.conn();
     // SAFETY: `uv_getaddrinfo_t` is inhabited by the all-zero bit pattern.
     let mut addr_req: uv_getaddrinfo_t = unsafe { mem::zeroed() };
     let mut addr: *mut c_char = ptr::null_mut();
@@ -571,7 +576,7 @@ pub unsafe fn socket_connect(
                 // SAFETY: the caller's stream and loop, and one candidate
                 // from the lookup above.
                 unsafe {
-                    let tcp: *mut uv_tcp_t = &raw mut (*stream).s.uv.tcp;
+                    let tcp = conn.tcp();
                     uv_tcp_init(uv_of(uv_loop), tcp);
                     uv_tcp_nodelay(tcp, 1);
                     uv_tcp_connect(&raw mut req, tcp, (*candidate).ai_addr, Some(connect_cb));
@@ -580,18 +585,16 @@ pub unsafe fn socket_connect(
             } else {
                 // SAFETY: the caller's stream, loop and address.
                 unsafe {
-                    let pipe: *mut uv_pipe_t = &raw mut (*stream).s.uv.pipe;
+                    let pipe = conn.pipe();
                     uv_pipe_init(uv_of(uv_loop), pipe, 0);
                     uv_pipe_connect(&raw mut req, pipe, address, Some(connect_cb));
                     pipe.cast()
                 }
             };
             // SAFETY: the caller's stream, now holding the connect attempt.
-            unsafe {
-                stream_init(ptr::null_mut(), &raw mut (*stream).s, -1, uv_stream);
-                (*stream).s.internal_close_cb = Some(connect_close_cb);
-                (*stream).s.internal_data = (&raw mut closed).cast();
-            }
+            unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, uv_stream) };
+            conn.internal_close_cb = Some(connect_close_cb);
+            conn.internal_data = (&raw mut closed).cast();
             closed = false;
             status = 1;
 
@@ -603,8 +606,7 @@ pub unsafe fn socket_connect(
                 break 'settled;
             }
 
-            // SAFETY: the caller's stream.
-            unsafe { stream_may_close(&raw mut (*stream).s) };
+            may_close(conn);
             // Wait for the close callback before retrying or returning:
             // `stream` may be on the caller's stack.
             // SAFETY: the main loop is live for as long as the editor is.
@@ -622,10 +624,10 @@ pub unsafe fn socket_connect(
         }
     }
 
-    // SAFETY: the caller's stream, and the two allocations made above.
+    conn.internal_close_cb = None;
+    conn.internal_data = ptr::null_mut();
+    // SAFETY: the two allocations made above.
     unsafe {
-        (*stream).s.internal_close_cb = None;
-        (*stream).s.internal_data = ptr::null_mut();
         xfree(addr.cast());
         uv_freeaddrinfo(addr_req.addrinfo);
     }

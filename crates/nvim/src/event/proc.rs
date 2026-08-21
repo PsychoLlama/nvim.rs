@@ -28,8 +28,8 @@
 //! That is what [`Child`] is for: a child is always reached through a raw
 //! pointer that outlives any borrow of it, so the pointer is wrapped once —
 //! paying the `unsafe` at construction — and every field access below is
-//! ordinary Rust. [`Output`] is the same wrapper for one of the child's two
-//! output streams.
+//! ordinary Rust. `rstream`'s [`Reader`] is the same wrapper for one of the
+//! child's two output streams.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -48,7 +48,7 @@ use crate::event::r#loop::{
     loop_children, loop_poll_events, one_arg_event, process_events, process_events_until,
 };
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, multiqueue_put_event};
-use crate::event::rstream::rstream_may_close;
+use crate::event::rstream::{Reader, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
 use crate::event::{pack_int, unpack_int};
 use crate::global_cell::GlobalCell;
@@ -65,8 +65,7 @@ use crate::os::shell::shell_free_argv;
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::os::time::os_hrtime;
 use crate::types::{
-    LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, RStream, Stream, uv_handle_t, uv_loop_t,
-    uv_timer_t,
+    LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, Stream, uv_loop_t, uv_timer_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -166,15 +165,16 @@ impl Child {
     }
 
     /// The child's standard output.
-    fn stdout(self) -> Output {
-        // SAFETY: a field of the live child.
-        Output(unsafe { &raw mut (*self.0).out })
+    fn stdout(self) -> Reader {
+        // SAFETY: a field of the live child, so it inherits this handle's
+        // promise.
+        unsafe { Reader::new(&raw mut (*self.0).out) }
     }
 
     /// The child's standard error.
-    fn stderr(self) -> Output {
-        // SAFETY: a field of the live child.
-        Output(unsafe { &raw mut (*self.0).err })
+    fn stderr(self) -> Reader {
+        // SAFETY: as above.
+        unsafe { Reader::new(&raw mut (*self.0).err) }
     }
 }
 
@@ -191,34 +191,6 @@ impl DerefMut for Child {
     fn deref_mut(&mut self) -> &mut Proc {
         // SAFETY: the promise made at construction.
         unsafe { &mut *self.0 }
-    }
-}
-
-/// One of a child's two output streams. Only ever built from [`Child`], so
-/// it inherits that handle's promise.
-#[derive(Copy, Clone)]
-struct Output(*mut RStream);
-
-impl Output {
-    /// The pointer back, for the stream layer, which still wants one.
-    fn as_ptr(self) -> *mut RStream {
-        self.0
-    }
-
-    /// The stream's libuv handle. Every arm of the `uv` union shares an
-    /// address, so the pipe/tcp/idle distinction does not matter here.
-    fn uv_handle(self) -> *mut uv_handle_t {
-        // SAFETY: a field of the live stream.
-        unsafe { (&raw mut (*self.0).s.uv).cast() }
-    }
-}
-
-impl Deref for Output {
-    type Target = RStream;
-
-    fn deref(&self) -> &RStream {
-        // SAFETY: the promise inherited from the `Child` that built it.
-        unsafe { &*self.0 }
     }
 }
 
@@ -697,7 +669,7 @@ fn proc_close(mut child: Child) {
 /// grandchild that inherited it — cannot block teardown forever. The bound is
 /// the system receive buffer size on top of what has already been read, which
 /// is the most a terminated process can still have queued.
-fn flush_stream(child: Child, stream: Output) {
+fn flush_stream(child: Child, stream: Reader) {
     if stream.s.closed {
         return;
     }
@@ -713,7 +685,7 @@ fn flush_stream(child: Child, stream: Output) {
         let mut system_buffer_size: c_int = 0;
         let size = &raw mut system_buffer_size;
         // SAFETY: the stream's own libuv handle.
-        let err = unsafe { uv_recv_buffer_size(stream.uv_handle(), size) };
+        let err = unsafe { uv_recv_buffer_size(stream.conn().uv_handle(), size) };
         let read_ahead = match err {
             // libuv reports a byte count, never a negative one.
             0 => usize::try_from(system_buffer_size).unwrap_or(FALLBACK_READ_AHEAD),
