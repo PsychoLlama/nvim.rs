@@ -1,8 +1,8 @@
 {
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1057,
-  "files_without_deny_unsafe_op": 23,
-  "files_without_deny_casts": 1072,
+  "files_without_deny_unsafe_op": 21,
+  "files_without_deny_casts": 1070,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
     "crates/nvim/src/api/autocmd/create.rs": {"missing_safety_doc": 4, "unsafe_lines": 339},
@@ -426,7 +426,7 @@
     "crates/nvim/src/fold/session.rs": {"unsafe_lines": 47},
     "crates/nvim/src/fold/text.rs": {"unsafe_lines": 168},
     "crates/nvim/src/fuzzy.rs": {"missing_safety_doc": 4, "unsafe_lines": 376},
-    "crates/nvim/src/garray.rs": {"extern_abi": 2, "missing_safety_doc": 11, "no_mangle": 2, "unsafe_lines": 139},
+    "crates/nvim/src/garray.rs": {"extern_abi": 2, "no_mangle": 2, "unsafe_lines": 58},
     "crates/nvim/src/getchar/buffers.rs": {"cell_ptr": 16, "unsafe_lines": 226},
     "crates/nvim/src/getchar/cmdkey.rs": {"unsafe_lines": 106},
     "crates/nvim/src/getchar/funcs.rs": {"cell_ptr": 5, "unsafe_lines": 157},
@@ -443,7 +443,7 @@
     "crates/nvim/src/grid/line.rs": {"cell_ptr": 12, "unsafe_lines": 495},
     "crates/nvim/src/grid/mod.rs": {"cell_ptr": 1, "unsafe_lines": 298},
     "crates/nvim/src/grid/schar.rs": {"cell_ptr": 9, "extern_abi": 2, "no_mangle": 2, "unsafe_lines": 151},
-    "crates/nvim/src/hashtab.rs": {"extern_abi": 1, "missing_safety_doc": 14, "no_mangle": 1, "unsafe_lines": 162},
+    "crates/nvim/src/hashtab.rs": {"extern_abi": 1, "no_mangle": 1, "unsafe_lines": 68},
     "crates/nvim/src/help/mod.rs": {"cell_ptr": 1, "extern_abi": 1, "unsafe_lines": 341},
     "crates/nvim/src/help/tags.rs": {"cell_ptr": 4, "unsafe_lines": 274},
     "crates/nvim/src/highlight/blend.rs": {"cell_ptr": 2, "unsafe_lines": 44},

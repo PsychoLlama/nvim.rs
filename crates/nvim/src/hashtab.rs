@@ -6,6 +6,24 @@
 //! implementation exactly. Keys are borrowed C strings owned by the callers;
 //! the table compares them and frees them only on the caller's behalf
 //! (`hash_clear_all`). Allocation stays on the `xmalloc` family.
+//!
+//! # Boundary
+//!
+//! Every entry point takes a raw `hashtab_T` pointer because its callers
+//! hold one -- a field of `buf_T`, of a `dict_T`, a `static`. Each turns it
+//! into a reference once, at the top; what it may *not* do is hand out a
+//! reference, because `hash_lookup` and friends answer a `*mut hashitem_T`
+//! that callers hold across further table mutations. That contract is the
+//! reason `ht_locked` exists.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::siemsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -33,7 +51,7 @@ const EMPTY_ITEM: hashitem_T = hashitem_T {
 pub static hash_removed: c_char = 0;
 
 fn removed_sentinel() -> *mut c_char {
-    &hash_removed as *const c_char as *mut c_char
+    (&raw const hash_removed).cast_mut()
 }
 
 impl hashitem_T {
@@ -107,8 +125,13 @@ fn hash_bytes(key: &[u8]) -> hash_T {
     if first == 0 {
         return 0;
     }
-    rest.iter().fold(first as hash_T, |hash, &b| {
-        hash.wrapping_mul(101).wrapping_add(b as hash_T)
+    fold(first, rest)
+}
+
+/// The fold itself: `hash * 101 + byte`, seeded with `first`.
+fn fold(first: u8, rest: &[u8]) -> hash_T {
+    rest.iter().fold(hash_T::from(first), |hash, &b| {
+        hash.wrapping_mul(101).wrapping_add(hash_T::from(b))
     })
 }
 
@@ -117,9 +140,7 @@ fn hash_bytes(key: &[u8]) -> hash_T {
 /// 0 instead of ending it.
 fn hash_bytes_len(key: &[u8]) -> hash_T {
     match key.split_first() {
-        Some((&first, rest)) => rest.iter().fold(first as hash_T, |hash, &b| {
-            hash.wrapping_mul(101).wrapping_add(b as hash_T)
-        }),
+        Some((&first, rest)) => fold(first, rest),
         None => 0,
     }
 }
@@ -186,199 +207,318 @@ fn rehash_into(old: &[hashitem_T], new: &mut [hashitem_T], used: usize) {
     }
 }
 
-pub unsafe fn hash_init(ht: *mut hashtab_T) {
-    *ht = hashtab_T {
-        ht_mask: (HT_INIT_SIZE - 1) as hash_T,
-        ht_used: 0,
-        ht_filled: 0,
-        ht_changed: 0,
-        ht_locked: 0,
-        ht_array: ptr::null_mut(),
-        ht_smallarray: [EMPTY_ITEM; HT_INIT_SIZE],
-    };
-    (*ht).ht_array = (&raw mut (*ht).ht_smallarray) as *mut hashitem_T;
+/// The table's inline array, as an item pointer: the value `ht_array` holds
+/// while the table is small.
+///
+/// Derived from the raw pointer, never from a reference to the table: the
+/// result is written through for as long as the table stays small, and a
+/// pointer that borrowed the struct would not survive the next field write.
+///
+/// # Safety
+///
+/// `ht` points to a live (or at least allocated) `hashtab_T`.
+unsafe fn small_array(ht: *mut hashtab_T) -> *mut hashitem_T {
+    // SAFETY: the caller's promise; taking a field's address reads nothing.
+    unsafe { &raw mut (*ht).ht_smallarray }.cast::<hashitem_T>()
 }
 
+/// Set up an empty table, its array pointing at its own inline storage.
+///
+/// # Safety
+///
+/// `ht` points to writable, possibly uninitialized `hashtab_T` storage.
+pub unsafe fn hash_init(ht: *mut hashtab_T) {
+    // SAFETY: the caller's storage, written before anything reads it, and
+    // the inline array it then points at is part of that same storage.
+    unsafe {
+        *ht = hashtab_T {
+            ht_mask: HT_INIT_SIZE - 1,
+            ht_used: 0,
+            ht_filled: 0,
+            ht_changed: 0,
+            ht_locked: 0,
+            ht_array: ptr::null_mut(),
+            ht_smallarray: [EMPTY_ITEM; HT_INIT_SIZE],
+        };
+        (*ht).ht_array = small_array(ht);
+    }
+}
+
+/// Release the table's array, if it ever left the inline one. The keys are
+/// the caller's (see [`hash_clear_all`]).
+///
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T`.
 pub unsafe fn hash_clear(ht: *mut hashtab_T) {
-    if (*ht).ht_array != (&raw mut (*ht).ht_smallarray) as *mut hashitem_T {
-        xfree((*ht).ht_array as *mut c_void);
+    // SAFETY: the caller's table; a grown `ht_array` is its own allocation.
+    let array = unsafe { (*ht).ht_array };
+    if array != unsafe { small_array(ht) } {
+        unsafe { xfree(array.cast::<c_void>()) };
     }
 }
 
 /// Free the table *and* every key, where each key pointer was offset by
 /// `off` bytes into its allocation (keys living inside larger structs).
+///
+/// # Safety
+///
+/// `ht` points to a live or all-zero `hashtab_T`, and every live key is `off`
+/// bytes into an `xmalloc`-family allocation this call takes over.
 pub unsafe fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
-    let mut todo = (*ht).ht_used;
+    // SAFETY: the caller's table.
+    let (mut todo, array, size) = unsafe { ((*ht).ht_used, (*ht).ht_array, (*ht).ht_mask + 1) };
     // Error paths free zeroed, never-initialized tables whose ht_array is
     // still null; like the C loop, don't touch the array unless a live
     // item needs freeing.
     if todo > 0 {
-        let items = slice::from_raw_parts((*ht).ht_array, (*ht).ht_mask + 1);
-        for hi in items {
+        // SAFETY: a table with a live item has an array of `ht_mask + 1`.
+        for hi in unsafe { slice::from_raw_parts(array, size) } {
             if todo == 0 {
                 break;
             }
             if hi.is_kept() {
-                xfree(hi.hi_key.sub(off as usize) as *mut c_void);
+                // SAFETY: the caller's promise about where a key starts.
+                unsafe { xfree(hi.hi_key.sub(off as usize).cast::<c_void>()) };
                 todo -= 1;
             }
         }
     }
-    hash_clear(ht);
+    unsafe { hash_clear(ht) };
 }
 
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T` and `key` is NUL-terminated. See
+/// [`hash_lookup`] for what the answer means.
 pub unsafe fn hash_find(ht: *const hashtab_T, key: *const c_char) -> *mut hashitem_T {
-    hash_lookup(
-        ht,
-        key,
-        CStr::from_ptr(key).to_bytes().len(),
-        hash_hash(key),
-    )
+    // SAFETY: the caller's table and NUL-terminated key.
+    unsafe {
+        hash_lookup(
+            ht,
+            key,
+            CStr::from_ptr(key).to_bytes().len(),
+            hash_hash(key),
+        )
+    }
 }
 
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T` and `key` is readable for `len` bytes.
+/// See [`hash_lookup`] for what the answer means.
 pub unsafe fn hash_find_len(
     ht: *const hashtab_T,
     key: *const c_char,
     len: usize,
 ) -> *mut hashitem_T {
-    hash_lookup(ht, key, len, hash_hash_len(key, len))
+    // SAFETY: the caller's table and `len`-byte key.
+    unsafe { hash_lookup(ht, key, len, hash_hash_len(key, len)) }
 }
 
 /// Find `key` (of `key_len` bytes, hashing to `hash`): returns the item
 /// holding it, or — for an absent key — the slot where it belongs (a
 /// tombstone if the walk crossed one, else the empty slot that ended it).
+///
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T` whose live keys are NUL-terminated, and
+/// `key` is readable for `key_len` bytes. The answer is a pointer *into* the
+/// table's array, so it dies at the next resize.
 pub unsafe fn hash_lookup(
     ht: *const hashtab_T,
     key: *const c_char,
     key_len: usize,
     hash: hash_T,
 ) -> *mut hashitem_T {
-    let wanted = slice::from_raw_parts(key as *const u8, key_len);
+    // SAFETY: the caller's key and table. The probe never runs off the
+    // array: it is masked to `ht_mask`, and the table is never full, so some
+    // slot is empty and ends the walk.
+    let wanted = unsafe { slice::from_raw_parts(key.cast::<u8>(), key_len) };
+    let (array, mask) = unsafe { ((*ht).ht_array, (*ht).ht_mask) };
     let mut freeitem: *mut hashitem_T = ptr::null_mut();
-    for idx in Probe::new(hash, (*ht).ht_mask) {
-        let hi = (*ht).ht_array.add(idx);
-        if (*hi).is_empty() {
+    for idx in Probe::new(hash, mask) {
+        let hi = unsafe { array.add(idx) };
+        let item = unsafe { &*hi };
+        if item.is_empty() {
             return if freeitem.is_null() { hi } else { freeitem };
         }
-        if (*hi).is_removed() {
+        if item.is_removed() {
             if freeitem.is_null() {
                 freeitem = hi;
             }
-        } else if (*hi).hi_hash == hash && CStr::from_ptr((*hi).hi_key).to_bytes() == wanted {
+        } else if item.hi_hash == hash
+            && unsafe { CStr::from_ptr(item.hi_key) }.to_bytes() == wanted
+        {
             return hi;
         }
     }
     unreachable!("probe sequence always finds an empty slot");
 }
 
+/// Add `key` to the table, complaining (and failing) when it is already
+/// there. The key stays the caller's.
+///
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T` and `key` is NUL-terminated and stays
+/// alive for as long as the table holds it.
 pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
-    let hash = hash_hash(key);
-    let hi = hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash);
-    if (*hi).is_kept() {
-        siemsg_c!(
-            gettext(c"E685: Internal error: hash_add(): duplicate key \"%s\"".as_ptr()),
-            key,
-        );
+    // SAFETY: the caller's table and NUL-terminated key.
+    let hash = unsafe { hash_hash(key) };
+    let hi = unsafe { hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash) };
+    if unsafe { &*hi }.is_kept() {
+        let fmt = c"E685: Internal error: hash_add(): duplicate key \"%s\"";
+        // SAFETY: `%s` spends the NUL-terminated key.
+        unsafe { siemsg_c!(gettext(fmt.as_ptr()), key) };
         return FAIL;
     }
-    hash_add_item(ht, hi, key, hash);
+    unsafe { hash_add_item(ht, hi, key, hash) };
     OK
 }
 
 /// Add `key` at `hi`, which the caller obtained from `hash_lookup` on a
 /// missing key (so it is empty or a tombstone).
+///
+/// # Safety
+///
+/// `hi` is a slot of `ht`'s current array holding no live key, `hash` is
+/// `key`'s hash, and `key` outlives its stay in the table.
 pub unsafe fn hash_add_item(
     ht: *mut hashtab_T,
     hi: *mut hashitem_T,
     key: *mut c_char,
     hash: hash_T,
 ) {
-    (*ht).ht_used = (*ht).ht_used.wrapping_add(1);
-    (*ht).ht_changed += 1;
-    if (*hi).is_empty() {
-        (*ht).ht_filled = (*ht).ht_filled.wrapping_add(1);
+    // SAFETY: the caller's table and one of its own slots.
+    unsafe {
+        (*ht).ht_used = (*ht).ht_used.wrapping_add(1);
+        (*ht).ht_changed += 1;
+        if (*hi).is_empty() {
+            (*ht).ht_filled = (*ht).ht_filled.wrapping_add(1);
+        }
+        (*hi).hi_key = key;
+        (*hi).hi_hash = hash;
+        hash_may_resize(ht, 0);
     }
-    (*hi).hi_key = key;
-    (*hi).hi_hash = hash;
-    hash_may_resize(ht, 0);
 }
 
 /// Remove the item at `hi` (leaving a tombstone). The key itself belongs to
 /// the caller.
+///
+/// # Safety
+///
+/// `hi` is a slot of `ht`'s current array holding a live key.
 pub unsafe fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T) {
-    (*ht).ht_used = (*ht).ht_used.wrapping_sub(1);
-    (*ht).ht_changed += 1;
-    (*hi).hi_key = removed_sentinel();
-    hash_may_resize(ht, 0);
+    // SAFETY: the caller's table and one of its own slots.
+    unsafe {
+        (*ht).ht_used = (*ht).ht_used.wrapping_sub(1);
+        (*ht).ht_changed += 1;
+        (*hi).hi_key = removed_sentinel();
+        hash_may_resize(ht, 0);
+    }
 }
 
 /// Lock out resizing while a caller iterates `ht_array` or holds item
 /// pointers across mutations.
+///
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T`, and the lock is released exactly once.
 pub unsafe fn hash_lock(ht: *mut hashtab_T) {
-    (*ht).ht_locked += 1;
+    // SAFETY: the caller's table.
+    unsafe { (*ht).ht_locked += 1 };
 }
 
+/// Undo one [`hash_lock`], resizing now if the table wanted to meanwhile.
+///
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T` this caller locked, and no item pointer
+/// into its array is held past the call.
 pub unsafe fn hash_unlock(ht: *mut hashtab_T) {
-    (*ht).ht_locked -= 1;
-    hash_may_resize(ht, 0);
+    // SAFETY: the caller's table.
+    unsafe {
+        (*ht).ht_locked -= 1;
+        hash_may_resize(ht, 0);
+    }
 }
 
 /// Grow, shrink, or compact (drop tombstones from) the array when the load
 /// factors say so; `minitems` forces room for that many items up front.
+///
+/// # Safety
+///
+/// `ht` points to a live `hashtab_T`, and no item pointer into its array is
+/// held across the call (that is what `ht_locked` is for).
 unsafe fn hash_may_resize(ht: *mut hashtab_T, minitems: usize) {
-    if (*ht).ht_locked > 0 {
+    // SAFETY: the caller's table, and its own inline array.
+    let smallarray = unsafe { small_array(ht) };
+    let table = unsafe { &mut *ht };
+    if table.ht_locked > 0 {
         return;
     }
-    let smallarray = (&raw mut (*ht).ht_smallarray) as *mut hashitem_T;
-    let oldsize = (*ht).ht_mask + 1;
-    let newsize = match resize_decision(
-        (*ht).ht_filled,
-        (*ht).ht_used,
-        oldsize,
-        (*ht).ht_array == smallarray,
-        minitems,
-    ) {
-        Some(newsize) => newsize,
-        None => return,
+    let oldsize = table.ht_mask + 1;
+    let was_small = table.ht_array == smallarray;
+    let Some(newsize) =
+        resize_decision(table.ht_filled, table.ht_used, oldsize, was_small, minitems)
+    else {
+        return;
     };
 
+    // Moving back into the inline array means copying the items out of it
+    // first, because the destination is the same storage.
     let newarray_is_small = newsize == HT_INIT_SIZE;
-    let keep_smallarray = newarray_is_small && (*ht).ht_array == smallarray;
     let mut temparray = [EMPTY_ITEM; HT_INIT_SIZE];
-    let oldarray = if keep_smallarray {
-        temparray = (*ht).ht_smallarray;
+    let oldarray = if newarray_is_small && was_small {
+        temparray = table.ht_smallarray;
         temparray.as_mut_ptr()
     } else {
-        (*ht).ht_array
+        table.ht_array
     };
     let newarray = if newarray_is_small {
-        (*ht).ht_smallarray = [EMPTY_ITEM; HT_INIT_SIZE];
+        table.ht_smallarray = [EMPTY_ITEM; HT_INIT_SIZE];
         smallarray
     } else {
-        xcalloc(newsize, core::mem::size_of::<hashitem_T>()) as *mut hashitem_T
+        // SAFETY: a zeroed slot is an empty one, which is what `rehash_into`
+        // probes for -- the zeroing is load-bearing, not hygiene.
+        unsafe { xcalloc(newsize, size_of::<hashitem_T>()) }.cast::<hashitem_T>()
     };
 
-    rehash_into(
-        slice::from_raw_parts(oldarray, oldsize),
-        slice::from_raw_parts_mut(newarray, newsize),
-        (*ht).ht_used,
-    );
+    // SAFETY: both arrays are `oldsize`/`newsize` items of their own, and
+    // they only overlap in the `newarray_is_small && was_small` case, where
+    // the old one is the copy on the stack.
+    let old = unsafe { slice::from_raw_parts(oldarray, oldsize) };
+    let new = unsafe { slice::from_raw_parts_mut(newarray, newsize) };
+    rehash_into(old, new, table.ht_used);
 
-    if (*ht).ht_array != smallarray {
-        xfree((*ht).ht_array as *mut c_void);
+    if !was_small {
+        unsafe { xfree(table.ht_array.cast::<c_void>()) };
     }
-    (*ht).ht_array = newarray;
-    (*ht).ht_mask = (newsize - 1) as hash_T;
-    (*ht).ht_filled = (*ht).ht_used;
-    (*ht).ht_changed += 1;
+    table.ht_array = newarray;
+    table.ht_mask = newsize - 1;
+    table.ht_filled = table.ht_used;
+    table.ht_changed += 1;
 }
 
+/// A NUL-terminated key's hash.
+///
+/// # Safety
+///
+/// `key` is NUL-terminated.
 pub unsafe fn hash_hash(key: *const c_char) -> hash_T {
-    hash_bytes(CStr::from_ptr(key).to_bytes())
+    // SAFETY: the caller's NUL-terminated key.
+    hash_bytes(unsafe { CStr::from_ptr(key) }.to_bytes())
 }
 
+/// A `len`-byte key's hash, NUL bytes included.
+///
+/// # Safety
+///
+/// `key` is readable for `len` bytes.
 pub unsafe fn hash_hash_len(key: *const c_char, len: usize) -> hash_T {
-    hash_bytes_len(slice::from_raw_parts(key as *const u8, len))
+    // SAFETY: the caller's `len` readable bytes.
+    hash_bytes_len(unsafe { slice::from_raw_parts(key.cast::<u8>(), len) })
 }
 
 /// The unit suite reads the sentinel address through this accessor.
@@ -463,6 +603,76 @@ mod tests {
     #[test]
     fn minitems_reserves_capacity() {
         assert_eq!(resize_decision(0, 0, 16, true, 100), Some(256));
+        // `minitems` never shrinks below what is already in the table: 200
+        // live items ask for 300, i.e. 512 slots, whatever `minitems` says.
+        assert_eq!(resize_decision(200, 200, 256, false, 1), Some(512));
+    }
+
+    #[test]
+    fn a_grown_table_shrinks_back_to_the_inline_array() {
+        // Almost everything removed from a big table: back to 16 slots, so
+        // `hash_may_resize` moves the items home to `ht_smallarray`.
+        assert_eq!(resize_decision(1000, 2, 2048, false, 0), Some(16));
+    }
+
+    #[test]
+    fn a_comfortable_table_is_left_alone() {
+        // Under two thirds filled and over a fifth live: no work to do.
+        assert_eq!(resize_decision(100, 100, 256, false, 0), None);
+        // Same load, but the array is the inline one and `filled` has passed
+        // HT_INIT_SIZE - 1, so the small-array early-out no longer applies.
+        assert_eq!(resize_decision(15, 15, 16, true, 0), Some(64));
+    }
+
+    #[test]
+    fn a_big_table_doubles_rather_than_quadruples() {
+        // Up to 1000 live items the new size covers 4x; past it, 2x. Both
+        // round up to a power of two.
+        assert_eq!(resize_decision(1000, 1000, 1024, false, 0), Some(4096));
+        assert_eq!(resize_decision(1001, 1001, 1024, false, 0), Some(2048));
+    }
+
+    #[test]
+    fn rehash_stops_once_every_live_item_has_moved() {
+        // `used` is the contract, not the array's contents: the walk stops
+        // after that many kept items, which is what makes it O(used) rather
+        // than O(size) on a mostly-empty table.
+        let key: *mut c_char = std::ptr::without_provenance_mut(0x1000);
+        let mut old = [EMPTY_ITEM; 16];
+        for (i, slot) in old.iter_mut().enumerate() {
+            *slot = hashitem_T {
+                hi_hash: i,
+                hi_key: key,
+            };
+        }
+        let mut new = [EMPTY_ITEM; 16];
+        rehash_into(&old, &mut new, 3);
+        assert_eq!(new.iter().filter(|hi| hi.is_kept()).count(), 3);
+        // The first three, in array order.
+        assert!([0, 1, 2].iter().all(|&i| new[i].is_kept()));
+    }
+
+    #[test]
+    fn rehash_probes_past_a_taken_slot() {
+        // Four hashes that all mask to slot 1 under mask 7 land in the four
+        // successive slots the probe sequence visits, in insertion order.
+        let key: *mut c_char = std::ptr::without_provenance_mut(0x1000);
+        let mut old = [EMPTY_ITEM; 16];
+        for (n, slot) in old.iter_mut().take(4).enumerate() {
+            *slot = hashitem_T {
+                hi_hash: 1 + n * 8,
+                hi_key: key,
+            };
+        }
+        let mut new = [EMPTY_ITEM; 8];
+        rehash_into(&old, &mut new, 4);
+        assert_eq!(new.iter().filter(|hi| hi.is_kept()).count(), 4);
+        for (n, slot) in old.iter().take(4).enumerate() {
+            let landed = Probe::new(slot.hi_hash, 7)
+                .find(|&idx| new[idx].hi_hash == slot.hi_hash)
+                .expect("every item is somewhere on its own probe sequence");
+            assert!(landed < 8, "{n}");
+        }
     }
 
     #[test]
