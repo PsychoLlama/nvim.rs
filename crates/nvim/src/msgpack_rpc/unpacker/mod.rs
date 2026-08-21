@@ -726,7 +726,7 @@ pub(super) fn unpack_integer_token(tok: mpack_token_t) -> Option<Integer> {
     if tok.type_0 == TOKEN_UINT {
         Some(mpack_unpack_uint(tok).cast_signed())
     } else if tok.type_0 == TOKEN_SINT {
-        Some(mpack_unpack_sint(tok) as Integer)
+        Some(mpack_unpack_sint(tok))
     } else {
         None
     }
