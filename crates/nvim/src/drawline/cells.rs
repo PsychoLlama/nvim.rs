@@ -434,9 +434,21 @@ impl Cells {
 
     /// Draw the whole buffer line and answer the window row after it.
     ///
+    /// `#[inline(always)]` is load-bearing and measured, not a hint. There is
+    /// exactly one caller ([`win_line`](super::win_line)), and this is one
+    /// half of the function upstream writes as a single body; when the
+    /// inliner declines — which it did from `39579d0db5`, a commit that
+    /// touches no drawing file at all — `Cells` and `WinLineVars` stop being
+    /// one frame's worth of locals and the per-cell loop reloads them through
+    /// pointers. Measured on a 600-round `redraw!` of 400 wrapped lines
+    /// (`perf stat -e instructions:u`, which repeats to 0.03 %): **2,834.1 M
+    /// instructions without the attribute, 2,782.6 M with it, −1.8 %**. Adding
+    /// it to [`Cells::new`] as well costs 5.8 M back, so it stays here only.
+    ///
     /// # Safety
     /// `wp`, `buf` and everything in `f` must be live, and `wlv` must be the
     /// state the setup half filled in for this line.
+    #[inline(always)]
     pub(crate) unsafe fn run(
         &mut self,
         wlv: &mut WinLineVars,
