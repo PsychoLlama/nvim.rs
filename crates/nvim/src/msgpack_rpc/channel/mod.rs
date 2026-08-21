@@ -1,4 +1,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! msgpack-rpc over a channel.
 //!
@@ -32,7 +39,7 @@ use crate::event::multiqueue::{multiqueue_new_child, multiqueue_put_event};
 use crate::event::proc::exit_on_closed_chan;
 use crate::event::rstream::rstream_start;
 use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
-use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF};
 use crate::main::{
     ch_before_blocking_events, channels, main_loop, ui_client_channel_id, ui_client_error_exit,
 };
@@ -40,8 +47,8 @@ use crate::memory::{arena_finish, arena_mem_free, xcalloc, xfree};
 use crate::msgpack_rpc::unpacker::{unpacker_init, unpacker_teardown};
 use crate::types::{
     Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType, ClientType,
-    Dict, Error, ErrorType, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker,
-    WBuffer, kErrorTypeException, kErrorTypeValidation, kObjectTypeArray, kObjectTypeInteger,
+    Dict, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
+    kErrorTypeException, kErrorTypeValidation, kObjectTypeArray, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
@@ -217,13 +224,11 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
     unsafe {
         let out = channel_outstream(channel);
         let in_0 = channel_instream(channel);
-        logmsg_c!(
+        log!(
             LOGLVL_DBG,
-            ptr::null(),
-            c"rpc_start".as_ptr(),
+            c"rpc_start",
             93,
-            true,
-            c"rpc ch %lu in-stream=%p out-stream=%p".as_ptr(),
+            c"rpc ch %lu in-stream=%p out-stream=%p",
             id,
             in_0.cast::<c_void>(),
             out.cast::<c_void>(),
@@ -349,15 +354,7 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
             }
         }
         channel_close(chan.id, kChannelPartRpc, ptr::null_mut());
-        logmsg_c!(
-            loglevel,
-            ptr::null(),
-            c"chan_close_on_err".as_ptr(),
-            545,
-            true,
-            c"RPC: %s".as_ptr(),
-            msg,
-        );
+        log!(loglevel, c"chan_close_on_err", 545, c"RPC: %s", msg);
     }
 }
 
@@ -512,11 +509,11 @@ unsafe fn report_call_error(err: *mut Error, result: &Object) {
                 let kind = &*array.items;
                 let message = &*array.items.add(1);
                 if kind.type_0 == kObjectTypeInteger
-                    && (kind.data.integer == kErrorTypeException as Integer
-                        || kind.data.integer == kErrorTypeValidation as Integer)
+                    && (kind.data.integer == Integer::from(kErrorTypeException)
+                        || kind.data.integer == Integer::from(kErrorTypeValidation))
                     && message.type_0 == kObjectTypeString
                 {
-                    let kind = kind.data.integer as ErrorType;
+                    let kind = crate::narrow::number_as_int(kind.data.integer);
                     api_set_error(err, kind, c"%s".as_ptr(), message.data.string.data());
                     return;
                 }

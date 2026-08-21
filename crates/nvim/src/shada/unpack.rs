@@ -297,7 +297,7 @@ pub(crate) unsafe fn shada_check_status(
     remaining: size_t,
 ) -> ShaDaReadResult {
     unsafe {
-        if status as c_uint == MPACK_OK {
+        if status == MPACK_OK {
             if remaining != 0 {
                 semsg_c!(
                     gettext(
@@ -311,7 +311,7 @@ pub(crate) unsafe fn shada_check_status(
             return kSDReadStatusSuccess;
         }
         semsg_c!(
-            gettext(if status as c_uint == MPACK_EOF {
+            gettext(if status == MPACK_EOF {
                 c"E576: Failed to parse ShaDa file: incomplete msgpack string at position %lu"
                     .as_ptr()
             } else {

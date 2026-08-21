@@ -29,6 +29,18 @@ pub const fn number_as_int(n: i64) -> c_int {
     n as c_int
 }
 
+/// A msgpack unsigned integer narrowed to the 32 bits an RPC envelope carries
+/// its message type and request id in, wrapping exactly as upstream's
+/// `(uint32_t)` casts do.
+///
+/// Same argument as `number_as_int`: the value is whatever the peer put on the
+/// wire, so rejecting it would be a different protocol and panicking on it
+/// would be a denial of service. A message type of `0x1_0000_0000` decodes as
+/// 0, i.e. a request, which is what upstream answers.
+pub const fn msgpack_uint_as_u32(n: u64) -> u32 {
+    n as u32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,5 +60,17 @@ mod tests {
         // And the sign wraps rather than saturating.
         assert_eq!(number_as_int(varnumber_T::from(c_int::MAX) + 1), c_int::MIN);
         assert_eq!(number_as_int(varnumber_T::MAX), -1);
+    }
+
+    #[test]
+    fn a_msgpack_uint_narrows_to_32_bits_by_wrapping() {
+        assert_eq!(msgpack_uint_as_u32(0), 0);
+        assert_eq!(msgpack_uint_as_u32(2), 2);
+        assert_eq!(msgpack_uint_as_u32(u64::from(u32::MAX)), u32::MAX);
+        // The load-bearing case: a message type past 32 bits wraps into the
+        // range the envelope check accepts, so `[0x1_0000_0000, id, m, args]`
+        // is a *request*. Rejecting it would be a different protocol.
+        assert_eq!(msgpack_uint_as_u32(0x1_0000_0000), 0);
+        assert_eq!(msgpack_uint_as_u32(u64::MAX), u32::MAX);
     }
 }

@@ -1,4 +1,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! The msgpack-rpc envelope: `[type, id, method, args]` and its answers.
 //!
@@ -48,7 +55,7 @@ pub unsafe fn serialize_request(
         } else {
             kMessageTypeNotification
         };
-        put_byte(&mut packer, kind as c_char);
+        put_byte(&mut packer, kind.to_le_bytes()[0].cast_signed());
         if is_request {
             mpack_uint(&mut packer.ptr, request_id);
         }
@@ -92,11 +99,14 @@ pub unsafe fn serialize_response(
     unsafe {
         let mut packer = packer_buffer_init(slice::from_mut(&mut chan));
         mpack_array(&mut packer.ptr, 4);
-        put_byte(&mut packer, kMessageTypeResponse as c_char);
+        put_byte(
+            &mut packer,
+            kMessageTypeResponse.to_le_bytes()[0].cast_signed(),
+        );
         mpack_uint(&mut packer.ptr, response_id);
         if errored {
             mpack_array(&mut packer.ptr, 2);
-            mpack_integer(&mut packer.ptr, err_type as Integer);
+            mpack_integer(&mut packer.ptr, Integer::from(err_type));
             mpack_str(cstr_as_string((*err).msg), &mut packer);
             put_byte(&mut packer, wire::NIL);
         } else {
@@ -139,7 +149,7 @@ unsafe fn report_failed_notification(
             Object {
                 type_0: kObjectTypeInteger,
                 data: crate::types::object_data {
-                    integer: (*err).type_0 as Integer,
+                    integer: Integer::from((*err).type_0),
                 },
             },
             Object {
@@ -170,7 +180,7 @@ unsafe fn report_failed_notification(
 mod wire {
     use core::ffi::c_char;
 
-    pub const NIL: c_char = 0xc0u8 as c_char;
+    pub const NIL: c_char = 0xc0u8.cast_signed();
 }
 
 /// Writes one raw byte through the packer's cursor.
@@ -217,7 +227,7 @@ unsafe fn packer_buffer_init(chans: &mut [*mut Channel]) -> PackerBuffer {
         ptr: startptr,
         endptr: startptr.wrapping_add(ARENA_BLOCK_SIZE),
         anydata: chans.as_mut_ptr().cast::<c_void>(),
-        anyint: chans.len() as i64,
+        anyint: i64::try_from(chans.len()).expect("addressee count fits an i64"),
         packer_flush: Some(channel_flush_callback),
     }
 }
@@ -233,7 +243,7 @@ unsafe fn packer_channels<'a>(packer: &PackerBuffer) -> &'a mut [*mut Channel] {
     unsafe {
         slice::from_raw_parts_mut(
             packer.anydata.cast::<*mut Channel>(),
-            packer.anyint as usize,
+            usize::try_from(packer.anyint).expect("`packer_buffer_init` stored a count here"),
         )
     }
 }

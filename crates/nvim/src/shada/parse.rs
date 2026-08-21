@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::msgpack_rpc::unpacker::MPACK_OK;
 
@@ -483,7 +483,7 @@ unsafe fn parse_variable(
                 is_blob = true;
             }
             (*global_var).value = decode_string(binval.data(), binval.len(), is_blob, false);
-        } else if cursor.typval(&raw mut (*global_var).value) as c_uint != MPACK_OK {
+        } else if cursor.typval(&raw mut (*global_var).value) != MPACK_OK {
             semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: variable entry at position %lu has value that cannot be converted to the Vimscript value"

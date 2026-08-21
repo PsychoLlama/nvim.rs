@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! msgpack encodings for the scalars and container headers the API packer
 //! emits.
@@ -105,12 +112,19 @@ pub fn uint(value: u32) -> Item {
         item
     } else if value > 0xff {
         let mut item = Item::of(&[tag::UINT16]);
-        item.push_all(&(value as u16).to_be_bytes());
+        item.push_all(
+            &u16::try_from(value)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         item
     } else if value > 0x7f {
-        Item::of(&[tag::UINT8, value as u8])
+        Item::of(&[
+            tag::UINT8,
+            u8::try_from(value).expect("the msgpack width chosen above bounds this"),
+        ])
     } else {
-        Item::of(&[value as u8])
+        Item::of(&[u8::try_from(value).expect("the msgpack width chosen above bounds this")])
     }
 }
 
@@ -126,7 +140,7 @@ pub fn uint64(value: u64) -> Item {
         item.push_all(&value.to_be_bytes());
         item
     } else {
-        uint(value as u32)
+        uint(u32::try_from(value).expect("the msgpack width chosen above bounds this"))
     }
 }
 
@@ -134,7 +148,7 @@ pub fn uint64(value: u64) -> Item {
 /// its early cutover.
 pub fn integer(value: i64) -> Item {
     if value >= 0 {
-        return uint64(value as u64);
+        return uint64(value.cast_unsigned());
     }
     if value < -0x8000_0000 {
         let mut item = Item::of(&[tag::INT64]);
@@ -142,16 +156,31 @@ pub fn integer(value: i64) -> Item {
         item
     } else if value < -0x8000 {
         let mut item = Item::of(&[tag::INT32]);
-        item.push_all(&(value as i32).to_be_bytes());
+        item.push_all(
+            &i32::try_from(value)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         item
     } else if value < -0x80 {
         let mut item = Item::of(&[tag::INT16]);
-        item.push_all(&(value as i16).to_be_bytes());
+        item.push_all(
+            &i16::try_from(value)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         item
     } else if value < -0x20 {
-        Item::of(&[tag::INT8, value as u8])
+        Item::of(&[
+            tag::INT8,
+            i8::try_from(value)
+                .expect("the msgpack width chosen above bounds this")
+                .cast_unsigned(),
+        ])
     } else {
-        Item::of(&[value as u8])
+        Item::of(&[i8::try_from(value)
+            .expect("the msgpack width chosen above bounds this")
+            .cast_unsigned()])
     }
 }
 
@@ -164,10 +193,16 @@ pub fn float8(value: f64) -> Item {
 
 pub fn array_header(len: u32) -> Item {
     if len < 0x10 {
-        Item::of(&[tag::FIXARRAY | len as u8])
+        Item::of(&[
+            tag::FIXARRAY | u8::try_from(len).expect("the msgpack width chosen above bounds this")
+        ])
     } else if len < 0x10000 {
         let mut item = Item::of(&[tag::ARRAY16]);
-        item.push_all(&(len as u16).to_be_bytes());
+        item.push_all(
+            &u16::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         item
     } else {
         let mut item = Item::of(&[tag::ARRAY32]);
@@ -178,10 +213,16 @@ pub fn array_header(len: u32) -> Item {
 
 pub fn map_header(len: u32) -> Item {
     if len < 0x10 {
-        Item::of(&[tag::FIXMAP | len as u8])
+        Item::of(&[
+            tag::FIXMAP | u8::try_from(len).expect("the msgpack width chosen above bounds this")
+        ])
     } else if len < 0x10000 {
         let mut item = Item::of(&[tag::MAP16]);
-        item.push_all(&(len as u16).to_be_bytes());
+        item.push_all(
+            &u16::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         item
     } else {
         let mut item = Item::of(&[tag::MAP32]);
@@ -200,7 +241,9 @@ pub use tag::ARRAY16;
 /// method names, all of which are fixed and short.
 pub fn fixstr_header(len: usize) -> Item {
     assert!(len < 32, "not a fixstr");
-    Item::of(&[tag::FIXSTR | len as u8])
+    Item::of(
+        &[tag::FIXSTR | u8::try_from(len).expect("the msgpack width chosen above bounds this")],
+    )
 }
 
 /// The header for a string of `len` bytes, or `None` when no msgpack string
@@ -210,16 +253,29 @@ pub fn fixstr_header(len: usize) -> Item {
 /// one width (255, 65535) steps up to the next. Harmless, and preserved.
 pub fn str_header(len: usize) -> Option<Item> {
     if len < 32 {
-        Some(Item::of(&[tag::FIXSTR | len as u8]))
+        Some(Item::of(&[tag::FIXSTR
+            | u8::try_from(len)
+                .expect("the msgpack width chosen above bounds this")]))
     } else if len < 0xff {
-        Some(Item::of(&[tag::STR8, len as u8]))
+        Some(Item::of(&[
+            tag::STR8,
+            u8::try_from(len).expect("the msgpack width chosen above bounds this"),
+        ]))
     } else if len < 0xffff {
         let mut item = Item::of(&[tag::STR16]);
-        item.push_all(&(len as u16).to_be_bytes());
+        item.push_all(
+            &u16::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         Some(item)
     } else if len < 0xffff_ffff {
         let mut item = Item::of(&[tag::STR32]);
-        item.push_all(&(len as u32).to_be_bytes());
+        item.push_all(
+            &u32::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         Some(item)
     } else {
         None
@@ -230,14 +286,25 @@ pub fn str_header(len: usize) -> Option<Item> {
 /// [`str_header`].
 pub fn bin_header(len: usize) -> Option<Item> {
     if len < 0xff {
-        Some(Item::of(&[tag::BIN8, len as u8]))
+        Some(Item::of(&[
+            tag::BIN8,
+            u8::try_from(len).expect("the msgpack width chosen above bounds this"),
+        ]))
     } else if len < 0xffff {
         let mut item = Item::of(&[tag::BIN16]);
-        item.push_all(&(len as u16).to_be_bytes());
+        item.push_all(
+            &u16::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         Some(item)
     } else if len < 0xffff_ffff {
         let mut item = Item::of(&[tag::BIN32]);
-        item.push_all(&(len as u32).to_be_bytes());
+        item.push_all(
+            &u32::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         Some(item)
     } else {
         None
@@ -260,16 +327,24 @@ pub fn ext_header(len: usize, ext_type: i8) -> Option<Item> {
         Item::of(&[tag::EXT8])
     } else if len < 0xffff {
         let mut item = Item::of(&[tag::EXT16]);
-        item.push_all(&(len as u16).to_be_bytes());
+        item.push_all(
+            &u16::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         item
     } else if len < 0xffff_ffff {
         let mut item = Item::of(&[tag::EXT32]);
-        item.push_all(&(len as u32).to_be_bytes());
+        item.push_all(
+            &u32::try_from(len)
+                .expect("the msgpack width chosen above bounds this")
+                .to_be_bytes(),
+        );
         item
     } else {
         return None;
     };
-    item.push(ext_type as u8);
+    item.push(ext_type.cast_unsigned());
     Some(item)
 }
 
@@ -282,11 +357,21 @@ pub fn ext_header(len: usize, ext_type: i8) -> Option<Item> {
 /// where fixext2 would have done.
 pub fn handle(ext_type: i8, value: i32) -> Item {
     if (-0x1f..=0x7f).contains(&value) {
-        return Item::of(&[tag::FIXEXT1, ext_type as u8, value as u8]);
+        return Item::of(&[
+            tag::FIXEXT1,
+            ext_type.cast_unsigned(),
+            i8::try_from(value)
+                .expect("the msgpack width chosen above bounds this")
+                .cast_unsigned(),
+        ]);
     }
     assert!(value >= 0, "handles are allocated upward from zero");
-    let payload = uint(value as u32);
-    let mut item = Item::of(&[tag::EXT8, payload.len as u8, ext_type as u8]);
+    let payload = uint(value.cast_unsigned());
+    let mut item = Item::of(&[
+        tag::EXT8,
+        u8::try_from(payload.len).expect("the msgpack width chosen above bounds this"),
+        ext_type.cast_unsigned(),
+    ]);
     item.push_all(payload.bytes());
     item
 }

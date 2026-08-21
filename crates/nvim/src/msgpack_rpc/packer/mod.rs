@@ -1,3 +1,12 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
 //! Serialisation of API objects to msgpack.
 //!
 //! The packer writes into a [`PackerBuffer`] — a window of memory with a `flush`
@@ -47,7 +56,7 @@ fn flush(packer: &mut PackerBuffer) {
 
 /// The low 16 bits of `value`, most significant byte first.
 pub fn mpack_be16(cursor: &mut *mut c_char, value: uint32_t) {
-    emit(cursor, &(value as u16).to_be_bytes());
+    emit(cursor, &value.to_be_bytes()[2..]);
 }
 
 /// All 32 bits of `value`, most significant byte first.
@@ -129,12 +138,22 @@ pub fn mpack_check_buffer(packer: &mut PackerBuffer) {
     }
 }
 
+/// A container's element count as msgpack carries it.
+///
+/// The panic is unreachable: 2^32 `Object`s is 128 GiB of arena. It matches
+/// the `expect` the string and extension headers already carry for the same
+/// reason.
+fn container_len(size: size_t) -> uint32_t {
+    uint32_t::try_from(size).expect("container too long for msgpack")
+}
+
 /// # Safety
 /// `str` must describe `str.size` readable bytes at `str.data`.
 pub unsafe fn mpack_str(str: String_0, packer: &mut PackerBuffer) {
     let header = format::str_header(str.len()).expect("string too long for msgpack");
     emit(&mut packer.ptr, header.bytes());
-    mpack_raw(str.data(), str.len(), packer);
+    // SAFETY: the caller's bytes.
+    unsafe { mpack_raw(str.data(), str.len(), packer) };
 }
 
 /// # Safety
@@ -142,7 +161,8 @@ pub unsafe fn mpack_str(str: String_0, packer: &mut PackerBuffer) {
 pub unsafe fn mpack_bin(str: String_0, packer: &mut PackerBuffer) {
     let header = format::bin_header(str.len()).expect("blob too long for msgpack");
     emit(&mut packer.ptr, header.bytes());
-    mpack_raw(str.data(), str.len(), packer);
+    // SAFETY: the caller's bytes.
+    unsafe { mpack_raw(str.data(), str.len(), packer) };
 }
 
 /// Copies `len` opaque bytes, flushing as often as it takes.
@@ -156,8 +176,12 @@ pub unsafe fn mpack_raw(data: *const c_char, len: size_t, packer: &mut PackerBuf
     let mut pos: size_t = 0;
     while pos < len {
         let to_copy = (len - pos).min(mpack_remaining(packer));
-        packer.ptr.copy_from_nonoverlapping(data.add(pos), to_copy);
-        packer.ptr = packer.ptr.add(to_copy);
+        // SAFETY: `to_copy` is bounded by both what the caller still owes and
+        // what the buffer window holds.
+        unsafe {
+            packer.ptr.copy_from_nonoverlapping(data.add(pos), to_copy);
+            packer.ptr = packer.ptr.add(to_copy);
+        }
         pos += to_copy;
         if pos < len {
             flush(packer);
@@ -178,20 +202,22 @@ pub unsafe fn mpack_ext(
 ) {
     let header = format::ext_header(len, ext_type).expect("extension too long for msgpack");
     emit(&mut packer.ptr, header.bytes());
-    mpack_raw(buf, len, packer);
+    // SAFETY: the caller's bytes.
+    unsafe { mpack_raw(buf, len, packer) };
 }
 
 /// A buffer, window or tabpage handle. The extension type is the object type's
 /// distance from `kObjectTypeBuffer`, so the three are 0, 1 and 2.
 pub fn mpack_handle(type_0: ObjectType, handle: handle_T, packer: &mut PackerBuffer) {
-    let ext_type = type_0.wrapping_sub(kObjectTypeBuffer as ObjectType) as int8_t;
+    let ext_type = type_0.wrapping_sub(kObjectTypeBuffer).to_le_bytes()[0].cast_signed();
     emit(&mut packer.ptr, format::handle(ext_type, handle).bytes());
 }
 
 /// # Safety
 /// `obj` must point at a live object; its contents are traversed.
 pub unsafe fn mpack_object(obj: *mut Object, packer: &mut PackerBuffer) {
-    mpack_object_inner(obj, core::ptr::null_mut(), 0, packer);
+    // SAFETY: the caller's object.
+    unsafe { mpack_object_inner(obj, core::ptr::null_mut(), 0, packer) };
 }
 
 /// Packs an array's elements without wrapping them in another object.
@@ -199,7 +225,7 @@ pub unsafe fn mpack_object(obj: *mut Object, packer: &mut PackerBuffer) {
 /// # Safety
 /// `arr` must describe `arr.size` live objects at `arr.items`.
 pub unsafe fn mpack_object_array(arr: Array, packer: &mut PackerBuffer) {
-    mpack_array(&mut packer.ptr, arr.size as uint32_t);
+    mpack_array(&mut packer.ptr, container_len(arr.size));
     if arr.size == 0 {
         return;
     }
@@ -214,7 +240,9 @@ pub unsafe fn mpack_object_array(arr: Array, packer: &mut PackerBuffer) {
     } else {
         core::ptr::null_mut()
     };
-    mpack_object_inner(arr.items, resume, 1, packer);
+    // SAFETY: the caller's elements, and a container that lives to the end of
+    // the walk below.
+    unsafe { mpack_object_inner(arr.items, resume, 1, packer) };
 }
 
 /// Walks `current` and everything below it, iteratively.
@@ -236,56 +264,73 @@ pub unsafe fn mpack_object_inner(
     let mut stack: format::SmallStack<(*mut Object, size_t)> = format::SmallStack::default();
     'walk: loop {
         mpack_check_buffer(packer);
+        // SAFETY: `current` points at a live object for the whole walk; every
+        // union read below is guarded by the `type_0` it belongs to.
+        let type_0 = unsafe { (*current).type_0 };
         // Everything that is not a container writes itself here and moves on;
         // nil, and a luaref once it has been released, fall through to the
         // nil byte below.
         'packed: {
-            match (*current).type_0 {
+            match type_0 {
                 kObjectTypeLuaRef => {
-                    api_free_luaref((*current).data.luaref);
-                    (*current).data.luaref = LUA_NOREF as LuaRef;
+                    // SAFETY: as above. A released luaref packs as nil, and
+                    // the slot is overwritten so a second pass cannot free it
+                    // twice.
+                    unsafe {
+                        api_free_luaref((*current).data.luaref);
+                        (*current).data.luaref = LUA_NOREF as LuaRef;
+                    }
                 }
                 kObjectTypeNil => {}
                 kObjectTypeBoolean => {
-                    mpack_bool(&mut packer.ptr, (*current).data.boolean);
+                    // SAFETY: as above.
+                    mpack_bool(&mut packer.ptr, unsafe { (*current).data.boolean });
                     break 'packed;
                 }
                 kObjectTypeInteger => {
-                    mpack_integer(&mut packer.ptr, (*current).data.integer);
+                    // SAFETY: as above.
+                    mpack_integer(&mut packer.ptr, unsafe { (*current).data.integer });
                     break 'packed;
                 }
                 kObjectTypeFloat => {
-                    mpack_float8(&mut packer.ptr, (*current).data.floating);
+                    // SAFETY: as above.
+                    mpack_float8(&mut packer.ptr, unsafe { (*current).data.floating });
                     break 'packed;
                 }
                 kObjectTypeString => {
-                    mpack_str((*current).data.string, packer);
+                    // SAFETY: as above, and the string is live for the pack.
+                    unsafe { mpack_str((*current).data.string, packer) };
                     break 'packed;
                 }
                 kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
-                    mpack_handle(
-                        (*current).type_0,
-                        (*current).data.integer as handle_T,
-                        packer,
-                    );
+                    // SAFETY: as above; a handle is carried in the integer
+                    // arm of the union.
+                    let handle = crate::narrow::number_as_int(unsafe { (*current).data.integer });
+                    mpack_handle(type_0, handle, packer);
                     break 'packed;
                 }
                 kObjectTypeArray | kObjectTypeDict => {
-                    let is_array = (*current).type_0 == kObjectTypeArray;
-                    let size = if is_array {
-                        let size = (*current).data.array.size;
-                        mpack_array(&mut packer.ptr, size as uint32_t);
-                        size
-                    } else {
-                        let size = (*current).data.dict.size;
-                        mpack_map(&mut packer.ptr, size as uint32_t);
-                        size
+                    let is_array = type_0 == kObjectTypeArray;
+                    // SAFETY: as above.
+                    let size = unsafe {
+                        if is_array {
+                            (*current).data.array.size
+                        } else {
+                            (*current).data.dict.size
+                        }
                     };
+                    if is_array {
+                        mpack_array(&mut packer.ptr, container_len(size));
+                    } else {
+                        mpack_map(&mut packer.ptr, container_len(size));
+                    }
                     if size == 0 {
                         break 'packed;
                     }
                     if is_array && size == 1 {
-                        current = (*current).data.array.items;
+                        // SAFETY: as above; a one-element array is entered
+                        // without touching the stack.
+                        current = unsafe { (*current).data.array.items };
                         continue 'walk;
                     }
                     if !container.is_null() {
@@ -310,22 +355,26 @@ pub unsafe fn mpack_object_inner(
             }
         }
 
-        if (*container).type_0 == kObjectTypeArray {
-            let arr: Array = (*container).data.array;
-            current = arr.items.add(container_idx);
-            container_idx += 1;
-            if container_idx >= arr.size {
-                container = core::ptr::null_mut();
-            }
-        } else {
-            let dict: Dict = (*container).data.dict;
-            let entry: *mut KeyValuePair = dict.items.add(container_idx);
-            container_idx += 1;
-            mpack_check_buffer(packer);
-            mpack_str((*entry).key, packer);
-            current = &raw mut (*entry).value;
-            if container_idx >= dict.size {
-                container = core::ptr::null_mut();
+        // SAFETY: `container` is a live array or dict, and `container_idx` is
+        // below its size — the two assignments below restore that.
+        unsafe {
+            if (*container).type_0 == kObjectTypeArray {
+                let arr: Array = (*container).data.array;
+                current = arr.items.add(container_idx);
+                container_idx += 1;
+                if container_idx >= arr.size {
+                    container = core::ptr::null_mut();
+                }
+            } else {
+                let dict: Dict = (*container).data.dict;
+                let entry: *mut KeyValuePair = dict.items.add(container_idx);
+                container_idx += 1;
+                mpack_check_buffer(packer);
+                mpack_str((*entry).key, packer);
+                current = &raw mut (*entry).value;
+                if container_idx >= dict.size {
+                    container = core::ptr::null_mut();
+                }
             }
         }
     }
@@ -346,14 +395,20 @@ pub fn packer_string_buffer() -> PackerBuffer {
     }
 }
 
+/// # Safety
+/// `buffer` points at a live buffer opened by [`packer_string_buffer`], whose
+/// allocation this reallocates.
 unsafe fn flush_string_buffer(buffer: *mut PackerBuffer) {
-    let buffer = &mut *buffer;
-    let capacity = buffer.endptr.addr() - buffer.startptr.addr();
-    let len = buffer.ptr.addr() - buffer.startptr.addr();
-    let new_capacity = 2 * capacity;
-    buffer.startptr = xrealloc(buffer.startptr.cast::<c_void>(), new_capacity).cast::<c_char>();
-    buffer.ptr = buffer.startptr.add(len);
-    buffer.endptr = buffer.startptr.add(new_capacity);
+    // SAFETY: the caller's buffer, and an allocation only this hook resizes.
+    unsafe {
+        let buffer = &mut *buffer;
+        let capacity = buffer.endptr.addr() - buffer.startptr.addr();
+        let len = buffer.ptr.addr() - buffer.startptr.addr();
+        let new_capacity = 2 * capacity;
+        buffer.startptr = xrealloc(buffer.startptr.cast::<c_void>(), new_capacity).cast::<c_char>();
+        buffer.ptr = buffer.startptr.add(len);
+        buffer.endptr = buffer.startptr.add(new_capacity);
+    }
 }
 
 /// Takes ownership of everything written to a [`packer_string_buffer`].

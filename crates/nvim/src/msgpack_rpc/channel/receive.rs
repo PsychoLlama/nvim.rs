@@ -1,4 +1,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! The receiving half of an RPC channel: the read callback, the drain loop,
 //! and where each decoded message goes.
@@ -15,7 +22,7 @@ use crate::api::private::helpers::{api_clear_error, api_free_object, api_set_err
 use crate::channel::{channel_decref, channel_incref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
-use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF};
 use crate::main::{ch_before_blocking_events, resize_events, ui_client_attached};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::msgpack_rpc::unpacker::unpacker_advance;
@@ -55,13 +62,11 @@ pub(super) unsafe fn receive_msgpack(
     let id = chan.id;
     // SAFETY: the verbs match the arguments.
     unsafe {
-        logmsg_c!(
+        log!(
             LOGLVL_DBG,
-            ptr::null(),
-            c"receive_msgpack".as_ptr(),
+            c"receive_msgpack",
             211,
-            true,
-            c"ch %lu: parsing %zu bytes from msgpack Stream: %p".as_ptr(),
+            c"ch %lu: parsing %zu bytes from msgpack Stream: %p",
             id,
             c,
             stream.cast::<c_void>(),
@@ -185,7 +190,7 @@ unsafe fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
                 c"ch %lu (type=%u) returned a response with an unknown request id %u. Ensure the client is properly synchronized"
                     .as_ptr(),
                 chan.id,
-                chan.rpc.client_type as u32,
+                chan.rpc.client_type.cast_unsigned(),
                 p.request_id,
             );
             chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_ERR);
@@ -311,20 +316,22 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
         }
         return;
     }
-    let (name, name_len) = (p.handler.name, p.method_name_len as c_int);
+    // A method name is at most `protocol::METHOD_NAME_MAX` bytes, so the
+    // `%.*s` precision always fits; the clamp is for a shape the header
+    // parser cannot produce.
+    let name_len = c_int::try_from(p.method_name_len).unwrap_or(c_int::MAX);
+    let name = p.handler.name;
     // SAFETY: the channel's queue is live, and the handler name is a static
     // string the verbs match.
     unsafe {
         multiqueue_put_event(chan.events, event);
-        logmsg_c!(
+        log!(
             LOGLVL_DBG,
-            ptr::null(),
-            c"handle_request".as_ptr(),
+            c"handle_request",
             347,
-            true,
-            c"RPC: scheduled %.*s".as_ptr(),
+            c"RPC: scheduled %.*s",
             name_len,
-            name,
+            name
         );
     }
 }
