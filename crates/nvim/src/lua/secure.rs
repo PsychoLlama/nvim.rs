@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 //! `:trust`, the ex-command face of `vim.secure.trust`.
 //!
 //! # Boundary
@@ -45,40 +47,57 @@ impl TrustAction {
 /// # Safety
 /// The global Lua state must be initialized: main thread, editor running.
 unsafe fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
-    let lstate = get_global_lstate();
-    let top = lua_gettop(lstate);
+    // SAFETY: the caller promises an initialized editor, so the global
+    // state is live; `top` is what every path below unwinds the stack to.
+    let (lstate, top) = unsafe {
+        let lstate = get_global_lstate();
+        (lstate, lua_gettop(lstate))
+    };
 
-    lua_getfield(lstate, LUA_GLOBALSINDEX, c"vim".as_ptr());
-    lua_getfield(lstate, -1, c"secure".as_ptr());
-    lua_getfield(lstate, -1, c"trust".as_ptr());
+    // SAFETY: as above. This leaves `vim.secure.trust` and its one argument
+    // table on the stack, which is what `nlua_pcall` consumes.
+    unsafe {
+        lua_getfield(lstate, LUA_GLOBALSINDEX, c"vim".as_ptr());
+        lua_getfield(lstate, -1, c"secure".as_ptr());
+        lua_getfield(lstate, -1, c"trust".as_ptr());
 
-    lua_createtable(lstate, 0, 0);
-    lua_pushstring(lstate, c"action".as_ptr());
-    lua_pushstring(lstate, action.name().as_ptr());
-    lua_settable(lstate, -3);
-    match path {
-        Some(path) => {
-            lua_pushstring(lstate, c"path".as_ptr());
-            lua_pushstring(lstate, path.as_ptr());
+        lua_createtable(lstate, 0, 0);
+        lua_pushstring(lstate, c"action".as_ptr());
+        lua_pushstring(lstate, action.name().as_ptr());
+        lua_settable(lstate, -3);
+        match path {
+            Some(path) => {
+                lua_pushstring(lstate, c"path".as_ptr());
+                lua_pushstring(lstate, path.as_ptr());
+            }
+            None => {
+                lua_pushstring(lstate, c"bufnr".as_ptr());
+                lua_pushnumber(lstate, 0.0);
+            }
         }
-        None => {
-            lua_pushstring(lstate, c"bufnr".as_ptr());
-            lua_pushnumber(lstate, 0.0);
-        }
+        lua_settable(lstate, -3);
     }
-    lua_settable(lstate, -3);
 
-    if nlua_pcall(lstate, 1, 2) != 0 {
-        nlua_error(lstate, gettext(c"vim.secure.trust: %.*s".as_ptr()));
-        lua_settop(lstate, top);
+    // SAFETY: as above; the failure path reports and unwinds.
+    if unsafe { nlua_pcall(lstate, 1, 2) } != 0 {
+        unsafe {
+            nlua_error(lstate, gettext(c"vim.secure.trust: %.*s".as_ptr()));
+            lua_settop(lstate, top);
+        }
         return false;
     }
 
-    let success = lua_toboolean(lstate, -2) != 0;
-    // The second result is the path it acted on, or the reason it could not.
-    let msg = lua_tolstring(lstate, -1, ptr::null_mut());
+    // SAFETY: as above -- two results, and the second is a string Lua keeps
+    // alive until the `settop` below.
+    let (success, msg) = unsafe {
+        let success = lua_toboolean(lstate, -2) != 0;
+        // The second result is the path it acted on, or why it could not.
+        let msg = lua_tolstring(lstate, -1, ptr::null_mut());
+        (success, msg)
+    };
     if !msg.is_null() {
-        let msg = CStr::from_ptr(msg).to_string_lossy();
+        // SAFETY: `lua_tolstring` answered a NUL-terminated string.
+        let msg = unsafe { CStr::from_ptr(msg) }.to_string_lossy();
         match (success, action) {
             (true, TrustAction::Allow) => {
                 crate::smsg!(0, "Allowed in trust database: \"{msg}\"");
@@ -95,16 +114,28 @@ unsafe fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
         }
     }
 
-    lua_settop(lstate, top);
+    // SAFETY: as above.
+    unsafe { lua_settop(lstate, top) };
     success
 }
 
 /// `:trust [++deny|++remove] [path]`. Without a path it acts on the
 /// current buffer.
+///
+/// # Safety
+/// `eap` must point at a live `exarg_T` whose `arg` is NUL-terminated, and
+/// the editor's Lua state must be up.
 pub unsafe fn ex_trust(eap: *mut exarg_T) {
-    let arg = (*eap).arg;
-    let rest = skiptowhite(arg);
-    let word = slice::from_raw_parts(arg as *const u8, rest.addr() - arg.addr());
+    // SAFETY: the caller's `exarg_T`; `arg` is the NUL-terminated command
+    // line, so the first word is inside it.
+    let (arg, word) = unsafe {
+        let arg = (*eap).arg;
+        let rest = skiptowhite(arg);
+        (
+            rest,
+            slice::from_raw_parts(arg.cast::<u8>(), rest.addr() - arg.addr()),
+        )
+    };
     let action = match word {
         b"++deny" => TrustAction::Deny,
         b"++remove" => TrustAction::Remove,
@@ -114,11 +145,13 @@ pub unsafe fn ex_trust(eap: *mut exarg_T) {
             return;
         }
     };
-    let path = skipwhite(rest);
-    let path = if *path == 0 {
-        None
-    } else {
-        Some(CStr::from_ptr(path as *const c_char))
+    // SAFETY: as above -- whatever follows the first word is still inside
+    // the same NUL-terminated line.
+    let path = unsafe {
+        let path = skipwhite(arg);
+        (*path != 0).then(|| CStr::from_ptr(path.cast::<c_char>()))
     };
-    nlua_trust(action, path);
+    // SAFETY: `ex_trust` only runs from the command table, so the editor and
+    // its Lua state are up.
+    unsafe { nlua_trust(action, path) };
 }

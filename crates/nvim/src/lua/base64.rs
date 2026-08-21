@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 //! `vim.base64`: the Lua bindings over the codec in [`crate::base64`].
 //!
 //! # Boundary
@@ -24,28 +26,45 @@ pub const LUA_TSTRING: c_int = 4;
 /// # Safety
 /// `lstate` must be a live Lua state, called as a Lua C function.
 unsafe fn transcode(lstate: *mut lua_State, convert: fn(&[u8]) -> Option<Vec<u8>>) -> c_int {
-    if lua_gettop(lstate) < 1 {
-        return luaL_error(lstate, c"Expected 1 argument".as_ptr());
-    }
-    if lua_type(lstate, 1) != LUA_TSTRING {
-        // Does not return.
-        luaL_argerror(lstate, 1, c"expected string".as_ptr());
-    }
-    let mut len: size_t = 0;
-    let src = lua_tolstring(lstate, 1, &raw mut len);
-    let Some(out) = convert(slice::from_raw_parts(src as *const u8, len)) else {
-        return luaL_error(lstate, c"Invalid input".as_ptr());
+    // SAFETY: the caller's live state; the argument checks come first, and
+    // `luaL_argerror` does not return.
+    let src = unsafe {
+        if lua_gettop(lstate) < 1 {
+            return luaL_error(lstate, c"Expected 1 argument".as_ptr());
+        }
+        if lua_type(lstate, 1) != LUA_TSTRING {
+            luaL_argerror(lstate, 1, c"expected string".as_ptr());
+        }
+        let mut len: size_t = 0;
+        let data = lua_tolstring(lstate, 1, &raw mut len);
+        // The value stays on the stack, so the bytes outlive `convert`.
+        slice::from_raw_parts(data.cast::<u8>(), len)
     };
-    lua_pushlstring(lstate, out.as_ptr() as *const c_char, out.len());
+    let Some(out) = convert(src) else {
+        // SAFETY: as above.
+        return unsafe { luaL_error(lstate, c"Invalid input".as_ptr()) };
+    };
+    // SAFETY: as above; Lua copies the bytes.
+    unsafe { lua_pushlstring(lstate, out.as_ptr().cast::<c_char>(), out.len()) };
     1
 }
 
+/// `vim.base64.encode(str)`.
+///
+/// # Safety
+/// Called by Lua with a live `lua_State`.
 unsafe extern "C-unwind" fn nlua_base64_encode(lstate: *mut lua_State) -> c_int {
-    transcode(lstate, |src| Some(encode(src).into_bytes()))
+    // SAFETY: Lua calls this with a live state of its own.
+    unsafe { transcode(lstate, |src| Some(encode(src).into_bytes())) }
 }
 
+/// `vim.base64.decode(str)`.
+///
+/// # Safety
+/// Called by Lua with a live `lua_State`.
 unsafe extern "C-unwind" fn nlua_base64_decode(lstate: *mut lua_State) -> c_int {
-    transcode(lstate, decode)
+    // SAFETY: as above.
+    unsafe { transcode(lstate, decode) }
 }
 
 /// What `luaL_register` copies into the table, terminated by a null name.
@@ -70,7 +89,11 @@ static BASE64_FUNCTIONS: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
 /// # Safety
 /// `lstate` must be a live Lua state with room for one more value.
 pub unsafe fn luaopen_base64(lstate: *mut lua_State) -> c_int {
-    lua_createtable(lstate, 0, 0);
-    luaL_register(lstate, ptr::null(), BASE64_FUNCTIONS.ptr().cast());
+    // SAFETY: the caller's live state; the table is what `luaL_register`
+    // copies the (`'static`) registry into.
+    unsafe {
+        lua_createtable(lstate, 0, 0);
+        luaL_register(lstate, ptr::null(), BASE64_FUNCTIONS.ptr().cast());
+    }
     1
 }

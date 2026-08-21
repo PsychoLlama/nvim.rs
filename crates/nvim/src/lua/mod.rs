@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 //! The Lua runtime: the LuaJIT FFI bindings, the `vim.*` stdlib, and the
 //! bridge between Lua values and the editor's own.
 

@@ -13,7 +13,6 @@
     "crates/nvim/src/extmark/undo.rs": 1,
     "crates/nvim/src/file_search/resolve.rs": 1,
     "crates/nvim/src/fileio/read.rs": 1,
-    "crates/nvim/src/lua/xdiff.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
     "crates/nvim/src/search/command.rs": 1,
     "crates/nvim/src/search/find.rs": 1
