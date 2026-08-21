@@ -39,7 +39,7 @@ use crate::event::multiqueue::{multiqueue_new_child, multiqueue_put_event};
 use crate::event::proc::exit_on_closed_chan;
 use crate::event::rstream::rstream_start;
 use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
-use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF};
+use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::main::{
     ch_before_blocking_events, channels, main_loop, ui_client_channel_id, ui_client_error_exit,
 };
@@ -224,7 +224,7 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
     unsafe {
         let out = channel_outstream(channel);
         let in_0 = channel_instream(channel);
-        log!(
+        logmsg!(
             LOGLVL_DBG,
             c"rpc_start",
             93,
@@ -354,7 +354,7 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
             }
         }
         channel_close(chan.id, kChannelPartRpc, ptr::null_mut());
-        log!(loglevel, c"chan_close_on_err", 545, c"RPC: %s", msg);
+        logmsg!(loglevel, c"chan_close_on_err", 545, c"RPC: %s", msg);
     }
 }
 

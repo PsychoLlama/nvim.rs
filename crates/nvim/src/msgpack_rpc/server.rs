@@ -19,7 +19,7 @@ use crate::event::libuv::{uv_freeaddrinfo, uv_strerror};
 use crate::event::socket::address::is_bare_server_name;
 use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_watcher_start};
 use crate::global_cell::GlobalCell;
-use crate::log::{LOGLVL_ERR, LOGLVL_WRN};
+use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::main::{IObuff, NameBuff, main_loop};
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::os::cshim::snprintf;
@@ -104,7 +104,7 @@ pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
     // SAFETY: a static name, and a message with no arguments.
     unsafe {
         if os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) {
-            log!(LOGLVL_ERR, c"server_init", 58, c"test log message");
+            logmsg!(LOGLVL_ERR, c"server_init", 58, c"test log message");
         }
     }
 
@@ -228,7 +228,7 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
     if truncated {
         // SAFETY: `address` is NUL-terminated and the verb takes a string.
         unsafe {
-            log!(
+            logmsg!(
                 LOGLVL_ERR,
                 c"server_address_new",
                 133,
@@ -279,7 +279,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
     if addr.is_null() || unsafe { *addr == 0 } {
         // SAFETY: a message with no arguments.
         unsafe {
-            log!(LOGLVL_WRN, c"server_start", 169, c"Empty or NULL address");
+            logmsg!(LOGLVL_WRN, c"server_start", 169, c"Empty or NULL address");
         }
         return 1;
     }
@@ -326,7 +326,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
         // SAFETY: the watcher is live and its address is NUL-terminated; a
         // TCP watcher owns the addrinfo `socket_watcher_init` resolved.
         unsafe {
-            log!(
+            logmsg!(
                 LOGLVL_ERR,
                 c"server_start",
                 186,
@@ -347,7 +347,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
         // SAFETY: the watcher is still live, and `free_server` releases it
         // once libuv is done.
         unsafe {
-            log!(
+            logmsg!(
                 LOGLVL_WRN,
                 c"server_start",
                 197,
@@ -402,7 +402,7 @@ pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bo
     let Some(watcher) = found else {
         // SAFETY: `addr` is NUL-terminated and the verb takes a string.
         unsafe {
-            log!(
+            logmsg!(
                 LOGLVL_WRN,
                 c"server_stop",
                 236,
@@ -457,7 +457,7 @@ unsafe fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut 
     if result != 0 {
         // SAFETY: `uv_strerror` answers a static string for any code.
         unsafe {
-            log!(
+            logmsg!(
                 LOGLVL_ERR,
                 c"connection_cb",
                 276,

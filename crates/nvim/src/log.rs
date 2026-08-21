@@ -25,10 +25,6 @@ use crate::event::libuv::{
     uv_strerror,
 };
 use crate::global_cell::GlobalCell;
-/// `#[macro_export]` publishes at the crate root; this re-export lets callers
-/// name the macro where the rest of the logging API lives, and brings it into
-/// scope here ahead of its own textual definition.
-pub use crate::logmsg_c;
 use crate::main::{g_min_log_level, g_stats, ui_client_channel_id};
 use crate::memory::xfree;
 use crate::msg_schedule_semsg_c;
@@ -40,6 +36,10 @@ use crate::path::path_tail;
 use crate::types::{
     FILE, UV_MUTEX_INIT, Vv, XDGVarType, int32_t, uv_loop_t, uv_mutex_t, uv_timeval64_t,
 };
+/// `#[macro_export]` publishes at the crate root; this re-export lets callers
+/// name the macro where the rest of the logging API lives, and brings it into
+/// scope here ahead of its own textual definition.
+pub use crate::{logmsg, logmsg_c};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
@@ -394,6 +394,30 @@ macro_rules! logmsg_c {
             $crate::log::logmsg_finish(log_file, eol, payload_ok)
         }
     }};
+}
+
+/// One log line in `logmsg`'s plain shape: no context tag, the upstream
+/// function name and line number, newline-terminated.
+///
+/// Spelled out, a [`logmsg_c!`] call is six fixed arguments before the format
+/// string and rustfmt wraps it over eight lines — eight lines of *unchecked*
+/// code, since the whole call has to sit inside the region. Naming the fixed
+/// half here leaves one line per site.
+///
+/// `who` and `fmt` are `CStr` literals; the macro takes the pointers.
+#[macro_export]
+macro_rules! logmsg {
+    ($level:expr, $who:expr, $line:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
+        $crate::log::logmsg_c!(
+            $level,
+            ::core::ptr::null(),
+            $who.as_ptr(),
+            $line,
+            true,
+            $fmt.as_ptr()
+            $(, $arg)*
+        )
+    };
 }
 
 /// Dump libuv's handle table to the log — the `:checkhealth`-adjacent view

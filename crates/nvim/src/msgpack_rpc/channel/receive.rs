@@ -22,7 +22,7 @@ use crate::api::private::helpers::{api_clear_error, api_free_object, api_set_err
 use crate::channel::{channel_decref, channel_incref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
-use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF};
+use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::main::{ch_before_blocking_events, resize_events, ui_client_attached};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::msgpack_rpc::unpacker::unpacker_advance;
@@ -62,7 +62,7 @@ pub(super) unsafe fn receive_msgpack(
     let id = chan.id;
     // SAFETY: the verbs match the arguments.
     unsafe {
-        log!(
+        logmsg!(
             LOGLVL_DBG,
             c"receive_msgpack",
             211,
@@ -325,7 +325,7 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
     // string the verbs match.
     unsafe {
         multiqueue_put_event(chan.events, event);
-        log!(
+        logmsg!(
             LOGLVL_DBG,
             c"handle_request",
             347,
