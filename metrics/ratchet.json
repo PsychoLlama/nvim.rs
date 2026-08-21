@@ -1,8 +1,8 @@
 {
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1054,
-  "files_without_deny_unsafe_op": 32,
-  "files_without_deny_casts": 1086,
+  "files_without_deny_unsafe_op": 31,
+  "files_without_deny_casts": 1085,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
     "crates/nvim/src/api/autocmd/create.rs": {"missing_safety_doc": 4, "unsafe_lines": 339},
@@ -332,7 +332,7 @@
     "crates/nvim/src/event/proc.rs": {"cell_ptr": 3, "extern_abi": 5, "unsafe_lines": 99},
     "crates/nvim/src/event/rstream.rs": {"extern_abi": 4, "missing_safety_doc": 16, "unsafe_lines": 180},
     "crates/nvim/src/event/signal.rs": {"extern_abi": 3, "missing_safety_doc": 7, "unsafe_lines": 45},
-    "crates/nvim/src/event/socket/mod.rs": {"cell_ptr": 4, "extern_abi": 5, "missing_safety_doc": 14, "unsafe_lines": 344},
+    "crates/nvim/src/event/socket/mod.rs": {"cell_ptr": 4, "extern_abi": 5, "unsafe_lines": 145},
     "crates/nvim/src/event/stream.rs": {"extern_abi": 1, "missing_safety_doc": 4, "unsafe_lines": 112},
     "crates/nvim/src/event/time.rs": {"extern_abi": 4, "missing_safety_doc": 8, "unsafe_lines": 68},
     "crates/nvim/src/event/wstream.rs": {"extern_abi": 1, "missing_safety_doc": 7, "unsafe_lines": 94},
