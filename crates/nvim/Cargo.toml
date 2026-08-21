@@ -36,9 +36,11 @@ nvim-mainthread = { path = "../mainthread" }
 # Edition 2024 warns when an `unsafe fn` body uses unsafe operations without
 # an explicit `unsafe {}` block. The transpiled tree has thousands of such
 # fns; blanket-wrapping their bodies would double the textual `unsafe` count
-# the ratchet tracks while making nothing safer. So the lint is allowed
-# crate-wide, and modules deny it as they are rewritten — rewrites eliminate
-# unsafe instead of annotating it.
+# the ratchet tracks while making nothing safer. So the lint is allowed here,
+# and modules deny it as they are rewritten — rewrites eliminate unsafe
+# instead of annotating it. Every file in the library now does, and lib.rs
+# denies it crate-wide on top; this allow survives only for the sibling
+# bin/test/bench crate roots, which this table also governs.
 [lints.rust]
 unsafe_op_in_unsafe_fn = "allow"
 

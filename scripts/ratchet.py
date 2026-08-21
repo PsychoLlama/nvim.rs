@@ -144,14 +144,15 @@ plus two whole-tree metrics:
   files_without_deny_unsafe_op  the number of source files carrying neither
                     #![forbid(unsafe_code)] nor
                     #![deny(unsafe_op_in_unsafe_fn)]. Same trick for edition
-                    2024's honest-unsafe lint: the crate allows it (see
-                    Cargo.toml — blanket body-wrapping would double the
-                    textual unsafe count), each module denies it once its
-                    unsafe fns use explicit unsafe blocks, and the count of
-                    files doing neither may only fall. The crate root
-                    (lib.rs) can't deny per-module — its inner attributes
-                    are crate-level — so it holds the floor at 1 until the
-                    allow itself retires.
+                    2024's honest-unsafe lint: Cargo.toml allows it (blanket
+                    body-wrapping would double the textual unsafe count), each
+                    module denies it once its unsafe fns use explicit unsafe
+                    blocks, and the count of files doing neither may only fall.
+                    Phase 20 drove it to **0**: the crate root's inner
+                    attribute is crate-level rather than per-module, so lib.rs
+                    could only take it once every file beneath it already had
+                    a marker — which is exactly the state the criterion
+                    describes, and why lib.rs went last.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for

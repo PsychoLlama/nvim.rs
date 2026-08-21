@@ -8,6 +8,15 @@
 #![allow(special_module_name)]
 #![allow(unused_assignments)]
 #![allow(unused_mut)]
+// The crate root cannot carry `forbid(unsafe_code)` — `forbid` reaches the
+// whole subtree and cannot be lifted by a module, and the tree is still tens
+// of thousands of unchecked lines deep. `deny(unsafe_op_in_unsafe_fn)` is the
+// strongest marker it can carry, and it is now a *no-op*: every other source
+// file in the crate already carries one of the two markers, so nothing is left
+// for this to switch on. That is the whole point — it overrides the crate's
+// Cargo.toml allow (which still governs the sibling bin/test/bench roots) and
+// makes the finished state compiler-enforced rather than a grep result.
+#![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod allocator;
 pub mod api;
