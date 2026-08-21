@@ -7,9 +7,18 @@
 //! and the `*list()` bulk forms.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use crate::types::{FAIL, OK, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
+use crate::eval::funcs::args::{Args, frame};
+use crate::narrow::number_as_int;
+use crate::types::{FAIL, OK, VAR_DICT, VAR_LIST, kListLenMayKnow};
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.
@@ -41,13 +50,60 @@ unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
     }
 }
 
-/// `tv_dict_find` with a Rust key; null when the key is absent.
+/// `NULL`, for the many optional pointers in this file.
+fn null<T>() -> *mut T {
+    ::core::ptr::null_mut()
+}
+
+/// The value stored under `key`, or `None` when the dictionary has no such
+/// key.
 ///
 /// # Safety
-/// `d` must be null or a live dictionary.
-unsafe fn find(d: *const dict_T, key: &str) -> *mut dictitem_T {
+/// `d` must be null or a live dictionary; the answer borrows from it.
+unsafe fn key(d: *const dict_T, key: &str) -> Option<*mut typval_T> {
     // SAFETY: the caller's dictionary.
-    unsafe { tv_dict_find(d, key.as_ptr().cast(), key.len() as ptrdiff_t) }
+    let di: *mut dictitem_T = unsafe {
+        tv_dict_find(
+            d,
+            key.as_ptr().cast(),
+            ptrdiff_t::try_from(key.len()).expect("a key literal is short"),
+        )
+    };
+    // SAFETY: a non-null answer is a live item of that dictionary. No read
+    // happens here.
+    (!di.is_null()).then(|| unsafe { &raw mut (*di).di_tv })
+}
+
+/// Argument `i` as a dictionary, or null when it was not supplied.
+///
+/// # Safety
+/// The caller must already have checked that a supplied argument `i` is a
+/// dictionary -- `tv_check_for_*_dict_arg` is what does that.
+unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut dict_T {
+    if !args.has(i) {
+        return null();
+    }
+    // SAFETY: the caller's check says the dictionary arm is live.
+    unsafe { args.get(i).vval.v_dict }
+}
+
+/// A `group` argument: `None` when it does not read as a string at all, and
+/// null for the empty string, which names the global group.
+///
+/// # Safety
+/// `tv` must be a live typval.
+unsafe fn group_arg(tv: *mut typval_T) -> Option<*mut c_char> {
+    // SAFETY: the caller's typval.
+    let group = unsafe { tv_get_string_chk(tv) }.cast_mut();
+    if group.is_null() {
+        return None;
+    }
+    // SAFETY: a non-null answer is a NUL-terminated string.
+    Some(if unsafe { *group } == 0 {
+        null()
+    } else {
+        group
+    })
 }
 
 /// The name of highlight group `id`, or `"NONE"` when it has none.
@@ -62,11 +118,11 @@ unsafe fn hl_name(id: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
     }
 }
 
-/// Walks a `list_T`, yielding each item in order.
+/// Walks a `list_T`, yielding each item's value in order.
 ///
 /// # Safety
 /// `l` must be null or a live list the body does not modify.
-unsafe fn list_items(l: *const list_T) -> impl Iterator<Item = *mut listitem_T> {
+unsafe fn list_items(l: *const list_T) -> impl Iterator<Item = *mut typval_T> {
     // SAFETY: the caller's list.
     let mut at = unsafe { tv_list_first(l) };
     ::core::iter::from_fn(move || {
@@ -76,8 +132,58 @@ unsafe fn list_items(l: *const list_T) -> impl Iterator<Item = *mut listitem_T> 
         let item = at;
         // SAFETY: `item` is a live element of the caller's list.
         at = unsafe { (*item).li_next };
-        Some(item)
+        // SAFETY: as above. No read happens here.
+        Some(unsafe { &raw mut (*item).li_tv })
     })
+}
+
+/// Runs `one` over every dictionary in `l`, appending what it answers to
+/// `retlist`. An entry that is not a dictionary is E715 and answers -1.
+///
+/// # Safety
+/// `l` and `retlist` must be live lists.
+unsafe fn each_dict(
+    retlist: *mut list_T,
+    l: *const list_T,
+    mut one: impl FnMut(*mut dict_T) -> c_int,
+) {
+    // SAFETY: the caller's lists.
+    unsafe {
+        for tv in list_items(l) {
+            let retval = if (*tv).v_type == VAR_DICT {
+                one((*tv).vval.v_dict)
+            } else {
+                emsg(gettext((&raw const e_dictreq).cast::<c_char>()));
+                -1
+            };
+            tv_list_append_number(retlist, varnumber_T::from(retval));
+        }
+    };
+}
+
+/// The body `sign_placelist()` and `sign_unplacelist()` share: a list of
+/// what `one` answered for each dictionary in the argument list.
+///
+/// The return list is allocated *before* the type check, so a non-list
+/// argument still answers `[]` and not `0`.
+///
+/// # Safety
+/// `args` and `rettv` are the frame's.
+unsafe fn each_dict_arg(
+    args: Args<'_>,
+    rettv: &mut typval_T,
+    one: impl FnMut(*mut dict_T) -> c_int,
+) {
+    // SAFETY: the frame's return slot.
+    let retlist = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
+    if args.ty(0) != VAR_LIST {
+        // SAFETY: a static message.
+        unsafe { emsg(gettext((&raw const e_listreq).cast::<c_char>())) };
+        return;
+    }
+    // SAFETY: the tag says the list arm is live, and `retlist` was just
+    // allocated.
+    unsafe { each_dict(retlist, args.get(0).vval.v_list, one) };
 }
 
 /// `sign_getdefined()`'s dictionary for one defined sign.
@@ -121,7 +227,7 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
         let sh = Sh::new(decor_find_sign(mt_decor(mark)));
         put_str(d, "name", sign_get_name(sh.raw()));
         put_nr(d, "id", varnumber_T::from(mark.id.cast_signed()));
-        put_str(d, "group", describe_ns(mark.ns as NS, c"".as_ptr()));
+        put_str(d, "group", describe_ns(mark.ns.cast_signed(), c"".as_ptr()));
         put_nr(d, "lnum", varnumber_T::from(mark.pos.row + 1));
         put_nr(d, "priority", varnumber_T::from(sh.priority));
         d
@@ -267,7 +373,7 @@ unsafe fn sign_define_from_dict(
             texthl = tv_dict_get_string(dict, c"texthl".as_ptr(), false);
             culhl = tv_dict_get_string(dict, c"culhl".as_ptr(), false);
             numhl = tv_dict_get_string(dict, c"numhl".as_ptr(), false);
-            prio = tv_dict_get_number_def(dict, c"priority".as_ptr(), -1) as ::core::ffi::c_int;
+            prio = number_as_int(tv_dict_get_number_def(dict, c"priority".as_ptr(), -1));
         }
         sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1
     }
@@ -278,35 +384,29 @@ unsafe fn sign_define_from_dict(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_define(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
-    unsafe {
-        if (*argvars).v_type == VAR_LIST && (*argvars.offset(1)).v_type == VAR_UNKNOWN {
+    let (args, rettv) = frame!(argvars, rettv);
+    if args.ty(0) == VAR_LIST && !args.has(1) {
+        // SAFETY: the frame's return slot, and a list the evaluator owns.
+        unsafe {
             let retlist = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-            for li in list_items((*argvars).vval.v_list) {
-                let tv = &raw mut (*li).li_tv;
-                let retval = if (*tv).v_type == VAR_DICT {
-                    sign_define_from_dict(::core::ptr::null_mut(), (*tv).vval.v_dict)
-                } else {
-                    emsg(gettext(&raw const e_dictreq as *const ::core::ffi::c_char));
-                    -1
-                };
-                tv_list_append_number(retlist, retval as varnumber_T);
-            }
-            return;
-        }
-
-        (*rettv).vval.v_number = -1;
-        let name = tv_get_string_chk(argvars) as *mut ::core::ffi::c_char;
-        if name.is_null() || tv_check_for_opt_dict_arg(argvars, 1) == FAIL {
-            return;
-        }
-        let d = if (*argvars.offset(1)).v_type == VAR_DICT {
-            (*argvars.offset(1)).vval.v_dict
-        } else {
-            ::core::ptr::null_mut()
+            each_dict(retlist, args.get(0).vval.v_list, |d| {
+                sign_define_from_dict(null(), d)
+            });
         };
-        (*rettv).vval.v_number = sign_define_from_dict(name, d) as varnumber_T;
+        return;
     }
+
+    rettv.vval.v_number = -1;
+    // SAFETY: the argument slots the frame named.
+    let name = unsafe { tv_get_string_chk(args.ptr(0)) }.cast_mut();
+    // SAFETY: as above.
+    if name.is_null() || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) } == FAIL {
+        return;
+    }
+    // SAFETY: the tag says the dictionary arm is live.
+    let d = unsafe { dict_arg(args, 1) };
+    // SAFETY: the name and dictionary just read out of the frame.
+    rettv.vval.v_number = varnumber_T::from(unsafe { sign_define_from_dict(name, d) });
 }
 
 /// `sign_getdefined()`.
@@ -314,17 +414,19 @@ pub unsafe fn f_sign_define(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_getdefined(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the frame's return slot and argument.
     unsafe {
         let l = tv_list_alloc_ret(rettv, 0);
-        if (*argvars).v_type == VAR_UNKNOWN {
-            for sp in sign_defs() {
-                tv_list_append_dict(l, sign_get_info_dict(sp));
-            }
-        } else if let Some(sp) = sign_find(tv_get_string(argvars)) {
+        let defs = if args.has(0) {
+            sign_find(tv_get_string(args.ptr(0))).into_iter().collect()
+        } else {
+            sign_defs()
+        };
+        for sp in defs {
             tv_list_append_dict(l, sign_get_info_dict(sp));
         }
-    }
+    };
 }
 
 /// `sign_getplaced()`.
@@ -332,45 +434,42 @@ pub unsafe fn f_sign_getdefined(argvars: *mut typval_T, rettv: *mut typval_T, _f
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_getplaced(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the frame's return slot and argument slots.
     unsafe {
-        let mut buf = ::core::ptr::null_mut();
+        let mut buf = null();
         let mut lnum: linenr_T = 0;
         let mut sign_id = 0;
         let mut group: *const ::core::ffi::c_char = ::core::ptr::null();
 
         let l = tv_list_alloc_ret(rettv, 0);
 
-        if (*argvars).v_type != VAR_UNKNOWN {
-            buf = get_buf_arg(argvars);
+        if args.has(0) {
+            buf = get_buf_arg(args.ptr(0));
             if buf.is_null() {
                 return;
             }
-            if (*argvars.offset(1)).v_type != VAR_UNKNOWN {
-                if tv_check_for_nonnull_dict_arg(argvars, 1) == FAIL {
+            if args.has(1) {
+                if tv_check_for_nonnull_dict_arg(args.ptr(0), 1) == FAIL {
                     return;
                 }
-                let dict = (*argvars.offset(1)).vval.v_dict;
+                let dict = args.get(1).vval.v_dict;
 
-                let di = find(dict, "lnum");
-                if !di.is_null() {
-                    lnum = tv_get_lnum(&raw mut (*di).di_tv);
+                if let Some(tv) = key(dict, "lnum") {
+                    lnum = tv_get_lnum(tv);
                     if lnum <= 0 {
                         return;
                     }
                 }
-                let di = find(dict, "id");
-                if !di.is_null() {
+                if let Some(tv) = key(dict, "id") {
                     let mut notanum = false;
-                    sign_id = tv_get_number_chk(&raw mut (*di).di_tv, &raw mut notanum)
-                        as ::core::ffi::c_int;
+                    sign_id = number_as_int(tv_get_number_chk(tv, &raw mut notanum));
                     if notanum {
                         return;
                     }
                 }
-                let di = find(dict, "group");
-                if !di.is_null() {
-                    group = tv_get_string_chk(&raw mut (*di).di_tv);
+                if let Some(tv) = key(dict, "group") {
+                    group = tv_get_string_chk(tv);
                     if group.is_null() {
                         return;
                     }
@@ -383,7 +482,7 @@ pub unsafe fn f_sign_getplaced(argvars: *mut typval_T, rettv: *mut typval_T, _fp
         }
 
         sign_get_placed(buf, lnum, sign_id, group, l);
-    }
+    };
 }
 
 /// `sign_jump()`.
@@ -391,54 +490,45 @@ pub unsafe fn f_sign_getplaced(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_jump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
-    unsafe {
-        (*rettv).vval.v_number = -1;
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.vval.v_number = -1;
 
-        let mut notanum = false;
-        let id = tv_get_number_chk(argvars, &raw mut notanum) as ::core::ffi::c_int;
-        if notanum {
-            return;
-        }
-        if id <= 0 {
-            emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-            return;
-        }
-
-        let mut group = tv_get_string_chk(argvars.offset(1)) as *mut ::core::ffi::c_char;
-        if group.is_null() {
-            return;
-        }
-        if *group == 0 {
-            group = ::core::ptr::null_mut();
-        }
-
-        let buf = get_buf_arg(argvars.offset(2));
-        if buf.is_null() {
-            return;
-        }
-
-        (*rettv).vval.v_number = sign_jump(id, group, buf) as varnumber_T;
+    let mut notanum = false;
+    // SAFETY: the frame's argument slots.
+    let id = number_as_int(unsafe { tv_get_number_chk(args.ptr(0), &raw mut notanum) });
+    if notanum {
+        return;
     }
+    if id <= 0 {
+        // SAFETY: a static message.
+        unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+        return;
+    }
+
+    // SAFETY: the frame's argument slots.
+    let Some(group) = (unsafe { group_arg(args.ptr(1)) }) else {
+        return;
+    };
+    // SAFETY: as above.
+    let buf = unsafe { get_buf_arg(args.ptr(2)) };
+    if buf.is_null() {
+        return;
+    }
+
+    // SAFETY: a live buffer and a group name the argument owns.
+    rettv.vval.v_number = varnumber_T::from(unsafe { sign_jump(id, group, buf) });
 }
 
 /// The named key's value, or the positional typval when there is one.
 ///
 /// # Safety
 /// `tv` and `dict` must be null or live.
-unsafe fn slot(tv: *mut typval_T, dict: *mut dict_T, key: &str) -> *mut typval_T {
-    // SAFETY: the caller's typval and dictionary.
-    unsafe {
-        if !tv.is_null() {
-            return tv;
-        }
-        let di = find(dict, key);
-        if di.is_null() {
-            ::core::ptr::null_mut()
-        } else {
-            &raw mut (*di).di_tv
-        }
+unsafe fn slot(tv: *mut typval_T, dict: *mut dict_T, name: &str) -> Option<*mut typval_T> {
+    if !tv.is_null() {
+        return Some(tv);
     }
+    // SAFETY: the caller's dictionary.
+    unsafe { key(dict, name) }
 }
 
 /// Places one sign described by a dictionary; answers its id, or −1.
@@ -460,71 +550,62 @@ unsafe fn sign_place_from_dict(
         let mut notanum = false;
 
         let mut id = 0;
-        let id_tv = slot(id_tv, dict, "id");
-        if !id_tv.is_null() {
-            id = tv_get_number_chk(id_tv, &raw mut notanum) as ::core::ffi::c_int;
+        if let Some(tv) = slot(id_tv, dict, "id") {
+            id = number_as_int(tv_get_number_chk(tv, &raw mut notanum));
             if notanum {
                 return -1;
             }
             if id < 0 {
-                emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
+                emsg(gettext((&raw const e_invarg).cast::<c_char>()));
                 return -1;
             }
         }
 
-        let mut group: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-        let group_tv = slot(group_tv, dict, "group");
-        if !group_tv.is_null() {
-            group = tv_get_string_chk(group_tv) as *mut ::core::ffi::c_char;
-            if group.is_null() {
-                return -1;
-            }
-            if *group == 0 {
-                group = ::core::ptr::null_mut();
+        let mut group: *mut c_char = null();
+        if let Some(tv) = slot(group_tv, dict, "group") {
+            match group_arg(tv) {
+                Some(named) => group = named,
+                None => return -1,
             }
         }
 
-        let name_tv = slot(name_tv, dict, "name");
-        if name_tv.is_null() {
+        let Some(name_tv) = slot(name_tv, dict, "name") else {
             return -1;
-        }
-        let name = tv_get_string_chk(name_tv) as *mut ::core::ffi::c_char;
+        };
+        let name = tv_get_string_chk(name_tv).cast_mut();
         if name.is_null() {
             return -1;
         }
 
-        let buf_tv = slot(buf_tv, dict, "buffer");
-        if buf_tv.is_null() {
+        let Some(buf_tv) = slot(buf_tv, dict, "buffer") else {
             return -1;
-        }
+        };
         let buf = get_buf_arg(buf_tv);
         if buf.is_null() {
             return -1;
         }
 
         let mut lnum: linenr_T = 0;
-        let di = find(dict, "lnum");
-        if !di.is_null() {
-            lnum = tv_get_lnum(&raw mut (*di).di_tv);
+        if let Some(tv) = key(dict, "lnum") {
+            lnum = tv_get_lnum(tv);
             if lnum <= 0 {
-                emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
+                emsg(gettext((&raw const e_invarg).cast::<c_char>()));
                 return -1;
             }
         }
 
         let mut prio = -1;
-        let di = find(dict, "priority");
-        if !di.is_null() {
-            prio = tv_get_number_chk(&raw mut (*di).di_tv, &raw mut notanum) as ::core::ffi::c_int;
+        if let Some(tv) = key(dict, "priority") {
+            prio = number_as_int(tv_get_number_chk(tv, &raw mut notanum));
             if notanum {
                 return -1;
             }
         }
 
         // `sign_place` writes the id back when it was zero (auto-allocate).
-        let mut uid = id as uint32_t;
+        let mut uid = id.cast_unsigned();
         if sign_place(&raw mut uid, group, name, buf, lnum, prio) == OK {
-            uid as ::core::ffi::c_int
+            uid.cast_signed()
         } else {
             -1
         }
@@ -536,24 +617,21 @@ unsafe fn sign_place_from_dict(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_place(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
-    unsafe {
-        let mut dict = ::core::ptr::null_mut();
-        (*rettv).vval.v_number = -1;
-        if (*argvars.offset(4)).v_type != VAR_UNKNOWN {
-            if tv_check_for_nonnull_dict_arg(argvars, 4) == FAIL {
-                return;
-            }
-            dict = (*argvars.offset(4)).vval.v_dict;
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.vval.v_number = -1;
+    let mut dict = null();
+    if args.has(4) {
+        // SAFETY: the frame's argument slots.
+        if unsafe { tv_check_for_nonnull_dict_arg(args.ptr(0), 4) } == FAIL {
+            return;
         }
-        (*rettv).vval.v_number = sign_place_from_dict(
-            argvars,
-            argvars.offset(1),
-            argvars.offset(2),
-            argvars.offset(3),
-            dict,
-        ) as varnumber_T;
+        // SAFETY: the check above says the dictionary arm is live.
+        dict = unsafe { args.get(4).vval.v_dict };
     }
+    // SAFETY: the frame's argument slots and the dictionary just read.
+    let id =
+        unsafe { sign_place_from_dict(args.ptr(0), args.ptr(1), args.ptr(2), args.ptr(3), dict) };
+    rettv.vval.v_number = varnumber_T::from(id);
 }
 
 /// `sign_placelist()`.
@@ -561,25 +639,13 @@ pub unsafe fn f_sign_place(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_placelist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the frame's return slot and argument.
     unsafe {
-        let retlist = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-        if (*argvars).v_type != VAR_LIST {
-            emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
-            return;
-        }
-        for li in list_items((*argvars).vval.v_list) {
-            let tv = &raw mut (*li).li_tv;
-            let sign_id = if (*tv).v_type == VAR_DICT {
-                let null = ::core::ptr::null_mut();
-                sign_place_from_dict(null, null, null, null, (*tv).vval.v_dict)
-            } else {
-                emsg(gettext(&raw const e_dictreq as *const ::core::ffi::c_char));
-                -1
-            };
-            tv_list_append_number(retlist, sign_id as varnumber_T);
-        }
-    }
+        each_dict_arg(args, rettv, |d| {
+            sign_place_from_dict(null(), null(), null(), null(), d)
+        });
+    };
 }
 
 /// `sign_undefine()`.
@@ -587,31 +653,31 @@ pub unsafe fn f_sign_placelist(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_undefine(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
-    unsafe {
-        if (*argvars).v_type == VAR_LIST && (*argvars.offset(1)).v_type == VAR_UNKNOWN {
+    let (args, rettv) = frame!(argvars, rettv);
+    if args.ty(0) == VAR_LIST && !args.has(1) {
+        // SAFETY: the frame's return slot, and a list the evaluator owns.
+        unsafe {
             let retlist = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-            for li in list_items((*argvars).vval.v_list) {
-                let name = tv_get_string_chk(&raw mut (*li).li_tv);
+            for tv in list_items(args.get(0).vval.v_list) {
+                let name = tv_get_string_chk(tv);
                 let ok = !name.is_null() && sign_undefine_by_name(name) == OK;
                 tv_list_append_number(retlist, if ok { 0 } else { -1 });
             }
-            return;
-        }
+        };
+        return;
+    }
 
-        (*rettv).vval.v_number = -1;
-        if (*argvars).v_type == VAR_UNKNOWN {
-            free_signs();
-            (*rettv).vval.v_number = 0;
-            return;
-        }
-        let name = tv_get_string_chk(argvars);
-        if name.is_null() {
-            return;
-        }
-        if sign_undefine_by_name(name) == OK {
-            (*rettv).vval.v_number = 0;
-        }
+    rettv.vval.v_number = -1;
+    if !args.has(0) {
+        free_signs();
+        rettv.vval.v_number = 0;
+        return;
+    }
+    // SAFETY: the frame's argument slot.
+    let name = unsafe { tv_get_string_chk(args.ptr(0)) };
+    // SAFETY: a name the argument owns, NUL-terminated.
+    if !name.is_null() && unsafe { sign_undefine_by_name(name) } == OK {
+        rettv.vval.v_number = 0;
     }
 }
 
@@ -637,17 +703,16 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> 
         }
 
         if !dict.is_null() {
-            let di = find(dict, "buffer");
-            if !di.is_null() {
-                buf = get_buf_arg(&raw mut (*di).di_tv);
+            if let Some(tv) = key(dict, "buffer") {
+                buf = get_buf_arg(tv);
                 if buf.is_null() {
                     return -1;
                 }
             }
-            if !find(dict, "id").is_null() {
-                id = tv_dict_get_number(dict, c"id".as_ptr()) as ::core::ffi::c_int;
+            if key(dict, "id").is_some() {
+                id = number_as_int(tv_dict_get_number(dict, c"id".as_ptr()));
                 if id <= 0 {
-                    emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
+                    emsg(gettext((&raw const e_invarg).cast::<c_char>()));
                     return -1;
                 }
             }
@@ -662,21 +727,18 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> 
 /// # Safety
 /// The evaluator's argument and return slots.
 pub unsafe fn f_sign_unplace(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's slots.
-    unsafe {
-        (*rettv).vval.v_number = -1;
-        if tv_check_for_string_arg(argvars, 0) == FAIL
-            || tv_check_for_opt_dict_arg(argvars, 1) == FAIL
-        {
-            return;
-        }
-        let dict = if (*argvars.offset(1)).v_type != VAR_UNKNOWN {
-            (*argvars.offset(1)).vval.v_dict
-        } else {
-            ::core::ptr::null_mut()
-        };
-        (*rettv).vval.v_number = sign_unplace_from_dict(argvars, dict) as varnumber_T;
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.vval.v_number = -1;
+    // SAFETY: the frame's argument slots.
+    if unsafe { tv_check_for_string_arg(args.ptr(0), 0) } == FAIL
+        || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) } == FAIL
+    {
+        return;
     }
+    // SAFETY: the check above says the dictionary arm is live if it is set.
+    let dict = unsafe { dict_arg(args, 1) };
+    // SAFETY: the frame's first argument and the dictionary just read.
+    rettv.vval.v_number = varnumber_T::from(unsafe { sign_unplace_from_dict(args.ptr(0), dict) });
 }
 
 /// `sign_unplacelist()`.
@@ -688,22 +750,7 @@ pub unsafe fn f_sign_unplacelist(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    // SAFETY: the evaluator's slots.
-    unsafe {
-        let retlist = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
-        if (*argvars).v_type != VAR_LIST {
-            emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
-            return;
-        }
-        for li in list_items((*argvars).vval.v_list) {
-            let tv = &raw mut (*li).li_tv;
-            let retval = if (*tv).v_type == VAR_DICT {
-                sign_unplace_from_dict(::core::ptr::null_mut(), (*tv).vval.v_dict)
-            } else {
-                emsg(gettext(&raw const e_dictreq as *const ::core::ffi::c_char));
-                -1
-            };
-            tv_list_append_number(retlist, retval as varnumber_T);
-        }
-    }
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the frame's return slot and argument.
+    unsafe { each_dict_arg(args, rettv, |d| sign_unplace_from_dict(null(), d)) };
 }

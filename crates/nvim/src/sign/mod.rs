@@ -19,6 +19,13 @@
 //! takes with `use super::*`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
@@ -71,9 +78,9 @@ use crate::os::cshim::{gettext, snprintf, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText,
-    Error, EvalFuncData, FAIL, Integer, MTKey, MarkTreeIter, NS, OK, SignItem, buf_T, dict_T,
-    dictitem_T, exarg_T, expand_T, int32_t, int64_t, linenr_T, list_T, listitem_T, ptrdiff_t,
-    schar_T, sign_T, size_t, typval_T, uint32_t, varnumber_T,
+    Error, EvalFuncData, FAIL, Integer, MTKey, MarkTreeIter, OK, SignItem, buf_T, dict_T,
+    dictitem_T, exarg_T, expand_T, int32_t, int64_t, linenr_T, list_T, ptrdiff_t, schar_T, sign_T,
+    size_t, typval_T, uint32_t, varnumber_T,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, windows};

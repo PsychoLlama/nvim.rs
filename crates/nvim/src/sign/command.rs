@@ -9,10 +9,21 @@
 //! `:sign place` / `:sign list` reports.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::types::FAIL;
 use crate::{semsg_c, smsg_c};
+
+/// The `"*"` group's only byte, and the leading zero a sign name may carry.
+const STAR: c_char = b'*'.cast_signed();
+const ZERO: c_char = b'0'.cast_signed();
 
 /// A `vim_snprintf` into a fresh [`MSG_BUF_LEN`] buffer, kept as bytes so the
 /// caller can hand the result straight back to `msg_puts`.
@@ -96,7 +107,7 @@ unsafe fn report_signs(signs: &[MTKey]) {
             } else {
                 msg_buf!(
                     c"  group=%s".as_ptr(),
-                    describe_ns(mark.ns as NS, c"".as_ptr()),
+                    describe_ns(mark.ns.cast_signed(), c"".as_ptr()),
                 )
             };
             let lbuf = msg_buf!(
@@ -132,7 +143,9 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
         let idx = CMDS
             .iter()
             .position(|cmd| strcmp(begin_cmd, cmd.as_ptr()) == 0)
-            .map_or(SIGNCMD_LAST, |i| i as c_int);
+            .map_or(SIGNCMD_LAST, |i| {
+                c_int::try_from(i).expect("six subcommands")
+            });
         *end_cmd = save;
         idx
     }
@@ -236,7 +249,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
             } else if let Some(v) = after(c"priority=") {
                 prio = atoi(v);
             } else {
-                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
+                semsg_c!(gettext((&raw const e_invarg2).cast::<c_char>()), arg);
                 return;
             }
 
@@ -272,17 +285,17 @@ unsafe fn sign_place_cmd(
             // The listing forms: `:sign place [group=X] [file=Y|buffer=N]`.
             // A `line=` or a `name=` means a placement was intended.
             if lnum >= 0 || !name.is_null() || empty_group {
-                emsg(gettext(&raw const e_invarg as *const c_char));
+                emsg(gettext((&raw const e_invarg).cast::<c_char>()));
             } else {
                 sign_list_placed(buf, group);
             }
             return;
         }
         if name.is_null() || buf.is_null() || empty_group {
-            emsg(gettext(&raw const e_invarg as *const c_char));
+            emsg(gettext((&raw const e_invarg).cast::<c_char>()));
             return;
         }
-        let mut uid = id as uint32_t;
+        let mut uid = id.cast_unsigned();
         sign_place(&raw mut uid, group, name, buf, lnum, prio);
     }
 }
@@ -306,7 +319,7 @@ unsafe fn sign_unplace_cmd(
     // SAFETY: the caller's buffer, name and group.
     unsafe {
         if lnum >= 0 || !name.is_null() || (!group.is_null() && *group == 0) {
-            emsg(gettext(&raw const e_invarg as *const c_char));
+            emsg(gettext((&raw const e_invarg).cast::<c_char>()));
             return;
         }
 
@@ -337,13 +350,13 @@ unsafe fn sign_jump_cmd(
     // SAFETY: the caller's buffer, name and group.
     unsafe {
         if name.is_null() && group.is_null() && id == -1 {
-            emsg(gettext(&raw const e_argreq as *const c_char));
+            emsg(gettext((&raw const e_argreq).cast::<c_char>()));
             return;
         }
         // No buffer, an empty group, or a `line=`/`name=` that jumping has
         // no use for.
         if buf.is_null() || (!group.is_null() && *group == 0) || lnum >= 0 || !name.is_null() {
-            emsg(gettext(&raw const e_invarg as *const c_char));
+            emsg(gettext((&raw const e_invarg).cast::<c_char>()));
             return;
         }
         sign_jump(id, group, buf);
@@ -399,9 +412,9 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
 
         // A leading number is the sign id — but only if a separator follows,
         // so that `:sign unplace 3name=x` is not read as id 3.
-        if ascii_isdigit(*arg as c_int) {
+        if ascii_isdigit(c_int::from(*arg)) {
             out.id = getdigits_int(&raw mut arg, true, 0);
-            if !ascii_iswhite(*arg as c_int) && *arg != 0 {
+            if !ascii_iswhite(c_int::from(*arg)) && *arg != 0 {
                 out.id = -1;
                 arg = arg1;
             } else {
@@ -421,10 +434,10 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
                 out.lnum = atoi(v);
                 arg = skiptowhite(v);
                 lnum_arg = true;
-            } else if cmd == SIGNCMD_UNPLACE && *arg == b'*' as c_char {
+            } else if cmd == SIGNCMD_UNPLACE && *arg == STAR {
                 // `:sign unplace *`: every sign, and not with an id too.
                 if out.id != -1 {
-                    emsg(gettext(&raw const e_invarg as *const c_char));
+                    emsg(gettext((&raw const e_invarg).cast::<c_char>()));
                     return None;
                 }
                 out.id = -2;
@@ -438,7 +451,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
                 }
                 // Leading zeroes are stripped, so "099" and "99" name the
                 // same sign — but a bare "0" is kept.
-                while *namep == b'0' as c_char && *namep.add(1) != 0 {
+                while *namep == ZERO && *namep.add(1) != 0 {
                     namep = namep.add(1);
                 }
                 out.name = namep;
@@ -463,11 +476,11 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
                 // Diagnosed but not fatal, which is why this still breaks
                 // out with whatever buffer it found.
                 if *skipwhite(p) != 0 {
-                    semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p);
+                    semsg_c!(gettext((&raw const e_trailing_arg).cast::<c_char>()), p);
                 }
                 break;
             } else {
-                emsg(gettext(&raw const e_invarg as *const c_char));
+                emsg(gettext((&raw const e_invarg).cast::<c_char>()));
                 return None;
             }
             arg = skipwhite(arg);
@@ -475,7 +488,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
 
         if !filename.is_null() && out.buf.is_null() {
             semsg_c!(
-                gettext(&raw const e_invalid_buffer_name_str as *const c_char),
+                gettext((&raw const e_invalid_buffer_name_str).cast::<c_char>()),
                 filename,
             );
             return None;
@@ -540,7 +553,7 @@ pub unsafe fn ex_sign(eap: *mut exarg_T) {
             *p = 0;
             p = p.add(1);
         }
-        while *arg == b'0' as c_char && *arg.add(1) != 0 {
+        while *arg == ZERO && *arg.add(1) != 0 {
             arg = arg.add(1);
         }
 

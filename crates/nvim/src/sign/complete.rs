@@ -9,8 +9,16 @@
 //! named.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
+use crate::narrow::number_as_int;
 use crate::types::ExpandContext;
 
 /// What [`get_sign_name`] should enumerate.
@@ -40,6 +48,12 @@ enum Expand {
 /// an index: the `expand_T` it also passes carries the *other* completions'
 /// context, not this one.
 static EXPAND_WHAT: GlobalCell<Expand> = GlobalCell::new(Expand::Subcmd);
+
+/// `expand_generic`'s index as a list position; a negative one is 0, which
+/// is what `idx.max(0)` said before the completion lists were slices.
+fn at(idx: c_int) -> usize {
+    usize::try_from(idx).unwrap_or(0)
+}
 
 /// The `idx`'th element of a completion list, or null past its end.
 ///
@@ -87,11 +101,11 @@ pub unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
         // neither `line=` nor `name=`; `:sign unplace` and `:sign jump` take
         // the same three.
         Expand::List | Expand::Unplace => nth(&[c"group=", c"file=", c"buffer="], idx),
-        Expand::SignNames => sign_nth_name(idx.max(0) as usize),
-        Expand::SignGroups => match sign_nth_group(idx.max(0) as usize) {
+        Expand::SignNames => sign_nth_name(at(idx)),
+        Expand::SignGroups => match sign_nth_group(at(idx)).map(number_as_int) {
             // SAFETY: the namespace came out of the group list, so it is one
             // `nvim_create_namespace` handed out.
-            Some(ns) => unsafe { describe_ns(ns as NS, c"".as_ptr()).cast_mut() },
+            Some(ns) => unsafe { describe_ns(ns, c"".as_ptr()).cast_mut() },
             None => ::core::ptr::null_mut(),
         },
         Expand::Nothing => ::core::ptr::null_mut(),
@@ -148,7 +162,7 @@ pub unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
                 SIGNCMD_DEFINE => Expand::Define,
                 // `:sign place {id} ...` places and takes the full argument
                 // list; `:sign place ...` lists and takes the short one.
-                SIGNCMD_PLACE if ascii_isdigit(*begin_subcmd_args as c_int) => Expand::Place,
+                SIGNCMD_PLACE if ascii_isdigit(c_int::from(*begin_subcmd_args)) => Expand::Place,
                 SIGNCMD_PLACE => Expand::List,
                 SIGNCMD_LIST | SIGNCMD_UNDEFINE => Expand::SignNames,
                 SIGNCMD_JUMP | SIGNCMD_UNPLACE => Expand::Unplace,
