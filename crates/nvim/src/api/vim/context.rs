@@ -93,7 +93,9 @@ pub unsafe fn nvim_get_mode(arena: *mut Arena) -> Dict {
         let mut rv: Dict = arena_dict(arena, 2 as size_t);
         let mut modestr: *mut ::core::ffi::c_char =
             arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) as *mut ::core::ffi::c_char;
-        get_mode(modestr);
+        // The name is copied into the arena because the `Dict` borrows it;
+        // `get_mode` answers exactly `MODE_MAX_LENGTH` NUL-padded bytes.
+        modestr.copy_from_nonoverlapping(get_mode().as_ptr(), MODE_MAX_LENGTH as size_t);
         let mut blocked: bool = input_blocking();
         dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr)));
         dict_put(&mut rv, c"blocking", Object::boolean(blocked));

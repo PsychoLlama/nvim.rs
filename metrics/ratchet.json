@@ -1,7 +1,7 @@
 {
   "internal_exports": 0,
   "files_without_forbid_unsafe": 1058,
-  "files_without_deny_unsafe_op": 10,
+  "files_without_deny_unsafe_op": 9,
   "files_without_deny_casts": 1061,
   "files": {
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 33},
@@ -95,7 +95,7 @@
     "crates/nvim/src/arglist/mod.rs": {"cell_ptr": 1, "missing_safety_doc": 3, "unsafe_lines": 217},
     "crates/nvim/src/autocmd/aucmdwin.rs": {"cell_ptr": 11, "missing_safety_doc": 3, "unsafe_lines": 204},
     "crates/nvim/src/autocmd/cleanup.rs": {"missing_safety_doc": 7, "unsafe_lines": 127},
-    "crates/nvim/src/autocmd/define.rs": {"cell_ptr": 3, "missing_safety_doc": 10, "unsafe_lines": 423},
+    "crates/nvim/src/autocmd/define.rs": {"cell_ptr": 2, "missing_safety_doc": 10, "unsafe_lines": 423},
     "crates/nvim/src/autocmd/events.rs": {"cell_ptr": 2, "missing_safety_doc": 13, "unsafe_lines": 127},
     "crates/nvim/src/autocmd/fire.rs": {"cell_ptr": 7, "extern_abi": 2, "missing_safety_doc": 6, "no_mangle": 2, "unsafe_lines": 318},
     "crates/nvim/src/autocmd/groups.rs": {"cell_ptr": 8, "missing_safety_doc": 10, "unsafe_lines": 156},
@@ -879,7 +879,7 @@
     "crates/nvim/src/spellsuggest/walk/rep.rs": {"unsafe_lines": 86},
     "crates/nvim/src/spellsuggest/walk/split.rs": {"unsafe_lines": 178},
     "crates/nvim/src/spellsuggest/walk/transpose.rs": {"unsafe_lines": 161},
-    "crates/nvim/src/state.rs": {"cell_ptr": 12, "missing_safety_doc": 8, "unsafe_lines": 339},
+    "crates/nvim/src/state.rs": {"unsafe_lines": 96},
     "crates/nvim/src/statusline/custom.rs": {"cell_ptr": 3, "unsafe_lines": 48},
     "crates/nvim/src/statusline/mod.rs": {"unsafe_lines": 43},
     "crates/nvim/src/statusline/status.rs": {"cell_ptr": 1, "unsafe_lines": 14},

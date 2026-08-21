@@ -382,7 +382,7 @@ pub unsafe fn autocmd_register(
             // state, or it fires immediately on a difference that predates
             // it.
             if event == EVENT_MODECHANGED && !has_event(EVENT_MODECHANGED) {
-                get_mode(last_mode.ptr().cast::<::core::ffi::c_char>());
+                last_mode.set(get_mode());
             }
             if (event == EVENT_CURSORMOVED && !has_event(EVENT_CURSORMOVED))
                 || (event == EVENT_CURSORMOVEDI && !has_event(EVENT_CURSORMOVEDI))

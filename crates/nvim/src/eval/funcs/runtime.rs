@@ -379,12 +379,10 @@ pub unsafe fn f_menu_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// is non-zero.
 pub unsafe fn f_mode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    // `MODE_MAX_LENGTH` in the C.
-    let mut buf = [0 as c_char; 4];
-    // SAFETY: the frame is live; `get_mode` fills the buffer it is given and
+    // SAFETY: the frame is live; `get_mode` answers a NUL-padded name and
     // `rettv` then owns the duplicate.
     unsafe {
-        get_mode(buf.as_mut_ptr());
+        let mut buf = get_mode();
         if !non_zero_arg(args.ptr(0)) {
             buf[1] = NUL as c_char;
         }
