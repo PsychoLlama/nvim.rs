@@ -41,6 +41,13 @@ and this project adheres to [CalVer](https://calver.org/).
   `nvim_set_option_value()`/`nvim_get_option_info2()`/
   `nvim_get_all_options_info()`, and the wording of every "invalid argument"
   message the API answers with.
+- Rewrote the msgpack-RPC transport, covering the framing every RPC client and
+  embedder talks over: `serverstart()`/`serverstop()`/`serverlist()`,
+  `--listen` and `$NVIM_LISTEN_ADDRESS`, `sockconnect()` and `jobstart()`'s
+  `rpc` channels, `rpcrequest()`/`rpcnotify()`, the `--embed` and
+  `--remote-ui` stdio channels, the exact bytes a request, notification and
+  response are written as, what a malformed message is answered with before
+  the channel is closed, and the `RPC:` lines `$NVIM_LOG_FILE` records.
 
 ### Fixed
 
