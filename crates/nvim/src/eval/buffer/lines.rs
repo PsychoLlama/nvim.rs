@@ -2,8 +2,16 @@
 //! `appendbufline()`, `deletebufline()` and their current-buffer forms.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
+use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 
 /// Set or append lines in buffer `buf`, from `lines` — any type, converted to
@@ -59,7 +67,7 @@ pub(crate) unsafe fn set_buffer_lines(
                     if li.is_null() {
                         break;
                     }
-                    xfree(line as *mut c_void);
+                    xfree(line.cast());
                     line = typval_tostring(&raw mut (*li).li_tv, false);
                     li = (*li).li_next;
                 }
@@ -72,9 +80,9 @@ pub(crate) unsafe fn set_buffer_lines(
                     u_sync(true);
                 }
                 if !append && lnum <= Buf::current().line_count() {
-                    let old_len = strlen(ml_get(lnum)) as c_int;
+                    let old_len = len_as_int(strlen(ml_get(lnum)));
                     if u_savesub(lnum) == OK && ml_replace(lnum, line, true) == OK {
-                        inserted_bytes(lnum, 0, old_len, strlen(line) as c_int);
+                        inserted_bytes(lnum, 0, old_len, len_as_int(strlen(line)));
                         if is_curbuf && lnum == Win::current().w_cursor.lnum {
                             check_cursor_col(curwin.get());
                         }
@@ -91,7 +99,7 @@ pub(crate) unsafe fn set_buffer_lines(
                 }
                 lnum += 1;
             }
-            xfree(line as *mut c_void);
+            xfree(line.cast());
             if added > 0 {
                 appended_lines_mark(append_lnum, added);
                 // Only the current window of the current buffer follows the
@@ -160,11 +168,10 @@ unsafe fn get_buffer_lines(
         }
         let buf = Buf::new(buf);
         if !retlist {
-            (*rettv).vval.v_string = if start >= 1 && start <= buf.line_count() {
-                xstrnsave(buf.line(start).raw(), buf.line_len(start) as size_t)
-            } else {
-                ptr::null_mut()
-            };
+            let len = |n| size_t::try_from(n).expect("a line length is not negative");
+            let line = (start >= 1 && start <= buf.line_count())
+                .then(|| xstrnsave(buf.line(start).raw(), len(buf.line_len(start))));
+            (*rettv).vval.v_string = line.unwrap_or(ptr::null_mut());
             return;
         }
         start = start.max(1);
@@ -311,7 +318,7 @@ pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             // Every delete takes the same line number: the lines below move
             // up.
             for _ in first..=last {
-                ml_delete_flags(first, ML_DEL_MESSAGE as c_int);
+                ml_delete_flags(first, ML_DEL_MESSAGE);
             }
             // Pull every cursor that was inside or after the deleted range
             // back onto a line that still exists.

@@ -26,6 +26,13 @@
 //! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 pub mod decode;
 pub mod encode;

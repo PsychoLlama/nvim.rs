@@ -2,10 +2,18 @@
 //! `prompt_setinterrupt()` and `prompt_setprompt()`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::lines::set_buffer_lines;
 use super::*;
 use crate::eval::typval::kCallbackNone;
+use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
 
 /// Whether `s` ends in a newline — which asks the *next* `prompt_appendbuf()`
@@ -18,7 +26,7 @@ unsafe fn ends_in_newline(s: *const c_char) -> bool {
     // `strlen` measured it.
     unsafe {
         let len = strlen(s);
-        len > 0 && *s.add(len - 1) == b'\n' as c_char
+        len > 0 && *s.add(len - 1) == b'\n'.cast_signed()
     }
 }
 
@@ -197,11 +205,11 @@ pub unsafe fn f_prompt_setprompt(
             return;
         };
         let new_prompt = tv_get_string(args.ptr(1));
-        let new_prompt_len = strlen(new_prompt) as c_int;
+        let new_prompt_len = len_as_int(strlen(new_prompt));
         if bt_prompt(buf.raw()) && !buf.b_ml.ml_mfp.is_null() {
             rewrite_prompt_line(buf, new_prompt, new_prompt_len);
         }
-        xfree(buf.b_prompt_text as *mut c_void);
+        xfree(buf.b_prompt_text.cast());
         buf.b_prompt_text = xstrdup(new_prompt);
         buf.b_prompt_start.mark.col = new_prompt_len;
     }
@@ -228,37 +236,38 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
         let old_prompt = buf_prompt_text(buf.raw());
         let old_line = buf.line(prompt_lno).raw();
         let old_line_len = buf.line_len(prompt_lno);
-        let old_prompt_len = strlen(old_prompt) as c_int;
+        let old_prompt_len = len_as_int(strlen(old_prompt));
         let mut cursor_col = Win::current().w_cursor.col;
+        let prompt_col = buf.b_prompt_start.mark.col;
+        // A byte offset into `old_line`. Every use is guarded by the
+        // `prompt_col >= old_prompt_len` test below — `&&` short-circuits —
+        // and a prompt is never longer than the line it sits on, so no
+        // conversion here can fail.
+        let offset = |col: c_int| usize::try_from(col).expect("a prompt column is not negative");
         // Does the line still start with the prompt it was given? When it
         // does, only the prompt itself is swapped; when it does not — the
         // user has edited it away — the whole line goes.
-        let intact = buf.b_prompt_start.mark.col >= old_prompt_len
-            && buf.b_prompt_start.mark.col <= old_line_len
+        let intact = prompt_col >= old_prompt_len
+            && prompt_col <= old_line_len
             && strnequal(
                 old_prompt,
-                old_line
-                    .offset(buf.b_prompt_start.mark.col as isize)
-                    .offset(-(old_prompt_len as isize)),
-                old_prompt_len as size_t,
+                old_line.add(offset(prompt_col - old_prompt_len)),
+                offset(old_prompt_len),
             );
         if intact {
-            let new_line = concat_str(
-                new_prompt,
-                old_line.offset(buf.b_prompt_start.mark.col as isize),
-            );
+            let new_line = concat_str(new_prompt, old_line.add(offset(prompt_col)));
             if ml_replace_buf(buf.raw(), prompt_lno, new_line, false, false) != OK {
-                xfree(new_line as *mut c_void);
+                xfree(new_line.cast());
             }
             extmark_splice_cols(
                 buf.raw(),
                 prompt_lno - 1,
                 0,
-                buf.b_prompt_start.mark.col,
+                prompt_col,
                 new_prompt_len,
                 kExtmarkNoUndo,
             );
-            cursor_col += new_prompt_len - buf.b_prompt_start.mark.col;
+            cursor_col += new_prompt_len - prompt_col;
         } else {
             ml_replace_buf(
                 buf.raw(),

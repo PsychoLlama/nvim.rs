@@ -1,4 +1,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! `vim.json.encode`: a Lua value out, JSON text back.
 //!
@@ -19,6 +26,8 @@
 //! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
 use core::ffi::{CStr, c_char, c_int};
+
+use crate::narrow::len_as_int;
 
 use super::{
     Config, ENCODE_MAX_DEPTH, NUMBER_PRECISION, SPARSE_RATIO, SPARSE_SAFE, array_key,
@@ -236,6 +245,9 @@ impl Encoder {
     /// # Safety
     /// The table must be on top of the stack.
     unsafe fn append_array(&mut self, l: *mut lua_State, depth: c_int, length: i64, raw: bool) {
+        // Function-local: a module-level const lands in ffigen's flat C
+        // namespace (`unit-cdefs.h`).
+        const BOUNDED_BY_LENGTH: &str = "an array index is bounded by the table's length";
         self.out.push(b'[');
         for index in 1..=length {
             if index > 1 {
@@ -247,9 +259,15 @@ impl Encoder {
             // through `__len` gets read. The element is popped here.
             unsafe {
                 if raw {
-                    lua_rawgeti(l, -1, index as c_int);
+                    // Upstream's loop counter is an `int`, which is what
+                    // `lua_rawgeti` takes; `length` is a table's element
+                    // count (`lua_objlen`'s, already narrowed to an `int`,
+                    // or `array_length`'s, which raises on a sparse array),
+                    // so neither narrowing here can fail.
+                    lua_rawgeti(l, -1, c_int::try_from(index).expect(BOUNDED_BY_LENGTH));
                 } else {
-                    lua_pushinteger(l, index as isize);
+                    // Lua's own integer type is `ptrdiff_t`.
+                    lua_pushinteger(l, isize::try_from(index).expect(BOUNDED_BY_LENGTH));
                     lua_gettable(l, -2);
                 }
                 self.append_value(l, depth);
@@ -414,7 +432,7 @@ impl Encoder {
             // here rather than failing the `>= 1` below.
             match key {
                 Some(key) if key != 0.0 && key.floor() == key && key >= 1.0 => {
-                    max = max.max(key as i64);
+                    max = max.max(crate::narrow::float_as_i64(key));
                     items += 1;
                     // SAFETY: as above; the value goes, the key stays.
                     unsafe { lua_pop(l, 1) };
@@ -487,7 +505,9 @@ impl Encoder {
 
         if as_array {
             // SAFETY: the table is on top.
-            let length = unsafe { lua_objlen(l, -1) } as i64;
+            // Upstream writes `int len = lua_objlen(l, -1);` — a length
+            // narrowed to an `int`, so the port narrows it the same way.
+            let length = i64::from(len_as_int(unsafe { lua_objlen(l, -1) }));
             unsafe { self.append_array(l, depth, length, raw) };
             return;
         }
@@ -515,7 +535,8 @@ impl Encoder {
             if empty_array {
                 // SAFETY: as above.
                 unsafe {
-                    let length = lua_objlen(l, -1) as i64;
+                    // As above.
+                    let length = i64::from(len_as_int(lua_objlen(l, -1)));
                     self.append_array(l, depth, length, true);
                 }
                 return;

@@ -14,6 +14,13 @@
 //! duration of a change" dance, and the window walk several of them need.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod info;
 mod lines;
@@ -54,7 +61,7 @@ use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
 use crate::narrow::number_as_int;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 
 use crate::main::{
@@ -69,7 +76,7 @@ use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
 use ::libc::{strcmp, strlen};
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const ML_DEL_MESSAGE: c_uint = 1;
+use crate::memline::ML_DEL_MESSAGE;
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
 use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, windows_in_tab};
 /// The editor state [`SavedBufferState::prepare`] saves so that

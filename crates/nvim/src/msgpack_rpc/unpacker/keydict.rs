@@ -376,9 +376,12 @@ unsafe fn fail(message: &core::ffi::CStr, key: String_0) -> *mut c_char {
         arena_printf(
             core::ptr::null_mut(),
             message.as_ptr(),
-            // `%.*s`'s precision. A key longer than `c_int::MAX` cannot reach
-            // here; the general `(int)strlen(...)` helper is S24's.
-            c_int::try_from(key.len()).unwrap_or(c_int::MAX),
+            // `%.*s`'s precision, which upstream writes as `(int)key.size`.
+            // A 2 GiB keydict key cannot reach here — it would have to be a
+            // ShaDa entry that big — and if one did, saturating to
+            // `c_int::MAX` would print two gigabytes of it into an error
+            // message. `len_as_int` says so instead.
+            crate::narrow::len_as_int(key.len()),
             key.data(),
         )
         .data()
