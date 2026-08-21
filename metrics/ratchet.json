@@ -547,7 +547,7 @@
     "crates/nvim/src/lua/treesitter/query.rs": {"cell_ptr": 1, "extern_abi": 6, "missing_safety_doc": 8, "unsafe_lines": 257},
     "crates/nvim/src/lua/treesitter/ranges.rs": {"extern_abi": 2, "missing_safety_doc": 6, "unsafe_lines": 159},
     "crates/nvim/src/lua/treesitter/tree.rs": {"extern_abi": 6, "missing_safety_doc": 7, "unsafe_lines": 94},
-    "crates/nvim/src/lua/xdiff.rs": {"extern_abi": 4, "unsafe_lines": 167},
+    "crates/nvim/src/lua/xdiff.rs": {"extern_abi": 4, "unsafe_lines": 166},
     "crates/nvim/src/main/args.rs": {"cell_ptr": 6, "missing_safety_doc": 24, "unsafe_lines": 489},
     "crates/nvim/src/main/buffers.rs": {"cell_ptr": 10, "missing_safety_doc": 9, "unsafe_lines": 348},
     "crates/nvim/src/main/config.rs": {"cell_ptr": 5, "missing_safety_doc": 9, "unsafe_lines": 204},

@@ -56,7 +56,7 @@ enum Mode {
 /// A hunk's four coordinates: where the change starts in each document and
 /// how many lines it covers there. Zero-based, as `xdl_diff` reports them;
 /// the `+ 1` that makes a non-empty side one-based happens on the way out.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Hunk {
     start_a: c_int,
     count_a: c_int,
@@ -175,16 +175,24 @@ unsafe fn get_linematch_results(
     let block_a = block_from_lnum(bytes_a, hunk.start_a as linenr_T + 1).unwrap_or_default();
     let block_b = block_from_lnum(bytes_b, hunk.start_b as linenr_T + 1).unwrap_or_default();
     let decisions = linematch_nbuffers(&[block_a, block_b], &[hunk.count_a, hunk.count_b], iwhite);
+    // SAFETY: the caller's state, with the list still on top for each push.
+    let push = |finer: Hunk| unsafe { lua_pushhunk(lstate, finer) };
+    walk_decisions(hunk, &decisions, push);
+}
 
-    // Runs of the same decision are one hunk; the walk closes a hunk when
-    // the decision changes and once more at the end.
+/// The finer hunks a run of `linematch` decisions carves `hunk` into.
+///
+/// Each decision says which of the two buffers its step consumed a line
+/// from, so runs of the same decision are one hunk: the walk closes a hunk
+/// when the decision changes and once more at the end. It therefore always
+/// emits at least one hunk, even for no decisions at all.
+fn walk_decisions(hunk: Hunk, decisions: &[c_int], mut emit: impl FnMut(Hunk)) {
     let mut lnuma = hunk.start_a;
     let mut lnumb = hunk.start_b;
     let mut current = Hunk::from_cb(lnuma, 0, lnumb, 0);
     for (i, &decision) in decisions.iter().enumerate() {
         if i != 0 && decisions[i - 1] != decision {
-            // SAFETY: the caller's state, with the list still on top.
-            unsafe { lua_pushhunk(lstate, current) };
+            emit(current);
             current = Hunk::from_cb(lnuma, 0, lnumb, 0);
         }
         if decision & COMPARED_BUFFER0 != 0 {
@@ -196,8 +204,7 @@ unsafe fn get_linematch_results(
             current.count_b += 1;
         }
     }
-    // SAFETY: as above.
-    unsafe { lua_pushhunk(lstate, current) };
+    emit(current);
 }
 
 /// `xdemitcb_t::out_line` for [`Mode::Unified`]: append the emitted text to
@@ -661,5 +668,134 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
         }
         Mode::Locations => 1,
         Mode::OnHunk => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Both buffers consumed a line: the step is an unchanged line.
+    const BOTH: c_int = COMPARED_BUFFER0 | COMPARED_BUFFER1;
+
+    /// The hunks `walk_decisions` carves out of `hunk`, collected.
+    fn walk(hunk: Hunk, decisions: &[c_int]) -> Vec<Hunk> {
+        let mut hunks = Vec::new();
+        walk_decisions(hunk, decisions, |finer| hunks.push(finer));
+        hunks
+    }
+
+    /// A non-empty side is reported one-based; an empty one keeps its start,
+    /// because a zero count means "before this line" rather than "at it".
+    #[test]
+    fn only_a_non_empty_side_shifts_to_one_based() {
+        assert_eq!(Hunk::from_cb(3, 2, 7, 4).one_based(), [4, 2, 8, 4]);
+        // A pure deletion: nothing in the second document.
+        assert_eq!(Hunk::from_cb(3, 2, 7, 0).one_based(), [4, 2, 7, 0]);
+        // A pure addition: nothing in the first.
+        assert_eq!(Hunk::from_cb(3, 0, 7, 4).one_based(), [3, 0, 8, 4]);
+        assert_eq!(Hunk::from_cb(0, 0, 0, 0).one_based(), [0, 0, 0, 0]);
+    }
+
+    /// A negative count cannot come out of `xdl_diff`, but the rule is
+    /// `> 0` rather than `!= 0` and this is what says so.
+    #[test]
+    fn a_zero_count_is_the_only_thing_that_holds_the_start() {
+        assert_eq!(Hunk::from_cb(5, 1, 5, 1).one_based(), [6, 1, 6, 1]);
+        assert_eq!(Hunk::from_cb(5, 0, 5, 0).one_based(), [5, 0, 5, 0]);
+    }
+
+    /// No decisions still closes a hunk: `linematch` answering nothing
+    /// leaves the empty hunk the walk started with, at the original start.
+    #[test]
+    fn an_empty_decision_run_still_emits_one_hunk() {
+        assert_eq!(
+            walk(Hunk::from_cb(4, 0, 9, 0), &[]),
+            [Hunk::from_cb(4, 0, 9, 0)]
+        );
+    }
+
+    /// One run of one decision is one hunk, and the counts are the run's
+    /// length in whichever documents it consumed from.
+    #[test]
+    fn one_run_is_one_hunk() {
+        assert_eq!(
+            walk(Hunk::from_cb(0, 3, 0, 3), &[BOTH; 3]),
+            [Hunk::from_cb(0, 3, 0, 3)]
+        );
+        assert_eq!(
+            walk(Hunk::from_cb(0, 2, 0, 0), &[COMPARED_BUFFER0; 2]),
+            [Hunk::from_cb(0, 2, 0, 0)]
+        );
+        assert_eq!(
+            walk(Hunk::from_cb(0, 0, 0, 2), &[COMPARED_BUFFER1; 2]),
+            [Hunk::from_cb(0, 0, 0, 2)]
+        );
+    }
+
+    /// A change of decision closes a hunk and opens the next one where the
+    /// closed one left the two line numbers -- which advance only in the
+    /// document the decision consumed from.
+    #[test]
+    fn a_changed_decision_closes_the_hunk_at_the_lines_consumed() {
+        let hunk = Hunk::from_cb(10, 2, 20, 2);
+        let deletion_then_addition = [COMPARED_BUFFER0, COMPARED_BUFFER0, 2, 2];
+        assert_eq!(
+            walk(hunk, &deletion_then_addition),
+            [Hunk::from_cb(10, 2, 20, 0), Hunk::from_cb(12, 0, 20, 2),]
+        );
+    }
+
+    /// Three runs, each one step long: every hunk carries exactly the one
+    /// line its decision consumed, and the starts chain through.
+    #[test]
+    fn every_alternation_is_its_own_hunk() {
+        let alternating = [COMPARED_BUFFER0, COMPARED_BUFFER1, COMPARED_BUFFER0];
+        assert_eq!(
+            walk(Hunk::from_cb(0, 2, 0, 1), &alternating),
+            [
+                Hunk::from_cb(0, 1, 0, 0),
+                Hunk::from_cb(1, 0, 0, 1),
+                Hunk::from_cb(1, 1, 1, 0),
+            ]
+        );
+    }
+
+    /// The finer hunks cover the outer one exactly: the counts add up to
+    /// what `xdl_diff` reported, and nothing overlaps.
+    #[test]
+    fn the_finer_hunks_tile_the_original() {
+        let hunk = Hunk::from_cb(7, 3, 11, 3);
+        let decisions = [BOTH, COMPARED_BUFFER0, COMPARED_BUFFER1, BOTH];
+        let hunks = walk(hunk, &decisions);
+        assert_eq!(hunks.iter().map(|h| h.count_a).sum::<c_int>(), hunk.count_a);
+        assert_eq!(hunks.iter().map(|h| h.count_b).sum::<c_int>(), hunk.count_b);
+        let (mut lnuma, mut lnumb) = (hunk.start_a, hunk.start_b);
+        for finer in hunks {
+            assert_eq!((finer.start_a, finer.start_b), (lnuma, lnumb));
+            lnuma += finer.count_a;
+            lnumb += finer.count_b;
+        }
+    }
+
+    /// The keydict's optional-key bitfield is read bit by bit, and the
+    /// initializer says nothing was given.
+    #[test]
+    fn an_optional_key_is_one_bit_of_the_keydict() {
+        assert!((0..8).all(|bit| !is_set(&KEYDICT_INIT, bit)));
+        // The six `KEYSET_OPTIDX_xdl_diff__*` values `apply_opts` names.
+        for optidx in 1..=6 {
+            let mut opts = KEYDICT_INIT;
+            opts.is_set__xdl_diff_ = 1 << optidx;
+            assert!(is_set(&opts, optidx));
+            assert!((0..8).filter(|&b| b != optidx).all(|b| !is_set(&opts, b)));
+        }
+        // Bit 0 is not one of the six, and reading it must not spill into
+        // its neighbour.
+        let mut opts = KEYDICT_INIT;
+        opts.is_set__xdl_diff_ = 0b101;
+        assert!(is_set(&opts, 0));
+        assert!(!is_set(&opts, 1));
+        assert!(is_set(&opts, 2));
     }
 }
