@@ -54,12 +54,35 @@ and this project adheres to [CalVer](https://calver.org/).
   and `:!`, `timer_start()`/`timer_stop()`/`timer_info()`/`timer_pause()`,
   how a signal reaches the editor, the order queued work is delivered in,
   and how much a job's output may buffer before its writer is made to wait.
+- Rewrote signs, covering `:sign` and the `sign_*()` builtins, the `text=`
+  a sign is drawn with, the signs `getbufinfo()` reports, and the order
+  signs appear in when several land on one line.
+- Rewrote floating-window borders, covering `'winborder'` and
+  `nvim_open_win()`'s `border`: the six named styles, the eight-cell and
+  comma-separated forms, and the highlights each cell takes.
+- Rewrote the options that take their value from a fixed list of words,
+  from `'background'` and `'fileformat'` to `'diffopt'` and `'foldopen'`,
+  and the completion of those values.
+- Rewrote `mode()`, `state()`, the `ModeChanged` autocommand and the
+  `'virtualedit'` rules behind every move onto a column no character
+  occupies.
+- Rewrote `vim.json.encode()` and `vim.json.decode()`, covering numbers at
+  the edges of the integer range, `\uXXXX` escapes and surrogate pairs, and
+  the position a malformed document is reported at.
+- Rewrote `vim.diff()`, covering its `unified` and `indices` results, the
+  `on_hunk` callback and the `linematch` refinement.
+- Rewrote how the editor reads and writes files, `stdpath()` and the
+  `$XDG_*` directories behind it, `expand('~user')`, the pseudo-terminal
+  `:terminal` and `jobstart({pty = true})` run programs in, and the
+  terminfo entry the TUI reads for `$TERM`.
 
 ### Fixed
 
 - An undo file whose extmark records had been tampered with could crash the
   editor when the change was undone. Such a record is now rejected as a
   corrupt undo file, like every other field that does not make sense.
+- Redrawing a screenful of wrapped text is back to the speed it had before
+  2026.08.20, which lost it about 2%.
 
 ## [2026.08.20-6fa6afd7b2]
 
