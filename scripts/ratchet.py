@@ -91,9 +91,29 @@ unmeasured, as they were when they lived at the repo root):
               receiver-blind, as everything else here is; today no other
               type in the tree has a nullary `ptr()`/`as_raw()`, and one
               that did would only over-count, which is the safe direction.
-  lines       line count. No file may exceed 1,000 lines; files already over
-              the cap are grandfathered at their committed size and may
-              shrink or hold, never grow. New files start at the cap.
+  lines       line count, **excluding `#[cfg(test)]` modules**. No file may
+              exceed 1,000 lines; files already over the cap are
+              grandfathered at their committed size and may shrink or hold,
+              never grow. New files start at the cap.
+
+              The exemption is the cap's alone, and it exists because the two
+              were pulling against each other. The migration wants tests next
+              to the code they cover -- a rewritten module's safe core with
+              its Miri-runnable `#[cfg(test)] mod tests` in the same file is
+              the shape every phase-20 slice produced -- while the cap wants
+              files small enough to read. Counting test lines toward the cap
+              taxes exactly the posture being asked for: cjson's decoder sat
+              at 955 lines, 200 of them its 21 tests, so the next test to be
+              written would have forced a split of the *production* code that
+              nothing about the production code justified.
+
+              Nothing else is exempt. `unsafe_lines`, `missing_safety_doc`,
+              `cell_ptr` and the rest are still counted inside a test module,
+              because unchecked code in a test is still unchecked code and a
+              test is a fine place to be pushed away from writing it. Only
+              the cap looks away, and only at a `#[cfg(test)] mod name { .. }`
+              item -- a `#[cfg(test)] mod name;` declaration is a separate
+              file, and that file is measured in full like any other.
 
 plus two whole-tree metrics:
 
@@ -227,6 +247,14 @@ DENY_CASTS = re.compile(r"#!\[deny\([^\]]*\bclippy::cast_lossless\b", re.DOTALL)
 # what is being counted is whether the obligation is written down.
 SAFETY_HEADING = re.compile(r"^\s*///\s*#+\s*safety\b", re.IGNORECASE)
 DOC_LINE = re.compile(r"^\s*///")
+# A test module's header, `#[cfg(test)]` through the `{` that opens it. Further
+# attributes may sit between the two, and the module may carry any visibility.
+# The trailing `{` is required: `#[cfg(test)] mod tests;` names another file,
+# which is measured on its own.
+CFG_TEST_MOD = re.compile(
+    r"#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub\s*(?:\([^)]*\)\s*)?)?"
+    r"mod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{"
+)
 
 # Metrics computed from the source rather than counted with a needle.
 DERIVED = ("unsafe_lines", "missing_safety_doc")
@@ -389,6 +417,22 @@ def unsafe_lines(masked, deny):
     return len(covered & code_lines)
 
 
+def test_module_lines(masked):
+    """The 0-based line numbers a `#[cfg(test)] mod name { .. }` item spans.
+
+    Attribute line through closing brace, both included -- the whole item is
+    the thing the cap looks away from. Spans are unioned, so a test module
+    nested inside another counts once.
+    """
+    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
+    covered = set()
+    for match in CFG_TEST_MOD.finditer(masked):
+        first = bisect_right(starts, match.start()) - 1
+        last = bisect_right(starts, matching_brace(masked, match.end() - 1)) - 1
+        covered.update(range(first, last + 1))
+    return covered
+
+
 def has_safety_doc(lines, at):
     """Whether a `# Safety` heading sits in the doc comment above line `at`.
 
@@ -466,7 +510,7 @@ def measure():
         )
         counts["unsafe_lines"] = unsafe_lines(masked, DENY_UNSAFE_OP in masked)
         counts["missing_safety_doc"] = missing_safety_doc(text, masked)
-        counts["lines"] = len(text.splitlines())
+        counts["lines"] = len(text.splitlines()) - len(test_module_lines(masked))
         stats[str(path.relative_to(ROOT))] = counts
         without_forbid += FORBID not in masked
         without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
@@ -646,6 +690,25 @@ SELF_TEST_DENY_CASTS = [
     # Prose about the attribute does not switch it on.
     ("//! Adopt `#![deny(clippy::cast_lossless)]` here one day.\n", False),
 ]
+# (source, expected number of lines exempted from the line cap)
+SELF_TEST_TEST_MODULE = [
+    ("#[cfg(test)]\nmod tests {\n    fn t() {}\n}\n", 4),
+    ("fn f() {}\n#[cfg(test)]\nmod tests {\n    fn t() {}\n}\nfn g() {}\n", 4),
+    # Visibility and extra attributes sit between the two.
+    ("#[cfg(test)]\npub(crate) mod tests {\n}\n", 3),
+    ("#[cfg(test)]\n#[allow(clippy::all)]\nmod tests {\n}\n", 4),
+    ("#[cfg(test)]\nmod tests {\n}\n#[cfg(test)]\nmod more {\n}\n", 6),
+    # A nested test module is inside the outer span, not counted twice.
+    ("#[cfg(test)]\nmod tests {\n    #[cfg(test)]\n    mod inner {\n    }\n}\n", 6),
+    # A declaration names another file, which is measured on its own.
+    ("#[cfg(test)]\nmod tests;\n", 0),
+    # Everything else keeps its lines: another cfg, and production code.
+    ("#[cfg(unix)]\nmod unix {\n}\n", 0),
+    ("mod tests {\n}\n", 0),
+    # Prose about one costs nothing, and neither does a string holding it.
+    ("// #[cfg(test)]\n// mod tests {\nfn f() {}\n", 0),
+    ('fn f() {\n    let s = "#[cfg(test)] mod tests {";\n}\n', 0),
+]
 SELF_TEST_DENY = [
     # With the deny, a body's own blocks state its unsafe surface.
     ("unsafe fn f() {\n    g();\n}\n", 0),
@@ -668,6 +731,11 @@ def self_test():
     for source, expected in SELF_TEST_DENY_CASTS:
         got = DENY_CASTS.search(mask(source)) is not None
         assert got == expected, f"cast deny={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_TEST_MODULE:
+        got = len(test_module_lines(mask(source)))
+        assert got == expected, (
+            f"test_module_lines={got}, want {expected}, for {source!r}"
+        )
     needle = COUNTED_RE["extern_abi"]
     for source, expected in SELF_TEST_EXTERN_ABI:
         got = len(needle.findall(mask(source)))
