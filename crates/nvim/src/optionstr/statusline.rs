@@ -203,7 +203,7 @@ pub unsafe fn did_set_sessionoptions(args: *mut optset_T) -> *const c_char {
         // SAFETY: the frame's old value is a C string, and the table's own
         // word list and mask.
         unsafe {
-            let words = opt_ssop_values.ptr().cast::<*const c_char>();
+            let words = &opt_ssop_values;
             opt_strings_flags(old_value(args), words, ssop_flags.ptr(), true);
         }
         return invalid();

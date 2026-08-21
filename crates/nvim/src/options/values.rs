@@ -10,553 +10,278 @@
 use super::*;
 
 /// Valid values for 'ambiwidth'.
-pub static opt_ambw_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"single".as_ptr(), c"double".as_ptr(), ptr::null()]);
+pub static opt_ambw_values: [&CStr; 2] = [c"single", c"double"];
 
 /// Valid values for 'background'.
-pub static opt_bg_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"light".as_ptr(), c"dark".as_ptr(), ptr::null()]);
+pub static opt_bg_values: [&CStr; 2] = [c"light", c"dark"];
 
 /// Valid values for 'backspace'.
-pub static opt_bs_values: GlobalCell<[*const c_char; 5]> = GlobalCell::new([
-    c"indent".as_ptr(),
-    c"eol".as_ptr(),
-    c"start".as_ptr(),
-    c"nostop".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_bs_values: [&CStr; 4] = [c"indent", c"eol", c"start", c"nostop"];
 
 /// Valid values for 'backupcopy'.
-pub static opt_bkc_values: GlobalCell<[*const c_char; 6]> = GlobalCell::new([
-    c"yes".as_ptr(),
-    c"auto".as_ptr(),
-    c"no".as_ptr(),
-    c"breaksymlink".as_ptr(),
-    c"breakhardlink".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_bkc_values: [&CStr; 5] = [c"yes", c"auto", c"no", c"breaksymlink", c"breakhardlink"];
 
 /// Valid values for 'belloff'.
-pub static opt_bo_values: GlobalCell<[*const c_char; 21]> = GlobalCell::new([
-    c"all".as_ptr(),
-    c"backspace".as_ptr(),
-    c"cursor".as_ptr(),
-    c"complete".as_ptr(),
-    c"copy".as_ptr(),
-    c"ctrlg".as_ptr(),
-    c"error".as_ptr(),
-    c"esc".as_ptr(),
-    c"ex".as_ptr(),
-    c"hangul".as_ptr(),
-    c"insertmode".as_ptr(),
-    c"lang".as_ptr(),
-    c"mess".as_ptr(),
-    c"showmatch".as_ptr(),
-    c"operator".as_ptr(),
-    c"register".as_ptr(),
-    c"shell".as_ptr(),
-    c"spell".as_ptr(),
-    c"term".as_ptr(),
-    c"wildmode".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_bo_values: [&CStr; 20] = [
+    c"all",
+    c"backspace",
+    c"cursor",
+    c"complete",
+    c"copy",
+    c"ctrlg",
+    c"error",
+    c"esc",
+    c"ex",
+    c"hangul",
+    c"insertmode",
+    c"lang",
+    c"mess",
+    c"showmatch",
+    c"operator",
+    c"register",
+    c"shell",
+    c"spell",
+    c"term",
+    c"wildmode",
+];
 
 /// Valid values for 'breakindentopt'.
-pub static opt_briopt_values: GlobalCell<[*const c_char; 6]> = GlobalCell::new([
-    c"shift:".as_ptr(),
-    c"min:".as_ptr(),
-    c"sbr".as_ptr(),
-    c"list:".as_ptr(),
-    c"column:".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_briopt_values: [&CStr; 5] = [c"shift:", c"min:", c"sbr", c"list:", c"column:"];
 
 /// Valid values for 'bufhidden'.
-pub static opt_bh_values: GlobalCell<[*const c_char; 6]> = GlobalCell::new([
-    c"".as_ptr(),
-    c"hide".as_ptr(),
-    c"unload".as_ptr(),
-    c"delete".as_ptr(),
-    c"wipe".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_bh_values: [&CStr; 5] = [c"", c"hide", c"unload", c"delete", c"wipe"];
 
 /// Valid values for 'buftype'.
-pub static opt_bt_values: GlobalCell<[*const c_char; 9]> = GlobalCell::new([
-    c"".as_ptr(),
-    c"acwrite".as_ptr(),
-    c"help".as_ptr(),
-    c"nofile".as_ptr(),
-    c"nowrite".as_ptr(),
-    c"quickfix".as_ptr(),
-    c"terminal".as_ptr(),
-    c"prompt".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_bt_values: [&CStr; 8] = [
+    c"",
+    c"acwrite",
+    c"help",
+    c"nofile",
+    c"nowrite",
+    c"quickfix",
+    c"terminal",
+    c"prompt",
+];
 
 /// Valid values for 'casemap'.
-pub static opt_cmp_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"internal".as_ptr(), c"keepascii".as_ptr(), ptr::null()]);
+pub static opt_cmp_values: [&CStr; 2] = [c"internal", c"keepascii"];
 
 /// Valid values for 'clipboard'.
-pub static opt_cb_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"unnamed".as_ptr(), c"unnamedplus".as_ptr(), ptr::null()]);
+pub static opt_cb_values: [&CStr; 2] = [c"unnamed", c"unnamedplus"];
 
 /// Valid values for 'complete'.
-pub static opt_cpt_values: GlobalCell<[*const c_char; 16]> = GlobalCell::new([
-    c".".as_ptr(),
-    c"w".as_ptr(),
-    c"b".as_ptr(),
-    c"u".as_ptr(),
-    c"k".as_ptr(),
-    c"kspell".as_ptr(),
-    c"s".as_ptr(),
-    c"i".as_ptr(),
-    c"d".as_ptr(),
-    c"]".as_ptr(),
-    c"t".as_ptr(),
-    c"U".as_ptr(),
-    c"f".as_ptr(),
-    c"F".as_ptr(),
-    c"o".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_cpt_values: [&CStr; 15] = [
+    c".", c"w", c"b", c"u", c"k", c"kspell", c"s", c"i", c"d", c"]", c"t", c"U", c"f", c"F", c"o",
+];
 
 /// Valid values for 'completeopt'.
-pub static opt_cot_values: GlobalCell<[*const c_char; 12]> = GlobalCell::new([
-    c"menu".as_ptr(),
-    c"menuone".as_ptr(),
-    c"longest".as_ptr(),
-    c"preview".as_ptr(),
-    c"popup".as_ptr(),
-    c"noinsert".as_ptr(),
-    c"noselect".as_ptr(),
-    c"fuzzy".as_ptr(),
-    c"nosort".as_ptr(),
-    c"preinsert".as_ptr(),
-    c"nearest".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_cot_values: [&CStr; 11] = [
+    c"menu",
+    c"menuone",
+    c"longest",
+    c"preview",
+    c"popup",
+    c"noinsert",
+    c"noselect",
+    c"fuzzy",
+    c"nosort",
+    c"preinsert",
+    c"nearest",
+];
 
 /// Valid values for 'completeslash'.
-pub static opt_csl_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"".as_ptr(),
-    c"slash".as_ptr(),
-    c"backslash".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_csl_values: [&CStr; 3] = [c"", c"slash", c"backslash"];
 
 /// Valid values for 'cursorlineopt'.
-pub static opt_culopt_values: GlobalCell<[*const c_char; 5]> = GlobalCell::new([
-    c"line".as_ptr(),
-    c"screenline".as_ptr(),
-    c"number".as_ptr(),
-    c"both".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_culopt_values: [&CStr; 4] = [c"line", c"screenline", c"number", c"both"];
 
 /// Valid values for 'debug'.
-pub static opt_debug_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"msg".as_ptr(),
-    c"throw".as_ptr(),
-    c"beep".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_debug_values: [&CStr; 3] = [c"msg", c"throw", c"beep"];
 
 /// Valid values for 'diffopt'.
-pub static opt_dip_values: GlobalCell<[*const c_char; 20]> = GlobalCell::new([
-    c"filler".as_ptr(),
-    c"anchor".as_ptr(),
-    c"context:".as_ptr(),
-    c"iblank".as_ptr(),
-    c"icase".as_ptr(),
-    c"iwhite".as_ptr(),
-    c"iwhiteall".as_ptr(),
-    c"iwhiteeol".as_ptr(),
-    c"horizontal".as_ptr(),
-    c"vertical".as_ptr(),
-    c"closeoff".as_ptr(),
-    c"hiddenoff".as_ptr(),
-    c"foldcolumn:".as_ptr(),
-    c"followwrap".as_ptr(),
-    c"internal".as_ptr(),
-    c"indent-heuristic".as_ptr(),
-    c"algorithm:".as_ptr(),
-    c"inline:".as_ptr(),
-    c"linematch:".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_dip_values: [&CStr; 19] = [
+    c"filler",
+    c"anchor",
+    c"context:",
+    c"iblank",
+    c"icase",
+    c"iwhite",
+    c"iwhiteall",
+    c"iwhiteeol",
+    c"horizontal",
+    c"vertical",
+    c"closeoff",
+    c"hiddenoff",
+    c"foldcolumn:",
+    c"followwrap",
+    c"internal",
+    c"indent-heuristic",
+    c"algorithm:",
+    c"inline:",
+    c"linematch:",
+];
 
-pub static opt_dip_algorithm_values: GlobalCell<[*const c_char; 5]> = GlobalCell::new([
-    c"myers".as_ptr(),
-    c"minimal".as_ptr(),
-    c"patience".as_ptr(),
-    c"histogram".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_dip_algorithm_values: [&CStr; 4] = [c"myers", c"minimal", c"patience", c"histogram"];
 
-pub static opt_dip_inline_values: GlobalCell<[*const c_char; 5]> = GlobalCell::new([
-    c"none".as_ptr(),
-    c"simple".as_ptr(),
-    c"char".as_ptr(),
-    c"word".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_dip_inline_values: [&CStr; 4] = [c"none", c"simple", c"char", c"word"];
 
 /// Valid values for 'display'.
-pub static opt_dy_values: GlobalCell<[*const c_char; 5]> = GlobalCell::new([
-    c"lastline".as_ptr(),
-    c"truncate".as_ptr(),
-    c"uhex".as_ptr(),
-    c"msgsep".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_dy_values: [&CStr; 4] = [c"lastline", c"truncate", c"uhex", c"msgsep"];
 
 /// Valid values for 'eadirection'.
-pub static opt_ead_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"both".as_ptr(),
-    c"ver".as_ptr(),
-    c"hor".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_ead_values: [&CStr; 3] = [c"both", c"ver", c"hor"];
 
 /// Valid values for 'fileformat'.
-pub static opt_ff_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"unix".as_ptr(),
-    c"dos".as_ptr(),
-    c"mac".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_ff_values: [&CStr; 3] = [c"unix", c"dos", c"mac"];
 
 /// Valid values for 'foldclose'.
-pub static opt_fcl_values: GlobalCell<[*const c_char; 2]> =
-    GlobalCell::new([c"all".as_ptr(), ptr::null()]);
+pub static opt_fcl_values: [&CStr; 1] = [c"all"];
 
 /// Valid values for 'foldcolumn'.
-pub static opt_fdc_values: GlobalCell<[*const c_char; 21]> = GlobalCell::new([
-    c"auto".as_ptr(),
-    c"auto:1".as_ptr(),
-    c"auto:2".as_ptr(),
-    c"auto:3".as_ptr(),
-    c"auto:4".as_ptr(),
-    c"auto:5".as_ptr(),
-    c"auto:6".as_ptr(),
-    c"auto:7".as_ptr(),
-    c"auto:8".as_ptr(),
-    c"auto:9".as_ptr(),
-    c"0".as_ptr(),
-    c"1".as_ptr(),
-    c"2".as_ptr(),
-    c"3".as_ptr(),
-    c"4".as_ptr(),
-    c"5".as_ptr(),
-    c"6".as_ptr(),
-    c"7".as_ptr(),
-    c"8".as_ptr(),
-    c"9".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_fdc_values: [&CStr; 20] = [
+    c"auto", c"auto:1", c"auto:2", c"auto:3", c"auto:4", c"auto:5", c"auto:6", c"auto:7",
+    c"auto:8", c"auto:9", c"0", c"1", c"2", c"3", c"4", c"5", c"6", c"7", c"8", c"9",
+];
 
 /// Valid values for 'foldmethod'.
-pub static opt_fdm_values: GlobalCell<[*const c_char; 7]> = GlobalCell::new([
-    c"manual".as_ptr(),
-    c"expr".as_ptr(),
-    c"marker".as_ptr(),
-    c"indent".as_ptr(),
-    c"syntax".as_ptr(),
-    c"diff".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_fdm_values: [&CStr; 6] =
+    [c"manual", c"expr", c"marker", c"indent", c"syntax", c"diff"];
 
 /// Valid values for 'foldopen'.
-pub static opt_fdo_values: GlobalCell<[*const c_char; 12]> = GlobalCell::new([
-    c"all".as_ptr(),
-    c"block".as_ptr(),
-    c"hor".as_ptr(),
-    c"mark".as_ptr(),
-    c"percent".as_ptr(),
-    c"quickfix".as_ptr(),
-    c"search".as_ptr(),
-    c"tag".as_ptr(),
-    c"insert".as_ptr(),
-    c"undo".as_ptr(),
-    c"jump".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_fdo_values: [&CStr; 11] = [
+    c"all",
+    c"block",
+    c"hor",
+    c"mark",
+    c"percent",
+    c"quickfix",
+    c"search",
+    c"tag",
+    c"insert",
+    c"undo",
+    c"jump",
+];
 
 /// Valid values for 'inccommand'.
-pub static opt_icm_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"nosplit".as_ptr(),
-    c"split".as_ptr(),
-    c"".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_icm_values: [&CStr; 3] = [c"nosplit", c"split", c""];
 
 /// Valid values for 'jumpoptions'.
-pub static opt_jop_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"stack".as_ptr(),
-    c"view".as_ptr(),
-    c"clean".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_jop_values: [&CStr; 3] = [c"stack", c"view", c"clean"];
 
 /// Valid values for 'keymodel'.
-pub static opt_km_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"startsel".as_ptr(), c"stopsel".as_ptr(), ptr::null()]);
+pub static opt_km_values: [&CStr; 2] = [c"startsel", c"stopsel"];
 
 /// Valid values for 'lispoptions'.
-pub static opt_lop_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"expr:0".as_ptr(), c"expr:1".as_ptr(), ptr::null()]);
+pub static opt_lop_values: [&CStr; 2] = [c"expr:0", c"expr:1"];
 
 /// Valid values for 'messagesopt'.
-pub static opt_mopt_values: GlobalCell<[*const c_char; 5]> = GlobalCell::new([
-    c"hit-enter".as_ptr(),
-    c"wait:".as_ptr(),
-    c"history:".as_ptr(),
-    c"progress:".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_mopt_values: [&CStr; 4] = [c"hit-enter", c"wait:", c"history:", c"progress:"];
 
 /// Valid values for 'mousemodel'.
-pub static opt_mousem_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"extend".as_ptr(),
-    c"popup".as_ptr(),
-    c"popup_setpos".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_mousem_values: [&CStr; 3] = [c"extend", c"popup", c"popup_setpos"];
 
 /// Valid values for 'mousescroll'.
-pub static opt_mousescroll_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"hor:".as_ptr(), c"ver:".as_ptr(), ptr::null()]);
+pub static opt_mousescroll_values: [&CStr; 2] = [c"hor:", c"ver:"];
 
 /// Valid values for 'nrformats'.
-pub static opt_nf_values: GlobalCell<[*const c_char; 7]> = GlobalCell::new([
-    c"bin".as_ptr(),
-    c"octal".as_ptr(),
-    c"hex".as_ptr(),
-    c"alpha".as_ptr(),
-    c"unsigned".as_ptr(),
-    c"blank".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_nf_values: [&CStr; 6] = [c"bin", c"octal", c"hex", c"alpha", c"unsigned", c"blank"];
 
 /// Valid values for 'pumborder'.
-pub static opt_pumborder_values: GlobalCell<[*const c_char; 9]> = GlobalCell::new([
-    c"".as_ptr(),
-    c"double".as_ptr(),
-    c"single".as_ptr(),
-    c"shadow".as_ptr(),
-    c"rounded".as_ptr(),
-    c"solid".as_ptr(),
-    c"bold".as_ptr(),
-    c"none".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_pumborder_values: [&CStr; 8] = [
+    c"", c"double", c"single", c"shadow", c"rounded", c"solid", c"bold", c"none",
+];
 
 /// Valid values for 'redrawdebug'.
-pub static opt_rdb_values: GlobalCell<[*const c_char; 7]> = GlobalCell::new([
-    c"compositor".as_ptr(),
-    c"nothrottle".as_ptr(),
-    c"invalid".as_ptr(),
-    c"nodelta".as_ptr(),
-    c"line".as_ptr(),
-    c"flush".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_rdb_values: [&CStr; 6] = [
+    c"compositor",
+    c"nothrottle",
+    c"invalid",
+    c"nodelta",
+    c"line",
+    c"flush",
+];
 
 /// Valid values for 'rightleftcmd'.
-pub static opt_rlc_values: GlobalCell<[*const c_char; 2]> =
-    GlobalCell::new([c"search".as_ptr(), ptr::null()]);
+pub static opt_rlc_values: [&CStr; 1] = [c"search"];
 
 /// Valid values for 'scrollopt'.
-pub static opt_sbo_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"ver".as_ptr(),
-    c"hor".as_ptr(),
-    c"jump".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_sbo_values: [&CStr; 3] = [c"ver", c"hor", c"jump"];
 
 /// Valid values for 'selection'.
-pub static opt_sel_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"inclusive".as_ptr(),
-    c"exclusive".as_ptr(),
-    c"old".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_sel_values: [&CStr; 3] = [c"inclusive", c"exclusive", c"old"];
 
 /// Valid values for 'selectmode'.
-pub static opt_slm_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"mouse".as_ptr(),
-    c"key".as_ptr(),
-    c"cmd".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_slm_values: [&CStr; 3] = [c"mouse", c"key", c"cmd"];
 
 /// Valid values for 'sessionoptions'.
-pub static opt_ssop_values: GlobalCell<[*const c_char; 19]> = GlobalCell::new([
-    c"buffers".as_ptr(),
-    c"winpos".as_ptr(),
-    c"resize".as_ptr(),
-    c"winsize".as_ptr(),
-    c"localoptions".as_ptr(),
-    c"options".as_ptr(),
-    c"help".as_ptr(),
-    c"blank".as_ptr(),
-    c"globals".as_ptr(),
-    c"slash".as_ptr(),
-    c"unix".as_ptr(),
-    c"sesdir".as_ptr(),
-    c"curdir".as_ptr(),
-    c"folds".as_ptr(),
-    c"cursor".as_ptr(),
-    c"tabpages".as_ptr(),
-    c"terminal".as_ptr(),
-    c"skiprtp".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_ssop_values: [&CStr; 18] = [
+    c"buffers",
+    c"winpos",
+    c"resize",
+    c"winsize",
+    c"localoptions",
+    c"options",
+    c"help",
+    c"blank",
+    c"globals",
+    c"slash",
+    c"unix",
+    c"sesdir",
+    c"curdir",
+    c"folds",
+    c"cursor",
+    c"tabpages",
+    c"terminal",
+    c"skiprtp",
+];
 
 /// Valid values for 'showcmdloc'.
-pub static opt_sloc_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"last".as_ptr(),
-    c"statusline".as_ptr(),
-    c"tabline".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_sloc_values: [&CStr; 3] = [c"last", c"statusline", c"tabline"];
 
 /// Valid values for 'signcolumn'.
-pub static opt_scl_values: GlobalCell<[*const c_char; 23]> = GlobalCell::new([
-    c"yes".as_ptr(),
-    c"no".as_ptr(),
-    c"auto".as_ptr(),
-    c"auto:1".as_ptr(),
-    c"auto:2".as_ptr(),
-    c"auto:3".as_ptr(),
-    c"auto:4".as_ptr(),
-    c"auto:5".as_ptr(),
-    c"auto:6".as_ptr(),
-    c"auto:7".as_ptr(),
-    c"auto:8".as_ptr(),
-    c"auto:9".as_ptr(),
-    c"yes:1".as_ptr(),
-    c"yes:2".as_ptr(),
-    c"yes:3".as_ptr(),
-    c"yes:4".as_ptr(),
-    c"yes:5".as_ptr(),
-    c"yes:6".as_ptr(),
-    c"yes:7".as_ptr(),
-    c"yes:8".as_ptr(),
-    c"yes:9".as_ptr(),
-    c"number".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_scl_values: [&CStr; 22] = [
+    c"yes", c"no", c"auto", c"auto:1", c"auto:2", c"auto:3", c"auto:4", c"auto:5", c"auto:6",
+    c"auto:7", c"auto:8", c"auto:9", c"yes:1", c"yes:2", c"yes:3", c"yes:4", c"yes:5", c"yes:6",
+    c"yes:7", c"yes:8", c"yes:9", c"number",
+];
 
 /// Valid values for 'spelloptions'.
-pub static opt_spo_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"camel".as_ptr(), c"noplainbuffer".as_ptr(), ptr::null()]);
+pub static opt_spo_values: [&CStr; 2] = [c"camel", c"noplainbuffer"];
 
 /// Valid values for 'spellsuggest'.
-pub static opt_sps_values: GlobalCell<[*const c_char; 7]> = GlobalCell::new([
-    c"best".as_ptr(),
-    c"fast".as_ptr(),
-    c"double".as_ptr(),
-    c"expr:".as_ptr(),
-    c"file:".as_ptr(),
-    c"timeout:".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_sps_values: [&CStr; 6] =
+    [c"best", c"fast", c"double", c"expr:", c"file:", c"timeout:"];
 
 /// Valid values for 'splitkeep'.
-pub static opt_spk_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"cursor".as_ptr(),
-    c"screen".as_ptr(),
-    c"topline".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_spk_values: [&CStr; 3] = [c"cursor", c"screen", c"topline"];
 
 /// Valid values for 'switchbuf'.
-pub static opt_swb_values: GlobalCell<[*const c_char; 7]> = GlobalCell::new([
-    c"useopen".as_ptr(),
-    c"usetab".as_ptr(),
-    c"split".as_ptr(),
-    c"newtab".as_ptr(),
-    c"vsplit".as_ptr(),
-    c"uselast".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_swb_values: [&CStr; 6] = [
+    c"useopen", c"usetab", c"split", c"newtab", c"vsplit", c"uselast",
+];
 
 /// Valid values for 'tabclose'.
-pub static opt_tcl_values: GlobalCell<[*const c_char; 3]> =
-    GlobalCell::new([c"left".as_ptr(), c"uselast".as_ptr(), ptr::null()]);
+pub static opt_tcl_values: [&CStr; 2] = [c"left", c"uselast"];
 
 /// Valid values for 'tagcase'.
-pub static opt_tc_values: GlobalCell<[*const c_char; 6]> = GlobalCell::new([
-    c"followic".as_ptr(),
-    c"ignore".as_ptr(),
-    c"match".as_ptr(),
-    c"followscs".as_ptr(),
-    c"smart".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_tc_values: [&CStr; 5] = [c"followic", c"ignore", c"match", c"followscs", c"smart"];
 
 /// Valid values for 'termpastefilter'.
-pub static opt_tpf_values: GlobalCell<[*const c_char; 8]> = GlobalCell::new([
-    c"BS".as_ptr(),
-    c"HT".as_ptr(),
-    c"FF".as_ptr(),
-    c"ESC".as_ptr(),
-    c"DEL".as_ptr(),
-    c"C0".as_ptr(),
-    c"C1".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_tpf_values: [&CStr; 7] = [c"BS", c"HT", c"FF", c"ESC", c"DEL", c"C0", c"C1"];
 
 /// Valid values for 'virtualedit'.
-pub static opt_ve_values: GlobalCell<[*const c_char; 7]> = GlobalCell::new([
-    c"block".as_ptr(),
-    c"insert".as_ptr(),
-    c"all".as_ptr(),
-    c"onemore".as_ptr(),
-    c"none".as_ptr(),
-    c"NONE".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_ve_values: [&CStr; 6] = [c"block", c"insert", c"all", c"onemore", c"none", c"NONE"];
 
 /// Valid values for 'wildmode'.
-pub static opt_wim_values: GlobalCell<[*const c_char; 6]> = GlobalCell::new([
-    c"full".as_ptr(),
-    c"longest".as_ptr(),
-    c"list".as_ptr(),
-    c"lastused".as_ptr(),
-    c"noselect".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_wim_values: [&CStr; 5] = [c"full", c"longest", c"list", c"lastused", c"noselect"];
 
 /// Valid values for 'wildoptions'.
-pub static opt_wop_values: GlobalCell<[*const c_char; 5]> = GlobalCell::new([
-    c"fuzzy".as_ptr(),
-    c"tagfile".as_ptr(),
-    c"pum".as_ptr(),
-    c"exacttext".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_wop_values: [&CStr; 4] = [c"fuzzy", c"tagfile", c"pum", c"exacttext"];
 
 /// Valid values for 'winaltkeys'.
-pub static opt_wak_values: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"yes".as_ptr(),
-    c"menu".as_ptr(),
-    c"no".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_wak_values: [&CStr; 3] = [c"yes", c"menu", c"no"];
 
 /// Valid values for 'winborder'.
-pub static opt_winborder_values: GlobalCell<[*const c_char; 9]> = GlobalCell::new([
-    c"".as_ptr(),
-    c"double".as_ptr(),
-    c"single".as_ptr(),
-    c"shadow".as_ptr(),
-    c"rounded".as_ptr(),
-    c"solid".as_ptr(),
-    c"bold".as_ptr(),
-    c"none".as_ptr(),
-    ptr::null(),
-]);
+pub static opt_winborder_values: [&CStr; 8] = [
+    c"", c"double", c"single", c"shadow", c"rounded", c"solid", c"bold", c"none",
+];

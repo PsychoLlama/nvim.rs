@@ -144,8 +144,7 @@ const BLANK: vimoption_T = vimoption_T {
     flags_var: None,
     scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
     immutable: false,
-    values: ptr::null_mut(),
-    values_len: 0,
+    values: &[],
     opt_did_set_cb: None,
     opt_expand_cb: None,
     def_val: boolean(false),
@@ -191,15 +190,6 @@ const fn string(value: &'static CStr) -> OptVal {
             string: String_0::from_cstr(value),
         },
     }
-}
-
-/// The words a string option accepts: the address of the generated array,
-/// which the walk in `crate::optionstr` runs to its terminating
-/// null pointer.
-const fn accepted<const N: usize>(
-    values: &'static GlobalCell<[*const c_char; N]>,
-) -> *mut *const c_char {
-    values.as_raw().cast()
 }
 
 /// Copy one generated part into the table under construction.

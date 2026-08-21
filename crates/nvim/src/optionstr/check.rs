@@ -268,7 +268,7 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
     let listed = unsafe {
         opt_strings_flags(
             val.as_ptr().cast::<c_char>(),
-            opt_scl_values.ptr().cast::<*const c_char>(),
+            &opt_scl_values,
             ptr::null_mut(),
             false,
         )

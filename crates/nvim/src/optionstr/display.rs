@@ -446,13 +446,7 @@ pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
     unsafe {
         if local && c_int::from(*value) == NUL {
             *flags = 0 as c_uint;
-        } else if opt_strings_flags(
-            value,
-            opt_ve_values.ptr().cast::<*const c_char>(),
-            flags,
-            true,
-        ) != OK
-        {
+        } else if opt_strings_flags(value, &opt_ve_values, flags, true) != OK {
             return invalid();
         } else if strcmp(value, old_value(args)) != 0 {
             // What column the cursor may sit in just changed.

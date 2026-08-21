@@ -739,15 +739,14 @@ fn emit_values(out: &mut String, opts: &[Opt]) {
     fn walk(out: &mut String, prefix: &str, values: &[Choice]) {
         writeln!(
             out,
-            "pub static {prefix}_values: GlobalCell<[*const c_char; {}]> = GlobalCell::new([",
-            values.len() + 1
+            "pub static {prefix}_values: [&CStr; {}] = [",
+            values.len()
         )
         .unwrap();
         for c in values {
-            writeln!(out, "    c\"{}\".as_ptr(),", c_literal(&c.name)).unwrap();
+            writeln!(out, "    c\"{}\",", c_literal(&c.name)).unwrap();
         }
-        writeln!(out, "    ptr::null(),").unwrap();
-        writeln!(out, "]);").unwrap();
+        writeln!(out, "];").unwrap();
         for c in values {
             if c.nested.is_empty() {
                 continue;
@@ -813,13 +812,7 @@ fn emit_row(out: &mut String, o: &Opt) {
         writeln!(out, "        immutable: true,").unwrap();
     }
     if !o.values.is_empty() {
-        writeln!(
-            out,
-            "        values: accepted(&{}_values),",
-            o.values_prefix()
-        )
-        .unwrap();
-        writeln!(out, "        values_len: {},", o.values.len()).unwrap();
+        writeln!(out, "        values: &{}_values,", o.values_prefix()).unwrap();
     }
     if let Some(cb) = &o.did_set_cb {
         writeln!(out, "        opt_did_set_cb: Some({cb}),").unwrap();
@@ -888,8 +881,7 @@ const BLANK: vimoption_T = vimoption_T {
     flags_var: None,
     scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptInvalid),
     immutable: false,
-    values: ptr::null_mut(),
-    values_len: 0,
+    values: &[],
     opt_did_set_cb: None,
     opt_expand_cb: None,
     def_val: boolean(false),
@@ -939,15 +931,6 @@ const fn string(value: &'static CStr) -> OptVal {
             string: String_0::from_cstr(value),
         },
     }
-}
-
-/// The words a string option accepts: the address of the generated array,
-/// which the walk in `crate::optionstr` runs to its terminating
-/// null pointer.
-const fn accepted<const N: usize>(
-    values: &'static GlobalCell<[*const c_char; N]>,
-) -> *mut *const c_char {
-    values.as_raw().cast()
 }
 
 /// Copy one generated part into the table under construction.

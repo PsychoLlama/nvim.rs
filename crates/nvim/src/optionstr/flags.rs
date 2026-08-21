@@ -28,13 +28,12 @@ use crate::types::{FAIL, OK, OptIndex, optset_T, size_t};
 
 use super::illegal_char;
 
-/// The accepted words for an option: the null-pointer-terminated array the
-/// generated table carries, and how many words are in it.
+/// The accepted words for an option, as the generated table lists them.
 ///
 /// Two options borrow another row's list rather than repeating it —
 /// 'viewoptions' takes 'sessionoptions'' and 'fileformats' takes
 /// 'fileformat''s.
-pub(crate) fn opt_values(idx: OptIndex) -> (*const *const c_char, size_t) {
+pub(crate) fn opt_values(idx: OptIndex) -> &'static [&'static CStr] {
     let shared = match idx {
         kOptViewoptions => kOptSessionoptions,
         kOptFileformats => kOptFileformat,
@@ -42,8 +41,7 @@ pub(crate) fn opt_values(idx: OptIndex) -> (*const *const c_char, size_t) {
     };
     // SAFETY: `get_option` indexes the generated option table with a valid
     // index and returns a row of it, which lives for the process.
-    let opt = get_option(shared);
-    unsafe { ((*opt).values.cast_const(), (*opt).values_len) }
+    unsafe { (*get_option(shared)).values }
 }
 
 /// Does `value` open with `word`, ending there or at a separating comma?
@@ -69,36 +67,37 @@ fn opens_with(value: &[u8], word: &[u8], list: bool) -> bool {
 /// `loop` rather than a `while`.
 ///
 /// # Safety
-/// `val` is a C string and `values` a null-pointer-terminated array of C
-/// strings — both come from the option table or from an option's variable.
+/// `val` is a C string, from the option table or from an option's variable.
 /// `flagp` is null or points at a writable `unsigned`.
 pub(crate) unsafe fn opt_strings_flags(
     val: *const c_char,
-    values: *const *const c_char,
+    values: &[&CStr],
     flagp: *mut c_uint,
     list: bool,
 ) -> c_int {
     // SAFETY: the caller guarantees a C string.
-    let mut rest = unsafe { CStr::from_ptr(val) }.to_bytes();
+    let value = unsafe { CStr::from_ptr(val) };
+    let Some(mask) = words_mask(value.to_bytes(), values, list) else {
+        return FAIL;
+    };
+    if !flagp.is_null() {
+        // SAFETY: the caller guarantees a writable `unsigned`.
+        unsafe { *flagp = mask };
+    }
+    OK
+}
+
+/// The bitmask [`opt_strings_flags`] stores, or `None` for a value naming a
+/// word that is not accepted.
+fn words_mask(mut rest: &[u8], values: &[&CStr], list: bool) -> Option<c_uint> {
     let once = rest.is_empty() && !list;
     let mut mask: c_uint = 0;
-
     while !rest.is_empty() || once {
-        let mut bit = 0;
-        let word = loop {
-            // SAFETY: the caller guarantees the array ends in a null
-            // pointer, and the walk stops there.
-            let word = unsafe { *values.add(bit) };
-            if word.is_null() {
-                return FAIL;
-            }
-            // SAFETY: a non-null entry of that array is a C string.
-            let word = unsafe { CStr::from_ptr(word) }.to_bytes();
-            if opens_with(rest, word, list) {
-                break word;
-            }
-            bit += 1;
-        };
+        let (bit, word) = values
+            .iter()
+            .map(|word| word.to_bytes())
+            .enumerate()
+            .find(|&(_, word)| opens_with(rest, word, list))?;
         assert!(bit < c_uint::BITS as usize, "more accepted words than bits");
         mask |= 1 << bit;
         rest = &rest[word.len()..];
@@ -107,12 +106,7 @@ pub(crate) unsafe fn opt_strings_flags(
             break;
         }
     }
-
-    if !flagp.is_null() {
-        // SAFETY: the caller guarantees a writable `unsigned`.
-        unsafe { *flagp = mask };
-    }
-    OK
+    Some(mask)
 }
 
 /// [`opt_strings_flags`] as an option-table callback reports it: null when
@@ -122,7 +116,7 @@ pub(crate) unsafe fn opt_strings_flags(
 /// As [`opt_strings_flags`].
 pub(crate) unsafe fn did_set_opt_flags(
     val: *const c_char,
-    values: *const *const c_char,
+    values: &[&CStr],
     flagp: *mut c_uint,
     list: bool,
 ) -> *const c_char {
@@ -187,7 +181,7 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
         varp
     };
     let list = unsafe { (*opt).flags } & (kOptFlagComma | kOptFlagOneComma) != 0;
-    let (values, _) = opt_values(idx);
+    let values = opt_values(idx);
     // The table names the mask cell itself; an option with no mask has none.
     let flagp = unsafe { (*opt).flags_var }.map_or(ptr::null_mut(), |cell| cell.ptr());
     // SAFETY: the option's variable holds a C string.
@@ -201,7 +195,7 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
 /// `p` is a C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn check_ff_value(p: *mut c_char) -> c_int {
-    let (values, _) = opt_values(kOptFileformat);
+    let values = opt_values(kOptFileformat);
     // SAFETY: the caller's C string, against the table's own word list.
     unsafe { opt_strings_flags(p, values, ptr::null_mut(), false) }
 }

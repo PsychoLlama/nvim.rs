@@ -11,28 +11,6 @@ use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
 pub(super) const PART: [vimoption_T; 79] = [
-    // 'edcompatible'
-    vimoption_T {
-        fullname: name(c"edcompatible"),
-        shortname: name(c"ed"),
-        scope_flags: GLOBAL,
-        scope_idx: scope_idx(kGlobalOptEdcompatible, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::OwnDefault,
-        immutable: true,
-        ..BLANK
-    },
-    // 'emoji'
-    vimoption_T {
-        fullname: name(c"emoji"),
-        shortname: name(c"emo"),
-        flags: kOptFlagRedrAll | kOptFlagUIOption,
-        scope_flags: GLOBAL,
-        scope_idx: scope_idx(kGlobalOptEmoji, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_emoji),
-        opt_did_set_cb: Some(did_set_emoji),
-        def_val: boolean(true),
-        ..BLANK
-    },
     // 'encoding'
     vimoption_T {
         fullname: name(c"encoding"),
@@ -206,8 +184,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptFileformat),
         var: OptVar::String(&p_ff),
-        values: accepted(&opt_ff_values),
-        values_len: 3,
+        values: &opt_ff_values,
         opt_did_set_cb: Some(did_set_fileformat),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"unix"),
@@ -297,8 +274,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptFoldclose, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_fcl),
-        values: accepted(&opt_fcl_values),
-        values_len: 1,
+        values: &opt_fcl_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c""),
@@ -312,8 +288,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         type_0: kOptValTypeString,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptFoldcolumn, kBufOptInvalid),
-        values: accepted(&opt_fdc_values),
-        values_len: 20,
+        values: &opt_fdc_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"0"),
@@ -397,8 +372,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         type_0: kOptValTypeString,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptFoldmethod, kBufOptInvalid),
-        values: accepted(&opt_fdm_values),
-        values_len: 6,
+        values: &opt_fdm_values,
         opt_did_set_cb: Some(did_set_foldmethod),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"manual"),
@@ -438,8 +412,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptFoldopen, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_fdo),
         flags_var: Some(&fdo_flags),
-        values: accepted(&opt_fdo_values),
-        values_len: 11,
+        values: &opt_fdo_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"block,hor,mark,percent,quickfix,search,tag,undo"),
@@ -815,8 +788,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptInccommand, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_icm),
-        values: accepted(&opt_icm_values),
-        values_len: 3,
+        values: &opt_icm_values,
         opt_did_set_cb: Some(did_set_inccommand),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"nosplit"),
@@ -959,6 +931,35 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptJoinspaces, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Boolean(&p_js),
+        ..BLANK
+    },
+    // 'jumpoptions'
+    vimoption_T {
+        fullname: name(c"jumpoptions"),
+        shortname: name(c"jop"),
+        flags: kOptFlagOneComma | kOptFlagNoDup,
+        type_0: kOptValTypeString,
+        scope_flags: GLOBAL,
+        scope_idx: scope_idx(kGlobalOptJumpoptions, kWinOptInvalid, kBufOptInvalid),
+        var: OptVar::String(&p_jop),
+        flags_var: Some(&jop_flags),
+        values: &opt_jop_values,
+        opt_did_set_cb: Some(did_set_str_generic),
+        opt_expand_cb: Some(expand_set_str_generic),
+        def_val: string(c"clean"),
+        ..BLANK
+    },
+    // 'keymap'
+    vimoption_T {
+        fullname: name(c"keymap"),
+        shortname: name(c"kmp"),
+        flags: kOptFlagRedrStat | kOptFlagRedrBuf | kOptFlagNFname | kOptFlagPriMkrc,
+        type_0: kOptValTypeString,
+        scope_flags: BUF,
+        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptKeymap),
+        var: OptVar::String(&p_keymap),
+        opt_did_set_cb: Some(did_set_keymap),
+        def_val: string(c""),
         ..BLANK
     },
 ];

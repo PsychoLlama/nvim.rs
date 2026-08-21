@@ -184,15 +184,7 @@ pub unsafe fn did_set_completeopt(args: *mut optset_T) -> *const c_char {
         }
     };
     // SAFETY: a C string, the table's own word list and the mask beside it.
-    if unsafe {
-        opt_strings_flags(
-            value,
-            opt_cot_values.ptr().cast::<*const c_char>(),
-            flags,
-            true,
-        )
-    } != OK
-    {
+    if unsafe { opt_strings_flags(value, &opt_cot_values, flags, true) } != OK {
         return invalid();
     }
     ptr::null()
@@ -314,7 +306,7 @@ pub unsafe fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame, window and new value.
     let (wp, opt_flags, value) =
         unsafe { (win(args), (*args).os_flags, (*args).os_newval.string.data()) };
-    let words = opt_spo_values.ptr().cast::<*const c_char>();
+    let words = &opt_spo_values;
     // SAFETY: a C string, the table's own word list, and each scope's mask.
     unsafe {
         if !opt_flags.has(OptionSetFlags::LOCAL)
@@ -360,13 +352,7 @@ pub unsafe fn did_set_tagcase(args: *mut optset_T) -> *const c_char {
         // An empty buffer-local value means "no override".
         if local && c_int::from(*value) == NUL {
             *flags = 0 as c_uint;
-        } else if opt_strings_flags(
-            value,
-            opt_tc_values.ptr().cast::<*const c_char>(),
-            flags,
-            false,
-        ) != OK
-        {
+        } else if opt_strings_flags(value, &opt_tc_values, flags, false) != OK {
             return invalid();
         }
     }

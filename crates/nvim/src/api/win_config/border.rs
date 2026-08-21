@@ -21,8 +21,7 @@ pub unsafe fn parse_border_style(
     unsafe {
         let mut defaults: [C2Rust_Unnamed_15; 7] = [
             C2Rust_Unnamed_15 {
-                name: (*opt_winborder_values.ptr())[1 as ::core::ffi::c_int as usize]
-                    as *const ::core::ffi::c_char,
+                name: opt_winborder_values[1].as_ptr(),
                 chars: [
                     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                         *b"\xE2\x95\x94\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
@@ -52,8 +51,7 @@ pub unsafe fn parse_border_style(
                 shadow_color: false,
             },
             C2Rust_Unnamed_15 {
-                name: (*opt_winborder_values.ptr())[2 as ::core::ffi::c_int as usize]
-                    as *const ::core::ffi::c_char,
+                name: opt_winborder_values[2].as_ptr(),
                 chars: [
                     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                         *b"\xE2\x94\x8C\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
@@ -83,8 +81,7 @@ pub unsafe fn parse_border_style(
                 shadow_color: false,
             },
             C2Rust_Unnamed_15 {
-                name: (*opt_winborder_values.ptr())[3 as ::core::ffi::c_int as usize]
-                    as *const ::core::ffi::c_char,
+                name: opt_winborder_values[3].as_ptr(),
                 chars: [
                     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                         *b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
@@ -114,8 +111,7 @@ pub unsafe fn parse_border_style(
                 shadow_color: true,
             },
             C2Rust_Unnamed_15 {
-                name: (*opt_winborder_values.ptr())[4 as ::core::ffi::c_int as usize]
-                    as *const ::core::ffi::c_char,
+                name: opt_winborder_values[4].as_ptr(),
                 chars: [
                     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                         *b"\xE2\x95\xAD\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
@@ -145,8 +141,7 @@ pub unsafe fn parse_border_style(
                 shadow_color: false,
             },
             C2Rust_Unnamed_15 {
-                name: (*opt_winborder_values.ptr())[5 as ::core::ffi::c_int as usize]
-                    as *const ::core::ffi::c_char,
+                name: opt_winborder_values[5].as_ptr(),
                 chars: [
                     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                         *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
@@ -176,8 +171,7 @@ pub unsafe fn parse_border_style(
                 shadow_color: false,
             },
             C2Rust_Unnamed_15 {
-                name: (*opt_winborder_values.ptr())[6 as ::core::ffi::c_int as usize]
-                    as *const ::core::ffi::c_char,
+                name: opt_winborder_values[6].as_ptr(),
                 chars: [
                     ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                         *b"\xE2\x94\x8F\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",

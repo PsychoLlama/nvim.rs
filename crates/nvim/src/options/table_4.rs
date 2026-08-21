@@ -10,42 +10,7 @@
 use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
-pub(super) const PART: [vimoption_T; 79] = [
-    // 'rightleft'
-    vimoption_T {
-        fullname: name(c"rightleft"),
-        shortname: name(c"rl"),
-        flags: kOptFlagRedrWin,
-        scope_flags: WIN,
-        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptRightleft, kBufOptInvalid),
-        ..BLANK
-    },
-    // 'rightleftcmd'
-    vimoption_T {
-        fullname: name(c"rightleftcmd"),
-        shortname: name(c"rlc"),
-        flags: kOptFlagComma | kOptFlagRedrWin,
-        type_0: kOptValTypeString,
-        scope_flags: WIN,
-        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptRightleftcmd, kBufOptInvalid),
-        values: accepted(&opt_rlc_values),
-        values_len: 1,
-        opt_did_set_cb: Some(did_set_str_generic),
-        opt_expand_cb: Some(expand_set_str_generic),
-        def_val: string(c"search"),
-        ..BLANK
-    },
-    // 'ruler'
-    vimoption_T {
-        fullname: name(c"ruler"),
-        shortname: name(c"ru"),
-        flags: kOptFlagRedrStat,
-        scope_flags: GLOBAL,
-        scope_idx: scope_idx(kGlobalOptRuler, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_ru),
-        def_val: boolean(true),
-        ..BLANK
-    },
+pub(super) const PART: [vimoption_T; 80] = [
     // 'rulerformat'
     vimoption_T {
         fullname: name(c"rulerformat"),
@@ -136,8 +101,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptScrollopt, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_sbo),
-        values: accepted(&opt_sbo_values),
-        values_len: 3,
+        values: &opt_sbo_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"ver,jump"),
@@ -171,8 +135,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptSelection, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_sel),
-        values: accepted(&opt_sel_values),
-        values_len: 3,
+        values: &opt_sel_values,
         opt_did_set_cb: Some(did_set_selection),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"inclusive"),
@@ -187,8 +150,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptSelectmode, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_slm),
-        values: accepted(&opt_slm_values),
-        values_len: 3,
+        values: &opt_slm_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c""),
@@ -204,8 +166,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptSessionoptions, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_ssop),
         flags_var: Some(&ssop_flags),
-        values: accepted(&opt_ssop_values),
-        values_len: 18,
+        values: &opt_ssop_values,
         opt_did_set_cb: Some(did_set_sessionoptions),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"blank,buffers,curdir,folds,help,tabpages,winsize,terminal"),
@@ -408,8 +369,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptShowcmdloc, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_sloc),
-        values: accepted(&opt_sloc_values),
-        values_len: 3,
+        values: &opt_sloc_values,
         opt_did_set_cb: Some(did_set_showcmdloc),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"last"),
@@ -486,8 +446,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         type_0: kOptValTypeString,
         scope_flags: WIN,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptSigncolumn, kBufOptInvalid),
-        values: accepted(&opt_scl_values),
-        values_len: 22,
+        values: &opt_scl_values,
         opt_did_set_cb: Some(did_set_signcolumn),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"auto"),
@@ -599,8 +558,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptSpelloptions),
         var: OptVar::String(&p_spo),
-        values: accepted(&opt_spo_values),
-        values_len: 2,
+        values: &opt_spo_values,
         opt_did_set_cb: Some(did_set_spelloptions),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c""),
@@ -615,8 +573,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptSpellsuggest, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_sps),
-        values: accepted(&opt_sps_values),
-        values_len: 6,
+        values: &opt_sps_values,
         opt_did_set_cb: Some(did_set_spellsuggest),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"best"),
@@ -639,8 +596,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptSplitkeep, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_spk),
-        values: accepted(&opt_spk_values),
-        values_len: 3,
+        values: &opt_spk_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"cursor"),
@@ -735,8 +691,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptSwitchbuf, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_swb),
         flags_var: Some(&swb_flags),
-        values: accepted(&opt_swb_values),
-        values_len: 6,
+        values: &opt_swb_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"uselast"),
@@ -777,8 +732,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptTabclose, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_tcl),
         flags_var: Some(&tcl_flags),
-        values: accepted(&opt_tcl_values),
-        values_len: 2,
+        values: &opt_tcl_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c""),
@@ -840,8 +794,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptTagcase, kWinOptInvalid, kBufOptTagcase),
         var: OptVar::String(&p_tc),
         flags_var: Some(&tc_flags),
-        values: accepted(&opt_tc_values),
-        values_len: 5,
+        values: &opt_tc_values,
         opt_did_set_cb: Some(did_set_tagcase),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"followic"),
@@ -944,8 +897,7 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptTermpastefilter, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_tpf),
         flags_var: Some(&tpf_flags),
-        values: accepted(&opt_tpf_values),
-        values_len: 7,
+        values: &opt_tpf_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"BS,HT,ESC,DEL"),
@@ -959,6 +911,53 @@ pub(super) const PART: [vimoption_T; 79] = [
         scope_idx: scope_idx(kGlobalOptTermsync, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Boolean(&p_termsync),
         def_val: boolean(true),
+        ..BLANK
+    },
+    // 'terse'
+    vimoption_T {
+        fullname: name(c"terse"),
+        scope_flags: GLOBAL,
+        scope_idx: scope_idx(kGlobalOptTerse, kWinOptInvalid, kBufOptInvalid),
+        var: OptVar::OwnDefault,
+        immutable: true,
+        ..BLANK
+    },
+    // 'textwidth'
+    vimoption_T {
+        fullname: name(c"textwidth"),
+        shortname: name(c"tw"),
+        flags: kOptFlagRedrBuf | kOptFlagHLOnly,
+        type_0: kOptValTypeNumber,
+        scope_flags: BUF,
+        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptTextwidth),
+        var: OptVar::Number(&p_tw),
+        opt_did_set_cb: Some(did_set_textwidth),
+        def_val: number(0),
+        ..BLANK
+    },
+    // 'thesaurus'
+    vimoption_T {
+        fullname: name(c"thesaurus"),
+        shortname: name(c"tsr"),
+        flags: kOptFlagOneComma | kOptFlagExpand | kOptFlagNDname | kOptFlagNoDup,
+        type_0: kOptValTypeString,
+        scope_flags: GLOBAL | BUF,
+        scope_idx: scope_idx(kGlobalOptThesaurus, kWinOptInvalid, kBufOptThesaurus),
+        var: OptVar::String(&p_tsr),
+        def_val: string(c""),
+        ..BLANK
+    },
+    // 'thesaurusfunc'
+    vimoption_T {
+        fullname: name(c"thesaurusfunc"),
+        shortname: name(c"tsrfu"),
+        flags: kOptFlagSecure | kOptFlagFunc,
+        type_0: kOptValTypeString,
+        scope_flags: GLOBAL | BUF,
+        scope_idx: scope_idx(kGlobalOptThesaurusfunc, kWinOptInvalid, kBufOptThesaurusfunc),
+        var: OptVar::String(&p_tsrfu),
+        opt_did_set_cb: Some(did_set_thesaurusfunc),
+        def_val: string(c""),
         ..BLANK
     },
 ];

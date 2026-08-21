@@ -104,13 +104,7 @@ pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
             *flags = 0 as c_uint;
             return ptr::null();
         }
-        if opt_strings_flags(
-            value,
-            opt_bkc_values.ptr().cast::<*const c_char>(),
-            flags,
-            true,
-        ) != OK
-        {
+        if opt_strings_flags(value, &opt_bkc_values, flags, true) != OK {
             return invalid();
         }
         let named = [kOptBkcFlagAuto, kOptBkcFlagYes, kOptBkcFlagNo]
@@ -120,12 +114,7 @@ pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
         if named != 1 {
             // The mask was already rebuilt from the new value; put the old
             // one back, since the caller only restores the string.
-            opt_strings_flags(
-                old_value(args),
-                opt_bkc_values.ptr().cast::<*const c_char>(),
-                flags,
-                true,
-            );
+            opt_strings_flags(old_value(args), &opt_bkc_values, flags, true);
             return invalid();
         }
     }
@@ -160,12 +149,7 @@ pub unsafe fn did_set_bufhidden(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's buffer, and the table's own word list.
     unsafe {
         let buf = (*args).os_buf.cast::<buf_T>();
-        did_set_opt_flags(
-            (*buf).b_p_bh,
-            opt_bh_values.ptr().cast::<*const c_char>(),
-            ptr::null_mut(),
-            false,
-        )
+        did_set_opt_flags((*buf).b_p_bh, &opt_bh_values, ptr::null_mut(), false)
     }
 }
 
@@ -182,14 +166,7 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
     let first = unsafe { *(*buf).b_p_bt };
     let has_terminal = unsafe { !(*buf).terminal.is_null() };
     if has_terminal != (first == b't' as c_char)
-        || unsafe {
-            opt_strings_flags(
-                (*buf).b_p_bt,
-                opt_bt_values.ptr().cast::<*const c_char>(),
-                ptr::null_mut(),
-                false,
-            )
-        } != OK
+        || unsafe { opt_strings_flags((*buf).b_p_bt, &opt_bt_values, ptr::null_mut(), false) } != OK
     {
         return invalid();
     }

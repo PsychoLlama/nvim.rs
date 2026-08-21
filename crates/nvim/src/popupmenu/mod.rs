@@ -200,10 +200,10 @@ unsafe fn pum_border_width() -> c_int {
     // NUL-terminated strings.
     unsafe {
         let border = p_pumborder.get();
-        if *border == 0 || strequal(border, opt_winborder_values.get()[7]) {
+        if *border == 0 || strequal(border, opt_winborder_values[7].as_ptr()) {
             return 0;
         }
-        if strequal(border, opt_winborder_values.get()[3]) {
+        if strequal(border, opt_winborder_values[3].as_ptr()) {
             1
         } else {
             2

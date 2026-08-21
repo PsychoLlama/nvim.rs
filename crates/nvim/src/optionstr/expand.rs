@@ -114,12 +114,10 @@ unsafe fn original_value(args: *mut optexpand_T) -> Option<*mut c_char> {
 /// Complete an option whose accepted words the generated table lists.
 ///
 /// # Safety
-/// `args` points at the completion frame; `values` is an array of at most
-/// `num_values` C strings followed by a null pointer.
+/// `args` points at the completion frame.
 pub(crate) unsafe fn expand_set_opt_string(
     args: *mut optexpand_T,
-    values: *const *const c_char,
-    num_values: size_t,
+    values: &[&CStr],
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> c_int {
@@ -128,26 +126,18 @@ pub(crate) unsafe fn expand_set_opt_string(
     let original = unsafe { original_value(args) };
 
     // SAFETY: at most one push per word, plus the original value.
-    let mut out = unsafe { Matches::with_capacity(num_values) };
+    let mut out = unsafe { Matches::with_capacity(values.len()) };
     if let Some(value) = original {
         // SAFETY: `value` is a C string, and `xstrdup` hands over an
         // allocation the consumer frees.
         unsafe { out.push(xstrdup(value)) };
     }
 
-    let mut at = values;
-    loop {
-        // SAFETY: the array ends in a null pointer, and the walk stops
-        // there.
-        let word = unsafe { *at };
-        if word.is_null() {
-            break;
-        }
-        at = unsafe { at.add(1) };
-        // SAFETY: a non-null entry is a C string.
-        if unsafe { c_int::from(*word) } == NUL {
+    for entry in values {
+        if entry.is_empty() {
             continue; // Ignore an empty accepted word.
         }
+        let word = entry.as_ptr();
         // The current value is already the first completion; do not repeat
         // it.
         // SAFETY: both are C strings.
@@ -177,8 +167,8 @@ pub unsafe fn expand_set_str_generic(
     matches: *mut *mut *mut c_char,
 ) -> c_int {
     // SAFETY: the caller's frame.
-    let (values, values_len) = opt_values(unsafe { (*args).oe_idx });
-    unsafe { expand_set_opt_string(args, values, values_len, num_matches, matches) }
+    let values = opt_values(unsafe { (*args).oe_idx });
+    unsafe { expand_set_opt_string(args, values, num_matches, matches) }
 }
 
 /// The option's current value, offered as completion index 0 ahead of
@@ -417,16 +407,8 @@ pub unsafe fn expand_set_diffopt(
     if at <= start || unsafe { *at.sub(1) } != b':' as c_char {
         return unsafe { expand_set_str_generic(args, num_matches, matches) };
     }
-    // The last entry of each array is the null terminator, not a value.
-    let field = |values: &GlobalCell<[*const c_char; 5]>| unsafe {
-        expand_set_opt_string(
-            args,
-            values.ptr().cast::<*const c_char>(),
-            4,
-            num_matches,
-            matches,
-        )
-    };
+    let field =
+        |values: &[&CStr]| unsafe { expand_set_opt_string(args, values, num_matches, matches) };
     if unsafe { directly_after(at, start, c"algorithm:") } {
         return field(&opt_dip_algorithm_values);
     }
@@ -512,9 +494,9 @@ pub unsafe fn expand_set_eventignore(
 /// # Safety
 /// Called by `expand_generic`.
 pub unsafe fn get_fileformat_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    // SAFETY: the table's own array. Its last entry is the null terminator,
-    // which is also how `expand_generic` learns the list has ended.
-    unsafe { *opt_ff_values.ptr() }
-        .get(idx as usize)
-        .map_or(ptr::null_mut(), |value| value.cast_mut())
+    // A null past the end is how `expand_generic` learns the list has ended.
+    usize::try_from(idx)
+        .ok()
+        .and_then(|idx| opt_ff_values.get(idx))
+        .map_or(ptr::null_mut(), |value| value.as_ptr().cast_mut())
 }

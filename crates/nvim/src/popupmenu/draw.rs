@@ -317,7 +317,7 @@ unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
 
         // The shadow style is not a box: it darkens the cells to the right
         // and below instead, in two dedicated highlight groups.
-        if strequal(p_pumborder.get(), opt_winborder_values.get()[3]) {
+        if strequal(p_pumborder.get(), opt_winborder_values[3].as_ptr()) {
             config.shadow = true;
             let blend = syn_check_group(c"PmenuShadow".as_ptr(), 11);
             let through = syn_check_group(c"PmenuShadowThrough".as_ptr(), 18);

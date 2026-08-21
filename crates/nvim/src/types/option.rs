@@ -155,8 +155,11 @@ pub struct vimoption_T {
     pub flags_var: Option<&'static GlobalCell<::core::ffi::c_uint>>,
     pub scope_idx: [ssize_t; 3],
     pub immutable: bool,
-    pub values: *mut *const ::core::ffi::c_char,
-    pub values_len: size_t,
+    /// The words a string option accepts, empty for one that accepts
+    /// anything. Upstream kept the array and its length in two fields and
+    /// terminated the array with a null pointer besides — three spellings of
+    /// one fact, and the walk had to agree with all of them.
+    pub values: &'static [&'static ::core::ffi::CStr],
     pub opt_did_set_cb: opt_did_set_cb_T,
     pub opt_expand_cb: opt_expand_cb_T,
     pub def_val: OptVal,

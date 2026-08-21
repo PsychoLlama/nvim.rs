@@ -10,58 +10,7 @@
 use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
-pub(super) const PART: [vimoption_T; 57] = [
-    // 'terse'
-    vimoption_T {
-        fullname: name(c"terse"),
-        scope_flags: GLOBAL,
-        scope_idx: scope_idx(kGlobalOptTerse, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::OwnDefault,
-        immutable: true,
-        ..BLANK
-    },
-    // 'textwidth'
-    vimoption_T {
-        fullname: name(c"textwidth"),
-        shortname: name(c"tw"),
-        flags: kOptFlagRedrBuf | kOptFlagHLOnly,
-        type_0: kOptValTypeNumber,
-        scope_flags: BUF,
-        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptTextwidth),
-        var: OptVar::Number(&p_tw),
-        opt_did_set_cb: Some(did_set_textwidth),
-        def_val: number(0),
-        ..BLANK
-    },
-    // 'thesaurus'
-    vimoption_T {
-        fullname: name(c"thesaurus"),
-        shortname: name(c"tsr"),
-        flags: kOptFlagOneComma | kOptFlagExpand | kOptFlagNDname | kOptFlagNoDup,
-        type_0: kOptValTypeString,
-        scope_flags: GLOBAL | BUF,
-        scope_idx: scope_idx(kGlobalOptThesaurus, kWinOptInvalid, kBufOptThesaurus),
-        var: OptVar::String(&p_tsr),
-        def_val: string(c""),
-        ..BLANK
-    },
-    // 'thesaurusfunc'
-    vimoption_T {
-        fullname: name(c"thesaurusfunc"),
-        shortname: name(c"tsrfu"),
-        flags: kOptFlagSecure | kOptFlagFunc,
-        type_0: kOptValTypeString,
-        scope_flags: GLOBAL | BUF,
-        scope_idx: scope_idx(
-            kGlobalOptThesaurusfunc,
-            kWinOptInvalid,
-            kBufOptThesaurusfunc,
-        ),
-        var: OptVar::String(&p_tsrfu),
-        opt_did_set_cb: Some(did_set_thesaurusfunc),
-        def_val: string(c""),
-        ..BLANK
-    },
+pub(super) const PART: [vimoption_T; 53] = [
     // 'tildeop'
     vimoption_T {
         fullname: name(c"tildeop"),
@@ -328,8 +277,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         scope_idx: scope_idx(kGlobalOptVirtualedit, kWinOptVirtualedit, kBufOptInvalid),
         var: OptVar::String(&p_ve),
         flags_var: Some(&ve_flags),
-        values: accepted(&opt_ve_values),
-        values_len: 6,
+        values: &opt_ve_values,
         opt_did_set_cb: Some(did_set_virtualedit),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c""),
@@ -431,8 +379,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWildmode, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_wim),
-        values: accepted(&opt_wim_values),
-        values_len: 5,
+        values: &opt_wim_values,
         opt_did_set_cb: Some(did_set_wildmode),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"full"),
@@ -448,8 +395,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         scope_idx: scope_idx(kGlobalOptWildoptions, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_wop),
         flags_var: Some(&wop_flags),
-        values: accepted(&opt_wop_values),
-        values_len: 4,
+        values: &opt_wop_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"pum,tagfile"),
@@ -463,8 +409,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinaltkeys, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_wak),
-        values: accepted(&opt_wak_values),
-        values_len: 3,
+        values: &opt_wak_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c"menu"),
@@ -503,8 +448,7 @@ pub(super) const PART: [vimoption_T; 57] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptWinborder, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::String(&p_winborder),
-        values: accepted(&opt_winborder_values),
-        values_len: 8,
+        values: &opt_winborder_values,
         opt_did_set_cb: Some(did_set_winborder),
         opt_expand_cb: Some(expand_set_str_generic),
         def_val: string(c""),
