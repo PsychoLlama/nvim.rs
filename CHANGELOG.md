@@ -48,6 +48,12 @@ and this project adheres to [CalVer](https://calver.org/).
   `--remote-ui` stdio channels, the exact bytes a request, notification and
   response are written as, what a malformed message is answered with before
   the channel is closed, and the `RPC:` lines `$NVIM_LOG_FILE` records.
+- Rewrote the event loop and everything that runs on it, covering
+  `jobstart()`/`jobstop()`/`jobwait()`/`jobsend()` and the `on_stdout`/
+  `on_stderr`/`on_exit` callbacks, `:terminal` and `termopen()`, `system()`
+  and `:!`, `timer_start()`/`timer_stop()`/`timer_info()`/`timer_pause()`,
+  how a signal reaches the editor, the order queued work is delivered in,
+  and how much a job's output may buffer before its writer is made to wait.
 
 ### Fixed
 
