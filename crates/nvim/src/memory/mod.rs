@@ -2,10 +2,15 @@
 //! allocator: safe cores + C-ABI shims.
 //!
 //! The `mem_malloc`/`mem_free`/`mem_calloc`/`mem_realloc` function pointers
-//! are a load-bearing seam: the unit suite rebinds them at runtime to LuaJIT
-//! callbacks so specs can assert on exact allocation sequences. Every heap
-//! byte this module hands out therefore still flows through them — no Rust
-//! container replaces an `xmalloc` here.
+//! are a load-bearing seam: the LuaJIT unit suite rebinds them at runtime so
+//! specs can assert on exact allocation sequences. Every heap byte this
+//! module hands out therefore still flows through them — no Rust container
+//! replaces an `xmalloc` here.
+//!
+//! [`alloc_log`] is the in-crate answer to the same question, and the reason
+//! the seam can eventually go: the four `seam_*` wrappers below are this
+//! module's only calls into the platform allocator, and each one logs what it
+//! asked for when a test is recording.
 //!
 //! Copy helpers whose C originals used `memmove` (`xstrlcat`, which the unit
 //! suite calls with `src` pointing into `dst`) keep raw `ptr::copy`; slices
@@ -19,7 +24,9 @@
 //! `xmalloc`/`xcalloc`/`xfree`/`xstrdup`/`xmemdup`/`xmemdupz`) are pinned by
 //! the ABI ledger and read by `test/unit`'s allocator seam. Their signatures
 //! and their *allocation sequence* are both observable, so nothing here may
-//! be reorganised into a Rust container, and no call may be elided.
+//! be reorganised into a Rust container, and no call may be elided. The
+//! sequence stays observable from Rust through [`alloc_log`] once the four
+//! `mem_*` pointers have no Lua consumer left.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -31,6 +38,7 @@
 )]
 
 use crate::global_cell::SharedCell;
+use crate::memory::alloc_log::AllocEvent;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_long, c_ulong, c_void};
 use core::{ptr, slice};
@@ -107,6 +115,58 @@ macro_rules! mem_fn {
     };
 }
 
+/// The four calls below are the whole of this module's contact with the
+/// platform allocator, and the only place [`alloc_log`] observes. Keeping
+/// them in one place is what lets a test assert an exact allocation sequence
+/// without the recorder being spread through the file — and what will make
+/// deleting the `mem_*` seam a four-function edit.
+///
+/// # Safety
+///
+/// As [`try_malloc`].
+unsafe fn seam_malloc(size: usize) -> *mut c_void {
+    // SAFETY: the seam's `malloc`, whose pointer is never null.
+    let ret = unsafe { mem_fn!(mem_malloc)(size) };
+    alloc_log::record(AllocEvent::Malloc { size, ret });
+    ret
+}
+
+/// As [`seam_malloc`], for `calloc`.
+///
+/// # Safety
+///
+/// As [`try_malloc`].
+unsafe fn seam_calloc(count: usize, size: usize) -> *mut c_void {
+    // SAFETY: the seam's `calloc`, whose pointer is never null.
+    let ret = unsafe { mem_fn!(mem_calloc)(count, size) };
+    alloc_log::record(AllocEvent::Calloc { count, size, ret });
+    ret
+}
+
+/// As [`seam_malloc`], for `realloc`.
+///
+/// # Safety
+///
+/// `ptr` is null or an allocation from this module's family; otherwise as
+/// [`try_malloc`].
+unsafe fn seam_realloc(ptr: *mut c_void, size: usize) -> *mut c_void {
+    // SAFETY: the caller's allocation, handed to the seam that made it.
+    let ret = unsafe { mem_fn!(mem_realloc)(ptr, size) };
+    alloc_log::record(AllocEvent::Realloc { ptr, size, ret });
+    ret
+}
+
+/// As [`seam_malloc`], for `free`.
+///
+/// # Safety
+///
+/// `ptr` is null or an allocation from this module's family, not yet freed.
+unsafe fn seam_free(ptr: *mut c_void) {
+    // SAFETY: the caller's allocation, handed back to the seam that made it.
+    unsafe { mem_fn!(mem_free)(ptr) };
+    alloc_log::record(AllocEvent::Free { ptr });
+}
+
 /// `malloc`, retried once after asking the editor for memory back. NULL when
 /// even that did not help.
 ///
@@ -118,14 +178,12 @@ pub unsafe fn try_malloc(size: usize) -> *mut c_void {
     // failure; upstream rounds up for the same reason.
     let allocated_size = size.max(1);
     // SAFETY: the seam's `malloc`, and the retry after freeing.
-    unsafe {
-        let ret = mem_fn!(mem_malloc)(allocated_size);
-        if !ret.is_null() {
-            return ret;
-        }
-        try_to_free_memory();
-        mem_fn!(mem_malloc)(allocated_size)
+    let ret = unsafe { seam_malloc(allocated_size) };
+    if !ret.is_null() {
+        return ret;
     }
+    unsafe { try_to_free_memory() };
+    unsafe { seam_malloc(allocated_size) }
 }
 
 /// [`try_malloc`], reporting the failure to the user.
@@ -170,7 +228,7 @@ pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn xfree(ptr: *mut c_void) {
     // SAFETY: the caller's allocation, handed back to the seam that made it.
-    unsafe { mem_fn!(mem_free)(ptr) };
+    unsafe { seam_free(ptr) };
 }
 
 /// `calloc` that never fails. The zeroing is load-bearing: callers all over
@@ -189,18 +247,16 @@ pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
     };
     // SAFETY: the seam's `calloc`, the retry after freeing, and a
     // NUL-terminated static for the exit message.
-    unsafe {
-        let ret = mem_fn!(mem_calloc)(allocated_count, allocated_size);
-        if !ret.is_null() {
-            return ret;
-        }
-        try_to_free_memory();
-        let ret = mem_fn!(mem_calloc)(allocated_count, allocated_size);
-        if ret.is_null() {
-            preserve_exit((&raw const e_outofmem).cast::<c_char>());
-        }
-        ret
+    let ret = unsafe { seam_calloc(allocated_count, allocated_size) };
+    if !ret.is_null() {
+        return ret;
     }
+    unsafe { try_to_free_memory() };
+    let ret = unsafe { seam_calloc(allocated_count, allocated_size) };
+    if ret.is_null() {
+        unsafe { preserve_exit((&raw const e_outofmem).cast::<c_char>()) };
+    }
+    ret
 }
 
 /// `realloc` that never fails.
@@ -213,18 +269,16 @@ pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void 
     let allocated_size = size.max(1);
     // SAFETY: the caller's allocation, handed to the seam that made it, plus
     // the retry after freeing.
-    unsafe {
-        let ret = mem_fn!(mem_realloc)(ptr, allocated_size);
-        if !ret.is_null() {
-            return ret;
-        }
-        try_to_free_memory();
-        let ret = mem_fn!(mem_realloc)(ptr, allocated_size);
-        if ret.is_null() {
-            preserve_exit((&raw const e_outofmem).cast::<c_char>());
-        }
-        ret
+    let ret = unsafe { seam_realloc(ptr, allocated_size) };
+    if !ret.is_null() {
+        return ret;
     }
+    unsafe { try_to_free_memory() };
+    let ret = unsafe { seam_realloc(ptr, allocated_size) };
+    if ret.is_null() {
+        unsafe { preserve_exit((&raw const e_outofmem).cast::<c_char>()) };
+    }
+    ret
 }
 
 /// [`xmalloc`] of `size + 1` bytes with the extra one set to NUL: room for
@@ -720,6 +774,7 @@ pub unsafe fn mergesort_list(
 
 /// The arena allocator, re-exported: every caller in the tree spells it
 /// `crate::memory::arena_*`, and it is the same allocation family.
+pub mod alloc_log;
 pub mod arena;
 pub use arena::*;
 
