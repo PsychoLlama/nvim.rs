@@ -12,6 +12,22 @@
 //! A null `Arena` pointer is legal everywhere here and means "no arena":
 //! [`arena_alloc`] falls through to [`xmalloc`], which is how the many
 //! callers that take an optional arena spell the absent case.
+//!
+//! # What tests this
+//!
+//! The `plan()` tests below are the bump arithmetic with the pointers taken
+//! out of it. Everything else splits in two, and knowing which half a change
+//! lands in is the difference between a gated edit and a blind one:
+//!
+//! - **What a request resolves to** -- the offsets and the three copy
+//!   helpers -- reaches the editor's answers, so any behavioural
+//!   differential over the API surface covers it.
+//! - **Block policy** -- which strategy serves a request, whether a spent
+//!   block is reused, whether the consumed chain is released -- reaches
+//!   nothing. A correct answer built out of the wrong blocks is the same
+//!   answer, and the release faults are leaks. That half is covered only by
+//!   `crates/nvim/tests/unit/arena.rs`, which reads the block allocations
+//!   off [`crate::memory::alloc_log`]. Change anything below and run it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
