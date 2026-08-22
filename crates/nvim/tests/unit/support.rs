@@ -1,6 +1,7 @@
 //! Shared helpers for calling the C-ABI surface from Rust tests.
 
 use std::ffi::{CStr, CString, c_char};
+use std::sync::{Mutex, MutexGuard};
 
 use c2rust_neovim::memory::xfree;
 
@@ -26,4 +27,219 @@ pub unsafe fn take_bytes(ptr: *mut c_char) -> Vec<u8> {
 /// `ptr` must be a valid NUL-terminated string from the `xmalloc` family.
 pub unsafe fn internalize(ptr: *mut c_char) -> String {
     String::from_utf8(take_bytes(ptr)).unwrap()
+}
+
+/// Editor globals are process-wide and `cargo test` runs cases in parallel,
+/// so anything that reads or writes one takes this first.
+///
+/// The LuaJIT harness got this for free: `itp` forks a child per case. Here
+/// there is one process, so the serialisation is explicit. Poisoning is
+/// ignored — a panicking case has already reported its own failure, and the
+/// next one restores what it touched itself.
+static EDITOR: Mutex<()> = Mutex::new(());
+
+/// Exclusive use of the editor's globals for the caller's scope.
+pub fn editor_lock() -> MutexGuard<'static, ()> {
+    let guard = EDITOR.lock().unwrap_or_else(|e| e.into_inner());
+    init_editor();
+    guard
+}
+
+/// Bring up as much of the editor as the code a case reaches will
+/// dereference, once per process.
+///
+/// The LuaJIT harness ran `event_init()` + `early_init(NULL)` in a fresh
+/// forked child for every case. Here there is one process shared with every
+/// other case, so this runs lazily — the first time anything takes the
+/// editor lock — and never again.
+///
+/// `early_init` alone is not enough for a case that provokes an error
+/// message, and the failure is a long way from the cause: `emsg` resolves
+/// the message's highlight group, formats it, and clears to the end of the
+/// screen, and that last step walks `msg_grid_adj`, whose target is NULL
+/// until the compositor sets it. So the grid is allocated and pointed at
+/// `default_grid` here, which is what `msg_grid_validate` does for an editor
+/// that is not using a separate message grid.
+///
+/// Messages still reach stdout (nothing is attached to consume them), which
+/// is exactly what the Lua lane did too.
+fn init_editor() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    // SAFETY: the caller holds the editor lock, and `Once` makes this the
+    // only initialisation.
+    ONCE.call_once(|| unsafe {
+        c2rust_neovim::main::early_init(std::ptr::null_mut());
+        c2rust_neovim::drawscreen::default_grid_alloc();
+        c2rust_neovim::main::msg_grid_adj.with_mut(|view| {
+            view.target = c2rust_neovim::main::default_grid.ptr();
+        });
+    });
+}
+
+/// The Rust twin of `test/unit/testutil.lua`'s `alloc_log` and
+/// `test/unit/eval/testutil.lua`'s `alloc_logging_t`.
+///
+/// A spec case that reads
+///
+/// ```lua
+/// alloc_log:clear()
+/// lib.tv_list_append_string(l, 'test', 3)
+/// alloc_log:check({
+///   a.str(l.lv_last.li_tv.vval.v_string, 'tes'),
+///   a.li(l.lv_last),
+/// })
+/// ```
+///
+/// ports to
+///
+/// ```ignore
+/// log.clear();
+/// unsafe { tv_list_append_string(l, cstr("test").as_ptr(), 3) };
+/// log.check(&[
+///     alloc::string(unsafe { (*(*l).lv_last).li_tv.vval.v_string }, 3),
+///     alloc::li(unsafe { (*l).lv_last }),
+/// ]);
+/// ```
+///
+/// The one property to preserve when porting a case: **every size is
+/// derived from the layout**, never written as a literal. The Lua
+/// expectations spell them `ffi.sizeof('list_T')` and
+/// `ffi.offsetof('dictitem_T', 'di_key') + n + 1`; here they are
+/// `size_of::<list_T>()` and `offset_of!(dictitem_T, di_key) + n + 1`. That
+/// is what makes an expectation a statement about the allocation rather than
+/// about this machine, and it is why the cases port at all.
+pub mod alloc {
+    use std::ffi::{c_char, c_void};
+    use std::mem::{offset_of, size_of};
+    use std::sync::MutexGuard;
+
+    use c2rust_neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
+    use c2rust_neovim::types::{dict_T, dictitem_T, list_T, listitem_T};
+
+    /// A recording of this thread's editor allocations, plus the editor lock
+    /// — recording only means anything with one case running at a time.
+    ///
+    /// Dropping it stops the recording and releases the lock.
+    pub struct AllocLog {
+        recorder: Recorder,
+        _editor: MutexGuard<'static, ()>,
+    }
+
+    impl AllocLog {
+        /// Take the editor and start recording.
+        pub fn start() -> AllocLog {
+            let editor = super::editor_lock();
+            AllocLog {
+                recorder: Recorder::start(),
+                _editor: editor,
+            }
+        }
+
+        /// Assert the events recorded since the last check, and start over —
+        /// `alloc_log:check(exp)`, which also clears.
+        #[track_caller]
+        pub fn check(&self, expected: &[AllocEvent]) {
+            let actual = self.recorder.take();
+            assert_eq!(actual, expected, "allocation sequence");
+        }
+
+        /// [`check`](Self::check), with the temporary allocations dropped
+        /// first — `alloc_log:clear_tmp_allocs(..)` followed by a check.
+        #[track_caller]
+        pub fn check_net(&self, clear_null_frees: bool, expected: &[AllocEvent]) {
+            let mut actual = self.recorder.take();
+            clear_tmp_allocs(&mut actual, clear_null_frees);
+            assert_eq!(actual, expected, "net allocation sequence");
+        }
+
+        /// Forget everything recorded so far — `alloc_log:clear()`.
+        pub fn clear(&self) {
+            self.recorder.clear();
+        }
+    }
+
+    /// `tv_list_alloc`'s allocation: `a.list(l)`.
+    pub fn list(l: *const list_T) -> AllocEvent {
+        AllocEvent::Calloc {
+            count: 1,
+            size: size_of::<list_T>(),
+            ret: l as *mut c_void,
+        }
+    }
+
+    /// `tv_list_item_alloc`'s allocation: `a.li(li)`.
+    pub fn li(li: *const listitem_T) -> AllocEvent {
+        AllocEvent::Malloc {
+            size: size_of::<listitem_T>(),
+            ret: li as *mut c_void,
+        }
+    }
+
+    /// `tv_dict_alloc`'s allocation: `a.dict(d)`.
+    pub fn dict(d: *const dict_T) -> AllocEvent {
+        AllocEvent::Calloc {
+            count: 1,
+            size: size_of::<dict_T>(),
+            ret: d as *mut c_void,
+        }
+    }
+
+    /// `tv_dict_item_alloc_len`'s allocation: `a.di(di, key_len)`.
+    ///
+    /// The size is the whole point of the case — a `dictitem_T` is
+    /// over-allocated so the NUL-terminated key fits in its flexible `di_key`
+    /// member, but never below the struct's own size.
+    pub fn di(di: *const dictitem_T, key_len: usize) -> AllocEvent {
+        AllocEvent::Malloc {
+            size: size_of::<dictitem_T>().max(offset_of!(dictitem_T, di_key) + key_len + 1),
+            ret: di as *mut c_void,
+        }
+    }
+
+    /// A NUL-terminated copy of `len` bytes: `a.str(s, len)`.
+    pub fn string(s: *const c_char, len: usize) -> AllocEvent {
+        AllocEvent::Malloc {
+            size: len + 1,
+            ret: s as *mut c_void,
+        }
+    }
+
+    /// A release: `a.freed(p)`.
+    pub fn freed<T>(p: *const T) -> AllocEvent {
+        AllocEvent::Free {
+            ptr: p as *mut c_void,
+        }
+    }
+}
+
+/// The Rust twin of `typval_spec.lua`'s `check_emsg`: run `f` and assert
+/// whether it pushed `msg` onto the message history.
+///
+/// `None` asserts the history did not move, which is how the spec says "this
+/// call reported nothing".
+///
+/// # Safety
+/// Runs editor code that reaches the message layer; the caller holds the
+/// editor lock (see [`editor_lock`]).
+#[track_caller]
+pub unsafe fn check_emsg<R>(f: impl FnOnce() -> R, msg: Option<&str>) -> R {
+    use c2rust_neovim::message::msg_hist_last;
+
+    let before = msg_hist_last.get();
+    let ret = f();
+    let after = msg_hist_last.get();
+    match msg {
+        Some(expected) => {
+            assert!(
+                !after.is_null(),
+                "expected the message {expected:?}, got none"
+            );
+            assert_ne!(before, after, "expected a new message: {expected:?}");
+            let chunk = unsafe { *(*after).msg.items };
+            let text = unsafe { CStr::from_ptr(chunk.text.data()) };
+            assert_eq!(text.to_string_lossy(), expected);
+        }
+        None => assert_eq!(before, after, "unexpected message"),
+    }
+    ret
 }

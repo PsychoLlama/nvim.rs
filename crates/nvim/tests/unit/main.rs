@@ -28,6 +28,7 @@ mod profile;
 mod sha256;
 mod strings;
 mod terminfo;
+mod typval;
 mod undo;
 mod unpacker;
 mod window;
