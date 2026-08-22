@@ -111,7 +111,6 @@ mod write {
     use std::fs;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::PathBuf;
-    use std::sync::{Mutex, MutexGuard};
 
     use c2rust_neovim::main::{curbuf, p_udir};
     use c2rust_neovim::memory::xfree;
@@ -119,17 +118,17 @@ mod write {
     use c2rust_neovim::undo::format::UF_START_MAGIC;
     use c2rust_neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
 
-    /// `p_udir` and `curbuf` are process-wide, so the cases run one at a
-    /// time and put them back. Poisoning is ignored: a panicking case has
-    /// already reported its own failure, and the next one restores the
-    /// globals itself.
-    static EDITOR: Mutex<()> = Mutex::new(());
+    use crate::support::{Editor, editor_lock};
 
     /// One case's editor state: an `'undodir'` of its own, a buffer with
     /// enough of `u_write_undo`'s inputs filled in to be worth writing, and
     /// the hash the writer stamps into the header.
     struct Fixture {
-        _guard: MutexGuard<'static, ()>,
+        // `p_udir` and `curbuf` are process-wide, so the cases run one at a
+        // time and put them back. This is the *same* lock every other case
+        // in this binary takes: a second mutex over the same globals would
+        // serialise these cases against each other and against nothing else.
+        _guard: Editor,
         dir: PathBuf,
         buf: Box<buf_T>,
         hash: [u8; UNDO_HASH_SIZE as usize],
@@ -142,7 +141,7 @@ mod write {
 
     impl Fixture {
         fn new(case: &str) -> Fixture {
-            let guard = EDITOR.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = editor_lock();
             let dir = std::env::temp_dir().join(format!("nvim-unit-undo-{case}"));
             let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(&dir).unwrap();

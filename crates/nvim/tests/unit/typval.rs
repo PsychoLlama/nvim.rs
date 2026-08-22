@@ -203,6 +203,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         // The same key again. The hashtab reports it and nothing is
         // allocated for the failure.
         let again = check_emsg(
+            log.editor(),
             || tv_dict_add(d, di),
             Some(r#"E685: Internal error: hash_add(): duplicate key """#),
         );
@@ -336,7 +337,7 @@ fn tv_get_lnum_resolves_the_cursor_and_reports_the_rest() {
         log.check(&[]);
         // SAFETY: `tv` is a value this case owns and does not free; the
         // editor lock is held by `log`.
-        let got = unsafe { check_emsg(|| tv_get_lnum(&raw const tv), emsg) };
+        let got = check_emsg(log.editor(), || unsafe { tv_get_lnum(&raw const tv) }, emsg);
         assert_eq!(i64::from(got), expected, "{v_type:?} {emsg:?}");
         if emsg.is_some() {
             // Reporting the error allocated; the spec does not describe what.

@@ -44,12 +44,26 @@ pub unsafe fn internalize(ptr: *mut c_char) -> String {
 #[cfg(not(miri))]
 static EDITOR: Mutex<()> = Mutex::new(());
 
+/// Proof that the holder has exclusive use of the editor's globals, and
+/// that [`init_editor`] has already run.
+///
+/// It exists so the "caller holds the editor lock" precondition is a type
+/// rather than a comment: every helper here that reads editor state takes
+/// one, so a case cannot reach that state without having gone through
+/// [`editor_lock`] — which is also the only thing that brings the editor
+/// up. Without the token, a case that runs before the first lock and one
+/// that runs after would see different globals.
+#[cfg(not(miri))]
+pub struct Editor {
+    _guard: MutexGuard<'static, ()>,
+}
+
 /// Exclusive use of the editor's globals for the caller's scope.
 #[cfg(not(miri))]
-pub fn editor_lock() -> MutexGuard<'static, ()> {
+pub fn editor_lock() -> Editor {
     let guard = EDITOR.lock().unwrap_or_else(|e| e.into_inner());
     init_editor();
-    guard
+    Editor { _guard: guard }
 }
 
 /// Bring up as much of the editor as the code a case reaches will
@@ -120,7 +134,6 @@ fn init_editor() {
 pub mod alloc {
     use std::ffi::{c_char, c_void};
     use std::mem::{offset_of, size_of};
-    use std::sync::MutexGuard;
 
     use c2rust_neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
     use c2rust_neovim::types::{dict_T, dictitem_T, list_T, listitem_T};
@@ -131,7 +144,7 @@ pub mod alloc {
     /// Dropping it stops the recording and releases the lock.
     pub struct AllocLog {
         recorder: Recorder,
-        _editor: MutexGuard<'static, ()>,
+        editor: super::Editor,
     }
 
     impl AllocLog {
@@ -140,8 +153,14 @@ pub mod alloc {
             let editor = super::editor_lock();
             AllocLog {
                 recorder: Recorder::start(),
-                _editor: editor,
+                editor,
             }
+        }
+
+        /// The editor lock this recording holds, to hand to a helper that
+        /// needs one — [`check_emsg`](super::check_emsg), say.
+        pub fn editor(&self) -> &super::Editor {
+            &self.editor
         }
 
         /// Assert the events recorded since the last check, and start over —
@@ -234,12 +253,11 @@ pub mod alloc {
 /// `None` asserts the history did not move, which is how the spec says "this
 /// call reported nothing".
 ///
-/// # Safety
-/// Runs editor code that reaches the message layer; the caller holds the
-/// editor lock (see [`editor_lock`]).
+/// The [`Editor`] token is the lock this reads the message history under;
+/// see [`editor_lock`].
 #[cfg(not(miri))]
 #[track_caller]
-pub unsafe fn check_emsg<R>(f: impl FnOnce() -> R, msg: Option<&str>) -> R {
+pub fn check_emsg<R>(_editor: &Editor, f: impl FnOnce() -> R, msg: Option<&str>) -> R {
     use c2rust_neovim::message::msg_hist_last;
 
     let before = msg_hist_last.get();
