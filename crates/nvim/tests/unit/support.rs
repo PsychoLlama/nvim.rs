@@ -1,6 +1,7 @@
 //! Shared helpers for calling the C-ABI surface from Rust tests.
 
 use std::ffi::{CStr, CString, c_char};
+#[cfg(not(miri))]
 use std::sync::{Mutex, MutexGuard};
 
 use c2rust_neovim::memory::xfree;
@@ -36,9 +37,15 @@ pub unsafe fn internalize(ptr: *mut c_char) -> String {
 /// there is one process, so the serialisation is explicit. Poisoning is
 /// ignored — a panicking case has already reported its own failure, and the
 /// next one restores what it touched itself.
+///
+/// Miri cannot run [`init_editor`] (`early_init` reaches `clock_gettime`),
+/// so everything that needs a live editor is compiled out there — as the
+/// undofile cases already are.
+#[cfg(not(miri))]
 static EDITOR: Mutex<()> = Mutex::new(());
 
 /// Exclusive use of the editor's globals for the caller's scope.
+#[cfg(not(miri))]
 pub fn editor_lock() -> MutexGuard<'static, ()> {
     let guard = EDITOR.lock().unwrap_or_else(|e| e.into_inner());
     init_editor();
@@ -63,6 +70,7 @@ pub fn editor_lock() -> MutexGuard<'static, ()> {
 ///
 /// Messages still reach stdout (nothing is attached to consume them), which
 /// is exactly what the Lua lane did too.
+#[cfg(not(miri))]
 fn init_editor() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     // SAFETY: the caller holds the editor lock, and `Once` makes this the
@@ -108,6 +116,7 @@ fn init_editor() {
 /// `size_of::<list_T>()` and `offset_of!(dictitem_T, di_key) + n + 1`. That
 /// is what makes an expectation a statement about the allocation rather than
 /// about this machine, and it is why the cases port at all.
+#[cfg(not(miri))]
 pub mod alloc {
     use std::ffi::{c_char, c_void};
     use std::mem::{offset_of, size_of};
@@ -221,6 +230,7 @@ pub mod alloc {
 /// # Safety
 /// Runs editor code that reaches the message layer; the caller holds the
 /// editor lock (see [`editor_lock`]).
+#[cfg(not(miri))]
 #[track_caller]
 pub unsafe fn check_emsg<R>(f: impl FnOnce() -> R, msg: Option<&str>) -> R {
     use c2rust_neovim::message::msg_hist_last;

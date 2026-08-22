@@ -15,6 +15,10 @@
 //!
 //! See `crate::support::alloc` for the porting rules; the short version is
 //! that a size is always `size_of`/`offset_of!`, never a literal.
+//!
+//! Every case here needs a live editor, which Miri cannot start.
+
+#![cfg(not(miri))]
 
 use std::ffi::{CStr, c_char};
 use std::ptr;
