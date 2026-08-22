@@ -340,7 +340,6 @@ pub unsafe fn emsg_multiline(
 ///
 /// # Safety
 /// `s` must be a valid C string.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn emsg(s: *const c_char) -> bool {
     unsafe { emsg_multiline(s, c"emsg".as_ptr(), HLF_E, false) }
 }

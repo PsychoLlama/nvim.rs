@@ -141,7 +141,6 @@ pub(crate) unsafe fn cmdline_number_prompt() -> bool {
 }
 
 /// Set the dimensions of the Nvim application "screen".
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     // SAFETY: the screen, the window layout and the autocommand machinery, all
     // on the main thread.

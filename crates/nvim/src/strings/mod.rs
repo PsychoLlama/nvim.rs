@@ -212,7 +212,6 @@ pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_cha
 /// Composing sequences move as a unit — `utfc_ptr2len` gives the length of
 /// the whole character at each position — so the source is walked forwards
 /// while the destination is filled from the back.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
     unsafe {
         let len = CStr::from_ptr(s).to_bytes().len();

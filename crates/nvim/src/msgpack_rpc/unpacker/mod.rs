@@ -91,7 +91,6 @@ pub const MPACK_NOMEM: c_int = 3;
 /// # Safety
 /// `data` points at `size` readable bytes, and `arena`/`err` at a writable
 /// `Arena` and `Error`.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn unpack(
     mut data: *const c_char,
     mut size: size_t,

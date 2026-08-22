@@ -212,7 +212,6 @@ pub unsafe extern "C" fn tv_islocked(tv: *const typval_T) -> bool {
 ///
 /// `name` is what the error names; `name_len` may be `TV_TRANSLATE` or
 /// `TV_CSTRING` instead of a real length.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_check_lock(
     tv: *const typval_T,
     name: *const ::core::ffi::c_char,

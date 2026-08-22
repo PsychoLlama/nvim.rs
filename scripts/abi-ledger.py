@@ -20,12 +20,17 @@ candidates per file), classifying every export as:
   internal  nobody resolves the name. Only in-crate callers, which the
             compiler resolves regardless of mangling. Safe to de-export.
 
-Spec references are found by intersecting export names with every
-identifier-shaped token in test/unit/**/*.lua. That over-approximates (a
-symbol named in a comment counts), which errs in the safe direction: a
-symbol is only ever misclassified toward "keep exported", never toward
-"safe to change". Dynamically constructed names ('mem_' .. name) are
-invisible to the scan and must be listed in DYNAMIC_SPEC_REFS by hand.
+Spec references are found by intersecting export names with the *reach
+shapes* a unit spec can actually use against the running binary: `lib.name`
+(the table `cimport` returns, and `ffi.C.name`), `lib['name']`/`lib["name"]`,
+and anything a spec `ffi.cdef`s itself. A bare identifier no longer counts:
+in Lua it is a local, a test title (`itp('63screen_resize', ...)`) or prose,
+and a whole-file token scan kept eight symbols exported for a comment. The
+scan still over-approximates -- every `.field` in the lane counts, whatever
+the table -- but it no longer counts English. Dynamically constructed names
+('mem_' .. name) remain invisible and must be listed in DYNAMIC_SPEC_REFS by
+hand. The unit suite is the backstop: a symbol that is needed and gone makes
+`cimport` fail loudly on the first spec that reaches for it.
 
 A few *functional* specs and the oldtest harness also resolve symbols by
 name — ffi_spec, tui_spec, job_spec, preload.lua and runtest.vim's
@@ -149,10 +154,24 @@ CDEF_RE = re.compile(
 )
 
 
+# The two ways a unit spec names a symbol of the running binary: as a field
+# of the table `cimport`/`ffi.C` hands back, or as a string subscript of it.
+SPEC_REF_RE = re.compile(
+    r"""\.\s*([A-Za-z_][A-Za-z0-9_]*)"""
+    r"""|\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*\]"""
+)
+
+
 def spec_tokens():
     tokens = set(DYNAMIC_SPEC_REFS)
     for spec in ROOT.glob("test/unit/**/*.lua"):
-        tokens.update(TOKEN_RE.findall(spec.read_text()))
+        text = spec.read_text()
+        for m in SPEC_REF_RE.finditer(text):
+            tokens.add(m.group(1) or m.group(2))
+        # A spec that declares its own prototypes reaches them bare.
+        for m in CDEF_RE.finditer(text):
+            chunk = m.group("long") or m.group("sq") or m.group("dq") or ""
+            tokens.update(TOKEN_RE.findall(chunk))
     return tokens
 
 

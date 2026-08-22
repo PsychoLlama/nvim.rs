@@ -837,7 +837,6 @@ pub static ru_wid: GlobalCell<c_int> = GlobalCell::new(0);
 pub static sc_col: GlobalCell<c_int> = GlobalCell::new(0);
 #[unsafe(no_mangle)]
 pub static starting: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
-#[unsafe(no_mangle)]
 pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
 pub static v_dying: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static stdin_isatty: GlobalCell<bool> = GlobalCell::new(true);
@@ -959,7 +958,6 @@ pub(crate) const SEA_QUIT: c_int = 2 as c_int;
 pub static swap_exists_action: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
 pub static IObuff: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
-#[unsafe(no_mangle)]
 pub static NameBuff: GlobalCell<[c_char; 4096]> = GlobalCell::new([0; 4096]);
 pub static msg_buf: GlobalCell<[c_char; 480]> = GlobalCell::new([0; 480]);
 pub static os_buf: GlobalCell<[c_char; 4096]> = GlobalCell::new([0; 4096]);
