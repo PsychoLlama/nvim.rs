@@ -45,6 +45,11 @@ typedef struct qf_info_S qf_info_S;
 typedef struct qfline_S qfline_S;
 typedef struct reg_extmatch_T reg_extmatch_T;
 typedef struct regengine regengine;
+typedef struct s_mmbuffer s_mmbuffer;
+typedef struct s_mmfile s_mmfile;
+typedef struct s_xdemitcb s_xdemitcb;
+typedef struct s_xdemitconf s_xdemitconf;
+typedef struct s_xpparam s_xpparam;
 typedef struct slang_S slang_S;
 typedef struct socket_watcher socket_watcher;
 typedef struct syn_state syn_state;
@@ -332,8 +337,6 @@ typedef struct listitem_S listitem_S;
 typedef struct listwatch_S listwatch_S;
 typedef struct luaL_Buffer luaL_Buffer;
 typedef struct luaL_Reg luaL_Reg;
-typedef struct s_mmbuffer s_mmbuffer;
-typedef struct s_mmfile s_mmfile;
 typedef struct mpack_one_parser_t mpack_one_parser_t;
 typedef struct mpack_rpc_header_s mpack_rpc_header_s;
 typedef struct mpack_rpc_message_s mpack_rpc_message_s;
@@ -348,9 +351,6 @@ typedef union pthread_mutex_t pthread_mutex_t;
 typedef union pthread_rwlock_t pthread_rwlock_t;
 typedef struct regmmatch_T regmmatch_T;
 typedef struct regprog regprog;
-typedef struct s_xdemitcb s_xdemitcb;
-typedef struct s_xdemitconf s_xdemitconf;
-typedef struct s_xpparam s_xpparam;
 typedef struct sockaddr sockaddr;
 typedef struct socket_watcher_uv_pipe socket_watcher_uv_pipe;
 typedef struct socket_watcher_uv_tcp socket_watcher_uv_tcp;
@@ -629,8 +629,8 @@ typedef double lua_Number;
 typedef unsigned int magic_T;
 typedef mapblock mapblock_T;
 typedef matchitem matchitem_T;
-typedef struct s_mmbuffer mmbuffer_t;
-typedef struct s_mmfile mmfile_t;
+typedef s_mmbuffer mmbuffer_t;
+typedef s_mmfile mmfile_t;
 typedef unsigned int mode_t;
 typedef struct mpack_node_s mpack_node_t;
 typedef struct mpack_rpc_header_s mpack_rpc_header_t;
@@ -745,11 +745,11 @@ typedef unsigned int var_flavour_T;
 typedef void *vim_acl_T;
 typedef VimMenu vimmenu_T;
 typedef void (*wbuffer_data_finalizer)(void *);
-typedef struct s_xdemitcb xdemitcb_t;
-typedef struct s_xdemitconf xdemitconf_t;
+typedef s_xdemitcb xdemitcb_t;
+typedef s_xdemitconf xdemitconf_t;
 typedef int (*xdl_emit_hunk_consume_func_t)(int, int, int, int, void *);
 typedef unsigned int xp_prefix_T;
-typedef struct s_xpparam xpparam_t;
+typedef s_xpparam xpparam_t;
 struct AdditionalData {
   uint32_t nitems;
   uint32_t nbytes;
@@ -3167,14 +3167,6 @@ struct luaL_Reg {
   const char *name;
   lua_CFunction func;
 };
-struct s_mmbuffer {
-  char *ptr;
-  int size;
-};
-struct s_mmfile {
-  char *ptr;
-  int size;
-};
 struct mpack_one_parser_t {
   mpack_data_t data;
   mpack_uint32_t size;
@@ -3303,24 +3295,6 @@ struct regprog {
   unsigned int re_engine;
   unsigned int re_flags;
   bool re_in_use;
-};
-struct s_xdemitcb {
-  void *priv;
-  int (*out_hunk)(void *, long, long, long, long, const char *, long);
-  int (*out_line)(void *, mmbuffer_t *, int);
-};
-struct s_xdemitconf {
-  long ctxlen;
-  long interhunkctxlen;
-  unsigned long flags;
-  find_func_t find_func;
-  void *find_func_priv;
-  xdl_emit_hunk_consume_func_t hunk_func;
-};
-struct s_xpparam {
-  unsigned long flags;
-  char **anchors;
-  size_t anchors_nr;
 };
 struct sockaddr {
   sa_family_t sa_family;

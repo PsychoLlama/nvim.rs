@@ -98,10 +98,10 @@ impl Emit<'_> {
 
     /// `ecb->out_line`, with each part as one `mmbuffer_t`.
     pub fn line(&mut self, parts: &[&[u8]]) -> XdResult {
-        let mut bufs: [mmbuffer_t; 3] = [mmbuffer_t {
+        let mut bufs: [mmbuffer_t; 3] = core::array::from_fn(|_| mmbuffer_t {
             ptr: core::ptr::null_mut(),
             size: 0,
-        }; 3];
+        });
         for (buf, part) in bufs.iter_mut().zip(parts) {
             buf.ptr = part.as_ptr().cast::<c_char>().cast_mut();
             buf.size = part.len() as c_int;

@@ -168,19 +168,16 @@ pub(crate) const DIFFIN_INIT: diffin_T = diffin_T {
     din_mmfile: MMFILE_INIT,
 };
 
-#[derive(Copy, Clone)]
 pub struct diffio_T {
     pub dio_orig: diffin_T,
     pub dio_new: diffin_T,
     pub dio_diff: diffout_T,
     pub dio_internal: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
 pub struct diffout_T {
     pub dout_fname: *mut ::core::ffi::c_char,
     pub dout_ga: garray_T,
 }
-#[derive(Copy, Clone)]
 pub struct diffin_T {
     pub din_fname: *mut ::core::ffi::c_char,
     pub din_mmfile: mmfile_t,
