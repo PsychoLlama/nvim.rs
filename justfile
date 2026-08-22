@@ -110,6 +110,12 @@ lint-tools:
 # findings (the `correctness` group) fail the run outright. Lint levels live
 # in Cargo.toml's [lints.clippy]; the script clears RUSTFLAGS so the dev
 # shell's `-D warnings` can't promote the counted groups to errors first.
+#
+# The same run also counts two allow-by-default *rustc* lints the migration
+# is burning to zero -- `unreachable_pub` and `unused_qualifications` -- as
+# whole-tree totals in the same baseline. They live here rather than in
+# metrics/ratchet.json because they need a compile: ratchet.py is a
+# pre-commit hook and must not invoke cargo.
 # `--check` compares against the committed baseline instead of writing;
 # `--allow-growth` mirrors the ratchet's override.
 lint *args: lint-tools
