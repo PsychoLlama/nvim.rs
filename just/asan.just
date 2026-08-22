@@ -15,9 +15,19 @@ triple := `rustc -vV | sed -n 's/^host: //p'`
 bin := justfile_directory() / "target/asan" / triple / "debug/nvim"
 
 # ASan reports go to files (nvim is a TUI; stderr is often a terminal the
-# harness owns). Leak checking stays off until the corruption classes are
-# triaged. Callers may override by exporting ASAN_OPTIONS.
+# harness owns). Leak checking is off in the default options because a leak
+# is not a corruption and every report would be noise on a run looking for
+# one; `leaktest` below turns it on. Callers may override by exporting
+# ASAN_OPTIONS.
 options := "detect_leaks=0:log_path=" + justfile_directory() / "target/asan/asan.log"
+
+# The same, with LeakSanitizer on.
+#
+# `exitcode=0` is not optional. LSan exits non-zero when it reports, and the
+# functional harness reads a child nvim's exit status: with the default
+# exitcode the whole run dies before the first test, with no output that says
+# why. Measured.
+leakoptions := "detect_leaks=1:exitcode=0:log_path=" + justfile_directory() / "target/asan/asan.log"
 
 # Compile the nvim binary with AddressSanitizer. Stack-redzone checking is
 # on again: the 2023 nightly's C-ABI lowering over-read by-value aggregates
@@ -61,3 +71,48 @@ oldtest +args: build
   export NVIM_BIN={{ bin }}
   export NVIM_PRG={{ justfile_directory() }}/target/bin/nvim
   exec setarch "$(uname -m)" -R scripts/run-oldtest.sh {{ args }}
+
+# Run functional tests with LEAK CHECKING ON, then summarise every report.
+# Args as for `functionaltest`.
+#
+# THE NOISE FLOOR IS A CONSTANT, and that is what makes this worth having:
+# on a clean tree every nvim process reports exactly
+#
+#   SUMMARY: AddressSanitizer: 1055 byte(s) leaked in 2 allocation(s).
+#
+# ... which is two process-lifetime singletons that are never freed because
+# the Lua state outlives them: `cjson::lua_cjson::lua_cjson_new`'s 1,023-byte
+# encode buffer (registered once by `nlua_state_add_stdlib`) and
+# `luv_work_init`'s 32-byte work queue (once, from `nlua_init`). Measured
+# identical for a bare `-u NONE -c qa`, for a 269-line Vimscript decode
+# corpus, and for all 77 cases of `vimscript/json_functions_spec.lua` — so
+# ANY OTHER SUMMARY LINE IS A REAL LEAK, and the arithmetic is that simple.
+#
+# There is no suppression file because there is no `llvm-symbolizer` in this
+# environment: LSan matches suppressions on symbolized frames, so the reports
+# come back as raw module offsets and a suppression could not match. Resolve
+# a frame by hand with
+#   addr2line -e target/asan/<triple>/debug/nvim -f -C -p 0x<offset>
+# where the offset is the `nvim+0x...` in the report.
+leaktest *args: build
+  #!/usr/bin/env bash
+  set -uo pipefail
+  export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ leakoptions }}}"
+  export NVIM_TEST_ASAN=1
+  ulimit -s 65536
+  export NVIM_BIN={{ bin }}
+  rm -f {{ justfile_directory() }}/target/asan/asan.log.*
+  setarch "$(uname -m)" -R scripts/run-tests.sh functional {{ args }}
+  rc=$?
+  echo
+  echo "== leak reports =="
+  shopt -s nullglob
+  reports=({{ justfile_directory() }}/target/asan/asan.log.*)
+  if [ ${#reports[@]} -eq 0 ]; then
+    echo "none"
+  else
+    for f in "${reports[@]}"; do
+      printf '%s\t%s\n' "$(basename "$f")" "$(grep -h SUMMARY "$f" | tail -1)"
+    done | sort -k2 | uniq -c -f1
+  fi
+  exit $rc
