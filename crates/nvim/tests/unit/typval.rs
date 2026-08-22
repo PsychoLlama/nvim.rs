@@ -24,20 +24,23 @@ use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use c2rust_neovim::eval::typval::{
-    tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_item_alloc, tv_dict_item_alloc_len,
-    tv_dict_item_free, tv_dict_item_remove, tv_get_lnum, tv_list_alloc, tv_list_append_string,
-    tv_list_unref,
+    kCallbackNone, tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_is_watched,
+    tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_item_remove,
+    tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_lnum, tv_list_alloc, tv_list_append_number,
+    tv_list_append_string, tv_list_drop_items, tv_list_first, tv_list_last, tv_list_len,
+    tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
 };
 use c2rust_neovim::main::curwin;
-use c2rust_neovim::memory::xstrdup;
+use c2rust_neovim::memory::{xfree, xstrdup};
 use c2rust_neovim::types::{
-    FAIL, OK, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue,
-    kListLenUnknown, kSpecialVarNull, listitem_T, typval_T, typval_vval_union, win_T,
+    Callback, Callback_data, FAIL, OK, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kBoolVarFalse,
+    kBoolVarTrue, kListLenUnknown, kSpecialVarNull, listitem_T, listwatch_T, ptrdiff_t, typval_T,
+    typval_vval_union, win_T,
 };
 
 use crate::support::alloc::{self, AllocLog};
-use crate::support::{check_emsg, cstr};
+use crate::support::{check_emsg, cstr, editor_lock};
 
 /// `describe('list') describe('append') describe('string()') itp('works')`,
 /// spec line 663.
@@ -348,4 +351,112 @@ fn tv_get_lnum_resolves_the_cursor_and_reports_the_rest() {
     }
 
     curwin.set(saved_curwin);
+}
+/// `tv_list_drop_items` unlinks a run of items and shortens the list.
+///
+/// **No differential can see this.** `string()` and all six encoder sinks
+/// walk the *links*, and every `len()` in every sweep corpus is over a
+/// literal, so a list whose cached `lv_len` an unlink got wrong renders
+/// byte-identically — measured NOT CAUGHT by `evalsweep`
+/// (`1787432513-typvalmutate.py --blind list-drop-len`). The length is
+/// still what `len()` answers for a list any *runtime* code shortened.
+#[test]
+fn dropping_items_shortens_the_list() {
+    let _editor = editor_lock();
+    // SAFETY: the list and its items are this case's own, freed below.
+    unsafe {
+        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t);
+        for n in 1..=4 {
+            tv_list_append_number(l, n);
+        }
+        assert_eq!(tv_list_len(l), 4);
+
+        let second = (*tv_list_first(l)).li_next;
+        let third = (*second).li_next;
+        tv_list_drop_items(l, second, third);
+
+        assert_eq!(tv_list_len(l), 2, "two of the four items were unlinked");
+        let first = tv_list_first(l);
+        let last = tv_list_last(l);
+        assert_eq!((*first).li_next, last, "the gap closed forwards");
+        assert_eq!((*last).li_prev, first, "and backwards");
+
+        // `drop` does not free; these two are ours now. They hold numbers,
+        // so there is nothing to clear.
+        xfree(second.cast());
+        xfree(third.cast());
+        tv_list_unref(l);
+    }
+}
+
+/// A `listwatch_T` standing on an item that is being unlinked is advanced to
+/// the item *after* it — what keeps `:for` and `filter()` walking a list
+/// whose current item they just removed.
+///
+/// **No differential can see this either.** The only corpus row that removes
+/// a watched item is `filter([1, 2, 3], 'v:val > 1')`, which removes the
+/// *first* one; a watcher pushed backwards off the front is NULL, which ends
+/// the walk with the same answer. Measured NOT CAUGHT by `evalsweep`.
+#[test]
+fn a_watcher_on_a_dropped_item_advances_past_it() {
+    let _editor = editor_lock();
+    // SAFETY: as above; `lw` outlives its registration.
+    unsafe {
+        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t);
+        for n in 1..=3 {
+            tv_list_append_number(l, n);
+        }
+        let second = (*tv_list_first(l)).li_next;
+        let third = (*second).li_next;
+
+        let mut lw = listwatch_T {
+            lw_item: second,
+            lw_next: ptr::null_mut(),
+        };
+        tv_list_watch_add(l, &raw mut lw);
+        tv_list_drop_items(l, second, second);
+        assert_eq!(lw.lw_item, third, "the watcher moved on, not back");
+
+        tv_list_watch_remove(l, &raw mut lw);
+        xfree(second.cast());
+        tv_list_unref(l);
+    }
+}
+
+/// `tv_dict_watcher_remove` matches a watcher on all three of its callback,
+/// its pattern *length* and its pattern bytes.
+///
+/// **Nothing else in the tree reaches `watcher.rs` at all.** It is reachable
+/// from Vimscript only through `dictwatcheradd()`/`dictwatcherdel()`, and no
+/// sweep corpus calls either; `extend()`'s notify is a no-op when no watcher
+/// is registered. Measured NOT CAUGHT by `evalsweep`.
+#[test]
+fn a_watcher_is_removed_only_by_its_own_pattern() {
+    let _editor = editor_lock();
+    // SAFETY: the dict is this case's own and is freed below; a
+    // `kCallbackNone` callback owns nothing.
+    unsafe {
+        let d = tv_dict_alloc();
+        let callback = Callback {
+            data: Callback_data { luaref: 0 },
+            type_0: kCallbackNone,
+        };
+        let pattern = cstr("key*");
+        tv_dict_watcher_add(d, pattern.as_ptr(), 4, callback);
+        assert!(tv_dict_is_watched(d));
+
+        // A prefix of the pattern is not the pattern ...
+        let shorter = cstr("key");
+        assert!(!tv_dict_watcher_remove(d, shorter.as_ptr(), 3, callback));
+        assert!(tv_dict_is_watched(d), "a shorter pattern matched");
+
+        // ... and neither are different bytes of the same length.
+        let same_len = cstr("kex*");
+        assert!(!tv_dict_watcher_remove(d, same_len.as_ptr(), 4, callback));
+        assert!(tv_dict_is_watched(d), "a different pattern matched");
+
+        assert!(tv_dict_watcher_remove(d, pattern.as_ptr(), 4, callback));
+        assert!(!tv_dict_is_watched(d), "its own pattern did not match");
+        tv_dict_free(d);
+    }
 }

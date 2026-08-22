@@ -394,3 +394,77 @@ pub(crate) trait TypvalSink {
         path: &ConvPath,
     ) -> Flow;
 }
+#[cfg(test)]
+mod tests {
+    use super::InlineStack;
+
+    /// The spill boundary, asserted from both sides.
+    ///
+    /// How many frames [`InlineStack`] holds inline is a *capacity*, and a
+    /// capacity is not part of any answer: setting `INLINE_FRAMES` to 1 leaves
+    /// every sweep byte-identical (measured, `1787432513-typvalmutate.py
+    /// --blind stack-inline-frames`), the same shape p20-22 measured for
+    /// `garray.rs`. What a differential *can* see is the boundary going wrong,
+    /// because `eval/typval_encode`'s walk indexes frames from the bottom and
+    /// the corpus nests thirty deep — but only as a panic. This says it
+    /// precisely, and being pure it also runs under Miri, which is the only
+    /// thing that checks the `MaybeUninit` discipline `inline` is built on.
+    #[test]
+    fn the_inline_stack_spills_and_comes_back_in_order() {
+        let mut stack: InlineStack<usize, 4> = InlineStack::new();
+        assert!(stack.is_empty());
+
+        for i in 0..4 {
+            stack.push(i);
+        }
+        assert_eq!(stack.len(), 4);
+        assert_eq!(stack.last(), 3);
+
+        // Past the budget the Vec takes over, and the two halves stay one
+        // sequence indexed from the bottom.
+        for i in 4..10 {
+            stack.push(i);
+        }
+        assert_eq!(stack.len(), 10);
+        for i in 0..10 {
+            assert_eq!(*stack.get_mut(i), i, "frame {i}");
+        }
+        assert_eq!(stack.last(), 9);
+
+        // A write through `last_mut` lands on both sides of the boundary.
+        *stack.last_mut() = 99;
+        assert_eq!(stack.last(), 99);
+        *stack.get_mut(3) = 98;
+        assert_eq!(*stack.get_mut(3), 98);
+
+        // And popping walks back across it in the same order.
+        for i in (0..10).rev() {
+            assert_eq!(stack.len(), i + 1);
+            stack.pop();
+        }
+        assert!(stack.is_empty());
+    }
+
+    /// A stack that never leaves the inline array, and one that never uses it.
+    #[test]
+    fn the_inline_stack_works_at_both_extremes() {
+        let mut inline_only: InlineStack<u8, 8> = InlineStack::new();
+        inline_only.push(7);
+        assert_eq!(inline_only.last(), 7);
+        inline_only.pop();
+        assert!(inline_only.is_empty());
+
+        // `N == 0` is the degenerate arm the generic has to survive: every
+        // push spills.
+        let mut always_spills: InlineStack<u8, 0> = InlineStack::new();
+        for i in 0..3 {
+            always_spills.push(i);
+        }
+        assert_eq!(always_spills.len(), 3);
+        for i in 0..3u8 {
+            assert_eq!(*always_spills.get_mut(usize::from(i)), i);
+        }
+        always_spills.pop();
+        assert_eq!(always_spills.last(), 1);
+    }
+}
