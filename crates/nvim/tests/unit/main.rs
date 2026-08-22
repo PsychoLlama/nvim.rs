@@ -5,6 +5,7 @@
 
 mod support;
 
+mod arena;
 mod arglist;
 mod charset;
 mod cmdhist;
