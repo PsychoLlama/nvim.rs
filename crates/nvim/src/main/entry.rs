@@ -495,7 +495,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
                 (*curtab.get()).tp_firstwin
             };
             while !wp.is_null() {
-                if (*wp).w_arg_idx_invalid == 0 {
+                if !(*wp).w_arg_idx_invalid {
                     diff_win_options(wp, true);
                 }
                 wp = (*wp).w_next;

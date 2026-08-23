@@ -300,7 +300,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
 
         // When an auto-indent was removed, curswant stays after the indent.
         if restart_edit.get() == NUL && temp == (*curwin.get()).w_cursor.col {
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         }
 
         // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).

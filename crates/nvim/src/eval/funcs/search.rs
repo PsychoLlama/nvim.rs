@@ -281,7 +281,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         if flags & SP_NOMOVE != 0 {
             (*curwin.get()).w_cursor = save_cursor;
         } else {
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         }
         retval
     }

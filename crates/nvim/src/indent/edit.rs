@@ -543,7 +543,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
 
         (*win).w_onebuf_opt.wo_list = save_p_list;
         (*win).w_cursor.col = new_cursor_col.max(0) as colnr_T;
-        (*win).w_set_curswant = 1;
+        (*win).w_set_curswant = true;
         changed_cline_bef_curs(win);
         if State.get() & MODE_INSERT != 0 {
             adjust_insert_start(insstart_less);

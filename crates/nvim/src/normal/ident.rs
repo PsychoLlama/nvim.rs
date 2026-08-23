@@ -466,7 +466,7 @@ pub unsafe fn find_decl(
         if !found {
             (*curwin.get()).w_cursor = old_pos;
         } else {
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             reset_search_dir();
         }
         xfree(pat as *mut c_void);

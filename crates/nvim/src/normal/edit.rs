@@ -229,7 +229,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         (*curwin.get()).w_cursor.col -= 1;
         mb_adjust_cursor();
         (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         set_last_insert((*cap).nchar);
         fold_update_after_insert();
     }
@@ -346,7 +346,7 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
             n -= 1;
         }
         check_cursor(curwin.get());
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         if did_change {
             changed_lines(
                 curbuf.get(),
@@ -510,7 +510,7 @@ pub(crate) unsafe fn nv_tilde(cap: *mut cmdarg_T) {
 pub unsafe fn set_cursor_for_append_to_line() {
     // SAFETY: reads and writes the current window's cursor.
     unsafe {
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         if get_ve_flags(curwin.get()) == kOptVeFlagAll as c_uint {
             // Insert mode is what makes `coladvance` allow the position one
             // past the end.

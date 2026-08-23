@@ -584,7 +584,7 @@ fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
     let pat = dup_bytes(found, len);
     search_path(pat, len, kind, prenum == 0, prenum1);
     free(pat);
-    cur_win().w_set_curswant = 1;
+    cur_win().w_set_curswant = true;
 }
 
 /// CTRL-W g -- read the second letter and dispatch on it.

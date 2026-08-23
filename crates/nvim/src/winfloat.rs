@@ -668,7 +668,7 @@ fn config_float(win: Win, mut fconfig: WinConfig) {
     win.w_redr_status = win.w_status_height != 0;
     win.w_pos_changed = true;
     if change_external || change_border {
-        win.w_hl_needs_update = 1;
+        win.w_hl_needs_update = true;
         win.redraw_later(UPD_NOT_VALID);
     }
 

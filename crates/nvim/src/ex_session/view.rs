@@ -96,7 +96,7 @@ pub(crate) unsafe fn put_view(
         }
 
         // Edit the file, unless the `:next` above already did.
-        if add_edit && (!did_next || (*wp).w_arg_idx_invalid != 0) {
+        if add_edit && (!did_next || (*wp).w_arg_idx_invalid) {
             match put_edit(out, wp, opts) {
                 Some(keep_cursor) => do_cursor &= keep_cursor,
                 None => return false,

@@ -313,7 +313,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         }
 
         if !arrow_used.get() {
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         }
         if stuff_empty() {
             did_check_timestamps.set(false);

@@ -351,7 +351,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                         (*win).w_cursor.lnum += 1;
                         (*win).w_cursor.col = 0;
                         (*win).w_cursor.coladd = 0;
-                        (*win).w_set_curswant = 1;
+                        (*win).w_set_curswant = true;
                         (*(*cap).oap).inclusive = false;
                     }
                 } else {
@@ -367,7 +367,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                     break;
                 }
             } else if past_line {
-                (*win).w_set_curswant = 1;
+                (*win).w_set_curswant = true;
                 if virtual_active(win) {
                     oneright();
                 } else {
@@ -418,7 +418,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                 {
                     (*win).w_cursor.lnum -= 1;
                     coladvance(win, MAXCOL as c_int);
-                    (*win).w_set_curswant = 1;
+                    (*win).w_set_curswant = true;
                     // A delete or a change that wrapped back over the line
                     // break must take the break with it, so put the cursor
                     // one past the last character and tell the caller not to
@@ -567,7 +567,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
             }
             return;
         }
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         // Landing on a TAB with 'virtualedit' means the *last* cell of it,
         // so that `dt<Tab>` takes the whole tab.
         if gchar_cursor() == TAB
@@ -627,7 +627,7 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
             } else {
                 setpcmark();
                 (*win).w_cursor = *pos;
-                (*win).w_set_curswant = 1;
+                (*win).w_set_curswant = true;
                 (*win).w_cursor.coladd = 0;
                 adjust_for_sel(cap);
             }
@@ -645,7 +645,7 @@ pub(crate) unsafe fn nv_brace(cap: *mut cmdarg_T) {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).use_reg_one = true;
         (*(*cap).oap).inclusive = false;
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         if findsent((*cap).arg as Direction, (*cap).count1) == FAIL {
             clearopbeep((*cap).oap);
             return;
@@ -663,7 +663,7 @@ pub(crate) unsafe fn nv_findpar(cap: *mut cmdarg_T) {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = false;
         (*(*cap).oap).use_reg_one = true;
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         if !findpar(
             &raw mut (*(*cap).oap).inclusive,
             (*cap).arg,
@@ -708,7 +708,7 @@ pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
             (*curwin.get()).w_curswant = 0;
         }
         // The column was named outright, so it is not a remembered want.
-        (*curwin.get()).w_set_curswant = 0;
+        (*curwin.get()).w_set_curswant = false;
     }
 }
 
@@ -718,7 +718,7 @@ pub(crate) unsafe fn nv_bck_word(cap: *mut cmdarg_T) {
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = false;
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         if bck_word((*cap).count1, (*cap).arg != 0, false) == 0 {
             clearopbeep((*cap).oap);
         } else {
@@ -750,7 +750,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
         }
 
         (*(*cap).oap).motion_type = kMTCharWise;
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         let moved = if word_end {
             end_word((*cap).count1, (*cap).arg != 0, cw_on_word, false)
         } else {

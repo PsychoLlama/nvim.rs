@@ -309,7 +309,7 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
     }
     if let Some(v) = entry(c"curswant") {
         win.w_curswant = number_as_int(v);
-        win.w_set_curswant = 0;
+        win.w_set_curswant = false;
     }
     if let Some(v) = entry(c"topline") {
         // Not a plain assignment: 'scrolloff' and folds decide where the

@@ -398,7 +398,7 @@ unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
         );
         // Only restored when 'curswant' was due to be recomputed anyway:
         // if it was already valid, `update_curswant` did not change it.
-        if wp == cur && saved_set_curswant != 0 {
+        if wp == cur && saved_set_curswant {
             (*cur).w_set_curswant = saved_set_curswant;
             (*cur).w_curswant = saved_curswant;
             (*cur).w_virtcol = saved_virtcol;
@@ -494,7 +494,7 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
         (*curwin.get()).w_cursor.coladd = coladd;
         check_cursor(curwin.get());
         mb_adjust_cursor();
-        (*curwin.get()).w_set_curswant = set_curswant as c_int;
+        (*curwin.get()).w_set_curswant = set_curswant;
         rettv.vval.v_number = 0;
     }
 }
@@ -545,7 +545,7 @@ unsafe fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
                 (*curwin.get()).w_cursor = pos;
                 if curswant >= 0 {
                     (*curwin.get()).w_curswant = curswant - 1;
-                    (*curwin.get()).w_set_curswant = 0;
+                    (*curwin.get()).w_set_curswant = false;
                 }
                 check_cursor(curwin.get());
                 rettv.vval.v_number = 0;

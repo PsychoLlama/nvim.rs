@@ -228,7 +228,7 @@ pub unsafe fn do_check_cursorbind() {
 
     let cursor = old_curwin.w_cursor;
     let curswant = old_curwin.w_curswant;
-    let set_curswant = old_curwin.w_set_curswant != 0;
+    let set_curswant = old_curwin.w_set_curswant;
     // SAFETY: `curbuf` is set from startup to exit.
     let old_curbuf = unsafe { Buf::current() };
     let old_visual_select = VIsual_select.get();
@@ -256,7 +256,7 @@ pub unsafe fn do_check_cursorbind() {
             win.w_cursor.col = cursor.col;
             win.w_cursor.coladd = cursor.coladd;
             win.w_curswant = curswant;
-            win.w_set_curswant = set_curswant as c_int;
+            win.w_set_curswant = set_curswant;
 
             // Make sure the cursor is in a valid position. `restart_edit` is
             // set for the duration so that it may sit beyond the end of line.

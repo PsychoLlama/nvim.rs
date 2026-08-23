@@ -534,7 +534,7 @@ pub(crate) unsafe fn did_set_option(
             && (*opt).flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
             && (*opt).flags & kOptFlagHLOnly as uint32_t == 0
         {
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         }
 
         check_redraw((*opt).flags);

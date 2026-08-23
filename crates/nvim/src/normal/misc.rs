@@ -306,7 +306,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
         if VIsual_active.get() {
             end_visual_mode();
             check_cursor_col(curwin.get());
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             redraw_curbuf_later(UPD_INVERTED);
         } else if no_reason {
             vim_beep(kOptBoFlagEsc as c_uint);

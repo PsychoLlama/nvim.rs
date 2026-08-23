@@ -486,7 +486,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
             }
 
             msgmore(put.nr_lines);
-            (*curwin.get()).w_set_curswant = true as c_int;
+            (*curwin.get()).w_set_curswant = true;
 
             // Don't leave the cursor after the NUL.
             let len = get_cursor_line_len();

@@ -508,7 +508,7 @@ fn move_cursor_there(
     // after concealed characters.
     let col = col_from_screen.unwrap_or(pos.col);
     win.w_curswant = col;
-    win.w_set_curswant = 0; // May still have been true
+    win.w_set_curswant = false; // May still have been true
     let past_eol = !win.coladvance(col);
     if let Some(inclusive) = inclusive {
         *inclusive = past_eol;

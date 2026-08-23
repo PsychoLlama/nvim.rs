@@ -749,7 +749,7 @@ unsafe fn place_cursor(state: &Ecmd) {
                 (*curwin.get()).w_cursor.col = state.solcol;
                 check_cursor_col(curwin.get());
                 (*curwin.get()).w_cursor.coladd = 0;
-                (*curwin.get()).w_set_curswant = 1;
+                (*curwin.get()).w_set_curswant = true;
             } else {
                 beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
             }

@@ -309,7 +309,7 @@ pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
             // is still the one 'winhighlight' made.
             if !wp.is_null() && (*wp).w_ns_hl_winhl > 0 && (*wp).w_ns_hl == (*wp).w_ns_hl_winhl {
                 (*wp).w_ns_hl = 0;
-                (*wp).w_hl_needs_update = 1;
+                (*wp).w_hl_needs_update = true;
             }
             return true;
         }
@@ -371,7 +371,7 @@ pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
         }
 
         if !wp.is_null() {
-            (*wp).w_hl_needs_update = 1;
+            (*wp).w_hl_needs_update = true;
         }
         true
     }

@@ -373,8 +373,8 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
     cursor.lnum = 1 as linenr_T;
     cursor.col = 0 as colnr_T;
     cursor.coladd = 0 as colnr_T;
-    win.w_set_curswant = 1;
-    win.w_topline_was_set = 0;
+    win.w_set_curswant = true;
+    win.w_topline_was_set = false;
 
     // mark cursor position as being invalid
     win.w_valid = WinValid::NONE;
@@ -414,7 +414,7 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
     rebuild_title();
     // when autocmds didn't change it
     let win = cur_win();
-    if win.w_topline == 1 as linenr_T && win.w_topline_was_set == 0 {
+    if win.w_topline == 1 as linenr_T && !win.w_topline_was_set {
         scroll_halfway(win); // redisplay at correct position
     }
 

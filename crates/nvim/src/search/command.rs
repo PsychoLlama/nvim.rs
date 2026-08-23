@@ -718,7 +718,7 @@ pub unsafe fn do_search(
                 setpcmark();
             }
             (*curwin.get()).w_cursor = pos;
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             true
         };
 

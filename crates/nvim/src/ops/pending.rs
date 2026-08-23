@@ -124,7 +124,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
                 (*oap).end.col += l - 1;
             }
         }
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
 
         // `empty` is set when start and end are the same. `inclusive` affects
         // that too, unless yanking with the end on a NUL.

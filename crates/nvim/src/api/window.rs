@@ -143,7 +143,7 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
     // callees run can reach it.
     unsafe {
         check_cursor_col(w.raw());
-        w.w_set_curswant = 1;
+        w.w_set_curswant = true;
         let mut switchwin = switchwin_T::default();
         switch_win(
             &raw mut switchwin,
@@ -402,7 +402,7 @@ pub fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Error> {
         return ().reported(err);
     }
     w.w_ns_hl = number_as_int(ns_id);
-    w.w_hl_needs_update = 1;
+    w.w_hl_needs_update = true;
     w.redraw_later(UPD_NOT_VALID);
     ().reported(err)
 }

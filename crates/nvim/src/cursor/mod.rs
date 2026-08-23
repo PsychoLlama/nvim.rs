@@ -95,7 +95,7 @@ impl Win {
     /// Ask for `w_curswant` to be recomputed from the cursor's new position.
     #[inline(always)]
     fn recompute_curswant(mut self) {
-        self.w_set_curswant = 1;
+        self.w_set_curswant = true;
     }
 
     #[inline(always)]

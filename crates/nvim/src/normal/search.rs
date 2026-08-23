@@ -145,7 +145,7 @@ pub(crate) unsafe fn normal_search(
         // A search is one of the motions that fills the "1 last change"
         // register rather than the small-delete one.
         (*oap).use_reg_one = true;
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
 
         let i = do_search(
             oap,
@@ -221,7 +221,7 @@ pub(crate) unsafe fn nv_mark_move_to(
             (*(*cap).oap).use_reg_one = true;
         }
         (*(*cap).oap).inclusive = false;
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
         res
     }
 }

@@ -399,7 +399,7 @@ pub unsafe fn f_spellbadword(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
                 len = spell_move_to(curwin.get(), FORWARD, SMT_ALL, true, &raw mut attr);
                 if len != 0 {
                     word = get_cursor_pos_ptr();
-                    (*curwin.get()).w_set_curswant = 1;
+                    (*curwin.get()).w_set_curswant = true;
                 }
             } else if *(*curbuf.get()).b_s.b_p_spl != NUL as c_char {
                 let mut str = tv_get_string_chk(args.ptr(0));

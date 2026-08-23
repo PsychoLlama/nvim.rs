@@ -40,9 +40,8 @@ pub unsafe fn show_cursor_info_later(force: bool) {
         let state = get_real_state();
         // "The cursor is on an empty line" is a status-line item of its own, and
         // in Insert mode it is deliberately always reported as false.
-        let empty_line = c_int::from(
-            State.get() & MODE_INSERT == 0 && *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum) == 0,
-        );
+        let empty_line =
+            State.get() & MODE_INSERT == 0 && *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum) == 0;
 
         validate_virtcol(wp);
 
@@ -55,7 +54,7 @@ pub unsafe fn show_cursor_info_later(force: bool) {
             || (*wp).w_topline != (*wp).w_stl_topline
             || (*(*wp).w_buffer).b_ml.ml_line_count != (*wp).w_stl_line_count
             || (*wp).w_topfill != (*wp).w_stl_topfill
-            || empty_line != c_int::from((*wp).w_stl_empty)
+            || empty_line != (*wp).w_stl_empty
             || reg_recording.get() != (*wp).w_stl_recording
             || state != (*wp).w_stl_state
             || visual_moved
@@ -75,7 +74,7 @@ pub unsafe fn show_cursor_info_later(force: bool) {
 
         (*wp).w_stl_cursor = (*wp).w_cursor;
         (*wp).w_stl_virtcol = (*wp).w_virtcol;
-        (*wp).w_stl_empty = empty_line as c_char;
+        (*wp).w_stl_empty = empty_line;
         (*wp).w_stl_topline = (*wp).w_topline;
         (*wp).w_stl_line_count = (*(*wp).w_buffer).b_ml.ml_line_count;
         (*wp).w_stl_topfill = (*wp).w_topfill;

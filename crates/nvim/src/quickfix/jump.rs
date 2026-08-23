@@ -249,7 +249,7 @@ unsafe fn qf_jump_goto_line(
         } else {
             (*curwin.get()).w_cursor.col = (qf_col - 1) as colnr_T;
         }
-        (*curwin.get()).w_set_curswant = true as c_int;
+        (*curwin.get()).w_set_curswant = true;
         check_cursor(curwin.get());
     }
 }

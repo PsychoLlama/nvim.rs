@@ -641,7 +641,7 @@ pub unsafe fn buflist_getfile(
         win.w_cursor.col = col;
         check_cursor_column(win);
         win.w_cursor.coladd = 0 as colnr_T;
-        win.w_set_curswant = 1;
+        win.w_set_curswant = true;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && restore_view {
         // SAFETY: the mark read above, which is still live.
@@ -693,7 +693,7 @@ pub(crate) unsafe fn buflist_getfpos() {
         win.w_cursor.col = col;
         check_cursor_column(win);
         win.w_cursor.coladd = 0 as colnr_T;
-        win.w_set_curswant = 1;
+        win.w_set_curswant = true;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 {
         // SAFETY: the mark read above, which is still live.

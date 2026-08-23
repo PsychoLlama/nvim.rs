@@ -177,7 +177,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
         if !pos.is_null() {
             setpcmark();
             (*curwin.get()).w_cursor = *pos;
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             may_fold_open(cap, kOptFdoFlagBlock as c_uint);
         }
     }
@@ -236,7 +236,7 @@ unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
             false,
         );
         xfree(name as *mut c_void);
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
     }
 }
 
@@ -286,7 +286,7 @@ unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
                 clearopbeep((*cap).oap);
                 break;
             }
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         }
         may_fold_open(cap, kOptFdoFlagSearch as c_uint);
     }
@@ -321,7 +321,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
             } else {
                 '}' as c_int
             };
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             if !findpar(
                 &raw mut (*(*cap).oap).inclusive,
                 (*cap).arg,

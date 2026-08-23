@@ -104,7 +104,7 @@ pub unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
             while ascii_iswhite(gchar_cursor()) && oneright() == OK {}
             (*win).w_valid.clear(WinValid::WCOL);
         }
-        (*win).w_set_curswant = 1;
+        (*win).w_set_curswant = true;
         // Inside a closed fold the wanted column is the one that was asked
         // for, not the one the fold's single displayed line has.
         if has_any_folding(win) != 0 {
@@ -139,7 +139,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
         {
             (*win).w_cursor.col -= 1;
         }
-        (*win).w_set_curswant = 1;
+        (*win).w_set_curswant = true;
         adjust_for_sel(cap);
     }
 }
@@ -359,7 +359,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
                 } else {
                     coladvance(curwin.get(), width / 2);
                 }
-                (*curwin.get()).w_set_curswant = 1;
+                (*curwin.get()).w_set_curswant = true;
             }
             Ok(b'_') => nv_g_underscore_cmd(cap),
             Ok(b'$') => nv_g_dollar_cmd(cap),
@@ -369,7 +369,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             // `ge`/`gE`: back to the end of the previous word.
             Ok(b'e' | b'E') => {
                 (*oap).motion_type = kMTCharWise;
-                (*curwin.get()).w_set_curswant = 1;
+                (*curwin.get()).w_set_curswant = true;
                 (*oap).inclusive = true;
                 if bckend_word((*cap).count1, nchar == 'E' as c_int, false) == 0 {
                     clearopbeep(oap);

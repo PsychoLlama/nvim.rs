@@ -779,7 +779,7 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
     if wargcount(win) <= 1 || editing {
         // Editing the current entry: `arg_had_last` if it is the last.
         // SAFETY: caller contract.
-        unsafe { (*win).w_arg_idx_invalid = c_int::from(false) };
+        unsafe { (*win).w_arg_idx_invalid = false };
         if idx == wargcount(win) - 1 && win_alist(win) == global_arglist() {
             arg_had_last.set(true);
         }
@@ -788,7 +788,7 @@ pub unsafe fn check_arg_idx(win: *mut win_T) {
     // Not editing the current entry, so `arg_had_last` only if this buffer
     // is the *last* global argument.
     // SAFETY: caller contract.
-    unsafe { (*win).w_arg_idx_invalid = c_int::from(true) };
+    unsafe { (*win).w_arg_idx_invalid = true };
     let gcount = alist_count(global_arglist());
     if idx == wargcount(win) - 1
         || arg_had_last.get()

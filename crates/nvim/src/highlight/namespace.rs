@@ -445,10 +445,10 @@ pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
         }
         let hl_def = (*wp).w_ns_hl_attr;
 
-        if (*wp).w_hl_needs_update == 0 && !invalid {
+        if !(*wp).w_hl_needs_update && !invalid {
             return;
         }
-        (*wp).w_hl_needs_update = 0;
+        (*wp).w_hl_needs_update = false;
 
         // A blending float always has a *named* normal group, because
         // `NormalFloat` always is one.

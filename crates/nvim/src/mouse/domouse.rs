@@ -881,7 +881,7 @@ fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mo
                 unsafe { find_end_of_word(win.cursor()) };
             }
         }
-        win.w_set_curswant = 1;
+        win.w_set_curswant = true;
     }
 
     if is_click {

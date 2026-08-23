@@ -177,7 +177,7 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
             let old_cursor = (*curwin.get()).w_cursor;
             (*curwin.get()).w_cursor = VIsual.get();
             VIsual.set(old_cursor);
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             return;
         }
 
@@ -332,7 +332,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
             }
             coladvance(curwin.get(), (*curwin.get()).w_curswant);
         } else {
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         }
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -625,6 +625,6 @@ pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
             clearopbeep(oap);
         }
         adjust_cursor_col();
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
     }
 }

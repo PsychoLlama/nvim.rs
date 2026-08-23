@@ -335,7 +335,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                     if !out.puts(c"edit ") || !ses_fname(out, (*wp).w_buffer, opts, true) {
                         return false;
                     }
-                    if (*wp).w_arg_idx_invalid == 0 {
+                    if !(*wp).w_arg_idx_invalid {
                         edited_win = wp;
                     }
                     break;

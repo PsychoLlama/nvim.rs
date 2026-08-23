@@ -794,7 +794,7 @@ unsafe fn goto_match(
         }
         if action != ACTION_SHOW {
             (*curwin.get()).w_cursor.col = startp.offset_from(walk.line) as colnr_T;
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         }
 
         if tagpreview != 0 && curwin.get() != curwin_save && win_valid(curwin_save) {

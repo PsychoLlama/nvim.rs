@@ -323,7 +323,7 @@ unsafe fn finish_addsub(
         if visual {
             (*curwin.get()).w_cursor = save_cursor;
         } else if did_change {
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
         } else if virtual_active(curwin.get()) {
             (*curwin.get()).w_cursor.coladd = save_coladd;
         }

@@ -392,7 +392,7 @@ impl DoTag {
                 (*curwin.get()).w_cursor.lnum = mark.mark.lnum;
             }
             (*curwin.get()).w_cursor.col = mark.mark.col;
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             if jop_flags.get() & kOptJopFlagView as c_uint != 0 {
                 mark_view_restore(&raw mut self.saved_fmark);
             }

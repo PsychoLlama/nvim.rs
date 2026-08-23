@@ -610,14 +610,19 @@ pub struct window_S {
     pub w_hl_id_normal: ::core::ffi::c_int,
     pub w_hl_attr_normal: ::core::ffi::c_int,
     pub w_hl_attr_normalnc: ::core::ffi::c_int,
-    pub w_hl_needs_update: ::core::ffi::c_int,
+    /// Whether the window's highlight namespace has to be re-resolved
+    /// before it is next drawn.
+    pub w_hl_needs_update: bool,
     pub w_prev: *mut win_T,
     pub w_next: *mut win_T,
     pub w_locked: bool,
     pub w_frame: *mut frame_T,
     pub w_cursor: pos_T,
     pub w_curswant: colnr_T,
-    pub w_set_curswant: ::core::ffi::c_int,
+    /// Whether the next cursor move should recompute `w_curswant` — the
+    /// column a vertical move aims for — rather than keep the one the last
+    /// horizontal move set.
+    pub w_set_curswant: bool,
     pub w_cursorline: linenr_T,
     pub w_last_cursorline: linenr_T,
     pub w_old_visual_mode: ::core::ffi::c_char,
@@ -631,7 +636,9 @@ pub struct window_S {
     pub w_p_lcs_chars: lcs_chars_T,
     pub w_p_fcs_chars: fcs_chars_T,
     pub w_topline: linenr_T,
-    pub w_topline_was_set: ::core::ffi::c_char,
+    /// Whether `w_topline` was set on purpose rather than left at its
+    /// default, which decides whether entering the buffer may move it.
+    pub w_topline_was_set: bool,
     pub w_topfill: ::core::ffi::c_int,
     pub w_old_topfill: ::core::ffi::c_int,
     pub w_botfill: bool,
@@ -706,7 +713,9 @@ pub struct window_S {
     pub w_stl_topline: linenr_T,
     pub w_stl_line_count: linenr_T,
     pub w_stl_topfill: ::core::ffi::c_int,
-    pub w_stl_empty: ::core::ffi::c_char,
+    /// Whether the last line drawn in the window was empty, as the status
+    /// line last saw it.
+    pub w_stl_empty: bool,
     pub w_stl_recording: ::core::ffi::c_int,
     pub w_stl_state: ::core::ffi::c_int,
     pub w_stl_visual_mode: ::core::ffi::c_int,
@@ -714,7 +723,8 @@ pub struct window_S {
     pub w_alt_fnum: ::core::ffi::c_int,
     pub w_alist: *mut alist_T,
     pub w_arg_idx: ::core::ffi::c_int,
-    pub w_arg_idx_invalid: ::core::ffi::c_int,
+    /// Whether `w_arg_idx` no longer names the argument the window shows.
+    pub w_arg_idx_invalid: bool,
     pub w_localdir: *mut ::core::ffi::c_char,
     pub w_prevdir: *mut ::core::ffi::c_char,
     pub w_onebuf_opt: winopt_T,

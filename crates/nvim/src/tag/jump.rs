@@ -460,7 +460,7 @@ impl Jump {
                 return FAIL;
             }
 
-            (*curwin.get()).w_set_curswant = 1;
+            (*curwin.get()).w_set_curswant = true;
             postponed_split.set(0);
             let mut retval = self.run_command(tagp);
             // Jumping to another file counts as success: at least the file

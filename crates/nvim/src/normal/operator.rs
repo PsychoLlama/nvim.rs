@@ -109,7 +109,7 @@ pub(crate) unsafe fn nv_kundo(cap: *mut cmdarg_T) {
             return;
         }
         u_undo((*cap).count1);
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
     }
 }
 
@@ -125,7 +125,7 @@ pub(crate) unsafe fn nv_undo_line(cap: *mut cmdarg_T) {
             return;
         }
         u_undoline();
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
     }
 }
 
@@ -191,7 +191,7 @@ pub(crate) unsafe fn nv_redo_or_register(cap: *mut cmdarg_T) {
             return;
         }
         u_redo((*cap).count1);
-        (*curwin.get()).w_set_curswant = 1;
+        (*curwin.get()).w_set_curswant = true;
     }
 }
 

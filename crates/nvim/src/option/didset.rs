@@ -747,7 +747,7 @@ pub unsafe fn did_set_winblend(args: *mut optset_T) -> *const c_char {
         if f.new_number() != f.old_number() {
             let win = f.win;
             (*win).w_onebuf_opt.wo_winbl = (*win).w_onebuf_opt.wo_winbl.clamp(0, 100);
-            (*win).w_hl_needs_update = 1;
+            (*win).w_hl_needs_update = true;
             check_blending(win);
         }
     }

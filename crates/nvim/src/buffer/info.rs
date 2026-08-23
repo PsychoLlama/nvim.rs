@@ -802,7 +802,7 @@ pub unsafe fn append_arg_number(wp: *mut win_T, buf: *mut c_char, buflen: size_t
     }
     // SAFETY: the caller's promise -- a live window.
     let win = unsafe { Win::new(wp) };
-    let fmt = if win.w_arg_idx_invalid != 0 {
+    let fmt = if win.w_arg_idx_invalid {
         tr(c" ((%d) of %d)")
     } else {
         tr(c" (%d of %d)")

@@ -345,7 +345,7 @@ pub unsafe fn update_curswant_force() {
     let mut win = unsafe { Win::current() };
     win.validate_virtcol();
     win.w_curswant = win.w_virtcol;
-    win.w_set_curswant = 0;
+    win.w_set_curswant = false;
 }
 
 /// [`update_curswant_force`], but only when something asked for it.
@@ -354,7 +354,7 @@ pub unsafe fn update_curswant_force() {
 /// The current window must be valid.
 pub unsafe fn update_curswant() {
     // SAFETY: `curwin` is set from startup to exit.
-    if unsafe { Win::current() }.w_set_curswant != 0 {
+    if unsafe { Win::current() }.w_set_curswant {
         // SAFETY: the caller's promise.
         unsafe { update_curswant_force() };
     }
@@ -494,7 +494,7 @@ pub unsafe fn set_topline(wp: *mut win_T, lnum: linenr_T) {
         win.w_botline = last;
     }
     win.w_topline = lnum;
-    win.w_topline_was_set = 1;
+    win.w_topline_was_set = true;
     if lnum != prev_topline {
         // The filler lines are kept when the top line did not change.
         win.w_topfill = 0;
