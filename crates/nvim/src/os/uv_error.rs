@@ -15,9 +15,9 @@
 //! They stay plain `c_int` rather than becoming an enum: a `uv_*` call can
 //! answer *any* code, including ones this port has never named, so an
 //! exhaustive type would be a lie. What the family needed was one definition,
-//! not a new type. The literal form is also load-bearing — `tools/ffigen`
+//! not a new type. The literal form is also load-bearing: `tools/ffigen`
 //! publishes a `pub const` to the unit lane only when it can read the value
-//! off the source, and `test/unit/os/{fs,fileio}_spec.lua` assert on
+//! off the source. `crates/nvim/tests/unit/{fs,fileio}.rs` assert on
 //! `UV_ENOENT`, `UV_EEXIST`, `UV_EISDIR`, `UV_EBADF`, `UV_ELOOP` and
 //! `UV_EMLINK` by name.
 #![forbid(unsafe_code)]

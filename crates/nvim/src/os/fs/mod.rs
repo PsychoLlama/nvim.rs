@@ -12,12 +12,13 @@
 //! the current directory, executability, and the read/write/copy calls that
 //! are libc rather than libuv.
 //!
-//! **Every export here is genuine FFI.** The thirty-four `no_mangle` entry
-//! points keep their C signatures and every surviving `unsafe` unit is a
-//! libuv or libc call that has no Rust equivalent, so the deny buys no
-//! narrower obligation on those. What it does buy is the *rest* of each
-//! body — the mode arithmetic, the `$PATH` walk, the short-read loops — as
-//! checked code, which is where the file's unchecked lines actually lived.
+//! **Nothing here is exported by name any more**, but the entry points are
+//! still raw-pointer functions: `crates/nvim/tests/unit/fs.rs` drives them
+//! from outside the crate, and every surviving `unsafe` unit is a libuv or
+//! libc call that has no Rust equivalent, so the deny buys no narrower
+//! obligation on those. What it does buy is the *rest* of each body — the
+//! mode arithmetic, the `$PATH` walk, the short-read loops — as checked
+//! code, which is where this file's unchecked lines actually lived.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
