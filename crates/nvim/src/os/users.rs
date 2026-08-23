@@ -169,11 +169,7 @@ pub unsafe fn os_get_usernames(users: *mut garray_T) -> c_int {
 /// # Safety
 ///
 /// `s` is writable for `len` bytes.
-///
-/// The C ABI is here because `test/unit/os/env_spec.lua` still resolves this
-/// by name; it goes when that spec does.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_get_username(s: *mut c_char, len: size_t) -> c_int {
+pub unsafe fn os_get_username(s: *mut c_char, len: size_t) -> c_int {
     // SAFETY: `getuid` cannot fail and touches nothing; `s` is the
     // caller's buffer.
     unsafe { os_get_uname(libc::getuid(), s, len) }

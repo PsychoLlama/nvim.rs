@@ -183,8 +183,7 @@ unsafe fn resolve_user_dir(src: *const c_char, dst: *mut c_char, dstlen: c_int) 
 /// # Safety
 /// `srcp` must be NUL-terminated, `dst` writable for `dstlen` bytes, and
 /// `prefix` NUL-terminated or NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn expand_env_esc(
+pub unsafe fn expand_env_esc(
     srcp: *const c_char,
     dst: *mut c_char,
     dstlen: c_int,

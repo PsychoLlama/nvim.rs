@@ -102,8 +102,7 @@ const UNSETENV_FAILED: &CStr = c"uv_os_unsetenv(%s) failed: %d %s";
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_getenv(name: *const c_char) -> *mut c_char {
+pub unsafe fn os_getenv(name: *const c_char) -> *mut c_char {
     /// Big enough that most variables never need the second call.
     const INIT_SIZE: usize = 64;
     // SAFETY: the caller's contract; `size` is `buf`'s length going in and
@@ -142,12 +141,7 @@ pub unsafe extern "C" fn os_getenv(name: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `name` must be NUL-terminated and `buf` writable for `bufsize` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_getenv_buf(
-    name: *const c_char,
-    buf: *mut c_char,
-    bufsize: size_t,
-) -> *mut c_char {
+pub unsafe fn os_getenv_buf(name: *const c_char, buf: *mut c_char, bufsize: size_t) -> *mut c_char {
     // SAFETY: the caller's contract; the retry buffer is sized from what
     // libuv reported and the copy back into `buf` is bounded by `bufsize`.
     unsafe {
@@ -178,8 +172,7 @@ pub unsafe extern "C" fn os_getenv_buf(
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_getenv_noalloc(name: *const c_char) -> *mut c_char {
+pub unsafe fn os_getenv_noalloc(name: *const c_char) -> *mut c_char {
     // SAFETY: the caller's contract; `NameBuff` is `MAXPATHL` bytes.
     unsafe { os_getenv_buf(name, NameBuff.ptr().cast(), MAXPATHL as usize) }
 }
@@ -190,8 +183,7 @@ pub unsafe extern "C" fn os_getenv_noalloc(name: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_env_exists(name: *const c_char, nonempty: bool) -> bool {
+pub unsafe fn os_env_exists(name: *const c_char, nonempty: bool) -> bool {
     // SAFETY: the caller's contract. A two-byte buffer is deliberate: the
     // value does not matter, and `UV_ENOBUFS` already means "found".
     unsafe {
@@ -241,8 +233,7 @@ pub unsafe extern "C" fn os_setenv(
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_unsetenv(name: *const c_char) -> c_int {
+pub unsafe fn os_unsetenv(name: *const c_char) -> c_int {
     // SAFETY: the caller's contract.
     unsafe {
         if *name == 0 {
@@ -308,8 +299,7 @@ pub unsafe fn os_copy_fullenv(env: *mut *mut c_char, env_size: size_t) {
 
 /// The *name* of the environment variable at `index`, newly allocated, or
 /// NULL when there is none.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_getenvname_at_index(index: size_t) -> *mut c_char {
+pub unsafe fn os_getenvname_at_index(index: size_t) -> *mut c_char {
     // SAFETY: `environ` is libc's own NULL-terminated block; the bound check
     // walks it rather than trusting `index`.
     unsafe {
@@ -329,8 +319,7 @@ pub unsafe extern "C" fn os_getenvname_at_index(index: size_t) -> *mut c_char {
 }
 
 /// This process's id.
-#[unsafe(no_mangle)]
-pub extern "C" fn os_get_pid() -> int64_t {
+pub fn os_get_pid() -> int64_t {
     // SAFETY: `getpid` takes no arguments.
     unsafe { getpid() as int64_t }
 }
@@ -343,8 +332,7 @@ pub fn os_hint_priority() {}
 ///
 /// # Safety
 /// `hostname` must be writable for `size` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_get_hostname(hostname: *mut c_char, size: size_t) {
+pub unsafe fn os_get_hostname(hostname: *mut c_char, size: size_t) {
     // SAFETY: the caller's contract; `vutsname` is a local `uname` fills in,
     // and `nodename` is NUL-terminated when it succeeds.
     unsafe {
@@ -450,8 +438,7 @@ pub unsafe fn get_env_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// `fname` must be an absolute, NUL-terminated path.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_setenv_append_path(fname: *const c_char) -> bool {
+pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
     // SAFETY: the caller's contract; `os_buf` is `MAXPATHL` bytes and the
     // assertion below is what keeps the directory inside it.
     unsafe {
@@ -492,8 +479,7 @@ pub unsafe extern "C" fn os_setenv_append_path(fname: *const c_char) -> bool {
 ///
 /// # Safety
 /// `sh` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_shell_is_cmdexe(sh: *const c_char) -> bool {
+pub unsafe fn os_shell_is_cmdexe(sh: *const c_char) -> bool {
     // SAFETY: the caller's contract; `path_tail` answers a pointer inside its
     // argument, and `$COMSPEC` lands in `NameBuff`.
     unsafe {

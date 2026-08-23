@@ -11,6 +11,7 @@ mod charset;
 mod cmdhist;
 mod cursor;
 mod digraph;
+mod env;
 mod expressions;
 mod fold;
 mod fpconv;
