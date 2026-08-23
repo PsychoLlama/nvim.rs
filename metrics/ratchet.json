@@ -898,7 +898,7 @@
     "crates/nvim/src/syntax/cluster.rs": {"missing_safety_doc": 9, "unsafe_lines": 153},
     "crates/nvim/src/syntax/command.rs": {"cell_ptr": 1, "missing_safety_doc": 16, "unsafe_lines": 244},
     "crates/nvim/src/syntax/define.rs": {"cell_ptr": 1, "missing_safety_doc": 14, "unsafe_lines": 417},
-    "crates/nvim/src/syntax/endpos.rs": {"missing_safety_doc": 15, "unsafe_lines": 326},
+    "crates/nvim/src/syntax/endpos.rs": {"missing_safety_doc": 15, "unsafe_lines": 323},
     "crates/nvim/src/syntax/items.rs": {"cell_ptr": 4, "missing_safety_doc": 10, "unsafe_lines": 250},
     "crates/nvim/src/syntax/keyword.rs": {"missing_safety_doc": 8, "unsafe_lines": 208},
     "crates/nvim/src/syntax/list.rs": {"missing_safety_doc": 15, "unsafe_lines": 402},

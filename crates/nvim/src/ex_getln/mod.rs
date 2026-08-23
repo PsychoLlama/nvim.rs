@@ -349,7 +349,7 @@ pub const kExprNodeOpMissing: ExprASTNodeType = 1;
 pub const kExprNodeMissing: ExprASTNodeType = 0;
 pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const MAX_CB_ERRORS: C2Rust_Unnamed_58 = 1;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct CpInfo {
     pub win_info: C2Rust_Unnamed_50,
     pub buf_info: C2Rust_Unnamed_49,

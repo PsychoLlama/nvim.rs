@@ -468,7 +468,7 @@ pub struct llpos_T {
     pub col: colnr_T,
     pub len: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct match_T {
     pub rm: regmmatch_T,
     pub buf: *mut buf_T,
@@ -482,7 +482,7 @@ pub struct match_T {
     pub has_cursor: bool,
     pub tm: proftime_T,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct matchitem {
     pub mit_next: *mut matchitem_T,
     pub mit_id: ::core::ffi::c_int,

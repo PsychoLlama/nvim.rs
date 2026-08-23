@@ -119,7 +119,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
         if log_level >= 0 {
             g_min_log_level.set(log_level);
         }
-        let save_cmdmod: cmdmod_T = cmdmod.get();
+        let save_cmdmod: cmdmod_T = cmdmod.with(Clone::clone);
         memset(cmdmod.ptr().cast::<c_void>(), 0, size_of::<cmdmod_T>());
         (*cmdmod.ptr()).cmod_flags = flags;
         apply_cmdmod(cmdmod.ptr());

@@ -11,7 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct CmdParseInfo {
     pub cmdmod: cmdmod_T,
     pub magic: CmdParseInfo_magic,
@@ -178,8 +178,7 @@ crate::flag_set! {
     /// `:noswapfile` -- a buffer the command opens gets no swap file.
     const NOSWAPFILE = 8192;
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
+#[derive(Clone)]
 pub struct cmdmod_T {
     pub cmod_flags: CmdModFlags,
     pub cmod_split: ::core::ffi::c_int,

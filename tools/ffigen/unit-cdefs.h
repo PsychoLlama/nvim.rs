@@ -6,7 +6,6 @@ typedef struct DecorVirtText DecorVirtText;
 typedef struct KeySetLink KeySetLink;
 typedef struct ParserLine ParserLine;
 typedef struct Scrollback Scrollback;
-typedef struct SignTextAttrs SignTextAttrs;
 typedef struct TermKeyCsi TermKeyCsi;
 typedef struct VimMenu VimMenu;
 typedef struct VirtTextChunk VirtTextChunk;
@@ -40,6 +39,8 @@ typedef struct qf_info_S qf_info_S;
 typedef struct qfline_S qfline_S;
 typedef struct reg_extmatch_T reg_extmatch_T;
 typedef struct regengine regengine;
+typedef struct regmatch_T regmatch_T;
+typedef struct regmmatch_T regmmatch_T;
 typedef struct s_mmbuffer s_mmbuffer;
 typedef struct s_mmfile s_mmfile;
 typedef struct s_xdemitcb s_xdemitcb;
@@ -278,8 +279,6 @@ typedef struct addrinfo addrinfo;
 typedef struct buffblock buffblock;
 typedef struct bufstate_T bufstate_T;
 typedef struct cmdarg_T cmdarg_T;
-typedef struct regmatch_T regmatch_T;
-typedef struct cmdmod_T cmdmod_T;
 typedef union cstack_T_cs_pend cstack_T_cs_pend;
 typedef struct hashitem_T hashitem_T;
 typedef struct hashtab_T hashtab_T;
@@ -308,7 +307,6 @@ typedef struct extmark_undo_vec_t extmark_undo_vec_t;
 typedef struct fcs_chars_T fcs_chars_T;
 typedef struct fmarkv_T fmarkv_T;
 typedef struct fmark_T fmark_T;
-typedef struct foldinfo_T foldinfo_T;
 typedef struct funccall_S_fc_fixvar funccall_S_fc_fixvar;
 typedef struct garray_T garray_T;
 typedef struct lcs_chars_T lcs_chars_T;
@@ -329,14 +327,12 @@ typedef struct partial_S partial_S;
 typedef struct pos_save_T pos_save_T;
 typedef union pthread_mutex_t pthread_mutex_t;
 typedef union pthread_rwlock_t pthread_rwlock_t;
-typedef struct regmmatch_T regmmatch_T;
 typedef struct regprog regprog;
 typedef struct sockaddr sockaddr;
 typedef struct socket_watcher_uv_pipe socket_watcher_uv_pipe;
 typedef struct socket_watcher_uv_tcp socket_watcher_uv_tcp;
 typedef union socket_watcher_uv socket_watcher_uv;
 typedef struct staticList10_T staticList10_T;
-typedef struct statuscol_T statuscol_T;
 typedef struct stl_hlrec stl_hlrec;
 typedef union syn_state_sst_union syn_state_sst_union;
 typedef struct taggy_T taggy_T;
@@ -2456,28 +2452,6 @@ struct cmdarg_T {
   int retval;
   char *searchbuf;
 };
-struct regmatch_T {
-  regprog_T *regprog;
-  char *startp[10];
-  char *endp[10];
-  colnr_T rm_matchcol;
-  bool rm_ic;
-};
-struct cmdmod_T {
-  CmdModFlags cmod_flags;
-  int cmod_split;
-  int cmod_tab;
-  char *cmod_filter_pat;
-  regmatch_T cmod_filter_regmatch;
-  bool cmod_filter_force;
-  int cmod_verbose;
-  char *cmod_save_ei;
-  int cmod_did_sandbox;
-  OptInt cmod_verbose_save;
-  int cmod_save_msg_silent;
-  int cmod_save_msg_scroll;
-  int cmod_did_esilent;
-};
 union cstack_T_cs_pend {
   void *csp_rv[50];
   void *csp_ex[50];
@@ -2690,12 +2664,6 @@ struct fmark_T {
   fmarkv_T view;
   AdditionalData *additional_data;
 };
-struct foldinfo_T {
-  linenr_T fi_lnum;
-  int fi_level;
-  int fi_low_level;
-  linenr_T fi_lines;
-};
 struct funccall_S_fc_fixvar {
   typval_T di_tv;
   uint8_t di_flags;
@@ -2874,14 +2842,6 @@ union pthread_rwlock_t {
   char __size[56];
   long __align;
 };
-struct regmmatch_T {
-  regprog_T *regprog;
-  lpos_T startpos[10];
-  lpos_T endpos[10];
-  colnr_T rmm_matchcol;
-  int rmm_ic;
-  colnr_T rmm_maxcol;
-};
 struct regprog {
   regengine_T *engine;
   unsigned int regflags;
@@ -2907,16 +2867,6 @@ union socket_watcher_uv {
 struct staticList10_T {
   list_T sl_list;
   listitem_T sl_items[10];
-};
-struct statuscol_T {
-  int width;
-  linenr_T lnum;
-  int sign_cul_id;
-  bool draw;
-  stl_hlrec_t *hlrec;
-  foldinfo_T foldinfo;
-  colnr_T fold_vcol[9];
-  SignTextAttrs *sattrs;
 };
 struct stl_hlrec {
   char *start;

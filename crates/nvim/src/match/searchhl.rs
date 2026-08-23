@@ -106,7 +106,10 @@ pub unsafe fn init_search_hl(wp: *mut win_T, search_hl: *mut match_T) {
     unsafe {
         let mut cur = (*wp).w_match_head;
         while !cur.is_null() {
-            (*cur).mit_hl.rm = (*cur).mit_match;
+            // The highlight state borrows the item's program; the
+            // item keeps owning it, which is why this is a shallow
+            // clone and not a compile of its own.
+            (*cur).mit_hl.rm = (*cur).mit_match.clone();
             (*cur).mit_hl.attr = if (*cur).mit_hlg_id == 0 {
                 0
             } else {

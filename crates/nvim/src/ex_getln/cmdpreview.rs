@@ -257,7 +257,7 @@ pub(crate) unsafe fn cmdpreview_prepare(cpinfo: *mut CpInfo) {
         xfree(saved_bufs.h.hash as *mut ::core::ffi::c_void);
 
         (*cpinfo).save_hls = p_hls.get() != 0;
-        (*cpinfo).save_cmdmod = cmdmod.get();
+        (*cpinfo).save_cmdmod = cmdmod.with(Clone::clone);
         win_size_save(&raw mut (*cpinfo).save_view);
         save_search_patterns();
 
@@ -341,7 +341,7 @@ pub(crate) unsafe fn cmdpreview_restore_state(cpinfo: *mut CpInfo) {
             i += 1;
         }
 
-        cmdmod.set((*cpinfo).save_cmdmod);
+        cmdmod.set((*cpinfo).save_cmdmod.clone());
         p_hls.set((*cpinfo).save_hls as ::core::ffi::c_int);
         restore_search_patterns();
         win_size_restore(&raw mut (*cpinfo).save_view);

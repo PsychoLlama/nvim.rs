@@ -182,14 +182,11 @@ unsafe fn best_end_match(
             let mut regmatch = empty_regmmatch();
             regmatch.rmm_ic = (*spp).sp_ic;
             regmatch.regprog = (*spp).sp_prog;
-            let matched = syn_regexec(
-                &raw mut regmatch,
-                startpos.lnum,
-                lc_col as colnr_T,
-                &raw mut (*spp).sp_time,
-            );
+            let time = &raw mut (*spp).sp_time;
+            let matched = syn_regexec(&raw mut regmatch, startpos.lnum, lc_col as colnr_T, time);
             (*spp).sp_prog = regmatch.regprog;
-            if matched && best.is_none_or(|(_, b)| regmatch.startpos[0].col < b.startpos[0].col) {
+            let col = regmatch.startpos[0].col;
+            if matched && best.as_ref().is_none_or(|(_, b)| col < b.startpos[0].col) {
                 best = Some((idx, regmatch));
             }
             idx += 1;

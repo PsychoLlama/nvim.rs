@@ -345,8 +345,10 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
         }
 
         let mut errormsg: *const c_char = ptr::null();
-        let save_cmdmod: cmdmod_T = cmdmod.get();
-        cmdmod.set((*cmdinfo).cmdmod);
+        // Shallow both ways: the saved block owns what it points at
+        // until it goes back, and the caller keeps owning `cmdinfo`.
+        let save_cmdmod: cmdmod_T = cmdmod.with(Clone::clone);
+        cmdmod.set((*cmdinfo).cmdmod.clone());
         apply_cmdmod(cmdmod.ptr());
 
         'end: {

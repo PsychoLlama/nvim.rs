@@ -57,8 +57,7 @@ pub struct reg_extmatch_T {
     pub refcnt: int16_t,
     pub matches: [*mut uint8_t; 10],
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
+#[derive(Clone)]
 pub struct regmatch_T {
     pub regprog: *mut regprog_T,
     pub startp: [*mut ::core::ffi::c_char; 10],
@@ -66,8 +65,7 @@ pub struct regmatch_T {
     pub rm_matchcol: colnr_T,
     pub rm_ic: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
+#[derive(Clone)]
 pub struct regmmatch_T {
     pub regprog: *mut regprog_T,
     pub startpos: [lpos_T; 10],

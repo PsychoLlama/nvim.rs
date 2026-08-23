@@ -12,7 +12,6 @@
 use super::*;
 
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct foldinfo_T {
     pub fi_lnum: linenr_T,
     pub fi_level: ::core::ffi::c_int,

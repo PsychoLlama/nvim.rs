@@ -204,7 +204,9 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         // Modifiers are restored on the way out, for recursive calls.
-        let save_cmdmod: cmdmod_T = cmdmod.get();
+        // A shallow copy, as it always was: the saved block owns the
+        // `:filter` pattern and program until it is put back below.
+        let save_cmdmod: cmdmod_T = cmdmod.with(Clone::clone);
         let mut after_modifier: *mut c_char = ptr::null_mut();
 
         'doend: {
