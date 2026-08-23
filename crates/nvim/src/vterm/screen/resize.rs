@@ -128,7 +128,7 @@ impl OldBuffer {
 fn blank_lineinfo() -> VTermLineInfo {
     VTermLineInfo {
         doublewidth_doubleheight_continuation: [0; 1],
-        c2rust_padding: [0; 3],
+        _pad: [0; 3],
     }
 }
 

@@ -90,7 +90,7 @@ pub(super) fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
 /// A line with no double-width, double-height or continuation marking.
 pub(super) const BLANK_LINE: VTermLineInfo = VTermLineInfo {
     doublewidth_doubleheight_continuation: [0; 1],
-    c2rust_padding: [0; 3],
+    _pad: [0; 3],
 };
 
 /// Whether `next` extends the grapheme that `prev` ended.
@@ -204,7 +204,7 @@ impl VTermState {
             schar,
             width,
             protected_cell_dwl_dhl: [0; 1],
-            c2rust_padding: [0; 3],
+            _pad: [0; 3],
         };
         info.set_protected_cell(self.protected_cell());
         info.set_dwl(line.doublewidth());

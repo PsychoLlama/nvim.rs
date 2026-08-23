@@ -38,7 +38,7 @@ fn blank_cell() -> VTermScreenCell {
         width: 1,
         attrs: VTermScreenCellAttrs {
             bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [0; 3],
-            c2rust_padding: [0; 1],
+            _pad: [0; 1],
         },
         fg: VTermColor { type_0: 0 },
         bg: VTermColor { type_0: 0 },

@@ -12,6 +12,13 @@
 //
 // These are libvterm's types, Copyright (c) 2008 Paul Evans, under the MIT
 // license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
+//
+// A `_pad` field is the tail of a bitfield storage unit: C rounds a bitfield
+// run up to its storage unit, so the bytes exist on both sides and the
+// struct's layout -- pinned by `tools/ffigen/unit-cdefs.h`, which the unit
+// suite's LuaJIT `ffi.cdef` and C fixtures both compile against -- depends on
+// them. `ffigen` drops the field when it re-expands the run into real C
+// bitfield members, and matches it by that exact name.
 use core::mem::offset_of;
 
 use super::*;
@@ -30,7 +37,7 @@ pub struct ScreenPen {
     pub uri: ::core::ffi::c_int,
     pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
         [u8; 3],
-    pub c2rust_padding: [u8; 1],
+    pub _pad: [u8; 1],
 }
 crate::bitfield_accessors! {
     impl ScreenPen.bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl {
@@ -97,7 +104,7 @@ pub struct VTermGlyphInfo {
     pub schar: schar_T,
     pub width: ::core::ffi::c_int,
     pub protected_cell_dwl_dhl: [u8; 1],
-    pub c2rust_padding: [u8; 3],
+    pub _pad: [u8; 3],
 }
 crate::bitfield_accessors! {
     impl VTermGlyphInfo.protected_cell_dwl_dhl {
@@ -111,7 +118,7 @@ crate::bitfield_accessors! {
 #[repr(C, align(4))]
 pub struct VTermLineInfo {
     pub doublewidth_doubleheight_continuation: [u8; 1],
-    pub c2rust_padding: [u8; 3],
+    pub _pad: [u8; 3],
 }
 crate::bitfield_accessors! {
     impl VTermLineInfo.doublewidth_doubleheight_continuation {
@@ -211,7 +218,7 @@ pub struct VTermScreen {
     pub rows: ::core::ffi::c_int,
     pub cols: ::core::ffi::c_int,
     pub global_reverse_reflow: [u8; 1],
-    pub c2rust_padding: [u8; 3],
+    pub _pad: [u8; 3],
     pub buffers: [*mut ScreenCell; 2],
     pub buffer: *mut ScreenCell,
     pub sb_buffer: *mut VTermScreenCell,
@@ -294,7 +301,7 @@ pub struct VTermScreenCell {
 pub struct VTermScreenCellAttrs {
     pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
         [u8; 3],
-    pub c2rust_padding: [u8; 1],
+    pub _pad: [u8; 1],
 }
 crate::bitfield_accessors! {
     impl VTermScreenCellAttrs.bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline {
@@ -371,7 +378,7 @@ pub struct VTermState {
     pub colors: [VTermColor; 16],
     pub bold_is_highbright: ::core::ffi::c_int,
     pub protected_cell: [u8; 1],
-    pub c2rust_padding: [u8; 3],
+    pub _pad: [u8; 3],
     pub saved: VTermState_saved,
     pub tmp: VTermState_tmp,
     pub selection: VTermState_selection,
@@ -506,7 +513,7 @@ pub struct VTermStateFields {
 pub struct VTermState_mode {
     pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
         [u8; 3],
-    pub c2rust_padding: [u8; 1],
+    pub _pad: [u8; 1],
 }
 crate::bitfield_accessors! {
     impl VTermState_mode.keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output {
@@ -541,7 +548,7 @@ pub struct VTermState_saved {
 #[repr(C, align(4))]
 pub struct VTermState_saved_mode {
     pub cursor_visible_cursor_blink_cursor_shape: [u8; 1],
-    pub c2rust_padding: [u8; 3],
+    pub _pad: [u8; 3],
 }
 crate::bitfield_accessors! {
     impl VTermState_saved_mode.cursor_visible_cursor_blink_cursor_shape {
@@ -569,7 +576,7 @@ pub union VTermState_tmp {
 pub struct VTermState_tmp_selection {
     pub mask: uint16_t,
     pub state: [u8; 1],
-    pub c2rust_padding: [u8; 1],
+    pub _pad: [u8; 1],
     pub recvpartial: uint32_t,
     pub sendpartial: uint32_t,
 }
@@ -615,7 +622,7 @@ pub type VTermValueType = ::core::ffi::c_uint;
 #[repr(C, align(4))]
 pub struct VTerm_mode {
     pub utf8_ctrl8bit: [u8; 1],
-    pub c2rust_padding: [u8; 3],
+    pub _pad: [u8; 3],
 }
 crate::bitfield_accessors! {
     impl VTerm_mode.utf8_ctrl8bit {
@@ -628,7 +635,7 @@ crate::bitfield_accessors! {
 pub struct VTerm_parser {
     pub state: VTermParserState,
     pub in_esc: [u8; 1],
-    pub c2rust_padding: [u8; 3],
+    pub _pad: [u8; 3],
     pub intermedlen: ::core::ffi::c_int,
     pub intermed: [::core::ffi::c_char; 16],
     pub v: VTerm_parser_v,

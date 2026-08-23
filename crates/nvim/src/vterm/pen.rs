@@ -681,7 +681,7 @@ mod tests {
             uri: 0,
             bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline: [0;
                 3],
-            c2rust_padding: [0; 1],
+            _pad: [0; 1],
         }
     }
 

@@ -406,13 +406,14 @@ fn named_fields(fields: &syn::FieldsNamed, bits: Option<&BitfieldAccessors>) -> 
         .map(|f| {
             let name = f.ident.as_ref().unwrap().to_string();
             // In a bitfield struct the storage array expands to C bitfield
-            // members, and the `c2rust_padding` arrays that follow them
-            // disappear: C's own storage-unit rounding provides those bytes.
-            // `c2rust_padding` is the only name the transpiler ever gave
-            // them, so matching on it is exact.
+            // members, and the `_pad` arrays that follow them disappear: C's
+            // own storage-unit rounding provides those bytes. `_pad` is the
+            // crate's name for exactly that field -- see the note at the top
+            // of `crates/nvim/src/types/vterm.rs` -- so matching on it is
+            // exact.
             let (bits, padding) = match bits {
                 Some(acc) if name == acc.storage => (acc.specs.clone(), false),
-                Some(_) if name == "c2rust_padding" => (Vec::new(), true),
+                Some(_) if name == "_pad" => (Vec::new(), true),
                 _ => (Vec::new(), false),
             };
             Field {

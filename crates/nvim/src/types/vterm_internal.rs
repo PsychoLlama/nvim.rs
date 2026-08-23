@@ -12,6 +12,13 @@
 //
 // These are libvterm's types, Copyright (c) 2008 Paul Evans, under the MIT
 // license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
+//
+// A `_pad` field is the tail of a bitfield storage unit: C rounds a bitfield
+// run up to its storage unit, so the bytes exist on both sides and the
+// struct's layout -- pinned by `tools/ffigen/unit-cdefs.h`, which the unit
+// suite's LuaJIT `ffi.cdef` and C fixtures both compile against -- depends on
+// them. `ffigen` drops the field when it re-expands the run into real C
+// bitfield members, and matches it by that exact name.
 use core::mem::offset_of;
 
 use super::*;
@@ -69,7 +76,7 @@ pub struct VTermPen {
     pub uri: ::core::ffi::c_int,
     pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline:
         [u8; 3],
-    pub c2rust_padding: [u8; 1],
+    pub _pad: [u8; 1],
 }
 crate::bitfield_accessors! {
     impl VTermPen.bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline {

@@ -35,7 +35,7 @@ pub fn erased_pen(fg: VTermColor, bg: VTermColor) -> ScreenPen {
         uri: 0,
         bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
             [0; 3],
-        c2rust_padding: [0; 1],
+        _pad: [0; 1],
     }
 }
 
@@ -141,7 +141,7 @@ mod tests {
             attrs: VTermScreenCellAttrs {
                 bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
                     [0; 3],
-                c2rust_padding: [0; 1],
+                _pad: [0; 1],
             },
             fg: black(),
             bg: black(),
