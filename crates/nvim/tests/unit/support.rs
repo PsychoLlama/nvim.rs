@@ -338,7 +338,9 @@ pub mod alloc {
     use std::mem::{offset_of, size_of};
 
     use c2rust_neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use c2rust_neovim::types::{dict_T, dictitem_T, list_T, listitem_T};
+    use c2rust_neovim::types::{
+        DictWatcher, dict_T, dictitem_T, list_T, listitem_T, partial_T, typval_T,
+    };
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -438,6 +440,33 @@ pub mod alloc {
         AllocEvent::Malloc {
             size: len + 1,
             ret: s as *mut c_void,
+        }
+    }
+
+    /// `tv_dict_watcher_add`'s allocation: `a.dwatcher(w)`.
+    pub fn dwatcher(w: *const DictWatcher) -> AllocEvent {
+        AllocEvent::Malloc {
+            size: size_of::<DictWatcher>(),
+            ret: w as *mut c_void,
+        }
+    }
+
+    /// A `partial_T` built by the harness rather than by the code under
+    /// test: the spec's `a.lua_pt(pt)`.
+    pub fn partial(pt: *const partial_T) -> AllocEvent {
+        AllocEvent::Calloc {
+            count: 1,
+            size: size_of::<partial_T>(),
+            ret: pt as *mut c_void,
+        }
+    }
+
+    /// A partial's argument vector, likewise the harness's: the spec's
+    /// `a.lua_tvs(argv, argc)`.
+    pub fn argv(argv: *const typval_T, argc: usize) -> AllocEvent {
+        AllocEvent::Malloc {
+            size: size_of::<typval_T>() * argc,
+            ret: argv as *mut c_void,
         }
     }
 

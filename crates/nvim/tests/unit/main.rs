@@ -42,6 +42,7 @@ mod strings;
 mod terminfo;
 mod termkey;
 mod typval;
+mod typval_dict;
 mod typval_list;
 mod undo;
 mod unpacker;
