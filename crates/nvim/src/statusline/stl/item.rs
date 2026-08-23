@@ -15,12 +15,13 @@
 
 #![forbid(unsafe_code)]
 
+use crate::memline::MlFlags;
 use core::ffi::c_int;
 use core::ptr;
 
 use super::{
-    Env, Fill, Kind, MAX_STL_EVAL_DEPTH, ML_EMPTY, NumberBase, STL_BYTEVAL_X, STL_CLICK_FUNC,
-    STL_FILENAME, STL_FOLDCOL, STL_FULLPATH, STL_HELPFLAG_ALT, STL_HIGHLIGHT, STL_HIGHLIGHT_COMB,
+    Env, Fill, Kind, MAX_STL_EVAL_DEPTH, NumberBase, STL_BYTEVAL_X, STL_CLICK_FUNC, STL_FILENAME,
+    STL_FOLDCOL, STL_FULLPATH, STL_HELPFLAG_ALT, STL_HIGHLIGHT, STL_HIGHLIGHT_COMB,
     STL_MODIFIED_ALT, STL_OFFSET_X, STL_PREVIEWFLAG_ALT, STL_ROFLAG_ALT, STL_SEPARATE, STL_SIGNCOL,
     STL_TABCLOSENR, STL_TABPAGENR, STL_TRUNCMARK, STL_USER_HL, STL_VIM_EXPR, STL_VIRTCOL_ALT,
     StlItem, StlScratch, TMPLEN, as_number, cells_at, char_len_at, dup_cstring, group,
@@ -478,7 +479,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
                     s.push(Kind::Separate, pos);
                 }
             } else if !env.is_statuscol() {
-                v.num = if env.buf.b_ml.ml_flags & ML_EMPTY != 0 {
+                v.num = if env.buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
                     0
                 } else {
                     env.win.w_cursor.lnum as c_int
@@ -525,7 +526,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
                 v.base = kNumBaseHexadecimal;
             }
             let l = env.line_offset();
-            v.num = if env.buf.b_ml.ml_flags & ML_EMPTY != 0 || l < 0 {
+            v.num = if env.buf.b_ml.ml_flags.has(MlFlags::EMPTY) || l < 0 {
                 0
             } else {
                 l + 1

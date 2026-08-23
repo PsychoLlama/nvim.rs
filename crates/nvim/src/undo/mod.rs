@@ -42,6 +42,7 @@ use crate::main::{
 };
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
+use crate::memline::MlFlags;
 use crate::memline::{ml_append_flags, ml_delete, ml_get, ml_get_buf, ml_replace, resolve_symlink};
 use crate::memory::{time_to_bytes, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
 use crate::message::{
@@ -84,9 +85,6 @@ mod header {
     pub const O_CREAT: c_int = 0o100;
     pub const O_EXCL: c_int = 0o200;
     pub const O_NOFOLLOW: c_int = 0o400000;
-
-    /// `ml_append`/`ml_delete` flags.
-    pub const ML_EMPTY: c_int = 0x1;
 
     /// The `u_header_T::uh_flags` bits.
     pub const UH_CHANGED: c_int = 1;
@@ -486,7 +484,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
     }
     b.b_u_time_cur = uhp.uh_time + 1;
     uhp.uh_flags = if b.b_changed != 0 { UH_CHANGED } else { 0 }
-        | if b.b_ml.ml_flags & ML_EMPTY != 0 {
+        | if b.b_ml.ml_flags.has(MlFlags::EMPTY) {
             UH_EMPTYBUF
         } else {
             0

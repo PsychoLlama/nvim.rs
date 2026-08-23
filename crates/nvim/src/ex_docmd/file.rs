@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Allow;
+use crate::memline::MlFlags;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -21,7 +22,7 @@ use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
     DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT,
-    ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, ML_EMPTY, cmdmod_has, ex_pressedreturn, kDirectionNotSet,
+    ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, cmdmod_has, ex_pressedreturn, kDirectionNotSet,
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -489,7 +490,7 @@ pub(crate) unsafe fn ex_swapname(_eap: *mut exarg_T) {
 /// `:read` — insert a file, or the output of a command.
 pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
     unsafe {
-        let was_empty = (*curbuf.get()).b_ml.ml_flags & ML_EMPTY;
+        let was_empty = (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY);
         if (*eap).usefilter != 0 {
             do_bang(1, eap, false, false, true);
             return;
@@ -537,7 +538,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
         }
         // Reading into an empty buffer in Ex mode leaves the empty line the
         // buffer started with; drop it.
-        if was_empty != 0 && exmode_active.get() {
+        if was_empty && exmode_active.get() {
             let lnum = if (*eap).line2 == 0 {
                 (*curbuf.get()).b_ml.ml_line_count
             } else {

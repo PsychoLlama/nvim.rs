@@ -97,8 +97,6 @@ mod flag {
 }
 use flag::*;
 
-pub const ML_EMPTY: c_int = 0x1;
-
 /// `flag` when `cond`, and no bits otherwise — the `cond ? FLAG : 0` the
 /// flag arguments of `buflist_add`, `check_changed` and `do_ecmd` are
 /// assembled from.

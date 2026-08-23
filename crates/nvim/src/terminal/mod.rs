@@ -56,6 +56,7 @@ use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;
 use crate::main::{State, buffer_handles, exiting};
 use crate::map::mh_get_int;
+use crate::memline::MlFlags;
 use crate::memline::ml_delete_buf;
 use crate::r#move::win_col_off;
 use crate::option::set_option_value;
@@ -100,8 +101,6 @@ pub use refresh::{
     on_scrollback_option_changed, terminal_check_refresh, terminal_init, terminal_teardown,
 };
 
-/// `ml_flags` bit meaning the buffer holds one empty line and nothing else.
-const ML_EMPTY: c_int = 0x1;
 /// The largest `'scrollback'` that means anything; the option's negative
 /// "unlimited" spelling becomes this.
 const SB_MAX: c_int = 1000000;
@@ -334,13 +333,13 @@ pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Ter
     // SAFETY: a queue with no "on put" hook, freed by `terminal_destroy`.
     term.pending.events = unsafe { multiqueue_new(None, ::core::ptr::null_mut()) };
 
-    if buf.b_ml.ml_flags & ML_EMPTY == 0 {
+    if !buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         let line_count = buf.line_count();
         // Not immutable: ml_delete_buf() mutates b_ml behind the pointer.
         #[allow(clippy::while_immutable_condition)]
-        while buf.b_ml.ml_flags & ML_EMPTY == 0 {
+        while !buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
             // SAFETY: a live buffer, deleting its own lines down to the one
-            // empty line `ML_EMPTY` stands for.
+            // empty line `MlFlags::EMPTY` stands for.
             unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
         }
         // SAFETY: as above, reporting what the deletion took away.

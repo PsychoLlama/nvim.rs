@@ -101,7 +101,7 @@ pub(crate) unsafe fn ml_append_int(
         if hp.is_null() {
             return FAIL;
         }
-        (*buf).b_ml.ml_flags &= !ML_EMPTY;
+        (*buf).b_ml.ml_flags.clear(MlFlags::EMPTY);
 
         // Index of `lnum` within the block. Negative when the block found was
         // line one's rather than `lnum`'s, which is the `lnum == 0` case.
@@ -221,9 +221,9 @@ unsafe fn ml_insert_in_block(
             *slot |= DB_MARKED;
         }
 
-        (*buf).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+        (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
         if flags & ML_APPEND_NEW == 0 {
-            (*buf).b_ml.ml_flags |= ML_LOCKED_POS;
+            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_POS;
         }
     }
 }
@@ -386,10 +386,10 @@ unsafe fn ml_split_data_block(
         // if it changed and this is not a file being read in for the first
         // time.
         if lines_moved != 0 || in_left {
-            (*buf).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
         }
         if flags & ML_APPEND_NEW == 0 && db_idx >= 0 && in_left {
-            (*buf).b_ml.ml_flags |= ML_LOCKED_POS;
+            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_POS;
         }
         mf_put(mfp, hp_new, true, false);
 
@@ -652,7 +652,7 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
                 set_keep_msg(gettext(no_lines_msg.ptr().cast::<c_char>()), 0);
             }
             let i = ml_replace_buf(buf, 1, c"".as_ptr().cast_mut(), true, false);
-            (*buf).b_ml.ml_flags |= ML_EMPTY;
+            (*buf).b_ml.ml_flags |= MlFlags::EMPTY;
             return i;
         }
 
@@ -724,7 +724,7 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
 
             // Mark the block dirty, and make sure it reaches the file so a
             // recovery sees the delete.
-            (*buf).b_ml.ml_flags |= ML_LOCKED_DIRTY | ML_LOCKED_POS;
+            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY | MlFlags::LOCKED_POS;
         }
 
         ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);

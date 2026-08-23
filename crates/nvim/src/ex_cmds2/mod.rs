@@ -66,6 +66,7 @@ use crate::main::{
     cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, firstbuf, msg_col, msg_didany,
     msg_didout, msg_row, no_check_timestamps, p_aw, p_awa, p_confirm, p_write, vgetc_busy,
 };
+use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
@@ -88,7 +89,7 @@ use core::ptr;
 
 use flag::{
     CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
-    DOBUF_UNLOAD, ML_EMPTY, VIM_QUESTION,
+    DOBUF_UNLOAD, VIM_QUESTION,
 };
 
 pub use listdo::ex_listdo;
@@ -115,9 +116,6 @@ mod flag {
 
     /// The buffer `dialog_msg` formats into.
     pub const DIALOG_MSG_SIZE: usize = 1000;
-
-    /// `memline` flags: the buffer holds a single empty line.
-    pub const ML_EMPTY: c_int = 0x1;
 }
 
 // -- List walks -------------------------------------------------------------
@@ -853,7 +851,7 @@ pub unsafe fn ex_drop(eap: *mut exarg_T) {
                 buf_check_timestamp(curbuf.get());
                 (*curbuf.get()).b_p_ar = save_ar;
             }
-            if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+            if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                 ex_rewind(eap);
             }
             // Execute [+cmd]. No need to execute [++opts]: those only apply

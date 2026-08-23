@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -81,7 +82,7 @@ unsafe fn replace_character(c: c_int) {
 /// buffer.
 pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
     unsafe {
-        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 || (*oap).empty {
+        if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) || (*oap).empty {
             return OK;
         }
 

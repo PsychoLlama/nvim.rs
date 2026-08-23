@@ -1,6 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_docmd::cmdmod_has;
+use crate::memline::MlFlags;
 use crate::semsg_c;
 use core::ffi::CStr;
 use std::borrow::Cow;
@@ -238,7 +239,6 @@ pub const O_NOFOLLOW: ::core::ffi::c_int = __O_NOFOLLOW;
 pub const UV_FS_COPYFILE_FICLONE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
@@ -505,7 +505,7 @@ pub unsafe fn buf_write(
                 }
 
                 end = end.min((*buf).b_ml.ml_line_count);
-                if (*buf).b_ml.ml_flags & ML_EMPTY != 0 {
+                if (*buf).b_ml.ml_flags.has(MlFlags::EMPTY) {
                     start = end + 1;
                 }
 

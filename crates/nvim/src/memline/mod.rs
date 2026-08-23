@@ -217,11 +217,32 @@ pub const KV_INITIAL_VALUE: StringBuilder = StringBuilder {
 pub const ML_CHNK_ADDLINE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ML_CHNK_UPDLINE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const ML_LINE_DIRTY: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const ML_LOCKED_DIRTY: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const ML_LOCKED_POS: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const ML_ALLOCATED: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
+crate::flag_set! {
+    /// What a buffer's memline is holding right now -- upstream's `ML_*`,
+    /// the bits [`memline_T::ml_flags`] carries.
+    ///
+    /// c2rust emitted these as a bare `int` and re-emitted the `#define`s
+    /// once per translation unit: seventeen copies of `ML_EMPTY` alone, in
+    /// seventeen modules. There is one definition now.
+    pub struct MlFlags;
+
+    /// The buffer holds a single empty line and nothing has been written
+    /// into it -- what a brand new buffer is, and what `:enew` returns one
+    /// to. Cleared by the first line that is appended or replaced.
+    const EMPTY = 0x1;
+    /// `ml_line_ptr` has been edited since it was read, so the block it
+    /// came from has to be updated before the line is dropped.
+    const LINE_DIRTY = 0x2;
+    /// The locked data block has been changed and must be written back.
+    const LOCKED_DIRTY = 0x4;
+    /// The locked data block's line *positions* changed too, so the index
+    /// above it has to be corrected as well.
+    const LOCKED_POS = 0x8;
+    /// `ml_line_ptr` is an allocation of the memline's own rather than a
+    /// pointer into a locked block, so it has to be freed and not just
+    /// forgotten.
+    const ALLOCATED = 0x10;
+}
 pub const BH_DIRTY: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -277,7 +298,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
         let mut hp: *mut bhdr_T = ::core::ptr::null_mut();
         if !mfp.is_null() {
             (*buf).b_ml.ml_mfp = mfp;
-            (*buf).b_ml.ml_flags = ML_EMPTY;
+            (*buf).b_ml.ml_flags = MlFlags::EMPTY;
             (*buf).b_ml.ml_line_count = 1;
             if ml_open_blocks(buf, mfp, &mut hp) {
                 return OK;
@@ -511,9 +532,7 @@ pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
             return; // not open
         }
         mf_close((*buf).b_ml.ml_mfp, del_file != 0); // closes the .swp file
-        if (*buf).b_ml.ml_line_lnum != 0
-            && (*buf).b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED) != 0
-        {
+        if (*buf).b_ml.ml_line_lnum != 0 && (*buf).b_ml.line_is_owned() {
             xfree((*buf).b_ml.ml_line_ptr.cast());
         }
         xfree((*buf).b_ml.ml_stack.cast());

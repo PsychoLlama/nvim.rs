@@ -250,7 +250,6 @@ pub const QF_GETLIST_TITLE: c_uint = 1;
 pub const QF_GETLIST_ALL: c_uint = 4095;
 pub const CMDBUFFSIZE: c_int = 1024;
 pub const TAB: c_int = '\t' as c_int;
-pub const ML_EMPTY: c_int = 0x1;
 pub const INVALID_QFIDX: c_int = -1;
 pub const INVALID_QFBUFNR: c_int = 0;
 /// Messages more than one child reports.

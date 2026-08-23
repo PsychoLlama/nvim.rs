@@ -14,6 +14,7 @@
 use super::super::store::{Header, Marks, header_chain};
 use super::super::*;
 use super::{u_undo_end, u_undoredo};
+use crate::memline::MlFlags;
 use crate::semsg_c;
 use crate::winlayer::Buf;
 
@@ -164,7 +165,7 @@ pub unsafe fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
         buf = unsafe { Buf::current() };
     }
     u_newcount.set(0);
-    u_oldcount.set(if buf.b_ml.ml_flags & ML_EMPTY != 0 {
+    u_oldcount.set(if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         -1
     } else {
         0

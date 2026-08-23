@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -119,7 +120,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
         let mut counts = PosCounts::default();
         let mut bom_count: varnumber_T = 0;
 
-        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+        if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
             if dict.is_null() {
                 msg(gettext(no_lines_msg.ptr() as *mut c_char), 0);
                 return;

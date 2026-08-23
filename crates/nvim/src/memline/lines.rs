@@ -96,8 +96,8 @@ pub unsafe fn gchar_pos(pos: *mut pos_T) -> ::core::ffi::c_int {
 ///
 /// # Safety
 /// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_line_alloced() -> ::core::ffi::c_int {
-    unsafe { (*curbuf.get()).b_ml.ml_flags & ML_LINE_DIRTY }
+pub unsafe fn ml_line_alloced() -> bool {
+    unsafe { (*curbuf.get()).b_ml.ml_flags.has(MlFlags::LINE_DIRTY) }
 }
 
 /// Flush any pending change, then insert.
@@ -325,14 +325,14 @@ pub unsafe fn ml_replace_buf_len(
         if (*buf).update_callbacks.size != 0 {
             ml_add_deleted_len_buf(buf, ml_get_buf(buf, lnum), -1);
         }
-        if (*buf).b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED) != 0 {
+        if (*buf).b_ml.line_is_owned() {
             xfree((*buf).b_ml.ml_line_ptr.cast()); // free the allocated line
         }
 
         (*buf).b_ml.ml_line_ptr = line;
         (*buf).b_ml.ml_line_textlen = len_arg as colnr_T + 1;
         (*buf).b_ml.ml_line_lnum = lnum;
-        (*buf).b_ml.ml_flags = ((*buf).b_ml.ml_flags | ML_LINE_DIRTY) & !ML_EMPTY;
+        (*buf).b_ml.line_was_replaced();
         if noalloc {
             // Upstream note: a bit of a hack, but replacing lines in a loop
             // is common and a scratch allocation per line is a lot of noise.
@@ -398,7 +398,7 @@ pub unsafe fn ml_setmarked(lnum: linenr_T) {
         }
         let dp = (*hp).bh_data as *mut DataBlock;
         *db_index(dp).offset((lnum - (*curbuf.get()).b_ml.ml_locked_low) as isize) |= DB_MARKED;
-        (*curbuf.get()).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+        (*curbuf.get()).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
     }
 }
 
@@ -426,7 +426,7 @@ pub unsafe fn ml_firstmarked() -> linenr_T {
                 let slot = db_index(dp).offset(i as isize);
                 if *slot & DB_MARKED != 0 {
                     *slot &= DB_INDEX_MASK;
-                    (*curbuf.get()).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+                    (*curbuf.get()).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
                     lowest_marked.set(lnum + 1);
                     return lnum;
                 }
@@ -459,7 +459,7 @@ pub unsafe fn ml_clearmarked() {
                 let slot = db_index(dp).offset(i as isize);
                 if *slot & DB_MARKED != 0 {
                     *slot &= DB_INDEX_MASK;
-                    (*curbuf.get()).b_ml.ml_flags |= ML_LOCKED_DIRTY;
+                    (*curbuf.get()).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY;
                 }
                 i += 1;
                 lnum += 1;

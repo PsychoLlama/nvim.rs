@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::memline::MlFlags;
 
 // ---------------------------------------------------------------------------
 // The Ex commands.
@@ -353,7 +354,7 @@ pub unsafe fn ex_argedit(eap: *mut exarg_T) {
     unsafe { maketitle() };
     // SAFETY: curbuf is valid.
     let empty_curbuf = unsafe {
-        (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0
+        (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY)
             && ((*curbuf.get()).b_ffname.is_null() || curbuf_is_reusable)
     };
     if cur_arg_idx() == 0 && empty_curbuf {

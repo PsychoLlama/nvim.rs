@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -441,7 +442,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let mut win = current_win();
     let lines = buf.b_ml.ml_line_count;
     let cursor = win.w_cursor.lnum;
-    if buf.b_ml.ml_flags & ML_EMPTY != 0 {
+    if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         out.put_str(c"%s", tr_raw((&raw const no_lines_msg).cast::<c_char>()));
     } else if p_ru.get() != 0 {
         // The current line and column are already on the screen -- webb

@@ -24,6 +24,7 @@ mod time;
 
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
+use crate::memline::MlFlags;
 use crate::option::cpo_has;
 use crate::smsg_keep_c;
 use crate::winlayer::{Buf, windows};
@@ -143,7 +144,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
     }
     u_newcount.set(0);
     // SAFETY: as above.
-    let empty = unsafe { Buf::current() }.b_ml.ml_flags & ML_EMPTY != 0;
+    let empty = unsafe { Buf::current() }.b_ml.ml_flags.has(MlFlags::EMPTY);
     u_oldcount.set(if empty { -1 } else { 0 });
     // SAFETY: a NUL-terminated literal.
     unsafe { msg_ext_set_kind(c"undo".as_ptr()) };
@@ -250,7 +251,7 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
 
     // SAFETY: a live current buffer.
     let buf = unsafe { Buf::current() };
-    if buf.b_ml.ml_flags & ML_EMPTY != 0 {
+    if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         u_newcount.set(u_newcount.get() - 1);
     }
     u_oldcount.set(u_oldcount.get() - u_newcount.get());

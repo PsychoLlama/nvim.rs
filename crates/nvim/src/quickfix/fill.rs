@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::guard::Lock;
+use crate::memline::MlFlags;
 use crate::types::{
     FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
 };
@@ -333,7 +334,7 @@ unsafe fn clear_qf_buffer() -> bool {
         // No undo information is stored — the quickfix buffer is usually
         // not modifiable — so the undo stack is cleaned up instead, or an
         // autocommand could invalidate it.
-        while (*curbuf.get()).b_ml.ml_flags & ML_EMPTY == 0 {
+        while !(*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
             if ml_delete(1) == FAIL {
                 internal_error(c"qf_fill_buffer()".as_ptr());
                 return false;

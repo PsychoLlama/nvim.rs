@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -361,7 +362,7 @@ pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bo
 
         // An already-allocated line can be edited in place; one that is still
         // memory-mapped has to be copied.
-        let alloc_newp = ml_line_alloced() == 0;
+        let alloc_newp = !ml_line_alloced();
         let newp = if alloc_newp {
             let newp = xmallocz(newlen as size_t) as *mut c_char;
             memmove(newp as *mut c_void, oldp as *const c_void, col as size_t);
@@ -432,7 +433,7 @@ pub unsafe fn del_lines(nlines: linenr_T, undo: bool) {
 
         let mut n = 0;
         while n < nlines {
-            if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+            if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                 break; // nothing to delete
             }
             ml_delete_flags(first, ML_DEL_MESSAGE);

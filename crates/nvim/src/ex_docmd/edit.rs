@@ -2,6 +2,7 @@
 //! `:normal`, which re-enters the normal-mode state machine.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -20,8 +21,8 @@ use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::modifier::expr_map_locked;
 use crate::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::ex_docmd::{
-    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, ML_EMPTY, OPTION_MAGIC_OFF, OPTION_MAGIC_ON,
-    REMAP_NONE, REMAP_YES, kMTLineWise,
+    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE,
+    REMAP_YES, kMTLineWise,
 };
 use crate::ex_getln::getexline;
 use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
@@ -72,7 +73,7 @@ use ::libc::strlen;
 /// `:print`, `:number` and `:list`.
 pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
     unsafe {
-        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+        if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
             emsg(gettext(&raw const e_empty_buffer as *const c_char));
         } else {
             let idx = (*eap).cmdidx as c_int;

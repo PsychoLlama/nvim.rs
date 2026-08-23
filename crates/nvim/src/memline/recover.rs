@@ -73,7 +73,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             (*buf).b_ml.ml_line_lnum = 0; // no cached line
             (*buf).b_ml.ml_line_offset = 0;
             (*buf).b_ml.ml_locked = core::ptr::null_mut(); // no locked block
-            (*buf).b_ml.ml_flags = 0;
+            (*buf).b_ml.ml_flags = MlFlags::NONE;
 
             // Open the memfile on the old swap file. `mf_open` consumes the
             // name, so keep a copy of it for the messages.
@@ -289,7 +289,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             hp = core::ptr::null_mut();
 
             // Recovery is going ahead, so the buffer's current contents go.
-            while (*curbuf.get()).b_ml.ml_flags & ML_EMPTY == 0 {
+            while !(*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                 ml_delete(1);
             }
 
@@ -363,7 +363,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // Drop the original file's lines and the empty buffer's dummy
             // line; they are now past the end of what was recovered.
             while (*curbuf.get()).b_ml.ml_line_count > lnum
-                && (*curbuf.get()).b_ml.ml_flags & ML_EMPTY == 0
+                && !(*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY)
             {
                 ml_delete((*curbuf.get()).b_ml.ml_line_count);
             }

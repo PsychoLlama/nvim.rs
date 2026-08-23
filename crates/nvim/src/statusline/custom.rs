@@ -20,6 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -713,7 +714,7 @@ pub unsafe fn redraw_ruler() {
 /// The line number is 0 for an empty buffer, and the column is 0 outside
 /// Insert mode on an empty line -- which is what makes that read "0-1".
 fn ruler_position(win: Win, virtcol: colnr_T, buffer: &mut [c_char]) -> c_int {
-    let empty_buffer = win.buffer().b_ml.ml_flags & ML_EMPTY != 0;
+    let empty_buffer = win.buffer().b_ml.ml_flags.has(MlFlags::EMPTY);
     // SAFETY: a live window's cursor line, which is NUL-terminated.
     let first = unsafe { *ml_get_buf(win.buffer().raw(), win.w_cursor.lnum) };
     let empty_line = State.get() & MODE_INSERT == 0 && c_int::from(first) == NUL;

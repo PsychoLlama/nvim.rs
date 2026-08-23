@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -121,7 +122,7 @@ pub unsafe fn readfile(
         let mut notconverted = false;
         let mut conv = Conv::new(BAD_REPLACE);
         let mut linecnt: linenr_T = 0;
-        let mut wasempty = 0;
+        let mut wasempty = false;
 
         // Reset before triggering any autocommands.
         (*curbuf.get()).b_au_did_filetype = false;
@@ -158,7 +159,7 @@ pub unsafe fn readfile(
 
             // Autocommands may have added lines, so check whether the buffer
             // is empty now.
-            wasempty = (*curbuf.get()).b_ml.ml_flags & ML_EMPTY;
+            wasempty = (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY);
 
             if !recoverymode.get()
                 && !how.filtering
@@ -801,7 +802,7 @@ pub unsafe fn readfile(
             // In recovery mode everything but autocommands is skipped.
             if !recoverymode.get() {
                 // The last line, which came from the empty buffer, has to go.
-                if how.newfile && wasempty != 0 && (*curbuf.get()).b_ml.ml_flags & ML_EMPTY == 0 {
+                if how.newfile && wasempty && !(*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                     ml_delete((*curbuf.get()).b_ml.ml_line_count);
                     linecnt -= 1;
                 }

@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -655,7 +656,7 @@ pub unsafe fn buf_clear_file(buf: *mut buf_T) {
     buf.b_p_bomb = 0;
     buf.b_start_bomb = 0;
     buf.b_ml.ml_mfp = ptr::null_mut::<memfile_T>();
-    buf.b_ml.ml_flags = ML_EMPTY; // empty buffer
+    buf.b_ml.ml_flags = MlFlags::EMPTY; // empty buffer
 }
 
 /// Clear the current buffer's contents.
@@ -663,7 +664,7 @@ pub fn buf_clear() {
     let buf = cur_buf();
     let line_count = buf.line_count();
     free_extmarks(buf); // delete any extmarks
-    while cur_buf().b_ml.ml_flags & ML_EMPTY == 0 {
+    while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
         delete_line(1 as linenr_T);
     }
     mark_lines_deleted(line_count); // prepare for display

@@ -308,13 +308,12 @@ unsafe fn tab_spaces_to_tabs() {
                         ptr.offset(i as isize) as *const ::core::ffi::c_void,
                         (newp_len as ptrdiff_t - col) as size_t,
                     );
-                    if (*curbuf.get()).b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED) != 0 {
+                    if (*curbuf.get()).b_ml.line_is_owned() {
                         xfree((*curbuf.get()).b_ml.ml_line_ptr as *mut ::core::ffi::c_void);
                     }
                     (*curbuf.get()).b_ml.ml_line_ptr = newp;
                     (*curbuf.get()).b_ml.ml_line_textlen = newp_len;
-                    (*curbuf.get()).b_ml.ml_flags =
-                        ((*curbuf.get()).b_ml.ml_flags | ML_LINE_DIRTY) & !ML_EMPTY;
+                    (*curbuf.get()).b_ml.line_was_replaced();
                     inserted_bytes(
                         fpos.lnum,
                         change_col,

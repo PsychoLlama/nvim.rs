@@ -23,6 +23,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_int, c_void};
 
 use super::*;
@@ -526,7 +527,7 @@ pub unsafe fn deleted_lines(lnum: linenr_T, count: linenr_T) {
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn deleted_lines_mark(lnum: linenr_T, count: c_int) {
     unsafe {
-        let made_empty = count > 0 && (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0;
+        let made_empty = count > 0 && (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY);
 
         mark_adjust(
             lnum,

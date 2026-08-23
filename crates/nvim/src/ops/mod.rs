@@ -193,9 +193,6 @@ pub(crate) fn op_virtual() -> bool {
     virtual_op.get() != Some(false)
 }
 
-/// `b_ml.ml_flags`: the buffer is one empty line.
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1;
-
 /// `get_fileformat`: lines end with CR LF, so a line break is two bytes.
 pub const EOL_DOS: ::core::ffi::c_int = 1;
 

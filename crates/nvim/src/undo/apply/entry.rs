@@ -11,6 +11,7 @@
 use super::super::store::Header;
 use super::super::*;
 use crate::edit::BeginlineOpts;
+use crate::memline::MlFlags;
 use crate::pos::MAXLNUM;
 use crate::winlayer::{Buf, Win};
 
@@ -101,7 +102,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     let old_flags = curhead.uh_flags;
     let new_flags = (if buf.b_changed != 0 { UH_CHANGED } else { 0 })
-        | (if buf.b_ml.ml_flags & ML_EMPTY != 0 {
+        | (if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
             UH_EMPTYBUF
         } else {
             0
@@ -182,7 +183,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     curhead.uh_flags = new_flags;
     // SAFETY: a live buffer.
     if old_flags & UH_EMPTYBUF != 0 && unsafe { buf_is_empty(buf.raw()) } {
-        buf.b_ml.ml_flags |= ML_EMPTY;
+        buf.b_ml.ml_flags |= MlFlags::EMPTY;
     }
     // SAFETY: a live buffer.
     unsafe {

@@ -20,6 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -61,7 +62,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
     unsafe {
         let old_lcount = (*curbuf.get()).b_ml.ml_line_count;
 
-        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+        if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
             return Ok(());
         }
         // Nothing to delete -- but still prepare undo, for `op_change`.

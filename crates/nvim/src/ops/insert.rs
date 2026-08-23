@@ -26,6 +26,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
@@ -335,7 +336,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
 
         // Delete the region first. In an empty buffer there is nothing to
         // delete, only undo to prepare.
-        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+        if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
             if u_save_cursor() == FAIL {
                 return 0;
             }

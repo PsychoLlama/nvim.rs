@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
@@ -35,10 +36,9 @@ use crate::memory::xfree;
 use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::{
-    CA_COMMAND_BUSY, CAR, DEL, ESC, ML_DEL_MESSAGE, ML_EMPTY, NL, OPENLINE_DO_COM,
-    REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, checkclearop, checkclearopq,
-    clearop, clearopbeep, nv_object, nv_operator, prep_redo, prep_redo_cmd, v_swap_corners,
-    v_visop,
+    CA_COMMAND_BUSY, CAR, DEL, ESC, ML_DEL_MESSAGE, NL, OPENLINE_DO_COM, REPLACE_CR_NCHAR,
+    REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, checkclearop, checkclearopq, clearop, clearopbeep,
+    nv_object, nv_operator, prep_redo, prep_redo_cmd, v_swap_corners, v_visop,
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
@@ -756,7 +756,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
                 do_pending_operator(cap, 0, false);
                 // The delete may have left the buffer with one empty line
                 // that the put should not keep.
-                emptied = (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0;
+                emptied = (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY);
                 drop(silenced);
                 (*(*cap).oap).regname = regname;
             }

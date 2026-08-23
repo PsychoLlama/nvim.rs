@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -592,7 +593,7 @@ pub unsafe fn read_buffer_into(
     debug_assert!(!sb.is_null(), "sb");
     // SAFETY: the caller's promise -- a live buffer and a live builder.
     let (buf, mut out) = unsafe { (Buf::new(buf), Builder::of(&mut *sb)) };
-    if buf.b_ml.ml_flags & ML_EMPTY != 0 {
+    if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         return;
     }
 

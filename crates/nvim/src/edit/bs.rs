@@ -22,6 +22,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memline::MlFlags;
 use core::ffi::c_int;
 
 use super::*;
@@ -305,12 +306,12 @@ unsafe fn bs_join_line() -> bool {
                 if len > 0 && *ptr.offset((len - 1) as isize) as c_int == ' ' as c_int {
                     let newp = xmemdupz(ptr as *const ::core::ffi::c_void, (len - 1) as size_t)
                         as *mut ::core::ffi::c_char;
-                    if (*curbuf.get()).b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED) != 0 {
+                    if (*curbuf.get()).b_ml.line_is_owned() {
                         xfree((*curbuf.get()).b_ml.ml_line_ptr as *mut ::core::ffi::c_void);
                     }
                     (*curbuf.get()).b_ml.ml_line_ptr = newp;
                     (*curbuf.get()).b_ml.ml_line_textlen -= 1;
-                    (*curbuf.get()).b_ml.ml_flags |= ML_LINE_DIRTY;
+                    (*curbuf.get()).b_ml.ml_flags |= MlFlags::LINE_DIRTY;
                 }
             }
 

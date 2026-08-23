@@ -4,6 +4,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Suppress;
+use crate::memline::MlFlags;
 use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -15,7 +16,7 @@ use crate::eval::vars::{set_vim_var_string, v_exception, v_throwpoint};
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::ex_docmd::{
-    DoCmdOpts, ETYPE_EXCEPT, ML_EMPTY, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_error_buf,
+    DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_error_buf,
     ex_pressedreturn, loop_cookie, wcmd_T,
 };
 use crate::ex_eval::discard_current_exception;
@@ -138,7 +139,7 @@ pub unsafe fn do_exmode() {
             let moved = prev_line != (*curwin.get()).w_cursor.lnum
                 || changedtick != buf_get_changedtick(curbuf.get());
             if moved && !ex_no_reprint.get() {
-                if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+                if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                     emsg(gettext(&raw const e_empty_buffer as *const c_char));
                 } else {
                     // A bare Return already scrolled; print over that line
@@ -156,7 +157,7 @@ pub unsafe fn do_exmode() {
                 }
             } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
                 // Return on the last line: there is nothing to print.
-                if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+                if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                     emsg(gettext(&raw const e_empty_buffer as *const c_char));
                 } else {
                     emsg(gettext(c"E501: At end-of-file".as_ptr()));

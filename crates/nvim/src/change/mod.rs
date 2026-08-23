@@ -138,7 +138,6 @@ pub const SIN_INSERT: ::core::ffi::c_int = 2;
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const COM_NEST: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const COM_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;

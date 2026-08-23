@@ -165,11 +165,11 @@ pub(crate) unsafe fn ml_get_buf_impl(
             (*buf).b_ml.ml_line_ptr = (dp as *mut c_char).offset(start as isize);
             (*buf).b_ml.ml_line_textlen = end.wrapping_sub(start) as colnr_T;
             (*buf).b_ml.ml_line_lnum = lnum;
-            (*buf).b_ml.ml_flags &= !(ML_LINE_DIRTY | ML_ALLOCATED);
+            (*buf).b_ml.forget_line();
         }
 
         if will_change {
-            (*buf).b_ml.ml_flags |= ML_LOCKED_DIRTY | ML_LOCKED_POS;
+            (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY | MlFlags::LOCKED_POS;
             ml_add_deleted_len_buf(buf, (*buf).b_ml.ml_line_ptr, -1);
         }
         (*buf).b_ml.ml_line_ptr
@@ -180,7 +180,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
 /// block, and forget it.
 ///
 /// `noalloc` says the caller owns the line's memory and this must not free
-/// it; it is only ever set together with `ML_LINE_DIRTY`.
+/// it; it is only ever set together with [`MlFlags::LINE_DIRTY`].
 ///
 /// # Safety
 /// `buf` must point at a buffer.
@@ -194,7 +194,7 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
             return; // nothing to do
         }
 
-        if (*buf).b_ml.ml_flags & ML_LINE_DIRTY != 0 {
+        if (*buf).b_ml.ml_flags.has(MlFlags::LINE_DIRTY) {
             if entered.get() {
                 return;
             }
@@ -218,14 +218,14 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
                 xfree(new_line.cast());
             }
             entered.set(false);
-        } else if (*buf).b_ml.ml_flags & ML_ALLOCATED != 0 {
-            // The caller must set ML_LINE_DIRTY along with noalloc, which
+        } else if (*buf).b_ml.ml_flags.has(MlFlags::ALLOCATED) {
+            // The caller must set `MlFlags::LINE_DIRTY` along with noalloc, which
             // the branch above handles.
             debug_assert!(!noalloc);
             xfree((*buf).b_ml.ml_line_ptr.cast());
         }
 
-        (*buf).b_ml.ml_flags &= !(ML_LINE_DIRTY | ML_ALLOCATED);
+        (*buf).b_ml.forget_line();
         (*buf).b_ml.ml_line_lnum = 0;
         (*buf).b_ml.ml_line_offset = 0;
     }
@@ -298,7 +298,7 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
             old_line.offset(-(extra as isize)),
             new_len as usize,
         );
-        (*buf).b_ml.ml_flags |= ML_LOCKED_DIRTY | ML_LOCKED_POS;
+        (*buf).b_ml.ml_flags |= MlFlags::LOCKED_DIRTY | MlFlags::LOCKED_POS;
         // The `extra == 0` case is already covered by the insert and delete.
         if extra != 0 {
             ml_updatechunk(buf, lnum, extra, ML_CHNK_UPDLINE);
@@ -386,8 +386,8 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
             mf_put(
                 mfp,
                 (*buf).b_ml.ml_locked,
-                (*buf).b_ml.ml_flags & ML_LOCKED_DIRTY != 0,
-                (*buf).b_ml.ml_flags & ML_LOCKED_POS != 0,
+                (*buf).b_ml.ml_flags.has(MlFlags::LOCKED_DIRTY),
+                (*buf).b_ml.ml_flags.has(MlFlags::LOCKED_POS),
             );
             (*buf).b_ml.ml_locked = core::ptr::null_mut();
 
@@ -449,7 +449,7 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
                 (*buf).b_ml.ml_locked_low = low;
                 (*buf).b_ml.ml_locked_high = high;
                 (*buf).b_ml.ml_locked_lineadd = 0;
-                (*buf).b_ml.ml_flags &= !(ML_LOCKED_DIRTY | ML_LOCKED_POS);
+                (*buf).b_ml.block_is_clean();
                 return hp;
             }
 

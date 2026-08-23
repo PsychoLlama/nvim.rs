@@ -11,9 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::lines::set_op_range;
-use super::{
-    B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, FAIL, ML_EMPTY, NL, print_line,
-};
+use super::{B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, FAIL, NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
@@ -23,6 +21,7 @@ use crate::main::{
     Columns, Rows, State, curbuf, curwin, ex_no_reprint, firstwin, lastwin, lines_left, msg_scroll,
     need_wait_return, p_window,
 };
+use crate::memline::MlFlags;
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::{emsg, msg_putchar};
@@ -51,7 +50,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     let mut lnum = line2;
     let mut indent = 0;
     // SAFETY: `curbuf` is the live current buffer.
-    let mut empty = unsafe { (*curbuf.get()).b_ml.ml_flags } & ML_EMPTY != 0;
+    let mut empty = unsafe { (*curbuf.get()).b_ml.ml_flags }.has(MlFlags::EMPTY);
 
     // The ! flag toggles autoindent.
     if forceit != 0 {
@@ -284,7 +283,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
     while lnum >= line1 {
         // SAFETY: `curbuf` is live and `line1` is a line of it.
         unsafe {
-            if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+            if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
                 // Nothing left to delete.
                 break;
             }

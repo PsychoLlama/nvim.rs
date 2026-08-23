@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::memline::MlFlags;
 use crate::types::{FAIL, NUL, OK};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -59,7 +60,7 @@ pub(crate) unsafe fn diff_write_buffer(
         if end < 0 {
             end = (*buf).b_ml.ml_line_count;
         }
-        if (*buf).b_ml.ml_flags & ML_EMPTY != 0 || end < start {
+        if (*buf).b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
             *m = MMFILE_INIT;
             return OK;
         }
@@ -158,7 +159,7 @@ unsafe fn diff_write(
             end = (*buf).b_ml.ml_line_count;
         }
 
-        let save_ml_flags = (*buf).b_ml.ml_flags;
+        let was_empty = (*buf).b_ml.ml_flags.masked(MlFlags::EMPTY);
         let save_ff = (*buf).b_p_ff;
         // The diff must see the file the way the buffer holds it.
         (*buf).b_p_ff = xstrdup(c"unix".as_ptr());
@@ -173,7 +174,7 @@ unsafe fn diff_write(
         if end < start {
             // The range names a completely empty file.
             end = start;
-            (*buf).b_ml.ml_flags |= ML_EMPTY;
+            (*buf).b_ml.ml_flags |= MlFlags::EMPTY;
         }
         let r = buf_write(
             buf,
@@ -187,7 +188,7 @@ unsafe fn diff_write(
         (*cmdmod.ptr()).cmod_flags = CmdModFlags::SANDBOX.when(save_cmod_flags);
         free_string_option((*buf).b_p_ff);
         (*buf).b_p_ff = save_ff;
-        (*buf).b_ml.ml_flags = (*buf).b_ml.ml_flags & !ML_EMPTY | save_ml_flags & ML_EMPTY;
+        (*buf).b_ml.ml_flags = (*buf).b_ml.ml_flags.without(MlFlags::EMPTY) | was_empty;
         r
     }
 }
