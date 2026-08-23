@@ -46,8 +46,8 @@ const EMPTY_ITEM: hashitem_T = hashitem_T {
 };
 
 /// Sentinel for a removed item: `hi_key` equal to this *address* marks a
-/// tombstone. Exported because other modules (and the unit suite, via
-/// `_hash_key_removed`) compare against it. Never written through.
+/// tombstone. Exported because other modules compare against it. Never
+/// written through.
 pub static hash_removed: c_char = 0;
 
 fn removed_sentinel() -> *mut c_char {
@@ -519,12 +519,6 @@ pub unsafe fn hash_hash(key: *const c_char) -> hash_T {
 pub unsafe fn hash_hash_len(key: *const c_char, len: usize) -> hash_T {
     // SAFETY: the caller's `len` readable bytes.
     hash_bytes_len(unsafe { slice::from_raw_parts(key.cast::<u8>(), len) })
-}
-
-/// The unit suite reads the sentinel address through this accessor.
-#[unsafe(no_mangle)]
-pub extern "C" fn _hash_key_removed() -> *const c_char {
-    removed_sentinel()
 }
 
 #[cfg(test)]

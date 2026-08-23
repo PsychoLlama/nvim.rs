@@ -155,8 +155,7 @@ pub(crate) unsafe fn api_free_string(value: String_0) {
 
 /// Free `value` and everything below it. Only for objects that were built on
 /// the heap; an arena-allocated object is freed with its arena.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn api_free_object(value: Object) {
+pub unsafe fn api_free_object(value: Object) {
     // SAFETY: `value` owns whatever it points at.
     unsafe {
         match value.type_0 {

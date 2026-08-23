@@ -173,8 +173,7 @@ pub unsafe fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `arg` must be a NUL-terminated expression; `eap` may be null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn eval0(
+pub unsafe fn eval0(
     arg: *mut c_char,
     rettv: *mut typval_T,
     eap: *mut exarg_T,

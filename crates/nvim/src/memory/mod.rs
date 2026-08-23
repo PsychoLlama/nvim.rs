@@ -308,8 +308,7 @@ unsafe fn copy_bytes(dst: *mut c_void, src: *const c_void, len: usize) {
 /// # Safety
 ///
 /// `data` is readable for `len` bytes; otherwise as [`try_malloc`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void {
+pub unsafe fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void {
     // SAFETY: `xmallocz` answers `len + 1` fresh bytes, which cannot
     // overlap the caller's `len` readable ones.
     unsafe {

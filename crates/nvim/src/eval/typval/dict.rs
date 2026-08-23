@@ -59,8 +59,7 @@ pub unsafe fn tv_dict_item_alloc_len(
 }
 
 /// [`tv_dict_item_alloc_len`] for a NUL-terminated key.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T {
+pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T {
     unsafe { tv_dict_item_alloc_len(key, strlen(key)) }
 }
 
@@ -101,8 +100,7 @@ pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
 }
 
 /// Allocate an empty dictionary.  The caller owns the reference count.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_alloc() -> *mut dict_T {
+pub unsafe fn tv_dict_alloc() -> *mut dict_T {
     unsafe {
         let d = xcalloc(1, ::core::mem::size_of::<dict_T>()) as *mut dict_T;
 
@@ -178,8 +176,7 @@ pub unsafe fn tv_dict_free_dict(d: *mut dict_T) {
 
 /// Free `d` and everything in it.  A no-op while `free_unref_items()` is
 /// walking, which frees the whole graph itself.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_free(d: *mut dict_T) {
+pub unsafe fn tv_dict_free(d: *mut dict_T) {
     unsafe {
         if tv_in_free_unref_items.get() {
             return;
@@ -203,8 +200,7 @@ pub unsafe fn tv_dict_unref(d: *mut dict_T) {
 
 /// Add `item` to `d`.  `FAIL` when the key is already there, or when it would
 /// shadow a builtin function in a scope dictionary.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
+pub unsafe fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
     unsafe {
         let key = tv_dict_item_key(item);
         if tv_dict_wrong_func_name(d, &raw mut (*item).di_tv, key) != 0 {

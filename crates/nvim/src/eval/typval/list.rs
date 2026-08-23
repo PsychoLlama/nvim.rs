@@ -178,8 +178,7 @@ pub unsafe extern "C" fn tv_list_free(l: *mut list_T) {
 }
 
 /// Drop a reference to `l`, freeing it when the last one goes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_unref(l: *mut list_T) {
+pub unsafe fn tv_list_unref(l: *mut list_T) {
     unsafe {
         if let Some(list) = l.as_mut() {
             list.lv_refcount -= 1;

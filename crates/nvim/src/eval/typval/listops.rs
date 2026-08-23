@@ -52,8 +52,7 @@ pub unsafe fn tv_list_insert_tv(l: *mut list_T, tv: *mut typval_T, item: *mut li
 }
 
 /// Link `item` onto `l`'s tail.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append(l: *mut list_T, item: *mut listitem_T) {
+pub unsafe fn tv_list_append(l: *mut list_T, item: *mut listitem_T) {
     unsafe {
         match (*l).lv_last.as_mut() {
             Some(last) => {

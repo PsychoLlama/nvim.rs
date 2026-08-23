@@ -32,10 +32,11 @@ use c2rust_neovim::eval::typval::{
 };
 use c2rust_neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use c2rust_neovim::types::{
-    Callback, Callback_data, CallbackType, DictWatcher, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T,
-    dictitem_T, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, list_T, listitem_T, partial_T,
-    typval_T, typval_vval_union,
+    Callback, Callback_data, CallbackType, DictWatcher, Object, VAR_BOOL, VAR_DICT, VAR_FLOAT,
+    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union,
 };
 
 use super::cstr;
@@ -668,4 +669,103 @@ pub unsafe fn eval0(expr: &str) -> Option<typval_T> {
         )
     };
     (ok != 0).then_some(tv)
+}
+
+/// An API `Object`, as `test/unit/api/testutil.lua`'s `obj2lua` spelled one.
+///
+/// The API's value type is [`Tv`]'s twin one layer out: it has no NULL
+/// container (a NULL list converts to an *empty* array) and no funcref at
+/// all (a partial converts to nil), which is most of what the conversion
+/// cases are about.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Obj {
+    /// `kObjectTypeNil`.
+    Nil,
+    /// `kObjectTypeBoolean`.
+    Bool(bool),
+    /// `kObjectTypeInteger`.
+    Int(i64),
+    /// `kObjectTypeFloat`.
+    Float(f64),
+    /// `kObjectTypeString`, by its `size` — interior NULs included.
+    Str(Vec<u8>),
+    /// `kObjectTypeArray`.
+    Array(Vec<Obj>),
+    /// `kObjectTypeDict`, read back sorted by key.
+    Dict(Vec<(Vec<u8>, Obj)>),
+}
+
+impl Obj {
+    /// `Obj::Str` from anything string-shaped.
+    pub fn s(bytes: impl AsRef<[u8]>) -> Obj {
+        Obj::Str(bytes.as_ref().to_vec())
+    }
+
+    /// `Obj::Dict` from `&str` keys.
+    pub fn dict<const N: usize>(entries: [(&str, Obj); N]) -> Obj {
+        Obj::Dict(
+            entries
+                .into_iter()
+                .map(|(k, v)| (k.as_bytes().to_vec(), v))
+                .collect(),
+        )
+    }
+}
+
+/// `obj2lua`: read an `Object` back out.
+///
+/// # Safety
+/// `o` points at a live `Object` whose contents are live.
+pub unsafe fn read_object(o: *const Object) -> Obj {
+    let data = unsafe { (*o).data };
+    let type_0 = unsafe { (*o).type_0 };
+    // The `kObjectType*` constants are `const`s, not variants, so a `match`
+    // arm would bind rather than compare.
+    if type_0 == kObjectTypeNil {
+        Obj::Nil
+    } else if type_0 == kObjectTypeBoolean {
+        Obj::Bool(unsafe { data.boolean })
+    } else if type_0 == kObjectTypeInteger {
+        Obj::Int(unsafe { data.integer })
+    } else if type_0 == kObjectTypeFloat {
+        Obj::Float(unsafe { data.floating })
+    } else if type_0 == kObjectTypeString {
+        {
+            let s = unsafe { data.string };
+            Obj::Str(if s.is_null() {
+                Vec::new()
+            } else {
+                unsafe { std::slice::from_raw_parts(s.data().cast::<u8>(), s.len()) }.to_vec()
+            })
+        }
+    } else if type_0 == kObjectTypeArray {
+        {
+            let a = unsafe { data.array };
+            Obj::Array(
+                (0..a.size)
+                    .map(|i| unsafe { read_object(a.items.add(i)) })
+                    .collect(),
+            )
+        }
+    } else if type_0 == kObjectTypeDict {
+        {
+            let d = unsafe { data.dict };
+            let mut entries: Vec<(Vec<u8>, Obj)> = (0..d.size)
+                .map(|i| {
+                    let kv = unsafe { *d.items.add(i) };
+                    (
+                        unsafe {
+                            std::slice::from_raw_parts(kv.key.data().cast::<u8>(), kv.key.len())
+                        }
+                        .to_vec(),
+                        unsafe { read_object(&raw const kv.value) },
+                    )
+                })
+                .collect();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            Obj::Dict(entries)
+        }
+    } else {
+        panic!("reading Object type {type_0} is not implemented")
+    }
 }

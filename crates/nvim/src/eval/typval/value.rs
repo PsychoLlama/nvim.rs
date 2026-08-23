@@ -17,8 +17,7 @@ use crate::semsg_c;
 /// The work is done by the `nothing` sink, the seventh instantiation of
 /// `typval_encode.c.h`: it walks the value iteratively, so a container that
 /// refers to itself is deep-freed without recursing.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_clear(tv: *mut typval_T) {
+pub unsafe fn tv_clear(tv: *mut typval_T) {
     unsafe {
         if tv.is_null() || (*tv).v_type == VAR_UNKNOWN {
             return;
@@ -69,8 +68,7 @@ pub unsafe fn tv_free(tv: *mut typval_T) {
 ///
 /// The copy is shallow and always unlocked; `deepcopy()` goes through
 /// `var_item_copy`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_copy(from: *const typval_T, to: *mut typval_T) {
+pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
     unsafe {
         (*to).v_type = (*from).v_type;
         (*to).v_lock = VAR_UNLOCKED;

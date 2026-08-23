@@ -65,8 +65,7 @@ pub unsafe fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> b
 }
 
 /// Drop whatever `callback` holds and leave it `kCallbackNone`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn callback_free(callback: *mut Callback) {
+pub unsafe fn callback_free(callback: *mut Callback) {
     unsafe {
         match (*callback).type_0 {
             kCallbackFuncref => {

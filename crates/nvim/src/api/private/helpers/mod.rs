@@ -51,6 +51,9 @@ mod vimdict;
 pub(crate) use self::keydict::*;
 pub(crate) use self::text::*;
 pub(crate) use self::value::*;
+// Reached by name from `crates/nvim/tests/unit`, which links the library from
+// outside; the rest of `value` stays in-crate.
+pub use self::value::api_free_object;
 pub(crate) use self::vimdict::*;
 
 const ET_ERROR: except_type_T = 1;

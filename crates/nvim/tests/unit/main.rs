@@ -5,6 +5,7 @@
 
 mod support;
 
+mod api_converter;
 mod arena;
 mod arglist;
 mod buffer;
