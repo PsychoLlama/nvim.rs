@@ -14,29 +14,27 @@
 //! union arm through LuaJIT's FFI needed a cast the translator did not write;
 //! they all hold.
 
-use std::ffi::{CStr, CString, c_char, c_int, c_uint};
+use std::ffi::{CStr, c_char, c_int, c_uint};
 use std::ptr;
 
 use c2rust_neovim::tui::termkey::driver_csi::{
     termkey_interpret_csi, termkey_interpret_modereport, termkey_interpret_mouse,
-    termkey_interpret_position,
 };
 use c2rust_neovim::tui::termkey::termkey::{
-    TERMKEY_CANON_SPACESYMBOL, TERMKEY_FLAG_SPACESYMBOL, TERMKEY_FLAG_UTF8,
+    TERMKEY_CANON_DELBS, TERMKEY_CANON_SPACESYMBOL, TERMKEY_FLAG_SPACESYMBOL, TERMKEY_FLAG_UTF8,
     TERMKEY_FORMAT_LOWERSPACE, TERMKEY_FORMAT_MOUSE_POS, TERMKEY_KEYMOD_ALT, TERMKEY_KEYMOD_CTRL,
     TERMKEY_MOUSE_DRAG, TERMKEY_MOUSE_PRESS, TERMKEY_MOUSE_RELEASE, TERMKEY_RES_AGAIN,
-    TERMKEY_RES_KEY, TERMKEY_RES_NONE, TERMKEY_SYM_DOWN, TERMKEY_SYM_ESCAPE, TERMKEY_SYM_PAGEUP,
-    TERMKEY_SYM_RIGHT, TERMKEY_SYM_SPACE, TERMKEY_SYM_UP, TERMKEY_TYPE_DCS, TERMKEY_TYPE_FUNCTION,
-    TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_MODEREPORT, TERMKEY_TYPE_MOUSE, TERMKEY_TYPE_OSC,
-    TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, termkey_canonicalise,
+    TERMKEY_RES_KEY, TERMKEY_RES_NONE, TERMKEY_SYM_BACKSPACE, TERMKEY_SYM_DEL, TERMKEY_SYM_ESCAPE,
+    TERMKEY_SYM_PAGEUP, TERMKEY_SYM_RIGHT, TERMKEY_SYM_SPACE, TERMKEY_SYM_UP, TERMKEY_TYPE_DCS,
+    TERMKEY_TYPE_FUNCTION, TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_MODEREPORT, TERMKEY_TYPE_MOUSE,
+    TERMKEY_TYPE_OSC, TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI,
     termkey_destroy, termkey_get_buffer_remaining, termkey_get_buffer_size, termkey_get_canonflags,
-    termkey_get_keyname, termkey_getkey, termkey_getkey_force, termkey_interpret_string,
-    termkey_lookup_keyname, termkey_new_abstract, termkey_push_bytes, termkey_set_buffer_size,
-    termkey_set_canonflags, termkey_set_flags, termkey_start, termkey_stop,
+    termkey_getkey, termkey_getkey_force, termkey_interpret_string, termkey_new_abstract,
+    termkey_push_bytes, termkey_set_buffer_size, termkey_set_canonflags, termkey_start,
 };
 use c2rust_neovim::types::{
     TermKey, TermKeyCsiParam, TermKeyFormat, TermKeyKey, TermKeyMouseEvent, TermKeyResult,
-    TermKeySym, TermKeyType,
+    TermKeyType,
 };
 
 /// The default buffer, in bytes. Not a literal in the assertions below: what
@@ -68,16 +66,6 @@ impl Reader {
     fn start(&self) {
         // SAFETY: as above, at every entry point here.
         unsafe { termkey_start(self.0) };
-    }
-
-    fn stop(&self) {
-        // SAFETY: as above.
-        unsafe { termkey_stop(self.0) };
-    }
-
-    fn set_flags(&self, flags: c_int) {
-        // SAFETY: as above.
-        unsafe { termkey_set_flags(self.0, flags) };
     }
 
     fn canonflags(&self) -> c_int {
@@ -136,32 +124,6 @@ impl Reader {
         key
     }
 
-    fn canonicalise(&self, key: &mut TermKeyKey) {
-        // SAFETY: the reader is live and `key` is the caller's.
-        unsafe { termkey_canonicalise(self.0, key) };
-    }
-
-    fn keyname(&self, sym: TermKeySym) -> String {
-        // SAFETY: the name is a `'static` NUL-terminated string.
-        let name = unsafe { CStr::from_ptr(termkey_get_keyname(self.0, sym)) };
-        name.to_string_lossy().into_owned()
-    }
-
-    /// The symbol named at the head of `text`, and the rest of `text`.
-    fn lookup_keyname(&self, text: &str) -> Option<(TermKeySym, String)> {
-        let text = CString::new(text).expect("no interior NUL");
-        let mut sym: TermKeySym = 0;
-        // SAFETY: `text` outlives the call and `sym` is this frame's.
-        let rest = unsafe { termkey_lookup_keyname(self.0, text.as_ptr(), &mut sym) };
-        if rest.is_null() {
-            return None;
-        }
-        // SAFETY: on a match the answer points into `text`, at or before its
-        // terminator.
-        let rest = unsafe { CStr::from_ptr(rest) };
-        Some((sym, rest.to_string_lossy().into_owned()))
-    }
-
     /// Render `key`, answering (the length the whole rendering would take, what
     /// actually landed in a buffer of `room` bytes).
     fn strfkey(&self, key: &TermKeyKey, room: usize, format: TermKeyFormat) -> (usize, String) {
@@ -197,15 +159,6 @@ impl Reader {
         };
         assert_eq!(res, TERMKEY_RES_KEY, "not a mouse key");
         (event, button, line, col)
-    }
-
-    /// (line, column) of a cursor-position report.
-    fn position(&self, key: &TermKeyKey) -> (c_int, c_int) {
-        let (mut line, mut col) = (0, 0);
-        // SAFETY: as above.
-        let res = unsafe { termkey_interpret_position(self.0, key, &mut line, &mut col) };
-        assert_eq!(res, TERMKEY_RES_KEY, "not a position report");
-        (line, col)
     }
 
     /// (introducer, mode, value) of a DECRPM mode report.
@@ -293,13 +246,10 @@ fn utf8(key: &TermKeyKey) -> String {
 }
 
 #[test]
-fn a_reader_is_started_when_it_is_made_and_stops_and_starts_again() {
+fn a_reader_is_started_when_it_is_made_and_starting_it_again_is_a_no_op() {
     let tk = Reader::new(0);
     assert_eq!(tk.buffer_size(), DEFAULT_BUFFER);
     assert_ne!(tk.state().is_started, 0);
-
-    tk.stop();
-    assert_eq!(tk.state().is_started, 0);
 
     tk.start();
     assert_ne!(tk.state().is_started, 0);
@@ -425,6 +375,9 @@ fn a_utf8_sequence_fed_one_byte_at_a_time_asks_for_more_until_it_is_whole() {
     drip(b"\xF0\x90\x80\x80", 0x10000);
 }
 
+/// Canonicalisation is what makes two spellings of one keypress into one key,
+/// and it is reached only on the way out of the decoder — so the way to see it
+/// is to decode the same byte under each setting of the flag that governs it.
 #[test]
 fn the_space_symbol_flag_decides_whether_a_space_is_a_character() {
     let tk = Reader::new(0);
@@ -433,19 +386,45 @@ fn the_space_symbol_flag_decides_whether_a_space_is_a_character() {
     assert_eq!(code(&key), i32::from(b' '));
     assert_eq!(key.modifiers, 0);
 
-    tk.set_flags(TERMKEY_FLAG_SPACESYMBOL as c_int);
-    let key = tk.key_from(b" ");
+    // Asking for it at construction is the direction the TUI uses.
+    let symbolic = Reader::new(TERMKEY_FLAG_SPACESYMBOL as c_int);
+    let key = symbolic.key_from(b" ");
     assert_eq!(key.type_0, TERMKEY_TYPE_KEYSYM);
     assert_eq!(code(&key), TERMKEY_SYM_SPACE);
     assert_eq!(key.modifiers, 0);
 
     // The flag and the canonicalisation flag are two spellings of one thing and
     // are kept in step in both directions.
-    assert_ne!(tk.canonflags() & TERMKEY_CANON_SPACESYMBOL as c_int, 0);
-    tk.set_flags(0);
-    assert_eq!(tk.canonflags() & TERMKEY_CANON_SPACESYMBOL as c_int, 0);
+    assert_ne!(
+        symbolic.canonflags() & TERMKEY_CANON_SPACESYMBOL as c_int,
+        0
+    );
     tk.set_canonflags(TERMKEY_CANON_SPACESYMBOL as c_int);
     assert_ne!(tk.state().flags & TERMKEY_FLAG_SPACESYMBOL as c_int, 0);
+    let key = tk.key_from(b" ");
+    assert_eq!(key.type_0, TERMKEY_TYPE_KEYSYM);
+    assert_eq!(code(&key), TERMKEY_SYM_SPACE);
+
+    // And back: clearing it puts the character spelling back.
+    tk.set_canonflags(0);
+    assert_eq!(tk.state().flags & TERMKEY_FLAG_SPACESYMBOL as c_int, 0);
+    assert_eq!(tk.key_from(b" ").type_0, TERMKEY_TYPE_UNICODE);
+}
+
+/// The other canonicalisation, and the one the TUI actually turns on
+/// (`tui/input.rs` ORs `TERMKEY_CANON_DELBS` in at startup): DEL is delivered
+/// as Backspace.
+#[test]
+fn the_delbs_flag_delivers_del_as_backspace() {
+    let tk = Reader::new(0);
+    let key = tk.key_from(b"\x7f");
+    assert_eq!(key.type_0, TERMKEY_TYPE_KEYSYM);
+    assert_eq!(code(&key), TERMKEY_SYM_DEL);
+
+    tk.set_canonflags(tk.canonflags() | TERMKEY_CANON_DELBS as c_int);
+    let key = tk.key_from(b"\x7f");
+    assert_eq!(key.type_0, TERMKEY_TYPE_KEYSYM);
+    assert_eq!(code(&key), TERMKEY_SYM_BACKSPACE);
 }
 
 #[test]
@@ -467,26 +446,6 @@ fn resizing_the_buffer_keeps_what_is_already_in_it() {
         "the buffered byte survived the resize"
     );
     assert_eq!(code(&key), i32::from(b'h'));
-}
-
-#[test]
-fn key_names_look_up_both_ways_and_report_where_a_name_ends() {
-    let tk = Reader::new(0);
-    assert_eq!(tk.keyname(TERMKEY_SYM_SPACE), "Space");
-    assert_eq!(
-        tk.lookup_keyname("Space"),
-        Some((TERMKEY_SYM_SPACE, String::new()))
-    );
-    assert_eq!(
-        tk.lookup_keyname("Up"),
-        Some((TERMKEY_SYM_UP, String::new()))
-    );
-    // The longest name that matches wins, and what follows it is handed back.
-    assert_eq!(
-        tk.lookup_keyname("DownMore"),
-        Some((TERMKEY_SYM_DOWN, "More".to_string()))
-    );
-    assert_eq!(tk.lookup_keyname("SomeUnknownKey"), None);
 }
 
 /// `termkey_strfkey` follows `snprintf`: it writes what fits and answers the
@@ -526,55 +485,6 @@ fn a_rendering_that_does_not_fit_is_truncated_and_reports_its_full_length() {
         tk.strfkey(&mouse, 4, TERMKEY_FORMAT_MOUSE_POS),
         (len, "C-M".to_string())
     );
-}
-
-/// Canonicalisation is what makes two keys that stand for the same keypress
-/// compare equal, which is the whole point of the `13cmpkey` case the Lua spec
-/// carried: it compared keys only after canonicalising both.
-#[test]
-fn canonicalising_makes_the_space_symbol_and_the_space_character_the_same_key() {
-    let tk = Reader::new(0);
-    let cmp = |a: &TermKeyKey, b: &TermKeyKey| -> std::cmp::Ordering {
-        let (mut a, mut b) = (*a, *b);
-        tk.canonicalise(&mut a);
-        tk.canonicalise(&mut b);
-        (a.type_0, code(&a), a.modifiers).cmp(&(b.type_0, code(&b), b.modifiers))
-    };
-    let unicode =
-        |c: u8, modifiers: c_uint| made_key(TERMKEY_TYPE_UNICODE, i32::from(c), modifiers as c_int);
-
-    let plain_a = unicode(b'A', 0);
-    assert_eq!(cmp(&plain_a, &plain_a), std::cmp::Ordering::Equal);
-    assert_eq!(cmp(&plain_a, &unicode(b'A', 0)), std::cmp::Ordering::Equal);
-    // Modifiers sort after none, and the codepoint outranks them.
-    assert_eq!(
-        cmp(&plain_a, &unicode(b'A', TERMKEY_KEYMOD_CTRL)),
-        std::cmp::Ordering::Less
-    );
-    assert_eq!(cmp(&plain_a, &unicode(b'B', 0)), std::cmp::Ordering::Less);
-    assert_eq!(
-        cmp(&unicode(b'A', TERMKEY_KEYMOD_CTRL), &unicode(b'B', 0)),
-        std::cmp::Ordering::Less
-    );
-    // A symbol sorts after any character.
-    let up = made_key(TERMKEY_TYPE_KEYSYM, TERMKEY_SYM_UP, 0);
-    assert_eq!(cmp(&plain_a, &up), std::cmp::Ordering::Less);
-
-    // The pair that needs canonicalising: with the default flags the symbol
-    // becomes the character, and with SPACESYMBOL the character becomes the
-    // symbol. Either way the two are one key.
-    let space_sym = made_key(TERMKEY_TYPE_KEYSYM, TERMKEY_SYM_SPACE, 0);
-    let space_char = unicode(b' ', 0);
-    assert_eq!(cmp(&space_sym, &space_char), std::cmp::Ordering::Equal);
-    let mut canonical = space_sym;
-    tk.canonicalise(&mut canonical);
-    assert_eq!(canonical.type_0, TERMKEY_TYPE_UNICODE);
-
-    tk.set_canonflags(tk.canonflags() | TERMKEY_CANON_SPACESYMBOL as c_int);
-    assert_eq!(cmp(&space_sym, &space_char), std::cmp::Ordering::Equal);
-    let mut canonical = space_char;
-    tk.canonicalise(&mut canonical);
-    assert_eq!(canonical.type_0, TERMKEY_TYPE_KEYSYM);
 }
 
 /// The three mouse wire protocols a terminal may speak. None of them was parsed
@@ -646,7 +556,6 @@ fn a_cursor_position_report_parses_and_a_bare_csi_r_is_still_f3() {
     let tk = Reader::new(0);
     let key = tk.key_from(b"\x1b[?15;7R");
     assert_eq!(key.type_0, TERMKEY_TYPE_POSITION);
-    assert_eq!(tk.position(&key), (15, 7));
 
     // Without the private-mode introducer the same final byte is a function
     // key, which is why the reports the TUI asks for use `CSI ?`.

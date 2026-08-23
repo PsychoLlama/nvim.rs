@@ -343,32 +343,6 @@ pub unsafe fn termkey_interpret_mouse(
 
 /// # Safety
 /// The reader is not read. `key` must be a readable key, and each of the
-/// two out-parameters must be null or writable.
-pub unsafe fn termkey_interpret_position(
-    _tk: *mut TermKey,
-    key: *const TermKeyKey,
-    line: *mut c_int,
-    col: *mut c_int,
-) -> TermKeyResult {
-    // SAFETY: the caller's key.
-    let key = unsafe { &*key };
-    if key.type_0 != TERMKEY_TYPE_POSITION {
-        return TERMKEY_RES_NONE;
-    }
-    // SAFETY: the caller's two out-parameters, each null or writable.
-    let (line, col) = unsafe { (line.as_mut(), col.as_mut()) };
-    let (packed_line, packed_col) = report::unpack_position(&key.report());
-    if let Some(line) = line {
-        *line = packed_line;
-    }
-    if let Some(col) = col {
-        *col = packed_col;
-    }
-    TERMKEY_RES_KEY
-}
-
-/// # Safety
-/// The reader is not read. `key` must be a readable key, and each of the
 /// three out-parameters must be null or writable.
 pub unsafe fn termkey_interpret_modereport(
     _tk: *mut TermKey,

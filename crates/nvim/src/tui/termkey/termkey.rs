@@ -9,13 +9,13 @@
 use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::tui::termkey::format::{self, KeyBody};
 use crate::tui::termkey::utf8::{self, Decoded, UNICODE_INVALID};
-use crate::tui::termkey::{driver_csi, driver_ti, keynames, report};
+use crate::tui::termkey::{driver_csi, driver_ti, report};
 use crate::types::{
     TermKey, TermKey_Terminfo_Getstr_Hook, TermKeyEvent, TermKeyFormat, TermKeyKey,
     TermKeyKey_code, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry,
     size_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_uchar, c_void};
+use core::ffi::{c_char, c_int, c_uchar, c_void};
 use core::ops::{Deref, DerefMut};
 
 pub const TERMKEY_EVENT_UNKNOWN: TermKeyEvent = 0;
@@ -309,10 +309,8 @@ fn free(mut tk: Tk) {
 /// contract [`Tk::of`] spells out. Nothing may name it afterwards.
 pub unsafe fn termkey_destroy(tk: *mut TermKey) {
     // SAFETY: the caller's reader, as at every entry point here.
-    let tk = unsafe { Tk::of(tk) };
-    if tk.is_started != 0 {
-        stop(tk);
-    }
+    let mut tk = unsafe { Tk::of(tk) };
+    tk.is_started = 0;
     free(tk);
 }
 
@@ -356,20 +354,6 @@ pub unsafe fn termkey_start(tk: *mut TermKey) -> c_int {
     start(unsafe { Tk::of(tk) })
 }
 
-fn stop(mut tk: Tk) -> c_int {
-    tk.is_started = 0;
-    1
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_stop(tk: *mut TermKey) -> c_int {
-    // SAFETY: the caller's reader, as at every entry point here.
-    stop(unsafe { Tk::of(tk) })
-}
-
 fn set_flags(mut tk: Tk, newflags: c_int) {
     tk.flags = newflags;
     // The two spellings of "a space is a symbol, not a character" are kept in
@@ -379,15 +363,6 @@ fn set_flags(mut tk: Tk, newflags: c_int) {
     } else {
         tk.canonflags &= !(TERMKEY_CANON_SPACESYMBOL as c_int);
     }
-}
-
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out.
-pub unsafe fn termkey_set_flags(tk: *mut TermKey, newflags: c_int) {
-    // SAFETY: the caller's reader, as at every entry point here.
-    set_flags(unsafe { Tk::of(tk) }, newflags);
 }
 
 /// # Safety
@@ -571,16 +546,6 @@ fn canonicalise(tk: Tk, key: &mut TermKeyKey) {
     }
 }
 
-/// # Safety
-/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
-/// yet destroyed, with nothing else reading or writing it meanwhile -- the
-/// contract [`Tk::of`] spells out. `key` must be a writable key.
-pub unsafe fn termkey_canonicalise(tk: *mut TermKey, key: *mut TermKeyKey) {
-    // SAFETY: the caller's reader and the key it is asking about.
-    let (tk, key) = unsafe { (Tk::of(tk), &mut *key) };
-    canonicalise(tk, key);
-}
-
 /// Read the next key without consuming it. `force` means "decide now": a
 /// sequence that could still grow is taken as complete instead of waiting.
 fn peekkey(mut tk: Tk, key: &mut TermKeyKey, force: c_int, nbytep: &mut size_t) -> TermKeyResult {
@@ -750,43 +715,6 @@ pub unsafe fn termkey_getkey_force(tk: *mut TermKey, key: *mut TermKeyKey) -> Te
         tk.eat_bytes(nbytes);
     }
     ret
-}
-
-/// The name of a symbolic key, or "UNKNOWN".
-///
-/// # Safety
-/// The reader is not read; any pointer, including null, is accepted for it.
-pub unsafe fn termkey_get_keyname(_tk: *mut TermKey, sym: TermKeySym) -> *const c_char {
-    keynames::name(sym).as_ptr()
-}
-
-/// Find the symbol named at the head of `str`, and where its name ends.
-///
-/// Returns null when nothing matches. On a match `*symp` is the symbol and the
-/// return value points at the rest of `str`, so "DownMore" yields Down and
-/// "More".
-///
-/// # Safety
-/// The reader is not read. `text` must be NUL-terminated and outlive the
-/// answer, which points into it, and `symp` must be writable.
-pub unsafe fn termkey_lookup_keyname(
-    _tk: *mut TermKey,
-    text: *const c_char,
-    symp: *mut TermKeySym,
-) -> *const c_char {
-    // SAFETY: the caller's NUL-terminated name.
-    let name = unsafe { CStr::from_ptr(text) }.to_bytes();
-    match keynames::lookup(name) {
-        Some((sym, len)) => {
-            // SAFETY: the caller's out-parameter, and `len` bytes of the name
-            // matched, so `text + len` is inside the same string.
-            unsafe {
-                *symp = sym;
-                text.add(len)
-            }
-        }
-        None => core::ptr::null(),
-    }
 }
 
 /// Render a key as text, in the manner of `snprintf`: at most `len - 1` bytes

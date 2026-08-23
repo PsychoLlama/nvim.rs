@@ -90,17 +90,6 @@ pub fn name(sym: TermKeySym) -> &'static CStr {
         .unwrap_or(UNKNOWN_NAME)
 }
 
-/// Find the symbol whose name starts `text`, and how many bytes it took.
-///
-/// The first symbol in numeric order whose name is a prefix of `text` wins, so
-/// "DownMore" is Down followed by "More".
-pub fn lookup(text: &[u8]) -> Option<(TermKeySym, usize)> {
-    KEY_NAMES
-        .iter()
-        .position(|name| text.starts_with(name.to_bytes()))
-        .map(|sym| (sym as TermKeySym, KEY_NAMES[sym].count_bytes()))
-}
-
 /// A name as text. The names are all ASCII, so this never has to decide what
 /// to do about a name that is not.
 pub fn text(name: &CStr) -> &str {
@@ -143,25 +132,20 @@ mod tests {
     }
 
     #[test]
-    fn lookup_takes_the_longest_leading_name_it_knows() {
-        assert_eq!(lookup(b"Space"), Some((5, 5)));
-        assert_eq!(lookup(b"Up"), Some((7, 2)));
-        assert_eq!(lookup(b"DownMore"), Some((8, 4)));
-        assert_eq!(lookup(b"SomeUnknownKey"), None);
-    }
-
-    #[test]
-    fn names_are_unique_and_in_symbol_order() {
+    fn every_name_is_distinct_and_none_is_a_prefix_of_another() {
         let mut sorted = KEY_NAMES.to_vec();
         sorted.sort_unstable();
         sorted.dedup();
-        assert_eq!(sorted.len(), KEY_NAMES.len());
+        assert_eq!(sorted.len(), KEY_NAMES.len(), "two symbols share a name");
+        // Upstream resolved a name by taking the first entry that prefixed the
+        // text, so a name that prefixed a later one would have shadowed it.
+        // Nothing depends on that any more, but a table where it could happen
+        // is a table where two spellings mean one key.
         for (sym, name) in KEY_NAMES.iter().enumerate() {
-            assert_eq!(lookup(name.to_bytes()).map(|found| found.0), {
-                // A name that is a prefix of an earlier name resolves to that
-                // one instead; none is, so every name finds itself.
-                Some(sym as TermKeySym)
-            });
+            let shadowed = KEY_NAMES
+                .iter()
+                .position(|other| other.to_bytes().starts_with(name.to_bytes()));
+            assert_eq!(shadowed, Some(sym), "{name:?} prefixes an earlier name");
         }
     }
 
