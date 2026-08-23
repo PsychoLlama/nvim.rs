@@ -309,8 +309,7 @@ pub unsafe fn get_sw_value_col(buf: *mut buf_T, col: colnr_T, left: bool) -> c_i
 ///
 /// # Safety
 /// There must be a current buffer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn get_sts_value() -> c_int {
+pub unsafe fn get_sts_value() -> c_int {
     unsafe {
         if (*curbuf.get()).b_p_sts < 0 {
             get_sw_value(curbuf.get())
@@ -453,12 +452,7 @@ fn indent_width(mut next: impl FnMut() -> u8, stops: Option<&[colnr_T]>, ts: Opt
 /// # Safety
 /// `ptr` must point at a NUL-terminated string; `vts` must be a valid
 /// tabstop array or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn indent_size_ts(
-    ptr: *const c_char,
-    ts: OptInt,
-    vts: *mut colnr_T,
-) -> c_int {
+pub unsafe fn indent_size_ts(ptr: *const c_char, ts: OptInt, vts: *mut colnr_T) -> c_int {
     unsafe {
         debug_assert!(char2cells(' ' as c_int) == 1);
         // `vts[0]` is the count and `vts[1..=count]` the widths.

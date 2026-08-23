@@ -460,7 +460,7 @@
     "crates/nvim/src/indent/breakindent.rs": {"unsafe_lines": 108},
     "crates/nvim/src/indent/edit.rs": {"cell_ptr": 2, "unsafe_lines": 529},
     "crates/nvim/src/indent/expr.rs": {"unsafe_lines": 225},
-    "crates/nvim/src/indent/mod.rs": {"cell_ptr": 1, "extern_abi": 2, "no_mangle": 2, "unsafe_lines": 400},
+    "crates/nvim/src/indent/mod.rs": {"cell_ptr": 1, "unsafe_lines": 400},
     "crates/nvim/src/indent_c/cino.rs": {"unsafe_lines": 123},
     "crates/nvim/src/indent_c/comment.rs": {"cell_ptr": 6, "unsafe_lines": 104},
     "crates/nvim/src/indent_c/cpp.rs": {"unsafe_lines": 219},

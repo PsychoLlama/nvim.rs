@@ -19,6 +19,7 @@ mod fpconv;
 mod fs;
 mod garray;
 mod hashtab;
+mod indent;
 mod keycodes;
 mod linematch;
 mod map;

@@ -133,7 +133,7 @@ pub struct Sandbox {
     /// Variables written through this sandbox, with the value they had
     /// before the first write. One entry per name, in first-write order.
     saved_env: Vec<(String, Option<OsString>)>,
-    _editor: Editor,
+    editor: Editor,
 }
 
 #[cfg(not(miri))]
@@ -146,7 +146,7 @@ impl Sandbox {
             dir: None,
             saved_cwd: std::env::current_dir().expect("a working directory"),
             saved_env: Vec::new(),
-            _editor: editor,
+            editor,
         }
     }
 
@@ -163,6 +163,13 @@ impl Sandbox {
         std::env::set_current_dir(&dir).expect("standing in the sandbox");
         sandbox.dir = Some(dir);
         sandbox
+    }
+
+    /// The editor lock this sandbox holds, to hand to a helper whose
+    /// precondition is "the caller holds it" — the same token
+    /// [`editor_lock`] answers.
+    pub fn editor(&self) -> &Editor {
+        &self.editor
     }
 
     /// The private directory's absolute, resolved path.
