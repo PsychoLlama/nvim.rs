@@ -47,4 +47,3 @@
 {"symbol":"vterm_state_set_selection_callbacks","kind":"fn","file":"crates/nvim/src/vterm/state/entry.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"vterm_state_set_unrecognised_fallbacks","kind":"fn","file":"crates/nvim/src/vterm/state/entry.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"win_col_off","kind":"fn","file":"crates/nvim/src/move/mod.rs","class":"test","refs":["functional-specs"]}
-{"symbol":"xfree","kind":"fn","file":"crates/nvim/src/memory/mod.rs","class":"test","refs":["unit-specs"]}

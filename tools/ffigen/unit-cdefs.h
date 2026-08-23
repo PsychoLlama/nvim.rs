@@ -8134,4 +8134,3 @@ void vterm_state_set_callbacks(VTermState *, const VTermStateCallbacks *, void *
 void vterm_state_set_selection_callbacks(VTermState *, const VTermSelectionCallbacks *, void *, char *, size_t);
 void vterm_state_set_unrecognised_fallbacks(VTermState *, const VTermStateFallbacks *, void *);
 int win_col_off(win_T *);
-void xfree(void *);

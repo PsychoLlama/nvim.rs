@@ -197,10 +197,11 @@ pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
 
 /// `free`, through the seam. A null pointer is a no-op, as `free`'s is.
 ///
+/// Carries the C ABI as tree-sitter's allocator hook; see [`xmalloc`].
+///
 /// # Safety
 ///
 /// `ptr` is null or an allocation from this module's family, not yet freed.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xfree(ptr: *mut c_void) {
     // SAFETY: the caller's allocation, handed back to the seam that made it.
     unsafe { seam_free(ptr) };

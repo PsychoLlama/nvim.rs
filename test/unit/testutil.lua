@@ -361,13 +361,6 @@ else
   cimportstr = _cimportstr
 end
 
--- take a pointer to a C-allocated string and return an interned
--- version while also freeing the memory
-local function internalize(cdata, len)
-  ffi.gc(cdata, ffi.C.free)
-  return ffi.string(cdata, len)
-end
-
 local cstr = ffi.typeof('char[?]')
 local function to_cstr(string)
   return cstr(#string + 1, string)
@@ -619,19 +612,7 @@ end
 
 local trace_end_msg = ('E%s\n'):format((' '):rep(hook_msglen - 2))
 
---- @type function
-local _debug_log
-
-local debug_log = only_separate(function(...)
-  return _debug_log(...)
-end)
-
 local function itp_child(wr, func)
-  --- @param s string
-  _debug_log = function(s)
-    s = s:sub(1, hook_msglen - 2)
-    sc.write(wr, '>' .. s .. (' '):rep(hook_msglen - 2 - #s) .. '\n')
-  end
   local status, result = pcall(init)
   if status then
     collectgarbage('stop')
@@ -781,10 +762,6 @@ local function gen_itp(it)
   return itp
 end
 
-local function cppimport(path)
-  return cimport(paths.test_source_path .. '/test/includes/pre/' .. path)
-end
-
 cimport(
   './src/nvim/types_defs.h',
   './src/nvim/main.h',
@@ -792,65 +769,9 @@ cimport(
   './src/nvim/os/fs.h'
 )
 
-local function conv_enum(etab, eval)
-  local n = tonumber(eval)
-  return etab[n] or n
-end
-
-local function array_size(arr)
-  return ffi.sizeof(arr) / ffi.sizeof(arr[0])
-end
-
-local function kvi_size(kvi)
-  return array_size(kvi.init_array)
-end
-
-local function kvi_init(kvi)
-  kvi.capacity = kvi_size(kvi)
-  kvi.items = kvi.init_array
-  return kvi
-end
-
-local function kvi_destroy(kvi)
-  if kvi.items ~= kvi.init_array then
-    lib.xfree(kvi.items)
-  end
-end
-
-local function kvi_new(ct)
-  return kvi_init(ffi.new(ct))
-end
-
-local function make_enum_conv_tab(m, values, skip_pref, set_cb)
-  child_call_once(function()
-    local ret = {}
-    for _, v in ipairs(values) do
-      local str_v = v
-      if v:sub(1, #skip_pref) == skip_pref then
-        str_v = v:sub(#skip_pref + 1)
-      end
-      ret[tonumber(m[v])] = str_v
-    end
-    set_cb(ret)
-  end)
-end
-
-local function ptr2addr(ptr)
-  return tonumber(ffi.cast('intptr_t', ffi.cast('void *', ptr)))
-end
-
-local s = ffi.new('char[64]', { 0 })
-
-local function ptr2key(ptr)
-  ffi.C.snprintf(s, ffi.sizeof(s), '%p', ffi.cast('void *', ptr))
-  return ffi.string(s)
-end
-
 --- @class test.unit.testutil.module
 local M = {
   cimport = cimport,
-  cppimport = cppimport,
-  internalize = internalize,
   ffi = ffi,
   lib = lib,
   cstr = cstr,
@@ -863,16 +784,6 @@ local M = {
   child_call_once = child_call_once,
   child_cleanup_once = child_cleanup_once,
   sc = sc,
-  conv_enum = conv_enum,
-  array_size = array_size,
-  kvi_destroy = kvi_destroy,
-  kvi_size = kvi_size,
-  kvi_init = kvi_init,
-  kvi_new = kvi_new,
-  make_enum_conv_tab = make_enum_conv_tab,
-  ptr2addr = ptr2addr,
-  ptr2key = ptr2key,
-  debug_log = debug_log,
 }
 --- @class test.unit.testutil: test.unit.testutil.module, test.testutil
 M = vim.tbl_extend('error', M, t_global)

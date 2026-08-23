@@ -608,7 +608,7 @@
     "crates/nvim/src/memline/swapname.rs": {"cell_ptr": 2, "missing_safety_doc": 12, "unsafe_lines": 581},
     "crates/nvim/src/memline/tree.rs": {"cell_ptr": 3, "unsafe_lines": 341},
     "crates/nvim/src/memory/arena.rs": {"extern_abi": 1, "unsafe_lines": 48},
-    "crates/nvim/src/memory/mod.rs": {"extern_abi": 4, "no_mangle": 1, "unsafe_lines": 93},
+    "crates/nvim/src/memory/mod.rs": {"extern_abi": 4, "unsafe_lines": 93},
     "crates/nvim/src/menu/complete.rs": {"cell_ptr": 1, "unsafe_lines": 8},
     "crates/nvim/src/menu/define.rs": {"unsafe_lines": 24},
     "crates/nvim/src/menu/exec.rs": {"cell_ptr": 2, "unsafe_lines": 37},
