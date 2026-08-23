@@ -77,10 +77,7 @@
 {"symbol":"os_fileinfo_size","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_get_hostname","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_get_pid","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"os_get_uname","kind":"fn","file":"crates/nvim/src/os/users.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"os_get_userdir","kind":"fn","file":"crates/nvim/src/os/users.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_get_username","kind":"fn","file":"crates/nvim/src/os/users.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"os_get_usernames","kind":"fn","file":"crates/nvim/src/os/users.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_getenv","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_getenv_buf","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_getenv_noalloc","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}

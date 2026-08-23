@@ -33,4 +33,5 @@ mod termkey;
 mod typval;
 mod undo;
 mod unpacker;
+mod users;
 mod window;

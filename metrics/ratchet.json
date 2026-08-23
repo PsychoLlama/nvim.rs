@@ -730,7 +730,7 @@
     "crates/nvim/src/os/signal.rs": {"cell_ptr": 4, "unsafe_lines": 92},
     "crates/nvim/src/os/stdpaths.rs": {"cell_ptr": 3, "unsafe_lines": 48},
     "crates/nvim/src/os/time.rs": {"cell_ptr": 3, "unsafe_lines": 68},
-    "crates/nvim/src/os/users.rs": {"extern_abi": 4, "no_mangle": 4, "unsafe_lines": 40},
+    "crates/nvim/src/os/users.rs": {"extern_abi": 1, "no_mangle": 1, "unsafe_lines": 40},
     "crates/nvim/src/path/compare.rs": {"extern_abi": 2, "no_mangle": 2, "unsafe_lines": 151},
     "crates/nvim/src/path/expand.rs": {"missing_safety_doc": 1, "unsafe_lines": 342},
     "crates/nvim/src/path/glob.rs": {"cell_ptr": 2, "extern_abi": 1, "missing_safety_doc": 1, "unsafe_lines": 265},

@@ -9,8 +9,8 @@
 //! anything else. None of those calls is reentrant or thread-safe; the
 //! editor is single-threaded, which is the assumption upstream made too.
 //!
-//! The `os_get_*` entry points keep their C signatures: the unit suite
-//! calls them through FFI (see `test/unit/os/users_spec.lua`).
+//! The `os_get_*` entry points are driven from outside the crate by
+//! `crates/nvim/tests/unit/users.rs`, which is why they are `pub`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -143,8 +143,7 @@ fn best_match(users: &[CString], name: &[u8]) -> UserMatch {
 ///
 /// `users` is null or points to writable `garray_T` storage, which this call
 /// initializes (anything it already held is leaked, as upstream's is).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_get_usernames(users: *mut garray_T) -> c_int {
+pub unsafe fn os_get_usernames(users: *mut garray_T) -> c_int {
     if users.is_null() {
         return FAIL;
     }
@@ -170,6 +169,9 @@ pub unsafe extern "C" fn os_get_usernames(users: *mut garray_T) -> c_int {
 /// # Safety
 ///
 /// `s` is writable for `len` bytes.
+///
+/// The C ABI is here because `test/unit/os/env_spec.lua` still resolves this
+/// by name; it goes when that spec does.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_get_username(s: *mut c_char, len: size_t) -> c_int {
     // SAFETY: `getuid` cannot fail and touches nothing; `s` is the
@@ -184,8 +186,7 @@ pub unsafe extern "C" fn os_get_username(s: *mut c_char, len: size_t) -> c_int {
 /// # Safety
 ///
 /// `s` is writable for `len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> c_int {
+pub unsafe fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> c_int {
     // SAFETY: `getpwuid` answers null or a pointer into libc's static
     // entry, whose `pw_name` is null or NUL-terminated and which
     // `owned_name` copies out of before anything else runs.
@@ -211,8 +212,7 @@ pub unsafe extern "C" fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t
 /// # Safety
 ///
 /// `name` is null or NUL-terminated.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_get_userdir(name: *const c_char) -> *mut c_char {
+pub unsafe fn os_get_userdir(name: *const c_char) -> *mut c_char {
     // SAFETY: the caller's name, then libc's static `passwd` entry, whose
     // `pw_dir` is copied before anything else can invalidate it.
     unsafe {
