@@ -235,8 +235,7 @@ fn take_errno() -> c_int {
 ///
 /// # Safety
 /// `path` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_chdir(path: *const c_char) -> c_int {
+pub unsafe fn os_chdir(path: *const c_char) -> c_int {
     if p_verbose.get() >= 5 as OptInt {
         // SAFETY: the caller's NUL-terminated path, and `%s` is the one
         // conversion the format string asks for.
@@ -262,8 +261,7 @@ pub unsafe extern "C" fn os_chdir(path: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `buf` must address `len` writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_dirname(buf: *mut c_char, mut len: size_t) -> c_int {
+pub unsafe fn os_dirname(buf: *mut c_char, mut len: size_t) -> c_int {
     // SAFETY: the caller's buffer. libuv reports the answer's length back
     // through `len`, which is what bounds the error message copy.
     unsafe {
@@ -294,8 +292,7 @@ pub unsafe fn os_isrealdir(name: *const c_char) -> bool {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_isdir(name: *const c_char) -> bool {
+pub unsafe fn os_isdir(name: *const c_char) -> bool {
     // SAFETY: the caller's NUL-terminated path.
     let mode = unsafe { os_getperm(name) };
     mode >= 0 && is_dir(mode as u64)
@@ -306,8 +303,7 @@ pub unsafe extern "C" fn os_isdir(name: *const c_char) -> bool {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_nodetype(name: *const c_char) -> c_int {
+pub unsafe fn os_nodetype(name: *const c_char) -> c_int {
     let mut statbuf = UV_STAT_T_INIT;
     // SAFETY: the caller's NUL-terminated path; `statbuf` is this frame's.
     if unsafe { os_stat(name, &raw mut statbuf) } != 0 {
@@ -341,12 +337,7 @@ pub unsafe fn os_exepath(buffer: *mut c_char, size: *mut size_t) -> c_int {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string, and `abspath` null or writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_can_exe(
-    name: *const c_char,
-    abspath: *mut *mut c_char,
-    use_path: bool,
-) -> bool {
+pub unsafe fn os_can_exe(name: *const c_char, abspath: *mut *mut c_char, use_path: bool) -> bool {
     // SAFETY: the caller's contract, passed straight through.
     unsafe {
         let has_dir = gettail_dir(name) != name;
@@ -427,8 +418,7 @@ unsafe fn is_executable_in_path(name: *const c_char, abspath: *mut *mut c_char) 
 ///
 /// # Safety
 /// `path` must be null or a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int {
+pub unsafe fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int {
     if path.is_null() {
         return UV_EINVAL; // `uv_fs_open` asserts on NULL. #7561
     }
@@ -531,8 +521,7 @@ pub unsafe fn os_set_cloexec(fd: c_int) -> c_int {
 ///
 /// # Safety
 /// `fd` must be a descriptor this process owns.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_close(fd: c_int) -> c_int {
+pub unsafe fn os_close(fd: c_int) -> c_int {
     // SAFETY: the caller's descriptor.
     fs_result(|req| unsafe { uv_fs_close(NO_LOOP, req, fd as uv_file, None) })
 }
@@ -542,8 +531,7 @@ pub unsafe extern "C" fn os_close(fd: c_int) -> c_int {
 ///
 /// # Safety
 /// `fd` must be a descriptor this process owns.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_dup(fd: c_int) -> c_int {
+pub unsafe fn os_dup(fd: c_int) -> c_int {
     loop {
         // SAFETY: `dup` on the caller's descriptor.
         let ret = unsafe { dup(fd) };
@@ -577,8 +565,7 @@ pub unsafe fn os_open_stdin_fd() -> c_int {
 /// # Safety
 /// `ret_eof` must be writable, and `ret_buf` must address `size` writable
 /// bytes or be null with `size` zero.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_read(
+pub unsafe fn os_read(
     fd: c_int,
     ret_eof: *mut bool,
     ret_buf: *mut c_char,
@@ -626,8 +613,7 @@ pub unsafe extern "C" fn os_read(
 /// # Safety
 /// `ret_eof` must be writable and `iov` must address `iov_size` live
 /// `iovec`s whose buffers are writable for their stated lengths.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_readv(
+pub unsafe fn os_readv(
     fd: c_int,
     ret_eof: *mut bool,
     iov: *mut iovec,
@@ -695,8 +681,7 @@ pub unsafe extern "C" fn os_readv(
 ///
 /// # Safety
 /// `buf` must address `size` readable bytes, or be null with `size` zero.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_write(
+pub unsafe fn os_write(
     fd: c_int,
     buf: *const c_char,
     size: size_t,

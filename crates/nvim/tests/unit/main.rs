@@ -16,6 +16,7 @@ mod expressions;
 mod fileio;
 mod fold;
 mod fpconv;
+mod fs;
 mod garray;
 mod hashtab;
 mod keycodes;

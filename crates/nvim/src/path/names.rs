@@ -376,7 +376,6 @@ pub unsafe fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `fname` must name at least one readable byte.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_is_absolute(fname: *const c_char) -> bool {
+pub unsafe fn path_is_absolute(fname: *const c_char) -> bool {
     unsafe { *fname == b'/' as c_char || *fname == b'~' as c_char }
 }

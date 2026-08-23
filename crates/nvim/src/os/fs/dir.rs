@@ -45,8 +45,7 @@ pub unsafe extern "C" fn os_path_exists(path: *const c_char) -> bool {
 ///
 /// # Safety
 /// Both must be NUL-terminated strings.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_rename(path: *const c_char, new_path: *const c_char) -> c_int {
+pub unsafe fn os_rename(path: *const c_char, new_path: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated paths.
     fs_ok(|req| unsafe { uv_fs_rename(NO_LOOP, req, path, new_path, None) })
 }
@@ -55,8 +54,7 @@ pub unsafe extern "C" fn os_rename(path: *const c_char, new_path: *const c_char)
 ///
 /// # Safety
 /// `path` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_mkdir(path: *const c_char, mode: int32_t) -> c_int {
+pub unsafe fn os_mkdir(path: *const c_char, mode: int32_t) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     fs_result(|req| unsafe { uv_fs_mkdir(NO_LOOP, req, path, mode as c_int, None) })
 }
@@ -73,8 +71,7 @@ pub unsafe extern "C" fn os_mkdir(path: *const c_char, mode: int32_t) -> c_int {
 /// # Safety
 /// `dir` must be a NUL-terminated string and `failed_dir` writable;
 /// `created` must be null or point at a pointer that is null or owned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_mkdir_recurse(
+pub unsafe fn os_mkdir_recurse(
     dir: *const c_char,
     mode: int32_t,
     failed_dir: *mut *mut c_char,
@@ -210,8 +207,7 @@ pub unsafe fn os_mkdtemp(templ: *const c_char, path: *mut c_char) -> c_int {
 ///
 /// # Safety
 /// `path` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_rmdir(path: *const c_char) -> c_int {
+pub unsafe fn os_rmdir(path: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     fs_result(|req| unsafe { uv_fs_rmdir(NO_LOOP, req, path, None) })
 }
@@ -262,8 +258,7 @@ pub unsafe fn os_closedir(dir: *mut Directory) {
 ///
 /// # Safety
 /// `path` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_remove(path: *const c_char) -> c_int {
+pub unsafe fn os_remove(path: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     fs_result(|req| unsafe { uv_fs_unlink(NO_LOOP, req, path, None) })
 }

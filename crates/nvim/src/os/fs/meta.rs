@@ -72,8 +72,7 @@ pub(crate) unsafe fn os_stat(name: *const c_char, statbuf: *mut uv_stat_t) -> c_
 ///
 /// # Safety
 /// `name` must be null or a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_getperm(name: *const c_char) -> int32_t {
+pub unsafe fn os_getperm(name: *const c_char) -> int32_t {
     let mut statbuf = UV_STAT_T_INIT;
     // SAFETY: the caller's path; `statbuf` is this frame's.
     let stat_result = unsafe { os_stat(name, &raw mut statbuf) };
@@ -88,8 +87,7 @@ pub unsafe extern "C" fn os_getperm(name: *const c_char) -> int32_t {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_setperm(name: *const c_char, perm: c_int) -> c_int {
+pub unsafe fn os_setperm(name: *const c_char, perm: c_int) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     fs_ok(|req| unsafe { uv_fs_chmod(NO_LOOP, req, name, perm, None) })
 }
@@ -238,8 +236,7 @@ pub unsafe fn os_chown(path: *const c_char, owner: uv_uid_t, group: uv_gid_t) ->
 ///
 /// # Safety
 /// `fd` must be a descriptor this process owns.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fchown(fd: c_int, owner: uv_uid_t, group: uv_gid_t) -> c_int {
+pub unsafe fn os_fchown(fd: c_int, owner: uv_uid_t, group: uv_gid_t) -> c_int {
     // SAFETY: the caller's descriptor.
     fs_result(|req| unsafe { uv_fs_fchown(NO_LOOP, req, fd as uv_file, owner, group, None) })
 }
@@ -257,8 +254,7 @@ pub unsafe fn os_file_settime(path: *const c_char, atime: c_double, mtime: c_dou
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_file_is_readable(name: *const c_char) -> bool {
+pub unsafe fn os_file_is_readable(name: *const c_char) -> bool {
     // SAFETY: the caller's NUL-terminated path.
     fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name, R_OK, None) }) == 0
 }
@@ -282,8 +278,7 @@ pub unsafe extern "C" fn os_file_is_writable(name: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `path` must be null or a NUL-terminated string, and `file_info` writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo(path: *const c_char, file_info: *mut FileInfo) -> bool {
+pub unsafe fn os_fileinfo(path: *const c_char, file_info: *mut FileInfo) -> bool {
     // SAFETY: the caller's out-parameter; upstream zeroes it first so that a
     // failed call leaves a defined value behind.
     unsafe {
@@ -299,8 +294,7 @@ pub unsafe extern "C" fn os_fileinfo(path: *const c_char, file_info: *mut FileIn
 ///
 /// # Safety
 /// `path` must be null or a NUL-terminated string, and `file_info` writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_link(path: *const c_char, file_info: *mut FileInfo) -> bool {
+pub unsafe fn os_fileinfo_link(path: *const c_char, file_info: *mut FileInfo) -> bool {
     // SAFETY: the caller's out-parameter.
     unsafe {
         *file_info = FileInfo {
@@ -329,8 +323,7 @@ pub unsafe extern "C" fn os_fileinfo_link(path: *const c_char, file_info: *mut F
 /// # Safety
 /// `file_descriptor` must be a descriptor this process owns, and
 /// `file_info` writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_fd(file_descriptor: c_int, file_info: *mut FileInfo) -> bool {
+pub unsafe fn os_fileinfo_fd(file_descriptor: c_int, file_info: *mut FileInfo) -> bool {
     // SAFETY: the caller's out-parameter.
     unsafe {
         *file_info = FileInfo {
@@ -356,8 +349,7 @@ pub unsafe extern "C" fn os_fileinfo_fd(file_descriptor: c_int, file_info: *mut 
 ///
 /// # Safety
 /// Both must be readable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_id_equal(
+pub unsafe fn os_fileinfo_id_equal(
     file_info_1: *const FileInfo,
     file_info_2: *const FileInfo,
 ) -> bool {
@@ -372,8 +364,7 @@ pub unsafe extern "C" fn os_fileinfo_id_equal(
 ///
 /// # Safety
 /// `file_info` must be readable and `file_id` writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_id(file_info: *const FileInfo, file_id: *mut FileID) {
+pub unsafe fn os_fileinfo_id(file_info: *const FileInfo, file_id: *mut FileID) {
     // SAFETY: the caller's in- and out-parameters.
     unsafe {
         (*file_id).inode = (*file_info).stat.st_ino;
@@ -383,32 +374,28 @@ pub unsafe extern "C" fn os_fileinfo_id(file_info: *const FileInfo, file_id: *mu
 
 /// # Safety
 /// `file_info` must be readable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_inode(file_info: *const FileInfo) -> uint64_t {
+pub unsafe fn os_fileinfo_inode(file_info: *const FileInfo) -> uint64_t {
     // SAFETY: the caller's readable `FileInfo`.
     unsafe { (*file_info).stat.st_ino }
 }
 
 /// # Safety
 /// `file_info` must be readable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_size(file_info: *const FileInfo) -> uint64_t {
+pub unsafe fn os_fileinfo_size(file_info: *const FileInfo) -> uint64_t {
     // SAFETY: the caller's readable `FileInfo`.
     unsafe { (*file_info).stat.st_size }
 }
 
 /// # Safety
 /// `file_info` must be readable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_hardlinks(file_info: *const FileInfo) -> uint64_t {
+pub unsafe fn os_fileinfo_hardlinks(file_info: *const FileInfo) -> uint64_t {
     // SAFETY: the caller's readable `FileInfo`.
     unsafe { (*file_info).stat.st_nlink }
 }
 
 /// # Safety
 /// `file_info` must be readable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileinfo_blocksize(file_info: *const FileInfo) -> uint64_t {
+pub unsafe fn os_fileinfo_blocksize(file_info: *const FileInfo) -> uint64_t {
     // SAFETY: the caller's readable `FileInfo`.
     unsafe { (*file_info).stat.st_blksize }
 }
@@ -417,8 +404,7 @@ pub unsafe extern "C" fn os_fileinfo_blocksize(file_info: *const FileInfo) -> ui
 ///
 /// # Safety
 /// `path` must be null or a NUL-terminated string, and `file_id` writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileid(path: *const c_char, file_id: *mut FileID) -> bool {
+pub unsafe fn os_fileid(path: *const c_char, file_id: *mut FileID) -> bool {
     let mut statbuf = UV_STAT_T_INIT;
     // SAFETY: the caller's path; `statbuf` is this frame's.
     if unsafe { os_stat(path, &raw mut statbuf) } != LIBUV_SUCCESS {
@@ -436,11 +422,7 @@ pub unsafe extern "C" fn os_fileid(path: *const c_char, file_id: *mut FileID) ->
 ///
 /// # Safety
 /// Both must be readable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileid_equal(
-    file_id_1: *const FileID,
-    file_id_2: *const FileID,
-) -> bool {
+pub unsafe fn os_fileid_equal(file_id_1: *const FileID, file_id_2: *const FileID) -> bool {
     // SAFETY: the caller's readable `FileID`s.
     unsafe {
         (*file_id_1).inode == (*file_id_2).inode && (*file_id_1).device_id == (*file_id_2).device_id
@@ -451,11 +433,7 @@ pub unsafe extern "C" fn os_fileid_equal(
 ///
 /// # Safety
 /// Both must be readable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_fileid_equal_fileinfo(
-    file_id: *const FileID,
-    file_info: *const FileInfo,
-) -> bool {
+pub unsafe fn os_fileid_equal_fileinfo(file_id: *const FileID, file_info: *const FileInfo) -> bool {
     // SAFETY: the caller's readable structs.
     unsafe {
         (*file_id).inode == (*file_info).stat.st_ino
