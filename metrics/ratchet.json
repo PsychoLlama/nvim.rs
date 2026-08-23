@@ -715,7 +715,7 @@
     "crates/nvim/src/os/env/dirs.rs": {"unsafe_lines": 254},
     "crates/nvim/src/os/env/expand.rs": {"unsafe_lines": 188},
     "crates/nvim/src/os/env/mod.rs": {"cell_ptr": 8, "extern_abi": 1, "missing_safety_doc": 1, "no_mangle": 1, "unsafe_lines": 258},
-    "crates/nvim/src/os/fileio.rs": {"extern_abi": 8, "no_mangle": 8, "unsafe_lines": 91},
+    "crates/nvim/src/os/fileio.rs": {"unsafe_lines": 91},
     "crates/nvim/src/os/fs/dir.rs": {"extern_abi": 6, "no_mangle": 6, "unsafe_lines": 56},
     "crates/nvim/src/os/fs/meta.rs": {"extern_abi": 17, "no_mangle": 17, "unsafe_lines": 70},
     "crates/nvim/src/os/fs/mod.rs": {"extern_abi": 11, "missing_safety_doc": 1, "no_mangle": 11, "unsafe_lines": 104},

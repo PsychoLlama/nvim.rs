@@ -13,6 +13,7 @@ mod cursor;
 mod digraph;
 mod env;
 mod expressions;
+mod fileio;
 mod fold;
 mod fpconv;
 mod garray;

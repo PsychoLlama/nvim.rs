@@ -10,11 +10,11 @@
 //!
 //! # Boundary
 //!
-//! The `FileDescriptor` layout and the C signatures of the `file_*` entry
-//! points are frozen: `test/unit/os/fileio_spec.lua` builds the struct
-//! through LuaJIT's FFI and reads `fp.wr` back out of it. The block comes
-//! from `alloc_block`, so the three positions stay raw pointers rather
-//! than becoming a slice and an index.
+//! `crates/nvim/tests/unit/fileio.rs` builds a `FileDescriptor` from
+//! outside the crate and reads `wr` back out of it, which is why the type
+//! and the `file_*` entry points are `pub`. The block comes from
+//! `alloc_block`, so the three positions stay raw pointers rather than
+//! becoming a slice and an index.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -139,8 +139,7 @@ fn open_flags(flags: c_int) -> c_int {
 ///
 /// `fname` is NUL-terminated and `ret_fp` points to writable, possibly
 /// uninitialized `FileDescriptor` storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_open(
+pub unsafe fn file_open(
     ret_fp: *mut FileDescriptor,
     fname: *const c_char,
     flags: c_int,
@@ -171,12 +170,7 @@ pub unsafe extern "C" fn file_open(
 ///
 /// `ret_fp` points to writable, possibly uninitialized `FileDescriptor`
 /// storage, and `fd` is an open descriptor this call takes over.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_open_fd(
-    ret_fp: *mut FileDescriptor,
-    fd: c_int,
-    flags: c_int,
-) -> c_int {
+pub unsafe fn file_open_fd(ret_fp: *mut FileDescriptor, fd: c_int, flags: c_int) -> c_int {
     // SAFETY: the caller's storage, written before anything reads it.
     let fp = unsafe { &mut *ret_fp };
     fp.wr = has(flags, WRITING);
@@ -241,8 +235,7 @@ pub unsafe fn file_open_buffer(ret_fp: *mut FileDescriptor, data: *mut c_char, l
 /// # Safety
 ///
 /// `fp` points to a live `FileDescriptor`, which this call spends.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> c_int {
+pub unsafe fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> c_int {
     // SAFETY: the caller's descriptor, and the arena block it owns.
     unsafe {
         if (*fp).fd < 0 {
@@ -270,8 +263,7 @@ pub unsafe extern "C" fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> 
 /// # Safety
 ///
 /// `fp` points to a live `FileDescriptor`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_fsync(fp: *mut FileDescriptor) -> c_int {
+pub unsafe fn file_fsync(fp: *mut FileDescriptor) -> c_int {
     // SAFETY: the caller's descriptor.
     unsafe {
         if !(*fp).wr {
@@ -294,8 +286,7 @@ pub unsafe extern "C" fn file_fsync(fp: *mut FileDescriptor) -> c_int {
 /// # Safety
 ///
 /// `fp` points to a live `FileDescriptor`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_flush(fp: *mut FileDescriptor) -> c_int {
+pub unsafe fn file_flush(fp: *mut FileDescriptor) -> c_int {
     // SAFETY: the caller's descriptor; `read_pos..write_pos` is the pending
     // output inside its own block.
     let fp = unsafe { &mut *fp };
@@ -334,12 +325,7 @@ fn read_count(n: ptrdiff_t) -> usize {
 ///
 /// `fp` points to a live read-side `FileDescriptor` and `ret_buf` is
 /// writable for `size` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_read(
-    fp: *mut FileDescriptor,
-    ret_buf: *mut c_char,
-    size: size_t,
-) -> ptrdiff_t {
+pub unsafe fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: size_t) -> ptrdiff_t {
     // SAFETY: the caller's descriptor and output buffer. The block's three
     // positions stay inside the block, and `os_readv` only writes what the
     // iovecs describe.
@@ -441,12 +427,7 @@ pub unsafe fn file_try_read_buffered(fp: *mut FileDescriptor, size: size_t) -> *
 ///
 /// `fp` points to a live write-side `FileDescriptor`, and `buf` is readable
 /// for `size` bytes and does not point into the descriptor's own block.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_write(
-    fp: *mut FileDescriptor,
-    buf: *const c_char,
-    size: size_t,
-) -> ptrdiff_t {
+pub unsafe fn file_write(fp: *mut FileDescriptor, buf: *const c_char, size: size_t) -> ptrdiff_t {
     // SAFETY: the caller's descriptor and input. The copy below only runs
     // once `size` is known to fit the space left after `write_pos`.
     let fp = unsafe { &mut *fp };
@@ -480,8 +461,7 @@ pub unsafe extern "C" fn file_write(
 /// # Safety
 ///
 /// `fp` points to a live read-side `FileDescriptor`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
+pub unsafe fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
     // SAFETY: the caller's descriptor; every position below is bounded by
     // the block's own `ARENA_BLOCK_SIZE` bytes.
     let fp = unsafe { &mut *fp };
