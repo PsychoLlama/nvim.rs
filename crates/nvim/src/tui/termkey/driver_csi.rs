@@ -302,8 +302,10 @@ fn handle_csi_mode(
     TERMKEY_RES_KEY
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_interpret_mouse(
+/// # Safety
+/// The reader is not read. `key` must be a readable key, and each of the
+/// four out-parameters must be null or writable.
+pub unsafe fn termkey_interpret_mouse(
     _tk: *mut TermKey,
     key: *const TermKeyKey,
     event: *mut TermKeyMouseEvent,
@@ -339,8 +341,10 @@ pub unsafe extern "C" fn termkey_interpret_mouse(
     TERMKEY_RES_KEY
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_interpret_position(
+/// # Safety
+/// The reader is not read. `key` must be a readable key, and each of the
+/// two out-parameters must be null or writable.
+pub unsafe fn termkey_interpret_position(
     _tk: *mut TermKey,
     key: *const TermKeyKey,
     line: *mut c_int,
@@ -363,8 +367,10 @@ pub unsafe extern "C" fn termkey_interpret_position(
     TERMKEY_RES_KEY
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_interpret_modereport(
+/// # Safety
+/// The reader is not read. `key` must be a readable key, and each of the
+/// three out-parameters must be null or writable.
+pub unsafe fn termkey_interpret_modereport(
     _tk: *mut TermKey,
     key: *const TermKeyKey,
     initial: *mut c_int,
@@ -400,8 +406,12 @@ pub unsafe extern "C" fn termkey_interpret_modereport(
 /// discards on the next call. `params` must have room for
 /// `csi::CSI_MAX_PARAMS`, which upstream assumed rather than checked — it
 /// ignores the count the caller passes in and only writes it back.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_interpret_csi(
+///
+/// # Safety
+/// `tk` must be a live reader still holding the sequence `key` names, `key`
+/// must be a readable key, `params` must have room for `CSI_MAX_PARAMS`
+/// entries, and `nparams` and `cmd` must be writable.
+pub unsafe fn termkey_interpret_csi(
     tk: *mut TermKey,
     key: *const TermKeyKey,
     params: *mut TermKeyCsiParam,

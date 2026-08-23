@@ -251,11 +251,10 @@ fn utf8_bytes(field: &[c_char; 7]) -> &[u8] {
 
 /// Create a key reader. `term` is the terminal's description, which may be null
 /// when nothing is known about it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_new_abstract(
-    term: *mut TerminfoEntry,
-    flags: c_int,
-) -> *mut TermKey {
+///
+/// # Safety
+/// `term` must be null or a live terminfo entry that outlives the reader.
+pub unsafe fn termkey_new_abstract(term: *mut TerminfoEntry, flags: c_int) -> *mut TermKey {
     // SAFETY: xmalloc returns a fresh allocation of the size asked for; it
     // aborts rather than returning null.
     let raw = unsafe { xmalloc(size_of::<TermKey>()) } as *mut TermKey;
@@ -304,8 +303,11 @@ fn free(mut tk: Tk) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_destroy(tk: *mut TermKey) {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out. Nothing may name it afterwards.
+pub unsafe fn termkey_destroy(tk: *mut TermKey) {
     // SAFETY: the caller's reader, as at every entry point here.
     let tk = unsafe { Tk::of(tk) };
     if tk.is_started != 0 {
@@ -316,6 +318,12 @@ pub unsafe extern "C" fn termkey_destroy(tk: *mut TermKey) {
 
 /// Install nvim's override for terminfo capability lookups, so it can supply
 /// key sequences the terminal's description does not name.
+///
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out. `data` is handed back to `hookfn`
+/// untouched and must outlive the reader.
 pub unsafe fn termkey_hook_terminfo_getstr(
     tk: *mut TermKey,
     hookfn: Option<TermKey_Terminfo_Getstr_Hook>,
@@ -339,8 +347,11 @@ fn start(mut tk: Tk) -> c_int {
     1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_start(tk: *mut TermKey) -> c_int {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_start(tk: *mut TermKey) -> c_int {
     // SAFETY: the caller's reader, as at every entry point here.
     start(unsafe { Tk::of(tk) })
 }
@@ -350,8 +361,11 @@ fn stop(mut tk: Tk) -> c_int {
     1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_stop(tk: *mut TermKey) -> c_int {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_stop(tk: *mut TermKey) -> c_int {
     // SAFETY: the caller's reader, as at every entry point here.
     stop(unsafe { Tk::of(tk) })
 }
@@ -367,20 +381,29 @@ fn set_flags(mut tk: Tk, newflags: c_int) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_set_flags(tk: *mut TermKey, newflags: c_int) {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_set_flags(tk: *mut TermKey, newflags: c_int) {
     // SAFETY: the caller's reader, as at every entry point here.
     set_flags(unsafe { Tk::of(tk) }, newflags);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_canonflags(tk: *mut TermKey) -> c_int {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_get_canonflags(tk: *mut TermKey) -> c_int {
     // SAFETY: the caller's reader, as at every entry point here.
     unsafe { Tk::of(tk) }.canonflags
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_set_canonflags(tk: *mut TermKey, flags: c_int) {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_set_canonflags(tk: *mut TermKey, flags: c_int) {
     // SAFETY: the caller's reader, as at every entry point here.
     let mut tk = unsafe { Tk::of(tk) };
     tk.canonflags = flags;
@@ -391,14 +414,20 @@ pub unsafe extern "C" fn termkey_set_canonflags(tk: *mut TermKey, flags: c_int) 
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_buffer_size(tk: *mut TermKey) -> size_t {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_get_buffer_size(tk: *mut TermKey) -> size_t {
     // SAFETY: the caller's reader, as at every entry point here.
     unsafe { Tk::of(tk) }.buffsize
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_set_buffer_size(tk: *mut TermKey, size: size_t) -> c_int {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_set_buffer_size(tk: *mut TermKey, size: size_t) -> c_int {
     // SAFETY: the caller's reader, as at every entry point here.
     let mut tk = unsafe { Tk::of(tk) };
     let buffer = tk.buffer;
@@ -409,8 +438,11 @@ pub unsafe extern "C" fn termkey_set_buffer_size(tk: *mut TermKey, size: size_t)
     1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_buffer_remaining(tk: *mut TermKey) -> size_t {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out.
+pub unsafe fn termkey_get_buffer_remaining(tk: *mut TermKey) -> size_t {
     // SAFETY: the caller's reader, as at every entry point here.
     let tk = unsafe { Tk::of(tk) };
     tk.buffsize - tk.buffcount
@@ -418,12 +450,12 @@ pub unsafe extern "C" fn termkey_get_buffer_remaining(tk: *mut TermKey) -> size_
 
 /// Hand more input to the reader. Returns how much of it was taken, or `-1` as
 /// a `size_t` when the buffer was already full.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_push_bytes(
-    tk: *mut TermKey,
-    bytes: *const c_char,
-    len: size_t,
-) -> size_t {
+///
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out. `bytes` must address `len` readable bytes.
+pub unsafe fn termkey_push_bytes(tk: *mut TermKey, bytes: *const c_char, len: size_t) -> size_t {
     // SAFETY: the caller's reader, as at every entry point here.
     let mut tk = unsafe { Tk::of(tk) };
     // SAFETY: the caller's input, `len` bytes of it.
@@ -539,8 +571,11 @@ fn canonicalise(tk: Tk, key: &mut TermKeyKey) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_canonicalise(tk: *mut TermKey, key: *mut TermKeyKey) {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out. `key` must be a writable key.
+pub unsafe fn termkey_canonicalise(tk: *mut TermKey, key: *mut TermKeyKey) {
     // SAFETY: the caller's reader and the key it is asking about.
     let (tk, key) = unsafe { (Tk::of(tk), &mut *key) };
     canonicalise(tk, key);
@@ -682,8 +717,11 @@ pub fn peekkey_mouse(tk: Tk, key: &mut TermKeyKey, nbytep: &mut size_t) -> TermK
     TERMKEY_RES_KEY
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_getkey(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out. `key` must be a writable key.
+pub unsafe fn termkey_getkey(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult {
     // SAFETY: the caller's reader and the key it is reading into.
     let (mut tk, key) = unsafe { (Tk::of(tk), &mut *key) };
     let mut nbytes: size_t = 0;
@@ -699,11 +737,11 @@ pub unsafe extern "C" fn termkey_getkey(tk: *mut TermKey, key: *mut TermKeyKey) 
     ret
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_getkey_force(
-    tk: *mut TermKey,
-    key: *mut TermKeyKey,
-) -> TermKeyResult {
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out. `key` must be a writable key.
+pub unsafe fn termkey_getkey_force(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult {
     // SAFETY: the caller's reader and the key it is reading into.
     let (mut tk, key) = unsafe { (Tk::of(tk), &mut *key) };
     let mut nbytes: size_t = 0;
@@ -715,8 +753,10 @@ pub unsafe extern "C" fn termkey_getkey_force(
 }
 
 /// The name of a symbolic key, or "UNKNOWN".
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_keyname(_tk: *mut TermKey, sym: TermKeySym) -> *const c_char {
+///
+/// # Safety
+/// The reader is not read; any pointer, including null, is accepted for it.
+pub unsafe fn termkey_get_keyname(_tk: *mut TermKey, sym: TermKeySym) -> *const c_char {
     keynames::name(sym).as_ptr()
 }
 
@@ -725,8 +765,11 @@ pub unsafe extern "C" fn termkey_get_keyname(_tk: *mut TermKey, sym: TermKeySym)
 /// Returns null when nothing matches. On a match `*symp` is the symbol and the
 /// return value points at the rest of `str`, so "DownMore" yields Down and
 /// "More".
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_lookup_keyname(
+///
+/// # Safety
+/// The reader is not read. `text` must be NUL-terminated and outlive the
+/// answer, which points into it, and `symp` must be writable.
+pub unsafe fn termkey_lookup_keyname(
     _tk: *mut TermKey,
     text: *const c_char,
     symp: *mut TermKeySym,
@@ -756,8 +799,12 @@ pub unsafe extern "C" fn termkey_lookup_keyname(
 /// makes easy — that subtraction wrapped to a size_t of about 2^64 and the next
 /// write ran off the end of the caller's buffer. Rendering once and copying
 /// what fits has no such edge.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_strfkey(
+///
+/// # Safety
+/// The reader is not read. `buffer` must address `len` writable bytes and
+/// `key` must be a readable key; the key is taken by pointer only because
+/// this is the shape the C ABI had.
+pub unsafe fn termkey_strfkey(
     _tk: *mut TermKey,
     buffer: *mut c_char,
     len: size_t,
@@ -831,8 +878,14 @@ pub unsafe extern "C" fn termkey_strfkey(
 
 /// The payload of the last DCS, OSC or APC string, if `key` is still the one
 /// that reported it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_interpret_string(
+///
+/// # Safety
+/// `tk` must be a live reader, made by [`termkey_new_abstract`] and not
+/// yet destroyed, with nothing else reading or writing it meanwhile -- the
+/// contract [`Tk::of`] spells out. `key` must be a readable key, and `strp` a
+/// writable out-parameter. The answer borrows the reader's saved payload and
+/// is invalidated by the next control string it reads.
+pub unsafe fn termkey_interpret_string(
     tk: *mut TermKey,
     key: *const TermKeyKey,
     strp: *mut *const c_char,

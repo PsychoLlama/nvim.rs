@@ -89,6 +89,9 @@ pub fn new_driver(entry: *mut TerminfoEntry) -> *mut c_void {
     Box::into_raw(Box::new(TerminfoDriver { entry, keys: None })) as *mut c_void
 }
 
+/// # Safety
+/// `info` must be a driver made by [`new_driver`] and not yet freed, and
+/// nothing may name it afterwards.
 pub unsafe fn free_driver(info: *mut c_void) {
     // SAFETY: the box `new_driver` leaked, reclaimed exactly once — the reader
     // that owns it is destroyed once.
