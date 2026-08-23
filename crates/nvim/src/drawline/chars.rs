@@ -590,7 +590,7 @@ impl Cells {
                 }
             }
 
-            let lcs = (*wp).w_p_lcs_chars;
+            let lcs = &(*wp).w_p_lcs_chars;
             let at = self.ptr.offset_from(self.line);
 
             // 'list': change 160 to "nbsp" and a space to "space" — but not

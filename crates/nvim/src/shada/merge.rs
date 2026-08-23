@@ -359,7 +359,12 @@ pub(crate) unsafe extern "C" fn compare_file_marks(a: *const c_void, b: *const c
 /// room; if the new item is older than everything in a full list there is
 /// nowhere for it to go and this answers −1. So does an `i` of −1, which is
 /// how a caller says the item is one the list already holds.
-pub(crate) fn marklist_insert<T: Copy>(list: &mut [T], len: c_int, i: c_int) -> c_int {
+///
+/// The items are *moved* within the list, not duplicated: a mark owns its
+/// ShaDa extra data, and the slot a shift vacates is written over by the
+/// caller. [`shift_within`] is `slice::copy_within` for a type that is only
+/// `Clone` for that reason.
+pub(crate) fn marklist_insert<T: Clone>(list: &mut [T], len: c_int, i: c_int) -> c_int {
     let len = len as usize;
     match i.cmp(&0) {
         Ordering::Less => -1,
@@ -368,10 +373,10 @@ pub(crate) fn marklist_insert<T: Copy>(list: &mut [T], len: c_int, i: c_int) -> 
             if len == JUMPLISTSIZE as usize {
                 at -= 1;
                 if at > 0 {
-                    list.copy_within(1..=at, 0); // the oldest item goes
+                    shift_within(list, 1..at + 1, 0); // the oldest item goes
                 }
             } else if at != len {
-                list.copy_within(at..len, at + 1); // newer items shift up
+                shift_within(list, at..len, at + 1); // newer items shift up
             }
             at as c_int
         }
@@ -380,10 +385,25 @@ pub(crate) fn marklist_insert<T: Copy>(list: &mut [T], len: c_int, i: c_int) -> 
                 -1 // older than the whole list
             } else {
                 if len > 0 {
-                    list.copy_within(0..len, 1);
+                    shift_within(list, 0..len, 1);
                 }
                 0
             }
+        }
+    }
+}
+
+/// `slice::copy_within` without the `Copy` bound: the elements are shallow-
+/// cloned in whichever direction keeps the source intact until it is read,
+/// which is what a `memmove` of the same range does.
+fn shift_within<T: Clone>(list: &mut [T], src: core::ops::Range<usize>, dest: usize) {
+    if dest <= src.start {
+        for (n, at) in src.enumerate() {
+            list[dest + n] = list[at].clone();
+        }
+    } else {
+        for (n, at) in src.enumerate().rev() {
+            list[dest + n] = list[at].clone();
         }
     }
 }

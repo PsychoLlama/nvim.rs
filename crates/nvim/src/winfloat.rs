@@ -576,7 +576,7 @@ fn set_minimal_style(win: Win) {
     if win.w_floating && opt_is_set(win.w_onebuf_opt.wo_stl) {
         clear_opt(&mut win.w_onebuf_opt.wo_stl);
         if win.w_status_height > 0 {
-            config_float(win, win.w_config);
+            config_float(win, win.w_config.clone());
         }
     }
 }
@@ -642,7 +642,7 @@ fn config_float(win: Win, mut fconfig: WinConfig) {
     let mut change_border = fconfig.border != win.w_config.border
         || fconfig.border_hl_ids != win.w_config.border_hl_ids;
 
-    merge_config(&mut win, fconfig);
+    merge_config(&mut win, fconfig.clone());
 
     let has_border = win.w_floating && win.w_config.border;
     for i in 0..4 {
@@ -785,7 +785,7 @@ pub fn win_float_update_statusline() {
         let has_status = wp.w_status_height > 0;
         let should_show = opt_is_set(wp.w_onebuf_opt.wo_stl) && show_statusline();
         if should_show != has_status {
-            config_float(wp, wp.w_config);
+            config_float(wp, wp.w_config.clone());
         }
     }
 }
@@ -800,7 +800,7 @@ pub fn win_float_anchor_laststatus() {
 
 pub fn win_reconfig_floats() {
     for wp in floats() {
-        config_float(wp, wp.w_config);
+        config_float(wp, wp.w_config.clone());
     }
 }
 

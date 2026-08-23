@@ -279,7 +279,7 @@ impl Cells {
         // SAFETY: the caller's window and the scratch buffer, which is not
         // held across another `get_extra_buf`.
         unsafe {
-            let lcs = (*wp).w_p_lcs_chars;
+            let lcs = &(*wp).w_p_lcs_chars;
             let (mut lcs_tab1, mut lcs_tab2, mut lcs_tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
             if (*wp).w_onebuf_opt.wo_list != 0
                 && lcs.leadtab1 != NUL as schar_T

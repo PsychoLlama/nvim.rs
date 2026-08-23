@@ -154,7 +154,7 @@ impl Fmark {
     #[inline(always)]
     pub(super) fn read(self) -> fmark_T {
         // SAFETY: as `pos_raw`.
-        unsafe { *self.0 }
+        unsafe { (*self.0).clone() }
     }
 
     /// Overwrite the whole record. Does not free what was there; see
@@ -301,7 +301,7 @@ impl Xfmark {
     #[inline(always)]
     pub(super) fn read(self) -> xfmark_T {
         // SAFETY: `new`'s caller promised a live record.
-        unsafe { *self.0 }
+        unsafe { (*self.0).clone() }
     }
 
     #[inline(always)]

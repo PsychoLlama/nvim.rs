@@ -574,7 +574,7 @@ fn check_tabpage_windows(old_curtab: TabPage) {
 
 /// Re-place a floating window under its own configuration.
 fn config_float(mut wp: Win) {
-    let (raw, config) = (wp.raw(), wp.w_config);
+    let (raw, config) = (wp.raw(), wp.w_config.clone());
     // SAFETY: a live window and its own configuration.
     unsafe { win_config_float(raw, config) };
 }

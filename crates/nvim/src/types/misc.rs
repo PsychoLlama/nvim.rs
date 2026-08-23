@@ -66,7 +66,7 @@ pub struct Map_ptr_t_ptr_t {
     pub set: Set_ptr_t,
     pub values: *mut ptr_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Map_uint32_t_ptr_t {
     pub set: Set_uint32_t,
     pub values: *mut ptr_t,
@@ -133,7 +133,8 @@ pub struct Set_ptr_t {
     pub h: MapHash,
     pub keys: *mut ptr_t,
 }
-#[derive(Copy, Clone)]
+/// Not `Copy`: `keys` and the hash's own tables are owned allocations.
+#[derive(Clone)]
 pub struct Set_uint32_t {
     pub h: MapHash,
     pub keys: *mut uint32_t,

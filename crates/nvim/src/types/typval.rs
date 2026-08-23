@@ -178,7 +178,10 @@ pub struct listvar_S {
     pub lv_lock: VarLockStatus,
     pub lua_table_ref: LuaRef,
 }
-#[derive(Copy, Clone)]
+/// Not `Copy`: a node of the intrusive watcher list a `:for` loop links
+/// into its list, so a duplicate would be a second node claiming the same
+/// place in it.
+#[derive(Clone)]
 pub struct listwatch_S {
     pub lw_item: *mut listitem_T,
     pub lw_next: *mut listwatch_T,

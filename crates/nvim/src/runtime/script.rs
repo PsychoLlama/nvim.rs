@@ -519,7 +519,7 @@ pub unsafe fn getsourceline(
 
     // Convert the encoding of the script line.
     // SAFETY: as above; `string_convert` returns fresh memory or null.
-    if !line.is_null() && unsafe { (*sp).conv }.vc_type != CONV_NONE {
+    if !line.is_null() && unsafe { (*sp).conv.vc_type } != CONV_NONE {
         let converted = unsafe { string_convert(&raw mut (*sp).conv, line, ptr::null_mut()) };
         if !converted.is_null() {
             unsafe { xfree(line.cast::<c_void>()) };

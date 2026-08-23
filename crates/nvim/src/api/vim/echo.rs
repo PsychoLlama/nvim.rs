@@ -125,7 +125,7 @@ pub unsafe fn nvim_echo(
                 }
                 id = msg_multihl(
                     (*opts).id,
-                    hl_msg,
+                    hl_msg.clone(),
                     kind,
                     history,
                     (*opts).err,
@@ -144,7 +144,7 @@ pub unsafe fn nvim_echo(
                     verbose_stop();
                 }
                 if is_progress {
-                    do_autocmd_progress(id, hl_msg, &raw mut msg_data);
+                    do_autocmd_progress(id, hl_msg.clone(), &raw mut msg_data);
                 }
                 if !needs_clear {
                     return id.reported(error);

@@ -501,7 +501,7 @@ impl Writing {
             }
 
             for i in 0..(*buf).b_changelistlen as usize {
-                let fm = (*buf).b_changelist[i];
+                let fm = (*buf).b_changelist[i].clone();
                 (*filemarks).changes[i] = ShadaEntry {
                     type_0: kSDItemChange,
                     can_free_entry: false,

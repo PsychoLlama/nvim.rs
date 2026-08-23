@@ -812,7 +812,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     // Copy the tag stack and its strings.
     for i in 0..oldp.w_tagstacklen as usize {
         let tag = &mut newp.w_tagstack[i];
-        *tag = oldp.w_tagstack[i];
+        *tag = oldp.w_tagstack[i].clone();
         tag.tagname = dup(tag.tagname);
         tag.user_data = dup(tag.user_data);
     }

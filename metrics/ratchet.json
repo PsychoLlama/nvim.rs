@@ -86,7 +86,7 @@
     "crates/nvim/src/api/win_config/apply.rs": {"missing_safety_doc": 3, "unsafe_lines": 449},
     "crates/nvim/src/api/win_config/border.rs": {"unsafe_lines": 121},
     "crates/nvim/src/api/win_config/get.rs": {"cell_ptr": 3, "missing_safety_doc": 2, "unsafe_lines": 216},
-    "crates/nvim/src/api/win_config/open.rs": {"cell_ptr": 5, "missing_safety_doc": 4, "unsafe_lines": 378},
+    "crates/nvim/src/api/win_config/open.rs": {"cell_ptr": 5, "missing_safety_doc": 4, "unsafe_lines": 373},
     "crates/nvim/src/api/win_config/parse.rs": {"missing_safety_doc": 7, "unsafe_lines": 636},
     "crates/nvim/src/api/window.rs": {"unsafe_lines": 155},
     "crates/nvim/src/arglist/all.rs": {"missing_safety_doc": 2, "unsafe_lines": 175},

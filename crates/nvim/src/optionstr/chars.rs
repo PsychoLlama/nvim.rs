@@ -547,13 +547,27 @@ pub unsafe fn set_chars_option(
             if listchars {
                 xfree((*wp).w_p_lcs_chars.multispace.cast::<c_void>());
                 xfree((*wp).w_p_lcs_chars.leadmultispace.cast::<c_void>());
-                (*wp).w_p_lcs_chars = lcs_chars.get();
+                (*wp).w_p_lcs_chars = take_lcs_chars();
             } else {
+                // Nothing in `fcs_chars_T` is owned, so this really is a copy.
                 (*wp).w_p_fcs_chars = fcs_chars.get();
             }
         }
     }
     ptr::null()
+}
+
+/// Take the module's scratch 'listchars' struct, leaving it owning neither
+/// of the two "multispace" runs: they belong to the window from here on.
+/// It is a move rather than a copy, which is why `lcs_chars_T` is not
+/// `Copy` and this cannot be a `GlobalCell::get`.
+fn take_lcs_chars() -> lcs_chars_T {
+    lcs_chars.with_mut(|chars| {
+        let taken = chars.clone();
+        chars.multispace = ptr::null_mut();
+        chars.leadmultispace = ptr::null_mut();
+        taken
+    })
 }
 
 /// Does the field named `name` start at `p`? A field name is followed by a

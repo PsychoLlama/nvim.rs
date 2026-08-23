@@ -89,15 +89,16 @@ pub unsafe fn nvim_open_win(
         ) {
             return (0 as Window).reported(error);
         }
-        let mut is_split: bool = has_key(
-            (*config).is_set__win_config_,
-            KEYSET_OPTIDX_win_config__split,
-        ) || has_key(
-            (*config).is_set__win_config_,
-            KEYSET_OPTIDX_win_config__vertical,
-        );
+        let keys_set = (*config).is_set__win_config_;
+        let mut is_split = has_key(keys_set, KEYSET_OPTIDX_win_config__split)
+            || has_key(keys_set, KEYSET_OPTIDX_win_config__vertical);
         let mut rv: Window = 0 as Window;
-        if fconfig.noautocmd {
+        // Read before the config is handed to the window: whichever branch
+        // below runs moves it, and both of these are wanted afterwards.
+        let noautocmd = fconfig.noautocmd;
+        let style = fconfig.style;
+        let cmdline_offset = fconfig._cmdline_offset;
+        if noautocmd {
             block_autocmds();
         }
         let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
@@ -136,13 +137,9 @@ pub unsafe fn nvim_open_win(
                 ) {
                     break '_cleanup;
                 }
-                if has_key(
-                    (*config).is_set__win_config_,
-                    KEYSET_OPTIDX_win_config__vertical,
-                ) && !(has_key(
-                    (*config).is_set__win_config_,
-                    KEYSET_OPTIDX_win_config__split,
-                )) {
+                if has_key(keys_set, KEYSET_OPTIDX_win_config__vertical)
+                    && !has_key(keys_set, KEYSET_OPTIDX_win_config__split)
+                {
                     if (*config).vertical {
                         fconfig.split = (if p_spr.get() != 0 {
                             kWinSplitRight as ::core::ffi::c_int
@@ -234,12 +231,12 @@ pub unsafe fn nvim_open_win(
                     );
                 }
             } else {
-                if fconfig._cmdline_offset < INT_MAX {
+                if cmdline_offset < INT_MAX {
                     cmdline_win.set(wp);
                 }
                 bufref = bufref_T::default();
                 set_bufref(&raw mut bufref, b);
-                if !fconfig.noautocmd {
+                if !noautocmd {
                     let mut switchwin_0: switchwin_T = switchwin_T {
                         sw_curwin: ::core::ptr::null_mut::<win_T>(),
                         sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
@@ -268,13 +265,13 @@ pub unsafe fn nvim_open_win(
                     && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
                     && b != (*wp).w_buffer
                 {
-                    let au_no_enter_leave: bool = curwin.get() != wp && !fconfig.noautocmd;
+                    let au_no_enter_leave: bool = curwin.get() != wp && !noautocmd;
                     if au_no_enter_leave {
                         (*autocmd_no_enter.ptr()) += 1;
                         (*autocmd_no_leave.ptr()) += 1;
                     }
                     win_set_buf(wp, b, err);
-                    if !fconfig.noautocmd {
+                    if !noautocmd {
                         tp = win_find_tabpage(wp);
                     }
                     if au_no_enter_leave {
@@ -290,7 +287,7 @@ pub unsafe fn nvim_open_win(
                         c"Window was closed immediately".as_ptr(),
                     );
                 } else {
-                    if fconfig.style as ::core::ffi::c_uint
+                    if style as ::core::ffi::c_uint
                         == kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         win_set_minimal_style(wp);
@@ -301,7 +298,7 @@ pub unsafe fn nvim_open_win(
                 }
             }
         }
-        if fconfig.noautocmd {
+        if noautocmd {
             unblock_autocmds();
         }
         rv.reported(error)

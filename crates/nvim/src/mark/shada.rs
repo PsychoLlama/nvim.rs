@@ -173,7 +173,7 @@ pub unsafe fn mark_buffer_iter(
     // SAFETY: writable out-parameters, and a live record.
     unsafe {
         *name = at;
-        *fm = *iter_mark;
+        *fm = (*iter_mark).clone();
     }
     iter_mark.cast()
 }

@@ -28,7 +28,9 @@ pub struct GridView {
     pub row_offset: ::core::ffi::c_int,
     pub col_offset: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+/// Not `Copy`: the five per-cell buffers are owned. `grid_alloc` clones a
+/// grid to keep everything *but* those, and replaces them explicitly.
+#[derive(Clone)]
 pub struct ScreenGrid {
     pub handle: handle_T,
     pub chars: *mut schar_T,

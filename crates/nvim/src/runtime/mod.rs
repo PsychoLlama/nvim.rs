@@ -183,7 +183,7 @@ crate::flag_set! {
     /// Look for both directories and files.
     const DIRFILE = 512;
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct source_cookie_T {
     pub fp: *mut FILE,
     pub nextline: *mut ::core::ffi::c_char,

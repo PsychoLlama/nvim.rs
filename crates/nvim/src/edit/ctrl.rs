@@ -307,7 +307,7 @@ pub(crate) unsafe fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: bool) ->
         if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
             let view = mark_view_make(curwin.get(), (*curwin.get()).w_cursor);
             let fm = &raw mut (*curbuf.get()).b_last_insert;
-            free_fmark(*fm);
+            free_fmark((*fm).clone());
             (*fm).mark = (*curwin.get()).w_cursor;
             (*fm).fnum = (*curbuf.get()).handle;
             (*fm).timestamp = os_time();

@@ -132,7 +132,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
             if need_append {
                 win_append(lastwin.get(), auc_win, ::core::ptr::null_mut());
                 map_put_int_ptr_t(window_handles.ptr(), (*auc_win).handle, auc_win as ptr_t);
-                win_config_float(auc_win, (*auc_win).w_config);
+                win_config_float(auc_win, (*auc_win).w_config.clone());
             }
             // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
             // `RedrawingDisabled` keeps it from redrawing or setting the

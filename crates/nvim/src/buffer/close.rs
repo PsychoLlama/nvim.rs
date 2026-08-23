@@ -824,10 +824,10 @@ fn free_buffer(mut buf: Buf) {
     clear_mark(&mut buf.b_last_change);
     clear_mark(&mut buf.b_prompt_start);
     for i in 0..NMARKS as usize {
-        drop_mark(buf.b_namedm[i]);
+        drop_mark(buf.b_namedm[i].clone());
     }
     for i in 0..buf.b_changelistlen as usize {
-        drop_mark(buf.b_changelist[i]);
+        drop_mark(buf.b_changelist[i].clone());
     }
     if autocmd_busy.get() {
         // Do not free the buffer structure while autocommands are executing,

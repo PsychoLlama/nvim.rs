@@ -133,7 +133,7 @@ pub use self::errors::*;
 /// The compositor layer messages float on.
 pub const kZIndexMessages: c_uint = 200;
 /// One entry of the message history. See [`self::history`].
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct msg_hist {
     pub next: *mut msg_hist,
     pub prev: *mut msg_hist,
@@ -425,7 +425,7 @@ pub unsafe fn msg_multihl(
 
         // A progress message displays as "title: percent% msg".
         if is_progress && !msg_data.is_null() {
-            let formatted = format_progress_message(hl_msg, msg_data);
+            let formatted = format_progress_message(hl_msg.clone(), msg_data);
             if formatted.items != hl_msg.items {
                 *needs_msg_clear = true;
                 hl_msg_updated = true;
@@ -434,7 +434,7 @@ pub unsafe fn msg_multihl(
         }
 
         for i in 0..hl_msg.size {
-            let chunk = *hl_msg.items.add(i);
+            let chunk = (*hl_msg.items.add(i)).clone();
             is_multihl.set(is_multihl.get() + 1);
             if err {
                 emsg_multiline(chunk.text.data(), kind, chunk.hl_id, true);
@@ -446,7 +446,7 @@ pub unsafe fn msg_multihl(
 
         let kept = history && hl_msg.size != 0;
         if kept {
-            msg_hist_add_multihl(hl_msg, false, msg_data);
+            msg_hist_add_multihl(hl_msg.clone(), false, msg_data);
         }
 
         msg_ext_skip_flush.set(false);

@@ -910,7 +910,7 @@ pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int,
         if width != wp.w_width || height != wp.w_height {
             wp.w_config.width = width.max(1);
             wp.w_config.height = height.max(1);
-            unsafe { win_config_float(wp, wp.w_config) };
+            unsafe { win_config_float(wp, wp.w_config.clone()) };
         }
     } else {
         // A split's size is a request: the layout decides what it gets.

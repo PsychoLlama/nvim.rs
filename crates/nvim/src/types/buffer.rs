@@ -40,7 +40,11 @@ pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeMouse: FloatRelative = 3;
 pub const kFloatRelativeTabline: FloatRelative = 4;
 pub const kFloatRelativeLaststatus: FloatRelative = 5;
-#[derive(Copy, Clone)]
+/// Not `Copy`: the two virtual-text chunk arrays are owned, and
+/// [`crate::window::config::merge_win_config`] decides which of two configs
+/// keeps them by comparing the `items` pointers. A `clone` is the shallow
+/// copy that comparison expects; it duplicates no allocation.
+#[derive(Clone)]
 pub struct WinConfig {
     pub window: Window,
     pub bufpos: lpos_T,
@@ -440,7 +444,9 @@ pub struct frame_S {
 pub type frame_T = frame_S;
 pub type getf_retvalues = ::core::ffi::c_int;
 pub type getf_values = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+/// Not `Copy`: `multispace` and `leadmultispace` are owned runs, allocated
+/// by 'listchars' and freed when the window's value is replaced.
+#[derive(Clone)]
 pub struct lcs_chars_T {
     pub eol: schar_T,
     pub ext: schar_T,
@@ -579,7 +585,8 @@ pub struct tabpage_S {
     pub tp_prevdir: *mut ::core::ffi::c_char,
 }
 pub type tabpage_T = tabpage_S;
-#[derive(Copy, Clone)]
+/// Not `Copy`: `tagname` and `user_data` are owned strings.
+#[derive(Clone)]
 pub struct taggy_T {
     pub tagname: *mut ::core::ffi::c_char,
     pub fmark: fmark_T,
@@ -587,7 +594,10 @@ pub struct taggy_T {
     pub cur_fnum: ::core::ffi::c_int,
     pub user_data: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
+/// Neither `Copy` nor `Clone`. A window owns its buffer list entry, its
+/// grid, its option strings, its tag stack and its jump list; nothing in
+/// the tree may duplicate one, and the absence of the derives is what says
+/// so.
 pub struct window_S {
     pub handle: handle_T,
     pub w_buffer: *mut buf_T,
@@ -750,7 +760,7 @@ pub struct window_S {
     pub w_statuscol_click_defs: *mut StlClickDefinition,
     pub w_statuscol_click_defs_size: size_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct wininfo_S {
     pub wi_win: *mut win_T,
     pub wi_mark: fmark_T,
@@ -760,7 +770,10 @@ pub struct wininfo_S {
     pub wi_folds: garray_T,
     pub wi_changelistidx: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+/// Not `Copy`: the string options in here are owned, and `copy_options`
+/// exists precisely to duplicate them. A shallow copy is a step in that,
+/// never the whole of it.
+#[derive(Clone)]
 pub struct winopt_T {
     pub wo_arab: ::core::ffi::c_int,
     pub wo_bri: ::core::ffi::c_int,

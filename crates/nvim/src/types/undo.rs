@@ -90,7 +90,7 @@ impl UndoLink {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct u_header {
     pub uh_next: UndoLink,
     pub uh_prev: UndoLink,
@@ -116,8 +116,14 @@ impl Default for u_header {
     /// `xmalloc` plus a `memset` left behind, spelled out so that getting
     /// one does not mean writing zeroes through a pointer.
     fn default() -> Self {
-        let unset_mark = fmark_T {
-            mark: pos_T::default(),
+        // A `const`, not a `let`: `fmark_T` is not `Copy`, and only a
+        // constant may be repeated into an array without it.
+        const UNSET_MARK: fmark_T = fmark_T {
+            mark: pos_T {
+                lnum: 0,
+                col: 0,
+                coladd: 0,
+            },
             fnum: 0,
             timestamp: 0,
             view: fmarkv_T {
@@ -138,7 +144,7 @@ impl Default for u_header {
             uh_cursor: pos_T::default(),
             uh_cursor_vcol: 0,
             uh_flags: 0,
-            uh_namedm: [unset_mark; 26],
+            uh_namedm: [UNSET_MARK; 26],
             uh_extmark: extmark_undo_vec_t {
                 size: 0,
                 capacity: 0,

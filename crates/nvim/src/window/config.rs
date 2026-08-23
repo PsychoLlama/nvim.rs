@@ -208,7 +208,7 @@ fn ext_win_position(wp: Win, validate: bool) {
         }
         return;
     }
-    let c: WinConfig = wp.w_config;
+    let c = wp.w_config.clone();
     if c.external {
         ui_call_win_external_pos(wp.w_grid_alloc.handle as Integer, wp.handle as Window);
         return;

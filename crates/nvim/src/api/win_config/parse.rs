@@ -636,7 +636,7 @@ pub(crate) unsafe fn parse_win_config(
         merge_win_config(
             fconfig,
             if !wp.is_null() {
-                (*wp).w_config
+                (*wp).w_config.clone()
             } else {
                 WinConfig {
                     window: 0,

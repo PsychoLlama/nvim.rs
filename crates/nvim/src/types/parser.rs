@@ -17,7 +17,7 @@ pub struct ParserHighlightChunk {
     pub end_col: size_t,
     pub group: *const ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct ParserInputReader {
     pub get_line: ParserLineGetter,
     pub cookie: *mut ::core::ffi::c_void,
@@ -44,7 +44,7 @@ pub struct ParserPosition {
     pub line: size_t,
     pub col: size_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct ParserState {
     pub reader: ParserInputReader,
     pub pos: ParserPosition,

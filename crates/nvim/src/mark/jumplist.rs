@@ -338,7 +338,7 @@ pub unsafe fn copy_jumplist(from: *mut win_T, to: *mut win_T) {
     let (from, mut to) = unsafe { (Win::new(from), Win::new(to)) };
     for i in 0..from.w_jumplistlen {
         let entry = from.jump(i).read();
-        to.jump(i).write(entry);
+        to.jump(i).write(entry.clone());
         // The file name is owned per entry, so the copy gets its own.
         if !entry.fname.is_null() {
             // SAFETY: `fname` is a NUL-terminated string owned by `from`.

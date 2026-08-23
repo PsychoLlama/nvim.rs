@@ -105,7 +105,7 @@ pub(crate) fn setheight_win(height: c_int, win: Win) {
     if win.w_floating {
         win.w_config.height = height.max(1);
         // SAFETY: a live window.
-        unsafe { win_config_float(win.raw(), win.w_config) };
+        unsafe { win_config_float(win.raw(), win.w_config.clone()) };
         win.redraw_later(UPD_VALID);
     } else {
         let chrome = arith::height_with_chrome(height, win.w_hsep_height, win.w_status_height);
@@ -274,7 +274,7 @@ pub(crate) fn setwidth_win(width: c_int, wp: Win) {
     if wp.w_floating {
         wp.w_config.width = width;
         // SAFETY: a live window.
-        unsafe { win_config_float(wp.raw(), wp.w_config) };
+        unsafe { win_config_float(wp.raw(), wp.w_config.clone()) };
         wp.redraw_later(UPD_NOT_VALID);
     } else {
         set_frame_width(wp.frame(), arith::width_with_chrome(width, wp.w_vsep_width));

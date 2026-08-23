@@ -15,7 +15,9 @@ pub type MarkAdjustMode = ::core::ffi::c_uint;
 pub type MarkGet = ::core::ffi::c_uint;
 pub type MarkMove = ::core::ffi::c_uint;
 pub type MarkMoveRes = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+/// Not `Copy`: `additional_data` is the ShaDa extra data the mark owns,
+/// and `free_fmark` takes a mark by value to release it.
+#[derive(Clone)]
 pub struct fmark_T {
     pub mark: pos_T,
     pub fnum: ::core::ffi::c_int,
@@ -28,7 +30,8 @@ pub struct fmarkv_T {
     pub topline_offset: linenr_T,
     pub skipcol: colnr_T,
 }
-#[derive(Copy, Clone)]
+/// Not `Copy`: an owned `fname` on top of [`fmark_T`]'s own.
+#[derive(Clone)]
 pub struct xfmark_T {
     pub fmark: fmark_T,
     pub fname: *mut ::core::ffi::c_char,

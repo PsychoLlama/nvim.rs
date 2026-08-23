@@ -164,7 +164,7 @@ unsafe fn msg_hist_free_msg(entry: *mut MessageHistoryEntry) {
         if entry == msg_hist_temp.get() {
             msg_hist_temp.set((*entry).next);
         }
-        hl_msg_free((*entry).msg);
+        hl_msg_free((*entry).msg.clone());
         xfree((*entry).kind.cast());
         xfree(entry.cast());
     }
@@ -292,7 +292,7 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
     unsafe {
         let mut content = EMPTY_ARRAY;
         for i in 0..(*entry).msg.size {
-            let chunk = *(*entry).msg.items.add(i);
+            let chunk = (*(*entry).msg.items.add(i)).clone();
             let attr = if chunk.hl_id != 0 {
                 syn_id2attr(chunk.hl_id)
             } else {
@@ -372,7 +372,7 @@ pub unsafe fn ex_messages(eap: *mut exarg_T) {
                     let mut needs_clear = false;
                     msg_multihl(
                         Object::NIL,
-                        (*p).msg,
+                        (*p).msg.clone(),
                         (*p).kind,
                         false,
                         false,

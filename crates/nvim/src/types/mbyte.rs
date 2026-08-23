@@ -30,7 +30,8 @@ pub struct StrCharInfo {
     pub ptr: *mut ::core::ffi::c_char,
     pub chr: CharInfo,
 }
-#[derive(Copy, Clone)]
+/// Not `Copy`: `vc_fd` is an iconv descriptor that has to be closed once.
+#[derive(Clone)]
 pub struct vimconv_T {
     pub vc_type: ::core::ffi::c_int,
     pub vc_factor: ::core::ffi::c_int,

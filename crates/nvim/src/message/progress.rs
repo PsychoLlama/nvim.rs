@@ -92,7 +92,7 @@ pub(crate) unsafe fn format_progress_message(
             return hl_msg;
         }
         for i in 0..hl_msg.size {
-            let chunk = *hl_msg.items.add(i);
+            let chunk = (*hl_msg.items.add(i)).clone();
             hl_msg_push(
                 &mut updated,
                 HlMessageChunk {

@@ -518,7 +518,7 @@ pub fn check_emsg_bytes<R>(_editor: &Editor, f: impl FnOnce() -> R, msg: Option<
                 "expected a new message: {:?}",
                 String::from_utf8_lossy(expected)
             );
-            let chunk = unsafe { *(*after).msg.items };
+            let chunk = unsafe { (*(*after).msg.items).clone() };
             let text = unsafe { CStr::from_ptr(chunk.text.data()) };
             assert_eq!(
                 String::from_utf8_lossy(text.to_bytes()),

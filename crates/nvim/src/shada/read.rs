@@ -429,7 +429,7 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry) {
             if buf.is_null() {
                 continue;
             }
-            free_fmark((*buf).b_last_cursor);
+            free_fmark((*buf).b_last_cursor.clone());
             (*buf).b_last_cursor = fmark_T {
                 mark: (*item).pos,
                 fnum: 0,
@@ -489,7 +489,7 @@ unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
         let win = curwin.get();
         let mut i = (*win).w_jumplistlen;
         while i > 0 {
-            let existing = (*win).w_jumplist[i as usize - 1];
+            let existing = &(*win).w_jumplist[i as usize - 1];
             if existing.fmark.timestamp <= fm.fmark.timestamp {
                 let same_file = if buf.is_null() {
                     !existing.fname.is_null() && strcmp(fm.fname, existing.fname) == 0
@@ -504,7 +504,7 @@ unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
             i -= 1;
         }
         if i > 0 && (*win).w_jumplistlen == JUMPLISTSIZE {
-            free_xfmark((*win).w_jumplist[0]);
+            free_xfmark((*win).w_jumplist[0].clone());
         }
         let len = (*win).w_jumplistlen;
         let i = marklist_insert(&mut (*win).w_jumplist, len, i);
@@ -529,7 +529,7 @@ unsafe fn insert_change(buf: *mut buf_T, fm: fmark_T) {
     unsafe {
         let mut i = (*buf).b_changelistlen;
         while i > 0 {
-            let existing = (*buf).b_changelist[i as usize - 1];
+            let existing = &(*buf).b_changelist[i as usize - 1];
             if existing.timestamp <= fm.timestamp {
                 if marks_equal(existing.mark, fm.mark) {
                     i = -1;
@@ -539,7 +539,7 @@ unsafe fn insert_change(buf: *mut buf_T, fm: fmark_T) {
             i -= 1;
         }
         if i > 0 && (*buf).b_changelistlen == JUMPLISTSIZE {
-            free_fmark((*buf).b_changelist[0]);
+            free_fmark((*buf).b_changelist[0].clone());
         }
         let len = (*buf).b_changelistlen;
         let i = marklist_insert(&mut (*buf).b_changelist, len, i);

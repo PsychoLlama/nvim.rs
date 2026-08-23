@@ -29,20 +29,23 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
         // `'list'` on the window forces the listing form whatever the caller
         // asked for.
         let list = list || (*curwin.get()).w_onebuf_opt.wo_list != 0;
-        let lcs = || (*curwin.get()).w_p_lcs_chars;
+        // The window's 'listchars', borrowed rather than copied: the struct
+        // owns its two "multispace" runs, and nothing printed below changes
+        // which window is current.
+        let lcs = &(*curwin.get()).w_p_lcs_chars;
 
         // Where the trailing whitespace starts, and where the leading
         // whitespace ends; both null when no 'listchars' item needs them.
         let mut trail = ptr::null();
         let mut lead = ptr::null();
         if list {
-            if lcs().trail != 0 {
+            if lcs.trail != 0 {
                 trail = s.add(strlen(s));
                 while trail > s && ascii_iswhite(*trail.sub(1) as c_int) {
                     trail = trail.sub(1);
                 }
             }
-            if lcs().lead != 0 || !lcs().leadmultispace.is_null() || lcs().leadtab1 != 0 {
+            if lcs.lead != 0 || !lcs.leadmultispace.is_null() || lcs.leadtab1 != 0 {
                 lead = s;
                 while ascii_iswhite(*lead as c_int) {
                     lead = lead.add(1);
@@ -56,7 +59,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
 
         // Output a space for an empty line, or it would not overwrite what is
         // already on the row.
-        if *s == 0 && !(list && lcs().eol != 0) {
+        if *s == 0 && !(list && lcs.eol != 0) {
             msg_putchar(b' ' as c_int);
         }
 
@@ -94,11 +97,11 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                     let mut buf = [0 as c_char; MB_MAXBYTES + 1];
                     if len >= MB_MAXBYTES as c_int {
                         xstrlcpy(buf.as_mut_ptr(), c"?".as_ptr(), buf.len());
-                    } else if lcs().nbsp != 0
+                    } else if lcs.nbsp != 0
                         && list
                         && (utf_ptr2char(s) == 160 || utf_ptr2char(s) == 0x202f)
                     {
-                        schar_get(buf.as_mut_ptr(), lcs().nbsp);
+                        schar_get(buf.as_mut_ptr(), lcs.nbsp);
                     } else {
                         ptr::copy_nonoverlapping(s, buf.as_mut_ptr(), len as usize);
                         buf[len as usize] = 0;
@@ -130,7 +133,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                     }
                 }
 
-                if c == TAB && (!list || lcs().tab1 != 0) {
+                if c == TAB && (!list || lcs.tab1 != 0) {
                     // How wide the tab is depends on where it starts.
                     extra_left = tabstop_padding(
                         col as colnr_T,
@@ -138,11 +141,11 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                         (*curbuf.get()).b_p_vts_array,
                     ) - 1;
                     if list {
-                        let (mut tab1, mut tab2, mut tab3) = (lcs().tab1, lcs().tab2, lcs().tab3);
-                        if !lead.is_null() && s <= lead && lcs().leadtab1 != 0 {
-                            tab1 = lcs().leadtab1;
-                            tab2 = lcs().leadtab2;
-                            tab3 = lcs().leadtab3;
+                        let (mut tab1, mut tab2, mut tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
+                        if !lead.is_null() && s <= lead && lcs.leadtab1 != 0 {
+                            tab1 = lcs.leadtab1;
+                            tab2 = lcs.leadtab2;
+                            tab3 = lcs.leadtab3;
                         }
                         sc = if extra_left == 0 && tab3 != 0 {
                             tab3
@@ -156,12 +159,12 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                         sc = b' ' as schar_T;
                         extra_fill = b' ' as schar_T;
                     }
-                } else if c == NUL && list && lcs().eol != 0 {
+                } else if c == NUL && list && lcs.eol != 0 {
                     // One more turn of the loop, which reads the NUL out of
                     // `extra_text` and stops.
                     extra_text = c"".as_ptr();
                     extra_left = 1;
-                    sc = lcs().eol;
+                    sc = lcs.eol;
                     hl_id = HLF_AT;
                     s = s.sub(1);
                 } else if c != NUL && byte2cells(c) > 1 {
@@ -178,17 +181,17 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                     sc = if !lead.is_null()
                         && s <= lead
                         && in_multispace
-                        && !lcs().leadmultispace.is_null()
+                        && !lcs.leadmultispace.is_null()
                     {
-                        cycle(lcs().leadmultispace, &mut multispace_pos)
-                    } else if !lead.is_null() && s <= lead && lcs().lead != 0 {
-                        lcs().lead
+                        cycle(lcs.leadmultispace, &mut multispace_pos)
+                    } else if !lead.is_null() && s <= lead && lcs.lead != 0 {
+                        lcs.lead
                     } else if !trail.is_null() && s > trail {
-                        lcs().trail
-                    } else if in_multispace && !lcs().multispace.is_null() {
-                        cycle(lcs().multispace, &mut multispace_pos)
-                    } else if list && lcs().space != 0 {
-                        lcs().space
+                        lcs.trail
+                    } else if in_multispace && !lcs.multispace.is_null() {
+                        cycle(lcs.multispace, &mut multispace_pos)
+                    } else if list && lcs.space != 0 {
+                        lcs.space
                     } else {
                         hl_id = 0;
                         b' ' as schar_T

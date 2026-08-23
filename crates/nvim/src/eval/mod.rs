@@ -93,7 +93,7 @@ pub const GLV_STOP: glv_status_T = 2;
 pub type glv_status_T = c_uint;
 pub const GLV_OK: glv_status_T = 1;
 pub const GLV_FAIL: glv_status_T = 0;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct forinfo_T {
     pub fi_semicolon: c_int,
     pub fi_varcount: c_int,

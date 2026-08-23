@@ -324,7 +324,7 @@ unsafe fn win_config_split(
         if !was_split {
             clear_float_config(fconfig, false);
         }
-        merge_win_config(&raw mut (*win).w_config, *fconfig);
+        merge_win_config(&raw mut (*win).w_config, (*fconfig).clone());
         true
     }
 }
@@ -384,7 +384,7 @@ unsafe fn win_config_float_tp(
                 }
             }
             if !(*win).w_floating {
-                if win_new_float(win, false, *fconfig, err).is_null() {
+                if win_new_float(win, false, (*fconfig).clone(), err).is_null() {
                     break '_restore_curwin;
                 }
                 redraw_later(win, UPD_NOT_VALID);
@@ -411,7 +411,7 @@ unsafe fn win_config_float_tp(
                 redraw_later(win, UPD_NOT_VALID);
                 set_must_redraw(UPD_NOT_VALID);
             }
-            win_config_float(win, *fconfig);
+            win_config_float(win, (*fconfig).clone());
             return true;
         }
         if curwin_moving_tp as ::core::ffi::c_int != 0 && win_valid(win) as ::core::ffi::c_int != 0
@@ -443,7 +443,7 @@ pub unsafe fn nvim_win_set_config(
             KEYSET_OPTIDX_win_config__vertical,
         );
         let mut old_style: WinStyle = (*w).w_config.style;
-        let mut fconfig: WinConfig = (*w).w_config;
+        let mut fconfig: WinConfig = (*w).w_config.clone();
         let mut to_split: bool = (*config).relative.len() == 0 as size_t
             && !(has_key(
                 (*config).is_set__win_config_,

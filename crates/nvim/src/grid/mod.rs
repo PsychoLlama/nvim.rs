@@ -207,7 +207,10 @@ pub unsafe fn grid_alloc(
 ) {
     unsafe {
         debug_assert!(rows >= 0 && columns >= 0, "rows >= 0 && columns >= 0");
-        let mut ngrid: ScreenGrid = *grid;
+        // The new grid starts as a shallow copy of the old one: everything
+        // but the five buffers, which are replaced below. The old ones stay
+        // the old grid's until `grid_free` takes them.
+        let mut ngrid: ScreenGrid = (*grid).clone();
         let ncells = rows as size_t * columns as size_t;
         ngrid.chars = xmalloc(ncells * size_of::<schar_T>()).cast::<schar_T>();
         ngrid.attrs = xmalloc(ncells * size_of::<sattr_T>()).cast::<sattr_T>();

@@ -289,7 +289,7 @@ impl DoTag {
                 self.len = TAGSTACKSIZE;
                 tagstack_clear_entry(&mut *self.entry(0));
                 for i in 1..self.len {
-                    *self.entry(i - 1) = *self.entry(i);
+                    *self.entry(i - 1) = (*self.entry(i)).clone();
                 }
                 self.idx -= 1;
                 // The name moved down with the entry; the user data is
@@ -369,8 +369,8 @@ impl DoTag {
 
             // A copy: autocommands may invalidate the stack before it is
             // used.
-            self.saved_fmark = (*self.entry(self.idx)).fmark;
-            let mark = self.saved_fmark;
+            self.saved_fmark = (*self.entry(self.idx)).fmark.clone();
+            let mark = self.saved_fmark.clone();
             if mark.fnum != (*curbuf.get()).handle {
                 // Another file. If it cannot be opened (it may have
                 // changed) keep the original position on the stack.
@@ -489,7 +489,7 @@ impl DoTag {
     unsafe fn record_position(&mut self) {
         // SAFETY: the caller's promise.
         unsafe {
-            self.saved_fmark = (*self.entry(self.idx)).fmark;
+            self.saved_fmark = (*self.entry(self.idx)).fmark.clone();
             if self.save_pos {
                 let cursor = (*curwin.get()).w_cursor;
                 (*self.entry(self.idx)).fmark.mark = cursor;
@@ -706,7 +706,7 @@ impl DoTag {
                 if chosen <= 0 || chosen > found || got_int.get() {
                     // No valid choice: change nothing.
                     if self.use_tagstack {
-                        (*self.entry(self.idx)).fmark = self.saved_fmark;
+                        (*self.entry(self.idx)).fmark = self.saved_fmark.clone();
                         self.idx = self.prev_idx;
                     }
                     return false;

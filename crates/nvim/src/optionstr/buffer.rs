@@ -189,7 +189,7 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
                 SID_NONE,
             );
             let prompt: *mut fmark_T = &raw mut (*buf).b_prompt_start;
-            free_fmark(*prompt);
+            free_fmark((*prompt).clone());
             (*prompt).mark = pos_T {
                 lnum: (*buf).b_ml.ml_line_count,
                 col: (*buf).b_prompt_start.mark.col,

@@ -11,7 +11,8 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// Not `Copy`: `text` is an owned string.
+#[derive(Clone)]
 pub struct HlMessageChunk {
     pub text: String_0,
     pub hl_id: ::core::ffi::c_int,

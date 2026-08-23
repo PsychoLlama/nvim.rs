@@ -1727,25 +1727,25 @@ static err_extra_cmd: GlobalCell<*const c_char> = GlobalCell::new(
 );
 pub static tslua_query_parse_count: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
-pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new(
-    [xfmark_T {
-        fmark: fmark_T {
-            mark: pos_T {
-                lnum: 0 as linenr_T,
-                col: 0,
-                coladd: 0,
-            },
-            fnum: 0,
-            timestamp: 0,
-            view: fmarkv_T {
-                topline_offset: 0,
-                skipcol: 0,
-            },
-            additional_data: ::core::ptr::null_mut::<AdditionalData>(),
+/// An unset entry of [`namedfm`]; a `const` because `xfmark_T` is not `Copy`.
+const UNSET_NAMED_MARK: xfmark_T = xfmark_T {
+    fmark: fmark_T {
+        mark: pos_T {
+            lnum: 0 as linenr_T,
+            col: 0,
+            coladd: 0,
         },
-        fname: ::core::ptr::null_mut::<c_char>(),
-    }; 36],
-);
+        fnum: 0,
+        timestamp: 0,
+        view: fmarkv_T {
+            topline_offset: 0,
+            skipcol: 0,
+        },
+        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
+    },
+    fname: ::core::ptr::null_mut::<c_char>(),
+};
+pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new([UNSET_NAMED_MARK; 36]);
 pub static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 pub static showcmd_buf: GlobalCell<[c_char; 41]> = GlobalCell::new([0; 41]);

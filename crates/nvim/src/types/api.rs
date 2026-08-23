@@ -77,7 +77,10 @@ pub struct ExtmarkInfoArray {
 pub type FieldHashfn = Option<unsafe fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 pub type Float = ::core::ffi::c_double;
 pub type HLGroupID = Integer;
-#[derive(Copy, Clone)]
+/// Not `Copy`: a kvec of chunks, each owning its text. A `clone` aliases
+/// the same array — which several message paths do deliberately, handing
+/// ownership on exactly once.
+#[derive(Clone)]
 pub struct HlMessage {
     pub size: size_t,
     pub capacity: size_t,

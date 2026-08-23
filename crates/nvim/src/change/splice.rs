@@ -189,7 +189,7 @@ unsafe fn record_change_mark(buf: *mut buf_T, lnum: linenr_T, col: colnr_T) {
 
         // RESET_FMARK: the old mark's additional data is freed first.
         let last_change = &raw mut (*buf).b_last_change;
-        free_fmark(*last_change);
+        free_fmark((*last_change).clone());
         (*last_change).mark = pos_T {
             lnum,
             col,
@@ -246,7 +246,7 @@ unsafe fn record_change_mark(buf: *mut buf_T, lnum: linenr_T, col: colnr_T) {
                 (*buf).b_changelistlen += 1;
             }
         }
-        *changelist.offset(((*buf).b_changelistlen - 1) as isize) = (*buf).b_last_change;
+        *changelist.offset(((*buf).b_changelistlen - 1) as isize) = (*buf).b_last_change.clone();
         // The current window is always *after* the last change, so that `g,`
         // takes you back to it.
         if (*curwin.get()).w_buffer == buf {

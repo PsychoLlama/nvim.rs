@@ -491,7 +491,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
         };
     // SAFETY: the buffer's own marks; the header takes the copies over.
     unsafe { zero_fmark_additional_data(&mut b.b_namedm) };
-    uhp.uh_namedm = b.b_namedm;
+    uhp.uh_namedm = b.b_namedm.clone();
     uhp.uh_visual = b.b_visual;
     b.b_u_newhead = link;
     if b.b_u_oldhead.is_none() {

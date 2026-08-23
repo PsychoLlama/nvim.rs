@@ -115,7 +115,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     // at the end, swapped with the ones it was carrying.
     // SAFETY: this module's own allocations, dropped exactly once.
     unsafe { zero_fmark_additional_data(&mut buf.b_namedm) };
-    let saved_marks = buf.b_namedm;
+    let saved_marks = buf.b_namedm.clone();
     let saved_visual = buf.b_visual;
     buf.b_op_start.lnum = buf.b_ml.ml_line_count;
     buf.b_op_start.col = 0;
@@ -361,14 +361,14 @@ unsafe fn apply_entry(
 ///
 /// A live buffer and a live header.
 unsafe fn swap_marks(mut buf: Buf, mut curhead: Header, saved: &[fmark_T; NMARKS as usize]) {
-    for (i, &saved) in saved.iter().enumerate() {
+    for (i, saved) in saved.iter().enumerate() {
         if curhead.uh_namedm[i].mark.lnum != 0 {
             // SAFETY: a mark the buffer owns and is about to drop.
-            unsafe { free_fmark(buf.b_namedm[i]) };
-            buf.b_namedm[i] = curhead.uh_namedm[i];
+            unsafe { free_fmark(buf.b_namedm[i].clone()) };
+            buf.b_namedm[i] = curhead.uh_namedm[i].clone();
         }
         if saved.mark.lnum != 0 {
-            curhead.uh_namedm[i] = saved;
+            curhead.uh_namedm[i] = saved.clone();
         } else {
             // Only the line number is cleared, as the C clears it: the rest
             // of the mark is left as it was.

@@ -74,7 +74,7 @@ pub unsafe fn mark_get(
         return fm;
     }
     // SAFETY: both records are live; the caller asked for the copy.
-    unsafe { *fmp = *fm };
+    unsafe { *fmp = (*fm).clone() };
     fmp
 }
 
