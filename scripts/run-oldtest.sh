@@ -51,7 +51,40 @@ if [[ ! -x $NVIM_PRG ]]; then
   exit 66
 fi
 
-make=(make -C "$root/test/old/testdir" NVIM_PRG="$NVIM_PRG")
+testdir=$root/test/old/testdir
+
+# Reject an unknown test name before running anything.
+#
+# make walks its goals left to right, so a typo in the middle of a list runs
+# every name before it and *then* dies with "No rule to make target" — a
+# fifteen-minute run that ends in an error and has to be repeated. The suite's
+# names are exactly its `test_*.vim` files, so the check is a file test.
+bad=()
+for arg in "$@"; do
+  case $arg in
+    all | clean | nolog | report | newtests | newtestssilent) continue ;;
+  esac
+  [[ -f $testdir/${arg%.res}.vim ]] || bad+=("$arg")
+done
+if (( ${#bad[@]} )); then
+  for arg in "${bad[@]}"; do
+    echo "$0: no such test: $arg" >&2
+    # A name that is nearly right is nearly always a prefix of one that
+    # exists (test_jumps for test_jumplist), so shorten it until something
+    # matches and report that.
+    stem=$arg
+    near=
+    while [[ ${#stem} -gt 5 && -z $near ]]; do
+      near=$(cd "$testdir" && ls "$stem"*.vim 2>/dev/null | sed 's/\.vim$//' || true)
+      stem=${stem%?}
+    done
+    [[ -n $near ]] && echo "  did you mean: $(echo "$near" | tr '\n' ' ')" >&2
+  done
+  echo "$0: nothing ran; \`ls $testdir/test_*.vim\` lists the suite" >&2
+  exit 64
+fi
+
+make=(make -C "$testdir" NVIM_PRG="$NVIM_PRG")
 if [[ $# -eq 1 && $1 == all ]]; then
   "${make[@]}" clean
   exec "${make[@]}"
