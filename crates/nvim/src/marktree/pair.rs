@@ -17,18 +17,13 @@
 //! side of a moving boundary a half sits on without walking to it.
 
 use core::ffi::c_int;
-use core::{ptr, slice};
 
-use crate::marktree::intersect::{IdSet, intersect_mov};
 use crate::marktree::iter::marktree_itr_next_skip;
 use crate::marktree::key::{
     MARKTREE_END_FLAG, MT_FLAG_ORPHANED, mt_end, mt_lookup_key, mt_lookup_key_side, mt_paired,
 };
 use crate::marktree::node::{Node, id2node};
-use crate::memory::xfree;
-use crate::types::{
-    Intersection, MTKey, MTPos, MarkTree, MarkTreeIter, size_t, uint16_t, uint64_t,
-};
+use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter, uint16_t, uint64_t};
 
 use super::{marktree_lookup, marktree_lookup_ns};
 
@@ -118,86 +113,6 @@ pub unsafe fn marktree_intersect_pair(
         // SAFETY: `b` is live and `itr` is positioned in it; neither optional
         // out-parameter is wanted.
         unsafe { marktree_itr_next_skip(b, itr, skip, true, None, None) };
-    }
-}
-
-/// Copy `set` into the caller's `out` buffer and record its length.
-///
-/// # Safety
-/// `out` must have room for `set.len()` ids and `n_out` must be live.
-unsafe fn answer(set: &IdSet, out: *mut uint64_t, n_out: *mut size_t) {
-    // SAFETY: the caller promises `out` has room for the whole set.
-    unsafe { ptr::copy_nonoverlapping(set.as_slice().as_ptr(), out, set.len()) };
-    // SAFETY: `n_out` is a live out-parameter per the caller.
-    unsafe { *n_out = set.len() };
-}
-
-/// `intersect_mov` over four caller-owned arrays, for `marktree_spec.lua`.
-///
-/// Answers false, writing nothing, when either result is longer than the
-/// buffer offered for it.
-///
-/// # Safety
-/// `x`, `y` and `win` must name `nx`, `ny` and `nwin` ids; `wout` and `dout`
-/// must have room for the counts `nwout` and `ndout` arrive holding, and all
-/// four out-parameters must be live.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn intersect_mov_test(
-    x: *const uint64_t,
-    nx: size_t,
-    y: *const uint64_t,
-    ny: size_t,
-    win: *const uint64_t,
-    nwin: size_t,
-    wout: *mut uint64_t,
-    nwout: *mut size_t,
-    dout: *mut uint64_t,
-    ndout: *mut size_t,
-) -> bool {
-    // x is immutable as far as intersect_mov is concerned, and y may shrink —
-    // whatever it loses shows up in d. Neither is ever grown, so borrowing the
-    // caller's arrays as sets is enough.
-    let mut xs = borrowed(x, nx);
-    let mut ys = borrowed(y, ny);
-    let mut ws = borrowed(ptr::null(), 0);
-    let mut ds = borrowed(ptr::null(), 0);
-    // SAFETY: each of the four names a live `Intersection` local of this frame,
-    // and no other view of any of them exists.
-    let (xs, ys) = unsafe { (IdSet::new(&raw mut xs), IdSet::new(&raw mut ys)) };
-    // SAFETY: as above.
-    let (ws, ds) = unsafe { (IdSet::new(&raw mut ws), IdSet::new(&raw mut ds)) };
-    ws.init();
-    ds.init();
-    // SAFETY: `win` names `nwin` ids per the caller.
-    ws.extend_from_slice(unsafe { slice::from_raw_parts(win, nwin) });
-
-    intersect_mov(&xs, &ys, &ws, &ds);
-
-    // SAFETY: both counts are live out-parameters, arriving as capacities.
-    let (wcap, dcap) = unsafe { (*nwout, *ndout) };
-    let fits = ws.len() <= wcap && ds.len() <= dcap;
-    if fits {
-        // SAFETY: `fits` is exactly the promise `answer` needs about `wout`.
-        unsafe { answer(&ws, wout, nwout) };
-        // SAFETY: and about `dout`.
-        unsafe { answer(&ds, dout, ndout) };
-    }
-    // SAFETY: `take_heap` answers the set's own buffer, or null if it never
-    // left its inline array; either is `xfree`-able exactly once.
-    unsafe { xfree(ws.take_heap()) };
-    // SAFETY: as above.
-    unsafe { xfree(ds.take_heap()) };
-    fits
-}
-
-/// An `Intersection` header over a caller's array, with no capacity of its own
-/// so that nothing ever tries to grow or free it.
-fn borrowed(items: *const uint64_t, size: size_t) -> Intersection {
-    Intersection {
-        size,
-        capacity: 0,
-        items: items.cast_mut(),
-        init_array: [0; 4],
     }
 }
 

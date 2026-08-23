@@ -256,8 +256,7 @@ fn swap_keys(b: &mut MarkTree, itr1: &MarkTreeIter, itr2: &MarkTreeIter, damage:
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_splice(
+pub unsafe fn marktree_splice(
     b: &mut MarkTree,
     start_line: int32_t,
     start_col: c_int,

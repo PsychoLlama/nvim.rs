@@ -32,9 +32,6 @@
 //! that an iterator handed alongside a tree is positioned in that tree.
 //!
 //! Derived from kbtree in klib, and from the marker tree of the Atom editor.
-//! The layouts of `MarkTree`, `MarkTreeIter`, `MTNode`, `MTKey` and `MTPos` are
-//! pinned by `test/unit/marktree_spec.lua`, which builds them with LuaJIT's FFI
-//! and reads their fields directly.
 
 pub mod check;
 pub mod cursor;
@@ -54,7 +51,7 @@ use core::ptr;
 use crate::global_cell::GlobalCell;
 use crate::map::{map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, mh_get_ptr_t};
 pub use crate::marktree::check::*;
-pub use crate::marktree::inspect::*;
+pub(crate) use crate::marktree::inspect::*;
 pub use crate::marktree::iter::*;
 use crate::marktree::key::*;
 use crate::marktree::meta::*;
@@ -250,12 +247,7 @@ impl Lasti {
 ///
 /// # Safety
 /// `b` must be a live tree and `itr` positioned on one of its keys.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_del_itr(
-    b: &mut MarkTree,
-    itr: &mut MarkTreeIter,
-    rev: bool,
-) -> uint64_t {
+pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> uint64_t {
     let mut adjustment = 0;
     // SAFETY: a positioned iterator names a live node of `b`.
     let cur = unsafe { Node::new(itr.x) };
@@ -540,8 +532,7 @@ pub unsafe fn marktree_revise_meta(b: &mut MarkTree, itr: &mut MarkTreeIter, old
 ///
 /// # Safety
 /// `b` must be a live tree, and nothing may name its nodes afterwards.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_clear(b: &mut MarkTree) {
+pub unsafe fn marktree_clear(b: &mut MarkTree) {
     if !b.root.is_null() {
         // SAFETY: a non-null root is a live node of `b`.
         let root = unsafe { Node::new(b.root) };
@@ -636,13 +627,7 @@ fn move_within_leaf(x: Node, itr: &MarkTreeIter, mut key: MTKey, mut newpos: MTP
 ///
 /// # Safety
 /// `b` must be a live tree and `itr` positioned on one of its keys.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_move(
-    b: &mut MarkTree,
-    itr: &mut MarkTreeIter,
-    row: c_int,
-    col: c_int,
-) {
+pub unsafe fn marktree_move(b: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int, col: c_int) {
     // SAFETY: a positioned iterator names a live node of `b`.
     let x = unsafe { Node::new(itr.x) };
     let mut key = x.key(itr.i as usize);
@@ -667,8 +652,7 @@ pub unsafe extern "C" fn marktree_move(
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_lookup_ns(
+pub unsafe fn marktree_lookup_ns(
     b: &mut MarkTree,
     ns: uint32_t,
     id: uint32_t,

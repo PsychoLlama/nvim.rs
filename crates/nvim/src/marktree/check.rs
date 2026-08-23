@@ -1,8 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-//! Whole-tree invariant checks, and the entry points the unit spec drives.
+//! Whole-tree invariant checks, and the entry points the unit suite drives.
 //!
-//! `test/unit/marktree_spec.lua` builds trees of thousands of random marks and
+//! `crates/nvim/tests/unit/marktree.rs` builds trees of thousands of marks and
 //! calls [`marktree_check`] after every batch, so these are not dead debug
 //! code: they are the oracle. What they assert, per node:
 //!
@@ -44,8 +44,7 @@ use super::{
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_check(b: &mut MarkTree) {
+pub unsafe fn marktree_check(b: &mut MarkTree) {
     // SAFETY: `b` is a live tree, so its root is null or one of its live nodes.
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         debug_assert!(b.n_keys == 0 as size_t, "b->n_keys == 0");
@@ -165,8 +164,7 @@ fn check_node(
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_check_intersections(b: &mut MarkTree) -> bool {
+pub unsafe fn marktree_check_intersections(b: &mut MarkTree) -> bool {
     // SAFETY: `b` is a live tree, so its root is null or one of its live nodes.
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         return true;
@@ -311,21 +309,28 @@ unsafe fn destroy_checked(checked: &mut Map_ptr_t_ptr_t) {
     unsafe { xfree(checked.values.cast()) };
 }
 
-/// Put a mark, spelling out every flag — `marktree_spec.lua`'s way in.
+/// One end of a mark, as the unit suite spells it.
+#[derive(Copy, Clone)]
+pub struct MarkEnd {
+    pub row: ::core::ffi::c_int,
+    pub col: ::core::ffi::c_int,
+    /// Which side of an insertion at this exact position the mark stays on.
+    pub right_gravity: bool,
+}
+
+/// Put a mark, spelling out every flag — the unit suite's way in.
+///
+/// `end` is `None` for a point mark; the sentinel row the tree itself uses for
+/// one does not escape into the callers.
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_put_test(
+pub unsafe fn marktree_put_test(
     b: &mut MarkTree,
     ns: uint32_t,
     id: uint32_t,
-    row: ::core::ffi::c_int,
-    col: ::core::ffi::c_int,
-    right_gravity: bool,
-    end_row: ::core::ffi::c_int,
-    end_col: ::core::ffi::c_int,
-    end_right: bool,
+    start: MarkEnd,
+    end: Option<MarkEnd>,
     meta_inline: bool,
 ) {
     let inline = if meta_inline {
@@ -333,9 +338,12 @@ pub unsafe extern "C" fn marktree_put_test(
     } else {
         0
     };
-    let flags = mt_flags(right_gravity, false, false, false) as ::core::ffi::c_int | inline;
+    let flags = mt_flags(start.right_gravity, false, false, false) as ::core::ffi::c_int | inline;
     let key = MTKey {
-        pos: MTPos { row, col },
+        pos: MTPos {
+            row: start.row,
+            col: start.col,
+        },
         ns,
         id,
         flags: flags as uint16_t,
@@ -343,13 +351,17 @@ pub unsafe extern "C" fn marktree_put_test(
             hl: DECOR_HIGHLIGHT_INLINE_INIT,
         },
     };
+    let end = end.unwrap_or(MarkEnd {
+        row: -1,
+        col: -1,
+        right_gravity: false,
+    });
     // SAFETY: `b` is a live tree.
-    unsafe { marktree_put(b, key, end_row, end_col, end_right) };
+    unsafe { marktree_put(b, key, end.row, end.col, end.right_gravity) };
 }
 
-/// `mt_right` where `marktree_spec.lua` can reach it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mt_right_test(key: MTKey) -> bool {
+/// `mt_right` where the unit suite can reach it.
+pub unsafe fn mt_right_test(key: MTKey) -> bool {
     mt_right(key)
 }
 
@@ -357,8 +369,7 @@ pub unsafe extern "C" fn mt_right_test(key: MTKey) -> bool {
 ///
 /// # Safety
 /// `b` must be a live tree holding that pair.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_del_pair_test(b: &mut MarkTree, ns: uint32_t, id: uint32_t) {
+pub unsafe fn marktree_del_pair_test(b: &mut MarkTree, ns: uint32_t, id: uint32_t) {
     let mut itr = MarkTreeIter::default();
     // SAFETY: `b` is live; a lookup only writes the iterator it is handed.
     unsafe { marktree_lookup_ns(b, ns, id, false, Some(&mut itr)) };

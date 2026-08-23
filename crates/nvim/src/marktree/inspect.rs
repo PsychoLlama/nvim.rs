@@ -37,8 +37,7 @@ use sizes::DOT_NAME_MAX;
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> String_0 {
+pub(crate) unsafe fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> String_0 {
     // SAFETY: `b` is a live tree per the caller, so its root is null or one of
     // its live nodes.
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {

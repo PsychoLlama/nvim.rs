@@ -89,8 +89,7 @@ unsafe fn as_filter<'a>(filter: MetaFilter) -> &'a MetaCount {
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_get(
+pub unsafe fn marktree_itr_get(
     b: &mut MarkTree,
     row: int32_t,
     col: c_int,
@@ -175,8 +174,7 @@ pub unsafe fn marktree_itr_get_ext(
 ///
 /// # Safety
 /// `b` must be a live tree.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_first(b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
+pub unsafe fn marktree_itr_first(b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
     if b.n_keys == 0 {
         itr.x = ptr::null_mut();
         return false;
@@ -201,8 +199,7 @@ pub unsafe extern "C" fn marktree_itr_first(b: &mut MarkTree, itr: &mut MarkTree
 ///
 /// # Safety
 /// `b` must be a live tree and `itr` positioned in it, or empty.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_next(b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
+pub unsafe fn marktree_itr_next(b: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
     // SAFETY: the caller's tree and iterator, per this function's contract.
     unsafe { marktree_itr_next_skip(b, itr, false, false, None, None) }
 }
@@ -302,8 +299,7 @@ pub unsafe fn marktree_itr_next_skip(
 ///
 /// # Safety
 /// `b` must be a live tree and `meta_filter` a live `MetaCount`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_get_filter(
+pub unsafe fn marktree_itr_get_filter(
     b: &mut MarkTree,
     row: int32_t,
     col: c_int,
@@ -364,8 +360,7 @@ pub unsafe fn marktree_itr_step_out_filter(
 /// # Safety
 /// `b` must be a live tree, `itr` positioned in it, and `meta_filter` a live
 /// `MetaCount`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_next_filter(
+pub unsafe fn marktree_itr_next_filter(
     b: &mut MarkTree,
     itr: &mut MarkTreeIter,
     stop_row: c_int,
@@ -489,8 +484,7 @@ pub unsafe fn marktree_itr_pos(itr: &MarkTreeIter) -> MTPos {
 ///
 /// # Safety
 /// `itr` must be positioned in a live tree, or empty.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_current(itr: &mut MarkTreeIter) -> MTKey {
+pub unsafe fn marktree_itr_current(itr: &mut MarkTreeIter) -> MTKey {
     if itr.x.is_null() {
         return MT_INVALID_KEY;
     }
@@ -517,8 +511,7 @@ pub unsafe extern "C" fn marktree_itr_current(itr: &mut MarkTreeIter) -> MTKey {
 /// `b` must be a live tree. Nothing here dereferences it, but the iterator
 /// this leaves behind names `b`'s root, and [`marktree_itr_step_overlap`]
 /// walks from there.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_get_overlap(
+pub unsafe fn marktree_itr_get_overlap(
     b: &mut MarkTree,
     row: c_int,
     col: c_int,
@@ -555,8 +548,7 @@ pub unsafe extern "C" fn marktree_itr_get_overlap(
 /// # Safety
 /// `b` must be a live tree and `itr` one [`marktree_itr_get_overlap`]
 /// positioned in it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marktree_itr_step_overlap(
+pub unsafe fn marktree_itr_step_overlap(
     b: &mut MarkTree,
     itr: &mut MarkTreeIter,
     pair: &mut MTPair,

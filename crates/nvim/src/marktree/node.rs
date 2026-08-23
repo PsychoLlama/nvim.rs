@@ -18,8 +18,6 @@
 //!   invalidates that self-pointer.
 //!
 //! So nodes are addressed by `*mut MTNode` throughout and never by reference.
-//! `test/unit/marktree_spec.lua` pins the layout besides: it reads
-//! `tree[0].root.level` and `iter[0].x.key[iter[0].i]` through LuaJIT's FFI.
 //!
 //! # Reaching a node from Rust
 //!

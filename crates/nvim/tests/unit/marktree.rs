@@ -18,21 +18,46 @@ use std::ffi::{c_int, c_uint};
 use std::ptr;
 
 use c2rust_neovim::marktree::check::{
-    marktree_check, marktree_check_intersections, marktree_del_pair_test, marktree_put_test,
-    mt_right_test,
+    MarkEnd, marktree_check, marktree_check_intersections, marktree_del_pair_test,
+    marktree_put_test, mt_right_test,
 };
 use c2rust_neovim::marktree::iter::{
-    marktree_itr_current, marktree_itr_first, marktree_itr_get, marktree_itr_next,
+    marktree_itr_current, marktree_itr_first, marktree_itr_get, marktree_itr_get_filter,
+    marktree_itr_get_overlap, marktree_itr_next, marktree_itr_next_filter,
+    marktree_itr_step_overlap,
 };
 use c2rust_neovim::marktree::key::mt_end;
+use c2rust_neovim::marktree::meta::META_COUNT;
 use c2rust_neovim::marktree::splice::marktree_splice;
-use c2rust_neovim::marktree::{marktree_clear, marktree_del_itr, marktree_lookup_ns};
+use c2rust_neovim::marktree::{
+    marktree_clear, marktree_del_itr, marktree_lookup_ns, marktree_move,
+};
 use c2rust_neovim::types::{
-    MTKey, MTNode, MTPos, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter, MarkTreeIter_s,
+    MTKey, MTNode, MTPair, MTPos, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter, MarkTreeIter_s,
 };
 
 /// The namespace every mark in this file lives in.
 const NS: u32 = 10;
+
+/// One count per meta kind; a filter selects a kind by holding a non-zero mask
+/// for it. The walks below only ever ask for the first kind.
+type MetaFilter = [u32; META_COUNT];
+
+/// One end of a mark, spelled out.
+fn at(row: i32, col: i32, right_gravity: bool) -> MarkEnd {
+    MarkEnd {
+        row,
+        col,
+        right_gravity,
+    }
+}
+
+/// Select inline virtual text and nothing else.
+fn inline_filter() -> MetaFilter {
+    let mut filter: MetaFilter = [0; META_COUNT];
+    filter[0] = u32::MAX;
+    filter
+}
 
 /// `MarkTree` and `MarkTreeIter` are both valid all-zero — the Lua spec relies
 /// on it too (`ffi.new` zero-initializes) — and `marktree_clear` restores that
@@ -89,18 +114,7 @@ impl Tree {
         self.next_id += 1;
         let id = self.next_id;
         unsafe {
-            marktree_put_test(
-                &mut self.tree,
-                NS,
-                id,
-                row,
-                col,
-                right,
-                -1,
-                -1,
-                false,
-                false,
-            );
+            marktree_put_test(&mut self.tree, NS, id, at(row, col, right), None, false);
         }
         self.shadow.push(Shadow {
             id,
@@ -121,12 +135,8 @@ impl Tree {
                 &mut self.tree,
                 NS,
                 id,
-                row,
-                col,
-                false,
-                end_row,
-                end_col,
-                true,
+                at(row, col, false),
+                Some(at(end_row, end_col, true)),
                 false,
             );
         }
@@ -143,6 +153,112 @@ impl Tree {
             right: true,
         });
         id
+    }
+
+    /// A range whose two halves each carry their own gravity, and which need
+    /// not run forwards -- the tree accepts an end that sorts before its start,
+    /// and `marktree_check_intersections` has an opinion about what that means.
+    fn put_pair_gravity(&mut self, start: MarkEnd, stop: MarkEnd) -> u32 {
+        self.next_id += 1;
+        let id = self.next_id;
+        unsafe { marktree_put_test(&mut self.tree, NS, id, start, Some(stop), false) };
+        for half in [start, stop] {
+            self.shadow.push(Shadow {
+                id,
+                row: half.row,
+                col: half.col,
+                right: half.right_gravity,
+            });
+        }
+        id
+    }
+
+    /// A mark carrying the first meta kind (inline virtual text), which is what
+    /// the filtered walk below selects on.
+    fn put_meta(&mut self, row: i32, col: i32, right: bool, meta: bool) -> u32 {
+        self.next_id += 1;
+        let id = self.next_id;
+        unsafe {
+            marktree_put_test(&mut self.tree, NS, id, at(row, col, right), None, meta);
+        }
+        self.shadow.push(Shadow {
+            id,
+            row,
+            col,
+            right,
+        });
+        id
+    }
+
+    /// Move one half of a mark to a new position, the way the decoration layer
+    /// does when a provider revises a mark in place.
+    fn move_half(&mut self, id: u32, end: bool, row: i32, col: i32) {
+        let mut itr = zeroed_iter();
+        unsafe {
+            marktree_lookup_ns(&mut self.tree, NS, id, end, Some(&mut itr));
+            assert!(!itr.x.is_null(), "id {id} not found");
+            marktree_move(&mut self.tree, &mut itr, row, col);
+        }
+        let half = self
+            .shadow
+            .iter_mut()
+            .filter(|s| s.id == id)
+            .nth(usize::from(end))
+            .expect("id in shadow");
+        half.row = row;
+        half.col = col;
+    }
+
+    /// The tree's own invariants, without the shadow walk -- for the cases
+    /// whose marks the shadow model cannot describe.
+    fn check_tree(&mut self) {
+        unsafe { marktree_check(&mut self.tree) };
+        assert!(unsafe { marktree_check_intersections(&mut self.tree) });
+    }
+
+    /// Every range covering (row, col), by id, sorted.
+    fn overlapping(&mut self, row: i32, col: i32) -> Vec<u32> {
+        let mut itr = zeroed_iter();
+        let mut pair: MTPair = unsafe { std::mem::zeroed() };
+        let mut ids = Vec::new();
+        if unsafe { marktree_itr_get_overlap(&mut self.tree, row, col, &mut itr) } {
+            while unsafe { marktree_itr_step_overlap(&mut self.tree, &mut itr, &mut pair) } {
+                ids.push(pair.start.id);
+            }
+        }
+        ids.sort_unstable();
+        ids
+    }
+
+    /// Walk the whole tree with a meta filter, answering (id, row, col) for
+    /// every key it stops on.
+    fn filtered(&mut self, filter: &MetaFilter) -> Vec<(u32, i32, i32)> {
+        let mut itr = zeroed_iter();
+        let mut seen = Vec::new();
+        let stop = (i32::MAX, 0);
+        if !unsafe {
+            marktree_itr_get_filter(
+                &mut self.tree,
+                0,
+                0,
+                stop.0,
+                stop.1,
+                filter.as_ptr(),
+                &mut itr,
+            )
+        } {
+            return seen;
+        }
+        loop {
+            let k: MTKey = unsafe { marktree_itr_current(&mut itr) };
+            seen.push((k.id, k.pos.row, k.pos.col));
+            if !unsafe {
+                marktree_itr_next_filter(&mut self.tree, &mut itr, stop.0, stop.1, filter.as_ptr())
+            } {
+                break;
+            }
+        }
+        seen
     }
 
     /// Delete the mark with this id, through a lookup by namespace and id.
@@ -488,3 +604,260 @@ const _: () = {
     assert!(size_of::<c_int>() == size_of::<i32>());
     assert!(size_of::<c_uint>() == size_of::<u32>());
 };
+
+/// `marktree_move` re-inserts a key at a new position rather than editing it in
+/// place, so the case that matters is the one where the new slot looks like the
+/// old one: the key has to be taken out and put back anyway, because its stored
+/// position is relative to its node.
+#[test]
+fn moving_a_mark_onto_a_neighbouring_slot_keeps_the_order() {
+    let mut t = Tree::new();
+    t.put_pair_gravity(at(1, 1, false), at(1, 3, false));
+    t.put_pair_gravity(at(1, 3, false), at(1, 3, false));
+    let third = t.put_pair_gravity(at(1, 3, false), at(1, 3, false));
+    t.put_pair_gravity(at(1, 3, false), at(1, 3, false));
+
+    t.move_half(third, false, 1, 2);
+    t.check_tree();
+    t.check();
+}
+
+/// Moving one half of every range in a tree deep enough to have intersection
+/// sets on its internal nodes: each move retracts the old covering records and
+/// establishes new ones, and `marktree_check_intersections` recomputes them
+/// from scratch to compare.
+#[test]
+fn moving_halves_of_overlapping_ranges_rebuilds_the_covering_records() {
+    let n = scale(20, 300) as i32;
+    let mut t = Tree::new();
+    let ids: Vec<u32> = (1..=n)
+        .map(|i| t.put_pair_gravity(at(1, i, false), at(2, n - i, false)))
+        .collect();
+    t.check_tree();
+
+    for (i, &id) in ids.iter().enumerate() {
+        // Alternate which half moves, so both the start's and the end's
+        // re-insertion paths run.
+        let end = i % 2 == 1;
+        t.move_half(id, end, 1 + i32::from(end), n / 2 + i as i32);
+        if i % 10 == 0 {
+            t.check_tree();
+        }
+    }
+    t.check_tree();
+    t.check();
+}
+
+/// The overlap iterator answers "which ranges cover this position" without
+/// walking them: the ranges covering a whole subtree are recorded on its root
+/// node, and the leaf scan picks up the ones that only partly cover their leaf.
+/// The model here is the same one the Lua spec kept -- a range from row1 to
+/// row2 covers column 0 of every row strictly after row1 and up to row2,
+/// because its start sits at a positive column.
+#[test]
+fn the_overlap_iterator_finds_every_range_covering_a_row() {
+    let size = scale(45, 600);
+    let mut t = Tree::new();
+    let mut at_row: Vec<Vec<u32>> = vec![Vec::new(); 11];
+
+    let mut k = 1i32;
+    'fill: loop {
+        for row1 in 1..=9 {
+            for row2 in row1..=10 {
+                if k > size as i32 {
+                    break 'fill;
+                }
+                let id = t.put_pair_gravity(at(row1, k, false), at(row2, size as i32 - k, false));
+                for row in at_row
+                    .iter_mut()
+                    .take(row2 as usize + 1)
+                    .skip(row1 as usize + 1)
+                {
+                    row.push(id);
+                }
+                k += 1;
+            }
+        }
+    }
+    assert_eq!(t.tree.n_keys, 2 * size);
+    assert!(unsafe { (*t.tree.root).level } >= scale(1, 2) as i16);
+    t.check_tree();
+
+    for row in 1..=10 {
+        let mut want = at_row[row as usize].clone();
+        want.sort_unstable();
+        assert_eq!(t.overlapping(row, 0), want, "row {row}");
+    }
+
+    // A position no range reaches: past every end.
+    assert_eq!(t.overlapping(11, 0), Vec::<u32>::new());
+}
+
+/// A splice over the *middle* of a stack of ranges. Every range here starts on
+/// row 1 and ends on row 2, so deleting columns from row 0 leaves the covering
+/// records alone while moving both halves -- which is the case that used to
+/// desynchronise the two.
+#[test]
+fn splicing_across_a_stack_of_ranges_keeps_the_covering_records() {
+    let n = scale(20, 400) as i32;
+    let mut t = Tree::new();
+    for i in 1..=n {
+        t.put_pair_gravity(at(1, i, false), at(2, n - i, false));
+    }
+    t.check_tree();
+
+    for _ in 0..scale(2, 10) {
+        t.splice((0, 0), (0, 100), (0, 0));
+        t.check_tree();
+    }
+    t.check();
+}
+
+/// The same, on a tree several levels deep whose ranges start and end on many
+/// different rows, spliced at a row in the middle of them.
+#[test]
+fn splicing_inside_a_deep_tree_of_ranges_keeps_the_covering_records() {
+    let size = scale(45, 900);
+    let mut t = Tree::new();
+    let mut k = 1i32;
+    'fill: loop {
+        for row1 in 1..=9 {
+            for row2 in row1..=10 {
+                if k > size as i32 {
+                    break 'fill;
+                }
+                t.put_pair_gravity(at(row1, k, false), at(row2, size as i32 - k, false));
+                k += 1;
+            }
+        }
+    }
+    assert_eq!(t.tree.n_keys, 2 * size);
+    assert!(unsafe { (*t.tree.root).level } >= scale(1, 2) as i16);
+    t.check_tree();
+
+    for _ in 0..scale(1, 4) {
+        for row in 3..=8 {
+            t.splice((row, 0), (0, 200), (0, 0));
+            t.check_tree();
+        }
+    }
+    t.check();
+}
+
+/// The meta counts let a walk skip a subtree that holds none of the kind it
+/// wants. This checks both halves of that: the filtered walk visits exactly the
+/// marked keys, and starting it anywhere before the next marked key still lands
+/// on that key rather than on the first key of some skipped subtree.
+#[test]
+fn a_filtered_walk_visits_only_the_marked_keys() {
+    let rows = scale(12, 120) as i32;
+    let cols = scale(8, 60) as i32;
+    let mut t = Tree::new();
+    // Sparse enough that most subtrees hold nothing the filter wants.
+    let marked = |row: i32, col: i32| col == 0 && row % (rows / 4) == 3;
+
+    let mut want: Vec<(u32, i32, i32)> = Vec::new();
+    for row in 0..rows {
+        for col in 0..cols {
+            let id = t.put_meta(row, col, row % 2 == 0, marked(row, col));
+            if marked(row, col) {
+                want.push((id, row, col));
+            }
+        }
+    }
+    t.check();
+    assert!(want.len() >= 3, "the fixture has to mark something");
+
+    let filter = inline_filter();
+    assert_eq!(t.filtered(&filter), want);
+
+    // Subtree skipping: from any row at or before it, the first marked key is
+    // the same one.
+    let (_, first_row, first_col) = want[0];
+    for row in 0..=first_row {
+        let mut itr = zeroed_iter();
+        assert!(
+            unsafe {
+                marktree_itr_get_filter(&mut t.tree, row, 0, rows, 0, filter.as_ptr(), &mut itr)
+            },
+            "no filtered mark at or after row {row}"
+        );
+        let k = unsafe { marktree_itr_current(&mut itr) };
+        assert_eq!((k.pos.row, k.pos.col), (first_row, first_col), "from {row}");
+    }
+
+    // A filter for a kind nothing carries walks nothing at all.
+    let mut other: MetaFilter = [0; META_COUNT];
+    other[1] = u32::MAX;
+    assert_eq!(t.filtered(&other), Vec::new());
+
+    // The counts survive an edit: deleting every marked key empties the walk.
+    for &(id, _, _) in &want {
+        t.del(id);
+    }
+    t.check();
+    assert_eq!(t.filtered(&filter), Vec::new());
+}
+
+/// Deleting through the *ends* of ranges, in a strided order rather than a
+/// random one, so that a whole run of neighbouring keys leaves at once and the
+/// rebalancer has to merge repeatedly.
+#[test]
+fn deleting_ranges_in_a_strided_order_keeps_the_covering_records() {
+    let n = scale(24, 320);
+    let mut t = Tree::new();
+    let ids: Vec<u32> = (1..=n as i32)
+        .map(|i| t.put_pair_gravity(at(1, i, false), at(2, n as i32 - i, false)))
+        .collect();
+    t.check_tree();
+
+    let stride = scale(4, 8);
+    let mut steps = 0;
+    for start in 0..stride {
+        let mut at = start;
+        while at < n {
+            t.del_pair(ids[at]);
+            at += stride;
+            steps += 1;
+            if steps % scale(3, 17) == 0 {
+                t.check_tree();
+            }
+        }
+    }
+    assert_eq!(t.tree.n_keys, 0);
+    t.check_tree();
+}
+
+/// Upstream #37867: a splice that deletes a span containing both halves of
+/// several ranges, some of which run *backwards* -- their end sorts before
+/// their start. The covering records of an inverted range are empty, and the
+/// splice has to leave them that way rather than deriving them from a span it
+/// reads as negative.
+#[test]
+fn splicing_over_ranges_whose_ends_precede_their_starts() {
+    let mut t = Tree::new();
+    t.put(190, 48, false);
+    t.put(48, 48, true);
+    t.put(190, 48, false);
+    for &(row, right, end_row) in &[
+        (166, false, 166),
+        (48, true, 48),
+        (48, true, 48),
+        (48, true, 255),
+        (131, false, 48),
+        (131, false, 48),
+        (48, true, 131),
+        (48, false, 216),
+        (172, false, 51),
+        (131, false, 131),
+        (156, false, 131),
+        (135, false, 166),
+        (172, false, 250),
+        (48, false, 143),
+    ] {
+        t.put_pair_gravity(at(row, 48, right), at(end_row, 48, false));
+    }
+    assert!(unsafe { marktree_check_intersections(&mut t.tree) });
+    t.splice((48, 0), (139, 0), (0, 0));
+    assert!(unsafe { marktree_check_intersections(&mut t.tree) });
+}

@@ -564,6 +564,61 @@ mod tests {
         assert_eq!(d.set().as_slice(), &[5]);
     }
 
+    /// The table `marktree_spec.lua` drove through an `intersect_mov_test`
+    /// shim that existed only to reach this function from Lua. Each row is
+    /// (old parent's set, new parent's set, the child's own set) and the answer
+    /// is (the child's set afterwards, what the new parent's other children
+    /// have to take on).
+    #[test]
+    fn a_move_redistributes_what_each_side_no_longer_covers() {
+        #[track_caller]
+        fn mov(x: &[uint64_t], y: &[uint64_t], w: &[uint64_t]) -> (Vec<uint64_t>, Vec<uint64_t>) {
+            let (x, y, w, d) = (
+                Fixture::new(x),
+                Fixture::new(y),
+                Fixture::new(w),
+                Fixture::new(&[]),
+            );
+            intersect_mov(&x.set(), &y.set(), &w.set(), &d.set());
+            (w.set().as_slice().to_vec(), d.set().as_slice().to_vec())
+        }
+        let none: Vec<uint64_t> = Vec::new();
+
+        // Nothing to inherit and nothing to shed.
+        assert_eq!(mov(&[], &[2, 3], &[2, 3]), (none.clone(), none.clone()));
+        // The child keeps what neither parent covers.
+        assert_eq!(mov(&[], &[], &[2, 3]), (vec![2, 3], none.clone()));
+        // What the old parent covered and the new one does not moves down.
+        assert_eq!(mov(&[2, 3], &[], &[]), (vec![2, 3], none.clone()));
+        // What the new parent covers and the child does not moves out to the
+        // new parent's other children.
+        assert_eq!(mov(&[], &[2, 3], &[]), (none.clone(), vec![2, 3]));
+
+        // Overlapping sets: only the difference each way moves.
+        assert_eq!(mov(&[1, 2, 5], &[2, 3], &[3]), (vec![1, 5], none.clone()));
+        assert_eq!(mov(&[1, 2, 5], &[5, 10], &[10]), (vec![1, 2], none.clone()));
+        assert_eq!(mov(&[1, 2], &[5, 10], &[10]), (vec![1, 2], vec![5]));
+
+        // Interleaved, so every merge step alternates sides.
+        let (x, y) = ([1, 3, 5, 7, 9], [2, 4, 6, 8, 10]);
+        assert_eq!(
+            mov(&x, &y, &[]),
+            (vec![1, 3, 5, 7, 9], vec![2, 4, 6, 8, 10])
+        );
+        assert_eq!(mov(&x, &y, &[4, 8]), (vec![1, 3, 5, 7, 9], vec![2, 6, 10]));
+
+        // Sets sharing some ids: 3, 6 and 9 are covered both before and after,
+        // so they neither move down nor move out.
+        let (x, y) = ([1, 3, 4, 6, 7, 9], [2, 3, 5, 6, 8, 9]);
+        assert_eq!(mov(&x, &y, &[]), (vec![1, 4, 7], vec![2, 5, 8]));
+        assert_eq!(mov(&x, &y, &[2, 5, 8]), (vec![1, 4, 7], none.clone()));
+        // And ids the child already carries that neither parent mentions stay.
+        assert_eq!(
+            mov(&x, &y, &[0, 2, 5, 8, 10]),
+            (vec![0, 1, 4, 7, 10], none.clone())
+        );
+    }
+
     #[test]
     fn moving_a_set_off_the_inline_array_copies_it() {
         let src = Fixture::new(&[1, 2, 3]);
