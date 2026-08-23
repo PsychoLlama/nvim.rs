@@ -30,7 +30,7 @@ one names a symbol that is gone.
 
 The same hole would be here if this script enumerated `pub` items and asked
 which tests use them. So it does the opposite: it parses the `use
-c2rust_neovim::...` trees out of `crates/nvim/tests/`, and every path it finds
+neovim::...` trees out of `crates/nvim/tests/`, and every path it finds
 must resolve to something the crate actually declares or re-exports. A path it
 cannot account for is an **error**, not a dropped row -- because the one way
 this ledger could go quietly wrong is a scanner blind spot (a re-export chain,
@@ -69,7 +69,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LEDGER = ROOT / "metrics" / "visibility-ledger.jsonl"
-CRATE = "c2rust_neovim"
+CRATE = "neovim"
 SRC = ROOT / "crates" / "nvim" / "src"
 TESTS = ROOT / "crates" / "nvim" / "tests"
 
@@ -150,7 +150,7 @@ def parse_use_tree(text, start):
 
 
 def crate_paths(text):
-    """Every `c2rust_neovim::…` path a test source names."""
+    """Every `neovim::…` path a test source names."""
     text = strip_comments(text)
     out = []
     imported = []

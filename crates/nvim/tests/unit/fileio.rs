@@ -18,13 +18,13 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::IntoRawFd;
 use std::path::{Path, PathBuf};
 
-use c2rust_neovim::os::fileio::{
+use neovim::os::fileio::{
     FileOpenFlags, file_close, file_flush, file_fsync, file_open, file_open_fd, file_read,
     file_skip, file_write, kFileCreate, kFileCreateOnly, kFileNoSymlink, kFileReadOnly,
     kFileTruncate, kFileWriteOnly,
 };
-use c2rust_neovim::os::uv_error::{UV_EEXIST, UV_EISDIR, UV_ELOOP, UV_EMLINK, UV_ENOENT};
-use c2rust_neovim::types::FileDescriptor;
+use neovim::os::uv_error::{UV_EEXIST, UV_EISDIR, UV_ELOOP, UV_EMLINK, UV_ENOENT};
+use neovim::types::FileDescriptor;
 
 use crate::support::{Editor, editor_lock};
 

@@ -17,6 +17,6 @@
 fn main() {
     // Arm the GlobalCell debug main-thread assertion before any editor code
     // touches a global.
-    c2rust_neovim::global_cell::init_main_thread();
-    c2rust_neovim::main::main();
+    neovim::global_cell::init_main_thread();
+    neovim::main::main();
 }

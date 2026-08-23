@@ -16,13 +16,13 @@
 use std::ffi::c_int;
 use std::ptr;
 
-use c2rust_neovim::types::{frame_T, win_T};
-use c2rust_neovim::window::arith::{
+use neovim::types::{frame_T, win_T};
+use neovim::window::arith::{
     MinSize, NextCurwin, cursor_fraction, fraction_row, frame_check_height, frame_check_width,
     frame_minheight, frame_minwidth, height_with_chrome, parent_target, sort_columns,
     width_with_chrome,
 };
-use c2rust_neovim::winlayer::Frame;
+use neovim::winlayer::Frame;
 
 // The layouts below mirror the C's: `FR_LEAF` 0, `FR_ROW` 1, `FR_COL` 2.
 const FR_LEAF: i8 = 0;

@@ -3,7 +3,7 @@
 //! undo, so the constants and the encoder are asserted from outside the
 //! crate as well as from inside it.
 
-use c2rust_neovim::undo::format::*;
+use neovim::undo::format::*;
 
 /// The nine bytes at offset 0 of every undo file since the format's
 /// inception. `Vim`, 0x9f, `UnDo`, 0xe5.
@@ -71,7 +71,7 @@ fn an_oversized_value_truncates_from_the_top() {
 /// whole of the on-disk link format.
 #[test]
 fn a_link_round_trips_through_its_four_byte_field() {
-    use c2rust_neovim::types::UndoLink;
+    use neovim::types::UndoLink;
 
     for seq in [1, 2, 0x7f, 0x80, 0xffff, 0x0100_0000, i32::MAX] {
         let link = UndoLink::to_seq(seq);
@@ -112,11 +112,11 @@ mod write {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::PathBuf;
 
-    use c2rust_neovim::main::{curbuf, p_udir};
-    use c2rust_neovim::memory::xfree;
-    use c2rust_neovim::types::buf_T;
-    use c2rust_neovim::undo::format::UF_START_MAGIC;
-    use c2rust_neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
+    use neovim::main::{curbuf, p_udir};
+    use neovim::memory::xfree;
+    use neovim::types::buf_T;
+    use neovim::undo::format::UF_START_MAGIC;
+    use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
 
     use crate::support::{Editor, editor_lock};
 

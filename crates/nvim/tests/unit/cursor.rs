@@ -15,11 +15,11 @@
 use std::cell::Cell;
 use std::ffi::c_int;
 
-use c2rust_neovim::cursor::arith::{
+use neovim::cursor::arith::{
     ColAdd, carried_coladd, checked_col, folded_line_span, gap_coladd, step_back, wrap_target_col,
 };
-use c2rust_neovim::pos::MAXCOL;
-use c2rust_neovim::types::{colnr_T, linenr_T};
+use neovim::pos::MAXCOL;
+use neovim::types::{colnr_T, linenr_T};
 
 // --------------------------------------------------------------- wrap_target_col
 //

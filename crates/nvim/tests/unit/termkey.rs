@@ -17,10 +17,10 @@
 use std::ffi::{CStr, c_char, c_int, c_uint};
 use std::ptr;
 
-use c2rust_neovim::tui::termkey::driver_csi::{
+use neovim::tui::termkey::driver_csi::{
     termkey_interpret_csi, termkey_interpret_modereport, termkey_interpret_mouse,
 };
-use c2rust_neovim::tui::termkey::termkey::{
+use neovim::tui::termkey::termkey::{
     TERMKEY_CANON_DELBS, TERMKEY_CANON_SPACESYMBOL, TERMKEY_FLAG_SPACESYMBOL, TERMKEY_FLAG_UTF8,
     TERMKEY_FORMAT_LOWERSPACE, TERMKEY_FORMAT_MOUSE_POS, TERMKEY_KEYMOD_ALT, TERMKEY_KEYMOD_CTRL,
     TERMKEY_MOUSE_DRAG, TERMKEY_MOUSE_PRESS, TERMKEY_MOUSE_RELEASE, TERMKEY_RES_AGAIN,
@@ -32,7 +32,7 @@ use c2rust_neovim::tui::termkey::termkey::{
     termkey_getkey, termkey_getkey_force, termkey_interpret_string, termkey_new_abstract,
     termkey_push_bytes, termkey_set_buffer_size, termkey_set_canonflags, termkey_start,
 };
-use c2rust_neovim::types::{
+use neovim::types::{
     TermKey, TermKeyCsiParam, TermKeyFormat, TermKeyKey, TermKeyMouseEvent, TermKeyResult,
     TermKeyType,
 };
@@ -132,7 +132,7 @@ impl Reader {
         // SAFETY: the buffer holds `room` bytes and the entry point writes at
         // most `room - 1` of them plus a terminator.
         let len = unsafe {
-            c2rust_neovim::tui::termkey::termkey::termkey_strfkey(
+            neovim::tui::termkey::termkey::termkey_strfkey(
                 self.0,
                 buffer.as_mut_ptr().cast::<c_char>(),
                 room,

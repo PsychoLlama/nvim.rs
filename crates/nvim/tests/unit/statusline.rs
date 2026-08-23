@@ -22,11 +22,11 @@
 use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::buffer::setfname;
-use c2rust_neovim::grid::schar_from_str;
-use c2rust_neovim::main::{curbuf, curwin};
-use c2rust_neovim::statusline::{FmtSource, StlSinks, build_stl_str_hl};
-use c2rust_neovim::types::schar_T;
+use neovim::buffer::setfname;
+use neovim::grid::schar_from_str;
+use neovim::main::{curbuf, curwin};
+use neovim::statusline::{FmtSource, StlSinks, build_stl_str_hl};
+use neovim::types::schar_T;
 
 use crate::support::{Sandbox, cstr};
 

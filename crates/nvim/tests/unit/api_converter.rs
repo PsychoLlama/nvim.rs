@@ -17,9 +17,9 @@
 
 use std::ptr;
 
-use c2rust_neovim::api::private::converter::vim_to_object;
-use c2rust_neovim::api::private::helpers::api_free_object;
-use c2rust_neovim::eval::typval::tv_clear;
+use neovim::api::private::converter::vim_to_object;
+use neovim::api::private::helpers::api_free_object;
+use neovim::eval::typval::tv_clear;
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{Obj, Pt, Tv};

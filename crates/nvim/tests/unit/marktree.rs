@@ -17,22 +17,20 @@
 use std::ffi::{c_int, c_uint};
 use std::ptr;
 
-use c2rust_neovim::marktree::check::{
+use neovim::marktree::check::{
     MarkEnd, marktree_check, marktree_check_intersections, marktree_del_pair_test,
     marktree_put_test, mt_right_test,
 };
-use c2rust_neovim::marktree::iter::{
+use neovim::marktree::iter::{
     marktree_itr_current, marktree_itr_first, marktree_itr_get, marktree_itr_get_filter,
     marktree_itr_get_overlap, marktree_itr_next, marktree_itr_next_filter,
     marktree_itr_step_overlap,
 };
-use c2rust_neovim::marktree::key::mt_end;
-use c2rust_neovim::marktree::meta::META_COUNT;
-use c2rust_neovim::marktree::splice::marktree_splice;
-use c2rust_neovim::marktree::{
-    marktree_clear, marktree_del_itr, marktree_lookup_ns, marktree_move,
-};
-use c2rust_neovim::types::{
+use neovim::marktree::key::mt_end;
+use neovim::marktree::meta::META_COUNT;
+use neovim::marktree::splice::marktree_splice;
+use neovim::marktree::{marktree_clear, marktree_del_itr, marktree_lookup_ns, marktree_move};
+use neovim::types::{
     MTKey, MTNode, MTPair, MTPos, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter, MarkTreeIter_s,
 };
 

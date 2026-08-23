@@ -6,12 +6,12 @@
 use std::ffi::{CStr, CString, c_void};
 use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
-use c2rust_neovim::event::multiqueue::{
+use neovim::event::multiqueue::{
     event_create_oneshot, multiqueue_empty, multiqueue_free, multiqueue_get,
     multiqueue_move_events, multiqueue_new, multiqueue_new_child, multiqueue_process_events,
     multiqueue_purge_events, multiqueue_put_event, multiqueue_replace_parent, multiqueue_size,
 };
-use c2rust_neovim::types::{Event, MultiQueue};
+use neovim::types::{Event, MultiQueue};
 
 /// An event carrying `label` and no handler, so `get` hands the label back.
 fn labelled(label: &CStr) -> Event {

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 #[cfg(not(miri))]
 use std::sync::{Mutex, MutexGuard};
 
-use c2rust_neovim::memory::xfree;
+use neovim::memory::xfree;
 
 #[cfg(not(miri))]
 pub(crate) mod tv;
@@ -97,11 +97,11 @@ fn init_editor() {
     // SAFETY: the caller holds the editor lock, and `Once` makes this the
     // only initialisation.
     ONCE.call_once(|| unsafe {
-        c2rust_neovim::main::event_init();
-        c2rust_neovim::main::early_init(std::ptr::null_mut());
-        c2rust_neovim::drawscreen::default_grid_alloc();
-        c2rust_neovim::main::msg_grid_adj.with_mut(|view| {
-            view.target = c2rust_neovim::main::default_grid.ptr();
+        neovim::main::event_init();
+        neovim::main::early_init(std::ptr::null_mut());
+        neovim::drawscreen::default_grid_alloc();
+        neovim::main::msg_grid_adj.with_mut(|view| {
+            view.target = neovim::main::default_grid.ptr();
         });
     });
 }
@@ -228,21 +228,21 @@ impl Sandbox {
     pub(crate) fn set_env(&mut self, name: &str, value: &str) -> std::ffi::c_int {
         self.remember_env(name);
         // SAFETY: both strings are this frame's and NUL-terminated.
-        unsafe { c2rust_neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 1) }
+        unsafe { neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 1) }
     }
 
     /// `os_setenv` with `overwrite` off: an existing value wins.
     pub(crate) fn set_env_if_unset(&mut self, name: &str, value: &str) -> std::ffi::c_int {
         self.remember_env(name);
         // SAFETY: as above.
-        unsafe { c2rust_neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 0) }
+        unsafe { neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 0) }
     }
 
     /// Remove a variable for the rest of the case.
     pub(crate) fn unset_env(&mut self, name: &str) -> std::ffi::c_int {
         self.remember_env(name);
         // SAFETY: the name is this frame's and NUL-terminated.
-        unsafe { c2rust_neovim::os::env::os_unsetenv(cstr(name).as_ptr()) }
+        unsafe { neovim::os::env::os_unsetenv(cstr(name).as_ptr()) }
     }
 }
 
@@ -271,10 +271,10 @@ impl Drop for Sandbox {
                     Some(value) => {
                         let value =
                             CString::new(value.as_encoded_bytes()).expect("it came from the block");
-                        c2rust_neovim::os::env::os_setenv(name.as_ptr(), value.as_ptr(), 1);
+                        neovim::os::env::os_setenv(name.as_ptr(), value.as_ptr(), 1);
                     }
                     None => {
-                        c2rust_neovim::os::env::os_unsetenv(name.as_ptr());
+                        neovim::os::env::os_unsetenv(name.as_ptr());
                     }
                 }
             }
@@ -337,10 +337,8 @@ pub(crate) mod alloc {
     use std::ffi::{c_char, c_void};
     use std::mem::{offset_of, size_of};
 
-    use c2rust_neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use c2rust_neovim::types::{
-        DictWatcher, dict_T, dictitem_T, list_T, listitem_T, partial_T, typval_T,
-    };
+    use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
+    use neovim::types::{DictWatcher, dict_T, dictitem_T, list_T, listitem_T, partial_T, typval_T};
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -504,7 +502,7 @@ pub(crate) fn check_emsg_bytes<R>(
     f: impl FnOnce() -> R,
     msg: Option<&[u8]>,
 ) -> R {
-    use c2rust_neovim::message::msg_hist_last;
+    use neovim::message::msg_hist_last;
 
     let before = msg_hist_last.get();
     let ret = f();

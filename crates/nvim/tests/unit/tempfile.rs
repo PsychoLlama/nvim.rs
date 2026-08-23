@@ -15,8 +15,8 @@
 
 use std::path::{Path, PathBuf};
 
-use c2rust_neovim::fileio::{vim_deltempdir, vim_gettempdir, vim_tempname};
-use c2rust_neovim::os::fs::os_file_is_writable;
+use neovim::fileio::{vim_deltempdir, vim_gettempdir, vim_tempname};
+use neovim::os::fs::os_file_is_writable;
 
 use crate::support::{Sandbox, cstr, internalize};
 

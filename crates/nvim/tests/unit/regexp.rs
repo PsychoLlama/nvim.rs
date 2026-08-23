@@ -36,8 +36,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use c2rust_neovim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
-use c2rust_neovim::types::regmatch_T;
+use neovim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
+use neovim::types::regmatch_T;
 
 use crate::support::Sandbox;
 

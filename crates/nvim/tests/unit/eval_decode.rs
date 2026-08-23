@@ -6,11 +6,11 @@
 
 use std::ffi::c_int;
 
-use c2rust_neovim::eval::decode::json_decode_string;
-use c2rust_neovim::eval::typval::tv_clear;
-use c2rust_neovim::main::emsg_silent;
-use c2rust_neovim::memory::{xfree, xmemdup};
-use c2rust_neovim::types::{VAR_UNKNOWN, VAR_UNLOCKED, typval_T, typval_vval_union};
+use neovim::eval::decode::json_decode_string;
+use neovim::eval::typval::tv_clear;
+use neovim::main::emsg_silent;
+use neovim::memory::{xfree, xmemdup};
+use neovim::types::{VAR_UNKNOWN, VAR_UNLOCKED, typval_T, typval_vval_union};
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{self, Tv};

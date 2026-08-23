@@ -8,11 +8,9 @@
 
 use std::ffi::c_char;
 
-use c2rust_neovim::memory::xfree;
-use c2rust_neovim::msgpack_rpc::packer::{
-    format, mpack_object, packer_string_buffer, packer_take_string,
-};
-use c2rust_neovim::types::{
+use neovim::memory::xfree;
+use neovim::msgpack_rpc::packer::{format, mpack_object, packer_string_buffer, packer_take_string};
+use neovim::types::{
     Array, Dict, KeyValuePair, Object, PackerBuffer, String_0, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, kObjectTypeWindow, object_data,

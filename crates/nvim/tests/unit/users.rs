@@ -18,9 +18,9 @@
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::garray::ga_clear_strings;
-use c2rust_neovim::os::users::{os_get_uname, os_get_userdir, os_get_username, os_get_usernames};
-use c2rust_neovim::types::{FAIL, OK, garray_T};
+use neovim::garray::ga_clear_strings;
+use neovim::os::users::{os_get_uname, os_get_userdir, os_get_username, os_get_usernames};
+use neovim::types::{FAIL, OK, garray_T};
 
 use crate::support::{cstr, editor_lock, take_bytes};
 

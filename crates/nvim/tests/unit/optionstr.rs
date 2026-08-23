@@ -8,7 +8,7 @@
 
 use std::ffi::c_int;
 
-use c2rust_neovim::optionstr::check_ff_value;
+use neovim::optionstr::check_ff_value;
 
 use crate::support::cstr;
 

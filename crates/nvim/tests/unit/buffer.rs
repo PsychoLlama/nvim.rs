@@ -14,11 +14,11 @@
 
 use std::ffi::{c_char, c_int};
 
-use c2rust_neovim::buffer::{
+use neovim::buffer::{
     BLN_LISTED, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, buf_valid, buflist_findpat, buflist_new,
     close_buffer,
 };
-use c2rust_neovim::types::buf_T;
+use neovim::types::buf_T;
 
 use crate::support::{Sandbox, cstr};
 

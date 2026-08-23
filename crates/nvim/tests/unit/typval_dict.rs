@@ -10,8 +10,8 @@
 use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
-use c2rust_neovim::eval::typval::{
+use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
+use neovim::eval::typval::{
     callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str, tv_dict_add_dict,
     tv_dict_add_float, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
     tv_dict_clear, tv_dict_copy, tv_dict_equal, tv_dict_extend, tv_dict_find, tv_dict_free,
@@ -19,11 +19,11 @@ use c2rust_neovim::eval::typval::{
     tv_dict_get_string_buf_chk, tv_dict_item_alloc_len, tv_dict_set_keys_readonly, tv_dict_unref,
     tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_unref,
 };
-use c2rust_neovim::main::{emsg_skip, sandbox};
-use c2rust_neovim::mbyte::convert_setup;
-use c2rust_neovim::memory::{xfree, xmalloc, xstrdup};
-use c2rust_neovim::ops::NUMBUFLEN;
-use c2rust_neovim::types::{Callback, FAIL, OK, VAR_FIXED, VAR_LOCKED, dict_T, vimconv_T};
+use neovim::main::{emsg_skip, sandbox};
+use neovim::mbyte::convert_setup;
+use neovim::memory::{xfree, xmalloc, xstrdup};
+use neovim::ops::NUMBUFLEN;
+use neovim::types::{Callback, FAIL, OK, VAR_FIXED, VAR_LOCKED, dict_T, vimconv_T};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Cb, Pt, Tv};

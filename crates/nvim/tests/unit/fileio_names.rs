@@ -11,7 +11,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use c2rust_neovim::fileio::file_pat_to_reg_pat;
+use neovim::fileio::file_pat_to_reg_pat;
 
 use crate::support::{cstr, internalize};
 

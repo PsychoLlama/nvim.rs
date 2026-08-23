@@ -29,13 +29,13 @@
 
 use std::ffi::c_void;
 
-use c2rust_neovim::memory::alloc_log::AllocEvent;
-use c2rust_neovim::memory::arena::{
+use neovim::memory::alloc_log::AllocEvent;
+use neovim::memory::arena::{
     ARENA_ALIGN, ARENA_BLOCK_SIZE, ARENA_EMPTY, alloc_block, arena_alloc, arena_finish,
     arena_mem_free,
 };
-use c2rust_neovim::memory::xfree;
-use c2rust_neovim::types::{Arena, consumed_blk};
+use neovim::memory::xfree;
+use neovim::types::{Arena, consumed_blk};
 
 use crate::support::alloc::{AllocLog, freed};
 

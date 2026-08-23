@@ -8,13 +8,13 @@
 use std::ffi::{CStr, c_char, c_void};
 use std::{ptr, slice};
 
-use c2rust_neovim::map::{
+use neovim::map::{
     MH_TOMBSTONE, kMHExisting, map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_clear,
     mh_delete_uint32_t, mh_get_cstr_t, mh_get_uint32_t, mh_get_uint64_t, mh_put_cstr_t,
     mh_put_uint32_t,
 };
-use c2rust_neovim::memory::xfree;
-use c2rust_neovim::types::{
+use neovim::memory::xfree;
+use neovim::types::{
     Map_cstr_t_ptr_t, Map_uint64_t_ptr_t, MapHash, Set_cstr_t, Set_uint32_t, Set_uint64_t, uint32_t,
 };
 

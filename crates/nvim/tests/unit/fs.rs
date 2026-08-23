@@ -20,7 +20,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::ptr;
 
-use c2rust_neovim::os::fs::{
+use neovim::os::fs::{
     NODE_NORMAL, NODE_WRITABLE, os_can_exe, os_chdir, os_close, os_dirname, os_dup, os_fchown,
     os_file_is_readable, os_file_is_writable, os_fileid, os_fileid_equal, os_fileid_equal_fileinfo,
     os_fileinfo, os_fileinfo_blocksize, os_fileinfo_fd, os_fileinfo_hardlinks, os_fileinfo_id,
@@ -28,8 +28,8 @@ use c2rust_neovim::os::fs::{
     os_isdir, os_mkdir, os_mkdir_recurse, os_nodetype, os_open, os_path_exists, os_read, os_readv,
     os_remove, os_rename, os_rmdir, os_setperm, os_write,
 };
-use c2rust_neovim::os::uv_error::{UV_EBADF, UV_EEXIST, UV_ENOENT};
-use c2rust_neovim::types::{FAIL, FileID, FileInfo, OK, iovec};
+use neovim::os::uv_error::{UV_EBADF, UV_EEXIST, UV_ENOENT};
+use neovim::types::{FAIL, FileID, FileInfo, OK, iovec};
 
 use crate::support::{Sandbox, internalize};
 

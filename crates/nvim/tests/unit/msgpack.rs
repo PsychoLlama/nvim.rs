@@ -22,10 +22,10 @@
 
 use std::ffi::{c_char, c_int};
 
-use c2rust_neovim::main::{grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size};
-use c2rust_neovim::memory::{xcalloc, xfree};
-use c2rust_neovim::msgpack_rpc::unpacker::{unpacker_advance, unpacker_init, unpacker_teardown};
-use c2rust_neovim::types::{GridLineEvent, Unpacker, sattr_T, schar_T};
+use neovim::main::{grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size};
+use neovim::memory::{xcalloc, xfree};
+use neovim::msgpack_rpc::unpacker::{unpacker_advance, unpacker_init, unpacker_teardown};
+use neovim::types::{GridLineEvent, Unpacker, sattr_T, schar_T};
 
 /// An unpacker that tears itself down, so a case can return without a
 /// cleanup dance.

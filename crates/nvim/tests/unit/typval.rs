@@ -24,15 +24,15 @@
 use std::ffi::{CStr, c_char};
 use std::ptr;
 
-use c2rust_neovim::eval::typval::{
+use neovim::eval::typval::{
     kCallbackNone, tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_is_watched,
     tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_item_remove,
     tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_alloc, tv_list_append_number,
     tv_list_append_string, tv_list_drop_items, tv_list_first, tv_list_last, tv_list_len,
     tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
 };
-use c2rust_neovim::memory::{xfree, xstrdup};
-use c2rust_neovim::types::{
+use neovim::memory::{xfree, xstrdup};
+use neovim::types::{
     Callback, Callback_data, FAIL, OK, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown,
     listitem_T, listwatch_T, ptrdiff_t,
 };
@@ -103,7 +103,7 @@ fn tv_list_append_string_copies_then_appends() {
 ///
 /// # Safety
 /// `l` is a live list of `VAR_STRING` items.
-unsafe fn strings(l: *const c2rust_neovim::types::list_T) -> Vec<Option<&'static str>> {
+unsafe fn strings(l: *const neovim::types::list_T) -> Vec<Option<&'static str>> {
     let mut out = Vec::new();
     let mut item = unsafe { (*l).lv_first };
     while !item.is_null() {

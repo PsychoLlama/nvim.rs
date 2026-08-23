@@ -9,16 +9,16 @@
 use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 
-use c2rust_neovim::eval::typval::{
+use neovim::eval::typval::{
     tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
     tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf,
     tv_get_string_buf_chk, tv_get_string_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret,
     value_check_lock,
 };
-use c2rust_neovim::main::{curwin, kTVCstring};
-use c2rust_neovim::memory::{xfree, xmalloc};
-use c2rust_neovim::ops::NUMBUFLEN;
-use c2rust_neovim::types::{
+use neovim::main::{curwin, kTVCstring};
+use neovim::memory::{xfree, xmalloc};
+use neovim::ops::NUMBUFLEN;
+use neovim::types::{
     VAR_BOOL, VAR_DICT, VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NUMBER,
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarType, kBoolVarFalse,
     kBoolVarTrue, kSpecialVarNull, typval_T, typval_vval_union, win_T,

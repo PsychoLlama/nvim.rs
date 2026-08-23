@@ -19,12 +19,12 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::os::env::expand::expand_env_esc;
-use c2rust_neovim::os::env::{
+use neovim::os::env::expand::expand_env_esc;
+use neovim::os::env::{
     os_env_exists, os_get_hostname, os_get_pid, os_getenv, os_getenv_buf, os_getenv_noalloc,
     os_getenvname_at_index, os_setenv_append_path, os_shell_is_cmdexe,
 };
-use c2rust_neovim::types::MAXPATHL;
+use neovim::types::MAXPATHL;
 
 use crate::support::{Sandbox, cstr, internalize};
 

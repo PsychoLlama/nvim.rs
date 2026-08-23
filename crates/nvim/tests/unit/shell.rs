@@ -16,10 +16,10 @@
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::main::{p_sh, p_shcf, p_sxe, p_sxq};
-use c2rust_neovim::memory::xfree;
-use c2rust_neovim::os::shell::system::os_system;
-use c2rust_neovim::os::shell::{shell_argv_to_str, shell_build_argv};
+use neovim::main::{p_sh, p_shcf, p_sxe, p_sxq};
+use neovim::memory::xfree;
+use neovim::os::shell::system::os_system;
+use neovim::os::shell::{shell_argv_to_str, shell_build_argv};
 
 use crate::support::{Editor, cstr, editor_lock, internalize};
 
@@ -298,6 +298,6 @@ fn the_argument_vector_is_one_allocation_per_word_plus_the_vector() {
             words
         };
         assert_eq!(words.len(), 4, "shell, extra args, flag, command");
-        c2rust_neovim::os::shell::shell_free_argv(argv);
+        neovim::os::shell::shell_free_argv(argv);
     }
 }

@@ -15,11 +15,11 @@ use std::ffi::c_int;
 use std::mem::size_of;
 use std::ptr;
 
-use c2rust_neovim::fold::adjust::fold_mark_adjust_recurse;
-use c2rust_neovim::fold::fold_T;
-use c2rust_neovim::garray::{ga_clear, ga_grow, ga_init};
-use c2rust_neovim::pos::MAXLNUM;
-use c2rust_neovim::types::{garray_T, linenr_T};
+use neovim::fold::adjust::fold_mark_adjust_recurse;
+use neovim::fold::fold_T;
+use neovim::garray::{ga_clear, ga_grow, ga_init};
+use neovim::pos::MAXLNUM;
+use neovim::types::{garray_T, linenr_T};
 
 /// The sentinel `mark_adjust` passes as `amount` to mean "these lines are
 /// gone".

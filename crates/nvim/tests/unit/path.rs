@@ -17,14 +17,14 @@ use std::ffi::{CStr, c_char, c_int};
 use std::path::Path;
 use std::ptr;
 
-use c2rust_neovim::main::p_fic;
-use c2rust_neovim::path::{
+use neovim::main::p_fic;
+use neovim::path::{
     append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
     kEqualFiles, kOneFileMissing, path_fix_case, path_full_compare, path_full_dir_name,
     path_guess_exepath, path_is_absolute, path_next_component, path_shorten_fname, path_tail,
     path_tail_with_sep, path_try_shorten_fname, path_with_extension, path_with_url, vim_full_name,
 };
-use c2rust_neovim::types::{FAIL, OK};
+use neovim::types::{FAIL, OK};
 
 use crate::support::Sandbox;
 

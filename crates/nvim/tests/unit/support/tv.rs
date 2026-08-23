@@ -26,12 +26,12 @@ use std::ffi::{CStr, c_char, c_int, c_void};
 use std::mem::offset_of;
 use std::ptr;
 
-use c2rust_neovim::eval::typval::{
+use neovim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
     tv_list_append,
 };
-use c2rust_neovim::memory::{xcalloc, xmalloc, xmemdupz};
-use c2rust_neovim::types::{
+use neovim::memory::{xcalloc, xmalloc, xmemdupz};
+use neovim::types::{
     Callback, Callback_data, CallbackType, DictWatcher, Object, VAR_BOOL, VAR_DICT, VAR_FLOAT,
     VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
     VAR_UNLOCKED, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
@@ -540,13 +540,13 @@ pub(crate) enum Cb {
 pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
     let mut path = Vec::new();
     match unsafe { (*cb).type_0 } {
-        c2rust_neovim::eval::typval::kCallbackNone => Cb::None,
-        c2rust_neovim::eval::typval::kCallbackFuncref => Cb::Fref(
+        neovim::eval::typval::kCallbackNone => Cb::None,
+        neovim::eval::typval::kCallbackFuncref => Cb::Fref(
             unsafe { CStr::from_ptr((*cb).data.funcref) }
                 .to_bytes()
                 .to_vec(),
         ),
-        c2rust_neovim::eval::typval::kCallbackPartial => Cb::Pt(Box::new(unsafe {
+        neovim::eval::typval::kCallbackPartial => Cb::Pt(Box::new(unsafe {
             read_partial((*cb).data.partial, &mut path)
         })),
         other => panic!("callback type {other} is not implemented"),
@@ -562,11 +562,11 @@ pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
 pub(crate) unsafe fn build_callback(cb: &Cb) -> Callback {
     let (type_0, data): (CallbackType, Callback_data) = match cb {
         Cb::None => (
-            c2rust_neovim::eval::typval::kCallbackNone,
+            neovim::eval::typval::kCallbackNone,
             Callback_data { luaref: 0 },
         ),
         Cb::Fref(name) => (
-            c2rust_neovim::eval::typval::kCallbackFuncref,
+            neovim::eval::typval::kCallbackFuncref,
             Callback_data {
                 funcref: unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast(),
             },
@@ -574,7 +574,7 @@ pub(crate) unsafe fn build_callback(cb: &Cb) -> Callback {
         Cb::Pt(pt) => {
             let mut path = Vec::new();
             (
-                c2rust_neovim::eval::typval::kCallbackPartial,
+                neovim::eval::typval::kCallbackPartial,
                 Callback_data {
                     partial: unsafe { pt.build_at(&mut path) },
                 },
@@ -624,8 +624,8 @@ pub(crate) unsafe fn dict_watchers(d: *const dict_T) -> Vec<Watcher> {
 }
 
 /// The spec's `ga_alloc`: a `garray_T` on the caller's stack, initialised.
-pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> c2rust_neovim::types::garray_T {
-    let mut ga = c2rust_neovim::types::garray_T {
+pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::garray_T {
+    let mut ga = neovim::types::garray_T {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,
@@ -633,7 +633,7 @@ pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> c2rust_neovim::types
         ga_data: ptr::null_mut(),
     };
     // SAFETY: `ga` is this frame's and `ga_init` only writes the header.
-    unsafe { c2rust_neovim::garray::ga_init(&raw mut ga, itemsize, growsize) };
+    unsafe { neovim::garray::ga_init(&raw mut ga, itemsize, growsize) };
     ga
 }
 
@@ -643,8 +643,8 @@ pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> c2rust_neovim::types
 /// # Safety
 /// The editor must be up. The answer owns its contents; clear it.
 pub(crate) unsafe fn eval0(expr: &str) -> Option<typval_T> {
-    use c2rust_neovim::eval::EVAL_EVALUATE;
-    use c2rust_neovim::types::evalarg_T;
+    use neovim::eval::EVAL_EVALUATE;
+    use neovim::types::evalarg_T;
 
     let mut tv = typval_T {
         v_type: VAR_UNKNOWN,
@@ -661,7 +661,7 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<typval_T> {
     // what it consumed.
     let mut arg: Vec<c_char> = expr.bytes().map(|b| b as c_char).chain([0]).collect();
     let ok = unsafe {
-        c2rust_neovim::eval::eval0(
+        neovim::eval::eval0(
             arg.as_mut_ptr(),
             &raw mut tv,
             ptr::null_mut(),

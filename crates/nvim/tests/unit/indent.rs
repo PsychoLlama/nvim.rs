@@ -15,9 +15,9 @@
 
 use std::ffi::c_int;
 
-use c2rust_neovim::indent::{get_sts_value, indent_size_ts};
-use c2rust_neovim::main::curbuf;
-use c2rust_neovim::types::{OptInt, buf_T, colnr_T};
+use neovim::indent::{get_sts_value, indent_size_ts};
+use neovim::main::curbuf;
+use neovim::types::{OptInt, buf_T, colnr_T};
 
 use crate::support::{Editor, Sandbox, cstr};
 

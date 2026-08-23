@@ -2,11 +2,11 @@
 
 use std::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong};
 
-use c2rust_neovim::strings::{
+use neovim::strings::{
     reverse_text, strcase_save, vim_snprintf, vim_strchr, vim_strnsave_unquoted,
     vim_strsave_escaped,
 };
-use c2rust_neovim::types::typval::uvarnumber_T;
+use neovim::types::typval::uvarnumber_T;
 
 use crate::support::{cstr, internalize, take_bytes};
 

@@ -7,9 +7,9 @@
 
 use std::ptr;
 
-use c2rust_neovim::eval::encode::encode_list_write;
-use c2rust_neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append};
-use c2rust_neovim::types::{VAR_UNLOCKED, list_T, typval_T, typval_vval_union};
+use neovim::eval::encode::encode_list_write;
+use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append};
+use neovim::types::{VAR_UNLOCKED, list_T, typval_T, typval_vval_union};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Tv};
@@ -117,7 +117,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
                 );
             }
             let mut tv = typval_T {
-                v_type: c2rust_neovim::types::VAR_LIST,
+                v_type: neovim::types::VAR_LIST,
                 v_lock: VAR_UNLOCKED,
                 vval: typval_vval_union { v_list: l },
             };
@@ -144,7 +144,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> typval_T {
         for i in 0..n {
             if i > 0 {
                 match inner_tv.v_type {
-                    c2rust_neovim::types::VAR_LIST => (*inner_tv.vval.v_list).lv_refcount += 1,
+                    neovim::types::VAR_LIST => (*inner_tv.vval.v_list).lv_refcount += 1,
                     _ => (*inner_tv.vval.v_dict).dv_refcount += 1,
                 }
             }
@@ -155,7 +155,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> typval_T {
             tv_list_append(outer, li);
         }
         typval_T {
-            v_type: c2rust_neovim::types::VAR_LIST,
+            v_type: neovim::types::VAR_LIST,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_list: outer },
         }

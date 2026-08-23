@@ -13,7 +13,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use c2rust_neovim::message::trunc_string;
+use neovim::message::trunc_string;
 
 use crate::support::{Editor, editor_lock};
 

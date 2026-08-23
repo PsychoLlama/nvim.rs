@@ -16,7 +16,7 @@
 use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
-use c2rust_neovim::eval::typval::{
+use neovim::eval::typval::{
     tv_clear, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_dict,
     tv_list_append_list, tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string,
     tv_list_append_tv, tv_list_concat, tv_list_copy, tv_list_drop_items, tv_list_equal,
@@ -25,10 +25,10 @@ use c2rust_neovim::eval::typval::{
     tv_list_insert_tv, tv_list_item_remove, tv_list_join, tv_list_remove_items, tv_list_unref,
     tv_list_watch_add, tv_list_watch_remove,
 };
-use c2rust_neovim::garray::ga_clear;
-use c2rust_neovim::mbyte::convert_setup;
-use c2rust_neovim::memory::{xfree, xstrdup};
-use c2rust_neovim::types::{
+use neovim::garray::ga_clear;
+use neovim::mbyte::convert_setup;
+use neovim::memory::{xfree, xstrdup};
+use neovim::types::{
     OK, VAR_FLOAT, VAR_LIST, VAR_UNLOCKED, list_T, listitem_T, listwatch_T, typval_T,
     typval_vval_union, vimconv_T,
 };
