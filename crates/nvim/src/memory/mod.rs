@@ -178,10 +178,12 @@ pub unsafe fn verbose_try_malloc(size: usize) -> *mut c_void {
 /// `malloc` that never fails: an allocation that cannot be served ends the
 /// process through `preserve_exit`, which writes the swapfiles out first.
 ///
+/// Carries the C ABI because tree-sitter takes it as an allocator hook
+/// (`ts_set_allocator`), as [`xcalloc`], [`xrealloc`] and [`xfree`] do.
+///
 /// # Safety
 ///
 /// As [`try_malloc`].
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
     // SAFETY: the caller's promise; `e_outofmem` is a NUL-terminated static.
     unsafe {
@@ -510,8 +512,7 @@ pub unsafe fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> us
 /// # Safety
 ///
 /// `str` is NUL-terminated; otherwise as [`try_malloc`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn xstrdup(str: *const c_char) -> *mut c_char {
+pub unsafe fn xstrdup(str: *const c_char) -> *mut c_char {
     // SAFETY: the caller's NUL-terminated string.
     let len = unsafe { cbytes(str) }.len();
     unsafe { xmemdupz(str.cast::<c_void>(), len) }.cast::<c_char>()

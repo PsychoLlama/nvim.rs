@@ -590,17 +590,19 @@ pub unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
 /// Truncate `s` into `buf` at cell width `room`, replacing the middle with
 /// "...". `s` and `buf` may be the same pointer.
 ///
-/// Exported for the unit specs.
+/// The two halves are chosen by cell width and then compared as byte
+/// offsets (`i <= e + 3`), so a line that is exactly `room` cells wide
+/// survives whole only when its characters are one byte per cell — upstream
+/// behaviour, asserted in `tests/unit/message.rs`.
+///
+/// `room_in < 3` clamping `room` to zero is redundant: with `room` left
+/// negative the head loop still does not run and the tail loop still breaks
+/// on its first character, so every `room_in` below 3 answers "..." either
+/// way. It is kept because it is upstream's and it says what was meant.
 ///
 /// # Safety
 /// `s` must be a valid C string and `buf` must have room for `buflen` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn trunc_string(
-    s: *const c_char,
-    buf: *mut c_char,
-    room_in: c_int,
-    buflen: c_int,
-) {
+pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, buflen: c_int) {
     unsafe {
         let mut room = room_in - 3; // "..." takes 3 chars
         let mut len = 0;

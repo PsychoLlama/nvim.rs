@@ -8106,7 +8106,6 @@ size_t multiqueue_size(MultiQueue *);
 int os_file_is_writable(const char *);
 bool os_path_exists(const char *);
 size_t schar_get(char *, schar_T);
-void trunc_string(const char *, char *, int, int);
 list_T *tv_list_alloc(ptrdiff_t);
 void tv_list_free(list_T *);
 void ui_call_chdir(String);
@@ -8152,5 +8151,3 @@ void vterm_state_set_unrecognised_fallbacks(VTermState *, const VTermStateFallba
 int win_col_off(win_T *);
 void *xcalloc(size_t, size_t);
 void xfree(void *);
-void *xmalloc(size_t);
-char *xstrdup(const char *);

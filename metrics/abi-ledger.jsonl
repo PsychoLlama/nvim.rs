@@ -17,7 +17,6 @@
 {"symbol":"schar_get","kind":"fn","file":"crates/nvim/src/grid/schar.rs","class":"test","refs":["unit-fixtures.so","unit-specs"]}
 {"symbol":"starting","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"test_disable_char_avail","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["functional-specs"]}
-{"symbol":"trunc_string","kind":"fn","file":"crates/nvim/src/message/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"tv_list_alloc","kind":"fn","file":"crates/nvim/src/eval/typval/list.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"tv_list_free","kind":"fn","file":"crates/nvim/src/eval/typval/list.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"ui_call_chdir","kind":"fn","file":"crates/nvim/src/ui/sinks.rs","class":"test","refs":["functional-specs"]}
@@ -65,5 +64,3 @@
 {"symbol":"win_col_off","kind":"fn","file":"crates/nvim/src/move/mod.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"xcalloc","kind":"fn","file":"crates/nvim/src/memory/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"xfree","kind":"fn","file":"crates/nvim/src/memory/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"xmalloc","kind":"fn","file":"crates/nvim/src/memory/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"xstrdup","kind":"fn","file":"crates/nvim/src/memory/mod.rs","class":"test","refs":["unit-specs"]}

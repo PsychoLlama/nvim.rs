@@ -31,6 +31,7 @@ mod map;
 mod marktree;
 mod mbyte;
 mod memory;
+mod message;
 mod r#move;
 mod multiqueue;
 mod optionstr;
