@@ -579,7 +579,11 @@ mod tests {
         // SAFETY: the handle names a live record, so its position is live.
         let seen = unsafe { *fm.pos_raw() };
         assert_eq!((seen.lnum, seen.col), (9, 2));
-        assert_eq!(fm.pos_raw().cast::<fmark_T>(), fm.raw());
+        // The claim is that the address is the record's own `mark` field, not
+        // that the field sits at any particular offset: `fmark_T` has no
+        // guaranteed layout, so `mark` need not come first.
+        assert_eq!(fm.pos_raw(), &raw mut record.mark);
+        assert!(fm.raw().cast::<u8>() <= fm.pos_raw().cast::<u8>());
     }
 
     #[test]

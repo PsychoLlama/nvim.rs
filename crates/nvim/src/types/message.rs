@@ -12,7 +12,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct HlMessageChunk {
     pub text: String_0,
     pub hl_id: ::core::ffi::c_int,

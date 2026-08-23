@@ -134,7 +134,6 @@ pub struct Set_ptr_t {
     pub keys: *mut ptr_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Set_uint32_t {
     pub h: MapHash,
     pub keys: *mut uint32_t,

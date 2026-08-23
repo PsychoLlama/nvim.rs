@@ -179,7 +179,6 @@ pub struct listvar_S {
     pub lua_table_ref: LuaRef,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct listwatch_S {
     pub lw_item: *mut listitem_T,
     pub lw_next: *mut listwatch_T,

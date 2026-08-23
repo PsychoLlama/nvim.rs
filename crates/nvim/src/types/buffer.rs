@@ -41,7 +41,6 @@ pub const kFloatRelativeMouse: FloatRelative = 3;
 pub const kFloatRelativeTabline: FloatRelative = 4;
 pub const kFloatRelativeLaststatus: FloatRelative = 5;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct WinConfig {
     pub window: Window,
     pub bufpos: lpos_T,
@@ -116,7 +115,6 @@ pub type disptick_T = uint64_t;
 pub type dobuf_action_values = ::core::ffi::c_uint;
 pub type dobuf_start_values = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct fcs_chars_T {
     pub stl: schar_T,
     pub stlnc: schar_T,
@@ -443,7 +441,6 @@ pub type frame_T = frame_S;
 pub type getf_retvalues = ::core::ffi::c_int;
 pub type getf_values = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct lcs_chars_T {
     pub eol: schar_T,
     pub ext: schar_T,
@@ -500,7 +497,6 @@ pub struct matchitem {
 }
 pub type matchitem_T = matchitem;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct pos_save_T {
     pub w_topline_save: ::core::ffi::c_int,
     pub w_topline_corr: ::core::ffi::c_int,
@@ -584,7 +580,6 @@ pub struct tabpage_S {
 }
 pub type tabpage_T = tabpage_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct taggy_T {
     pub tagname: *mut ::core::ffi::c_char,
     pub fmark: fmark_T,
@@ -593,7 +588,6 @@ pub struct taggy_T {
     pub user_data: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct window_S {
     pub handle: handle_T,
     pub w_buffer: *mut buf_T,
@@ -767,7 +761,6 @@ pub struct wininfo_S {
     pub wi_changelistidx: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct winopt_T {
     pub wo_arab: ::core::ffi::c_int,
     pub wo_bri: ::core::ffi::c_int,

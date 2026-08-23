@@ -31,7 +31,6 @@ pub struct StrCharInfo {
     pub chr: CharInfo,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct vimconv_T {
     pub vc_type: ::core::ffi::c_int,
     pub vc_factor: ::core::ffi::c_int,

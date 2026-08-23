@@ -18,7 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::{offset_of, size_of};
+use core::mem::offset_of;
 use core::ptr;
 
 use crate::main::{curbuf, curwin};
@@ -28,17 +28,26 @@ use crate::os::cshim::gettext;
 use crate::options::*;
 use crate::types::{
     OptIndex, OptInt, OptScope, OptVal, OptValType, OptVar, OptionSetFlags, buf_T, ssize_t,
-    vimoption_T, win_T, winopt_T,
+    vimoption_T, win_T,
 };
 
 use super::{NO_LOCAL_UNDOLEVEL, get_option, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin};
 
-/// `w_allbuf_opt` follows `w_onebuf_opt` in `win_T`, so the window's global
-/// copy of a window-local option is the same field exactly one `winopt_T`
-/// further on. `get_varp_scope_from` walks that distance rather than
-/// repeating the whole field table for the `:setglobal` case.
-const ALLBUF_OFFSET: usize = offset_of!(win_T, w_allbuf_opt) - offset_of!(win_T, w_onebuf_opt);
-const _: () = assert!(ALLBUF_OFFSET == size_of::<winopt_T>());
+/// The signed distance from a field of `w_onebuf_opt` to the same field of
+/// `w_allbuf_opt`. The two are the same type, so their fields sit at the
+/// same offsets *within* a `winopt_T`; the distance between the two copies
+/// is therefore the distance between the copies themselves, whichever order
+/// `win_T` happens to store them in. `get_varp_scope_from` walks it rather
+/// than repeating the whole field table for the `:setglobal` case.
+///
+/// It is deliberately not `size_of::<winopt_T>()`: `win_T` has no
+/// guaranteed layout, so the two copies need be neither adjacent nor in
+/// declaration order.
+const ALLBUF_OFFSET: isize = {
+    let one = offset_of!(win_T, w_onebuf_opt) as isize;
+    let all = offset_of!(win_T, w_allbuf_opt) as isize;
+    all - one
+};
 
 /// Where an option keeps its global value: the variable its row names, or —
 /// for an immutable option, which has nowhere to keep one — that row's own
@@ -182,7 +191,7 @@ pub unsafe fn get_varp_scope_from(
             if option_is_window_local(opt_idx) {
                 return get_varp_from(p, buf, win)
                     .cast::<c_char>()
-                    .add(ALLBUF_OFFSET)
+                    .offset(ALLBUF_OFFSET)
                     .cast::<c_void>();
             }
             return option_var(p);

@@ -134,7 +134,6 @@ pub use self::errors::*;
 pub const kZIndexMessages: c_uint = 200;
 /// One entry of the message history. See [`self::history`].
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct msg_hist {
     pub next: *mut msg_hist,
     pub prev: *mut msg_hist,

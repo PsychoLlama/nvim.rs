@@ -23,14 +23,12 @@ pub struct GridLineEvent {
     pub wrap: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct GridView {
     pub target: *mut ScreenGrid,
     pub row_offset: ::core::ffi::c_int,
     pub col_offset: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ScreenGrid {
     pub handle: handle_T,
     pub chars: *mut schar_T,

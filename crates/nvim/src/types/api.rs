@@ -78,7 +78,6 @@ pub type FieldHashfn = Option<unsafe fn(*const ::core::ffi::c_char, size_t) -> *
 pub type Float = ::core::ffi::c_double;
 pub type HLGroupID = Integer;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct HlMessage {
     pub size: size_t,
     pub capacity: size_t,
