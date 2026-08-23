@@ -107,7 +107,7 @@ unsafe fn hlgroup2dict(hl: &mut Dict, ns_id: NS, hl_id: c_int, arena: *mut Arena
 ///
 /// # Safety
 /// `opts`, `arena` and `err` are live; main thread only.
-pub unsafe fn ns_get_hl_defs(
+pub(crate) unsafe fn ns_get_hl_defs(
     ns_id: NS,
     opts: *mut KeyDict_get_highlight,
     arena: *mut Arena,
@@ -179,7 +179,7 @@ pub unsafe fn ns_get_hl_defs(
 /// it, NULL if not.
 ///
 /// `modec` is `'g'` for `gui=` and anything else for `cterm=`.
-pub fn highlight_has_attr(id: c_int, flag: HlAttrFlags, modec: c_int) -> *const c_char {
+pub(crate) fn highlight_has_attr(id: c_int, flag: HlAttrFlags, modec: c_int) -> *const c_char {
     if id <= 0 || id > highlight_num_groups() {
         return core::ptr::null();
     }
@@ -219,7 +219,11 @@ static ANSWER: GlobalCell<[u8; 20]> = GlobalCell::new([0; 20]);
 /// `what` is NUL-terminated and at least four bytes readable — upstream reads
 /// `what[3]` unconditionally, which its own callers guarantee. Main thread
 /// only.
-pub unsafe fn highlight_color(id: c_int, what: *const c_char, modec: c_int) -> *const c_char {
+pub(crate) unsafe fn highlight_color(
+    id: c_int,
+    what: *const c_char,
+    modec: c_int,
+) -> *const c_char {
     if id <= 0 || id > highlight_num_groups() {
         return core::ptr::null();
     }

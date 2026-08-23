@@ -63,7 +63,7 @@ static CLIPBOARD: GlobalCell<ClipboardState> = GlobalCell::new(ClipboardState {
 /// # Safety
 ///
 /// Main-thread editor call; may run the provider-detection vimscript.
-pub unsafe fn adjust_clipboard_name(
+pub(crate) unsafe fn adjust_clipboard_name(
     name: &mut c_int,
     quiet: bool,
     writing: bool,
@@ -155,7 +155,11 @@ fn regtype_of(byte: u8) -> Option<c_int> {
 /// # Safety
 ///
 /// Main-thread editor call; runs the clipboard provider.
-pub unsafe fn get_clipboard(mut name: c_int, target: &mut *mut yankreg_T, quiet: bool) -> bool {
+pub(crate) unsafe fn get_clipboard(
+    mut name: c_int,
+    target: &mut *mut yankreg_T,
+    quiet: bool,
+) -> bool {
     // SAFETY: main-thread editor call.
     let reg = unsafe { adjust_clipboard_name(&mut name, quiet, false) };
     if reg.is_null() {
@@ -278,7 +282,7 @@ pub unsafe fn get_clipboard(mut name: c_int, target: &mut *mut yankreg_T, quiet:
 ///
 /// Main-thread editor call; runs the clipboard provider. `reg` must point
 /// to a valid register whose y_type is known.
-pub unsafe fn set_clipboard(mut name: c_int, reg: *mut yankreg_T) {
+pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut yankreg_T) {
     // SAFETY: main-thread editor call.
     if unsafe { adjust_clipboard_name(&mut name, false, true) }.is_null() {
         return;
@@ -327,7 +331,7 @@ pub unsafe fn set_clipboard(mut name: c_int, reg: *mut yankreg_T) {
 
 /// Start a batch: defer provider updates until the matching
 /// [`end_batch_changes`]. Nests.
-pub fn start_batch_changes() {
+pub(crate) fn start_batch_changes() {
     CLIPBOARD.with_mut(|st| {
         st.batch_change_count += 1;
         if st.batch_change_count > 1 {
@@ -338,7 +342,7 @@ pub fn start_batch_changes() {
 }
 
 /// End a batch; flush a pending update once the outermost batch closes.
-pub fn end_batch_changes() {
+pub(crate) fn end_batch_changes() {
     let update = CLIPBOARD.with_mut(|st| {
         st.batch_change_count -= 1;
         if st.batch_change_count > 0 {
@@ -355,7 +359,7 @@ pub fn end_batch_changes() {
 
 /// Suspend batching (flushing any pending update); returns the depth for
 /// [`restore_batch_count`].
-pub fn save_batch_count() -> c_int {
+pub(crate) fn save_batch_count() -> c_int {
     let (save_count, update) = CLIPBOARD.with_mut(|st| {
         let save = st.batch_change_count;
         st.batch_change_count = 0;
@@ -370,7 +374,7 @@ pub fn save_batch_count() -> c_int {
 }
 
 /// Resume batching at the depth returned by [`save_batch_count`].
-pub fn restore_batch_count(save_count: c_int) {
+pub(crate) fn restore_batch_count(save_count: c_int) {
     CLIPBOARD.with_mut(|st| {
         debug_assert!(st.batch_change_count == 0);
         st.batch_change_count = save_count;

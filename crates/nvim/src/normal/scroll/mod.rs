@@ -33,14 +33,14 @@ pub(crate) use self::zet::*;
 /// buffer, which is what 'scrollbind' has to keep equal between windows: two
 /// windows showing the same buffer at different widths wrap it differently,
 /// so buffer line numbers would not line up.
-pub unsafe fn get_vtopline(wp: *mut win_T) -> c_int {
+pub(crate) unsafe fn get_vtopline(wp: *mut win_T) -> c_int {
     // SAFETY: `wp` is a live window.
     unsafe { plines_m_win_fill(wp, 1, (*wp).w_topline) - (*wp).w_topfill }
 }
 
 /// After a command that may have scrolled: bring the 'scrollbind' windows
 /// along, and remember where this one is for next time.
-pub unsafe fn do_check_scrollbind(check: bool) {
+pub(crate) unsafe fn do_check_scrollbind(check: bool) {
     // The previous call's answers. They are what makes this a *difference*
     // rather than an absolute position, so that a window bound to two others
     // does not fight itself.
@@ -87,7 +87,7 @@ pub unsafe fn do_check_scrollbind(check: bool) {
 /// Each window is made current in turn, because the scrolling functions work
 /// on `curwin`. Any Visual selection is put down for the duration so that
 /// nothing extends it.
-pub unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_int) {
+pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_int) {
     // SAFETY: walks the current tab page's window list, restoring `curwin`
     // and `curbuf` before returning.
     unsafe {
@@ -176,7 +176,7 @@ pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
 
 /// `CTRL-E` and `CTRL-Y`: scroll one line, leaving the cursor where it is on
 /// the screen for as long as it can.
-pub unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if !checkclearop((*cap).oap) {

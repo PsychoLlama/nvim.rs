@@ -74,7 +74,7 @@ pub(crate) unsafe fn option_var(p: *mut vimoption_T) -> *mut c_void {
 
 /// Whether an option is hidden: immutable, and reading its own default in
 /// place, so a write through its variable could not be observed anyway.
-pub fn is_option_hidden(opt_idx: OptIndex) -> bool {
+pub(crate) fn is_option_hidden(opt_idx: OptIndex) -> bool {
     if opt_idx == kOptInvalid {
         return false;
     }
@@ -84,13 +84,13 @@ pub fn is_option_hidden(opt_idx: OptIndex) -> bool {
 }
 
 /// Whether the table declares `type_0` as the option's type.
-pub fn option_has_type(opt_idx: OptIndex, type_0: OptValType) -> bool {
+pub(crate) fn option_has_type(opt_idx: OptIndex, type_0: OptValType) -> bool {
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     opt_idx != kOptInvalid && unsafe { (*get_option(opt_idx)).type_0 } == type_0
 }
 
 /// Whether the option exists in `scope`.
-pub fn option_has_scope(opt_idx: OptIndex, scope: OptScope) -> bool {
+pub(crate) fn option_has_scope(opt_idx: OptIndex, scope: OptScope) -> bool {
     assert!(scope <= kOptScopeBuf, "{scope} is not a scope");
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { (*get_option(opt_idx)).scope_flags as c_int & 1 << scope != 0 }
@@ -121,7 +121,7 @@ pub(crate) fn option_is_window_local(opt_idx: OptIndex) -> bool {
 }
 
 /// Where in a window's or buffer's array of values this option's sits.
-pub fn option_scope_idx(opt_idx: OptIndex, scope: OptScope) -> ssize_t {
+pub(crate) fn option_scope_idx(opt_idx: OptIndex, scope: OptScope) -> ssize_t {
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { (*get_option(opt_idx)).scope_idx[scope as usize] }
 }
@@ -176,7 +176,7 @@ unsafe fn local_optint(local: *mut OptInt, global: *mut c_void) -> *mut c_void {
 /// # Safety
 ///
 /// `p` must point into the option table; `buf` and `win` must be live.
-pub unsafe fn get_varp_scope_from(
+pub(crate) unsafe fn get_varp_scope_from(
     p: *mut vimoption_T,
     opt_flags: OptionSetFlags,
     buf: *mut buf_T,
@@ -245,7 +245,7 @@ pub unsafe fn get_varp_scope_from(
 /// # Safety
 ///
 /// `p` must point into the option table.
-pub unsafe fn get_varp_scope(p: *mut vimoption_T, opt_flags: OptionSetFlags) -> *mut c_void {
+pub(crate) unsafe fn get_varp_scope(p: *mut vimoption_T, opt_flags: OptionSetFlags) -> *mut c_void {
     // SAFETY: the caller's `p` is a table row; `curbuf`/`curwin` are live.
     unsafe { get_varp_scope_from(p, opt_flags, curbuf.get(), curwin.get()) }
 }
@@ -255,7 +255,7 @@ pub unsafe fn get_varp_scope(p: *mut vimoption_T, opt_flags: OptionSetFlags) -> 
 /// # Safety
 ///
 /// `buf` and `win` must be live.
-pub unsafe fn get_option_varp_scope_from(
+pub(crate) unsafe fn get_option_varp_scope_from(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     buf: *mut buf_T,
@@ -272,7 +272,11 @@ pub unsafe fn get_option_varp_scope_from(
 ///
 /// `p` must point into the option table; `buf` and `win` must be live, and
 /// `win->w_s` must be set for the four 'spell*' options.
-pub unsafe fn get_varp_from(p: *mut vimoption_T, buf: *mut buf_T, win: *mut win_T) -> *mut c_void {
+pub(crate) unsafe fn get_varp_from(
+    p: *mut vimoption_T,
+    buf: *mut buf_T,
+    win: *mut win_T,
+) -> *mut c_void {
     // SAFETY: the caller's pointers are live, and `p` is a table row.
     unsafe {
         let opt_idx = get_opt_idx(p);

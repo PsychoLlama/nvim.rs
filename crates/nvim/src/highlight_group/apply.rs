@@ -40,7 +40,12 @@ fn has_key(dict: &KeyDict_highlight, bit: c_int) -> bool {
 ///
 /// # Safety
 /// Redraws and emits UI events; main thread only.
-pub unsafe fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, link_id: c_int) {
+pub(crate) unsafe fn set_hl_group(
+    id: c_int,
+    attrs: HlAttrs,
+    dict: &KeyDict_highlight,
+    link_id: c_int,
+) {
     let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
 
     // Return if "default" was used and the group already has settings.

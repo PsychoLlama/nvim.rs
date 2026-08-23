@@ -19,12 +19,12 @@ use crate::types::NUL;
 use core::ffi::{c_int, c_uint};
 
 /// A decimal digit.
-pub fn ascii_isdigit(c: c_int) -> bool {
+pub(crate) fn ascii_isdigit(c: c_int) -> bool {
     (c_int::from(b'0')..=c_int::from(b'9')).contains(&c)
 }
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
-pub fn ascii_isalpha(c: c_int) -> bool {
+pub(crate) fn ascii_isalpha(c: c_int) -> bool {
     // Unsigned, so that a negative byte fails both ranges rather than
     // wrapping into one of them -- which is what the C macro's cast does.
     let c = c.cast_unsigned();
@@ -33,31 +33,31 @@ pub fn ascii_isalpha(c: c_int) -> bool {
 }
 
 /// `ASCII_ISLOWER`: an unaccented lower-case Latin letter.
-pub fn ascii_islower(c: c_int) -> bool {
+pub(crate) fn ascii_islower(c: c_int) -> bool {
     // Unsigned, as `ascii_isalpha`, so a negative byte fails rather than
     // wrapping into the range.
     (c_uint::from(b'a')..=c_uint::from(b'z')).contains(&c.cast_unsigned())
 }
 
 /// `ASCII_ISUPPER`: an unaccented upper-case Latin letter.
-pub fn ascii_isupper(c: c_int) -> bool {
+pub(crate) fn ascii_isupper(c: c_int) -> bool {
     (c_uint::from(b'A')..=c_uint::from(b'Z')).contains(&c.cast_unsigned())
 }
 
 /// A binary digit.
-pub fn ascii_isbdigit(c: c_int) -> bool {
+pub(crate) fn ascii_isbdigit(c: c_int) -> bool {
     c == c_int::from(b'0') || c == c_int::from(b'1')
 }
 
 /// A hexadecimal digit, in either case.
-pub fn ascii_isxdigit(c: c_int) -> bool {
+pub(crate) fn ascii_isxdigit(c: c_int) -> bool {
     ascii_isdigit(c)
         || (c_int::from(b'a')..=c_int::from(b'f')).contains(&c)
         || (c_int::from(b'A')..=c_int::from(b'F')).contains(&c)
 }
 
 /// A character that may appear in an identifier: a letter, a digit or `_`.
-pub fn ascii_isident(c: c_int) -> bool {
+pub(crate) fn ascii_isident(c: c_int) -> bool {
     (c_int::from(b'A')..=c_int::from(b'Z')).contains(&c)
         || (c_int::from(b'a')..=c_int::from(b'z')).contains(&c)
         || ascii_isdigit(c)
@@ -65,22 +65,22 @@ pub fn ascii_isident(c: c_int) -> bool {
 }
 
 /// Horizontal whitespace: a space or a tab. Vim's notion of "white".
-pub fn ascii_iswhite(c: c_int) -> bool {
+pub(crate) fn ascii_iswhite(c: c_int) -> bool {
     c == c_int::from(b' ') || c == c_int::from(b'\t')
 }
 
 /// Horizontal whitespace, or the end of the string.
-pub fn ascii_iswhite_or_nul(c: c_int) -> bool {
+pub(crate) fn ascii_iswhite_or_nul(c: c_int) -> bool {
     ascii_iswhite(c) || c == NUL
 }
 
 /// Horizontal whitespace, a newline, or the end of the string.
-pub fn ascii_iswhite_nl_or_nul(c: c_int) -> bool {
+pub(crate) fn ascii_iswhite_nl_or_nul(c: c_int) -> bool {
     ascii_iswhite(c) || c == c_int::from(b'\n') || c == NUL
 }
 
 /// Whitespace as `isspace()` sees it: `\t\n\v\f\r` or a space.
-pub fn ascii_isspace(c: c_int) -> bool {
+pub(crate) fn ascii_isspace(c: c_int) -> bool {
     (9..=13).contains(&c) || c == c_int::from(b' ')
 }
 

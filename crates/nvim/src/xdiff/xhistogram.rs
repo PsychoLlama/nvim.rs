@@ -373,7 +373,7 @@ fn histogram_diff(xpp: &Params<'_>, env: &mut Env<'_>, mut blk: Block) -> XdResu
 }
 
 /// `xdl_do_histogram_diff`.
-pub fn diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
+pub(crate) fn diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
     let mut env = prepare_env(text1, text2, xpp);
     let (d1s, d1e) = (env.xdf1.dstart, env.xdf1.dend);
     let (d2s, d2e) = (env.xdf2.dstart, env.xdf2.dend);

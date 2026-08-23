@@ -53,7 +53,7 @@ struct MenuArg {
 /// # Safety
 /// `eap` must name the live `exarg_T` of a menu command, whose `arg` points
 /// into the command line this rewrites in place.
-pub unsafe fn ex_menu(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_menu(eap: *mut exarg_T) {
     // SAFETY: the caller's obligation. `cmd` and `arg` name the command line,
     // which `ex_docmd` lets a command edit.
     let (cmd, arg, forceit, ranged) = unsafe {

@@ -160,7 +160,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
 }
 
 /// Tell the UI every option it declared an interest in.
-pub fn ui_refresh_options() {
+pub(crate) fn ui_refresh_options() {
     // SAFETY: the option table is a plain array, and each `var` is the
     // option's own global variable.
     unsafe {
@@ -241,7 +241,7 @@ pub(crate) unsafe fn showoneopt(opt: *mut vimoption_T, opt_flags: OptionSetFlags
 /// # Safety
 ///
 /// `fd` must be an open file, and the current window and buffer live.
-pub unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_only: c_int) -> c_int {
+pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_only: c_int) -> c_int {
     // SAFETY: the caller's file, and the option table.
     unsafe {
         for priority_pass in [true, false] {
@@ -341,7 +341,7 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_only: c_in
 /// # Safety
 ///
 /// `fd` must be an open file and the current window live.
-pub unsafe fn makefoldset(fd: *mut FILE) -> c_int {
+pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> c_int {
     // SAFETY: the caller's file, and `curwin` is live.
     unsafe {
         let wo = &raw mut (*curwin.get()).w_onebuf_opt;

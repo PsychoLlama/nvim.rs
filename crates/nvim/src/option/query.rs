@@ -43,7 +43,7 @@ use super::{
 use crate::state::MODE_TERMINAL;
 
 /// 'equalprg', local where set.
-pub fn get_equalprg() -> *mut c_char {
+pub(crate) fn get_equalprg() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
     unsafe {
         if *(*curbuf.get()).b_p_ep == 0 {
@@ -55,7 +55,7 @@ pub fn get_equalprg() -> *mut c_char {
 }
 
 /// 'findfunc', local where set.
-pub fn get_findfunc() -> *mut c_char {
+pub(crate) fn get_findfunc() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
     unsafe {
         if *(*curbuf.get()).b_p_ffu == 0 {
@@ -68,7 +68,7 @@ pub fn get_findfunc() -> *mut c_char {
 
 /// Whether 'shortmess' asks for message `x` to be shortened. The `a` flag is
 /// an abbreviation standing for these four and nothing else.
-pub fn shortmess(x: ShmFlag) -> bool {
+pub(crate) fn shortmess(x: ShmFlag) -> bool {
     const ABBREVIATED: [ShmFlag; 4] = [ShmFlag::RO, ShmFlag::MOD, ShmFlag::LINES, ShmFlag::WRI];
     // SAFETY: 'shortmess' is a string option; the null test is upstream's.
     let Some(shm) = (unsafe { cstr::at_opt(p_shm.get()) }) else {
@@ -78,7 +78,7 @@ pub fn shortmess(x: ShmFlag) -> bool {
 }
 
 /// Whether 'cpoptions' contains `flag`.
-pub fn cpo_has(flag: CpoFlag) -> bool {
+pub(crate) fn cpo_has(flag: CpoFlag) -> bool {
     // SAFETY: 'cpoptions' is a string option and is never null.
     flag.is_in(unsafe { CStr::from_ptr(p_cpo.get()) })
 }
@@ -89,7 +89,7 @@ pub fn cpo_has(flag: CpoFlag) -> bool {
 /// # Safety
 ///
 /// `fname` and `envname`, when non-null, must be NUL-terminated.
-pub unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
+pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
     if fname.is_null() || envname.is_null() {
         return;
     }
@@ -109,14 +109,14 @@ pub unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 }
 
 /// Whether anything has ever set the option.
-pub fn option_was_set(opt_idx: OptIndex) -> bool {
+pub(crate) fn option_was_set(opt_idx: OptIndex) -> bool {
     debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { (*options.ptr())[opt_idx as usize].flags & kOptFlagWasSet != 0 }
 }
 
 /// Forget that anything set the option — what `:set all&` does.
-pub fn reset_option_was_set(opt_idx: OptIndex) {
+pub(crate) fn reset_option_was_set(opt_idx: OptIndex) {
     debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { (*options.ptr())[opt_idx as usize].flags &= !kOptFlagWasSet }
@@ -129,7 +129,7 @@ pub fn reset_option_was_set(opt_idx: OptIndex) {
 /// # Safety
 ///
 /// `wp` must be live.
-pub unsafe fn fill_culopt_flags(val: Option<&CStr>, wp: *mut win_T) -> c_int {
+pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, wp: *mut win_T) -> c_int {
     // SAFETY: the caller's `wp` is live and `val` is NUL-terminated.
     unsafe {
         let mut p = match val {
@@ -175,7 +175,7 @@ pub unsafe fn fill_culopt_flags(val: Option<&CStr>, wp: *mut win_T) -> c_int {
 
 /// Whether patterns are magic right now — `\v`/`\V` in the pattern override
 /// 'magic' for the pattern they appear in.
-pub fn magic_isset() -> bool {
+pub(crate) fn magic_isset() -> bool {
     match magic_overruled.get() {
         OPTION_MAGIC_ON => true,
         OPTION_MAGIC_OFF => false,
@@ -190,7 +190,7 @@ pub fn magic_isset() -> bool {
 ///
 /// `optval`, when non-null, must be NUL-terminated; `optcb` must point at a
 /// live `Callback` this call may replace.
-pub unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> c_int {
+pub(crate) unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> c_int {
     // SAFETY: the caller's pointers are valid for the call.
     unsafe {
         if optval.is_null() || *optval == 0 {
@@ -233,7 +233,7 @@ pub unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback
 
 /// Whether 'backspace' allows backspacing over `what`. A prompt buffer never
 /// lets the prompt itself be backspaced over.
-pub fn can_bs(what: BsFlag) -> bool {
+pub(crate) fn can_bs(what: BsFlag) -> bool {
     // SAFETY: `curbuf` is live; 'backspace' is a string option.
     unsafe {
         if what == BsFlag::START && bt_prompt(curbuf.get()) {
@@ -252,7 +252,7 @@ pub fn can_bs(what: BsFlag) -> bool {
 /// # Safety
 ///
 /// `buf` must be live.
-pub unsafe fn get_bkc_flags(buf: *mut buf_T) -> c_uint {
+pub(crate) unsafe fn get_bkc_flags(buf: *mut buf_T) -> c_uint {
     // SAFETY: the caller's buffer is live.
     match unsafe { (*buf).b_bkc_flags } {
         0 => bkc_flags.get(),
@@ -265,7 +265,7 @@ pub unsafe fn get_bkc_flags(buf: *mut buf_T) -> c_uint {
 /// # Safety
 ///
 /// `buf` must be live.
-pub unsafe fn get_flp_value(buf: *mut buf_T) -> *mut c_char {
+pub(crate) unsafe fn get_flp_value(buf: *mut buf_T) -> *mut c_char {
     // SAFETY: the caller's buffer is live.
     unsafe {
         if (*buf).b_p_flp.is_null() || *(*buf).b_p_flp == 0 {
@@ -283,7 +283,7 @@ pub unsafe fn get_flp_value(buf: *mut buf_T) -> *mut c_char {
 /// # Safety
 ///
 /// `wp` must be live.
-pub unsafe fn get_ve_flags(wp: *mut win_T) -> c_uint {
+pub(crate) unsafe fn get_ve_flags(wp: *mut win_T) -> c_uint {
     // SAFETY: the caller's window is live.
     let flags = match unsafe { (*wp).w_onebuf_opt.wo_ve_flags } {
         0 => ve_flags.get(),
@@ -298,7 +298,7 @@ pub unsafe fn get_ve_flags(wp: *mut win_T) -> c_uint {
 /// # Safety
 ///
 /// `win` must be live.
-pub unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
+pub(crate) unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
     // SAFETY: the caller's window is live.
     unsafe {
         let local = (*win).w_onebuf_opt.wo_sbr;
@@ -317,7 +317,7 @@ pub unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
 /// # Safety
 ///
 /// `buf` must be live.
-pub unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
+pub(crate) unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
     // SAFETY: the caller's buffer is live; 'fileformat' is never null.
     unsafe {
         let c = *(*buf).b_p_ff as c_uchar;
@@ -336,7 +336,7 @@ pub unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
 /// # Safety
 ///
 /// `buf` must be live; `eap`, when non-null, must be a live command.
-pub unsafe fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T) -> c_int {
+pub(crate) unsafe fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T) -> c_int {
     // SAFETY: the caller's pointers are live.
     let c = unsafe {
         if !eap.is_null() && (*eap).force_ff != 0 {
@@ -361,7 +361,7 @@ pub unsafe fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T) -> c_
 }
 
 /// The line ending a new file gets: the first entry of 'fileformats'.
-pub fn default_fileformat() -> c_int {
+pub(crate) fn default_fileformat() -> c_int {
     // SAFETY: 'fileformats' is a string option; it is never null.
     match unsafe { *p_ffs.get() } as u8 {
         b'm' => EOL_MAC,
@@ -371,7 +371,7 @@ pub fn default_fileformat() -> c_int {
 }
 
 /// Set 'fileformat' to `eol_style` and redraw what shows it.
-pub fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
+pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
     let name = match eol_style {
         EOL_UNIX => Some(c"unix"),
         EOL_MAC => Some(c"mac"),
@@ -405,7 +405,7 @@ pub fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
 /// # Safety
 ///
 /// `p` must be NUL-terminated.
-pub unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
+pub(crate) unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
     // SAFETY: the caller's string is NUL-terminated.
     unsafe {
         if *p == b',' as c_char {
@@ -431,7 +431,7 @@ pub unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
 ///
 /// `option` must point at a NUL-terminated string; `buf` must have room for
 /// `maxlen` bytes; `sep_chars` must be NUL-terminated.
-pub unsafe fn copy_option_part(
+pub(crate) unsafe fn copy_option_part(
     option: *mut *mut c_char,
     buf: *mut c_char,
     maxlen: size_t,
@@ -473,20 +473,20 @@ pub unsafe fn copy_option_part(
 }
 
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
-pub fn csh_like_shell() -> bool {
+pub(crate) fn csh_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
     unsafe { !strstr(path_tail(p_sh.get()), c"csh".as_ptr()).is_null() }
 }
 
 /// Whether 'shell' is fish, which needs its own quoting.
-pub fn fish_like_shell() -> bool {
+pub(crate) fn fish_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
     unsafe { !strstr(path_tail(p_sh.get()), c"fish".as_ptr()).is_null() }
 }
 
 /// Every buffer-local (or window-local) option of the current buffer and
 /// window, as a dictionary — what `b:` and `w:` expose.
-pub fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
+pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
     let scope = if bufopt != 0 {
         kOptScopeBuf
     } else {
@@ -518,7 +518,7 @@ pub fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
 /// # Safety
 ///
 /// `wp` must be live, with a live buffer.
-pub unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
+pub(crate) unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
     // SAFETY: the caller's window and its buffer are live.
     unsafe {
         if State.get() & MODE_TERMINAL != 0 && !(*(*wp).w_buffer).terminal.is_null() {
@@ -536,7 +536,7 @@ pub unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
 /// # Safety
 ///
 /// `wp` must be live.
-pub unsafe fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t {
+pub(crate) unsafe fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t {
     // SAFETY: the caller's window is live.
     match unsafe { (*wp).w_onebuf_opt.wo_siso } {
         local if local < 0 => p_siso.get(),

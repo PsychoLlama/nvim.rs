@@ -50,7 +50,7 @@ fn blank_cell() -> VTermScreenCell {
 ///
 /// Returns false only when there is no buffer to read the option from,
 /// which happens if the buffer was wiped while the terminal still lives.
-pub fn term_may_alloc_scrollback(mut term: Term, buf: Option<Buf>) -> bool {
+pub(crate) fn term_may_alloc_scrollback(mut term: Term, buf: Option<Buf>) -> bool {
     if term.sb.is_sized() {
         return true;
     }
@@ -70,7 +70,7 @@ fn scrollback_limit(mut buf: Buf) -> usize {
     buf.b_p_scbk as usize
 }
 
-pub unsafe extern "C" fn term_sb_push(
+pub(crate) unsafe extern "C" fn term_sb_push(
     cols: c_int,
     cells: *const VTermScreenCell,
     data: *mut c_void,
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn term_sb_push(
     1
 }
 
-pub unsafe extern "C" fn term_sb_pop(
+pub(crate) unsafe extern "C" fn term_sb_pop(
     cols: c_int,
     cells: *mut VTermScreenCell,
     data: *mut c_void,
@@ -109,7 +109,7 @@ pub unsafe extern "C" fn term_sb_pop(
     1
 }
 
-pub unsafe extern "C" fn term_sb_clear(data: *mut c_void) -> c_int {
+pub(crate) unsafe extern "C" fn term_sb_clear(data: *mut c_void) -> c_int {
     // SAFETY: vterm hands back the terminal registered alongside this table.
     let mut term = unsafe { Term::new(data.cast()) };
     // On the alternate screen the scrollback belongs to the screen
@@ -128,7 +128,7 @@ pub unsafe extern "C" fn term_sb_clear(data: *mut c_void) -> c_int {
 /// Negative rows come from the scrollback, counting back from -1. Cells
 /// vterm reports as empty become spaces, and trailing spaces are dropped by
 /// terminating at the last cell that actually held something.
-pub fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
+pub(crate) fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
     // Worst case is one maximum-length grapheme cluster per column, plus
     // the terminator. C sized this buffer once, at 8191 bytes, which a wide
     // enough terminal full of clusters overruns.
@@ -169,7 +169,7 @@ pub fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
 ///
 /// Returns false for a scrollback cell past the end of a row that was
 /// stored while the terminal was narrower; the cell is left blank.
-pub fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScreenCell) -> bool {
+pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScreenCell) -> bool {
     if row >= 0 {
         let vts = term.vts;
         // SAFETY: the terminal's own screen, and a cell of the caller's.
@@ -197,7 +197,7 @@ pub fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScreenCell
 ///
 /// Trimming deletes from the top of the buffer, so the marks that pointed
 /// into those lines have to move with them.
-pub fn adjust_scrollback(mut term: Term, buf: Buf) {
+pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
     let limit = scrollback_limit(buf);
     assert!(
         term.sb.pending() == 0,
@@ -238,7 +238,7 @@ unsafe fn mark_adjust_term(buf: *mut buf_T, line1: linenr_T, line2: linenr_T, am
 /// Reading is paused for the duration: appending lines can run autocommands,
 /// and more terminal output arriving in the middle would be appended at the
 /// wrong place.
-pub fn refresh_scrollback(mut term: Term, buf: Buf) {
+pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
     let read_pause = term.opts.read_pause_cb.expect("non-null function pointer");
     let data = term.opts.data;
     // SAFETY: the callback the channel registered, taking the data it

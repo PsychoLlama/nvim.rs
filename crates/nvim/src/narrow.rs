@@ -40,7 +40,7 @@ use core::ffi::c_int;
 /// The name says `number` because that is what the Vimscript side calls the
 /// type; the API's `Integer` and the `varnumber_T` a builtin is handed are the
 /// same `i64`, and they narrow the same way.
-pub const fn number_as_int(n: i64) -> c_int {
+pub(crate) const fn number_as_int(n: i64) -> c_int {
     n as c_int
 }
 
@@ -52,7 +52,7 @@ pub const fn number_as_int(n: i64) -> c_int {
 /// wire, so rejecting it would be a different protocol and panicking on it
 /// would be a denial of service. A message type of `0x1_0000_0000` decodes as
 /// 0, i.e. a request, which is what upstream answers.
-pub const fn msgpack_uint_as_u32(n: u64) -> u32 {
+pub(crate) const fn msgpack_uint_as_u32(n: u64) -> u32 {
     n as u32
 }
 
@@ -70,7 +70,7 @@ pub const fn msgpack_uint_as_u32(n: u64) -> u32 {
 /// # Panics
 /// If `len` does not fit in a C `int` -- i.e. a single string of 2 GiB or more
 /// reaching an interface that measures it in `int`.
-pub fn len_as_int(len: usize) -> c_int {
+pub(crate) fn len_as_int(len: usize) -> c_int {
     c_int::try_from(len).unwrap_or_else(|_| panic!("length {len} does not fit in a C int"))
 }
 
@@ -86,7 +86,7 @@ pub fn len_as_int(len: usize) -> c_int {
 /// named helper rather than a bare cast: the port is *stricter* than the C
 /// here, and a future reader must not "fix" it into a `TryFrom` that reports an
 /// error the C never had, nor into a wrap that reintroduces one.
-pub fn float_as_i64(n: f64) -> i64 {
+pub(crate) fn float_as_i64(n: f64) -> i64 {
     n as i64
 }
 

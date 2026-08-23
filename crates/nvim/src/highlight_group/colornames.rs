@@ -17,7 +17,7 @@ use crate::types::RgbValue;
 use super::{kColorIdxBg, kColorIdxFg, kColorIdxHex, kColorIdxNone};
 
 /// One entry of X11's colour table.
-pub struct ColorName {
+pub(crate) struct ColorName {
     pub name: &'static CStr,
     pub color: RgbValue,
 }
@@ -28,12 +28,12 @@ const fn color_entry(name: &'static CStr, color: RgbValue) -> ColorName {
 
 /// The buffer [`coloridx_to_name`] formats a hex colour into: `#rrggbb` plus
 /// its terminator.
-pub type HexBuf = [u8; 8];
+pub(crate) type HexBuf = [u8; 8];
 
 /// `rgb.txt`, sorted by name — [`name_to_color`]'s binary search depends on
 /// that order. Upstream carries a trailing `{ NULL, 0 }` sentinel, which no
 /// reader here needs: both walk the length instead.
-pub static COLOR_NAMES: [ColorName; 707] = [
+pub(crate) static COLOR_NAMES: [ColorName; 707] = [
     color_entry(c"AliceBlue", 0xf0f8ff),
     color_entry(c"AntiqueWhite", 0xfaebd7),
     color_entry(c"AntiqueWhite1", 0xffefdb),
@@ -781,7 +781,7 @@ fn parse_hex6(digits: &[u8]) -> Option<RgbValue> {
 ///
 /// Answers `-1` for a name that is neither a `#rrggbb` literal, nor one of
 /// the four aliases for the `Normal` colours, nor in [`COLOR_NAMES`].
-pub fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
+pub(crate) fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
     if let Some(digits) = name.to_bytes().strip_prefix(b"#")
         && let Some(value) = parse_hex6(digits)
     {
@@ -821,7 +821,7 @@ pub fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
 /// # Panics
 /// On an `idx` that is neither a table index nor one of the four
 /// `kColorIdx*` values — upstream called `abort()` in the same place.
-pub fn coloridx_to_name(idx: c_int, val: c_int, hexbuf: &mut HexBuf) -> Option<&CStr> {
+pub(crate) fn coloridx_to_name(idx: c_int, val: c_int, hexbuf: &mut HexBuf) -> Option<&CStr> {
     if idx >= 0 {
         return Some(COLOR_NAMES[idx as usize].name);
     }

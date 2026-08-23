@@ -126,7 +126,7 @@ pub(crate) fn lookup_color(idx: usize, foreground: bool) -> (c_int, Option<bool>
 }
 
 /// The cterm number a colour name means, or -1 if it is not one.
-pub fn name_to_ctermcolor(name: &CStr) -> c_int {
+pub(crate) fn name_to_ctermcolor(name: &CStr) -> c_int {
     match cterm_color_index(name) {
         Some(idx) => lookup_color(idx, false).0,
         None => -1,

@@ -32,7 +32,7 @@ use crate::ui::ui_flush;
 
 /// Call the click definition function recorded for column `col` in
 /// `click_defs`, for button `which_button`.
-pub fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_button: c_int) {
+pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_button: c_int) {
     let def = click_defs.at(col);
     let mut modifiers = modifier_letters(mod_mask.get());
     let number = |v: varnumber_T| typval_T {
@@ -74,7 +74,7 @@ pub fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_button: c_in
 ///
 /// Returns `IN_BUFFER` and sets `mpos.col` to the column when in buffer text.
 /// The column is one for the first column.
-pub fn get_fpos_of_mouse(mut mpos: Pos) -> c_int {
+pub(crate) fn get_fpos_of_mouse(mut mpos: Pos) -> c_int {
     let mut pos = MousePos::current();
     if pos.row < 0 || pos.col < 0 {
         return IN_UNKNOWN; // check if it makes sense
@@ -125,7 +125,7 @@ pub fn get_fpos_of_mouse(mut mpos: Pos) -> c_int {
 
 /// Show the `'mousemodel'` popup menu, having first moved the cursor there if
 /// the model asks for it and the click landed outside the selection.
-pub fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: pos_T) -> c_int {
+pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: pos_T) -> c_int {
     // First set the cursor position before showing the popup menu.
     let mut jump_flags = if mouse_model_popup_setpos() && leaves_selection(m_pos_flag, m_pos) {
         MOUSE_MAY_STOP_VIS

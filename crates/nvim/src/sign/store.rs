@@ -370,7 +370,7 @@ pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> c_int {
 }
 
 /// Forgets every definition — `sign_undefine()` with no argument.
-pub fn free_signs() {
+pub(crate) fn free_signs() {
     for entry in SIGNS.with_mut(::core::mem::take) {
         // SAFETY: the icon is this module's own `xstrdup` and nothing else
         // holds it.

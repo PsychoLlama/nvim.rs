@@ -74,7 +74,7 @@ enum Prefix {
 /// # Safety
 ///
 /// `eap` must be the command's own argument block.
-pub unsafe fn ex_set(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_set(eap: *mut exarg_T) {
     // SAFETY: the caller's argument block.
     unsafe {
         let mut flags = match (*eap).cmdidx as CMD_index {
@@ -230,7 +230,7 @@ pub(crate) unsafe fn find_tty_option_end(arg: *const c_char) -> *const c_char {
 /// # Safety
 ///
 /// `arg` must be NUL-terminated, and `opt_idxp` writable.
-pub unsafe fn find_option_end(arg: *const c_char, opt_idxp: *mut OptIndex) -> *const c_char {
+pub(crate) unsafe fn find_option_end(arg: *const c_char, opt_idxp: *mut OptIndex) -> *const c_char {
     // SAFETY: the caller's string and out-parameter.
     unsafe {
         let tty_end = find_tty_option_end(arg);
@@ -609,7 +609,7 @@ unsafe fn show_one(
 /// # Safety
 ///
 /// `arg` must be NUL-terminated.
-pub unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_int {
+pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_int {
     let mut did_show = false;
     let mut arg = arg;
 
@@ -761,7 +761,7 @@ unsafe fn find_key_len(arg: *const c_char, len: size_t, has_lt: bool) -> c_int {
 /// # Safety
 ///
 /// `arg` must be NUL-terminated.
-pub unsafe fn string_to_key(arg: *mut c_char) -> c_int {
+pub(crate) unsafe fn string_to_key(arg: *mut c_char) -> c_int {
     // SAFETY: the caller's string; the second byte is only read once the
     // first is known not to be the terminator.
     unsafe {

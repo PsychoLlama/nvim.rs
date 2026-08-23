@@ -58,7 +58,7 @@ const KS_SPECIAL: c_int = 254;
 /// `arg` must be NUL-terminated with `arglen` bytes before the NUL, and
 /// `buf` must have room for the longest single argument -- `arglen` always
 /// is.
-pub unsafe fn uc_split_args_iter(
+pub(crate) unsafe fn uc_split_args_iter(
     arg: *const c_char,
     arglen: size_t,
     end: *mut size_t,
@@ -112,7 +112,7 @@ pub unsafe fn uc_split_args_iter(
 ///
 /// # Safety
 /// `arg` must have `arglen` readable bytes.
-pub unsafe fn uc_nargs_upper_bound(arg: *const c_char, arglen: size_t) -> size_t {
+pub(crate) unsafe fn uc_nargs_upper_bound(arg: *const c_char, arglen: size_t) -> size_t {
     // SAFETY: caller contract.
     let arg = unsafe { slice::from_raw_parts(arg.cast::<u8>(), arglen) };
     let mut was_white = true; // space before the first argument
@@ -312,7 +312,7 @@ unsafe fn add_cmd_modifier(
 ///
 /// # Safety
 /// As [`add_cmd_modifier`]; `cmod` and `multi_mods` must be live.
-pub unsafe fn add_win_cmd_modifiers(
+pub(crate) unsafe fn add_win_cmd_modifiers(
     buf: *mut c_char,
     cmod: *const cmdmod_T,
     multi_mods: *mut bool,
@@ -370,7 +370,7 @@ pub unsafe fn add_win_cmd_modifiers(
 ///
 /// # Safety
 /// As [`add_cmd_modifier`]; `cmod` must be live.
-pub unsafe fn uc_mods(buf: *mut c_char, cmod: *const cmdmod_T, quote: bool) -> size_t {
+pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: *const cmdmod_T, quote: bool) -> size_t {
     /// The modifiers that are nothing but a flag.
     static MOD_ENTRIES: [(CmdModFlags, &CStr); 12] = [
         (CmdModFlags::BROWSE, c"browse"),
@@ -680,7 +680,7 @@ unsafe fn expand_args(
 ///
 /// # Safety
 /// Module contract; `eap` must be the command being executed.
-pub unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
+pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
     let cmd = unsafe {
         let scope = if (*eap).cmdidx == CMD_USER {

@@ -73,7 +73,7 @@ const DOBUF_FIRST: c_int = 1;
 /// the stack hands back to the callbacks are the same address.
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct TerminalState {
+pub(crate) struct TerminalState {
     pub state: VimState,
     pub term: Term,
     /// `RedrawingDisabled` on entry. Terminal mode has to redraw.
@@ -335,7 +335,7 @@ fn saved_winopts(s: Session) -> Option<*mut winopt_T> {
 ///
 /// Returns whether it was left by `CTRL-\ CTRL-O`, which the caller turns
 /// into a single normal-mode command before coming back.
-pub unsafe fn terminal_enter() -> bool {
+pub(crate) unsafe fn terminal_enter() -> bool {
     let buf = current_buf();
     assert!(
         !buf.terminal.is_null(),

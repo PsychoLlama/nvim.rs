@@ -61,7 +61,7 @@ pub(crate) static p_et_nobin: GlobalCell<c_int> = GlobalCell::new(0);
 const BIN_DEP_OPTS: [OptIndex; 4] = [kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab];
 
 /// Rebuild the window title, unless the screen has not started yet.
-pub fn did_set_title() {
+pub(crate) fn did_set_title() {
     if starting.get() != NO_SCREEN {
         // SAFETY: the screen is up, so the buffers it names are live.
         unsafe { maketitle() };
@@ -71,7 +71,7 @@ pub fn did_set_title() {
 /// Apply what turning 'binary' on and off does to the four options it
 /// overrides. Their pre-'binary' values are stashed so that turning it off
 /// again restores them rather than the defaults.
-pub fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFlags) {
+pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFlags) {
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: `curbuf` is live.
@@ -176,7 +176,7 @@ pub(crate) fn didset_options2() {
 
 /// Replace a null string option with the shared empty string, for every
 /// option that has a global variable. A `:source`d script can leave one.
-pub fn check_options() {
+pub(crate) fn check_options() {
     // SAFETY: the option table is a plain array, and `get_varp` hands back
     // the variable of a string option, which is a `*mut c_char`.
     unsafe {
@@ -197,7 +197,7 @@ pub fn check_options() {
 /// # Safety
 ///
 /// `wp` must be live for the options that keep their flag in a window.
-pub unsafe fn was_set_insecurely(
+pub(crate) unsafe fn was_set_insecurely(
     wp: *mut win_T,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
@@ -216,7 +216,7 @@ pub unsafe fn was_set_insecurely(
 ///
 /// `wp` must be live for those options; the caller must pass the window the
 /// option is about to be used from.
-pub unsafe fn insecure_flag(
+pub(crate) unsafe fn insecure_flag(
     wp: *mut win_T,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
@@ -253,7 +253,7 @@ pub unsafe fn insecure_flag(
 }
 
 /// Ask for the window title and the tabline to be rebuilt.
-pub fn redraw_titles() {
+pub(crate) fn redraw_titles() {
     need_maketitle.set(true);
     redraw_tabline.set(true);
 }
@@ -264,7 +264,7 @@ pub fn redraw_titles() {
 ///
 /// `allowed` is ASCII at every call site, so the byte search here is the
 /// same answer as upstream's `vim_strchr`, which only differs above 0x7f.
-pub fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
+pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
     val.to_bytes()
         .iter()
         .all(|b| b.is_ascii_alphanumeric() || allowed.contains(b))
@@ -276,7 +276,7 @@ pub fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 /// # Safety
 ///
 /// `wp` must be live.
-pub unsafe fn check_blending(wp: *mut win_T) {
+pub(crate) unsafe fn check_blending(wp: *mut win_T) {
     // SAFETY: the caller's window is live.
     unsafe {
         (*wp).w_grid_alloc.blending = (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt
@@ -293,7 +293,7 @@ pub unsafe fn check_blending(wp: *mut win_T) {
 ///
 /// `winhl`, when non-null, must be NUL-terminated; `wp`, when non-null, must
 /// be live.
-pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
+pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
     // SAFETY: the caller's string is NUL-terminated and its window is live.
     unsafe {
         let mut p: *const c_char = if !winhl.is_null() {
@@ -382,7 +382,7 @@ pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
 /// # Safety
 ///
 /// `buf` and `win` must be live.
-pub unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: uint32_t) {
+pub(crate) unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: uint32_t) {
     // `kOptFlagRedrAll` is the two window bits together, so test for both.
     let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
     // SAFETY: the caller's buffer and window are live.
@@ -410,7 +410,7 @@ pub unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: uint32_t
 }
 
 /// [`check_redraw_for`] for the current buffer and window.
-pub fn check_redraw(flags: uint32_t) {
+pub(crate) fn check_redraw(flags: uint32_t) {
     // SAFETY: `curbuf`/`curwin` are live.
     unsafe { check_redraw_for(curbuf.get(), curwin.get(), flags) }
 }

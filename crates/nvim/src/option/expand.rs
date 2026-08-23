@@ -113,7 +113,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
 ///
 /// `xp` must be the command line's expansion state and `arg` a
 /// NUL-terminated cursor into `xp->xp_line`.
-pub unsafe fn set_context_in_set_cmd(
+pub(crate) unsafe fn set_context_in_set_cmd(
     xp: *mut expand_T,
     arg: *mut c_char,
     opt_flags: OptionSetFlags,
@@ -482,7 +482,7 @@ unsafe fn match_str(
 /// # Safety
 ///
 /// The out-parameters must be writable, and `regmatch`/`fuzzystr` valid.
-pub unsafe fn expand_settings(
+pub(crate) unsafe fn expand_settings(
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
     fuzzystr: *mut c_char,
@@ -602,7 +602,10 @@ pub(crate) unsafe fn escape_option_str_cmdline(var: *mut c_char) -> *mut c_char 
 /// # Safety
 ///
 /// The out-parameters must be writable.
-pub unsafe fn expand_old_setting(numMatches: *mut c_int, matches: *mut *mut *mut c_char) -> c_int {
+pub(crate) unsafe fn expand_old_setting(
+    numMatches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
     // SAFETY: the caller's out-parameters, and the option table.
     unsafe {
         *numMatches = 0;
@@ -630,7 +633,7 @@ pub unsafe fn expand_old_setting(numMatches: *mut c_int, matches: *mut *mut *mut
 /// # Safety
 ///
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
-pub unsafe fn expand_string_setting(
+pub(crate) unsafe fn expand_string_setting(
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
@@ -676,7 +679,7 @@ pub unsafe fn expand_string_setting(
 /// # Safety
 ///
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
-pub unsafe fn expand_setting_subtract(
+pub(crate) unsafe fn expand_setting_subtract(
     xp: *mut expand_T,
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,

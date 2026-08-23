@@ -18,7 +18,7 @@ const CHAR_TO_INDEX: [u8; 256] = {
     table
 };
 
-pub fn encode(src: &[u8]) -> String {
+pub(crate) fn encode(src: &[u8]) -> String {
     let mut dest = Vec::with_capacity(src.len().div_ceil(3) * 4);
     let (chunks, remainder) = src.as_chunks::<3>();
     for chunk in chunks {
@@ -47,7 +47,7 @@ pub fn encode(src: &[u8]) -> String {
 
 /// Strict decode: requires canonical padding and zeroed leftover bits,
 /// mirroring the upstream C validation exactly. `None` means invalid input.
-pub fn decode(src: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn decode(src: &[u8]) -> Option<Vec<u8>> {
     if !src.len().is_multiple_of(4) {
         return None;
     }

@@ -20,7 +20,7 @@ use crate::types::NUL;
 /// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
 /// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
 /// are likely to point somewhere else entirely.
-pub unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
+pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
     unsafe {
         // The last change id we parsed at. A change may have invalidated the
         // current state, so this is checked as if it were part of the identity
@@ -334,7 +334,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
 /// now depends on the line below the last parsed one. The window looks like:
 /// the line which changed, the displayed lines, then `lnum` -- the line below
 /// the window.
-pub unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: linenr_T) {
+pub(crate) unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: linenr_T) {
     unsafe {
         if syn_block.get() != (*wp).w_s {
             return; // not the right window
@@ -371,7 +371,7 @@ pub(crate) unsafe fn validate_current_state() {
 ///
 /// Only called just after [`get_syntax_attr`] for the previous line, to decide
 /// whether the next line has to be redrawn too.
-pub unsafe fn syntax_check_changed(lnum: linenr_T) -> bool {
+pub(crate) unsafe fn syntax_check_changed(lnum: linenr_T) -> bool {
     unsafe {
         // Only worth checking when `lnum` is just below the line we last
         // parsed and there is a saved state for it.

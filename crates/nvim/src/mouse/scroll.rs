@@ -36,7 +36,7 @@ use crate::types::{Direction, cmdarg_T, oparg_T};
 ///
 /// # Safety
 /// `c` must be a mouse key code.
-pub unsafe fn ins_mouse(c: c_int) {
+pub(crate) unsafe fn ins_mouse(c: c_int) {
     // SAFETY: `curwin` is live from startup to exit.
     let old_curwin = unsafe { Win::current() };
 
@@ -92,7 +92,7 @@ pub unsafe fn ins_mouse(c: c_int) {
 ///
 /// # Safety
 /// `cap` must be a live command argument.
-pub unsafe fn do_mousescroll(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn do_mousescroll(cap: *mut cmdarg_T) {
     let shift_or_ctrl = mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0;
     // SAFETY: `curwin` is live from startup to exit.
     let win = unsafe { Win::current() };
@@ -137,7 +137,7 @@ pub unsafe fn do_mousescroll(cap: *mut cmdarg_T) {
 
 /// Scrolling in Insert mode in direction `dir`, which is one of the `MSCR_`
 /// values.
-pub fn ins_mousescroll(dir: c_int) {
+pub(crate) fn ins_mousescroll(dir: c_int) {
     // SAFETY: `cmdarg_T` and `oparg_T` are C aggregates of scalars and
     // pointers, which is what the C's `CLEAR_FIELD` zeroes; `clear_oparg`
     // then initialises the operator properly.
@@ -207,14 +207,14 @@ pub fn ins_mousescroll(dir: c_int) {
 }
 
 /// Whether `'mousemodel'` is set to "popup" or "popup_setpos".
-pub fn mouse_model_popup() -> bool {
+pub(crate) fn mouse_model_popup() -> bool {
     // SAFETY: an option string is NUL-terminated, never null.
     unsafe { *p_mousem.get() == 'p' as c_char }
 }
 
 /// Whether `'mousemodel'` is exactly "popup_setpos", which moves the cursor
 /// before showing the menu.
-pub fn mouse_model_popup_setpos() -> bool {
+pub(crate) fn mouse_model_popup_setpos() -> bool {
     // SAFETY: an option string is NUL-terminated, never null.
     unsafe { CStr::from_ptr(p_mousem.get()) == c"popup_setpos" }
 }

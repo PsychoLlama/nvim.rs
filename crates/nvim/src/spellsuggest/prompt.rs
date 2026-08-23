@@ -87,7 +87,7 @@ fn iobuff() -> *mut c_char {
 /// # Safety
 ///
 /// There must be a current window with a buffer.
-pub unsafe fn spell_suggest(count: c_int) {
+pub(crate) unsafe fn spell_suggest(count: c_int) {
     // SAFETY: the caller guarantees the window; `curwin` is re-read after
     // the body because autocommands may have moved it.
     unsafe {

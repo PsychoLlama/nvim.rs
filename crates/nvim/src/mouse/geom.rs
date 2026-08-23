@@ -32,7 +32,7 @@ use crate::types::{colnr_T, varnumber_T};
 /// friends rewrite them in place, from screen coordinates into coordinates
 /// relative to the window they found.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct MousePos {
+pub(crate) struct MousePos {
     /// Grid handle: `DEFAULT_GRID_HANDLE` for the screen, 0 for "ask the
     /// compositor", a window's own handle under `ext_multigrid`.
     pub grid: c_int,
@@ -42,7 +42,7 @@ pub struct MousePos {
 
 impl MousePos {
     /// Where the last mouse event landed.
-    pub fn current() -> Self {
+    pub(crate) fn current() -> Self {
         Self {
             grid: mouse_grid.get(),
             row: mouse_row.get(),
@@ -52,7 +52,7 @@ impl MousePos {
 }
 
 /// Whether `c` is a mouse key.
-pub fn is_mouse_key(c: c_int) -> bool {
+pub(crate) fn is_mouse_key(c: c_int) -> bool {
     matches!(
         c,
         K_LEFTMOUSE
@@ -82,7 +82,7 @@ pub fn is_mouse_key(c: c_int) -> bool {
 
 /// The `KE_*` half of a key code, as C's `KEY2TERMCAP1` reads it: the low byte
 /// of `-c` shifted down.  Nothing checks that `c` is a key code.
-pub fn key_extra(c: c_int) -> c_int {
+pub(crate) fn key_extra(c: c_int) -> c_int {
     ((-c as u32 >> 8) & 0xff) as c_int
 }
 
@@ -90,7 +90,7 @@ pub fn key_extra(c: c_int) -> c_int {
 ///
 /// The bits are cumulative -- `MOD_MASK_4CLICK` *is* 2CLICK|3CLICK -- so the
 /// wider counts have to be tested first.
-pub fn click_count(mod_mask: c_int) -> varnumber_T {
+pub(crate) fn click_count(mod_mask: c_int) -> varnumber_T {
     match mod_mask & MOD_MASK_MULTI_CLICK {
         MOD_MASK_4CLICK => 4,
         MOD_MASK_3CLICK => 3,
@@ -101,7 +101,7 @@ pub fn click_count(mod_mask: c_int) -> varnumber_T {
 
 /// The four-byte modifier string a `%@Func@` handler receives, one letter per
 /// modifier held down and a space where it was not.
-pub fn modifier_letters(mod_mask: c_int) -> [c_char; 5] {
+pub(crate) fn modifier_letters(mod_mask: c_int) -> [c_char; 5] {
     let held = |bit: c_int, letter: u8| (if mod_mask & bit != 0 { letter } else { b' ' }) as c_char;
     [
         held(MOD_MASK_SHIFT, b's'),
@@ -113,7 +113,7 @@ pub fn modifier_letters(mod_mask: c_int) -> [c_char; 5] {
 }
 
 /// The name a `%@Func@` handler receives for the button that was pressed.
-pub fn button_name(which_button: c_int) -> &'static CStr {
+pub(crate) fn button_name(which_button: c_int) -> &'static CStr {
     match which_button {
         MOUSE_LEFT => c"l",
         MOUSE_RIGHT => c"r",
@@ -128,7 +128,7 @@ pub fn button_name(which_button: c_int) -> &'static CStr {
 /// [`super::comp_pos`] must not count when walking down the window.
 ///
 /// A similar formula is used in `curs_columns()`; see `move/arith.rs`.
-pub fn skipped_top_lines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
+pub(crate) fn skipped_top_lines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
     if skipcol > width1 {
         (skipcol - width1) / width2 + 1
     } else if skipcol > 0 {
@@ -140,7 +140,7 @@ pub fn skipped_top_lines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_in
 
 /// The column a horizontal wheel event scrolls to: `'mousescroll'` columns (or
 /// a window's width) left or right of `leftcol`, never past the left margin.
-pub fn wheel_leftcol(leftcol: colnr_T, step: c_int, direction: c_int) -> colnr_T {
+pub(crate) fn wheel_leftcol(leftcol: colnr_T, step: c_int, direction: c_int) -> colnr_T {
     let moved = leftcol + if direction == MSCR_RIGHT { -step } else { step };
     moved.max(0)
 }

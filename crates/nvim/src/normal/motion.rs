@@ -59,7 +59,7 @@ use crate::r#move::{
 /// long wrapped line and a short one keep the same apparent column. A closed
 /// fold counts as one screen line however tall its text is, so the walk steps
 /// over it rather than through it.
-pub unsafe fn nv_screengo(
+pub(crate) unsafe fn nv_screengo(
     oap: *mut oparg_T,
     dir: c_int,
     mut dist: c_int,

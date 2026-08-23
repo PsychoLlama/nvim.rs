@@ -76,7 +76,7 @@ use core::ptr;
 ///
 /// # Safety
 /// Module contract; `mesg` is NUL-terminated and `ignore` is writable.
-pub unsafe fn cause_errthrow(
+pub(crate) unsafe fn cause_errthrow(
     mesg: *const c_char,
     multiline: bool,
     concat: bool,
@@ -222,7 +222,7 @@ unsafe fn free_msglist(l: *mut msglist_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn free_global_msglist() {
+pub(crate) unsafe fn free_global_msglist() {
     // SAFETY: module contract.
     unsafe {
         free_msglist(*msg_list.get());
@@ -236,7 +236,7 @@ pub unsafe fn free_global_msglist() {
 ///
 /// # Safety
 /// Module contract; `cstack`, when non-null, is the running one.
-pub unsafe fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
+pub(crate) unsafe fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
     // Abort every command in nested calls and sourced files immediately.
     if cause_abort.get() {
         cause_abort.set(false);
@@ -267,7 +267,7 @@ pub unsafe fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
 ///
 /// # Safety
 /// Module contract; `cstack` is the running conditional stack.
-pub unsafe fn do_intthrow(cstack: *mut cstack_T) -> bool {
+pub(crate) unsafe fn do_intthrow(cstack: *mut cstack_T) -> bool {
     // No interrupt, or no try conditional active and nothing being thrown:
     // do nothing, for the sake of non-EH scripts.
     if !got_int.get() || (trylevel.get() == 0 && !did_throw.get()) {
@@ -306,7 +306,7 @@ pub unsafe fn do_intthrow(cstack: *mut cstack_T) -> bool {
 /// # Safety
 /// Module contract. `value` is a message list for [`ET_ERROR`] and a
 /// NUL-terminated string otherwise; `should_free` is writable.
-pub unsafe fn get_exception_string(
+pub(crate) unsafe fn get_exception_string(
     value: *mut c_void,
     type_0: except_type_T,
     cmdname: *mut c_char,
@@ -549,7 +549,7 @@ pub(super) unsafe fn discard_exception(excp: *mut except_T, was_finished: bool) 
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn discard_current_exception() {
+pub(crate) unsafe fn discard_current_exception() {
     if !current_exception.get().is_null() {
         // SAFETY: module contract.
         unsafe { discard_exception(current_exception.get(), false) };
@@ -637,7 +637,7 @@ pub(super) unsafe fn finish_exception(excp: *mut except_T) {
 ///
 /// # Safety
 /// Module contract; `estate` is writable.
-pub unsafe fn exception_state_save(estate: *mut exception_state_T) {
+pub(crate) unsafe fn exception_state_save(estate: *mut exception_state_T) {
     // SAFETY: caller contract.
     unsafe {
         (*estate).estate_current_exception = current_exception.get();
@@ -653,7 +653,7 @@ pub unsafe fn exception_state_save(estate: *mut exception_state_T) {
 ///
 /// # Safety
 /// Module contract; `estate` was filled by [`exception_state_save`].
-pub unsafe fn exception_state_restore(estate: *mut exception_state_T) {
+pub(crate) unsafe fn exception_state_restore(estate: *mut exception_state_T) {
     // SAFETY: caller contract.
     unsafe {
         if did_throw.get() {
@@ -668,7 +668,7 @@ pub unsafe fn exception_state_restore(estate: *mut exception_state_T) {
 }
 
 /// Forget the exception state entirely.
-pub fn exception_state_clear() {
+pub(crate) fn exception_state_clear() {
     current_exception.set(ptr::null_mut());
     did_throw.set(false);
     need_rethrow.set(false);
@@ -778,7 +778,7 @@ unsafe fn report_if_verbose(action: PendingAction, pending: c_int, value: *mut c
 ///
 /// # Safety
 /// As [`report_pending`].
-pub unsafe fn report_make_pending(pending: c_int, value: *mut c_void) {
+pub(crate) unsafe fn report_make_pending(pending: c_int, value: *mut c_void) {
     // SAFETY: caller contract.
     unsafe { report_if_verbose(PendingAction::Made, pending, value) }
 }

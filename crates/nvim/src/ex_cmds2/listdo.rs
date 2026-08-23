@@ -91,7 +91,7 @@ impl ListDo {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_listdo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_listdo(eap: *mut exarg_T) {
     // SAFETY: module contract.
     let (cmdidx, forceit) = unsafe { ((*eap).cmdidx, (*eap).forceit != 0) };
     let Some(list) = ListDo::from_cmdidx(cmdidx) else {

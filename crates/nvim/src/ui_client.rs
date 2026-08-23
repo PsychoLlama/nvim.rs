@@ -121,7 +121,7 @@ fn no_reader() -> CallbackReader {
 /// # Safety
 ///
 /// `argv` must have `argc` valid C strings, and `exepath` must be one.
-pub unsafe fn ui_client_start_server(
+pub(crate) unsafe fn ui_client_start_server(
     exepath: *const c_char,
     argc: usize,
     argv: *mut *mut c_char,
@@ -186,7 +186,7 @@ pub unsafe fn ui_client_start_server(
 /// # Safety
 ///
 /// `term` must be null or a valid C string, and a channel must be set.
-pub unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_char, rgb: bool) {
+pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_char, rgb: bool) {
     unsafe {
         let mut opts = DictBuf::<8>::new();
         opts.insert(c"rgb", Object::boolean(rgb));
@@ -290,7 +290,7 @@ unsafe fn log_startup_step(step: &'static CStr) {
 /// # Safety
 ///
 /// A channel must be set.
-pub unsafe fn ui_client_detach() {
+pub(crate) unsafe fn ui_client_detach() {
     unsafe {
         rpc_send_event(
             ui_client_channel_id.get(),
@@ -310,7 +310,7 @@ pub unsafe fn ui_client_detach() {
 /// # Safety
 ///
 /// Must be called once, on the main thread, with a server channel set.
-pub unsafe fn ui_client_run() -> ! {
+pub(crate) unsafe fn ui_client_run() -> ! {
     unsafe {
         // Published before the loop turns: a callback that runs during
         // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
@@ -349,7 +349,7 @@ pub unsafe fn ui_client_run() -> ! {
 /// # Safety
 ///
 /// The TUI must have been started.
-pub unsafe fn ui_client_stop() {
+pub(crate) unsafe fn ui_client_stop() {
     ui_client_attached.set(false);
     unsafe {
         if !tui_is_stopped(tui.get()) {
@@ -364,7 +364,7 @@ pub unsafe fn ui_client_stop() {
 /// # Safety
 ///
 /// A channel must be set if this client is attached.
-pub unsafe fn ui_client_set_size(width: c_int, height: c_int) {
+pub(crate) unsafe fn ui_client_set_size(width: c_int, height: c_int) {
     if ui_client_attached.get() {
         let mut args = ArrayBuf::<2>::new();
         args.push(Object::integer(Integer::from(width)));
@@ -390,7 +390,7 @@ pub unsafe fn ui_client_set_size(width: c_int, height: c_int) {
 /// # Safety
 ///
 /// `name` must have `name_len` readable bytes.
-pub unsafe fn ui_client_get_redraw_handler(
+pub(crate) unsafe fn ui_client_get_redraw_handler(
     name: *const c_char,
     name_len: usize,
     _error: *mut Error,
@@ -420,7 +420,7 @@ pub unsafe fn ui_client_get_redraw_handler(
 /// # Safety
 ///
 /// `error` must be writable.
-pub unsafe fn handle_ui_client_redraw(
+pub(crate) unsafe fn handle_ui_client_redraw(
     _channel_id: u64,
     _args: Array,
     _arena: *mut Arena,
@@ -592,7 +592,10 @@ macro_rules! forward {
         /// # Safety
         ///
         /// `args` must be the array the decoder produced for this event.
-        pub unsafe fn $wrapper(args: Array) {
+        // `pub(crate)`, not `pub`: the module is not reachable from outside
+        // the crate, so a `pub` here is `unreachable_pub` at the macro's own
+        // line, once for all of its expansions.
+        pub(crate) unsafe fn $wrapper(args: Array) {
             // An event may take no arguments, in which case neither of
             // these is read; borrowing them keeps that case warning-free
             // without an allow on every wrapper.
@@ -663,7 +666,7 @@ forward! {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe fn ui_client_event_grid_resize(args: Array) {
+pub(crate) unsafe fn ui_client_event_grid_resize(args: Array) {
     unsafe {
         let (Some(grid), Some(width), Some(height)) = (
             arg(args, 0, Some(kObjectTypeInteger)),
@@ -692,7 +695,7 @@ pub unsafe fn ui_client_event_grid_resize(args: Array) {
 /// Never called: the decoder recognises `grid_line` by this function's
 /// address and decodes the cells itself, ending at
 /// [`ui_client_event_raw_line`].
-pub fn ui_client_event_grid_line(_args: Array) {
+pub(crate) fn ui_client_event_grid_line(_args: Array) {
     unreachable!("grid_line is decoded by the unpacker, not dispatched");
 }
 
@@ -702,7 +705,7 @@ pub fn ui_client_event_grid_line(_args: Array) {
 ///
 /// `g` must be the decoder's event, and the shared buffers must hold the
 /// cells it counted.
-pub unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
+pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
     unsafe {
         let [grid, row, startcol] = (*g).args;
         let endcol = Integer::from(startcol + (*g).coloff);
@@ -729,7 +732,7 @@ pub unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe fn ui_client_event_hl_attr_define(args: Array) {
+pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
     unsafe {
         let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
             arg(args, 0, Some(kObjectTypeInteger)),
@@ -789,7 +792,7 @@ unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe fn ui_client_event_error_exit(args: Array) {
+pub(crate) unsafe fn ui_client_event_error_exit(args: Array) {
     let Some(status) = (unsafe { arg(args, 0, Some(kObjectTypeInteger)) }) else {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
@@ -805,7 +808,7 @@ pub unsafe fn ui_client_event_error_exit(args: Array) {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe fn ui_client_event_connect(args: Array) {
+pub(crate) unsafe fn ui_client_event_connect(args: Array) {
     let Some(address) = (unsafe { arg(args, 0, Some(kObjectTypeString)) }) else {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
@@ -893,7 +896,7 @@ static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub unsafe fn ui_client_event_restart(args: Array) {
+pub(crate) unsafe fn ui_client_event_restart(args: Array) {
     unsafe {
         api_free_array(restart_args.get());
         restart_args.set(copy_array(args, core::ptr::null_mut::<Arena>()));
@@ -909,7 +912,7 @@ pub unsafe fn ui_client_event_restart(args: Array) {
 /// # Safety
 ///
 /// Must run on the main thread with the old channel closed.
-pub unsafe fn ui_client_attach_to_restarted_server() {
+pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
     if !restart_pending.get() {
         return;
     }

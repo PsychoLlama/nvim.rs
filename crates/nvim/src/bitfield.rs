@@ -16,7 +16,7 @@
 #![forbid(unsafe_code)]
 
 /// Marker for types a bitfield range can be read as / written from.
-pub trait FieldValue: Copy {
+pub(crate) trait FieldValue: Copy {
     fn from_bits(bits: u64) -> Self;
     fn to_bits(self) -> u64;
 }
@@ -48,7 +48,7 @@ impl FieldValue for bool {
 }
 
 /// Read bits `lo..=hi` of `storage` into the low bits of the result.
-pub fn get_bits(storage: &[u8], lo: u32, hi: u32) -> u64 {
+pub(crate) fn get_bits(storage: &[u8], lo: u32, hi: u32) -> u64 {
     let mut bits = 0;
     for (i, bit) in (lo..=hi).enumerate() {
         if storage[(bit / 8) as usize] & (1 << (bit % 8)) != 0 {
@@ -59,7 +59,7 @@ pub fn get_bits(storage: &[u8], lo: u32, hi: u32) -> u64 {
 }
 
 /// Write the low bits of `bits` into bits `lo..=hi` of `storage`.
-pub fn set_bits(storage: &mut [u8], lo: u32, hi: u32, bits: u64) {
+pub(crate) fn set_bits(storage: &mut [u8], lo: u32, hi: u32, bits: u64) {
     for (i, bit) in (lo..=hi).enumerate() {
         let byte = &mut storage[(bit / 8) as usize];
         let mask = 1 << (bit % 8);

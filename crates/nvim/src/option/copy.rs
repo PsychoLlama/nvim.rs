@@ -75,7 +75,7 @@ fn unset_string() -> *mut c_char {
 ///
 /// Both windows must be live, and `wp_to`'s option fields uninitialised or
 /// already released.
-pub unsafe fn win_copy_options(wp_from: *mut win_T, wp_to: *mut win_T) {
+pub(crate) unsafe fn win_copy_options(wp_from: *mut win_T, wp_to: *mut win_T) {
     // SAFETY: the caller's windows.
     unsafe {
         copy_winopt(
@@ -110,7 +110,7 @@ pub(crate) unsafe fn copy_option_val(val: *const c_char) -> *mut c_char {
 ///
 /// Both must point at `winopt_T`s, and `to`'s fields uninitialised or
 /// already released.
-pub unsafe fn copy_winopt(from: *mut winopt_T, to: *mut winopt_T) {
+pub(crate) unsafe fn copy_winopt(from: *mut winopt_T, to: *mut winopt_T) {
     // SAFETY: the caller's structures.
     unsafe {
         let f = &*from;
@@ -262,7 +262,7 @@ pub(crate) unsafe fn check_winopt(wop: *mut winopt_T) {
 /// # Safety
 ///
 /// `wop` must point at a `winopt_T` whose string values are its own.
-pub unsafe fn clear_winopt(wop: *mut winopt_T) {
+pub(crate) unsafe fn clear_winopt(wop: *mut winopt_T) {
     // SAFETY: the caller's structure, and each address is one of its own
     // string fields.
     unsafe {
@@ -281,7 +281,7 @@ pub unsafe fn clear_winopt(wop: *mut winopt_T) {
 /// # Safety
 ///
 /// `wp` must be a live window.
-pub unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
+pub(crate) unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
     // SAFETY: the caller's window.
     unsafe {
         // 'wrap' and 'smoothscroll' scroll in different directions, and only
@@ -353,7 +353,7 @@ unsafe fn copy_sctx(buf: *mut buf_T, bv: BufOptIndex) {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-pub unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
+pub(crate) unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
     let mut did_isk = false;
 
     // SAFETY: the caller's buffer, and every global read here is an option
@@ -652,7 +652,7 @@ unsafe fn vts_array(buf: *mut buf_T) -> *mut colnr_T {
 }
 
 /// `-M`: make every buffer unmodifiable, default included.
-pub fn reset_modifiable() {
+pub(crate) fn reset_modifiable() {
     // SAFETY: `curbuf` is live.
     unsafe { (*curbuf.get()).b_p_ma = 0 };
     p_ma.set(0);
@@ -665,7 +665,7 @@ pub fn reset_modifiable() {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-pub unsafe fn set_iminsert_global(buf: *mut buf_T) {
+pub(crate) unsafe fn set_iminsert_global(buf: *mut buf_T) {
     // SAFETY: the caller's buffer.
     p_iminsert.set(unsafe { (*buf).b_p_iminsert });
 }
@@ -675,7 +675,7 @@ pub unsafe fn set_iminsert_global(buf: *mut buf_T) {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-pub unsafe fn set_imsearch_global(buf: *mut buf_T) {
+pub(crate) unsafe fn set_imsearch_global(buf: *mut buf_T) {
     // SAFETY: the caller's buffer.
     p_imsearch.set(unsafe { (*buf).b_p_imsearch });
 }

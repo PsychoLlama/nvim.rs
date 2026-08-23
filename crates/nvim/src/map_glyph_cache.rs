@@ -97,7 +97,7 @@ unsafe fn rehash(set: *mut Set_glyph) {
 /// # Safety
 /// As [`find_bucket`]; `status` must be writable, and `key` must have
 /// [`len`](String_0::len) readable bytes.
-pub unsafe fn mh_put_glyph(
+pub(crate) unsafe fn mh_put_glyph(
     set: *mut Set_glyph,
     key: String_0,
     status: *mut MHPutStatus,

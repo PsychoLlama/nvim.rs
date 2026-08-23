@@ -90,7 +90,10 @@ fn abbreviates(typed: &[u8], name: &str) -> bool {
 ///
 /// # Safety
 /// `arg_in` must be NUL-terminated and `xp` writable.
-pub unsafe fn set_context_in_user_cmd(xp: *mut expand_T, arg_in: *const c_char) -> *const c_char {
+pub(crate) unsafe fn set_context_in_user_cmd(
+    xp: *mut expand_T,
+    arg_in: *const c_char,
+) -> *const c_char {
     let mut arg = arg_in;
     // SAFETY: caller contract; every step stays inside the line.
     unsafe {
@@ -152,7 +155,7 @@ unsafe fn set_context(xp: *mut expand_T, context: ExpandContext, pattern: *const
 ///
 /// # Safety
 /// `cmd` and `arg` must be NUL-terminated and `xp` writable.
-pub unsafe fn set_context_in_user_cmdarg(
+pub(crate) unsafe fn set_context_in_user_cmdarg(
     cmd: *const c_char,
     arg: *const c_char,
     argt: ExArgt,
@@ -208,7 +211,7 @@ pub unsafe fn set_context_in_user_cmdarg(
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
     // SAFETY: caller contract.
     unsafe { get_user_commands(ptr::null_mut(), idx - CMD_SIZE as c_int) }
 }
@@ -221,7 +224,7 @@ pub unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: module contract.
     let (local, global) = unsafe {
         (
@@ -249,7 +252,7 @@ pub unsafe fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
     let scope = match cmdidx {
         c if c == CMD_USER as c_int => Scope::Global,
         c if c == CMD_USER_BUF as c_int => Scope::Buffer,
@@ -264,14 +267,14 @@ pub unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
 }
 
 /// `expand_generic()` item getter: the `-addr=` values.
-pub fn get_user_cmd_addr_type(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_addr_type(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     ADDR_TYPES
         .get(idx as usize)
         .map_or(ptr::null_mut(), |row| row.name.as_ptr().cast_mut())
 }
 
 /// `expand_generic()` item getter: the attribute names.
-pub fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// Must stay alphabetical bar the last, which upstream appended.
     static USER_CMD_FLAGS: [&CStr; 10] = [
         c"addr",
@@ -291,7 +294,7 @@ pub fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 }
 
 /// `expand_generic()` item getter: the `-nargs=` values.
-pub fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static USER_CMD_NARGS: [&CStr; 5] = [c"0", c"1", c"*", c"?", c"+"];
     USER_CMD_NARGS
         .get(idx as usize)
@@ -303,7 +306,7 @@ pub fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// The holes in [`COMMAND_COMPLETE`], and the Lua context that has a name
 /// only for display, are answered as the empty string: the getter's null is
 /// the end of the list, not a gap in it.
-pub fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if idx >= COMMAND_COMPLETE.len() as c_int {
         return ptr::null_mut();
     }
@@ -325,7 +328,7 @@ pub fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// # Safety
 /// `compl_arg` must be NUL-terminated when `expand` is one of the two
 /// custom types.
-pub unsafe fn cmdcomplete_type_to_str(
+pub(crate) unsafe fn cmdcomplete_type_to_str(
     expand: ExpandContext,
     compl_arg: *const c_char,
 ) -> *mut c_char {
@@ -350,7 +353,7 @@ pub unsafe fn cmdcomplete_type_to_str(
 ///
 /// # Safety
 /// `complete_str` must be NUL-terminated.
-pub unsafe fn cmdcomplete_str_to_type(complete_str: *const c_char) -> ExpandContext {
+pub(crate) unsafe fn cmdcomplete_str_to_type(complete_str: *const c_char) -> ExpandContext {
     // SAFETY: caller contract.
     let typed = unsafe { CStr::from_ptr(complete_str).to_bytes() };
     if typed.starts_with(b"custom,") {

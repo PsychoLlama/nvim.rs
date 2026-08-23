@@ -76,25 +76,25 @@ use crate::types::{
 use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen, strpbrk};
 
 mod flags;
-pub use self::flags::*;
+pub(crate) use self::flags::*;
 
 // The carve of the transpiled module; see each child's docs.
 mod state;
-pub use self::state::*;
+pub(crate) use self::state::*;
 mod stack;
-pub use self::stack::*;
+pub(crate) use self::stack::*;
 mod sync;
 pub(crate) use self::sync::*;
 mod attr;
-pub use self::attr::*;
+pub(crate) use self::attr::*;
 mod items;
 pub(crate) use self::items::*;
 mod endpos;
 pub(crate) use self::endpos::*;
 mod command;
-pub use self::command::*;
+pub(crate) use self::command::*;
 mod clear;
-pub use self::clear::*;
+pub(crate) use self::clear::*;
 mod list;
 pub(crate) use self::list::*;
 mod keyword;
@@ -106,26 +106,26 @@ pub(crate) use self::cluster::*;
 mod options;
 pub(crate) use self::options::*;
 mod query;
-pub use self::query::*;
+pub(crate) use self::query::*;
 mod syntime;
-pub use self::syntime::*;
+pub(crate) use self::syntime::*;
 
 /// How many `\(..\)` submatches a pattern can have.
-pub const NSUBEXP: ::core::ffi::c_uint = 10;
+pub(crate) const NSUBEXP: ::core::ffi::c_uint = 10;
 /// Size of `expand_T::xp_buf`, the scratch buffer a completion callback may
 /// answer from.
-pub const EXPAND_BUF_LEN: ::core::ffi::c_uint = 256;
+pub(crate) const EXPAND_BUF_LEN: ::core::ffi::c_uint = 256;
 // The `expand_T::xp_context` values this module sets.
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct sp_syn {
+pub(crate) struct sp_syn {
     pub inc_tag: ::core::ffi::c_int,
     pub id: int16_t,
     pub cont_in_list: *mut int16_t,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct keyentry {
+pub(crate) struct keyentry {
     pub ke_next: *mut keyentry_T,
     pub k_syn: sp_syn,
     pub next_list: *mut int16_t,
@@ -133,16 +133,16 @@ pub struct keyentry {
     pub k_char: ::core::ffi::c_int,
     pub keyword: [::core::ffi::c_char; 0],
 }
-pub type keyentry_T = keyentry;
+pub(crate) type keyentry_T = keyentry;
 /// The highest highlight id there can be.
-pub const MAX_HL_ID: ::core::ffi::c_uint = 20000;
+pub(crate) const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 /// The `contains=ALL`/`ALLBUT` marker, which shares its value with the highest
 /// possible highlight id and is offset by the `:syntax include` tag.
 pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_int;
 /// `do_source` flag: this is not a plugin or a package.
-pub const DOSO_NONE: ::core::ffi::c_uint = 0;
+pub(crate) const DOSO_NONE: ::core::ffi::c_uint = 0;
 #[derive(Copy, Clone)]
-pub struct stateitem_T {
+pub(crate) struct stateitem_T {
     pub si_idx: ::core::ffi::c_int,
     pub si_id: ::core::ffi::c_int,
     pub si_trans_id: ::core::ffi::c_int,
@@ -163,7 +163,7 @@ pub struct stateitem_T {
     pub si_extmatch: *mut reg_extmatch_T,
 }
 #[derive(Copy, Clone)]
-pub struct synpat_T {
+pub(crate) struct synpat_T {
     pub sp_type: ::core::ffi::c_char,
     pub sp_syncing: bool,
     pub sp_syn_match_id: int16_t,
@@ -183,13 +183,13 @@ pub struct synpat_T {
     pub sp_time: syn_time_T,
 }
 #[derive(Copy, Clone)]
-pub struct syn_cluster_T {
+pub(crate) struct syn_cluster_T {
     pub scl_name: *mut ::core::ffi::c_char,
     pub scl_name_u: *mut ::core::ffi::c_char,
     pub scl_list: *mut int16_t,
 }
 #[derive(Copy, Clone)]
-pub struct syn_opt_arg_T {
+pub(crate) struct syn_opt_arg_T {
     pub flags: SynFlags,
     pub keyword: bool,
     pub sync_idx: *mut ::core::ffi::c_int,
@@ -198,36 +198,36 @@ pub struct syn_opt_arg_T {
     pub cont_in_list: *mut int16_t,
     pub next_list: *mut int16_t,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
+pub(crate) const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
     ga_itemsize: 0 as ::core::ffi::c_int,
     ga_growsize: 1 as ::core::ffi::c_int,
     ga_data: NULL,
 };
-pub const SYNSPL_DEFAULT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SYNSPL_NOTOP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const SYNFLD_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SYNFLD_MINIMUM: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const SYNSPL_DEFAULT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub(crate) const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const SYNSPL_NOTOP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub(crate) const SYNFLD_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub(crate) const SYNFLD_MINIMUM: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 /// The `:source` argument the on/off commands build; `%s` is the file's name.
 pub(crate) const SYNTAX_FNAME: &::core::ffi::CStr = c"$VIMRUNTIME/syntax/%s.vim";
-pub const SST_MIN_ENTRIES: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
-pub const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
-pub const SST_FIX_STATES: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
+pub(crate) const SST_MIN_ENTRIES: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
+pub(crate) const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
+pub(crate) const SST_FIX_STATES: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
+pub(crate) const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 /// Whether `:syntax on|off|enable|manual` has been used, which is what stops
 /// [`syn_maybe_enable`] from overriding a deliberate choice.
 static did_syntax_onoff: GlobalCell<bool> = GlobalCell::new(false);
-pub const SPO_MS_OFF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SPO_ME_OFF: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SPO_HS_OFF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const SPO_HE_OFF: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const SPO_RS_OFF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const SPO_RE_OFF: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const SPO_LC_OFF: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const SPO_COUNT: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
+pub(crate) const SPO_MS_OFF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub(crate) const SPO_ME_OFF: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const SPO_HS_OFF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub(crate) const SPO_HE_OFF: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub(crate) const SPO_RS_OFF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+pub(crate) const SPO_RE_OFF: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub(crate) const SPO_LC_OFF: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
+pub(crate) const SPO_COUNT: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 pub(crate) const E_ILLEGAL_ARG: &::core::ffi::CStr = c"E390: Illegal argument: %s";
 pub(crate) const E_CONTAINS_NOT_ACCEPTED_HERE: &::core::ffi::CStr =
     c"E395: Contains argument not accepted here";
@@ -235,14 +235,14 @@ pub(crate) const E_INVALID_CCHAR_VALUE: &::core::ffi::CStr = c"E844: Invalid cch
 /// `%s` is the text before the `]`, `%s` the text after it.
 pub(crate) const E_TRAILING_CHAR_AFTER_RSB: &::core::ffi::CStr =
     c"E890: Trailing char after ']': %s]%s";
-pub const SPTYPE_MATCH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SPTYPE_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const SPTYPE_END: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const SPTYPE_SKIP: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const NONE_IDX: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const SF_CCOMMENT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const SF_MATCH: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const MAXKEYWLEN: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
+pub(crate) const SPTYPE_MATCH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const SPTYPE_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub(crate) const SPTYPE_END: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub(crate) const SPTYPE_SKIP: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+pub(crate) const NONE_IDX: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
+pub(crate) const SF_CCOMMENT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
+pub(crate) const SF_MATCH: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
+pub(crate) const MAXKEYWLEN: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
 // What the last `syn_current_attr` decided about the current position. The
 // query API reads these back, so they outlive the call that set them.
 
@@ -259,14 +259,14 @@ static current_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
 static current_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// The `cchar=` of the current character, for `conceal`.
 static current_sub_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-pub const CLUSTER_REPLACE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const CLUSTER_ADD: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const CLUSTER_SUBTRACT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const SYNID_TOP: ::core::ffi::c_int = 21000 as ::core::ffi::c_int;
-pub const SYNID_CONTAINED: ::core::ffi::c_int = 22000 as ::core::ffi::c_int;
-pub const SYNID_CLUSTER: ::core::ffi::c_int = 23000 as ::core::ffi::c_int;
-pub const MAX_SYN_INC_TAG: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
-pub const MAX_CLUSTER_ID: ::core::ffi::c_int = 32767 as ::core::ffi::c_int - SYNID_CLUSTER;
+pub(crate) const CLUSTER_REPLACE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const CLUSTER_ADD: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub(crate) const CLUSTER_SUBTRACT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub(crate) const SYNID_TOP: ::core::ffi::c_int = 21000 as ::core::ffi::c_int;
+pub(crate) const SYNID_CONTAINED: ::core::ffi::c_int = 22000 as ::core::ffi::c_int;
+pub(crate) const SYNID_CLUSTER: ::core::ffi::c_int = 23000 as ::core::ffi::c_int;
+pub(crate) const MAX_SYN_INC_TAG: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
+pub(crate) const MAX_CLUSTER_ID: ::core::ffi::c_int = 32767 as ::core::ffi::c_int - SYNID_CLUSTER;
 /// The `:syntax` command line being executed, which `:syntax include` needs to
 /// expand a file name against.
 static syn_cmdlinep: GlobalCell<*mut *mut ::core::ffi::c_char> =
@@ -318,10 +318,10 @@ pub(crate) unsafe fn cur_cluster_count() -> ::core::ffi::c_int {
     unsafe { (*cur_syn_block()).b_syn_clusters.ga_len }
 }
 /// `stateitem_T::si_idx` for a keyword, which has no pattern.
-pub const KEYWORD_IDX: ::core::ffi::c_int = -1;
+pub(crate) const KEYWORD_IDX: ::core::ffi::c_int = -1;
 /// The `contains=` list of a transparent item that is not inside anything: it
 /// admits every not-`contained` group.
-pub const ID_LIST_ALL: *mut int16_t = -1 as ::core::ffi::c_int as *mut int16_t;
+pub(crate) const ID_LIST_ALL: *mut int16_t = -1 as ::core::ffi::c_int as *mut int16_t;
 /// The sequence number the next pushed item gets.
 static next_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1);
 
@@ -374,12 +374,12 @@ static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static syn_time_on: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Set the time limit for parsing, or clear it with NULL.
-pub unsafe fn syn_set_timeout(tm: *mut proftime_T) {
+pub(crate) unsafe fn syn_set_timeout(tm: *mut proftime_T) {
     syn_tm.set(tm);
 }
-pub const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const ITEM_SKIP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const ITEM_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const ITEM_MATCHGROUP: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub(crate) const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub(crate) const ITEM_SKIP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const ITEM_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub(crate) const ITEM_MATCHGROUP: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub(crate) const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

@@ -38,7 +38,7 @@ use super::{
 /// # Safety
 ///
 /// `from` must be the live window or buffer `scope` names.
-pub unsafe fn set_option_direct_for(
+pub(crate) unsafe fn set_option_direct_for(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
@@ -158,7 +158,7 @@ impl OptionContext {
 ///
 /// `from` must be the live window or buffer `scope` names, and `err` a valid
 /// error slot.
-pub unsafe fn get_option_value_for(
+pub(crate) unsafe fn get_option_value_for(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     scope: OptScope,
@@ -187,7 +187,7 @@ pub unsafe fn get_option_value_for(
 ///
 /// `name` must be NUL-terminated, `from` the live window or buffer `scope`
 /// names, and `err` a valid error slot.
-pub unsafe fn set_option_value_for(
+pub(crate) unsafe fn set_option_value_for(
     name: *const c_char,
     opt_idx: OptIndex,
     value: OptVal,

@@ -507,7 +507,7 @@ pub(crate) unsafe fn nv_tilde(cap: *mut cmdarg_T) {
 
 /// Put the cursor where `A` starts inserting: past the last character, or
 /// past the last *cell* when 'virtualedit' is "all".
-pub unsafe fn set_cursor_for_append_to_line() {
+pub(crate) unsafe fn set_cursor_for_append_to_line() {
     // SAFETY: reads and writes the current window's cursor.
     unsafe {
         (*curwin.get()).w_set_curswant = true;

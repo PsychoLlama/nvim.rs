@@ -71,7 +71,7 @@ fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// None; `xp` is unused.
-pub unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match EXPAND_WHAT.get() {
         Expand::Subcmd => nth(&CMDS, idx),
         Expand::Define => nth(
@@ -124,7 +124,7 @@ pub unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// # Safety
 /// `xp` must be live and `arg` a writable NUL-terminated string
 /// ([`sign_cmd_idx`] terminates the subcommand in place).
-pub unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
+pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
     // SAFETY: the caller's completion context and command line.
     unsafe {
         // Default: expand subcommand names.

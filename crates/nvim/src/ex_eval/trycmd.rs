@@ -73,7 +73,7 @@ use core::ptr;
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_throw(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_throw(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let arg = (*eap).arg;
@@ -101,7 +101,7 @@ pub unsafe fn ex_throw(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract; an exception is current and `cstack` is the running one.
-pub unsafe fn do_throw(cstack: *mut cstack_T) {
+pub(crate) unsafe fn do_throw(cstack: *mut cstack_T) {
     // Clean up and deactivate as far as the next surrounding try conditional
     // that is not in its finally clause. That conditional itself stays
     // active so its ACTIVE flag can be tested below.
@@ -137,7 +137,7 @@ pub unsafe fn do_throw(cstack: *mut cstack_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_try(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_try(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -181,7 +181,7 @@ pub unsafe fn ex_try(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_catch(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_catch(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -351,7 +351,7 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_finally(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_finally(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -459,7 +459,7 @@ pub unsafe fn ex_finally(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_endtry(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endtry(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -632,7 +632,7 @@ pub unsafe fn ex_endtry(eap: *mut exarg_T) {
 /// # Safety
 /// Module contract; `csp` is writable and outlives the matching
 /// [`leave_cleanup`].
-pub unsafe fn enter_cleanup(csp: *mut cleanup_T) {
+pub(crate) unsafe fn enter_cleanup(csp: *mut cleanup_T) {
     // The pending values are restored by `leave_cleanup`, unless an aborting
     // error, an interrupt or an uncaught exception happens in between.
     if !(did_emsg.get() != 0 || got_int.get() || did_throw.get() || need_rethrow.get()) {
@@ -688,7 +688,7 @@ pub unsafe fn enter_cleanup(csp: *mut cleanup_T) {
 ///
 /// # Safety
 /// Module contract; `csp` was filled by [`enter_cleanup`].
-pub unsafe fn leave_cleanup(csp: *mut cleanup_T) {
+pub(crate) unsafe fn leave_cleanup(csp: *mut cleanup_T) {
     // SAFETY: caller contract.
     unsafe {
         let pending = (*csp).pending;

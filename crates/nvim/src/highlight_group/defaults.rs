@@ -496,7 +496,7 @@ static HIGHLIGHT_INIT_CMDLINE: [&CStr; 140] = [
 ///
 /// # Safety
 /// Runs `:highlight` commands, which redraw; main thread only.
-pub unsafe fn syn_init_cmdline_highlight(reset: bool, init: bool) {
+pub(crate) unsafe fn syn_init_cmdline_highlight(reset: bool, init: bool) {
     for line in &HIGHLIGHT_INIT_CMDLINE {
         // SAFETY: the caller's obligation; the strings are static.
         unsafe { do_highlight(line.as_ptr(), reset, init) };
@@ -511,7 +511,7 @@ pub unsafe fn syn_init_cmdline_highlight(reset: bool, init: bool) {
 ///
 /// # Safety
 /// Sources a colour scheme and runs `:highlight`; main thread only.
-pub unsafe fn init_highlight(both: bool, reset: bool) {
+pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
     /// Whether the `both == true` call from `main()` has happened. Before it
     /// has, nothing else is set up and its own run would overrule this one
     /// anyway, so a `both == false` call is dropped.
@@ -560,7 +560,7 @@ pub unsafe fn init_highlight(both: bool, reset: bool) {
 ///
 /// # Safety
 /// Sources a script and fires autocommands; main thread only.
-pub unsafe fn load_colors(name: *mut c_char) -> c_int {
+pub(crate) unsafe fn load_colors(name: *mut c_char) -> c_int {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: `name` is the caller's NUL-terminated scheme name.
@@ -599,7 +599,7 @@ pub unsafe fn load_colors(name: *mut c_char) -> c_int {
 
 /// Forgets the `Normal` colours, so that the next `:highlight` starts from
 /// the terminal's own.
-pub fn restore_cterm_colors() {
+pub(crate) fn restore_cterm_colors() {
     normal_fg.set(-1 as RgbValue);
     normal_bg.set(-1 as RgbValue);
     normal_sp.set(-1 as RgbValue);

@@ -256,7 +256,7 @@ unsafe fn syn_cmd_onoff(eap: *mut exarg_T, name: &CStr) {
 
 /// Turn syntax highlighting on unless `:syntax` has already been used one way
 /// or the other.
-pub unsafe fn syn_maybe_enable() {
+pub(crate) unsafe fn syn_maybe_enable() {
     unsafe {
         if !did_syntax_onoff.get() {
             let mut ea = exarg_T {
@@ -305,7 +305,7 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 ];
 
 /// `:syntax`. Finds the subcommand name in [`SUBCOMMANDS`] and calls it.
-pub unsafe fn ex_syntax(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
     unsafe {
         let arg = (*eap).arg;
         syn_cmdlinep.set((*eap).cmdlinep);
@@ -341,7 +341,7 @@ pub unsafe fn ex_syntax(eap: *mut exarg_T) {
 /// `:ownsyntax {name}` — give this window its own syntax block.
 ///
 /// Upstream marks this `@deprecated`.
-pub unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
     unsafe {
         if (*curwin.get()).w_s == &raw mut (*(*curwin.get()).w_buffer).b_s {
             (*curwin.get()).w_s =

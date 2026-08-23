@@ -23,7 +23,7 @@ use crate::types::NUL;
 ///
 /// # Safety
 /// `wp` and `pos` must be live; the out-parameters may each be null.
-pub unsafe fn getvcol(
+pub(crate) unsafe fn getvcol(
     wp: *mut win_T,
     pos: *mut pos_T,
     start: *mut colnr_T,
@@ -116,7 +116,7 @@ pub unsafe fn getvcol(
 ///
 /// # Safety
 /// `posp` must be live.
-pub unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
+pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
     unsafe {
         let win = curwin.get();
         let list_save = (*win).w_onebuf_opt.wo_list;
@@ -139,7 +139,7 @@ pub unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
 ///
 /// # Safety
 /// As [`getvcol`].
-pub unsafe fn getvvcol(
+pub(crate) unsafe fn getvvcol(
     wp: *mut win_T,
     pos: *mut pos_T,
     start: *mut colnr_T,
@@ -193,7 +193,7 @@ pub unsafe fn getvvcol(
 ///
 /// # Safety
 /// All pointers must be live; `left` and `right` are always written.
-pub unsafe fn getvcols(
+pub(crate) unsafe fn getvcols(
     wp: *mut win_T,
     pos1: *mut pos_T,
     pos2: *mut pos_T,

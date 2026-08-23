@@ -279,7 +279,7 @@ fn dict_of<const N: usize>(
 /// # Safety
 /// Module contract; `buf` must be null or a live buffer, and `arena` the
 /// dispatcher's.
-pub unsafe fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> Dict {
+pub(crate) unsafe fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> Dict {
     let gap: *mut garray_T = if buf.is_null() {
         ucmds.ptr()
     } else {

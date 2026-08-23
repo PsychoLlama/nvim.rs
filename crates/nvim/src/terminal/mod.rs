@@ -30,12 +30,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-pub mod callbacks;
-pub mod input;
-pub mod mode;
-pub mod refresh;
-pub mod scrollback;
-pub mod termrequest;
+pub(crate) mod callbacks;
+pub(crate) mod input;
+pub(crate) mod mode;
+pub(crate) mod refresh;
+pub(crate) mod scrollback;
+pub(crate) mod termrequest;
 
 use crate::api::private::helpers::{
     api_clear_error, api_free_object, cstr_as_string, dict_get_value,
@@ -95,9 +95,9 @@ use core::ops::{Deref, DerefMut};
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
 use crate::state::MODE_TERMINAL;
-pub use input::{terminal_paste, terminal_set_streamed_paste};
-pub use mode::terminal_enter;
-pub use refresh::{
+pub(crate) use input::{terminal_paste, terminal_set_streamed_paste};
+pub(crate) use mode::terminal_enter;
+pub(crate) use refresh::{
     on_scrollback_option_changed, terminal_check_refresh, terminal_init, terminal_teardown,
 };
 
@@ -134,7 +134,7 @@ const AUGROUP_ALL: c_int = -3;
 /// across a callback, an autocommand, a vterm write or a refresh**. Read the
 /// slot out first and call afterwards.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Term(*mut Terminal);
+pub(crate) struct Term(*mut Terminal);
 
 /// The state machine of a live terminal's emulator.
 ///
@@ -142,7 +142,7 @@ pub struct Term(*mut Terminal);
 /// rather than caching, exactly as the C did. Two methods rather than a
 /// `Deref`: the palette is all this module wants from a state.
 #[derive(Clone, Copy)]
-pub struct TermState(*mut VTermState);
+pub(crate) struct TermState(*mut VTermState);
 
 impl Deref for Term {
     type Target = Terminal;
@@ -184,12 +184,12 @@ impl Term {
     /// # Safety
     /// `term` must stay a live terminal for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(term: *mut Terminal) -> Self {
+    pub(crate) const unsafe fn new(term: *mut Terminal) -> Self {
         Self(term)
     }
 
     #[inline(always)]
-    pub fn raw(self) -> *mut Terminal {
+    pub(crate) fn raw(self) -> *mut Terminal {
         self.0
     }
 
@@ -271,7 +271,7 @@ unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_da
 /// The buffer is emptied: its lines are about to become a mirror of the
 /// emulator's screen, and anything already there would be taken for
 /// scrollback.
-pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal {
+pub(crate) unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal {
     // SAFETY: the caller hands over a live buffer that has no terminal yet.
     let mut buf = unsafe { Buf::new(buf) };
     // Leaked here and reclaimed by terminal_destroy. The buffer is the
@@ -353,7 +353,7 @@ pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Ter
 ///
 /// Runs `TermOpen`, which can wipe the buffer or close the terminal
 /// outright — hence the re-check before touching either again.
-pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
+pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
     // SAFETY: the caller hands over the buffer's own terminal slot.
     let mut term = unsafe { Term::new(*termpp) };
     assert!(!term.raw().is_null(), "terminal_open without a terminal");
@@ -459,7 +459,7 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
 /// wait for. Runs `TermClose` unless autocommands are blocked; the buffer
 /// stays, showing whatever the child left on screen, until something wipes
 /// it.
-pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
+pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // SAFETY: the caller hands over a slot holding a live terminal.
     let mut term = unsafe { Term::new(*termpp) };
     if term.destroy {
@@ -562,7 +562,7 @@ unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
 ///
 /// The redraw is deferred: this is reached from a process-status callback,
 /// which is no place to touch the screen.
-pub unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
+pub(crate) unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
     // SAFETY: the caller hands over a live terminal.
     let mut term = unsafe { Term::new(term) };
     if term.suspended != suspended {
@@ -582,7 +582,7 @@ pub unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
 ///
 /// The largest of them, not the smallest: a narrower window scrolls
 /// sideways rather than making the child reflow for everyone else.
-pub unsafe fn terminal_check_size(term: *mut Terminal) {
+pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
     // SAFETY: the caller hands over a live terminal.
     let mut term = unsafe { Term::new(term) };
     if term.closed {
@@ -626,7 +626,7 @@ pub unsafe fn terminal_check_size(term: *mut Terminal) {
 ///
 /// Reached repeatedly — from the close callback, from the buffer being
 /// wiped — and does nothing until `refcount` reaches zero.
-pub unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
+pub(crate) unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
     // SAFETY: the caller hands over a slot holding a live terminal.
     let mut term = unsafe { Term::new(*termpp) };
     if let Some(mut buf) = term.buf() {
@@ -704,7 +704,7 @@ unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
 ///
 /// `force_crlf` is for channels that are not a pty: a bare newline from
 /// those means "next line, column zero", which to a terminal is CR LF.
-pub unsafe fn terminal_receive(term: *mut Terminal, data: *const c_char, len: size_t) {
+pub(crate) unsafe fn terminal_receive(term: *mut Terminal, data: *const c_char, len: size_t) {
     // SAFETY: the caller hands over a live terminal.
     let mut term = unsafe { Term::new(term) };
     if data.is_null() {
@@ -779,7 +779,7 @@ fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> HlAttrFlags {
 /// buffer; `term_attrs` is its scratch array, `TERM_ATTRS_MAX` wide. Lines
 /// that are scrollback rather than screen resolve through the scrollback,
 /// and lines below the screen are left alone.
-pub unsafe fn terminal_get_line_attributes(
+pub(crate) unsafe fn terminal_get_line_attributes(
     term: *mut Terminal,
     _wp: *mut win_T,
     linenr: c_int,
@@ -873,23 +873,23 @@ pub unsafe fn terminal_get_line_attributes(
     }
 }
 
-pub unsafe fn terminal_buf(term: *const Terminal) -> Buffer {
+pub(crate) unsafe fn terminal_buf(term: *const Terminal) -> Buffer {
     // SAFETY: the caller hands over a live terminal.
     unsafe { (*term).buf_handle as Buffer }
 }
 
-pub unsafe fn terminal_running(term: *const Terminal) -> bool {
+pub(crate) unsafe fn terminal_running(term: *const Terminal) -> bool {
     // SAFETY: the caller hands over a live terminal.
     unsafe { !(*term).closed }
 }
 
-pub unsafe fn terminal_suspended(term: *const Terminal) -> bool {
+pub(crate) unsafe fn terminal_suspended(term: *const Terminal) -> bool {
     // SAFETY: the caller hands over a live terminal.
     unsafe { (*term).suspended }
 }
 
 /// Tell a child that asked for theme updates that `'background'` changed.
-pub unsafe fn terminal_notify_theme(term: *mut Terminal, dark: bool) {
+pub(crate) unsafe fn terminal_notify_theme(term: *mut Terminal, dark: bool) {
     // SAFETY: the caller hands over a live terminal.
     if !unsafe { Term::new(term) }.theme_updates {
         return;

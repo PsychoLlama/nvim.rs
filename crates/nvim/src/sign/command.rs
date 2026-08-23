@@ -507,7 +507,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
 ///
 /// # Safety
 /// `eap` must be a live Ex-command argument block with a writable `arg`.
-pub unsafe fn ex_sign(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_sign(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     unsafe {
         let mut arg = (*eap).arg;

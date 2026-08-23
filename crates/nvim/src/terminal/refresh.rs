@@ -58,7 +58,7 @@ static REFRESH_PENDING: GlobalCell<bool> = GlobalCell::new(false);
 /// first took damage.
 static INVALIDATED: GlobalCell<Vec<Term>> = GlobalCell::new(Vec::new());
 
-pub unsafe fn terminal_init() {
+pub(crate) unsafe fn terminal_init() {
     // SAFETY: the main loop is up, and the timer is this module's own,
     // untouched until `terminal_teardown` closes it.
     unsafe { time_watcher_init(main_loop.ptr(), timer(), ::core::ptr::null_mut()) };
@@ -66,7 +66,7 @@ pub unsafe fn terminal_init() {
     unsafe { (*timer()).events = multiqueue_new_child(main_loop_events()) };
 }
 
-pub unsafe fn terminal_teardown() {
+pub(crate) unsafe fn terminal_teardown() {
     // SAFETY: the timer this module started, stopped and closed once.
     unsafe { time_watcher_stop(timer()) };
     // SAFETY: as above, freeing the queue `terminal_init` made.
@@ -97,7 +97,7 @@ pub(super) fn refresh_queue() -> *mut MultiQueue {
 /// Nothing is queued while the child holds synchronized output open: it has
 /// asked for the screen to stay as it is until it says otherwise, and the
 /// damage it is making meanwhile would be a half-drawn frame.
-pub fn invalidate_terminal(mut term: Term, rows: Option<(c_int, c_int)>) {
+pub(crate) fn invalidate_terminal(mut term: Term, rows: Option<(c_int, c_int)>) {
     if let Some((start_row, end_row)) = rows {
         term.invalid_start = term.invalid_start.min(start_row);
         term.invalid_end = term.invalid_end.max(end_row);
@@ -119,7 +119,7 @@ pub fn invalidate_terminal(mut term: Term, rows: Option<(c_int, c_int)>) {
 
 /// Run whatever refresh work has come due. Called from the editor's idle
 /// paths, since the timer only queues.
-pub unsafe fn terminal_check_refresh() {
+pub(crate) unsafe fn terminal_check_refresh() {
     // SAFETY: the refresh queue, whose events are this module's own.
     unsafe { multiqueue_process_events(refresh_queue()) };
 }
@@ -159,7 +159,7 @@ pub(super) fn refresh_before_destroy(term: Term) {
 }
 
 /// Mirror everything `term` has accumulated into its buffer.
-pub fn refresh_terminal(mut term: Term) {
+pub(crate) fn refresh_terminal(mut term: Term) {
     let Some(buf) = term.buf() else {
         return;
     };
@@ -211,7 +211,7 @@ fn refresh_size(mut term: Term) -> bool {
 
 /// `'scrollback'` changed; trim or extend to match, but only once the
 /// scrollback has been sized at all.
-pub unsafe fn on_scrollback_option_changed(term: *mut Terminal) {
+pub(crate) unsafe fn on_scrollback_option_changed(term: *mut Terminal) {
     // SAFETY: the caller hands over a live terminal.
     let term = unsafe { Term::new(term) };
     if term.sb.is_sized() {
@@ -224,7 +224,7 @@ pub unsafe fn on_scrollback_option_changed(term: *mut Terminal) {
 /// Only the rows marked invalid are re-read. Rows past the end of the
 /// buffer are appended instead — that is how a terminal buffer grows to a
 /// full screen after it opens.
-pub fn refresh_screen(mut term: Term, buf: Buf) {
+pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
     let mut changed = 0;
     let mut added = 0;
     let (height, width) = term.size();
@@ -280,7 +280,7 @@ fn windows_showing(buf: Buf) -> impl Iterator<Item = Win> {
 /// A window whose cursor was on the last line before `added` lines arrived
 /// was following the output, and keeps following. One that had scrolled up
 /// stays where it was, clamped to the buffer.
-pub fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
+pub(crate) fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
     let ml_end = buf.line_count();
     for mut wp in windows_showing(buf) {
         if wp.is_current() && is_focused(term) {
@@ -320,7 +320,7 @@ pub fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
 /// cursor is invisible, and republish the cursor shape when it changes.
 ///
 /// Only for the terminal the user is typing at — the shape is global.
-pub fn refresh_cursor(mut term: Term, cursor_visible: &mut bool) {
+pub(crate) fn refresh_cursor(mut term: Term, cursor_visible: &mut bool) {
     if !is_focused(term) {
         return;
     }

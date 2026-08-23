@@ -175,7 +175,7 @@ impl<'a, T: Copy> InitVec<'a, T> {
 /// `kv_push`'s growth step is the whole reason this exists — c2rust expanded
 /// it at every use site, a dozen lines apiece, and the shape is identical
 /// each time: double the capacity, or start at eight.
-pub struct Kvec<'a, T> {
+pub(crate) struct Kvec<'a, T> {
     size: &'a mut usize,
     capacity: &'a mut usize,
     items: &'a mut *mut T,
@@ -184,7 +184,7 @@ pub struct Kvec<'a, T> {
 impl<'a, T> Kvec<'a, T> {
     /// Borrow the three fields of one `kvec_t`. They are distinct fields of
     /// the same struct, so the borrows do not conflict.
-    pub fn new(size: &'a mut usize, capacity: &'a mut usize, items: &'a mut *mut T) -> Self {
+    pub(crate) fn new(size: &'a mut usize, capacity: &'a mut usize, items: &'a mut *mut T) -> Self {
         Kvec {
             size,
             capacity,
@@ -196,7 +196,7 @@ impl<'a, T> Kvec<'a, T> {
     ///
     /// # Safety
     /// `items` must be null or a live allocation of `capacity` elements.
-    pub unsafe fn push(&mut self, value: T) {
+    pub(crate) unsafe fn push(&mut self, value: T) {
         unsafe {
             if *self.size == *self.capacity {
                 *self.capacity = if *self.capacity != 0 {
@@ -215,7 +215,7 @@ impl<'a, T> Kvec<'a, T> {
 
 /// Copy `size` bytes from `src` to `dest`, then free `src`. klib's kvec
 /// spells this inline in every `kv_concat`-shaped macro.
-pub unsafe fn _memcpy_free(
+pub(crate) unsafe fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,
     src: *mut ::core::ffi::c_void,
     size: size_t,

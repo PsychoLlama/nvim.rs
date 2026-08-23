@@ -62,63 +62,63 @@ mod jump;
 mod scroll;
 mod visual;
 
-pub use self::click::*;
-pub use self::domouse::*;
-pub use self::find::*;
-pub use self::geom::*;
-pub use self::jump::*;
-pub use self::scroll::*;
-pub use self::visual::*;
+pub(crate) use self::click::*;
+pub(crate) use self::domouse::*;
+pub(crate) use self::find::*;
+pub(crate) use self::geom::*;
+pub(crate) use self::jump::*;
+pub(crate) use self::scroll::*;
+pub(crate) use self::visual::*;
 
 // ---------------------------------------------------------------------------
 // The flag alphabet
 
-pub const kMTCharWise: MotionType = 0;
-pub const kMTLineWise: MotionType = 1;
+pub(crate) const kMTCharWise: MotionType = 0;
+pub(crate) const kMTLineWise: MotionType = 1;
 
 /// Where a click landed, as [`jump_to_mouse`] and `get_fpos_of_mouse()` report
 /// it: one `IN_*` value, plus the `MOUSE_*`/`CURSOR_MOVED` bits above them.
-pub const IN_UNKNOWN: c_int = 0;
-pub const IN_BUFFER: c_int = 1;
-pub const IN_STATUS_LINE: c_int = 2;
-pub const IN_SEP_LINE: c_int = 4;
-pub const IN_OTHER_WIN: c_int = 8;
-pub const CURSOR_MOVED: c_int = 256;
-pub const MOUSE_FOLD_CLOSE: c_int = 512;
-pub const MOUSE_FOLD_OPEN: c_int = 1024;
-pub const MOUSE_WINBAR: c_int = 2048;
-pub const MOUSE_STATUSCOL: c_int = 4096;
+pub(crate) const IN_UNKNOWN: c_int = 0;
+pub(crate) const IN_BUFFER: c_int = 1;
+pub(crate) const IN_STATUS_LINE: c_int = 2;
+pub(crate) const IN_SEP_LINE: c_int = 4;
+pub(crate) const IN_OTHER_WIN: c_int = 8;
+pub(crate) const CURSOR_MOVED: c_int = 256;
+pub(crate) const MOUSE_FOLD_CLOSE: c_int = 512;
+pub(crate) const MOUSE_FOLD_OPEN: c_int = 1024;
+pub(crate) const MOUSE_WINBAR: c_int = 2048;
+pub(crate) const MOUSE_STATUSCOL: c_int = 4096;
 
 /// What [`jump_to_mouse`] is allowed to do about the event.
-pub const MOUSE_FOCUS: c_int = 1;
-pub const MOUSE_MAY_VIS: c_int = 2;
-pub const MOUSE_DID_MOVE: c_int = 4;
-pub const MOUSE_SETPOS: c_int = 8;
-pub const MOUSE_MAY_STOP_VIS: c_int = 16;
-pub const MOUSE_RELEASED: c_int = 32;
+pub(crate) const MOUSE_FOCUS: c_int = 1;
+pub(crate) const MOUSE_MAY_VIS: c_int = 2;
+pub(crate) const MOUSE_DID_MOVE: c_int = 4;
+pub(crate) const MOUSE_SETPOS: c_int = 8;
+pub(crate) const MOUSE_MAY_STOP_VIS: c_int = 16;
+pub(crate) const MOUSE_RELEASED: c_int = 32;
 
 /// Which button the event carries.  `MOUSE_X1`/`MOUSE_X2` sit above the mask
 /// the modifiers use, which is why they are not 3 and 4.
-pub const MOUSE_LEFT: c_int = 0;
-pub const MOUSE_MIDDLE: c_int = 1;
-pub const MOUSE_RIGHT: c_int = 2;
-pub const MOUSE_X1: c_int = 768;
-pub const MOUSE_X2: c_int = 1024;
+pub(crate) const MOUSE_LEFT: c_int = 0;
+pub(crate) const MOUSE_MIDDLE: c_int = 1;
+pub(crate) const MOUSE_RIGHT: c_int = 2;
+pub(crate) const MOUSE_X1: c_int = 768;
+pub(crate) const MOUSE_X2: c_int = 1024;
 
 /// A wheel event's direction, as `cmdarg_T::arg` carries it.
-pub const MSCR_DOWN: c_int = 0;
-pub const MSCR_UP: c_int = 1;
-pub const MSCR_LEFT: c_int = -1;
-pub const MSCR_RIGHT: c_int = -2;
+pub(crate) const MSCR_DOWN: c_int = 0;
+pub(crate) const MSCR_UP: c_int = 1;
+pub(crate) const MSCR_LEFT: c_int = -1;
+pub(crate) const MSCR_RIGHT: c_int = -2;
 
-pub const MOD_MASK_SHIFT: c_int = 0x2;
-pub const MOD_MASK_CTRL: c_int = 0x4;
-pub const MOD_MASK_ALT: c_int = 0x8;
-pub const MOD_MASK_META: c_int = 0x10;
-pub const MOD_MASK_2CLICK: c_int = 0x20;
-pub const MOD_MASK_3CLICK: c_int = 0x40;
-pub const MOD_MASK_4CLICK: c_int = 0x60;
-pub const MOD_MASK_MULTI_CLICK: c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
+pub(crate) const MOD_MASK_SHIFT: c_int = 0x2;
+pub(crate) const MOD_MASK_CTRL: c_int = 0x4;
+pub(crate) const MOD_MASK_ALT: c_int = 0x8;
+pub(crate) const MOD_MASK_META: c_int = 0x10;
+pub(crate) const MOD_MASK_2CLICK: c_int = 0x20;
+pub(crate) const MOD_MASK_3CLICK: c_int = 0x40;
+pub(crate) const MOD_MASK_4CLICK: c_int = 0x60;
+pub(crate) const MOD_MASK_MULTI_CLICK: c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
 
 const FR_LEAF: c_int = 0;
 const FR_ROW: c_int = 1;
@@ -131,7 +131,7 @@ const DEFAULT_GRID_HANDLE: c_int = 1;
 /// Which of the window's decorations [`jump_to_mouse`] says the click landed
 /// on.
 #[derive(Clone, Copy)]
-pub struct Landed {
+pub(crate) struct Landed {
     pub winbar: bool,
     pub statuscol: bool,
     pub status_line: bool,
@@ -140,7 +140,7 @@ pub struct Landed {
 }
 
 impl Landed {
-    pub fn of(jump_flags: c_int) -> Self {
+    pub(crate) fn of(jump_flags: c_int) -> Self {
         let status_line = jump_flags & IN_STATUS_LINE != 0;
         Self {
             winbar: jump_flags & MOUSE_WINBAR != 0,
@@ -168,7 +168,7 @@ static got_click: GlobalCell<bool> = GlobalCell::new(false);
 static dragwin: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
 
 /// Reset the window being dragged.  To be called when switching tab page.
-pub fn reset_dragwin() {
+pub(crate) fn reset_dragwin() {
     dragwin.set(ptr::null_mut());
 }
 
@@ -275,7 +275,7 @@ impl Win {
 /// A `%@Func@` click-definition array: one entry per screen column of the line
 /// it describes.
 #[derive(Clone, Copy)]
-pub struct ClickDefs(*mut StlClickDefinition);
+pub(crate) struct ClickDefs(*mut StlClickDefinition);
 
 impl ClickDefs {
     /// # Safety
@@ -580,7 +580,7 @@ fn mouse_check_grid() -> (Option<colnr_T>, c_int) {
 ///
 /// # Safety
 /// `cap` must be a live command argument.
-pub unsafe fn nv_mousescroll(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_mousescroll(cap: *mut cmdarg_T) {
     let old_curwin = curwin.get();
 
     if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
@@ -608,7 +608,7 @@ pub unsafe fn nv_mousescroll(cap: *mut cmdarg_T) {
 ///
 /// # Safety
 /// `cap` must be a live command argument.
-pub unsafe fn nv_mouse(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_mouse(cap: *mut cmdarg_T) {
     // SAFETY: the caller's promise.
     let (oap, cmdchar, count1) = unsafe { ((*cap).oap, (*cap).cmdchar, (*cap).count1) };
     // SAFETY: `oap` is the live operator the command carries, or null.
@@ -618,7 +618,7 @@ pub unsafe fn nv_mouse(cap: *mut cmdarg_T) {
 /// Set UI mouse depending on current mode and `'mouse'`.
 ///
 /// Emits mouse_on/mouse_off UI events (unless `'mouse'` is empty).
-pub fn setmouse() {
+pub(crate) fn setmouse() {
     // SAFETY: both read the editor's mode and the UI list.
     unsafe { ui_cursor_shape() };
     // SAFETY: as above.
@@ -630,7 +630,11 @@ pub fn setmouse() {
 ///
 /// # Safety
 /// `rettv` must be a live, unset return value.
-pub unsafe fn f_getmousepos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_getmousepos(
+    _argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the caller's promise.
     let d = unsafe {
         tv_dict_alloc_ret(rettv);

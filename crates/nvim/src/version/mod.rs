@@ -38,15 +38,16 @@ use crate::types::{
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 
-pub const NVIM_VERSION_MAJOR: c_int = 0;
-pub const NVIM_VERSION_MINOR: c_int = 12;
-pub const NVIM_VERSION_PATCH: c_int = 4;
+pub(crate) const NVIM_VERSION_MAJOR: c_int = 0;
+pub(crate) const NVIM_VERSION_MINOR: c_int = 12;
+pub(crate) const NVIM_VERSION_PATCH: c_int = 4;
 
 /// The banner, NUL-terminated for the C-ABI callers that print it
 /// (`:version`, `nvim -v`, the intro screen, shada's generator field). The
 /// version is `build.rs`'s: the CalVer release tag when HEAD is one, else
 /// `dev-<short sha>[-dirty]`, else whatever `$NVIM_RS_VERSION` declared.
-pub const LONG_VERSION: &CStr = terminated(concat!("nvim.rs ", env!("NVIM_RS_VERSION"), "\0"));
+pub(crate) const LONG_VERSION: &CStr =
+    terminated(concat!("nvim.rs ", env!("NVIM_RS_VERSION"), "\0"));
 
 /// How `:version` describes this build's toolchain: the cargo profile
 /// `build.rs` was invoked under, and the `rustc` cargo handed it.
@@ -76,7 +77,7 @@ const fn terminated(text: &'static str) -> &'static CStr {
 ///
 /// # Safety
 /// `version_str` is a NUL-terminated string.
-pub unsafe fn has_nvim_version(version_str: *const c_char) -> bool {
+pub(crate) unsafe fn has_nvim_version(version_str: *const c_char) -> bool {
     // SAFETY: the caller's obligation.
     let asked = unsafe { CStr::from_ptr(version_str) };
     at_most_this_nvim(asked.to_bytes())
@@ -126,20 +127,20 @@ fn leading_number(text: &[u8]) -> Option<c_int> {
 
 /// The oldest Vim this port claims, as `v:version` spells a version:
 /// `MAJOR * 100 + MINOR`.
-pub fn min_vim_version() -> c_int {
+pub(crate) fn min_vim_version() -> c_int {
     VIM_BASELINES[0].number
 }
 
 /// The same version as `:version` writes it: `8.1`. The swap file's header
 /// records it, which is what makes an nvim swap file readable by the Vim it
 /// claims compatibility with.
-pub fn min_vim_version_name() -> &'static CStr {
+pub(crate) fn min_vim_version_name() -> &'static CStr {
     VIM_BASELINES[0].name
 }
 
 /// The newest Vim patch merged into that oldest line -- the four digits
 /// `v:versionlong` carries below the version itself.
-pub fn highest_patch() -> c_int {
+pub(crate) fn highest_patch() -> c_int {
     VIM_BASELINES[0].patches[0]
 }
 
@@ -149,7 +150,7 @@ pub fn highest_patch() -> c_int {
 /// `major_minor_version` of 0 asks about the baseline line (the bare
 /// `patchNNNN` spelling). A line older than the baseline is covered
 /// wholesale; one this port never tracked is a flat no.
-pub fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
+pub(crate) fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
     let baseline = if major_minor_version > 0 {
         if major_minor_version < min_vim_version() {
             return true;
@@ -176,7 +177,7 @@ pub fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
 ///
 /// # Safety
 /// `eap` is a live `exarg_T`.
-pub unsafe fn ex_version(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_version(eap: *mut exarg_T) {
     // SAFETY: the caller's obligation; `arg` is NUL-terminated.
     unsafe {
         if *(*eap).arg != 0 {
@@ -235,7 +236,7 @@ unsafe fn version_msg(s: &CStr) {
 ///
 /// # Safety
 /// The message machinery must be usable.
-pub unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
+pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
     // SAFETY: every item is NUL-terminated by construction.
     unsafe {
         let count = items.len() as c_int;
@@ -304,7 +305,7 @@ pub unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
 ///
 /// # Safety
 /// The Lua state and the message machinery must be usable.
-pub unsafe fn list_lua_version() {
+pub(crate) unsafe fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
     // SAFETY: the caller's obligation. `CODE` is borrowed, not owned, by the
@@ -339,7 +340,7 @@ pub unsafe fn list_lua_version() {
 ///
 /// # Safety
 /// The message machinery must be usable.
-pub unsafe fn list_version() {
+pub(crate) unsafe fn list_version() {
     // SAFETY: the caller's obligation.
     unsafe {
         msg_ext_set_kind(c"list_cmd".as_ptr());
@@ -399,7 +400,7 @@ pub unsafe fn list_version() {
 ///
 /// # Safety
 /// The editor's globals must be live.
-pub unsafe fn may_show_intro() -> bool {
+pub(crate) unsafe fn may_show_intro() -> bool {
     // SAFETY: the caller's obligation.
     unsafe {
         buf_is_empty(curbuf.get())
@@ -475,7 +476,7 @@ fn news_line() -> CString {
 ///
 /// # Safety
 /// The grid must be ready to draw on.
-pub unsafe fn intro_message(colon: bool) {
+pub(crate) unsafe fn intro_message(colon: bool) {
     // SAFETY: the caller's obligation.
     unsafe {
         // Centre the block vertically, ignoring the line the empty entry
@@ -614,7 +615,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 ///
 /// # Safety
 /// The editor's globals must be live.
-pub unsafe fn ex_intro(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_intro(_eap: *mut exarg_T) {
     // SAFETY: the caller's obligation.
     unsafe {
         screenclear();

@@ -58,7 +58,7 @@ fn translated(msg: &CStr) -> *const c_char {
 ///
 /// # Safety
 /// `eap` is the current Ex command with a writable NUL-terminated argument.
-pub unsafe fn ex_helptags(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
     let mut add_help_tags = false;
     // SAFETY: caller contract.
     unsafe {

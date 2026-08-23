@@ -44,16 +44,16 @@ mod complete;
 mod expand;
 mod list;
 
-pub use attr::{parse_addr_type_arg, parse_compl_arg};
-pub use complete::{
+pub(crate) use attr::{parse_addr_type_arg, parse_compl_arg};
+pub(crate) use complete::{
     cmdcomplete_str_to_type, cmdcomplete_type_to_str, expand_user_command_name,
     get_user_cmd_addr_type, get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs,
     get_user_command_name, get_user_commands, set_context_in_user_cmd, set_context_in_user_cmdarg,
 };
-pub use expand::{
+pub(crate) use expand::{
     add_win_cmd_modifiers, do_ucmd, uc_mods, uc_nargs_upper_bound, uc_split_args_iter,
 };
-pub use list::commands_array;
+pub(crate) use list::commands_array;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite, skipwhite};
@@ -79,11 +79,11 @@ use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
-pub const UC_BUFFER: c_int = 1;
-pub const LUA_NOREF: c_int = -2;
+pub(crate) const UC_BUFFER: c_int = 1;
+pub(crate) const LUA_NOREF: c_int = -2;
 
 /// The global user commands. A buffer's own live in its `b_ucmds`.
-pub static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
+pub(crate) static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: size_of::<ucmd_T>() as c_int,
@@ -163,7 +163,7 @@ pub(crate) unsafe fn ucmd_name(cmd: &ucmd_T) -> &[u8] {
 /// # Safety
 /// Module contract; `eap` must be the command being looked up, and `full`,
 /// `xp` and `complp` null or writable.
-pub unsafe fn find_ucmd(
+pub(crate) unsafe fn find_ucmd(
     eap: *mut exarg_T,
     p: *mut c_char,
     full: *mut c_int,
@@ -289,7 +289,7 @@ fn match_prefix(typed: &[u8], name: &[u8]) -> (usize, bool) {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-pub unsafe fn uc_validate_name(name: *mut c_char) -> *mut c_char {
+pub(crate) unsafe fn uc_validate_name(name: *mut c_char) -> *mut c_char {
     let mut name = name;
     // SAFETY: caller contract; the walk stops at the NUL.
     unsafe {
@@ -314,7 +314,7 @@ pub unsafe fn uc_validate_name(name: *mut c_char) -> *mut c_char {
 /// Module contract; `name` must have `name_len` readable bytes and `rep`
 /// must be NUL-terminated.
 #[expect(clippy::too_many_arguments, reason = "one per ucmd_T field")]
-pub unsafe fn uc_add_command(
+pub(crate) unsafe fn uc_add_command(
     name: *mut c_char,
     name_len: size_t,
     rep: *const c_char,
@@ -479,7 +479,7 @@ unsafe fn free_new_command(
 ///
 /// # Safety
 /// Module contract; `eap` must be the command being executed.
-pub unsafe fn ex_command(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
     let mut argt = ExArgt::NONE;
     let mut def: c_int = -1;
     let mut flags: c_int = 0;
@@ -582,7 +582,7 @@ pub unsafe fn ex_command(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_comclear(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_comclear(_eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         uc_clear(ucmds.ptr());
@@ -596,7 +596,7 @@ pub unsafe fn ex_comclear(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract; `cmd` must be a live entry that is being discarded.
-pub unsafe fn free_ucmd(cmd: *mut ucmd_T) {
+pub(crate) unsafe fn free_ucmd(cmd: *mut ucmd_T) {
     // SAFETY: caller contract; the entry owns all six.
     unsafe {
         let cmd = &mut *cmd;
@@ -613,7 +613,7 @@ pub unsafe fn free_ucmd(cmd: *mut ucmd_T) {
 ///
 /// # Safety
 /// Module contract; `gap` must be one of the two tables.
-pub unsafe fn uc_clear(gap: *mut garray_T) {
+pub(crate) unsafe fn uc_clear(gap: *mut garray_T) {
     // SAFETY: caller contract.
     unsafe {
         for i in 0..ucmd_list(gap).len() {
@@ -627,7 +627,7 @@ pub unsafe fn uc_clear(gap: *mut garray_T) {
 ///
 /// # Safety
 /// Module contract; `eap` must be the command being executed.
-pub unsafe fn ex_delcommand(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
     // SAFETY: caller contract; `eap.arg` is NUL-terminated.
     let (mut arg, buffer_only) = unsafe {
         let arg = (*eap).arg.cast_const();

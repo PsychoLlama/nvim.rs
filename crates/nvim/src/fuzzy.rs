@@ -56,9 +56,9 @@ use crate::types::{
 
 /// The most characters of a pattern or a candidate that are looked at, and
 /// so the most match positions that can be reported.
-pub const FUZZY_MATCH_MAX_LEN: usize = 1024;
+pub(crate) const FUZZY_MATCH_MAX_LEN: usize = 1024;
 /// The score of a candidate the pattern does not match at all.
-pub const FUZZY_SCORE_NONE: c_int = c_int::MIN;
+pub(crate) const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.
 const TV_UNKNOWN: typval_T = typval_T {
@@ -406,7 +406,7 @@ fn fuzzy_match_words(
 /// # Safety
 /// `str` and `pat_arg` must be NUL-terminated strings, and `matches` must
 /// point at `max_matches` writable entries.
-pub unsafe fn fuzzy_match(
+pub(crate) unsafe fn fuzzy_match(
     str: *const c_char,
     pat_arg: *const c_char,
     matchseq: bool,
@@ -431,7 +431,7 @@ pub unsafe fn fuzzy_match(
 ///
 /// # Safety
 /// Both arguments must be NUL-terminated strings or NULL.
-pub unsafe fn fuzzy_match_str(str: *const c_char, pat: *const c_char) -> c_int {
+pub(crate) unsafe fn fuzzy_match_str(str: *const c_char, pat: *const c_char) -> c_int {
     if str.is_null() || pat.is_null() {
         return 0;
     }
@@ -445,7 +445,10 @@ pub unsafe fn fuzzy_match_str(str: *const c_char, pat: *const c_char) -> c_int {
 ///
 /// # Safety
 /// Both arguments must be NUL-terminated strings or NULL.
-pub unsafe fn fuzzy_match_str_with_pos(str: *const c_char, pat: *const c_char) -> *mut garray_T {
+pub(crate) unsafe fn fuzzy_match_str_with_pos(
+    str: *const c_char,
+    pat: *const c_char,
+) -> *mut garray_T {
     if str.is_null() || pat.is_null() {
         return core::ptr::null_mut();
     }
@@ -484,7 +487,7 @@ pub unsafe fn fuzzy_match_str_with_pos(str: *const c_char, pat: *const c_char) -
 /// # Safety
 /// `*ptr` and `pat` must be NUL-terminated strings or NULL, and the line must
 /// be writable — a word is terminated in place while it is scored.
-pub unsafe fn fuzzy_match_str_in_line(
+pub(crate) unsafe fn fuzzy_match_str_in_line(
     ptr: *mut *mut c_char,
     pat: *const c_char,
     len: *mut c_int,
@@ -531,7 +534,7 @@ pub unsafe fn fuzzy_match_str_in_line(
 /// Where a fuzzy match was found in a buffer line: its start inside the
 /// line's own buffer, its length in bytes, and its score — missing for a
 /// whole-line match, where upstream leaves the caller's score alone.
-pub struct LineMatch {
+pub(crate) struct LineMatch {
     pub ptr: *mut c_char,
     pub len: c_int,
     pub score: Option<c_int>,
@@ -545,7 +548,7 @@ pub struct LineMatch {
 /// # Safety
 /// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
 /// point at valid positions in `buf`.
-pub unsafe fn search_for_fuzzy_match(
+pub(crate) unsafe fn search_for_fuzzy_match(
     buf: *mut buf_T,
     pos: *mut pos_T,
     pattern: *const c_char,
@@ -640,7 +643,7 @@ pub unsafe fn search_for_fuzzy_match(
 /// # Safety
 /// `fuzmatch` must be an allocated array of `count` entries naming allocated
 /// strings, and `matches` must be writable.
-pub unsafe fn fuzzymatches_to_strmatches(
+pub(crate) unsafe fn fuzzymatches_to_strmatches(
     fuzmatch: *mut fuzmatch_str_T,
     matches: *mut *mut *mut c_char,
     count: c_int,
@@ -959,7 +962,11 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
 ///
 /// # Safety
 /// Called with a Vimscript function's arguments and result slot.
-pub unsafe fn f_matchfuzzy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_matchfuzzy(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     unsafe { do_fuzzymatch(argvars, rettv, false) }
 }
 
@@ -968,6 +975,10 @@ pub unsafe fn f_matchfuzzy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 ///
 /// # Safety
 /// Called with a Vimscript function's arguments and result slot.
-pub unsafe fn f_matchfuzzypos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_matchfuzzypos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     unsafe { do_fuzzymatch(argvars, rettv, true) }
 }

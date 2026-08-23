@@ -21,37 +21,37 @@
 
 /// `xpparam_t.flags`: ask for the minimal edit script rather than a
 /// heuristic one.
-pub const XDF_NEED_MINIMAL: u64 = 1 << 0;
+pub(crate) const XDF_NEED_MINIMAL: u64 = 1 << 0;
 /// Compare lines with every whitespace run elided (`-w`).
-pub const XDF_IGNORE_WHITESPACE: u64 = 1 << 1;
+pub(crate) const XDF_IGNORE_WHITESPACE: u64 = 1 << 1;
 /// Compare lines with interior whitespace runs collapsed (`-b`).
-pub const XDF_IGNORE_WHITESPACE_CHANGE: u64 = 1 << 2;
+pub(crate) const XDF_IGNORE_WHITESPACE_CHANGE: u64 = 1 << 2;
 /// Compare lines ignoring trailing whitespace.
-pub const XDF_IGNORE_WHITESPACE_AT_EOL: u64 = 1 << 3;
+pub(crate) const XDF_IGNORE_WHITESPACE_AT_EOL: u64 = 1 << 3;
 /// Compare lines ignoring a CR immediately before the line's newline. The
 /// only spelling of this flag in the tree is `vim.diff{ignore_cr_at_eol=}`;
 /// `'diffopt'` has no name for it.
-pub const XDF_IGNORE_CR_AT_EOL: u64 = 1 << 4;
+pub(crate) const XDF_IGNORE_CR_AT_EOL: u64 = 1 << 4;
 /// The four flags above. Their presence is what switches
 /// [`super::xutils::recmatch`] and [`super::xutils::hash_record`] out of
 /// their fast byte-exact paths.
-pub const XDF_WHITESPACE_FLAGS: u64 = XDF_IGNORE_WHITESPACE
+pub(crate) const XDF_WHITESPACE_FLAGS: u64 = XDF_IGNORE_WHITESPACE
     | XDF_IGNORE_WHITESPACE_CHANGE
     | XDF_IGNORE_WHITESPACE_AT_EOL
     | XDF_IGNORE_CR_AT_EOL;
 /// Do not report a hunk whose every line is blank.
-pub const XDF_IGNORE_BLANK_LINES: u64 = 1 << 7;
+pub(crate) const XDF_IGNORE_BLANK_LINES: u64 = 1 << 7;
 /// Use the patience algorithm ([`super::xpatience`]).
-pub const XDF_PATIENCE_DIFF: u64 = 1 << 14;
+pub(crate) const XDF_PATIENCE_DIFF: u64 = 1 << 14;
 /// Use the histogram algorithm ([`super::xhistogram`]).
-pub const XDF_HISTOGRAM_DIFF: u64 = 1 << 15;
+pub(crate) const XDF_HISTOGRAM_DIFF: u64 = 1 << 15;
 /// The bits [`Params::algorithm`] reads. Both clear means Myers.
-pub const XDF_DIFF_ALGORITHM_MASK: u64 = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
+pub(crate) const XDF_DIFF_ALGORITHM_MASK: u64 = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
 /// Slide a shiftable hunk to the position the indent heuristic scores best.
-pub const XDF_INDENT_HEURISTIC: u64 = 1 << 23;
+pub(crate) const XDF_INDENT_HEURISTIC: u64 = 1 << 23;
 
 /// `xdemitconf_t.flags`: emit the hunk bodies with no `@@` header.
-pub const XDL_EMIT_NO_HUNK_HDR: u64 = 1 << 1;
+pub(crate) const XDL_EMIT_NO_HUNK_HDR: u64 = 1 << 1;
 
 /// Which of the three engines [`super::xdiffi::do_diff`] dispatches to.
 ///
@@ -59,7 +59,7 @@ pub const XDL_EMIT_NO_HUNK_HDR: u64 = 1 << 1;
 /// *value*, not as a pair of independent switches: patience wins when both
 /// are set, because its bit is tested first.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Algorithm {
+pub(crate) enum Algorithm {
     /// The default: Myers' O(ND) walk, in [`super::xdiffi`].
     Myers,
     /// [`super::xpatience`].
@@ -69,7 +69,7 @@ pub enum Algorithm {
 }
 
 /// `xpparam_t`, with the anchors already read off the C `char **`.
-pub struct Params<'a> {
+pub(crate) struct Params<'a> {
     /// The `XDF_*` bits above.
     pub flags: u64,
     /// Line prefixes that patience must keep as anchors. Always empty in
@@ -81,7 +81,7 @@ pub struct Params<'a> {
 
 impl Params<'_> {
     /// `XDF_DIFF_ALG(flags)`.
-    pub fn algorithm(&self) -> Algorithm {
+    pub(crate) fn algorithm(&self) -> Algorithm {
         match self.flags & XDF_DIFF_ALGORITHM_MASK {
             XDF_PATIENCE_DIFF => Algorithm::Patience,
             XDF_HISTOGRAM_DIFF => Algorithm::Histogram,
@@ -95,7 +95,7 @@ impl Params<'_> {
 
     /// The parameters a fall-back to the classic algorithm runs under: the
     /// caller's flags with the engine bits cleared, and no anchors.
-    pub fn without_algorithm(&self) -> Params<'static> {
+    pub(crate) fn without_algorithm(&self) -> Params<'static> {
         Params {
             flags: self.flags & !XDF_DIFF_ALGORITHM_MASK,
             anchors: Vec::new(),
@@ -105,7 +105,7 @@ impl Params<'_> {
 
 /// `xdemitconf_t`, less the two `#if 0`-ed function-name hooks.
 #[derive(Clone, Copy)]
-pub struct EmitConf {
+pub(crate) struct EmitConf {
     /// Unchanged lines to show either side of a hunk.
     pub ctxlen: i64,
     /// Unchanged lines two hunks may share before they are emitted as one.
@@ -117,15 +117,15 @@ pub struct EmitConf {
 /// A callback answered with a negative number, which is the only way any of
 /// this fails: every allocation goes through `xmalloc`, which aborts.
 #[derive(Clone, Copy, Debug)]
-pub struct Aborted;
+pub(crate) struct Aborted;
 
 /// The result every emit path carries.
-pub type XdResult<T = ()> = Result<T, Aborted>;
+pub(crate) type XdResult<T = ()> = Result<T, Aborted>;
 
 /// One line of a prepared file: where it starts in [`XdFile::text`], how long
 /// it is (its newline included, when it has one) and its hash.
 #[derive(Clone, Copy, Debug)]
-pub struct Rec {
+pub(crate) struct Rec {
     /// Byte offset into the owning file's text.
     pub start: usize,
     /// Byte length, the trailing newline included.
@@ -145,44 +145,44 @@ pub struct Rec {
 /// group walk in [`super::xdiffi::change_compact`] leans on them: they are
 /// what makes `while (rchg[end]) end++` terminate without a bounds test.
 #[derive(Default)]
-pub struct Changed(Vec<u8>);
+pub(crate) struct Changed(Vec<u8>);
 
 impl Changed {
     /// `nrec` lines, all unchanged, with the two sentinels.
-    pub fn new(nrec: usize) -> Self {
+    pub(crate) fn new(nrec: usize) -> Self {
         Self(vec![0; nrec + 2])
     }
 
     /// Is line `i` changed? Out-of-range answers `false`, which is what the
     /// sentinels give upstream — and `build_script`'s `i1 >= 0 || i2 >= 0`
     /// loop condition can in principle step one index further still.
-    pub fn get(&self, i: i64) -> bool {
+    pub(crate) fn get(&self, i: i64) -> bool {
         // The `as usize` of a negative i + 1 wraps to a huge index, which
         // `get` answers None for; that is the "further still" case.
         self.0.get((i + 1) as usize).is_some_and(|&c| c != 0)
     }
 
     /// Mark line `i`. Panics outside `-1 ..= nrec`, which no caller reaches.
-    pub fn set(&mut self, i: i64, changed: bool) {
+    pub(crate) fn set(&mut self, i: i64, changed: bool) {
         self.0[(i + 1) as usize] = u8::from(changed);
     }
 
     /// The `count` flags starting at line `from`, for
     /// [`super::xutils::fall_back_diff`]'s copy-back.
-    pub fn slice(&self, from: i64, count: i64) -> &[u8] {
+    pub(crate) fn slice(&self, from: i64, count: i64) -> &[u8] {
         let base = (from + 1) as usize;
         &self.0[base..base + count as usize]
     }
 
     /// Overwrite the `flags.len()` flags starting at line `from`.
-    pub fn write(&mut self, from: i64, flags: &[u8]) {
+    pub(crate) fn write(&mut self, from: i64, flags: &[u8]) {
         let base = (from + 1) as usize;
         self.0[base..base + flags.len()].copy_from_slice(flags);
     }
 }
 
 /// `xdfile_t`: one side of a diff, prepared.
-pub struct XdFile<'a> {
+pub(crate) struct XdFile<'a> {
     /// The whole input file. Every [`Rec`] indexes into this.
     pub text: &'a [u8],
     /// The file's lines, in order; `recs.len()` is upstream's `nrec`.
@@ -206,18 +206,18 @@ pub struct XdFile<'a> {
 
 impl<'a> XdFile<'a> {
     /// Upstream's `nrec`.
-    pub fn nrec(&self) -> i64 {
+    pub(crate) fn nrec(&self) -> i64 {
         self.recs.len() as i64
     }
 
     /// Line `i`'s bytes.
-    pub fn line(&self, i: i64) -> &'a [u8] {
+    pub(crate) fn line(&self, i: i64) -> &'a [u8] {
         let rec = self.recs[i as usize];
         &self.text[rec.start..rec.start + rec.size]
     }
 
     /// Line `i`'s hash or class id.
-    pub fn ha_at(&self, i: i64) -> u64 {
+    pub(crate) fn ha_at(&self, i: i64) -> u64 {
         self.recs[i as usize].ha
     }
 
@@ -225,7 +225,7 @@ impl<'a> XdFile<'a> {
     /// no gaps and no overlap, so a run of them is contiguous — which is the
     /// whole reason [`super::xutils::fall_back_diff`] can build a sub-file
     /// without copying.
-    pub fn span(&self, first: i64, last: i64) -> &'a [u8] {
+    pub(crate) fn span(&self, first: i64, last: i64) -> &'a [u8] {
         let a = self.recs[first as usize];
         let b = self.recs[last as usize];
         &self.text[a.start..b.start + b.size]
@@ -233,7 +233,7 @@ impl<'a> XdFile<'a> {
 
     /// The three arrays [`super::xdiffi::recs_cmp`] works over, borrowed
     /// apart so the walk can write `rchg` while reading the other two.
-    pub fn diff_data(&mut self) -> DiffData<'_> {
+    pub(crate) fn diff_data(&mut self) -> DiffData<'_> {
         DiffData {
             nrec: self.nreff,
             ha: &self.ha,
@@ -244,7 +244,7 @@ impl<'a> XdFile<'a> {
 }
 
 /// `diffdata_t`: the reduced view of an [`XdFile`] the Myers walk sees.
-pub struct DiffData<'a> {
+pub(crate) struct DiffData<'a> {
     /// How many entries of [`Self::ha`] and [`Self::rindex`] are live.
     pub nrec: i64,
     /// The surviving lines' hashes, densely packed.
@@ -257,13 +257,13 @@ pub struct DiffData<'a> {
 
 impl DiffData<'_> {
     /// Mark the reduced-index line `i` changed in the full file.
-    pub fn mark(&mut self, i: i64) {
+    pub(crate) fn mark(&mut self, i: i64) {
         self.rchg.set(self.rindex[i as usize], true);
     }
 }
 
 /// `xdfenv_t`: both prepared sides.
-pub struct Env<'a> {
+pub(crate) struct Env<'a> {
     /// The "before" file.
     pub xdf1: XdFile<'a>,
     /// The "after" file.
@@ -276,7 +276,7 @@ pub struct Env<'a> {
 /// the files backwards; the list therefore comes out in increasing `i1`
 /// order, which is the order this `Vec` is in.
 #[derive(Clone, Copy, Debug)]
-pub struct Change {
+pub(crate) struct Change {
     /// First changed line in file 1.
     pub i1: i64,
     /// First changed line in file 2.
@@ -294,7 +294,7 @@ pub struct Change {
 /// `line1`/`line2`, as [`super::xpatience`] and [`super::xhistogram`] carry
 /// it down their recursions.
 #[derive(Clone, Copy)]
-pub struct Block {
+pub(crate) struct Block {
     /// First line of file 1 in the block.
     pub line1: i64,
     /// How many lines of file 1 it covers.
@@ -307,12 +307,12 @@ pub struct Block {
 
 impl Block {
     /// `LINE_END(1)`: the last line of file 1 in the block.
-    pub fn end1(&self) -> i64 {
+    pub(crate) fn end1(&self) -> i64 {
         self.line1 + self.count1 - 1
     }
 
     /// `LINE_END(2)`.
-    pub fn end2(&self) -> i64 {
+    pub(crate) fn end2(&self) -> i64 {
         self.line2 + self.count2 - 1
     }
 }

@@ -81,7 +81,7 @@ pub(crate) fn optval_type_name(type_0: OptValType) -> &'static CStr {
 
 /// Release what a value owns. Only a string owns anything, and the shared
 /// empty string every unset string option points at is not ours to free.
-pub fn optval_free(value: OptVal) {
+pub(crate) fn optval_free(value: OptVal) {
     if value.type_0 != kOptValTypeString {
         return;
     }
@@ -95,7 +95,7 @@ pub fn optval_free(value: OptVal) {
 }
 
 /// A value that owns its own copy of whatever the original owned.
-pub fn optval_copy(value: OptVal) -> OptVal {
+pub(crate) fn optval_copy(value: OptVal) -> OptVal {
     match value.type_0 {
         kOptValTypeNil | kOptValTypeBoolean | kOptValTypeNumber => value,
         kOptValTypeString => OptVal {
@@ -111,7 +111,7 @@ pub fn optval_copy(value: OptVal) -> OptVal {
 
 /// Whether two values are the same. Two strings of the same length are
 /// compared byte-wise, so an option holding a NUL still compares correctly.
-pub fn optval_equal(o1: OptVal, o2: OptVal) -> bool {
+pub(crate) fn optval_equal(o1: OptVal, o2: OptVal) -> bool {
     if o1.type_0 != o2.type_0 {
         return false;
     }
@@ -147,7 +147,7 @@ pub(crate) fn option_get_type(opt_idx: OptIndex) -> OptValType {
 ///
 /// `varp` must be the variable the table names for `opt_idx`, in some scope
 /// — what `get_varp`/`get_varp_scope` hand out.
-pub unsafe fn optval_from_varp(opt_idx: OptIndex, varp: *mut c_void) -> OptVal {
+pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, varp: *mut c_void) -> OptVal {
     // 'modified' has no variable of its own worth reading: `b_changed` alone
     // misses a buffer whose undo state says it is unchanged after all.
     // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
@@ -240,7 +240,7 @@ pub(crate) fn optval_to_cstr(value: OptVal) -> *mut c_char {
 
 /// The value as the API reports it. A tri-state boolean that is neither true
 /// nor false comes back as nil.
-pub fn optval_as_object(value: OptVal) -> Object {
+pub(crate) fn optval_as_object(value: OptVal) -> Object {
     let nil = object {
         type_0: kObjectTypeNil,
         data: object_data { boolean: false },
@@ -277,7 +277,7 @@ pub fn optval_as_object(value: OptVal) -> Object {
 
 /// The API value as an option value, or `None` for an `Object` no option can
 /// hold. The result borrows the object's string rather than copying it.
-pub fn object_as_optval(o: Object) -> Option<OptVal> {
+pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
     // SAFETY: each arm reads the payload the object's own tag selected.
     unsafe {
         Some(match o.type_0 {

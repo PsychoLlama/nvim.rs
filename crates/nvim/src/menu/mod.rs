@@ -65,12 +65,12 @@ mod info;
 mod name;
 mod tree;
 
-pub use self::complete::*;
-pub use self::define::*;
-pub use self::exec::*;
-pub use self::info::*;
-pub use self::name::*;
-pub use self::tree::*;
+pub(crate) use self::complete::*;
+pub(crate) use self::define::*;
+pub(crate) use self::exec::*;
+pub(crate) use self::info::*;
+pub(crate) use self::name::*;
+pub(crate) use self::tree::*;
 
 /// How deep a menu path may go, and so how many priority components
 /// `:menu 10.20.30 …` can carry.
@@ -658,7 +658,7 @@ pub(crate) fn is_hidden(name: &CStr) -> bool {
 ///
 /// # Safety
 /// `name` must name a NUL-terminated string.
-pub unsafe fn menu_is_separator(name: *const c_char) -> bool {
+pub(crate) unsafe fn menu_is_separator(name: *const c_char) -> bool {
     // SAFETY: the caller's obligation.
     is_separator(unsafe { CStr::from_ptr(name) })
 }
@@ -703,7 +703,7 @@ pub(crate) fn get_menu_mode() -> c_int {
 }
 
 /// [`get_menu_mode`] as a `MENU_*_MODE` bit, or 0 for no mode at all.
-pub fn get_menu_mode_flag() -> c_int {
+pub(crate) fn get_menu_mode_flag() -> c_int {
     let mode = get_menu_mode();
     if mode == MENU_INDEX_INVALID {
         return 0;
@@ -716,7 +716,7 @@ pub fn get_menu_mode_flag() -> c_int {
 ///
 /// # Safety
 /// Must run from the main loop: the popup takes over key input.
-pub unsafe fn show_popupmenu() {
+pub(crate) unsafe fn show_popupmenu() {
     let menu_mode = get_menu_mode();
     if menu_mode == MENU_INDEX_INVALID {
         return;

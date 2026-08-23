@@ -223,14 +223,14 @@ pub(crate) use self::undo::*;
 
 /// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one
 /// `isalnum()` reads.  Locale-dependent by construction.
-pub const _ISalnum: ::core::ffi::c_ushort = 8;
-pub const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
-pub const INDENT_DEC: ::core::ffi::c_int = 3;
-pub const INDENT_INC: ::core::ffi::c_int = 2;
-pub const INDENT_SET: ::core::ffi::c_int = 1;
+pub(crate) const _ISalnum: ::core::ffi::c_ushort = 8;
+pub(crate) const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
+pub(crate) const INDENT_DEC: ::core::ffi::c_int = 3;
+pub(crate) const INDENT_INC: ::core::ffi::c_int = 2;
+pub(crate) const INDENT_SET: ::core::ffi::c_int = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct InsertState {
+pub(crate) struct InsertState {
     pub state: VimState,
     pub ca: *mut cmdarg_T,
     pub mincol: ::core::ffi::c_int,
@@ -252,34 +252,34 @@ pub struct InsertState {
     pub nomove: bool,
 }
 #[derive(Copy, Clone)]
-pub struct ReplaceStack {
+pub(crate) struct ReplaceStack {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-pub const MSCR_RIGHT: ::core::ffi::c_int = -2;
-pub const MSCR_LEFT: ::core::ffi::c_int = -1;
-pub const MSCR_UP: ::core::ffi::c_int = 1;
-pub const MSCR_DOWN: ::core::ffi::c_int = 0;
-pub const YREG_PASTE: ::core::ffi::c_int = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const REPLACE_STACK_EMPTY: ReplaceStack = ReplaceStack {
+pub(crate) const MSCR_RIGHT: ::core::ffi::c_int = -2;
+pub(crate) const MSCR_LEFT: ::core::ffi::c_int = -1;
+pub(crate) const MSCR_UP: ::core::ffi::c_int = 1;
+pub(crate) const MSCR_DOWN: ::core::ffi::c_int = 0;
+pub(crate) const YREG_PASTE: ::core::ffi::c_int = 0;
+pub(crate) const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub(crate) const REPLACE_STACK_EMPTY: ReplaceStack = ReplaceStack {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
-pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const NL_STR: &::core::ffi::CStr = c"\n";
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const ESC_STR: &::core::ffi::CStr = c"\x1B";
-pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
-pub const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
-pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
-pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
+pub(crate) const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub(crate) const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub(crate) const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
+pub(crate) const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
+pub(crate) const NL_STR: &::core::ffi::CStr = c"\n";
+pub(crate) const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
+pub(crate) const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
+pub(crate) const ESC_STR: &::core::ffi::CStr = c"\x1B";
+pub(crate) const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
+pub(crate) const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
+pub(crate) const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
+pub(crate) const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 static compl_busy: GlobalCell<bool> = GlobalCell::new(false);
 static Insstart_textlen: GlobalCell<colnr_T> = GlobalCell::new(0);
 static Insstart_blank_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
@@ -318,7 +318,7 @@ static replace_stack: GlobalCell<ReplaceStack> = GlobalCell::new(REPLACE_STACK_E
 /// What the last `edit_putchar` did to the screen cell it wrote over, and so
 /// how `edit_unputchar` has to take it back.
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub enum PutChar {
+pub(crate) enum PutChar {
     /// Nothing was put on the screen.
     Unset,
     /// The right half of a double-width character was overwritten.
@@ -333,9 +333,9 @@ static pc_schar: GlobalCell<schar_T> = GlobalCell::new(0);
 static pc_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static pc_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static pc_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-pub const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const MOD_MASK_CMD: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
+pub(crate) const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
+pub(crate) const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
+pub(crate) const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
+pub(crate) const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
+pub(crate) const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
+pub(crate) const MOD_MASK_CMD: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;

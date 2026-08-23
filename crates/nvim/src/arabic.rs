@@ -153,7 +153,7 @@ fn a_is_valid(c: c_int) -> bool {
 }
 
 /// Is `two` an alef variant that combines with a preceding lam?
-pub fn arabic_maycombine(two: c_int) -> bool {
+pub(crate) fn arabic_maycombine(two: c_int) -> bool {
     p_arshape.get() != 0
         && p_tbidi.get() == 0
         && matches!(
@@ -163,14 +163,14 @@ pub fn arabic_maycombine(two: c_int) -> bool {
 }
 
 /// Do `one` and `two` combine into a lam-alef ligature?
-pub fn arabic_combine(one: c_int, two: c_int) -> bool {
+pub(crate) fn arabic_combine(one: c_int, two: c_int) -> bool {
     one == A_LAM && arabic_maycombine(two)
 }
 
 /// Shape codepoint `c` (with combining char `*c1`) based on its neighbors.
 /// Returns the shaped codepoint; `*c1` is zeroed when it was absorbed into
 /// a lam-alef ligature.
-pub fn arabic_shape(
+pub(crate) fn arabic_shape(
     c: c_int,
     c1: &mut c_int,
     prev_c: c_int,

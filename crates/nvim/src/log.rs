@@ -39,7 +39,7 @@ use crate::types::{
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
 /// name the macro where the rest of the logging API lives, and brings it into
 /// scope here ahead of its own textual definition.
-pub use crate::{logmsg, logmsg_c};
+pub(crate) use crate::{logmsg, logmsg_c};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
@@ -47,10 +47,10 @@ use crate::os::cshim::{snprintf, stderr, stdout};
 use ::libc::{__errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, strerror, strftime};
 
 /// The levels [`logmsg_c!`] takes, and 'verbose' compares against.
-pub const LOGLVL_DBG: c_int = 1;
-pub const LOGLVL_INF: c_int = 2;
-pub const LOGLVL_WRN: c_int = 3;
-pub const LOGLVL_ERR: c_int = 4;
+pub(crate) const LOGLVL_DBG: c_int = 1;
+pub(crate) const LOGLVL_INF: c_int = 2;
+pub(crate) const LOGLVL_WRN: c_int = 3;
+pub(crate) const LOGLVL_ERR: c_int = 4;
 
 const kXDGStateHome: XDGVarType = 3;
 /// `MAXPATHL + 1`: what `log_file_path[]` is declared as upstream, and the
@@ -245,7 +245,7 @@ fn log_path_init() {
 
 /// Set up the log mutex and decide the log file. Called from startup, after
 /// `init_homedir` and `set_init_1` — the path depends on both (#11501).
-pub fn log_init() {
+pub(crate) fn log_init() {
     // SAFETY: initialising the process-wide mutex once, before any lock.
     unsafe { uv_mutex_init_recursive(mutex_ptr()) };
     log_path_init();
@@ -279,7 +279,7 @@ fn log_unlock() {
 /// # Safety
 /// `context` and `func_name` are NUL-terminated or null, and outlive the
 /// call.
-pub unsafe fn logmsg_begin(
+pub(crate) unsafe fn logmsg_begin(
     log_level: c_int,
     context: *const c_char,
     func_name: *const c_char,
@@ -335,7 +335,7 @@ pub unsafe fn logmsg_begin(
 /// # Safety
 /// `log_file` is the non-null handle a [`logmsg_begin`] call returned, and
 /// this is its first `logmsg_finish`.
-pub unsafe fn logmsg_finish(log_file: *mut FILE, eol: bool, payload_ok: bool) -> bool {
+pub(crate) unsafe fn logmsg_finish(log_file: *mut FILE, eol: bool, payload_ok: bool) -> bool {
     let mut ret = payload_ok;
     // SAFETY: the caller's open handle; `stderr`/`stdout` are the two the
     // module borrows rather than owns.
@@ -425,7 +425,7 @@ macro_rules! logmsg {
 ///
 /// # Safety
 /// `loop_0` is a live `uv_loop_t *`.
-pub unsafe fn log_uv_handles(loop_0: *mut c_void) {
+pub(crate) unsafe fn log_uv_handles(loop_0: *mut c_void) {
     log_lock();
     let log_file = open_log_file();
     // SAFETY: the caller's loop, and a handle this call owns except for the

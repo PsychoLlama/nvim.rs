@@ -87,23 +87,23 @@ use crate::winlayer::{Buf, Win, buffers, windows};
 use ::libc::{atoi, strcmp, strlen};
 
 mod command;
-pub use self::command::*;
+pub(crate) use self::command::*;
 mod complete;
-pub use self::complete::*;
+pub(crate) use self::complete::*;
 mod place;
-pub use self::place::*;
+pub(crate) use self::place::*;
 mod store;
-pub use self::store::*;
+pub(crate) use self::store::*;
 mod text;
-pub use self::text::*;
+pub(crate) use self::text::*;
 mod vimscript;
-pub use self::vimscript::*;
+pub(crate) use self::vimscript::*;
 
 /// The priority a placement gets when neither the definition nor the
 /// `:sign place` / `sign_place()` call names one.
-pub const SIGN_DEF_PRIO: c_int = 10;
+pub(crate) const SIGN_DEF_PRIO: c_int = 10;
 
-pub const MSG_BUF_LEN: c_int = 480;
+pub(crate) const MSG_BUF_LEN: c_int = 480;
 
 /// [`group_get_ns`]'s answer for the group `"*"`: every namespace, the
 /// global one included.
@@ -112,14 +112,14 @@ pub(crate) const ALL_GROUPS: int64_t = u32::MAX as int64_t;
 /// [`group_get_ns`]'s answer for a group that names no namespace.
 const NO_SUCH_GROUP: int64_t = -1;
 
-pub const SIGNCMD_DEFINE: c_int = 0;
-pub const SIGNCMD_UNDEFINE: c_int = 1;
-pub const SIGNCMD_LIST: c_int = 2;
-pub const SIGNCMD_PLACE: c_int = 3;
-pub const SIGNCMD_UNPLACE: c_int = 4;
-pub const SIGNCMD_JUMP: c_int = 5;
+pub(crate) const SIGNCMD_DEFINE: c_int = 0;
+pub(crate) const SIGNCMD_UNDEFINE: c_int = 1;
+pub(crate) const SIGNCMD_LIST: c_int = 2;
+pub(crate) const SIGNCMD_PLACE: c_int = 3;
+pub(crate) const SIGNCMD_UNPLACE: c_int = 4;
+pub(crate) const SIGNCMD_JUMP: c_int = 5;
 /// One past the last subcommand: [`sign_cmd_idx`]'s "not a subcommand".
-pub const SIGNCMD_LAST: c_int = 6;
+pub(crate) const SIGNCMD_LAST: c_int = 6;
 
 /// The `:sign` subcommands, in the order the `SIGNCMD_*` constants number
 /// them. Also the completion list for `:sign <Tab>`.

@@ -44,7 +44,7 @@ static TRANSLATIONS: GlobalCell<Vec<Translation>> = GlobalCell::new(Vec::new());
 ///
 /// # Safety
 /// `eap` must name the live `exarg_T` of the command.
-pub unsafe fn ex_menutranslate(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_menutranslate(eap: *mut exarg_T) {
     // SAFETY: the caller's obligation; `arg` names the command line, which
     // this takes apart in place.
     let arg = unsafe { CText::new((*eap).arg) };
@@ -230,7 +230,11 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut dict_
 ///
 /// # Safety
 /// The eval layer must pass live argument and return typvals.
-pub unsafe fn f_menu_info(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_menu_info(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the caller's obligation.
     let (retdict, menu_name) = unsafe {
         tv_dict_alloc_ret(rettv);

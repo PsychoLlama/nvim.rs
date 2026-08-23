@@ -14,7 +14,7 @@ use crate::pos::MAXCOL;
 use crate::types::{ExpandContext, NUL};
 
 /// Does this window's block define any syntax at all?
-pub unsafe fn syntax_present(win: *mut win_T) -> bool {
+pub(crate) unsafe fn syntax_present(win: *mut win_T) -> bool {
     unsafe {
         (*(*win).w_s).b_syn_patterns.ga_len != 0
             || (*(*win).w_s).b_syn_clusters.ga_len != 0
@@ -43,7 +43,7 @@ enum ExpandWhat {
 static EXPAND_WHAT: GlobalCell<ExpandWhat> = GlobalCell::new(ExpandWhat::SubCmd);
 
 /// Done expanding: forget what `:highlight` completion was asked to include.
-pub unsafe fn reset_expand_highlight() {
+pub(crate) unsafe fn reset_expand_highlight() {
     include_none.set(0);
     include_default.set(0);
     include_link.set(0);
@@ -51,7 +51,7 @@ pub unsafe fn reset_expand_highlight() {
 
 /// Command-line completion for `:match` and `:echohl`: highlight group names,
 /// plus `None`.
-pub unsafe fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub(crate) unsafe fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const c_char) {
     unsafe {
         (*xp).xp_context = ExpandContext::Highlight;
         (*xp).xp_pattern = arg as *mut c_char;
@@ -60,7 +60,7 @@ pub unsafe fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const c_char) {
 }
 
 /// Command-line completion for `:syntax`.
-pub unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub(crate) unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_char) {
     unsafe {
         // Default: expand subcommands.
         (*xp).xp_context = ExpandContext::Syntax;
@@ -126,7 +126,7 @@ const SYNC_ARGS: [&CStr; 10] = [
 
 /// `expand_generic`'s callback: the `idx`th completion candidate, or NULL past
 /// the end.
-pub unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         let nth = |names: &[&CStr]| {
             usize::try_from(idx)
@@ -163,7 +163,7 @@ pub unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// `trans` removes transparency; `spellp` answers whether spell checking
 /// applies there; `keep_state` keeps the state of the character at `col` so
 /// that [`syn_get_stack_item`] can be asked about it afterwards.
-pub unsafe fn syn_get_id(
+pub(crate) unsafe fn syn_get_id(
     wp: *mut win_T,
     lnum: linenr_T,
     col: colnr_T,
@@ -197,7 +197,7 @@ pub unsafe fn syn_get_id(
 
 /// Extra information about the current syntax item: answers its flags and
 /// stores its sequence number. Must be called right after [`get_syntax_attr`].
-pub unsafe fn get_syntax_info(seqnrp: *mut c_int) -> SynFlags {
+pub(crate) unsafe fn get_syntax_info(seqnrp: *mut c_int) -> SynFlags {
     unsafe {
         *seqnrp = current_seqnr.get();
         current_flags.get()
@@ -205,7 +205,7 @@ pub unsafe fn get_syntax_info(seqnrp: *mut c_int) -> SynFlags {
 }
 
 /// The conceal substitution character of the current item.
-pub unsafe fn syn_get_sub_char() -> c_int {
+pub(crate) unsafe fn syn_get_sub_char() -> c_int {
     current_sub_char.get()
 }
 
@@ -213,7 +213,7 @@ pub unsafe fn syn_get_sub_char() -> c_int {
 /// out of range.
 ///
 /// The caller must have called [`syn_get_id`] first, to fill the stack.
-pub unsafe fn syn_get_stack_item(i: c_int) -> c_int {
+pub(crate) unsafe fn syn_get_stack_item(i: c_int) -> c_int {
     unsafe {
         if i >= state_len() {
             // The state was not properly finished for the last character
@@ -240,7 +240,7 @@ unsafe fn syn_cur_foldlevel() -> c_int {
 }
 
 /// The fold level of line `lnum`, for `'foldmethod'=syntax`.
-pub unsafe fn syn_get_foldlevel(wp: *mut win_T, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn syn_get_foldlevel(wp: *mut win_T, lnum: linenr_T) -> c_int {
     unsafe {
         let mut level = 0;
 

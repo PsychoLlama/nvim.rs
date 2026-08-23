@@ -504,7 +504,7 @@ fn show_statusline() -> bool {
     p_ls.get() == 1 as OptInt || p_ls.get() == 2 as OptInt
 }
 
-pub unsafe fn win_new_float(
+pub(crate) unsafe fn win_new_float(
     wp: *mut win_T,
     last: bool,
     fconfig: WinConfig,
@@ -581,7 +581,7 @@ fn set_minimal_style(win: Win) {
     }
 }
 
-pub unsafe fn win_set_minimal_style(wp: *mut win_T) {
+pub(crate) unsafe fn win_set_minimal_style(wp: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     set_minimal_style(unsafe { Win::new(wp) });
 }
@@ -597,12 +597,12 @@ fn border_width(win: Win) -> c_int {
     win.w_border_adj[1] + win.w_border_adj[3]
 }
 
-pub unsafe fn win_border_height(wp: *mut win_T) -> c_int {
+pub(crate) unsafe fn win_border_height(wp: *mut win_T) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     border_height(unsafe { Win::new(wp) })
 }
 
-pub unsafe fn win_border_width(wp: *mut win_T) -> c_int {
+pub(crate) unsafe fn win_border_width(wp: *mut win_T) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     border_width(unsafe { Win::new(wp) })
 }
@@ -721,7 +721,7 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
     (row, col)
 }
 
-pub unsafe fn win_config_float(wp: *mut win_T, fconfig: WinConfig) {
+pub(crate) unsafe fn win_config_float(wp: *mut win_T, fconfig: WinConfig) {
     // SAFETY: the caller's promise -- a live window.
     config_float(unsafe { Win::new(wp) }, fconfig);
 }
@@ -739,7 +739,7 @@ unsafe extern "C" fn float_zindex_cmp(a: *const c_void, b: *const c_void) -> c_i
     z(b).cmp(&z(a)) as c_int
 }
 
-pub unsafe fn win_float_remove(bang: bool, mut count: c_int) {
+pub(crate) unsafe fn win_float_remove(bang: bool, mut count: c_int) {
     // The whole list is collected before anything is closed: `win_close`
     // fires autocommands that can close further floats, which is what the
     // `win_valid` re-check below is for.
@@ -769,7 +769,7 @@ pub unsafe fn win_float_remove(bang: bool, mut count: c_int) {
 // ---------------------------------------------------------------------------
 // Keeping floats in step with what they hang off, and finding one
 
-pub unsafe fn win_check_anchored_floats(win: *mut win_T) {
+pub(crate) unsafe fn win_check_anchored_floats(win: *mut win_T) {
     // SAFETY: the caller's promise -- a live window.
     let handle = unsafe { Win::new(win) }.handle;
     for mut wp in floats() {
@@ -780,7 +780,7 @@ pub unsafe fn win_check_anchored_floats(win: *mut win_T) {
     }
 }
 
-pub fn win_float_update_statusline() {
+pub(crate) fn win_float_update_statusline() {
     for wp in floats() {
         let has_status = wp.w_status_height > 0;
         let should_show = opt_is_set(wp.w_onebuf_opt.wo_stl) && show_statusline();
@@ -790,7 +790,7 @@ pub fn win_float_update_statusline() {
     }
 }
 
-pub fn win_float_anchor_laststatus() {
+pub(crate) fn win_float_anchor_laststatus() {
     for mut win in windows_in_tab(current_tab()) {
         if win.w_config.relative == kFloatRelativeLaststatus {
             win.w_pos_changed = true;
@@ -798,13 +798,13 @@ pub fn win_float_anchor_laststatus() {
     }
 }
 
-pub fn win_reconfig_floats() {
+pub(crate) fn win_reconfig_floats() {
     for wp in floats() {
         config_float(wp, wp.w_config.clone());
     }
 }
 
-pub fn win_float_find_preview() -> *mut win_T {
+pub(crate) fn win_float_find_preview() -> *mut win_T {
     floats()
         .find(|wp| wp.w_float_is_info)
         .map_or(ptr::null_mut(), Win::raw)
@@ -813,7 +813,7 @@ pub fn win_float_find_preview() -> *mut win_T {
 /// Select an alternative window to `win` (assumed floating) in tabpage `tp`,
 /// which is `win`'s original tabpage or NULL for the current one -- the window
 /// to switch to when `win` is current and is then closed or moved away.
-pub unsafe fn win_float_find_altwin(win: *const win_T, tp: *const tabpage_T) -> *mut win_T {
+pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: *const tabpage_T) -> *mut win_T {
     // `win` itself is only ever compared below, never read, so it stays raw.
     // SAFETY: the caller's promise -- null, or a live tab page.
     let Some(tp) = (unsafe { TabPage::from_raw(tp.cast_mut()) }) else {
@@ -855,7 +855,7 @@ fn handle_error_and_cleanup(win: Option<Win>, err: &mut Error) -> *mut win_T {
 
 /// Create a floating preview window. `enter` makes it current; `new_buf`
 /// gives it a scratch buffer of its own.
-pub fn win_float_create_preview(enter: bool, new_buf: bool) -> *mut win_T {
+pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> *mut win_T {
     let mut config = WIN_CONFIG_INIT;
     let cur = current_win();
     config.col = f64::from(cur.w_wcol);

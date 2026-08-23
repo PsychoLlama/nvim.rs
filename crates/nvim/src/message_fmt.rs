@@ -40,7 +40,7 @@ use core::fmt;
 /// Format `args` and report the result as an error message. The Rust-side
 /// equivalent of `semsg()`: returns `true` when the message was output or
 /// errors are currently suppressed.
-pub fn emsg_fmt(args: fmt::Arguments<'_>) -> bool {
+pub(crate) fn emsg_fmt(args: fmt::Arguments<'_>) -> bool {
     // SAFETY: reads message-state globals; main thread, like every message
     // call. Checked before formatting so suppressed errors cost nothing,
     // matching the variadic wrapper.
@@ -55,7 +55,7 @@ pub fn emsg_fmt(args: fmt::Arguments<'_>) -> bool {
 
 /// Format `args` and show it as a regular message with `hl_id` highlighting.
 /// The Rust-side equivalent of `smsg()`.
-pub fn msg_fmt(hl_id: c_int, args: fmt::Arguments<'_>) -> bool {
+pub(crate) fn msg_fmt(hl_id: c_int, args: fmt::Arguments<'_>) -> bool {
     let text = to_message(args);
     // SAFETY: `text` is NUL-terminated and outlives the call; msg copies
     // what it keeps.

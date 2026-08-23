@@ -28,7 +28,7 @@ use crate::ui_compositor::ui_comp_mouse_focus;
 use crate::winlayer::{Frame, windows};
 
 /// The screen row the first window starts at: the tab page line's height.
-pub fn first_window_row() -> c_int {
+pub(crate) fn first_window_row() -> c_int {
     // SAFETY: the window list is live from startup to exit.
     unsafe { (*firstwin.get()).w_winrow }
 }
@@ -41,7 +41,7 @@ pub fn first_window_row() -> c_int {
 ///
 /// Answers `None` when something is wrong -- including a click on the popup
 /// menu, which has no window of its own.
-pub fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
+pub(crate) fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
     if let Some(win) = find_grid_win(pos) {
         return Some(win);
     } else if pos.grid > 1 {
@@ -84,7 +84,7 @@ pub fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
 
 /// [`find_win_inner`], with `pos` left relative to the top-left of the whole
 /// window rather than of its inner area.
-pub fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
+pub(crate) fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
     let win = find_win_inner(pos)?;
     pos.row += win.w_winrow_off;
     pos.col += win.w_wincol_off;
@@ -148,7 +148,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
 /// window `win`, both rewritten to be relative to that line.
 ///
 /// Answers the line, and whether the position is below the last one.
-pub fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (linenr_T, bool) {
+pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (linenr_T, bool) {
     let mut screen_col = if win.w_onebuf_opt.wo_rl != 0 {
         win.w_view_width - 1 - *col
     } else {
@@ -221,7 +221,7 @@ pub fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (linenr_T, bool) 
 /// Convert a virtual (screen) column to a character column, the first column
 /// being zero.  Answers the byte index and the columns left over inside the
 /// character it landed in.
-pub fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, colnr_T) {
+pub(crate) fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, colnr_T) {
     // SAFETY: a live window, and `lnum` a line of the buffer it shows.
     let line = unsafe { win.buffer().line(lnum) };
     let mut csarg = CharsizeArg::default();
@@ -252,7 +252,7 @@ pub fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, colnr_T
 /// # Safety
 /// `wp` must be a live window and `lnum` a line of the buffer it shows;
 /// `coladdp` must be writable or null.
-pub unsafe fn vcol2col(
+pub(crate) unsafe fn vcol2col(
     wp: *mut win_T,
     lnum: linenr_T,
     vcol: colnr_T,

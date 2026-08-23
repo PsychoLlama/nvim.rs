@@ -74,7 +74,7 @@ const E_TEST_GARBAGECOLLECT_NOW: &CStr =
 mod fails;
 mod report;
 
-pub use fails::f_assert_fails;
+pub(crate) use fails::f_assert_fails;
 use report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
 
 // ---------------------------------------------------------------------------
@@ -479,19 +479,31 @@ unsafe fn assert_inrange(argvars: *mut typval_T) -> c_int {
 // ---------------------------------------------------------------------------
 
 /// `assert_beeps(cmd)`.
-pub unsafe fn f_assert_beeps(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_beeps(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*rettv).vval.v_number = assert_beeps(argvars, false) as varnumber_T };
 }
 
 /// `assert_nobeep(cmd)`.
-pub unsafe fn f_assert_nobeep(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_nobeep(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*rettv).vval.v_number = assert_beeps(argvars, true) as varnumber_T };
 }
 
 /// `assert_equal(expected, actual[, msg])`.
-pub unsafe fn f_assert_equal(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_equal(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::Equal) as varnumber_T;
@@ -499,7 +511,11 @@ pub unsafe fn f_assert_equal(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 }
 
 /// `assert_notequal(expected, actual[, msg])`.
-pub unsafe fn f_assert_notequal(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_notequal(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::NotEqual) as varnumber_T;
@@ -507,7 +523,7 @@ pub unsafe fn f_assert_notequal(argvars: *mut typval_T, rettv: *mut typval_T, _f
 }
 
 /// `assert_equalfile(fname-one, fname-two[, msg])`.
-pub unsafe fn f_assert_equalfile(
+pub(crate) unsafe fn f_assert_equalfile(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
@@ -517,7 +533,7 @@ pub unsafe fn f_assert_equalfile(
 }
 
 /// `assert_exception(string[, msg])`.
-pub unsafe fn f_assert_exception(
+pub(crate) unsafe fn f_assert_exception(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
@@ -547,19 +563,31 @@ pub unsafe fn f_assert_exception(
 }
 
 /// `assert_false(actual[, msg])`.
-pub unsafe fn f_assert_false(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_false(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*rettv).vval.v_number = assert_bool(argvars, false) as varnumber_T };
 }
 
 /// `assert_true(actual[, msg])`.
-pub unsafe fn f_assert_true(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_true(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*rettv).vval.v_number = assert_bool(argvars, true) as varnumber_T };
 }
 
 /// `assert_inrange(lower, upper, actual[, msg])`.
-pub unsafe fn f_assert_inrange(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_inrange(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         if tv_check_for_float_or_nr_arg(argvars, 0) == FAIL
@@ -574,7 +602,11 @@ pub unsafe fn f_assert_inrange(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 }
 
 /// `assert_match(pattern, actual[, msg])`.
-pub unsafe fn f_assert_match(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_match(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         (*rettv).vval.v_number = assert_match_common(argvars, AssertType::Match) as varnumber_T;
@@ -582,7 +614,11 @@ pub unsafe fn f_assert_match(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 }
 
 /// `assert_notmatch(pattern, actual[, msg])`.
-pub unsafe fn f_assert_notmatch(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_notmatch(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         (*rettv).vval.v_number = assert_match_common(argvars, AssertType::NotMatch) as varnumber_T;
@@ -590,7 +626,11 @@ pub unsafe fn f_assert_notmatch(argvars: *mut typval_T, rettv: *mut typval_T, _f
 }
 
 /// `assert_report(msg)`: an unconditional failure.
-pub unsafe fn f_assert_report(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_report(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
         let mut ga = prepare_assert_error();
@@ -606,7 +646,7 @@ pub unsafe fn f_assert_report(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 /// This is dangerous — any list or dict held only by internal C state is freed
 /// while still in use — so it is refused unless `v:testing` says the caller
 /// meant it.
-pub unsafe fn f_test_garbagecollect_now(
+pub(crate) unsafe fn f_test_garbagecollect_now(
     _argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,
@@ -627,7 +667,7 @@ pub unsafe fn f_test_garbagecollect_now(
 /// list-allocation log it wrote is only compiled in under a debug define that
 /// no shipped build sets. The argument is still read, so a bad one is still
 /// reported.
-pub unsafe fn f_test_write_list_log(
+pub(crate) unsafe fn f_test_write_list_log(
     argvars: *mut typval_T,
     _rettv: *mut typval_T,
     _fptr: EvalFuncData,

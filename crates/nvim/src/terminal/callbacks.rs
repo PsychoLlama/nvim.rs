@@ -45,7 +45,7 @@ use crate::winlayer::Buf;
 use super::refresh::invalidate_terminal;
 use super::{Term, scrollback};
 
-pub static SCREEN_CALLBACKS: VTermScreenCallbacks = VTermScreenCallbacks {
+pub(crate) static SCREEN_CALLBACKS: VTermScreenCallbacks = VTermScreenCallbacks {
     damage: Some(term_damage),
     moverect: Some(term_moverect),
     movecursor: Some(term_movecursor),
@@ -58,7 +58,7 @@ pub static SCREEN_CALLBACKS: VTermScreenCallbacks = VTermScreenCallbacks {
     sb_clear: Some(scrollback::term_sb_clear),
 };
 
-pub static SELECTION_CALLBACKS: VTermSelectionCallbacks = VTermSelectionCallbacks {
+pub(crate) static SELECTION_CALLBACKS: VTermSelectionCallbacks = VTermSelectionCallbacks {
     set: Some(term_selection_set),
     query: None,
 };
@@ -111,7 +111,7 @@ unsafe extern "C" fn term_movecursor(
 ///
 /// Does nothing when the buffer is gone, which happens if the child sets a
 /// title after its terminal buffer was wiped.
-pub fn buf_set_term_title(buf: Option<Buf>, title: &[u8]) {
+pub(crate) fn buf_set_term_title(buf: Option<Buf>, title: &[u8]) {
     let Some(mut buf) = buf else {
         return;
     };

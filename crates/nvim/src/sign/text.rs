@@ -28,7 +28,7 @@ pub(crate) const SIGN_TEXT_BUF: usize = SIGN_WIDTH as usize * MAX_SCHAR_SIZE as 
 /// # Safety
 /// `buf` must have room for [`SIGN_TEXT_BUF`] bytes and `sign_text` for
 /// `SIGN_WIDTH` cells.
-pub unsafe fn describe_sign_text(buf: *mut c_char, sign_text: *mut schar_T) -> size_t {
+pub(crate) unsafe fn describe_sign_text(buf: *mut c_char, sign_text: *mut schar_T) -> size_t {
     // SAFETY: `sign_text` holds SIGN_WIDTH cells, per the caller.
     let cells = unsafe { slice::from_raw_parts(sign_text, SIGN_WIDTH as usize) };
     let mut at = 0;
@@ -83,7 +83,7 @@ fn unescape(text: &mut [u8]) -> usize {
 /// # Safety
 /// `text` must be a writable NUL-terminated string and `sign_text` must have
 /// room for `SIGN_WIDTH` cells.
-pub unsafe fn init_sign_text(
+pub(crate) unsafe fn init_sign_text(
     text: *mut c_char,
     sign_text: *mut schar_T,
     from_define: bool,

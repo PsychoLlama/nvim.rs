@@ -52,9 +52,9 @@ use crate::types::{
 use ::libc::strlen;
 
 mod searchhl;
-pub use self::searchhl::*;
+pub(crate) use self::searchhl::*;
 mod vimscript;
-pub use self::vimscript::*;
+pub(crate) use self::vimscript::*;
 
 use crate::regexp::re_multiline;
 
@@ -362,7 +362,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn clear_matches(wp: *mut win_T) {
+pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
     // SAFETY: the caller's window.
     unsafe {
         while !(*wp).w_match_head.is_null() {
@@ -400,7 +400,7 @@ unsafe fn get_match(wp: *mut win_T, id: c_int) -> *mut matchitem_T {
 ///
 /// # Safety
 /// `eap` must be a live Ex-command argument block with a writable `arg`.
-pub unsafe fn ex_match(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     unsafe {
         // The command's count is the match id: `:match`, `:2match`, `:3match`.

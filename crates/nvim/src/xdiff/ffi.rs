@@ -44,7 +44,7 @@ const IS_SPACE: u16 = 8192;
 /// Under Miri it is the `"C"` locale's answer spelled out — Miri cannot call
 /// a foreign function, and the lane runs with no locale set anyway, so this
 /// *is* what libc would say there.
-pub fn is_space(byte: u8) -> bool {
+pub(crate) fn is_space(byte: u8) -> bool {
     #[cfg(miri)]
     {
         matches!(byte, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')
@@ -77,7 +77,7 @@ unsafe fn file_bytes<'a>(mf: *const mmfile_t) -> &'a [u8] {
 /// pointers out of this module's own types. It is sound because nothing
 /// writes the block during a diff — both callers build it on their stack and
 /// hand the callbacks a *separate* `priv` pointer to accumulate into.
-pub struct Emit<'a> {
+pub(crate) struct Emit<'a> {
     cb: &'a xdemitcb_t,
     hunk_func: xdl_emit_hunk_consume_func_t,
 }
@@ -86,18 +86,18 @@ impl Emit<'_> {
     /// Did the caller install `xdemitconf_t.hunk_func`? That is what picks
     /// between the unified-diff writer and the hunk-extent walk, and both
     /// `:diffupdate` and `vim.diff{on_hunk=}` take it.
-    pub fn has_hunk_func(&self) -> bool {
+    pub(crate) fn has_hunk_func(&self) -> bool {
         self.hunk_func.is_some()
     }
 
     /// Did the caller install `xdemitcb_t.out_hunk`? Nothing in nvim does,
     /// but the field is public and a caller that sets it wants its headers.
-    pub fn has_out_hunk(&self) -> bool {
+    pub(crate) fn has_out_hunk(&self) -> bool {
         self.cb.out_hunk.is_some()
     }
 
     /// `ecb->out_line`, with each part as one `mmbuffer_t`.
-    pub fn line(&mut self, parts: &[&[u8]]) -> XdResult {
+    pub(crate) fn line(&mut self, parts: &[&[u8]]) -> XdResult {
         let mut bufs: [mmbuffer_t; 3] = core::array::from_fn(|_| mmbuffer_t {
             ptr: core::ptr::null_mut(),
             size: 0,
@@ -118,7 +118,7 @@ impl Emit<'_> {
     /// `ecb->out_hunk`. The function-name arguments are always empty: the
     /// `XDL_EMIT_FUNCNAMES` machinery is `#if 0`-ed out of the vendored
     /// source, so `xdl_emit_diff`'s `func_line.len` never leaves zero.
-    pub fn out_hunk(&mut self, s1: i64, c1: i64, s2: i64, c2: i64) -> XdResult {
+    pub(crate) fn out_hunk(&mut self, s1: i64, c1: i64, s2: i64, c2: i64) -> XdResult {
         let Some(out_hunk) = self.cb.out_hunk else {
             return Err(Aborted);
         };
@@ -137,7 +137,13 @@ impl Emit<'_> {
     }
 
     /// `xecfg->hunk_func`, called with `ecb->priv` as upstream does.
-    pub fn hunk(&mut self, start_a: i64, count_a: i64, start_b: i64, count_b: i64) -> XdResult {
+    pub(crate) fn hunk(
+        &mut self,
+        start_a: i64,
+        count_a: i64,
+        start_b: i64,
+        count_b: i64,
+    ) -> XdResult {
         let Some(hunk_func) = self.hunk_func else {
             return Err(Aborted);
         };
@@ -164,7 +170,7 @@ impl Emit<'_> {
 /// All five pointers must be non-null and point at initialised structs that
 /// stay valid, and unwritten by anything but the callbacks, for the call;
 /// `xpp->anchors` must hold `anchors_nr` NUL-terminated strings.
-pub unsafe fn xdl_diff(
+pub(crate) unsafe fn xdl_diff(
     mf1: *mut mmfile_t,
     mf2: *mut mmfile_t,
     xpp: *const xpparam_t,

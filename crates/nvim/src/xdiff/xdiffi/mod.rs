@@ -31,7 +31,7 @@ use crate::xdiff::{xhistogram, xpatience};
 
 mod compact;
 
-pub use compact::change_compact;
+pub(crate) use compact::change_compact;
 
 /// Floor on the edit cost at which [`split`] gives up and takes the
 /// furthest-reaching path it has.
@@ -465,7 +465,7 @@ fn recs_cmp(
 }
 
 /// Prepare both files and run whichever engine the flags asked for.
-pub fn do_diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
+pub(crate) fn do_diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
     match xpp.algorithm() {
         Algorithm::Patience => return xpatience::diff(text1, text2, xpp),
         Algorithm::Histogram => return xhistogram::diff(text1, text2, xpp),
@@ -579,7 +579,7 @@ fn call_hunk_func(script: &[Change], xecfg: &EmitConf, emit: &mut Emit<'_>) -> X
 }
 
 /// `xdl_diff`'s body: diff the two texts and report through `emit`.
-pub fn diff(
+pub(crate) fn diff(
     text1: &[u8],
     text2: &[u8],
     xpp: &Params<'_>,

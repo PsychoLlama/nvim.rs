@@ -92,7 +92,7 @@ use flag::{
     DOBUF_UNLOAD, VIM_QUESTION,
 };
 
-pub use listdo::ex_listdo;
+pub(crate) use listdo::ex_listdo;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
@@ -144,47 +144,47 @@ fn tab_windows() -> impl Iterator<Item = (*mut tabpage_T, *mut win_T)> {
 // and lets the remote plugin host do the work.
 
 /// `:ruby`
-pub unsafe fn ex_ruby(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_ruby(eap: *mut exarg_T) {
     unsafe { script_host_execute(c"ruby", eap) }
 }
 
 /// `:rubyfile`
-pub unsafe fn ex_rubyfile(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_rubyfile(eap: *mut exarg_T) {
     unsafe { script_host_execute_file(c"ruby", eap) }
 }
 
 /// `:rubydo`
-pub unsafe fn ex_rubydo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_rubydo(eap: *mut exarg_T) {
     unsafe { script_host_do_range(c"ruby", eap) }
 }
 
 /// `:python3`
-pub unsafe fn ex_python3(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_python3(eap: *mut exarg_T) {
     unsafe { script_host_execute(c"python3", eap) }
 }
 
 /// `:py3file`
-pub unsafe fn ex_py3file(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_py3file(eap: *mut exarg_T) {
     unsafe { script_host_execute_file(c"python3", eap) }
 }
 
 /// `:pydo3`
-pub unsafe fn ex_pydo3(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pydo3(eap: *mut exarg_T) {
     unsafe { script_host_do_range(c"python3", eap) }
 }
 
 /// `:perl`
-pub unsafe fn ex_perl(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_perl(eap: *mut exarg_T) {
     unsafe { script_host_execute(c"perl", eap) }
 }
 
 /// `:perlfile`
-pub unsafe fn ex_perlfile(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_perlfile(eap: *mut exarg_T) {
     unsafe { script_host_execute_file(c"perl", eap) }
 }
 
 /// `:perldo`
-pub unsafe fn ex_perldo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_perldo(eap: *mut exarg_T) {
     unsafe { script_host_do_range(c"perl", eap) }
 }
 
@@ -271,7 +271,7 @@ unsafe fn script_host_do_range(name: &CStr, eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
+pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
     // SAFETY: module contract.
     unsafe {
         if !(p_aw.get() != 0 || p_awa.get() != 0)
@@ -300,7 +300,7 @@ pub unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn autowrite_all() {
+pub(crate) unsafe fn autowrite_all() {
     if !(p_aw.get() != 0 || p_awa.get() != 0) || p_write.get() == 0 {
         return;
     }
@@ -328,7 +328,7 @@ pub unsafe fn autowrite_all() {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
+pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
     let forceit = flags & CCGD_FORCEIT != 0;
     let mut bufref = bufref_T::default();
     // SAFETY: module contract, here and at every `unsafe` below.
@@ -383,7 +383,7 @@ pub unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
+pub(crate) unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // `check_overwrite` needs an exarg_T; upstream hands it an all-zero one.
     let mut ea = exarg_T::default();
@@ -468,7 +468,7 @@ unsafe fn write_all_writable() {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn dialog_close_terminal(buf: *mut buf_T) -> bool {
+pub(crate) unsafe fn dialog_close_terminal(buf: *mut buf_T) -> bool {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
     unsafe {
@@ -492,7 +492,7 @@ pub unsafe fn dialog_close_terminal(buf: *mut buf_T) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn can_abandon(buf: *mut buf_T, forceit: bool) -> bool {
+pub(crate) unsafe fn can_abandon(buf: *mut buf_T, forceit: bool) -> bool {
     // SAFETY: module contract.
     unsafe {
         buf_hide(buf)
@@ -545,7 +545,7 @@ unsafe fn changed_check_order() -> Vec<c_int> {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
+pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     if firstbuf.get().is_null() {
         return false;
     }
@@ -653,7 +653,7 @@ unsafe fn report_unwritten(buf: *mut buf_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn check_fname() -> c_int {
+pub(crate) unsafe fn check_fname() -> c_int {
     // SAFETY: module contract.
     unsafe {
         if (*curbuf.get()).b_ffname.is_null() {
@@ -668,7 +668,7 @@ pub unsafe fn check_fname() -> c_int {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> c_int {
+pub(crate) unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> c_int {
     let old_curbuf = curbuf.get();
     // SAFETY: module contract.
     let retval = unsafe {
@@ -710,7 +710,7 @@ pub unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> c_int {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_compiler(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     const CURRENT_COMPILER: &CStr = c"g:current_compiler";
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
@@ -783,7 +783,7 @@ pub unsafe fn ex_compiler(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_checktime(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_checktime(eap: *mut exarg_T) {
     let save_no_check_timestamps = no_check_timestamps.get();
     no_check_timestamps.set(0);
     // SAFETY: module contract.
@@ -807,7 +807,7 @@ pub unsafe fn ex_checktime(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_drop(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         // Check whether the first argument is already being edited in a

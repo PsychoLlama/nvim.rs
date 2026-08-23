@@ -43,7 +43,7 @@ mod soundalike;
 mod walk;
 
 use crate::semsg_c;
-pub use prompt::spell_suggest;
+pub(crate) use prompt::spell_suggest;
 
 use crate::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::eval::typval::tv_list_unref;
@@ -82,114 +82,114 @@ use core::{mem, ptr};
 use crate::highlight_group::HLF_COUNT;
 /// The longest word the spell code handles, and so the size of every word
 /// buffer in this module tree.
-pub use crate::spell::MAXWLEN;
+pub(crate) use crate::spell::MAXWLEN;
 
 /// A tab, which sound folding treats as a space.
-pub const TAB: c_int = '\t' as c_int;
+pub(crate) const TAB: c_int = '\t' as c_int;
 
 // Word flags. These live beside each word in the tree, except for
 // `WF_MIXCAP`, which only ever appears in `su_badflags`.
 /// The word is only valid in some regions.
-pub const WF_REGION: c_int = 0x01;
+pub(crate) const WF_REGION: c_int = 0x01;
 /// The word starts with a capital.
-pub const WF_ONECAP: c_int = 0x02;
+pub(crate) const WF_ONECAP: c_int = 0x02;
 /// The word is all capitals.
-pub const WF_ALLCAP: c_int = 0x04;
+pub(crate) const WF_ALLCAP: c_int = 0x04;
 /// The word is rare.
-pub const WF_RARE: c_int = 0x08;
+pub(crate) const WF_RARE: c_int = 0x08;
 /// The word must never be suggested.
-pub const WF_BANNED: c_int = 0x10;
+pub(crate) const WF_BANNED: c_int = 0x10;
 /// A mix of upper and lower case, "macaRONI". Only used for
 /// `su_badflags`.
-pub const WF_MIXCAP: c_int = 0x20;
+pub(crate) const WF_MIXCAP: c_int = 0x20;
 /// The word's case is exactly as spelled and cannot be reconstructed from
 /// the case-folded tree.
-pub const WF_KEEPCAP: c_int = 0x80;
+pub(crate) const WF_KEEPCAP: c_int = 0x80;
 /// Every case bit together: `ONECAP | ALLCAP | FIXCAP | KEEPCAP`.
-pub const WF_CAPMASK: c_int = 0xc6;
+pub(crate) const WF_CAPMASK: c_int = 0xc6;
 /// The word only counts as part of a compound.
-pub const WF_NEEDCOMP: c_int = 0x200;
+pub(crate) const WF_NEEDCOMP: c_int = 0x200;
 /// The word is never offered as a suggestion.
-pub const WF_NOSUGGEST: c_int = 0x400;
+pub(crate) const WF_NOSUGGEST: c_int = 0x400;
 /// The prefix makes the word rare.
-pub const WF_RAREPFX: c_int = 0x1000000;
+pub(crate) const WF_RAREPFX: c_int = 0x1000000;
 
 // What each kind of change costs. A suggestion's score is the sum over
 // the changes that reach it, and lower is offered first.
 /// Split the bad word in two.
-pub const SCORE_SPLIT: c_int = 149;
+pub(crate) const SCORE_SPLIT: c_int = 149;
 /// Split it where the language says not to (`NOSPLITSUGS`).
-pub const SCORE_SPLIT_NO: c_int = 249;
+pub(crate) const SCORE_SPLIT_NO: c_int = 249;
 /// Only the case differs.
-pub const SCORE_ICASE: c_int = 52;
+pub(crate) const SCORE_ICASE: c_int = 52;
 /// The word belongs to another region.
-pub const SCORE_REGION: c_int = 200;
+pub(crate) const SCORE_REGION: c_int = 200;
 /// The word is marked rare.
-pub const SCORE_RARE: c_int = 180;
+pub(crate) const SCORE_RARE: c_int = 180;
 /// Swap two characters.
-pub const SCORE_SWAP: c_int = 75;
+pub(crate) const SCORE_SWAP: c_int = 75;
 /// Swap two characters that have a third between them.
-pub const SCORE_SWAP3: c_int = 110;
+pub(crate) const SCORE_SWAP3: c_int = 110;
 /// Apply one `REP` item from the `.aff` file.
-pub const SCORE_REP: c_int = 65;
+pub(crate) const SCORE_REP: c_int = 65;
 /// Substitute a character.
-pub const SCORE_SUBST: c_int = 93;
+pub(crate) const SCORE_SUBST: c_int = 93;
 /// Substitute a character the language's `MAP` lines call similar.
-pub const SCORE_SIMILAR: c_int = 33;
+pub(crate) const SCORE_SIMILAR: c_int = 33;
 /// Substitute a composing character.
-pub const SCORE_SUBCOMP: c_int = 33;
+pub(crate) const SCORE_SUBCOMP: c_int = 33;
 /// Delete a character.
-pub const SCORE_DEL: c_int = 94;
+pub(crate) const SCORE_DEL: c_int = 94;
 /// Delete one of two identical characters.
-pub const SCORE_DELDUP: c_int = 66;
+pub(crate) const SCORE_DELDUP: c_int = 66;
 /// Delete a composing character.
-pub const SCORE_DELCOMP: c_int = 28;
+pub(crate) const SCORE_DELCOMP: c_int = 28;
 /// Insert a character.
-pub const SCORE_INS: c_int = 96;
+pub(crate) const SCORE_INS: c_int = 96;
 /// Insert a character that duplicates its neighbour.
-pub const SCORE_INSDUP: c_int = 67;
+pub(crate) const SCORE_INSDUP: c_int = 67;
 /// Insert a composing character.
-pub const SCORE_INSCOMP: c_int = 30;
+pub(crate) const SCORE_INSCOMP: c_int = 30;
 /// Turn a non-word character into a word character.
-pub const SCORE_NONWORD: c_int = 103;
+pub(crate) const SCORE_NONWORD: c_int = 103;
 
 /// A suggestion that came out of a `file:` item.
-pub const SCORE_FILE: c_int = 30;
+pub(crate) const SCORE_FILE: c_int = 30;
 /// The score ceiling a run starts with. Higher means slower; this allows
 /// about three changes.
-pub const SCORE_MAXINIT: c_int = 350;
+pub(crate) const SCORE_MAXINIT: c_int = 350;
 
 // Discounts for words the dictionary has seen before, and the word counts
 // that earn them.
-pub const SCORE_COMMON1: c_int = 30;
-pub const SCORE_COMMON2: c_int = 40;
-pub const SCORE_COMMON3: c_int = 50;
-pub const SCORE_THRES2: c_int = 10;
-pub const SCORE_THRES3: c_int = 100;
+pub(crate) const SCORE_COMMON1: c_int = 30;
+pub(crate) const SCORE_COMMON2: c_int = 40;
+pub(crate) const SCORE_COMMON3: c_int = 50;
+pub(crate) const SCORE_THRES2: c_int = 10;
+pub(crate) const SCORE_THRES3: c_int = 100;
 
 // Trying changed sound-folded words gets slow past two changes, and
 // stopping at one misses a few good suggestions, so the sound-a-like pass
 // runs up to three times with a rising ceiling.
-pub const SCORE_SFMAX1: c_int = 200;
-pub const SCORE_SFMAX2: c_int = 300;
-pub const SCORE_SFMAX3: c_int = 400;
+pub(crate) const SCORE_SFMAX1: c_int = 200;
+pub(crate) const SCORE_SFMAX2: c_int = 300;
+pub(crate) const SCORE_SFMAX3: c_int = 400;
 
 /// Any score at all; used where a score could not be computed.
-pub const SCORE_MAXMAX: c_int = 999999;
+pub(crate) const SCORE_MAXMAX: c_int = 999999;
 /// Past this, `spell_edit_score_limit`'s depth-first search costs more
 /// than the full table would.
-pub const SCORE_LIMITMAX: c_int = 350;
+pub(crate) const SCORE_LIMITMAX: c_int = 350;
 
 // Values for `sps_flags`, one per `'spellsuggest'` method.
 /// Weigh the sound-a-like score into the final order.
-pub const SPS_BEST: c_int = 1;
+pub(crate) const SPS_BEST: c_int = 1;
 /// Skip the sound-a-like search entirely.
-pub const SPS_FAST: c_int = 2;
+pub(crate) const SPS_FAST: c_int = 2;
 /// Score the two searches separately and interleave the results.
-pub const SPS_DOUBLE: c_int = 4;
+pub(crate) const SPS_DOUBLE: c_int = 4;
 
 /// What is known while looking for suggestions.
-pub struct suginfo_T {
+pub(crate) struct suginfo_T {
     /// The suggestions found so far, a garray of [`suggest_T`].
     pub su_ga: garray_T,
     /// How many suggestions will be displayed.
@@ -220,7 +220,7 @@ pub struct suginfo_T {
 
 /// One suggestion.
 #[derive(Copy, Clone)]
-pub struct suggest_T {
+pub(crate) struct suggest_T {
     /// The suggested word, an allocated string this entry owns.
     pub st_word: *mut c_char,
     /// `strlen(st_word)`.
@@ -255,7 +255,7 @@ static sps_limit: GlobalCell<c_int> = GlobalCell::new(9999);
 ///
 /// The current window must have its spell state set up, which it has
 /// whenever `'spell'` is on.
-pub unsafe fn window_langs<'a>() -> &'a mut [langp_T] {
+pub(crate) unsafe fn window_langs<'a>() -> &'a mut [langp_T] {
     // SAFETY: the caller guarantees the window's spell state; an empty
     // garray has a null data pointer, which `from_raw_parts_mut` rejects
     // even at length zero.
@@ -338,7 +338,7 @@ fn is_timeout_value(value: &[u8]) -> bool {
 /// # Safety
 ///
 /// `'spellsuggest'` must hold a NUL-terminated string.
-pub unsafe fn spell_check_sps() -> c_int {
+pub(crate) unsafe fn spell_check_sps() -> c_int {
     // SAFETY: the caller guarantees the option; `buf` is `MAXPATHL`, which
     // is what `copy_option_part` is told it may fill.
     unsafe {
@@ -410,7 +410,7 @@ pub unsafe fn spell_check_sps() -> c_int {
 ///
 /// `gap` must be an uninitialised garray, `word` NUL-terminated, and the
 /// current window must have its languages loaded.
-pub unsafe fn spell_suggest_list(
+pub(crate) unsafe fn spell_suggest_list(
     gap: *mut garray_T,
     word: *mut c_char,
     maxcount: c_int,

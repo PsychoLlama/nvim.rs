@@ -82,7 +82,7 @@ fn abbreviates(attr: &[u8], name: &str) -> bool {
 /// # Safety
 /// `value` must be writable and NUL-terminated, with at least `vallen`
 /// readable bytes.
-pub unsafe fn parse_addr_type_arg(
+pub(crate) unsafe fn parse_addr_type_arg(
     value: *mut c_char,
     vallen: c_int,
     addr_type_arg: *mut CmdAddr,
@@ -122,7 +122,7 @@ pub unsafe fn parse_addr_type_arg(
 ///
 /// # Safety
 /// `value` must be NUL-terminated with at least `vallen` readable bytes.
-pub unsafe fn parse_compl_arg(
+pub(crate) unsafe fn parse_compl_arg(
     value: *const c_char,
     vallen: c_int,
     complp: &mut ExpandContext,

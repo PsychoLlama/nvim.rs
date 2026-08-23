@@ -101,7 +101,7 @@ impl ShlWalk {
 ///
 /// # Safety
 /// `wp` and `search_hl` must be live.
-pub unsafe fn init_search_hl(wp: *mut win_T, search_hl: *mut match_T) {
+pub(crate) unsafe fn init_search_hl(wp: *mut win_T, search_hl: *mut match_T) {
     // SAFETY: the caller's window and search state.
     unsafe {
         let mut cur = (*wp).w_match_head;
@@ -332,7 +332,7 @@ unsafe fn next_search_hl(
 ///
 /// # Safety
 /// `wp` and `search_hl` must be live.
-pub unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, lnum: linenr_T) {
+pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, lnum: linenr_T) {
     // SAFETY: the caller's window and search state.
     unsafe {
         let mut walk = ShlWalk::new(wp, search_hl, Order::SearchFirst);
@@ -411,7 +411,7 @@ unsafe fn check_cur_search_hl(wp: *mut win_T, shl: *mut match_T) {
 /// # Safety
 /// Every pointer must be live; `line` is re-read, because a multi-line
 /// regexp can invalidate it.
-pub unsafe fn prepare_search_hl_line(
+pub(crate) unsafe fn prepare_search_hl_line(
     wp: *mut win_T,
     lnum: linenr_T,
     mincol: colnr_T,
@@ -492,7 +492,7 @@ pub unsafe fn prepare_search_hl_line(
 /// Every pointer must be live; `line` is re-read, because a multi-line
 /// regexp can invalidate it.
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn update_search_hl(
+pub(crate) unsafe fn update_search_hl(
     wp: *mut win_T,
     lnum: linenr_T,
     col: colnr_T,
@@ -605,7 +605,7 @@ pub unsafe fn update_search_hl(
 ///
 /// # Safety
 /// `wp` and `search_hl` must be live.
-pub unsafe fn get_prevcol_hl_flag(
+pub(crate) unsafe fn get_prevcol_hl_flag(
     wp: *mut win_T,
     search_hl: *mut match_T,
     curcol: colnr_T,
@@ -644,7 +644,7 @@ pub unsafe fn get_prevcol_hl_flag(
 ///
 /// # Safety
 /// `wp`, `search_hl` and `char_attr` must be live.
-pub unsafe fn get_search_match_hl(
+pub(crate) unsafe fn get_search_match_hl(
     wp: *mut win_T,
     search_hl: *mut match_T,
     col: colnr_T,

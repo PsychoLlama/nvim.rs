@@ -109,7 +109,7 @@ fn was_set(opt_idx: OptIndex) -> bool {
 
 /// A new tab page starts with the global 'cmdheight', not with whatever the
 /// tab page it was opened from had.
-pub fn set_init_tablocal() {
+pub(crate) fn set_init_tablocal() {
     // SAFETY: the option table is a plain array, and 'cmdheight' is numeric.
     p_ch.set(unsafe { (*options.ptr())[kOptCmdheight as usize].def_val.data.number });
 }
@@ -297,7 +297,7 @@ fn set_init_fenc_default() {
 ///
 /// `clean_arg` is `--clean`, which keeps the user's directories out of
 /// 'runtimepath'.
-pub fn set_init_1(clean_arg: bool) {
+pub(crate) fn set_init_1(clean_arg: bool) {
     // SAFETY: this runs on the main thread before anything else can touch
     // an option, and every string handed to `set_string_default` below is a
     // fresh allocation it takes ownership of.
@@ -379,7 +379,7 @@ pub fn set_init_1(clean_arg: bool) {
 
 /// The default `:set opt&` would install: the table's, with the environment
 /// expanded, or the unset value for a `:setlocal` on a global-local option.
-pub fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
+pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     // Running as root, 'modeline' defaults off: a modeline is arbitrary
     // code from whoever wrote the file.
     // SAFETY: `getuid` and the option table.
@@ -546,7 +546,7 @@ pub(crate) unsafe fn find_dup_item(
 }
 
 /// The second startup pass, once the screen size is known.
-pub fn set_init_2(_headless: bool) {
+pub(crate) fn set_init_2(_headless: bool) {
     // SAFETY: the option table and the screen are the editor's own.
     unsafe {
         logmsg_c!(
@@ -582,7 +582,7 @@ pub fn set_init_2(_headless: bool) {
 
 /// The third startup pass: the defaults that depend on which shell 'shell'
 /// turned out to name.
-pub fn set_init_3() {
+pub(crate) fn set_init_3() {
     /// The shells whose redirection syntax nvim knows, csh-like first.
     const CSH_LIKE: [&CStr; 2] = [c"csh", c"tcsh"];
     const POSIX_LIKE: [&CStr; 10] = [
@@ -641,7 +641,7 @@ pub fn set_init_3() {
 /// # Safety
 ///
 /// `lang`, if not null, must be NUL-terminated.
-pub unsafe fn set_helplang_default(lang: *const c_char) {
+pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
     if lang.is_null() {
         return;
     }
@@ -673,7 +673,7 @@ pub unsafe fn set_helplang_default(lang: *const c_char) {
 
 /// 'title' and 'icon' default off unless the user asked for them, so that
 /// nvim does not have to ask the terminal what its title was.
-pub fn set_title_defaults() {
+pub(crate) fn set_title_defaults() {
     for (opt_idx, cell) in [(kOptTitle, &p_title), (kOptIcon, &p_icon)] {
         if !was_set(opt_idx) {
             change_option_default(opt_idx, OFF);

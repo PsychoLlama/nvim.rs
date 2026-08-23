@@ -219,7 +219,7 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
 ///
 /// # Safety
 /// Writes to the message area; main thread only.
-pub unsafe fn syn_list_header(
+pub(crate) unsafe fn syn_list_header(
     did_header: bool,
     outlen: c_int,
     id: c_int,
@@ -321,7 +321,7 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 /// # Safety
 /// `arg` is the NUL-terminated rest of the command line, which `xp` is
 /// pointed into; main thread only.
-pub unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char) {
     // SAFETY: the caller's expansion state and command line.
     unsafe {
         // Default: expand group names.
@@ -383,7 +383,7 @@ pub unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char
 ///
 /// # Safety
 /// Main thread only.
-pub unsafe fn get_highlight_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_highlight_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: as the callee.
     unsafe { get_highlight_name_ext(xp, idx, true).cast_mut() }
 }
@@ -396,7 +396,7 @@ pub unsafe fn get_highlight_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Main thread only.
-pub unsafe fn get_highlight_name_ext(
+pub(crate) unsafe fn get_highlight_name_ext(
     _xp: *mut expand_T,
     idx: c_int,
     skip_cleared: bool,

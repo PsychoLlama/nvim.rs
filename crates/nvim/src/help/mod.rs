@@ -61,7 +61,7 @@ use ::libc::{fclose, qsort, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-pub use tags::ex_helptags;
+pub(crate) use tags::ex_helptags;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
@@ -130,7 +130,7 @@ const fn cstr_optval(value: &'static CStr) -> OptVal {
 /// `eap` is null or the current Ex command; its `arg` is a writable,
 /// NUL-terminated command line, which this truncates at the first `\n`,
 /// `\r`, or `|` that starts a following command.
-pub unsafe fn ex_help(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
     let old_key_typed = KeyTyped.get();
 
     // SAFETY: caller contract; the command line is writable.
@@ -429,7 +429,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
 ///
 /// # Safety
 /// `eap` is the current Ex command.
-pub unsafe fn ex_helpclose(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_helpclose(eap: *mut exarg_T) {
     // SAFETY: caller contract; the window list is live.
     unsafe {
         let mut win = firstwin.get();
@@ -447,7 +447,7 @@ pub unsafe fn ex_helpclose(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` is unused, but the signature is the Ex-command one.
-pub unsafe fn ex_exusage(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_exusage(_eap: *mut exarg_T) {
     // SAFETY: a static command line.
     unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
 }
@@ -456,7 +456,7 @@ pub unsafe fn ex_exusage(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// As [`ex_exusage`].
-pub unsafe fn ex_viusage(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_viusage(_eap: *mut exarg_T) {
     // SAFETY: a static command line.
     unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
 }
@@ -469,7 +469,7 @@ pub unsafe fn ex_viusage(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `arg` is NUL-terminated, and writable if it can end in `@xx`.
-pub unsafe fn check_help_lang(arg: *mut c_char) -> *mut c_char {
+pub(crate) unsafe fn check_help_lang(arg: *mut c_char) -> *mut c_char {
     // SAFETY: caller contract.
     unsafe {
         let len = strlen(arg) as isize;
@@ -494,7 +494,7 @@ pub unsafe fn check_help_lang(arg: *mut c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `matched_string` is NUL-terminated with at least `offset + 1` bytes.
-pub unsafe fn help_heuristic(
+pub(crate) unsafe fn help_heuristic(
     matched_string: *mut c_char,
     offset: c_int,
     wrong_case: bool,
@@ -551,7 +551,7 @@ unsafe extern "C" fn help_compare(s1: *const c_void, s2: *const c_void) -> c_int
 /// # Safety
 /// `arg` is NUL-terminated; `num_matches` and `matches` are writable. Runs
 /// Lua, so main thread only.
-pub unsafe fn find_help_tags(
+pub(crate) unsafe fn find_help_tags(
     arg: *const c_char,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -635,7 +635,7 @@ pub unsafe fn find_help_tags(
 ///
 /// # Safety
 /// `file` holds `num_file` writable NUL-terminated strings.
-pub unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
+pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
     // The preferred language as a `@ab` suffix, or empty for English.
     let mut suffix = [NUL as c_char; 4];
     // SAFETY: 'helplang' is a NUL-terminated option string; a non-empty one
@@ -698,7 +698,7 @@ pub unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
 ///
 /// # Safety
 /// Main thread; `curbuf` and `curwin` are live.
-pub unsafe fn prepare_help_buffer() {
+pub(crate) unsafe fn prepare_help_buffer() {
     // SAFETY: `curbuf`/`curwin` are the editor's current buffer and window.
     unsafe {
         (*curbuf.get()).b_help = true;
@@ -745,7 +745,7 @@ pub unsafe fn prepare_help_buffer() {
 ///
 /// # Safety
 /// Runs Lua: main thread only.
-pub unsafe fn get_local_additions() {
+pub(crate) unsafe fn get_local_additions() {
     let mut err = NO_ERROR;
     // SAFETY: a static chunk, no arguments, and our own error slot.
     unsafe {

@@ -76,12 +76,12 @@ use flag::{
     CSTP_CONTINUE, CSTP_FINISH, CSTP_NONE, CSTP_RETURN, CSTP_THROW,
 };
 
-pub use exception::{
+pub(crate) use exception::{
     cause_errthrow, discard_current_exception, do_errthrow, do_intthrow, exception_state_clear,
     exception_state_restore, exception_state_save, free_global_msglist, get_exception_string,
     report_make_pending,
 };
-pub use trycmd::{
+pub(crate) use trycmd::{
     do_throw, enter_cleanup, ex_catch, ex_endtry, ex_finally, ex_throw, ex_try, leave_cleanup,
 };
 
@@ -201,13 +201,13 @@ unsafe fn discard_pending_return(p: *mut c_void) {
 /// the first `emsg` call temporarily resets `force_abort` until the throw
 /// point is reached, so that during such a cancellation this keeps answering
 /// the same thing. `got_int` is also set by `interrupt()`.
-pub fn aborting() -> bool {
+pub(crate) fn aborting() -> bool {
     (did_emsg.get() != 0 && force_abort.get()) || got_int.get() || did_throw.get()
 }
 
 /// Put `force_abort` back, when it must be restored before the throw point
 /// for the error message has been reached. See [`aborting`].
-pub fn update_force_abort() {
+pub(crate) fn update_force_abort() {
     if cause_abort.get() {
         force_abort.set(true);
     }
@@ -217,14 +217,14 @@ pub fn update_force_abort() {
 /// script. Lets an autocommand be suppressed after a failing subcommand, as
 /// long as the error message has not been shown and so has not itself caused
 /// the abort.
-pub fn should_abort(retcode: c_int) -> bool {
+pub(crate) fn should_abort(retcode: c_int) -> bool {
     (retcode == FAIL && trylevel.get() != 0 && emsg_silent.get() == 0) || aborting()
 }
 
 /// Whether a function with the "abort" flag should not count as ended on an
 /// error -- parsing continues, to find finally clauses to execute, and some
 /// errors in skipped commands are still reported.
-pub fn aborted_in_try() -> bool {
+pub(crate) fn aborted_in_try() -> bool {
     // Only called after an error, where `force_abort` decides whether the
     // search for finally clauses is needed.
     force_abort.get()
@@ -234,7 +234,7 @@ pub fn aborted_in_try() -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_eval(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_eval(eap: *mut exarg_T) {
     let mut tv = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -260,7 +260,7 @@ pub unsafe fn ex_eval(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_if(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_if(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -291,7 +291,7 @@ pub unsafe fn ex_if(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_endif(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endif(eap: *mut exarg_T) {
     did_endif.set(true);
     // SAFETY: module contract.
     unsafe {
@@ -319,7 +319,7 @@ pub unsafe fn ex_endif(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_else(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -399,7 +399,7 @@ pub unsafe fn ex_else(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_while(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -492,7 +492,7 @@ unsafe fn for_next_item(
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_continue(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_continue(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -524,7 +524,7 @@ pub unsafe fn ex_continue(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_break(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_break(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -547,7 +547,7 @@ pub unsafe fn ex_break(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_endwhile(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         let cstack = (*eap).cstack;
@@ -634,7 +634,7 @@ pub unsafe fn ex_endwhile(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn cleanup_conditionals(
+pub(crate) unsafe fn cleanup_conditionals(
     cstack: *mut cstack_T,
     searched_cond: c_int,
     inclusive: bool,
@@ -778,7 +778,7 @@ unsafe fn get_end_emsg(cstack: *mut cstack_T) -> *mut c_char {
 /// # Safety
 /// Module contract; `cond_level` points at a live counter, normally one of
 /// `cstack`'s own.
-pub unsafe fn rewind_conditionals(
+pub(crate) unsafe fn rewind_conditionals(
     cstack: *mut cstack_T,
     idx: c_int,
     cond_type: c_int,
@@ -803,7 +803,7 @@ pub unsafe fn rewind_conditionals(
 ///
 /// # Safety
 /// Module contract.
-pub unsafe fn ex_endfunction(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endfunction(_eap: *mut exarg_T) {
     // SAFETY: module contract.
     unsafe {
         semsg_c!(
@@ -817,7 +817,7 @@ pub unsafe fn ex_endfunction(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `p` is NUL-terminated.
-pub unsafe fn has_loop_cmd(p: *mut c_char) -> bool {
+pub(crate) unsafe fn has_loop_cmd(p: *mut c_char) -> bool {
     // SAFETY: caller contract; `modifier_len` stops at the NUL, as does the
     // whitespace skip, so neither walk leaves the string.
     unsafe {

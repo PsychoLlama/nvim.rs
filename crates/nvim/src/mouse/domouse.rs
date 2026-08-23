@@ -168,7 +168,7 @@ impl Oap {
 ///
 /// # Safety
 /// `oap` must be a live operator argument or null.
-pub unsafe fn do_mouse(
+pub(crate) unsafe fn do_mouse(
     oap: *mut oparg_T,
     c: c_int,
     dir: c_int,

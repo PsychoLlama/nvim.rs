@@ -17,7 +17,7 @@ use core::ffi::c_int;
 
 /// Append a decimal digit to `value`; returns false (leaving `value`
 /// untouched) if the result would not fit in an `int`.
-pub fn vim_append_digit_int(value: &mut c_int, digit: c_int) -> bool {
+pub(crate) fn vim_append_digit_int(value: &mut c_int, digit: c_int) -> bool {
     match value.checked_mul(10).and_then(|x| x.checked_add(digit)) {
         Some(x) => {
             *value = x;
@@ -28,7 +28,7 @@ pub fn vim_append_digit_int(value: &mut c_int, digit: c_int) -> bool {
 }
 
 /// Clamp an `i64` into `int` range.
-pub fn trim_to_int(x: i64) -> c_int {
+pub(crate) fn trim_to_int(x: i64) -> c_int {
     // The clamp is the narrowing's proof.
     c_int::try_from(x.clamp(i64::from(c_int::MIN), i64::from(c_int::MAX)))
         .expect("clamped into `c_int` range")

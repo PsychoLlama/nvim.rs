@@ -47,13 +47,13 @@ use core::ptr;
 // The provider's own lifecycle state. `Disabled` is sticky (only a fresh
 // `nvim_set_decoration_provider` clears it); the other two are per-redraw.
 /// Set up for this redraw and taking calls.
-pub const kDecorProviderActive: DecorProvider_state = 1;
+pub(crate) const kDecorProviderActive: DecorProvider_state = 1;
 /// Turned off for the rest of *this window* — `on_win` or `on_line` declined.
-pub const kDecorProviderWinDisabled: DecorProvider_state = 2;
+pub(crate) const kDecorProviderWinDisabled: DecorProvider_state = 2;
 /// Turned off for the rest of *this redraw* — `on_start` declined.
-pub const kDecorProviderRedrawDisabled: DecorProvider_state = 3;
+pub(crate) const kDecorProviderRedrawDisabled: DecorProvider_state = 3;
 /// Turned off until it is registered again.
-pub const kDecorProviderDisabled: DecorProvider_state = 4;
+pub(crate) const kDecorProviderDisabled: DecorProvider_state = 4;
 
 /// `LuaRef` value meaning "no callback".
 const LUA_NOREF: LuaRef = -2;
@@ -206,7 +206,7 @@ unsafe fn decor_provider_invoke(
 ///
 /// # Safety
 /// `wp` must point to a live window.
-pub unsafe fn decor_providers_invoke_spell(
+pub(crate) unsafe fn decor_providers_invoke_spell(
     wp: *mut win_T,
     start_row: c_int,
     start_col: c_int,
@@ -244,7 +244,7 @@ pub unsafe fn decor_providers_invoke_spell(
 /// `wp` must point to a live window.
 ///
 /// @return whether a provider placed any marks in the callback.
-pub unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_int) -> bool {
+pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_int) -> bool {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     unsafe {
         let keys = (*(*wp).w_buffer).b_marktree[0].n_keys;
@@ -274,7 +274,7 @@ pub unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_int) ->
 ///
 /// # Safety
 /// Runs Lua; main thread only.
-pub unsafe fn decor_providers_start() {
+pub(crate) unsafe fn decor_providers_start() {
     // SAFETY: the callbacks re-enter the editor.
     unsafe {
         for idx in 0..provider_count() {
@@ -313,7 +313,7 @@ pub unsafe fn decor_providers_start() {
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua.
-pub unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
+pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     unsafe {
         // This might change in the future; then this would need
@@ -365,7 +365,7 @@ pub unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua.
-pub unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
+pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
     // SAFETY: the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     unsafe {
@@ -403,7 +403,7 @@ pub unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua.
-pub unsafe fn decor_providers_invoke_range(
+pub(crate) unsafe fn decor_providers_invoke_range(
     wp: *mut win_T,
     start_row: c_int,
     start_col: c_int,
@@ -483,7 +483,7 @@ pub unsafe fn decor_providers_invoke_range(
 ///
 /// # Safety
 /// `buf` must point to a live buffer; runs Lua.
-pub unsafe fn decor_providers_invoke_buf(buf: *mut buf_T) {
+pub(crate) unsafe fn decor_providers_invoke_buf(buf: *mut buf_T) {
     // SAFETY: the caller's buffer; the callbacks re-enter the editor.
     unsafe {
         for idx in 0..provider_count() {
@@ -503,7 +503,7 @@ pub unsafe fn decor_providers_invoke_buf(buf: *mut buf_T) {
 ///
 /// # Safety
 /// Runs Lua; main thread only.
-pub unsafe fn decor_providers_invoke_end() {
+pub(crate) unsafe fn decor_providers_invoke_end() {
     // SAFETY: the callbacks re-enter the editor.
     unsafe {
         for idx in 0..provider_count() {
@@ -526,7 +526,7 @@ pub unsafe fn decor_providers_invoke_end() {
 ///
 /// # Safety
 /// Reaches the highlight tables; main thread only.
-pub unsafe fn decor_provider_invalidate_hl() {
+pub(crate) unsafe fn decor_provider_invalidate_hl() {
     PROVIDERS.with_mut(|providers| {
         for p in providers.iter_mut() {
             p.hl_cached = false;
@@ -556,7 +556,7 @@ pub unsafe fn decor_provider_invalidate_hl() {
 ///
 /// # Safety
 /// The answer must not outlive the next registration.
-pub unsafe fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
+pub(crate) unsafe fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
     debug_assert!(ns_id > 0);
     match provider_index(ns_id, force) {
         Some(idx) => PROVIDERS.with(|providers| providers.as_ptr().cast_mut().wrapping_add(idx)),
@@ -574,7 +574,7 @@ pub unsafe fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
 ///
 /// Carries [`get_decor_provider`]'s `ns_id > 0` assertion, and for the same
 /// reason it is a `debug_assert!` there.
-pub fn with_decor_provider<R>(
+pub(crate) fn with_decor_provider<R>(
     ns_id: NS,
     force: bool,
     f: impl FnOnce(&mut DecorProvider) -> R,
@@ -631,7 +631,7 @@ const fn new_provider(ns_id: NS) -> DecorProvider {
 ///
 /// # Safety
 /// `p` must be null or point to a live provider.
-pub unsafe fn decor_provider_clear(p: *mut DecorProvider) {
+pub(crate) unsafe fn decor_provider_clear(p: *mut DecorProvider) {
     if p.is_null() {
         return;
     }

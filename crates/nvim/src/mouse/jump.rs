@@ -74,7 +74,11 @@ static did_drag: GlobalCell<c_int> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `inclusive` must be writable or null.
-pub unsafe fn jump_to_mouse(flags: c_int, inclusive: *mut bool, which_button: c_int) -> c_int {
+pub(crate) unsafe fn jump_to_mouse(
+    flags: c_int,
+    inclusive: *mut bool,
+    which_button: c_int,
+) -> c_int {
     // SAFETY: the caller's promise.
     let inclusive = unsafe { inclusive.as_mut() };
     jump(flags, inclusive, which_button)

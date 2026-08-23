@@ -28,7 +28,7 @@ const NO_NEWLINE: &[u8] = b"\n\\ No newline at end of file\n";
 /// A shift-only integer square root, used to size the Myers cost ceiling and
 /// the "this line matches too many others" limit. Approximate on purpose:
 /// both callers want an order of magnitude, not a root.
-pub fn bogosqrt(mut n: i64) -> i64 {
+pub(crate) fn bogosqrt(mut n: i64) -> i64 {
     let mut i = 1i64;
     while n > 0 {
         i <<= 1;
@@ -38,7 +38,7 @@ pub fn bogosqrt(mut n: i64) -> i64 {
 }
 
 /// How many bits of hash a table of `size` entries should be indexed by.
-pub fn hashbits(size: u32) -> u32 {
+pub(crate) fn hashbits(size: u32) -> u32 {
     let mut val: u32 = 1;
     let mut bits: u32 = 0;
     while val < size && bits < u32::BITS {
@@ -56,7 +56,7 @@ pub fn hashbits(size: u32) -> u32 {
 /// Only a sizing hint: [`super::xprepare::prepare_ctx`] grows past it. The
 /// histogram engine asks for a much smaller sample because it never fills a
 /// hash table that would have to be grown.
-pub fn guess_lines(text: &[u8], sample: i64) -> i64 {
+pub(crate) fn guess_lines(text: &[u8], sample: i64) -> i64 {
     let mut nl = 0i64;
     let mut cur = 0usize;
     while nl < sample && cur < text.len() {
@@ -77,7 +77,7 @@ pub fn guess_lines(text: &[u8], sample: i64) -> i64 {
 
 /// Is this line blank? Without a whitespace flag that means "empty or just a
 /// newline"; with one, "nothing but whitespace".
-pub fn blankline(line: &[u8], flags: u64) -> bool {
+pub(crate) fn blankline(line: &[u8], flags: u64) -> bool {
     if flags & XDF_WHITESPACE_FLAGS == 0 {
         return line.len() <= 1;
     }
@@ -103,7 +103,7 @@ fn ends_with_optional_cr(line: &[u8], i: usize) -> bool {
 /// `--ignore-cr-at-eol` matches — but each needs its own way of skipping
 /// whitespace while both sides are still in hand, so they are four loops
 /// rather than one.
-pub fn recmatch(l1: &[u8], l2: &[u8], flags: u64) -> bool {
+pub(crate) fn recmatch(l1: &[u8], l2: &[u8], flags: u64) -> bool {
     if l1 == l2 {
         return true;
     }
@@ -188,7 +188,7 @@ pub fn recmatch(l1: &[u8], l2: &[u8], flags: u64) -> bool {
 /// `text` is the rest of the *file*, not one line: the whitespace flavours
 /// need to see the byte after a whitespace run to know whether the run is at
 /// end of line, and that byte may be the newline itself.
-pub fn hash_record(text: &[u8], flags: u64) -> (u64, usize) {
+pub(crate) fn hash_record(text: &[u8], flags: u64) -> (u64, usize) {
     // Where this line ends, and where the next one starts. Splitting the
     // line off first is what keeps the fold loop below index-free: it is the
     // one place in the engine that runs per *byte* of both files.
@@ -313,7 +313,7 @@ fn format_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdRes
 
 /// Report a hunk's extent, through `xdemitcb_t.out_hunk` if the caller
 /// installed one and as a formatted `@@` line otherwise.
-pub fn emit_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdResult {
+pub(crate) fn emit_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdResult {
     if !emit.has_out_hunk() {
         return format_hunk_hdr(s1, c1, s2, c2, emit);
     }
@@ -327,7 +327,7 @@ pub fn emit_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdR
 
 /// Write one body line: its ` `/`-`/`+` marker, the line, and the
 /// no-final-newline marker when the line has no newline of its own.
-pub fn emit_diffrec(rec: &[u8], pre: &[u8], emit: &mut Emit) -> XdResult {
+pub(crate) fn emit_diffrec(rec: &[u8], pre: &[u8], emit: &mut Emit) -> XdResult {
     if rec.last().is_some_and(|&b| b != b'\n') {
         emit.line(&[pre, rec, NO_NEWLINE])
     } else {
@@ -342,7 +342,7 @@ pub fn emit_diffrec(rec: &[u8], pre: &[u8], emit: &mut Emit) -> XdResult {
 /// sub-files are re-derived from `env`'s records rather than from the
 /// original `mmfile_t`s — upstream's comment says it would rather reuse the
 /// prepared environment, but the library has no way to diff a range.
-pub fn fall_back_diff(env: &mut Env<'_>, xpp: &Params<'_>, blk: Block) -> XdResult {
+pub(crate) fn fall_back_diff(env: &mut Env<'_>, xpp: &Params<'_>, blk: Block) -> XdResult {
     let sub1 = env.xdf1.span(blk.line1 - 1, blk.end1() - 1);
     let sub2 = env.xdf2.span(blk.line2 - 1, blk.end2() - 1);
     let sub = do_diff(sub1, sub2, xpp)?;

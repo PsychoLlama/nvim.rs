@@ -13,55 +13,55 @@ use crate::types::{Integer, OptValType, size_t};
 use crate::ui::ui_call_hl_group_set;
 mod hlf;
 
-pub use self::hlf::*;
+pub(crate) use self::hlf::*;
 
 // The carve of the transpiled module; see each child's docs.
 mod colornames;
-pub use self::colornames::*;
+pub(crate) use self::colornames::*;
 mod cterm;
-pub use self::cterm::*;
+pub(crate) use self::cterm::*;
 mod defaults;
-pub use self::defaults::*;
+pub(crate) use self::defaults::*;
 mod table;
-pub use self::table::*;
+pub(crate) use self::table::*;
 mod list;
-pub use self::list::*;
+pub(crate) use self::list::*;
 mod query;
-pub use self::query::*;
+pub(crate) use self::query::*;
 mod command;
-pub use self::command::*;
+pub(crate) use self::command::*;
 mod apply;
-pub use self::apply::*;
+pub(crate) use self::apply::*;
 
 /// `OptValType`, for the one option this family sets (`'background'`).
-pub const kOptValTypeString: OptValType = 2;
+pub(crate) const kOptValTypeString: OptValType = 2;
 
 /// The highest highlight id, and the longest group name.
-pub const MAX_HL_ID: c_uint = 20000;
-pub const MAX_SYN_NAME: c_int = 200;
+pub(crate) const MAX_HL_ID: c_uint = 20000;
+pub(crate) const MAX_SYN_NAME: c_int = 200;
 
 /// `HlGroup::set`: which parts of a group have been given explicitly, so
 /// that `init` definitions know what not to overwrite.
-pub const SG_CTERM: c_uint = 2;
-pub const SG_GUI: c_uint = 4;
-pub const SG_LINK: c_uint = 8;
+pub(crate) const SG_CTERM: c_uint = 2;
+pub(crate) const SG_GUI: c_uint = 4;
+pub(crate) const SG_LINK: c_uint = 8;
 
 /// `HlGroup::rgb_*_idx`: where an RGB colour came from. A non-negative value
 /// is an index into `COLOR_NAMES` instead.
-pub const kColorIdxNone: c_int = -1;
-pub const kColorIdxHex: c_int = -2;
-pub const kColorIdxFg: c_int = -3;
-pub const kColorIdxBg: c_int = -4;
+pub(crate) const kColorIdxNone: c_int = -1;
+pub(crate) const kColorIdxHex: c_int = -2;
+pub(crate) const kColorIdxFg: c_int = -3;
+pub(crate) const kColorIdxBg: c_int = -4;
 
 /// Keyset bit positions, from `api/keysets_defs.h`.
-pub const KEYSET_OPTIDX_highlight__bg: c_int = 1;
-pub const KEYSET_OPTIDX_highlight__fg: c_int = 2;
-pub const KEYSET_OPTIDX_highlight__sp: c_int = 3;
-pub const KEYSET_OPTIDX_highlight__update: c_int = 13;
-pub const KEYSET_OPTIDX_get_highlight__id: c_int = 1;
-pub const KEYSET_OPTIDX_get_highlight__link: c_int = 2;
-pub const KEYSET_OPTIDX_get_highlight__name: c_int = 3;
-pub const KEYSET_OPTIDX_get_highlight__create: c_int = 4;
+pub(crate) const KEYSET_OPTIDX_highlight__bg: c_int = 1;
+pub(crate) const KEYSET_OPTIDX_highlight__fg: c_int = 2;
+pub(crate) const KEYSET_OPTIDX_highlight__sp: c_int = 3;
+pub(crate) const KEYSET_OPTIDX_highlight__update: c_int = 13;
+pub(crate) const KEYSET_OPTIDX_get_highlight__id: c_int = 1;
+pub(crate) const KEYSET_OPTIDX_get_highlight__link: c_int = 2;
+pub(crate) const KEYSET_OPTIDX_get_highlight__name: c_int = 3;
+pub(crate) const KEYSET_OPTIDX_get_highlight__create: c_int = 4;
 
 /// The `:highlight` parse errors.
 pub(crate) const e_highlight_group_name_not_found_str: &CStr =
@@ -172,7 +172,7 @@ unsafe fn combine_stl_hlt(
 ///
 /// # Safety
 /// Adds groups, resolves attributes and emits UI events; main thread only.
-pub unsafe fn highlight_changed() {
+pub(crate) unsafe fn highlight_changed() {
     // SAFETY (whole body): the editor's own tables and UI, on the main
     // thread; `hlf_names` is static and NUL-terminated.
     unsafe {

@@ -57,26 +57,26 @@ mod init;
 mod resolve;
 mod visited;
 
-pub use self::chdir::*;
-pub use self::cursor::*;
-pub use self::init::*;
-pub use self::resolve::*;
+pub(crate) use self::chdir::*;
+pub(crate) use self::cursor::*;
+pub(crate) use self::init::*;
+pub(crate) use self::resolve::*;
 pub(crate) use self::visited::*;
 
-pub const kCdCauseAuto: CdCause = 2;
-pub const kCdCauseWindow: CdCause = 1;
-pub const kCdCauseOther: CdCause = -1;
-pub const kBufOptIncludeexpr: c_int = 46;
+pub(crate) const kCdCauseAuto: CdCause = 2;
+pub(crate) const kCdCauseWindow: CdCause = 1;
+pub(crate) const kCdCauseOther: CdCause = -1;
+pub(crate) const kBufOptIncludeexpr: c_int = 46;
 
 /// What a search should accept as a match.
-pub const FINDFILE_DIR: c_int = 1;
-pub const FINDFILE_BOTH: c_int = 2;
+pub(crate) const FINDFILE_DIR: c_int = 1;
+pub(crate) const FINDFILE_BOTH: c_int = 2;
 
 crate::flag_set! {
     /// How to read the file name under the cursor -- upstream's `FNAME_*`,
     /// the `options` argument [`file_name_at_cursor`] and
     /// [`find_file_name_in_path`] thread.
-    pub struct FileNameOpts;
+    pub(crate) struct FileNameOpts;
 
     /// Say why, when no name could be read or no file found.
     const MESS = 1;
@@ -102,7 +102,7 @@ const LITERAL_DIR: ExpandFlags = ExpandFlags::DIR
     .or(ExpandFlags::NOTWILD);
 
 /// How far `**` descends when the pattern does not say.
-pub const FF_MAX_STAR_STAR_EXPAND: u8 = 30;
+pub(crate) const FF_MAX_STAR_STAR_EXPAND: u8 = 30;
 
 /// An owned NUL-terminated byte string.
 ///
@@ -784,7 +784,7 @@ impl FindContext {
 /// of the list).
 ///
 /// @return  a pointer to an allocated file name, or NULL if nothing found.
-pub unsafe fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
+pub(crate) unsafe fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
     unsafe {
         if search_ctx_arg.is_null() {
             return ptr::null_mut();

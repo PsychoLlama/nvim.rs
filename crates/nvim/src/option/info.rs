@@ -77,7 +77,7 @@ fn int_value(n: Integer) -> Object {
 /// # Safety
 ///
 /// `name` must be a valid string; `buf`, `win` and `arena` must be live.
-pub unsafe fn get_vimoption(
+pub(crate) unsafe fn get_vimoption(
     name: String_0,
     opt_flags: OptionSetFlags,
     buf: *mut buf_T,
@@ -106,7 +106,7 @@ pub unsafe fn get_vimoption(
 /// # Safety
 ///
 /// `arena` must be live.
-pub unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
+pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
     // SAFETY: the arena is live, and it is asked for exactly `kOptCount`
     // pairs before any is pushed.
     unsafe {

@@ -29,21 +29,21 @@ pub(crate) use self::showcmd::*;
 mod visual;
 pub(crate) use self::visual::*;
 mod ident;
-pub use self::ident::*;
+pub(crate) use self::ident::*;
 mod motion;
-pub use self::motion::*;
+pub(crate) use self::motion::*;
 mod search;
 pub(crate) use self::search::*;
 mod brackets;
 pub(crate) use self::brackets::*;
 mod scroll;
-pub use self::scroll::*;
+pub(crate) use self::scroll::*;
 mod edit;
-pub use self::edit::*;
+pub(crate) use self::edit::*;
 mod operator;
 pub(crate) use self::operator::*;
 mod gcmd;
-pub use self::gcmd::*;
+pub(crate) use self::gcmd::*;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT,
     Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T,
@@ -59,43 +59,43 @@ use crate::keycodes::{
 use crate::search::{BACKWARD, FORWARD, SEARCH_REV};
 mod misc;
 pub(crate) use self::misc::*;
-pub const _ISlower: c_uint = 512;
-pub const _ISupper: c_uint = 256;
-pub const kDirectionNotSet: Direction = 0;
-pub const kMarkChangedCursor: MarkMoveRes = 32;
-pub const kMarkChangedLine: MarkMoveRes = 16;
-pub const kMarkSwitchedBuf: MarkMoveRes = 4;
-pub const kMarkMoveFailed: MarkMoveRes = 2;
-pub const kMarkMoveSuccess: MarkMoveRes = 1;
-pub const kMarkJumpList: MarkMove = 16;
-pub const kMarkSetView: MarkMove = 8;
-pub const KMarkNoContext: MarkMove = 4;
-pub const kMarkContext: MarkMove = 2;
-pub const kMarkBeginLine: MarkMove = 1;
-pub const kMarkAll: MarkGet = 1;
-pub const GETF_ALT: getf_values = 2;
-pub const GETF_SETMARK: getf_values = 1;
-pub const OPENLINE_DO_COM: c_uint = 2;
-pub const HIST_SEARCH: c_int = 1;
-pub const ECMD_HIDE: c_uint = 1;
-pub const ECMD_LAST: c_int = -1;
-pub const VSE_NONE: c_uint = 0;
-pub const ML_DEL_MESSAGE: c_uint = 1;
-pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
-pub const CA_NO_ADJ_OP_END: c_uint = 2;
-pub const CA_COMMAND_BUSY: c_uint = 1;
-pub const REPLACE_NL_NCHAR: c_int = -2;
-pub const REPLACE_CR_NCHAR: c_int = -1;
-pub const SHOWCMD_COLS: c_uint = 10;
+pub(crate) const _ISlower: c_uint = 512;
+pub(crate) const _ISupper: c_uint = 256;
+pub(crate) const kDirectionNotSet: Direction = 0;
+pub(crate) const kMarkChangedCursor: MarkMoveRes = 32;
+pub(crate) const kMarkChangedLine: MarkMoveRes = 16;
+pub(crate) const kMarkSwitchedBuf: MarkMoveRes = 4;
+pub(crate) const kMarkMoveFailed: MarkMoveRes = 2;
+pub(crate) const kMarkMoveSuccess: MarkMoveRes = 1;
+pub(crate) const kMarkJumpList: MarkMove = 16;
+pub(crate) const kMarkSetView: MarkMove = 8;
+pub(crate) const KMarkNoContext: MarkMove = 4;
+pub(crate) const kMarkContext: MarkMove = 2;
+pub(crate) const kMarkBeginLine: MarkMove = 1;
+pub(crate) const kMarkAll: MarkGet = 1;
+pub(crate) const GETF_ALT: getf_values = 2;
+pub(crate) const GETF_SETMARK: getf_values = 1;
+pub(crate) const OPENLINE_DO_COM: c_uint = 2;
+pub(crate) const HIST_SEARCH: c_int = 1;
+pub(crate) const ECMD_HIDE: c_uint = 1;
+pub(crate) const ECMD_LAST: c_int = -1;
+pub(crate) const VSE_NONE: c_uint = 0;
+pub(crate) const ML_DEL_MESSAGE: c_uint = 1;
+pub(crate) const kMTLineWise: MotionType = 1;
+pub(crate) const kMTCharWise: MotionType = 0;
+pub(crate) const CA_NO_ADJ_OP_END: c_uint = 2;
+pub(crate) const CA_COMMAND_BUSY: c_uint = 1;
+pub(crate) const REPLACE_NL_NCHAR: c_int = -2;
+pub(crate) const REPLACE_CR_NCHAR: c_int = -1;
+pub(crate) const SHOWCMD_COLS: c_uint = 10;
 pub(crate) const SHOWCMD_BUFLEN: c_uint = 41;
-pub const MSCR_RIGHT: c_int = -2;
-pub const MSCR_LEFT: c_int = -1;
-pub const MSCR_UP: c_int = 1;
-pub const MSCR_DOWN: c_int = 0;
-pub const FIND_EVAL: c_uint = 4;
-pub const FIND_STRING: c_uint = 2;
-pub const FIND_IDENT: c_uint = 1;
+pub(crate) const MSCR_RIGHT: c_int = -2;
+pub(crate) const MSCR_LEFT: c_int = -1;
+pub(crate) const MSCR_UP: c_int = 1;
+pub(crate) const MSCR_DOWN: c_int = 0;
+pub(crate) const FIND_EVAL: c_uint = 4;
+pub(crate) const FIND_STRING: c_uint = 2;
+pub(crate) const FIND_IDENT: c_uint = 1;
 #[derive(Copy, Clone)]
 pub(crate) struct nv_cmd {
     pub cmd_char: c_int,
@@ -109,18 +109,18 @@ pub(crate) struct nv_cmd {
 /// ABI ledger nor the unit-test cdefs name any of them -- so the handlers are
 /// ordinary Rust functions rather than `extern "C"` ones.
 pub(crate) type nv_func_T = Option<unsafe fn(*mut cmdarg_T)>;
-pub const FM_FORWARD: c_uint = 2;
-pub const SPELL_ADD_BAD: SpellAddType = 1;
-pub const SPELL_ADD_GOOD: SpellAddType = 0;
-pub const SMT_RARE: smt_T = 2;
-pub const SMT_BAD: smt_T = 1;
-pub const FM_BACKWARD: c_uint = 1;
-pub const ACTION_GOTO: c_uint = 2;
-pub const ACTION_SHOW: c_uint = 1;
-pub const ACTION_SHOW_ALL: c_uint = 4;
-pub const FIND_ANY: c_uint = 1;
-pub const FIND_DEFINE: c_uint = 2;
-pub const DT_POP: c_uint = 2;
+pub(crate) const FM_FORWARD: c_uint = 2;
+pub(crate) const SPELL_ADD_BAD: SpellAddType = 1;
+pub(crate) const SPELL_ADD_GOOD: SpellAddType = 0;
+pub(crate) const SMT_RARE: smt_T = 2;
+pub(crate) const SMT_BAD: smt_T = 1;
+pub(crate) const FM_BACKWARD: c_uint = 1;
+pub(crate) const ACTION_GOTO: c_uint = 2;
+pub(crate) const ACTION_SHOW: c_uint = 1;
+pub(crate) const ACTION_SHOW_ALL: c_uint = 4;
+pub(crate) const FIND_ANY: c_uint = 1;
+pub(crate) const FIND_DEFINE: c_uint = 2;
+pub(crate) const DT_POP: c_uint = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub(crate) struct NormalState {
@@ -142,23 +142,23 @@ pub(crate) struct NormalState {
     pub old_col: c_int,
     pub old_pos: pos_T,
 }
-pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
-pub const KV_INITIAL_VALUE: Array = Array {
+pub(crate) const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
+pub(crate) const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const TAB: c_int = 9;
-pub const NL: c_int = '\n' as c_int;
-pub const CAR: c_int = '\r' as c_int;
-pub const ESC: c_int = '\u{1b}' as c_int;
-pub const DEL: c_int = 0x7f as c_int;
+pub(crate) const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
+pub(crate) const TAB: c_int = 9;
+pub(crate) const NL: c_int = '\n' as c_int;
+pub(crate) const CAR: c_int = '\r' as c_int;
+pub(crate) const ESC: c_int = '\u{1b}' as c_int;
+pub(crate) const DEL: c_int = 0x7f as c_int;
 pub(crate) const POUND: c_int = 0xa3 as c_int;
-pub const B_IMODE_LMAP: c_int = 1 as c_int;
-pub const MOD_MASK_SHIFT: c_int = 0x2 as c_int;
-pub const MOD_MASK_CTRL: c_int = 0x4 as c_int;
-pub const GRAPHEME_STATE_INIT: c_int = 0 as c_int;
+pub(crate) const B_IMODE_LMAP: c_int = 1 as c_int;
+pub(crate) const MOD_MASK_SHIFT: c_int = 0x2 as c_int;
+pub(crate) const MOD_MASK_CTRL: c_int = 0x4 as c_int;
+pub(crate) const GRAPHEME_STATE_INIT: c_int = 0 as c_int;
 static VIsual_mode_orig: GlobalCell<c_int> = GlobalCell::new(NUL);
 const e_changelist_is_empty: &CStr = c"E664: Changelist is empty";
 const e_cmdline_window_already_open: &CStr = c"E1292: Command-line window is already open";
@@ -608,5 +608,5 @@ static current_oap: GlobalCell<*mut oparg_T> = GlobalCell::new(::core::ptr::null
 static old_showcmd_buf: GlobalCell<[c_char; 41]> = GlobalCell::new([0; 41]);
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);
-pub const INT_MAX: c_int = __INT_MAX__;
-pub const __INT_MAX__: c_int = 2147483647 as c_int;
+pub(crate) const INT_MAX: c_int = __INT_MAX__;
+pub(crate) const __INT_MAX__: c_int = 2147483647 as c_int;

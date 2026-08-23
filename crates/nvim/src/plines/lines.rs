@@ -14,7 +14,7 @@ use crate::types::NUL;
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn win_may_fill(wp: *mut win_T) -> bool {
+pub(crate) unsafe fn win_may_fill(wp: *mut win_T) -> bool {
     unsafe {
         ((*wp).w_onebuf_opt.wo_diff != 0 && diffopt_filler())
             || buf_meta_total((*wp).w_buffer, MT_META_LINES) != 0
@@ -26,7 +26,7 @@ pub unsafe fn win_may_fill(wp: *mut win_T) -> bool {
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> c_int {
     unsafe {
         let virt_lines = decor_virt_lines(
             wp,
@@ -52,7 +52,7 @@ pub unsafe fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub unsafe fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> c_int {
+pub(crate) unsafe fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> c_int {
     unsafe { plines_win_nofill(wp, lnum, limit_winheight) + win_get_fill(wp, lnum) }
 }
 
@@ -60,7 +60,11 @@ pub unsafe fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) 
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub unsafe fn plines_win_nofill(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> c_int {
+pub(crate) unsafe fn plines_win_nofill(
+    wp: *mut win_T,
+    lnum: linenr_T,
+    limit_winheight: bool,
+) -> c_int {
     unsafe {
         if decor_conceal_line(wp, lnum - 1, false) {
             return 0;
@@ -86,7 +90,7 @@ pub unsafe fn plines_win_nofill(wp: *mut win_T, lnum: linenr_T, limit_winheight:
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub unsafe fn plines_win_nofold(wp: *mut win_T, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn plines_win_nofold(wp: *mut win_T, lnum: linenr_T) -> c_int {
     unsafe {
         let s = ml_get_buf((*wp).w_buffer, lnum);
         let mut csarg = CharsizeArg::default();
@@ -130,7 +134,7 @@ pub unsafe fn plines_win_nofold(wp: *mut win_T, lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub unsafe fn plines_win_col(wp: *mut win_T, lnum: linenr_T, mut column: c_long) -> c_int {
+pub(crate) unsafe fn plines_win_col(wp: *mut win_T, lnum: linenr_T, mut column: c_long) -> c_int {
     unsafe {
         // Filler lines above this buffer line.
         let mut lines = win_get_fill(wp, lnum);
@@ -194,7 +198,7 @@ pub unsafe fn plines_win_col(wp: *mut win_T, lnum: linenr_T, mut column: c_long)
 /// # Safety
 /// `wp` must be live; `nextp` (set to the last line of a fold) and `foldedp`
 /// may be null.
-pub unsafe fn plines_win_full(
+pub(crate) unsafe fn plines_win_full(
     wp: *mut win_T,
     mut lnum: linenr_T,
     nextp: *mut linenr_T,
@@ -242,7 +246,7 @@ pub unsafe fn plines_win_full(
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn plines_m_win(
+pub(crate) unsafe fn plines_m_win(
     wp: *mut win_T,
     mut first: linenr_T,
     last: linenr_T,
@@ -275,7 +279,7 @@ pub unsafe fn plines_m_win(
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn plines_m_win_fill(wp: *mut win_T, first: linenr_T, last: linenr_T) -> c_int {
+pub(crate) unsafe fn plines_m_win_fill(wp: *mut win_T, first: linenr_T, last: linenr_T) -> c_int {
     unsafe {
         let mut count = last - first
             + 1
@@ -312,7 +316,7 @@ pub unsafe fn plines_m_win_fill(wp: *mut win_T, first: linenr_T, last: linenr_T)
 ///
 /// # Safety
 /// `wp`, `end_lnum` and `end_vcol` must be live; `fill` may be null.
-pub unsafe fn win_text_height(
+pub(crate) unsafe fn win_text_height(
     wp: *mut win_T,
     start_lnum: linenr_T,
     start_vcol: int64_t,

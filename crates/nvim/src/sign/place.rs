@@ -316,7 +316,7 @@ unsafe fn buf_delete_signs(
 ///
 /// # Safety
 /// `buf` must be live.
-pub unsafe fn buf_has_signs(buf: *const buf_T) -> bool {
+pub(crate) unsafe fn buf_has_signs(buf: *const buf_T) -> bool {
     // SAFETY: the caller's buffer.
     let buf = unsafe { Buf::new(buf.cast_mut()) };
     buf.meta_total(kMTMetaSignHL) + buf.meta_total(kMTMetaSignText) != 0

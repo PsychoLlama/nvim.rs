@@ -40,7 +40,7 @@ use crate::vterm::vterm::{VTERM_ATTR_URI, VTERM_TERMINATOR_BEL, VTERM_VALUETYPE_
 /// Only the string-carrying ones are taken: a control or CSI sequence vterm
 /// does not know is not something an autocommand could make sense of
 /// either.
-pub static FALLBACKS: VTermStateFallbacks = VTermStateFallbacks {
+pub(crate) static FALLBACKS: VTermStateFallbacks = VTermStateFallbacks {
     control: None,
     csi: None,
     osc: Some(on_osc),
@@ -54,7 +54,7 @@ pub static FALLBACKS: VTermStateFallbacks = VTermStateFallbacks {
 ///
 /// Owned by the queued event: [`schedule_termrequest`] leaks the box and
 /// [`emit_termrequest`] reclaims it, possibly after re-queueing itself once.
-pub struct TermRequest {
+pub(crate) struct TermRequest {
     /// The buffer rather than the terminal: by the time this runs the
     /// terminal may have been destroyed, and a handle can be checked.
     buf_handle: handle_T,
@@ -165,7 +165,7 @@ fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
 }
 
 /// Queue the sequence assembled so far for reporting on the main loop.
-pub fn schedule_termrequest(mut term: Term) {
+pub(crate) fn schedule_termrequest(mut term: Term) {
     let request = Box::into_raw(Box::new(TermRequest {
         buf_handle: term.buf_handle,
         sequence: term.termrequest_buffer.clone(),
@@ -254,7 +254,7 @@ fn apply_osc8(term: Term) {
     unsafe { set_pen_attr(&mut *state.0, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value) };
 }
 
-pub unsafe extern "C" fn on_osc(
+pub(crate) unsafe extern "C" fn on_osc(
     command: c_int,
     frag: VTermStringFragment,
     user: *mut c_void,
@@ -282,7 +282,7 @@ pub unsafe extern "C" fn on_osc(
     1
 }
 
-pub unsafe extern "C" fn on_dcs(
+pub(crate) unsafe extern "C" fn on_dcs(
     command: *const c_char,
     commandlen: size_t,
     frag: VTermStringFragment,
@@ -308,7 +308,7 @@ pub unsafe extern "C" fn on_dcs(
     1
 }
 
-pub unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_void) -> c_int {
+pub(crate) unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_void) -> c_int {
     // SAFETY: as in `on_osc`.
     let term = unsafe { Term::new(user.cast()) };
     if frag.str.is_null() || frag.is_empty() {

@@ -238,7 +238,7 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
 ///
 /// # Safety
 /// `buf` must be live.
-pub unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T {
+pub(crate) unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T {
     // SAFETY: the caller's buffer.
     let signs = placed_signs(unsafe { Buf::new(buf) }, 0, ALL_GROUPS, |_| Keep::Yes);
     // SAFETY: every mark the walk kept carries a live sign decoration.
@@ -383,7 +383,11 @@ unsafe fn sign_define_from_dict(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_define(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_define(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     if args.ty(0) == VAR_LIST && !args.has(1) {
         // SAFETY: the frame's return slot, and a list the evaluator owns.
@@ -413,7 +417,11 @@ pub unsafe fn f_sign_define(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_getdefined(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_getdefined(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's return slot and argument.
     unsafe {
@@ -433,7 +441,11 @@ pub unsafe fn f_sign_getdefined(argvars: *mut typval_T, rettv: *mut typval_T, _f
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_getplaced(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_getplaced(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's return slot and argument slots.
     unsafe {
@@ -489,7 +501,11 @@ pub unsafe fn f_sign_getplaced(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_jump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_jump(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
 
@@ -616,7 +632,11 @@ unsafe fn sign_place_from_dict(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_place(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_place(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     let mut dict = null();
@@ -638,7 +658,11 @@ pub unsafe fn f_sign_place(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_placelist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_placelist(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame's return slot and argument.
     unsafe {
@@ -652,7 +676,11 @@ pub unsafe fn f_sign_placelist(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_undefine(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_undefine(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     if args.ty(0) == VAR_LIST && !args.has(1) {
         // SAFETY: the frame's return slot, and a list the evaluator owns.
@@ -726,7 +754,11 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> 
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_unplace(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_sign_unplace(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the frame's argument slots.
@@ -745,7 +777,7 @@ pub unsafe fn f_sign_unplace(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub unsafe fn f_sign_unplacelist(
+pub(crate) unsafe fn f_sign_unplacelist(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,

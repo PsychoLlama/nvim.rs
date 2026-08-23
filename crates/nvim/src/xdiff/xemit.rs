@@ -36,7 +36,7 @@ use crate::xdiff::xutils::{emit_diffrec, emit_hunk_hdr};
 /// `*start`, which is why it is in-out.
 ///
 /// `None` means the skip ran off the end and there is no hunk left.
-pub fn get_hunk(script: &[Change], start: &mut usize, xecfg: &EmitConf) -> Option<usize> {
+pub(crate) fn get_hunk(script: &[Change], start: &mut usize, xecfg: &EmitConf) -> Option<usize> {
     let max_common = 2 * xecfg.ctxlen + xecfg.interhunkctxlen;
     let max_ignorable = xecfg.ctxlen;
     // Blank lines skipped so far; they still count toward `max_common`.
@@ -97,7 +97,7 @@ fn emit_record(xdf: &XdFile<'_>, ri: i64, pre: &[u8], emit: &mut Emit<'_>) -> Xd
 /// Reached only from `vim.diff()` without an `on_hunk` callback; everything
 /// else in the tree installs `xdemitconf_t.hunk_func` and takes
 /// `xdiffi::call_hunk_func` instead.
-pub fn emit_diff(
+pub(crate) fn emit_diff(
     xe: &Env<'_>,
     script: &[Change],
     xecfg: &EmitConf,

@@ -61,7 +61,7 @@ const POUND_BYTE: u8 = 0xa3;
 /// line rather than of the buffer line.
 ///
 /// Also called from `move.rs` for a mouse click landing left of the text.
-pub unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();

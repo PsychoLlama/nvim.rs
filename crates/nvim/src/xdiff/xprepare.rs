@@ -177,7 +177,7 @@ fn prepare_ctx<'a>(
 
 /// Prepare both files: split, classify, and (for the classic algorithm)
 /// reduce.
-pub fn prepare_env<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> Env<'a> {
+pub(crate) fn prepare_env<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> Env<'a> {
     let algorithm = xpp.algorithm();
 
     // For histogram diff we can afford a smaller sample and thus a poorer

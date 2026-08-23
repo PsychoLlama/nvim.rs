@@ -42,7 +42,7 @@ use super::{HLF_W, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, k
 /// `Copy` on purpose: [`super::highlight_changed`] builds ten scratch entries
 /// by cloning real ones, which upstream does with `memmove`.
 #[derive(Clone, Copy, PartialEq)]
-pub struct HlGroup {
+pub(crate) struct HlGroup {
     /// The name as written.
     pub name: &'static CStr,
     /// The same name uppercased — the key groups are looked up by.
@@ -178,18 +178,18 @@ impl GroupTable {
 static GROUPS: GlobalCell<GroupTable> = GlobalCell::new(GroupTable::new());
 
 /// The number of highlight groups.
-pub fn highlight_num_groups() -> c_int {
+pub(crate) fn highlight_num_groups() -> c_int {
     GROUPS.with(|table| table.entries.len() as c_int)
 }
 
 /// The name of the group at *index* `id` — note that this one is not an id
 /// minus one, which is how its two callers in syntax.rs use it.
-pub fn highlight_group_name(id: c_int) -> *mut c_char {
+pub(crate) fn highlight_group_name(id: c_int) -> *mut c_char {
     GROUPS.with(|table| table.entries[id as usize].name.as_ptr().cast_mut())
 }
 
 /// The id the group at *index* `id` links to, 0 for none.
-pub fn highlight_link_id(id: c_int) -> c_int {
+pub(crate) fn highlight_link_id(id: c_int) -> c_int {
     GROUPS.with(|table| table.entries[id as usize].link)
 }
 
@@ -298,7 +298,7 @@ pub(crate) unsafe fn set_hl_attr(id: c_int) {
 ///
 /// # Safety
 /// See [`set_hl_attr`].
-pub unsafe fn highlight_attr_set_all() {
+pub(crate) unsafe fn highlight_attr_set_all() {
     let mut id = 1;
     // The count is re-read every round because `set_hl_attr` can add groups.
     while id <= highlight_num_groups() {
@@ -346,7 +346,7 @@ fn upper_key(name: &[u8]) -> CString {
 ///
 /// # Safety
 /// `name` is NUL-terminated; may add a group; main thread only.
-pub unsafe fn syn_name2id(name: *const c_char) -> c_int {
+pub(crate) unsafe fn syn_name2id(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
     let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
     if bytes.first() == Some(&b'@') {
@@ -360,7 +360,7 @@ pub unsafe fn syn_name2id(name: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `name` points to at least `len` readable bytes; main thread only.
-pub unsafe fn syn_name2id_len(name: *const c_char, len: size_t) -> c_int {
+pub(crate) unsafe fn syn_name2id_len(name: *const c_char, len: size_t) -> c_int {
     // SAFETY: the caller's buffer, `len` bytes of it.
     lookup(unsafe { core::slice::from_raw_parts(name.cast::<u8>(), len) })
 }
@@ -379,7 +379,7 @@ fn lookup(name: &[u8]) -> c_int {
 ///
 /// # Safety
 /// See [`syn_name2id`].
-pub unsafe fn syn_name2attr(name: *const c_char) -> c_int {
+pub(crate) unsafe fn syn_name2attr(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
     unsafe {
         match syn_name2id(name) {
@@ -393,13 +393,13 @@ pub unsafe fn syn_name2attr(name: *const c_char) -> c_int {
 ///
 /// # Safety
 /// See [`syn_name2id`].
-pub unsafe fn highlight_exists(name: *const c_char) -> c_int {
+pub(crate) unsafe fn highlight_exists(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
     c_int::from(unsafe { syn_name2id(name) } > 0)
 }
 
 /// The name of the group with id `id`, or `""` for an id that names none.
-pub fn syn_id2name(id: c_int) -> *mut c_char {
+pub(crate) fn syn_id2name(id: c_int) -> *mut c_char {
     // The bound has to be tested BEFORE the index is formed: `id` of 0 is the
     // "no group" answer every caller may pass, and `0usize - 1` panics.
     let index = id.checked_sub(1).and_then(|i| usize::try_from(i).ok());
@@ -417,7 +417,7 @@ pub fn syn_id2name(id: c_int) -> *mut c_char {
 /// # Safety
 /// `name` points to at least `len` readable bytes; may run `emsg`; main
 /// thread only.
-pub unsafe fn syn_check_group(name: *const c_char, len: size_t) -> c_int {
+pub(crate) unsafe fn syn_check_group(name: *const c_char, len: size_t) -> c_int {
     if len > MAX_SYN_NAME as size_t {
         // SAFETY: main-thread message call.
         unsafe { emsg(gettext(e_highlight_group_name_too_long.as_ptr())) };
@@ -502,7 +502,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
 /// # Safety
 /// Resolves namespace overrides, which can run a Lua callback; main thread
 /// only.
-pub unsafe fn syn_id2attr(hl_id: c_int) -> c_int {
+pub(crate) unsafe fn syn_id2attr(hl_id: c_int) -> c_int {
     let mut optional = false;
     // SAFETY: the editor's own tables.
     unsafe { syn_ns_id2attr(-1, hl_id, &mut optional) }
@@ -516,7 +516,7 @@ pub unsafe fn syn_id2attr(hl_id: c_int) -> c_int {
 ///
 /// # Safety
 /// See [`syn_id2attr`].
-pub unsafe fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut bool) -> c_int {
+pub(crate) unsafe fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut bool) -> c_int {
     // SAFETY: the editor's own tables.
     if unsafe { syn_ns_get_final_id(&mut ns_id, &mut hl_id) } {
         // The namespace defines the group to be empty; that is not optional.
@@ -547,7 +547,7 @@ pub unsafe fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut boo
 ///
 /// # Safety
 /// See [`syn_id2attr`].
-pub unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> bool {
+pub(crate) unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> bool {
     let mut hl_id = *hl_idp;
     let mut used = false;
 
@@ -589,7 +589,7 @@ pub unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> bool {
 ///
 /// # Safety
 /// See [`syn_id2attr`].
-pub unsafe fn syn_get_final_id(hl_id: c_int) -> c_int {
+pub(crate) unsafe fn syn_get_final_id(hl_id: c_int) -> c_int {
     // SAFETY: the editor's own state.
     unsafe {
         let mut ns_id = (*curwin.get()).w_ns_hl_active;

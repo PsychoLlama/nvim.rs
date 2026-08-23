@@ -14,7 +14,7 @@ use core::ffi::{c_char, c_int, c_void};
 use super::*;
 
 /// Clear all syntax info for one block.
-pub unsafe fn syntax_clear(block: *mut synblock_T) {
+pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
     unsafe {
         (*block).b_syn_error = false; // clear previous error
         (*block).b_syn_slow = false; // clear previous timeout
@@ -65,7 +65,7 @@ pub unsafe fn syntax_clear(block: *mut synblock_T) {
 }
 
 /// Get rid of `:ownsyntax` for window `wp`.
-pub unsafe fn reset_synblock(wp: *mut win_T) {
+pub(crate) unsafe fn reset_synblock(wp: *mut win_T) {
     unsafe {
         if (*wp).w_s != &raw mut (*(*wp).w_buffer).b_s {
             syntax_clear((*wp).w_s);

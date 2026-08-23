@@ -59,7 +59,7 @@ pub(crate) unsafe fn syn_stack_free_block(block: *mut synblock_T) {
 ///
 /// Used when the syntax items themselves changed, so nothing cached can be
 /// trusted any more.
-pub unsafe fn syn_stack_free_all(block: *mut synblock_T) {
+pub(crate) unsafe fn syn_stack_free_all(block: *mut synblock_T) {
     unsafe {
         syn_stack_free_block(block);
 
@@ -146,7 +146,7 @@ fn clamp_entries(len: c_int) -> c_int {
 ///
 /// Called from `update_screen()` before the screen is updated, once for each
 /// displayed buffer.
-pub unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
+pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
     unsafe {
         syn_stack_apply_changes_block(&raw mut (*buf).b_s, buf);
 

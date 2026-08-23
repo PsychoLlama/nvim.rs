@@ -314,7 +314,7 @@ fn score_cmp(s1: &SplitScore, s2: &SplitScore) -> i32 {
 /// reachable; otherwise, if `indent-heuristic` is on, take the
 /// lowest-scoring shift; otherwise leave the group where the slide-down
 /// loop left it.
-pub fn change_compact(xdf: &mut XdFile<'_>, xdfo: &XdFile<'_>, flags: u64) {
+pub(crate) fn change_compact(xdf: &mut XdFile<'_>, xdfo: &XdFile<'_>, flags: u64) {
     let mut g = group_init(xdf);
     let mut go = group_init(xdfo);
 

@@ -39,28 +39,28 @@ use crate::types::{Arena, Array, CursorShape, Object, cursorentry_T, size_t};
 use crate::ui::ui_mode_info_set;
 
 /// Where a mode's cursor shape sits in the shape table.
-pub type ShapeIdx = c_int;
+pub(crate) type ShapeIdx = c_int;
 
-pub const SHAPE_IDX_N: ShapeIdx = 0;
-pub const SHAPE_IDX_V: ShapeIdx = 1;
-pub const SHAPE_IDX_I: ShapeIdx = 2;
-pub const SHAPE_IDX_R: ShapeIdx = 3;
-pub const SHAPE_IDX_C: ShapeIdx = 4;
-pub const SHAPE_IDX_CI: ShapeIdx = 5;
-pub const SHAPE_IDX_CR: ShapeIdx = 6;
-pub const SHAPE_IDX_O: ShapeIdx = 7;
-pub const SHAPE_IDX_VE: ShapeIdx = 8;
-pub const SHAPE_IDX_SM: ShapeIdx = 16;
-pub const SHAPE_IDX_TERM: ShapeIdx = 17;
-pub const SHAPE_IDX_COUNT: ShapeIdx = 18;
+pub(crate) const SHAPE_IDX_N: ShapeIdx = 0;
+pub(crate) const SHAPE_IDX_V: ShapeIdx = 1;
+pub(crate) const SHAPE_IDX_I: ShapeIdx = 2;
+pub(crate) const SHAPE_IDX_R: ShapeIdx = 3;
+pub(crate) const SHAPE_IDX_C: ShapeIdx = 4;
+pub(crate) const SHAPE_IDX_CI: ShapeIdx = 5;
+pub(crate) const SHAPE_IDX_CR: ShapeIdx = 6;
+pub(crate) const SHAPE_IDX_O: ShapeIdx = 7;
+pub(crate) const SHAPE_IDX_VE: ShapeIdx = 8;
+pub(crate) const SHAPE_IDX_SM: ShapeIdx = 16;
+pub(crate) const SHAPE_IDX_TERM: ShapeIdx = 17;
+pub(crate) const SHAPE_IDX_COUNT: ShapeIdx = 18;
 
-pub const SHAPE_BLOCK: CursorShape = 0;
-pub const SHAPE_HOR: CursorShape = 1;
-pub const SHAPE_VER: CursorShape = 2;
+pub(crate) const SHAPE_BLOCK: CursorShape = 0;
+pub(crate) const SHAPE_HOR: CursorShape = 1;
+pub(crate) const SHAPE_VER: CursorShape = 2;
 
 /// What an entry is consulted for: `'mouseshape'`, `'guicursor'`, or both.
-pub const SHAPE_MOUSE: c_int = 1;
-pub const SHAPE_CURSOR: c_int = 2;
+pub(crate) const SHAPE_MOUSE: c_int = 1;
+pub(crate) const SHAPE_CURSOR: c_int = 2;
 
 /// `N_("E548: Digit expected")`. The option layer translates what it gets
 /// back, as it does the other four messages here.
@@ -128,7 +128,7 @@ static SHAPE_TABLE: GlobalCell<[cursorentry_T; SHAPE_IDX_COUNT as usize]> =
     GlobalCell::new(default_table());
 
 /// One mode's entry, copied out of the table.
-pub fn shape_entry(idx: ShapeIdx) -> cursorentry_T {
+pub(crate) fn shape_entry(idx: ShapeIdx) -> cursorentry_T {
     SHAPE_TABLE.with(|table| table[idx as usize])
 }
 
@@ -137,7 +137,7 @@ pub fn shape_entry(idx: ShapeIdx) -> cursorentry_T {
 /// `f` runs with the table borrowed, so it must be arithmetic and nothing
 /// else: anything that calls out of this module can read the table back
 /// (module docs).
-pub fn update_shape_entry(idx: ShapeIdx, f: impl FnOnce(&mut cursorentry_T)) {
+pub(crate) fn update_shape_entry(idx: ShapeIdx, f: impl FnOnce(&mut cursorentry_T)) {
     SHAPE_TABLE.with_mut(|table| f(&mut table[idx as usize]));
 }
 
@@ -164,7 +164,7 @@ fn clear_shape_table() {
 ///
 /// # Safety
 /// `arena` must be null or the caller's live arena.
-pub unsafe fn mode_style_array(arena: *mut Arena) -> Array {
+pub(crate) unsafe fn mode_style_array(arena: *mut Arena) -> Array {
     let mut all = arena_array(arena, SHAPE_IDX_COUNT as size_t);
     for idx in 0..SHAPE_IDX_COUNT {
         let cur = shape_entry(idx);
@@ -282,7 +282,7 @@ unsafe fn digits_at(opt: *mut c_char, at: usize) -> (c_int, usize) {
 /// string, and defines highlight groups; main thread only.
 ///
 /// @returns an error message for an illegal option, null otherwise.
-pub unsafe fn parse_shape_opt(what: c_int) -> *const c_char {
+pub(crate) unsafe fn parse_shape_opt(what: c_int) -> *const c_char {
     // Set by a `ve` in the mode list, in either round.
     let mut found_ve = false;
 
@@ -506,7 +506,7 @@ unsafe fn parse_parts(
 ///
 /// `exclusive` says `'selection'` is "exclusive", which selects the `ve`
 /// entry over the `v` one.
-pub fn cursor_is_block_during_visual(exclusive: bool) -> bool {
+pub(crate) fn cursor_is_block_during_visual(exclusive: bool) -> bool {
     let entry = shape_entry(if exclusive { SHAPE_IDX_VE } else { SHAPE_IDX_V });
     entry.shape == SHAPE_BLOCK && entry.blinkon == 0
 }
@@ -516,7 +516,7 @@ pub fn cursor_is_block_during_visual(exclusive: bool) -> bool {
 ///
 /// # Safety
 /// Reads the option's own value; main thread only.
-pub unsafe fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
+pub(crate) unsafe fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
     // SAFETY: an option value is a NUL-terminated string.
     if unsafe { *p_guicursor.get() } == 0 {
         return false;
@@ -531,7 +531,7 @@ pub unsafe fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
 ///
 /// # Safety
 /// Reads the command line and the `'selection'` option; main thread only.
-pub unsafe fn cursor_get_mode_idx() -> ShapeIdx {
+pub(crate) unsafe fn cursor_get_mode_idx() -> ShapeIdx {
     let state = State.get();
     if state == MODE_SHOWMATCH {
         SHAPE_IDX_SM

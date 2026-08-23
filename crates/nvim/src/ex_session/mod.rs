@@ -211,7 +211,7 @@ impl SessionFile {
 ///
 /// # Safety
 /// `fd` is open for writing.
-pub unsafe fn put_eol(fd: *mut FILE) -> c_int {
+pub(crate) unsafe fn put_eol(fd: *mut FILE) -> c_int {
     // SAFETY: caller contract.
     if unsafe { putc(b'\n' as c_int, fd) } < 0 {
         return FAIL;
@@ -223,7 +223,7 @@ pub unsafe fn put_eol(fd: *mut FILE) -> c_int {
 ///
 /// # Safety
 /// `fd` is open for writing and `s` NUL-terminated.
-pub unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> c_int {
+pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> c_int {
     // SAFETY: caller contract.
     if unsafe { fprintf(fd, c"%s\n".as_ptr(), s) } < 0 {
         return FAIL;
@@ -378,7 +378,7 @@ pub(crate) unsafe fn ses_do_win(wp: *mut win_T) -> bool {
 ///
 /// # Safety
 /// `eap` is the current Ex command.
-pub unsafe fn ex_loadview(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_loadview(eap: *mut exarg_T) {
     // SAFETY: caller contract; `fname` is owned and NUL-terminated.
     unsafe {
         let fname = get_view_file(*(*eap).arg);
@@ -464,7 +464,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `eap` is the current Ex command with a NUL-terminated argument.
-pub unsafe fn ex_mkrc(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
     // SAFETY: caller contract.
     let cmdidx = unsafe { (*eap).cmdidx };
     // `:mkview` and `:mksession` write a *state*; the other two write only

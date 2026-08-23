@@ -68,14 +68,18 @@ use crate::pos::MAXCOL;
 static ERRBUF: GlobalCell<[c_char; IOSIZE as usize]> = GlobalCell::new([0; IOSIZE as usize]);
 
 /// The script context recorded for the global value of an option.
-pub fn get_option_sctx(opt_idx: OptIndex) -> *mut sctx_T {
+pub(crate) fn get_option_sctx(opt_idx: OptIndex) -> *mut sctx_T {
     debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { &raw mut (*options.ptr())[opt_idx as usize].script_ctx }
 }
 
 /// Record where the option was just set, in every scope the flags name.
-pub fn set_option_sctx(opt_idx: OptIndex, opt_flags: OptionSetFlags, mut script_ctx: sctx_T) {
+pub(crate) fn set_option_sctx(
+    opt_idx: OptIndex,
+    opt_flags: OptionSetFlags,
+    mut script_ctx: sctx_T,
+) {
     let both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
 
     // A modeline already carries the line it was found on.
@@ -190,7 +194,7 @@ fn apply_optionset_autocmd(
 /// Whether the name is one of the terminal options nvim keeps only to stay
 /// compatible with scripts that set them.
 ///
-pub fn is_tty_option(name: &CStr) -> bool {
+pub(crate) fn is_tty_option(name: &CStr) -> bool {
     // SAFETY: `name` is NUL-terminated, which is all the walk needs.
     !unsafe { find_tty_option_end(name.as_ptr()) }.is_null()
 }
@@ -198,7 +202,7 @@ pub fn is_tty_option(name: &CStr) -> bool {
 /// What a terminal option reads back as. Only `t_Co`, `term` and `ttytype`
 /// have anything to say; the rest answer with the empty string.
 ///
-pub fn get_tty_option(name: &CStr) -> OptVal {
+pub(crate) fn get_tty_option(name: &CStr) -> OptVal {
     // SAFETY: `name` is NUL-terminated, and every arm allocates its answer.
     let value = unsafe {
         if name == c"t_Co" {
@@ -235,7 +239,7 @@ pub fn get_tty_option(name: &CStr) -> OptVal {
 ///
 /// On success the option takes ownership of `value`, which must be an
 /// allocation the option module may free.
-pub unsafe fn set_tty_option(name: &CStr, value: *mut c_char) -> bool {
+pub(crate) unsafe fn set_tty_option(name: &CStr, value: *mut c_char) -> bool {
     for (spelling, cell) in [(c"term", &TERM), (c"ttytype", &TTYTYPE)] {
         if name == spelling {
             // SAFETY: `value` is ours now.
@@ -282,7 +286,7 @@ impl TtyName {
 }
 
 /// The table index of an option name given as bytes, or `kOptInvalid`.
-pub fn find_option_len(name: &[u8]) -> OptIndex {
+pub(crate) fn find_option_len(name: &[u8]) -> OptIndex {
     if name.is_empty() {
         return kOptInvalid;
     }
@@ -290,13 +294,13 @@ pub fn find_option_len(name: &[u8]) -> OptIndex {
 }
 
 /// The table index of an option name, or `kOptInvalid`.
-pub fn find_option(name: &CStr) -> OptIndex {
+pub(crate) fn find_option(name: &CStr) -> OptIndex {
     find_option_len(name.to_bytes())
 }
 
 /// An owned copy of the option's value in the scope the flags name. An
 /// unknown option answers nil rather than failing.
-pub fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
+pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     if opt_idx == kOptInvalid {
         return NIL_OPTVAL;
     }
@@ -309,7 +313,7 @@ pub fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal 
 }
 
 /// The option table's row for an option.
-pub fn get_option(opt_idx: OptIndex) -> *mut vimoption_T {
+pub(crate) fn get_option(opt_idx: OptIndex) -> *mut vimoption_T {
     debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { &raw mut (*options.ptr())[opt_idx as usize] }
@@ -691,7 +695,7 @@ pub(crate) unsafe fn set_option(
 
 /// Write a value with no side effects at all: no callback, no autocommand,
 /// no validation. Only for values the editor itself computed.
-pub fn set_option_direct(
+pub(crate) fn set_option_direct(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
@@ -721,7 +725,7 @@ pub fn set_option_direct(
 /// nothing: the caller keeps `value`.
 ///
 /// Returns an untranslated error message, or null.
-pub fn set_option_value(
+pub(crate) fn set_option_value(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
@@ -764,7 +768,7 @@ pub(crate) fn unset_option_local_value(opt_idx: OptIndex) -> *const c_char {
 /// # Safety
 ///
 /// `name` must be a NUL-terminated string.
-pub unsafe fn set_option_value_handle_tty(
+pub(crate) unsafe fn set_option_value_handle_tty(
     name: *const c_char,
     opt_idx: OptIndex,
     value: OptVal,
@@ -790,7 +794,11 @@ pub unsafe fn set_option_value_handle_tty(
 }
 
 /// [`set_option_value`], reporting a rejection as an error message.
-pub fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: OptionSetFlags) {
+pub(crate) fn set_option_value_give_err(
+    opt_idx: OptIndex,
+    value: OptVal,
+    opt_flags: OptionSetFlags,
+) {
     let errmsg = set_option_value(opt_idx, value, opt_flags);
     if !errmsg.is_null() {
         // SAFETY: `set_option_value` returns a NUL-terminated message.

@@ -324,7 +324,7 @@ fn recurse(xpp: &Params<'_>, env: &mut Env<'_>, blk: Block) -> XdResult {
 }
 
 /// `xdl_do_patience_diff`.
-pub fn diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
+pub(crate) fn diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
     let mut env = prepare_env(text1, text2, xpp);
     let (n1, n2) = (env.xdf1.nrec(), env.xdf2.nrec());
     recurse(

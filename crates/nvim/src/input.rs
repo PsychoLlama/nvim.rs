@@ -45,7 +45,7 @@ const CALLBACK_NONE: Callback = Callback {
 ///
 /// # Safety
 /// Main-thread editor call; `str` is NUL-terminated.
-pub unsafe fn ask_yesno(str: *const c_char) -> c_int {
+pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
     let save_state = State.get();
     let no_prompt = Suppress::wait_return();
 
@@ -108,7 +108,7 @@ unsafe fn is_swallowed_key(first: u8, key: c_int) -> bool {
 /// # Safety
 /// Main-thread editor call; `events` is null or a live queue to drain while
 /// waiting.
-pub unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
+pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
     let save_mapped_ctrl_c = mapped_ctrl_c.get();
     mod_mask.set(0);
     mapped_ctrl_c.set(0); // Mappings are not used here.
@@ -210,7 +210,7 @@ pub unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
 /// # Safety
 /// Main-thread editor call; `prompt` is null or NUL-terminated, and
 /// `mouse_used` is null or writable.
-pub unsafe fn prompt_for_input(
+pub(crate) unsafe fn prompt_for_input(
     prompt: *mut c_char,
     hl_id: c_int,
     one_key: bool,

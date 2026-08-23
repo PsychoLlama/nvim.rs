@@ -2,11 +2,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-pub mod ffi;
-pub mod xdiffi;
-pub mod xemit;
-pub mod xhistogram;
-pub mod xpatience;
-pub mod xprepare;
-pub mod xtypes;
-pub mod xutils;
+pub(crate) mod ffi;
+pub(crate) mod xdiffi;
+pub(crate) mod xemit;
+pub(crate) mod xhistogram;
+pub(crate) mod xpatience;
+pub(crate) mod xprepare;
+pub(crate) mod xtypes;
+pub(crate) mod xutils;

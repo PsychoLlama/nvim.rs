@@ -76,7 +76,7 @@ use ::libc::{__errno_location, close, lseek, strerror};
 /// is no swap file, so the block cannot go anywhere and the caller must keep
 /// it in memory.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct SwapFailed;
+pub(crate) struct SwapFailed;
 
 /// Whether a memfile has blocks that are not on disk, and whether they may
 /// be written yet.
@@ -93,24 +93,24 @@ pub enum MfDirty {
 }
 
 /// Sync every block, not just the ones with a file block number.
-pub const MFS_ALL: c_int = 1;
+pub(crate) const MFS_ALL: c_int = 1;
 /// Stop as soon as a character is typed (but write at least one block).
-pub const MFS_STOP: c_int = 2;
+pub(crate) const MFS_STOP: c_int = 2;
 /// Push the file to the platter, so it survives a crash.
-pub const MFS_FLUSH: c_int = 4;
+pub(crate) const MFS_FLUSH: c_int = 4;
 /// Write block zero and nothing else.
-pub const MFS_ZERO: c_int = 8;
+pub(crate) const MFS_ZERO: c_int = 8;
 
 /// The block is locked in memory: a caller is holding it.
-pub const BH_LOCKED: c_uint = 2;
+pub(crate) const BH_LOCKED: c_uint = 2;
 /// The block has changed since it was last written.
-pub const BH_DIRTY: c_uint = 1;
+pub(crate) const BH_DIRTY: c_uint = 1;
 
 /// Page size to use when the device will not say.
-pub const MEMFILE_PAGE_SIZE: c_uint = 4096;
+pub(crate) const MEMFILE_PAGE_SIZE: c_uint = 4096;
 /// A device block size outside this range is not believed.
-pub const MIN_SWAP_PAGE_SIZE: u64 = 1048;
-pub const MAX_SWAP_PAGE_SIZE: u64 = 50000;
+pub(crate) const MIN_SWAP_PAGE_SIZE: u64 = 1048;
+pub(crate) const MAX_SWAP_PAGE_SIZE: u64 = 50000;
 
 const O_RDWR: c_int = 0o2;
 const O_CREAT: c_int = 0o100;
@@ -294,7 +294,7 @@ pub struct memfile_T {
 /// `fname` is the swap file to use, or null for memory only. It must be
 /// allocated, and is consumed either way — including when opening fails,
 /// which answers null.
-pub unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
+pub(crate) unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
     let mfp = Box::into_raw(Box::new(memfile_T {
         fname: None,
         ffname: None,
@@ -353,7 +353,10 @@ pub unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
 
 /// Give an existing memory file a swap file, as `'updatecount'` going from
 /// zero to non-zero does. `fname` is consumed as in [`mf_open`].
-pub unsafe fn mf_open_file(mfp: *mut memfile_T, fname: *mut c_char) -> Result<(), SwapFailed> {
+pub(crate) unsafe fn mf_open_file(
+    mfp: *mut memfile_T,
+    fname: *mut c_char,
+) -> Result<(), SwapFailed> {
     unsafe {
         if mf_do_open(mfp, fname, O_RDWR | O_CREAT | O_EXCL) {
             (*mfp).mf_dirty = MfDirty::Yes;
@@ -366,7 +369,7 @@ pub unsafe fn mf_open_file(mfp: *mut memfile_T, fname: *mut c_char) -> Result<()
 
 /// Close a memory file, releasing every block, and delete the swap file if
 /// `del_file`.
-pub unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
+pub(crate) unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
     if mfp.is_null() {
         return;
     }
@@ -388,7 +391,7 @@ pub unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
 ///
 /// `getlines` first pulls every line into memory — clumsy, but the blocks
 /// still in the file are about to become unreachable.
-pub unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
+pub(crate) unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
     unsafe {
         let mfp = (*buf).b_ml.ml_mfp;
         if mfp.is_null() || (*mfp).mf_fd < 0 {
@@ -415,7 +418,7 @@ pub unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
 
 /// Set the page size, once block zero of an existing swap file has said what
 /// it really is.
-pub unsafe fn mf_new_page_size(mfp: *mut memfile_T, new_size: c_uint) {
+pub(crate) unsafe fn mf_new_page_size(mfp: *mut memfile_T, new_size: c_uint) {
     unsafe { (*mfp).mf_page_size = new_size };
 }
 
@@ -423,7 +426,11 @@ pub unsafe fn mf_new_page_size(mfp: *mut memfile_T, new_size: c_uint) {
 ///
 /// `negative` asks for a memory-only block number, which is what data
 /// blocks get: they are written last, so their numbers are handed out last.
-pub unsafe fn mf_new(mfp: *mut memfile_T, negative: bool, page_count: c_uint) -> *mut bhdr_T {
+pub(crate) unsafe fn mf_new(
+    mfp: *mut memfile_T,
+    negative: bool,
+    page_count: c_uint,
+) -> *mut bhdr_T {
     unsafe {
         let page_size = (*mfp).mf_page_size;
         let mut block;
@@ -463,7 +470,7 @@ pub unsafe fn mf_new(mfp: *mut memfile_T, negative: bool, page_count: c_uint) ->
 /// lock it. Answers null if there is no such block.
 ///
 /// A negative `nr` must go through [`mf_trans_del`] first.
-pub unsafe fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: c_uint) -> *mut bhdr_T {
+pub(crate) unsafe fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: c_uint) -> *mut bhdr_T {
     unsafe {
         if nr >= (*mfp).mf_blocknr_max || nr <= (*mfp).mf_blocknr_min {
             return core::ptr::null_mut();
@@ -498,7 +505,7 @@ pub unsafe fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: c_uint) -> 
 /// Unlike [`mf_get`] this neither reads the file, nor locks the block, nor
 /// moves it in the sync order. `ml_setflags` uses it to amend block zero
 /// where it lies.
-pub unsafe fn mf_find(mfp: *mut memfile_T, nr: blocknr_T) -> *mut bhdr_T {
+pub(crate) unsafe fn mf_find(mfp: *mut memfile_T, nr: blocknr_T) -> *mut bhdr_T {
     unsafe { (*mfp).used.get(nr).unwrap_or(core::ptr::null_mut()) }
 }
 
@@ -507,7 +514,7 @@ pub unsafe fn mf_find(mfp: *mut memfile_T, nr: blocknr_T) -> *mut bhdr_T {
 /// `dirty` says it was changed and has to reach the file; `infile` asks for
 /// its file block number to be settled now, which recovery needs so that a
 /// block already on disk can name it.
-pub unsafe fn mf_put(mfp: *mut memfile_T, hp: *mut bhdr_T, dirty: bool, infile: bool) {
+pub(crate) unsafe fn mf_put(mfp: *mut memfile_T, hp: *mut bhdr_T, dirty: bool, infile: bool) {
     unsafe {
         let mut flags = (*hp).bh_flags;
         if flags & BH_LOCKED == 0 {
@@ -529,7 +536,7 @@ pub unsafe fn mf_put(mfp: *mut memfile_T, hp: *mut bhdr_T, dirty: bool, infile: 
 
 /// Give up a block for good. Its pages in the file, if it has any, go back
 /// on the free list.
-pub unsafe fn mf_free(mfp: *mut memfile_T, hp: *mut bhdr_T) {
+pub(crate) unsafe fn mf_free(mfp: *mut memfile_T, hp: *mut bhdr_T) {
     unsafe {
         let bnum = (*hp).bh_bnum;
         let page_count = (*hp).bh_page_count;
@@ -553,7 +560,7 @@ pub unsafe fn mf_free(mfp: *mut memfile_T, hp: *mut bhdr_T) {
 /// [`MFS_ZERO`]. Fails when there is no file or a write failed — which on a
 /// full disk is the common case, so after the first failure only blocks that
 /// already have a place in the file are attempted.
-pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> Result<(), SwapFailed> {
+pub(crate) unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> Result<(), SwapFailed> {
     unsafe {
         let got_int_save = got_int.get();
 
@@ -618,7 +625,7 @@ pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> Result<(), SwapFaile
 
 /// Mark every block that has a place in the file dirty, so a freshly
 /// created swap file gets all of them.
-pub unsafe fn mf_set_dirty(mfp: *mut memfile_T) {
+pub(crate) unsafe fn mf_set_dirty(mfp: *mut memfile_T) {
     unsafe {
         for i in 0..(*mfp).used.len() {
             let hp = (*mfp).used.at(i);
@@ -632,7 +639,7 @@ pub unsafe fn mf_set_dirty(mfp: *mut memfile_T) {
 
 /// Drop as many cached blocks as possible, for when memory has run out.
 /// Answers whether anything was released.
-pub unsafe fn mf_release_all() -> bool {
+pub(crate) unsafe fn mf_release_all() -> bool {
     unsafe {
         let mut released = false;
         let mut buf = firstbuf.get();
@@ -830,7 +837,7 @@ unsafe fn mf_trans_add(mfp: *mut memfile_T, hp: *mut bhdr_T) {
 
 /// The file block number a memory-only block was given, consuming the
 /// record of it. Answers `old_nr` unchanged if there is none.
-pub unsafe fn mf_trans_del(mfp: *mut memfile_T, old_nr: blocknr_T) -> blocknr_T {
+pub(crate) unsafe fn mf_trans_del(mfp: *mut memfile_T, old_nr: blocknr_T) -> blocknr_T {
     unsafe {
         match (*mfp).trans.remove(&old_nr) {
             Some(new_bnum) => {
@@ -847,7 +854,7 @@ pub unsafe fn mf_trans_del(mfp: *mut memfile_T, old_nr: blocknr_T) -> blocknr_T 
 ///
 /// # Safety
 /// `mfp` must point at a memfile.
-pub unsafe fn mf_fname(mfp: *const memfile_T) -> *const c_char {
+pub(crate) unsafe fn mf_fname(mfp: *const memfile_T) -> *const c_char {
     match unsafe { &(*mfp).fname } {
         Some(fname) => fname.as_ptr(),
         None => core::ptr::null(),
@@ -864,7 +871,7 @@ unsafe fn take_cstring(p: *mut c_char) -> CString {
 }
 
 /// Release the swap file's names.
-pub unsafe fn mf_free_fnames(mfp: *mut memfile_T) {
+pub(crate) unsafe fn mf_free_fnames(mfp: *mut memfile_T) {
     unsafe {
         (*mfp).fname = None;
         (*mfp).ffname = None;
@@ -875,7 +882,7 @@ pub unsafe fn mf_free_fnames(mfp: *mut memfile_T) {
 ///
 /// Only called when creating or renaming it, so the full path is always
 /// worked out afresh.
-pub unsafe fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut c_char) {
+pub(crate) unsafe fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut c_char) {
     unsafe {
         let full = full_name_save(fname, false);
         (*mfp).fname = Some(take_cstring(fname));
@@ -885,7 +892,7 @@ pub unsafe fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut c_char) {
 
 /// Make the swap file's name absolute — before a `:cd` makes the relative
 /// one mean something else.
-pub unsafe fn mf_fullname(mfp: *mut memfile_T) {
+pub(crate) unsafe fn mf_fullname(mfp: *mut memfile_T) {
     unsafe {
         if mfp.is_null() || (*mfp).fname.is_none() || (*mfp).ffname.is_none() {
             return;
@@ -895,7 +902,7 @@ pub unsafe fn mf_fullname(mfp: *mut memfile_T) {
 }
 
 /// Whether any block still owes the file a number.
-pub unsafe fn mf_need_trans(mfp: *mut memfile_T) -> bool {
+pub(crate) unsafe fn mf_need_trans(mfp: *mut memfile_T) -> bool {
     unsafe { (*mfp).fname.is_some() && (*mfp).mf_neg_count > 0 }
 }
 

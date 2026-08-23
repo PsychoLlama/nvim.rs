@@ -66,7 +66,7 @@ impl Context {
 /// # Safety
 /// `xp` must be live, `cmd` a NUL-terminated string, and `arg` a position in
 /// the command line being completed.
-pub unsafe fn set_context_in_menu_cmd(
+pub(crate) unsafe fn set_context_in_menu_cmd(
     xp: *mut expand_T,
     cmd: *const c_char,
     arg: *mut c_char,
@@ -239,7 +239,7 @@ impl Generator {
 }
 
 /// `expand_generic()`'s source for the list of (sub)menus, not entries.
-pub fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -259,7 +259,7 @@ pub fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// As [`get_menu_name`].
-pub unsafe fn get_menu_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_menu_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     /// Scratch for the one candidate at a time a submenu is answered with.
     static TBUFFER: GlobalCell<[u8; TBUFFER_LEN]> = GlobalCell::new([0; TBUFFER_LEN]);
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);

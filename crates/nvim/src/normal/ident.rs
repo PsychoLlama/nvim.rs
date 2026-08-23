@@ -106,7 +106,7 @@ pub(crate) unsafe fn find_is_eval_item(
 /// The identifier or string under the cursor. Answers its length and, through
 /// `text`, a pointer into the buffer line; `offset` receives how far into it
 /// the cursor was.
-pub unsafe fn find_ident_under_cursor(
+pub(crate) unsafe fn find_ident_under_cursor(
     text: *mut *mut c_char,
     find_type: c_int,
     offset: *mut c_int,
@@ -139,7 +139,7 @@ pub unsafe fn find_ident_under_cursor(
 /// second, which `FIND_STRING` asks for and which `FIND_IDENT` alone skips,
 /// accepts anything that is not white space. Each pass scans forward from the
 /// position for a character it will take, then backs up to that run's start.
-pub unsafe fn find_ident_at_pos(
+pub(crate) unsafe fn find_ident_at_pos(
     wp: *mut win_T,
     lnum: linenr_T,
     mut startcol: colnr_T,
@@ -330,7 +330,7 @@ pub(crate) unsafe fn is_ident(line: *const c_char, offset: c_int) -> bool {
 ///
 /// `locally` limits the search to the current `{}` block (`gd`); `thisblock`
 /// further refuses a match whose block closes before the cursor.
-pub unsafe fn find_decl(
+pub(crate) unsafe fn find_decl(
     word: *mut c_char,
     len: size_t,
     locally: bool,
@@ -478,7 +478,7 @@ pub unsafe fn find_decl(
 
 /// Run one of the identifier commands from outside the command loop, with a
 /// command argument built for the occasion. `CTRL-W ]` and friends use this.
-pub unsafe fn do_nv_ident(c1: c_int, c2: c_int) {
+pub(crate) unsafe fn do_nv_ident(c1: c_int, c2: c_int) {
     // SAFETY: both structures are plain data and are filled before use.
     unsafe {
         let mut oa: oparg_T = core::mem::zeroed();

@@ -27,7 +27,11 @@ use crate::types::NUL;
 ///
 /// `keep_state` keeps the state stack as it stands at `col` rather than closing
 /// the items that end there, which is what `synstack()` needs.
-pub unsafe fn get_syntax_attr(col: colnr_T, can_spell: *mut bool, keep_state: bool) -> c_int {
+pub(crate) unsafe fn get_syntax_attr(
+    col: colnr_T,
+    can_spell: *mut bool,
+    keep_state: bool,
+) -> c_int {
     unsafe {
         if !can_spell.is_null() {
             *can_spell = default_can_spell();
