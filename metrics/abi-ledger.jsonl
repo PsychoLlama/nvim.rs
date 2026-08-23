@@ -1,5 +1,4 @@
 {"symbol":"block_autocmds","kind":"fn","file":"crates/nvim/src/autocmd/fire.rs","class":"test","refs":["functional-specs"]}
-{"symbol":"check_ff_value","kind":"fn","file":"crates/nvim/src/optionstr/flags.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"curwin","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"display_tick","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"early_init","kind":"fn","file":"crates/nvim/src/main/entry.rs","class":"test","refs":["unit-specs"]}

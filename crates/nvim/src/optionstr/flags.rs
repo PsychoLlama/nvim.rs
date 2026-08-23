@@ -188,13 +188,15 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
     unsafe { opt_strings_flags(*varp, values, flagp, list) }
 }
 
-/// Is `p` one of "unix", "dos" or "mac"? `OK` or `FAIL`, exported for the
-/// unit suite.
+/// Is `p` one of "unix", "dos" or "mac"? `OK` or `FAIL`.
+///
+/// `:read ++ff=…` and `:write ++ff=…` check their argument with this before
+/// touching a buffer, which is why it is reachable without going through
+/// `did_set_*`.
 ///
 /// # Safety
 /// `p` is a C string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn check_ff_value(p: *mut c_char) -> c_int {
+pub unsafe fn check_ff_value(p: *mut c_char) -> c_int {
     let values = opt_values(kOptFileformat);
     // SAFETY: the caller's C string, against the table's own word list.
     unsafe { opt_strings_flags(p, values, ptr::null_mut(), false) }

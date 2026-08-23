@@ -707,7 +707,7 @@
     "crates/nvim/src/optionstr/complete.rs": {"cell_ptr": 3, "unsafe_lines": 151},
     "crates/nvim/src/optionstr/display.rs": {"cell_ptr": 4, "unsafe_lines": 146},
     "crates/nvim/src/optionstr/expand.rs": {"cell_ptr": 3, "unsafe_lines": 92},
-    "crates/nvim/src/optionstr/flags.rs": {"cell_ptr": 1, "extern_abi": 1, "no_mangle": 1, "unsafe_lines": 14},
+    "crates/nvim/src/optionstr/flags.rs": {"cell_ptr": 1, "unsafe_lines": 14},
     "crates/nvim/src/optionstr/frame.rs": {"unsafe_lines": 4},
     "crates/nvim/src/optionstr/statusline.rs": {"cell_ptr": 1, "unsafe_lines": 52},
     "crates/nvim/src/os/cshim.rs": {"extern_abi": 3, "missing_safety_doc": 7, "static_mut": 4, "unsafe_lines": 64, "variadic": 1},
