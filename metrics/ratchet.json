@@ -768,7 +768,7 @@
     "crates/nvim/src/quickfix/switchbuf.rs": {"cell_ptr": 3, "missing_safety_doc": 4, "unsafe_lines": 174},
     "crates/nvim/src/quickfix/vimgrep.rs": {"unsafe_lines": 366},
     "crates/nvim/src/quickfix/window.rs": {"cell_ptr": 1, "unsafe_lines": 26},
-    "crates/nvim/src/regexp/api.rs": {"cell_ptr": 3, "extern_abi": 3, "missing_safety_doc": 8, "no_mangle": 3, "unsafe_lines": 179},
+    "crates/nvim/src/regexp/api.rs": {"cell_ptr": 3, "missing_safety_doc": 5, "unsafe_lines": 179},
     "crates/nvim/src/regexp/bt/collection.rs": {"cell_ptr": 2, "unsafe_lines": 22},
     "crates/nvim/src/regexp/bt/compile.rs": {"unsafe_lines": 99},
     "crates/nvim/src/regexp/bt/escape.rs": {"unsafe_lines": 30},

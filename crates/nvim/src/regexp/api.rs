@@ -45,8 +45,13 @@ pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
 /// overrides 'regexpengine' for this pattern; with the automatic setting
 /// the NFA engine is tried first and a failure that reported no error
 /// falls back to the backtracking one.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regprog_T {
+///
+/// Answers null when the pattern does not parse, having reported why;
+/// otherwise the caller owns the program and frees it with [`vim_regfree`].
+///
+/// # Safety
+/// `expr_arg` must be a NUL-terminated pattern, borrowed for the call only.
+pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regprog_T {
     // SAFETY: `expr_arg` is the caller's NUL-terminated pattern, and the
     // engine table's entries are set at compile time.
     unsafe {
@@ -120,8 +125,14 @@ pub unsafe extern "C" fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regfree(prog: *mut regprog_T) {
+/// Release a program [`vim_regcomp`] answered. Null is a no-op.
+///
+/// # Safety
+/// `prog` must be null, or a program from [`vim_regcomp`] that has not been
+/// freed and that nothing still points at — a match may have *replaced* the
+/// program in its [`regmatch_T`], so free what the match left behind rather
+/// than what was put in.
+pub unsafe fn vim_regfree(prog: *mut regprog_T) {
     // SAFETY: `prog` is null or a program one of the engines produced.
     unsafe {
         if !prog.is_null() {
@@ -240,12 +251,17 @@ pub unsafe fn vim_regexec_prog(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regexec(
-    rmp: *mut regmatch_T,
-    line: *const c_char,
-    col: colnr_T,
-) -> bool {
+/// Run `rmp`'s program over the string `line`, starting at byte `col`.
+///
+/// On a hit `rmp`'s `startp`/`endp` point into `line`, so `line` has to
+/// outlive every read of them.
+///
+/// # Safety
+/// `rmp` must be writable and hold a live program, `line` must be
+/// NUL-terminated, and `col` must be within it. This re-enters the editor —
+/// a `\=` expression can start a match of its own — so nothing may be held
+/// across it.
+pub unsafe fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool {
     // SAFETY: as `vim_regexec_string`.
     unsafe { vim_regexec_string(rmp, line, col, false) }
 }
