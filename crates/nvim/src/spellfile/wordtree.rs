@@ -882,6 +882,14 @@ mod tests {
     /// of `[u8; 6]` and `c_int` was eight bytes with four of them padding,
     /// which is exactly what an `int` beside the array costs. One node per
     /// byte of dictionary is why anyone cares.
+    ///
+    /// Measured over the *fields*, not over `size_of::<wordnode_S>()`.
+    /// `wordnode_S` is `repr(Rust)`, so a layout-randomising build is free
+    /// to order it badly and pad it past the `repr(C)` original — which
+    /// would say something about that build and nothing about this struct.
+    /// Summing the declared fields is the comparison that means what the
+    /// paragraph above says, and it holds whatever the compiler does with
+    /// the order.
     #[test]
     fn a_node_costs_no_more_than_the_union() {
         /// `wordnode_S` as upstream lays it out, with both overlays.
@@ -897,8 +905,36 @@ mod tests {
             flags: uint16_t,
             region: int16_t,
         }
-        assert!(mem::size_of::<wordnode_S>() <= mem::size_of::<AsUnion>());
-        assert_eq!(mem::align_of::<wordnode_S>(), mem::align_of::<AsUnion>());
+        // Exhaustive: a field added to `wordnode_S` stops compiling here,
+        // which is the half of the claim a size cannot make.
+        let wordnode_S {
+            wn_digest,
+            wn_index,
+            wn_link,
+            wn_child,
+            wn_sibling,
+            wn_refs,
+            wn_byte,
+            wn_affixID,
+            wn_flags,
+            wn_region,
+        } = blank_node();
+        let fields = size_of_val(&wn_digest)
+            + size_of_val(&wn_index)
+            + size_of_val(&wn_link)
+            + size_of_val(&wn_child)
+            + size_of_val(&wn_sibling)
+            + size_of_val(&wn_refs)
+            + size_of_val(&wn_byte)
+            + size_of_val(&wn_affixID)
+            + size_of_val(&wn_flags)
+            + size_of_val(&wn_region);
+        assert!(
+            fields <= size_of::<AsUnion>(),
+            "{fields} bytes of fields against {} for the union",
+            size_of::<AsUnion>()
+        );
+        assert_eq!(align_of::<wordnode_S>(), align_of::<AsUnion>());
     }
 
     /// The compression table stores a pointer into the node, not to it, so

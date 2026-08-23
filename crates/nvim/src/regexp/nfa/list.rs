@@ -660,13 +660,41 @@ mod tests {
     /// saying which of the two shapes their positions are in would have cost
     /// thirty-two bytes a thread and moved that point by about four per cent.
     /// It is not in there: a set is its ten captures plus its two `int`s.
+    ///
+    /// Stated as a claim about the *fields* rather than about
+    /// `size_of::<regsub_T>()`, so that a layout-randomising build can run
+    /// it: `regsub_T` is `repr(Rust)`, and a build that shuffles its two
+    /// `int`s to opposite sides of the array pads it — which says something
+    /// about the compiler's freedom and nothing about this struct. What the
+    /// paragraph above actually asserts is that there is no fourth field and
+    /// that a capture is a pair of positions, and both survive the shuffle.
     #[test]
     fn a_thread_carries_no_capture_tag() {
+        // Exhaustive: a tag field added to `regsub_T` stops compiling here.
+        let regsub_T {
+            in_use,
+            list,
+            orig_start_col,
+        } = BLANK_SUB;
         assert_eq!(
-            size_of::<regsub_T>(),
-            size_of::<[Capture; NSUBEXP as usize]>() + 2 * size_of::<c_int>()
+            size_of_val(&in_use) + size_of_val(&list) + size_of_val(&orig_start_col),
+            size_of::<[Capture; NSUBEXP as usize]>() + 2 * size_of::<c_int>(),
+            "a capture set is its ten captures plus its two ints"
         );
-        assert_eq!(size_of::<regsubs_T>(), 2 * size_of::<regsub_T>());
+        // A capture is two positions and nothing else. An array is exactly
+        // its elements, whatever the layout, so this is the comparison that
+        // holds under randomisation.
+        assert_eq!(
+            size_of::<Capture>(),
+            size_of::<[MatchPos; 2]>(),
+            "a capture carries no tag naming the shape of its positions"
+        );
+        // And a thread's pair of sets is a pair, not a pair plus a tag.
+        let regsubs_T { norm, synt } = BLANK_SUBS;
+        assert_eq!(
+            size_of_val(&norm) + size_of_val(&synt),
+            2 * size_of::<regsub_T>()
+        );
     }
 
     /// A slot number and the `in_use` that makes it readable are off by one,

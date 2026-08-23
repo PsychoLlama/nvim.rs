@@ -18,5 +18,5 @@
     "crates/nvim/src/search/find.rs": 1
   },
   "unreachable_pub": 600,
-  "unused_qualifications": 148
+  "unused_qualifications": 144
 }
