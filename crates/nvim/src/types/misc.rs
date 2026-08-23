@@ -71,24 +71,18 @@ pub struct Map_uint32_t_ptr_t {
     pub set: Set_uint32_t,
     pub values: *mut ptr_t,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Map_uint32_t_uint32_t {
     pub set: Set_uint32_t,
     pub values: *mut uint32_t,
 }
-#[derive(Copy, Clone)]
 pub struct Map_uint64_t_MTDamagePair {
     pub set: Set_uint64_t,
     pub values: *mut MTDamagePair,
 }
-#[derive(Copy, Clone)]
 pub struct Map_uint64_t_int {
     pub set: Set_uint64_t,
     pub values: *mut ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Map_uint64_t_ptr_t {
     pub set: Set_uint64_t,
     pub values: *mut ptr_t,
@@ -145,8 +139,6 @@ pub struct Set_uint32_t {
     pub h: MapHash,
     pub keys: *mut uint32_t,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Set_uint64_t {
     pub h: MapHash,
     pub keys: *mut uint64_t,

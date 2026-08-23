@@ -41,8 +41,6 @@ pub struct MTPos {
     pub row: int32_t,
     pub col: int32_t,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct MarkTree {
     pub root: *mut MTNode,
     pub meta_root: [uint32_t; 5],

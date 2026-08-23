@@ -23,8 +23,6 @@ pub struct infoptr_T {
     pub ip_high: linenr_T,
     pub ip_index: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct memline_T {
     pub ml_line_count: linenr_T,
     pub ml_mfp: *mut memfile_T,

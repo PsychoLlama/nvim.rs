@@ -17,7 +17,6 @@ pub struct Directory {
     pub ent: uv_dirent_t,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct FileID {
     pub inode: uint64_t,
     pub device_id: uint64_t,

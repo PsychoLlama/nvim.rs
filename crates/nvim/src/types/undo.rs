@@ -53,7 +53,6 @@ impl Default for u_entry {
 /// rejected as corrupt, so **zero is free to mean "no link"** and every
 /// `UndoLink` this type builds is either zero or positive.
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Hash)]
-#[repr(C)]
 pub struct UndoLink {
     /// The target's `uh_seq`, or 0 for no target.
     seq: ::core::ffi::c_int,
@@ -157,7 +156,6 @@ impl Default for u_header {
     }
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct visualinfo_T {
     pub vi_start: pos_T,
     pub vi_end: pos_T,

@@ -140,8 +140,6 @@ pub struct fcs_chars_T {
     pub trunc: schar_T,
     pub truncrl: schar_T,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct file_buffer {
     pub handle: handle_T,
     pub b_ml: memline_T,
@@ -407,29 +405,22 @@ pub struct file_buffer {
     pub flush_count: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct file_buffer_b_signcols {
     pub max: ::core::ffi::c_int,
     pub last_max: ::core::ffi::c_int,
     pub count: [::core::ffi::c_int; 9],
     pub autom: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct file_buffer_b_wininfo {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut *mut WinInfo,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct file_buffer_update_callbacks {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut BufUpdateCallbacks,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct file_buffer_update_channels {
     pub size: size_t,
     pub capacity: size_t,
@@ -517,15 +508,12 @@ pub struct pos_save_T {
     pub w_cursor_corr: pos_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct syn_time_T {
     pub total: proftime_T,
     pub slowest: proftime_T,
     pub count: ::core::ffi::c_int,
     pub match_0: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct synblock_T {
     pub b_keywtab: hashtab_T,
     pub b_keywtab_ic: hashtab_T,
