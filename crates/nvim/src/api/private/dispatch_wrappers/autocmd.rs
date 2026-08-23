@@ -7,6 +7,18 @@
 
 use super::*;
 
+/// The msgpack-RPC dispatch wrapper for `nvim_clear_autocmds`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_clear_autocmds(
     channel_id: uint64_t,
     args: Array,
@@ -44,6 +56,18 @@ pub unsafe fn handle_nvim_clear_autocmds(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_create_augroup`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_create_augroup(
     channel_id: uint64_t,
     args: Array,
@@ -86,6 +110,18 @@ pub unsafe fn handle_nvim_create_augroup(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_create_autocmd`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_create_autocmd(
     channel_id: uint64_t,
     args: Array,
@@ -125,6 +161,18 @@ pub unsafe fn handle_nvim_create_autocmd(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_del_augroup_by_id`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_del_augroup_by_id(
     channel_id: uint64_t,
     args: Array,
@@ -157,6 +205,18 @@ pub unsafe fn handle_nvim_del_augroup_by_id(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_del_augroup_by_name`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_del_augroup_by_name(
     channel_id: uint64_t,
     args: Array,
@@ -189,6 +249,18 @@ pub unsafe fn handle_nvim_del_augroup_by_name(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_del_autocmd`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_del_autocmd(
     channel_id: uint64_t,
     args: Array,
@@ -221,6 +293,18 @@ pub unsafe fn handle_nvim_del_autocmd(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_exec_autocmds`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_exec_autocmds(
     channel_id: uint64_t,
     args: Array,
@@ -259,6 +343,18 @@ pub unsafe fn handle_nvim_exec_autocmds(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_get_autocmds`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_get_autocmds(
     channel_id: uint64_t,
     args: Array,

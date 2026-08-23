@@ -7,6 +7,13 @@
 
 use super::*;
 
+/// The Lua binding for `nvim_call_dict_function`, as a `lua_CFunction`.
+///
+/// # Safety
+/// LuaJIT's contract: `lstate` is the running Lua state, with this
+/// binding's arguments on top of its stack and nothing of this frame's
+/// below them. The ABI is `C-unwind` because a refused argument ends in
+/// `lua_error`, which unwinds through this frame rather than returning.
 pub unsafe extern "C-unwind" fn nlua_api_nvim_call_dict_function(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
@@ -62,6 +69,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_dict_function(lstate: *mut lu
     unsafe { dispatch(lstate, c"nvim_call_dict_function", 3, 1, convert) }
 }
 
+/// The Lua binding for `nvim_call_function`, as a `lua_CFunction`.
+///
+/// # Safety
+/// LuaJIT's contract: `lstate` is the running Lua state, with this
+/// binding's arguments on top of its stack and nothing of this frame's
+/// below them. The ABI is `C-unwind` because a refused argument ends in
+/// `lua_error`, which unwinds through this frame rather than returning.
 pub unsafe extern "C-unwind" fn nlua_api_nvim_call_function(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
@@ -108,6 +122,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_function(lstate: *mut lua_Sta
     unsafe { dispatch(lstate, c"nvim_call_function", 2, 1, convert) }
 }
 
+/// The Lua binding for `nvim_command`, as a `lua_CFunction`.
+///
+/// # Safety
+/// LuaJIT's contract: `lstate` is the running Lua state, with this
+/// binding's arguments on top of its stack and nothing of this frame's
+/// below them. The ABI is `C-unwind` because a refused argument ends in
+/// `lua_error`, which unwinds through this frame rather than returning.
 pub unsafe extern "C-unwind" fn nlua_api_nvim_command(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
@@ -143,6 +164,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_command(lstate: *mut lua_State) ->
     unsafe { dispatch(lstate, c"nvim_command", 1, 0, convert) }
 }
 
+/// The Lua binding for `nvim_eval`, as a `lua_CFunction`.
+///
+/// # Safety
+/// LuaJIT's contract: `lstate` is the running Lua state, with this
+/// binding's arguments on top of its stack and nothing of this frame's
+/// below them. The ABI is `C-unwind` because a refused argument ends in
+/// `lua_error`, which unwinds through this frame rather than returning.
 pub unsafe extern "C-unwind" fn nlua_api_nvim_eval(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
@@ -183,6 +211,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_eval(lstate: *mut lua_State) -> c_
     unsafe { dispatch(lstate, c"nvim_eval", 1, 1, convert) }
 }
 
+/// The Lua binding for `nvim_exec2`, as a `lua_CFunction`.
+///
+/// # Safety
+/// LuaJIT's contract: `lstate` is the running Lua state, with this
+/// binding's arguments on top of its stack and nothing of this frame's
+/// below them. The ABI is `C-unwind` because a refused argument ends in
+/// `lua_error`, which unwinds through this frame rather than returning.
 pub unsafe extern "C-unwind" fn nlua_api_nvim_exec2(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
@@ -231,6 +266,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_exec2(lstate: *mut lua_State) -> c
     unsafe { dispatch(lstate, c"nvim_exec2", 2, 1, convert) }
 }
 
+/// The Lua binding for `nvim_parse_expression`, as a `lua_CFunction`.
+///
+/// # Safety
+/// LuaJIT's contract: `lstate` is the running Lua state, with this
+/// binding's arguments on top of its stack and nothing of this frame's
+/// below them. The ABI is `C-unwind` because a refused argument ends in
+/// `lua_error`, which unwinds through this frame rather than returning.
 pub unsafe extern "C-unwind" fn nlua_api_nvim_parse_expression(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way

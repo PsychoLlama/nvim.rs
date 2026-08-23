@@ -7,6 +7,18 @@
 
 use super::*;
 
+/// The msgpack-RPC dispatch wrapper for `nvim_buf_create_user_command`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_buf_create_user_command(
     channel_id: uint64_t,
     args: Array,
@@ -60,6 +72,18 @@ pub unsafe fn handle_nvim_buf_create_user_command(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_buf_del_user_command`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_buf_del_user_command(
     channel_id: uint64_t,
     args: Array,
@@ -96,6 +120,18 @@ pub unsafe fn handle_nvim_buf_del_user_command(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_buf_get_commands`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_buf_get_commands(
     channel_id: uint64_t,
     args: Array,
@@ -138,6 +174,18 @@ pub unsafe fn handle_nvim_buf_get_commands(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_cmd`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_cmd(
     channel_id: uint64_t,
     args: Array,
@@ -184,6 +232,18 @@ pub unsafe fn handle_nvim_cmd(
     obj(kObjectTypeString, object_data { string: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_create_user_command`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_create_user_command(
     channel_id: uint64_t,
     args: Array,
@@ -231,6 +291,18 @@ pub unsafe fn handle_nvim_create_user_command(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_del_user_command`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_del_user_command(
     channel_id: uint64_t,
     args: Array,
@@ -263,6 +335,18 @@ pub unsafe fn handle_nvim_del_user_command(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_get_commands`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_get_commands(
     channel_id: uint64_t,
     args: Array,
@@ -301,6 +385,18 @@ pub unsafe fn handle_nvim_get_commands(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_parse_cmd`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_parse_cmd(
     channel_id: uint64_t,
     args: Array,

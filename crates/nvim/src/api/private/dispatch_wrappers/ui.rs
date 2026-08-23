@@ -7,6 +7,18 @@
 
 use super::*;
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_attach`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_attach(
     channel_id: uint64_t,
     args: Array,
@@ -47,6 +59,18 @@ pub unsafe fn handle_nvim_ui_attach(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_detach`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_detach(
     channel_id: uint64_t,
     args: Array,
@@ -75,6 +99,18 @@ pub unsafe fn handle_nvim_ui_detach(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_pum_set_bounds`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_pum_set_bounds(
     channel_id: uint64_t,
     args: Array,
@@ -119,6 +155,18 @@ pub unsafe fn handle_nvim_ui_pum_set_bounds(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_pum_set_height`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_pum_set_height(
     channel_id: uint64_t,
     args: Array,
@@ -151,6 +199,18 @@ pub unsafe fn handle_nvim_ui_pum_set_height(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_send`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_send(
     channel_id: uint64_t,
     args: Array,
@@ -181,6 +241,18 @@ pub unsafe fn handle_nvim_ui_send(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_set_focus`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_set_focus(
     channel_id: uint64_t,
     args: Array,
@@ -214,6 +286,18 @@ pub unsafe fn handle_nvim_ui_set_focus(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_set_option`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_set_option(
     channel_id: uint64_t,
     args: Array,
@@ -248,6 +332,18 @@ pub unsafe fn handle_nvim_ui_set_option(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_try_resize`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_try_resize(
     channel_id: uint64_t,
     args: Array,
@@ -284,6 +380,18 @@ pub unsafe fn handle_nvim_ui_try_resize(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_ui_try_resize_grid`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_ui_try_resize_grid(
     channel_id: uint64_t,
     args: Array,
@@ -324,6 +432,18 @@ pub unsafe fn handle_nvim_ui_try_resize_grid(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `ui_attach`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_ui_attach(
     channel_id: uint64_t,
     args: Array,

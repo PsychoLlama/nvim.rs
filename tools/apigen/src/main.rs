@@ -934,6 +934,30 @@ fn emit_fn(
         }
     }
 
+    // The `# Safety` section. It is the same contract for all 213 wrappers --
+    // they differ only in what they decode -- and writing it here is the only
+    // way it can exist at all: hand-written sections in generated files are
+    // gone the next time `just apigen` runs.
+    writeln!(out, "/// The msgpack-RPC dispatch wrapper for `{name}`.").unwrap();
+    writeln!(out, "///").unwrap();
+    writeln!(
+        out,
+        "/// Decodes the argument array against the signature, refuses the call\n\
+         /// through `error` if the arity or a type is wrong, and encodes the\n\
+         /// answer as an `Object`."
+    )
+    .unwrap();
+    writeln!(out, "///").unwrap();
+    writeln!(out, "/// # Safety").unwrap();
+    writeln!(
+        out,
+        "/// The dispatcher's contract, which is what every `unsafe` below rests\n\
+         /// on: `args` is an `Array` of `size` initialized `Object`s that outlives\n\
+         /// the call and stays the caller's to free, `arena` is the caller's own\n\
+         /// and live for the call, and `error` points at an `Error` slot that is\n\
+         /// live and unaliased until this returns."
+    )
+    .unwrap();
     writeln!(out, "pub unsafe fn {handler}(").unwrap();
     writeln!(out, "    channel_id: uint64_t,").unwrap();
     writeln!(out, "    args: Array,").unwrap();
@@ -1554,12 +1578,32 @@ fn idents(text: &str) -> BTreeSet<String> {
 /// follows it.
 fn split_items(text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
+    // An item's doc comment and attributes are held back until the item they
+    // belong to arrives, so a chunk boundary never falls between them. It used
+    // to: the wrappers carried no docs, and the first `# Safety` section the
+    // generator emitted split off the `pub unsafe fn` it documented and left
+    // rustfmt with "expected item after doc comment" at the end of a chunk.
+    // An indented `///` (the nested `convert` fn in a Lua binding) is inside an
+    // item already and is not held back.
+    let mut pending = String::new();
     for line in text.lines() {
+        if line.starts_with("///") || line.starts_with("#[") {
+            pending.push_str(line);
+            pending.push('\n');
+            continue;
+        }
         if line.starts_with("pub ") || out.is_empty() {
-            out.push(String::new());
+            out.push(std::mem::take(&mut pending));
+        } else {
+            out.last_mut()
+                .unwrap()
+                .push_str(&std::mem::take(&mut pending));
         }
         out.last_mut().unwrap().push_str(line);
         out.last_mut().unwrap().push('\n');
+    }
+    if !pending.is_empty() {
+        out.push(pending);
     }
     out
 }
@@ -2783,6 +2827,23 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     .filter_map(|(name, used)| used.then_some(name))
     .collect();
 
+    // As with the dispatch wrappers: one contract, 182 bindings, and it can
+    // only live in the generator.
+    writeln!(
+        out,
+        "/// The Lua binding for `{name}`, as a `lua_CFunction`."
+    )
+    .unwrap();
+    writeln!(out, "///").unwrap();
+    writeln!(out, "/// # Safety").unwrap();
+    writeln!(
+        out,
+        "/// LuaJIT's contract: `lstate` is the running Lua state, with this\n\
+         /// binding's arguments on top of its stack and nothing of this frame's\n\
+         /// below them. The ABI is `C-unwind` because a refused argument ends in\n\
+         /// `lua_error`, which unwinds through this frame rather than returning."
+    )
+    .unwrap();
     writeln!(
         out,
         "pub unsafe extern \"C-unwind\" fn nlua_api_{name}(lstate: *mut lua_State) -> c_int {{"
@@ -4038,6 +4099,10 @@ fn rustfmt(config: &Path, text: &str) -> Result<String, String> {
         .arg("stdout")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
+        // Captured rather than inherited so a rejection can say *what* was
+        // wrong: "rustfmt rejected the generated module" on its own points at
+        // ~4k emitted lines with no line number.
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| format!("rustfmt: {e}"))?;
     child
@@ -4050,7 +4115,10 @@ fn rustfmt(config: &Path, text: &str) -> Result<String, String> {
         .wait_with_output()
         .map_err(|e| format!("rustfmt: {e}"))?;
     if !out.status.success() {
-        return Err("rustfmt rejected the generated module".into());
+        return Err(format!(
+            "rustfmt rejected the generated module:\n{}",
+            String::from_utf8_lossy(&out.stderr).trim_end()
+        ));
     }
     String::from_utf8(out.stdout).map_err(|e| format!("rustfmt: {e}"))
 }

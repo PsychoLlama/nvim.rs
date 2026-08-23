@@ -7,6 +7,18 @@
 
 use super::*;
 
+/// The msgpack-RPC dispatch wrapper for `nvim_get_all_options_info`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_get_all_options_info(
     channel_id: uint64_t,
     args: Array,
@@ -33,6 +45,18 @@ pub unsafe fn handle_nvim_get_all_options_info(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_get_option_info2`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_get_option_info2(
     channel_id: uint64_t,
     args: Array,
@@ -75,6 +99,18 @@ pub unsafe fn handle_nvim_get_option_info2(
     obj(kObjectTypeDict, object_data { dict: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_get_option_value`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_get_option_value(
     channel_id: uint64_t,
     args: Array,
@@ -116,6 +152,18 @@ pub unsafe fn handle_nvim_get_option_value(
     }
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_set_option_value`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_set_option_value(
     channel_id: uint64_t,
     args: Array,

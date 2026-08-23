@@ -7,6 +7,18 @@
 
 use super::*;
 
+/// The msgpack-RPC dispatch wrapper for `nvim_open_tabpage`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_open_tabpage(
     channel_id: uint64_t,
     args: Array,
@@ -63,6 +75,18 @@ pub unsafe fn handle_nvim_open_tabpage(
     )
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_del_var`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_del_var(
     channel_id: uint64_t,
     args: Array,
@@ -99,6 +123,18 @@ pub unsafe fn handle_nvim_tabpage_del_var(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_number`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_get_number(
     channel_id: uint64_t,
     args: Array,
@@ -130,6 +166,18 @@ pub unsafe fn handle_nvim_tabpage_get_number(
     obj(kObjectTypeInteger, object_data { integer: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_var`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_get_var(
     channel_id: uint64_t,
     args: Array,
@@ -166,6 +214,18 @@ pub unsafe fn handle_nvim_tabpage_get_var(
     }
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_win`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_get_win(
     channel_id: uint64_t,
     args: Array,
@@ -202,6 +262,18 @@ pub unsafe fn handle_nvim_tabpage_get_win(
     )
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_is_valid`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_is_valid(
     channel_id: uint64_t,
     args: Array,
@@ -230,6 +302,18 @@ pub unsafe fn handle_nvim_tabpage_is_valid(
     obj(kObjectTypeBoolean, object_data { boolean: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_list_wins`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_list_wins(
     channel_id: uint64_t,
     args: Array,
@@ -263,6 +347,18 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
     obj(kObjectTypeArray, object_data { array: rv })
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_set_var`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_set_var(
     channel_id: uint64_t,
     args: Array,
@@ -300,6 +396,18 @@ pub unsafe fn handle_nvim_tabpage_set_var(
     NIL
 }
 
+/// The msgpack-RPC dispatch wrapper for `nvim_tabpage_set_win`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, `arena` is the caller's own
+/// and live for the call, and `error` points at an `Error` slot that is
+/// live and unaliased until this returns.
 pub unsafe fn handle_nvim_tabpage_set_win(
     channel_id: uint64_t,
     args: Array,
