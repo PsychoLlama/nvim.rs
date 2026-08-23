@@ -264,8 +264,7 @@ pub unsafe fn os_file_is_readable(name: *const c_char) -> bool {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_file_is_writable(name: *const c_char) -> c_int {
+pub unsafe fn os_file_is_writable(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     if fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name, W_OK, None) }) != 0 {
         return 0;

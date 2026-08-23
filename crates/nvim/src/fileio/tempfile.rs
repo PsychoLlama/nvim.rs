@@ -363,8 +363,7 @@ unsafe fn vim_closetempdir() {
 }
 
 /// Delete the temp directory and all files it contains.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_deltempdir() {
+pub unsafe fn vim_deltempdir() {
     unsafe {
         let Some(dir) = VIM_TEMPDIR.with_mut(|dir| dir.take()) else {
             return;
@@ -379,8 +378,7 @@ pub unsafe extern "C" fn vim_deltempdir() {
 /// Gets the path to Nvim's own temp dir, ending with a slash.
 ///
 /// Creates the directory on the first call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_gettempdir() -> *mut c_char {
+pub unsafe fn vim_gettempdir() -> *mut c_char {
     static NOTFOUND: GlobalCell<c_int> = GlobalCell::new(0);
     unsafe {
         let usable = VIM_TEMPDIR.with(|dir| dir.as_ref().is_some_and(|dir| os_isdir(dir.as_ptr())));
@@ -445,8 +443,7 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
 /// exists, because we own the directory and nobody else creates files in it.
 ///
 /// @return  the name, or NULL if Nvim can't create its temporary directory.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_tempname() -> *mut c_char {
+pub unsafe fn vim_tempname() -> *mut c_char {
     /// Temp filename counter.
     static TEMP_COUNT: GlobalCell<u64> = GlobalCell::new(0);
     unsafe {

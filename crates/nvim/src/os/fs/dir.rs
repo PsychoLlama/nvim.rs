@@ -34,8 +34,7 @@ use crate::types::{Directory, int32_t, size_t};
 ///
 /// # Safety
 /// `path` must be null or a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_path_exists(path: *const c_char) -> bool {
+pub unsafe fn os_path_exists(path: *const c_char) -> bool {
     let mut statbuf = UV_STAT_T_INIT;
     // SAFETY: the caller's path; `statbuf` is this frame's.
     unsafe { os_stat(path, &raw mut statbuf) == LIBUV_SUCCESS }

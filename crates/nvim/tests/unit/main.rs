@@ -46,6 +46,7 @@ mod sha256;
 mod shell;
 mod statusline;
 mod strings;
+mod tempfile;
 mod terminfo;
 mod termkey;
 mod typval;
