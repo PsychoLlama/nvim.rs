@@ -22,6 +22,12 @@ pub type RemapValues = ::core::ffi::c_int;
 /// first byte would otherwise land on another field. `#[repr(C)]` is what
 /// guarantees declaration order here; `add_buff` carries the matching
 /// compile-time assertion.
+///
+/// `Copy` stays, and it is narrower than it looks: the only block ever
+/// copied by value is [`buffheader_T::bh_first`], the inline head sentinel,
+/// whose flexible tail is the one declared byte and is never written. Every
+/// block that carries text is reached as `*mut buffblock_T` and lives for
+/// exactly as long as its allocation.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct buffblock {

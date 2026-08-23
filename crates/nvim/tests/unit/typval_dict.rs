@@ -56,14 +56,14 @@ fn a_zero_length_watch_pattern_matches_anything() {
         let cb = tv::build_callback(&Cb::None);
         log.clear();
 
-        tv_dict_watcher_add(d, cstr("*").as_ptr(), 0, cb);
+        tv_dict_watcher_add(d, cstr("*").as_ptr(), 0, cb.clone());
         let ws = tv::dict_watchers(d);
         log.check(&[alloc::dwatcher(ws[0].at), alloc::string(ws[0].pattern, 0)]);
         assert_eq!(ws[0].pat, b"");
         assert_eq!(ws[0].cb, Cb::None);
         assert!(!ws[0].busy);
 
-        assert!(tv_dict_watcher_remove(d, cstr("x").as_ptr(), 0, cb));
+        assert!(tv_dict_watcher_remove(d, cstr("x").as_ptr(), 0, &cb));
         log.check(&[alloc::freed(ws[0].pattern), alloc::freed(ws[0].at)]);
         assert_eq!(tv::dict_watchers(d), []);
 
@@ -113,7 +113,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         ]);
 
         let registered = [("te", none), ("foo", fref), ("te", partial)];
-        for (pattern, cb) in registered {
+        for (pattern, cb) in registered.clone() {
             tv_dict_watcher_add(d, cstr(pattern).as_ptr(), pattern.len(), cb);
         }
         let ws = tv::dict_watchers(d);
@@ -150,7 +150,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             d,
             cstr("foo").as_ptr(),
             3,
-            registered[1].1
+            &registered[1].1
         ));
         log.check(&[
             alloc::freed(registered[1].1.data.funcref),
@@ -161,7 +161,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             d,
             cstr("foo").as_ptr(),
             3,
-            registered[1].1
+            &registered[1].1
         ));
         assert_eq!(tv::dict_watchers(d).len(), 2);
 
@@ -170,7 +170,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             d,
             cstr("te").as_ptr(),
             2,
-            registered[2].1
+            &registered[2].1
         ));
         log.check(&[
             alloc::freed(pt_arg),
@@ -185,7 +185,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             d,
             cstr("te").as_ptr(),
             2,
-            registered[2].1
+            &registered[2].1
         ));
         assert_eq!(tv::dict_watchers(d).len(), 1);
 
@@ -194,14 +194,14 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             d,
             cstr("te").as_ptr(),
             2,
-            registered[0].1
+            &registered[0].1
         ));
         log.check(&[alloc::freed(ws[0].pattern), alloc::freed(ws[0].at)]);
         assert!(!tv_dict_watcher_remove(
             d,
             cstr("te").as_ptr(),
             2,
-            registered[0].1
+            &registered[0].1
         ));
         assert_eq!(tv::dict_watchers(d), []);
 

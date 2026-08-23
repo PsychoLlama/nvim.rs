@@ -10,6 +10,10 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
+/// One slot of terminfo's nine-deep parameter stack.
+///
+/// `Copy`: the stack is a value the expansion consumes, and `string` points
+/// at the caller's own text.
 #[derive(Copy, Clone)]
 pub struct TPVAR {
     pub num: ::core::ffi::c_long,

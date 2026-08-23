@@ -107,7 +107,10 @@ pub unsafe extern "C" fn unpack(
         let p: *mut Unpacker = &raw mut unpacker;
         mpack_parser_init(&raw mut (*p).parser, 0);
         (*p).parser.data.p = p.cast::<c_void>();
-        (*p).arena = *arena;
+        // The caller lends its arena for the parse and takes it back at the
+        // end; an arena owns its block chain, so it is *moved* both ways and
+        // the caller's slot is empty in between.
+        (*p).arena = core::mem::replace(&mut *arena, ARENA_EMPTY);
 
         let result = mpack_parse(
             &raw mut (*p).parser,
@@ -117,7 +120,7 @@ pub unsafe extern "C" fn unpack(
             Some(parse_nop),
         );
 
-        *arena = (*p).arena;
+        *arena = core::mem::replace(&mut (*p).arena, ARENA_EMPTY);
         (result, (*p).result)
     };
 

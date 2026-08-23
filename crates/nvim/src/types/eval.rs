@@ -389,7 +389,11 @@ crate::flag_set! {
     /// Read-only inside a `:sandbox`.
     const RO_SBX = 4;
 }
-#[derive(Copy, Clone)]
+/// How one `eval*()` call reads its continuation lines.
+///
+/// Not `Copy`: `eval_tofree` is the joined line the evaluator allocated and
+/// must free once.
+#[derive(Clone)]
 pub struct evalarg_T {
     pub eval_flags: ::core::ffi::c_int,
     pub eval_getline: LineGetter,
@@ -414,12 +418,12 @@ pub struct lval_T {
     pub ll_newkey: *mut ::core::ffi::c_char,
     pub ll_blob: *mut blob_T,
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct save_v_event_T {
     pub sve_did_save: bool,
     pub sve_hashtab: hashtab_T,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct timer_T {
     pub tw: TimeWatcher,
     pub timer_id: ::core::ffi::c_int,

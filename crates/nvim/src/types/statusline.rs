@@ -11,14 +11,21 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// What a click on one statusline column does.
+///
+/// Not `Copy`: the `func` of a `kStlClickFuncRun` definition is an owned
+/// string that `stl_clear_click_defs` frees.
+#[derive(Clone)]
 pub struct StlClickDefinition {
     pub type_0: StlClickDefinition_type_0,
     pub tabnr: ::core::ffi::c_int,
     pub func: *mut ::core::ffi::c_char,
 }
 pub type StlClickDefinition_type_0 = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+/// A click definition and the column it starts at.
+///
+/// Not `Copy`, following [`StlClickDefinition`].
+#[derive(Clone)]
 pub struct StlClickRecord {
     pub def: StlClickDefinition,
     pub start: *const ::core::ffi::c_char,
@@ -35,6 +42,9 @@ pub struct statuscol_T {
     pub fold_vcol: [colnr_T; 9],
     pub sattrs: *mut SignTextAttrs,
 }
+/// One highlight run of a built statusline.
+///
+/// `Copy`: `start` points into the built string, which the caller owns.
 #[derive(Copy, Clone)]
 pub struct stl_hlrec {
     pub start: *mut ::core::ffi::c_char,

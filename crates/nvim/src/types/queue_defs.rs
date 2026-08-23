@@ -11,7 +11,12 @@
 // emitted. One definition per logical type; every module re-exports here.
 
 pub type QUEUE = queue;
-#[derive(Copy, Clone)]
+/// libuv's intrusive doubly-linked list node.
+///
+/// **Self-referential.** An empty queue's `next` and `prev` both point at the
+/// node itself, and a linked node's neighbours point back at *its* address, so
+/// a node is only valid where it was initialised. Not `Copy`.
+#[derive(Clone)]
 pub struct queue {
     pub next: *mut queue,
     pub prev: *mut queue,

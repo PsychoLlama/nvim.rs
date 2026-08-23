@@ -61,7 +61,7 @@ pub struct scriptitem_T {
     pub sn_prl_idx: linenr_T,
     pub sn_prl_execed: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct scriptvar_T {
     pub sv_var: ScopeDictDictItem,
     pub sv_dict: dict_T,

@@ -42,6 +42,9 @@ pub struct MTDamagePair {
     pub end: MTDamage,
 }
 pub type MTNode = mtnode_s;
+/// One row of the API dispatch table.
+///
+/// `Copy`: a static name and a function pointer.
 #[derive(Copy, Clone)]
 pub struct MsgpackRpcRequestHandler {
     pub name: *const ::core::ffi::c_char,

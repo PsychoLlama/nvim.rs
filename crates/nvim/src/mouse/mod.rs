@@ -297,7 +297,7 @@ impl ClickDefs {
     /// The definition recorded for screen column `col`.
     fn at(self, col: c_int) -> StlClickDefinition {
         // SAFETY: the constructor's promise.
-        unsafe { *self.0.offset(col as isize) }
+        unsafe { (*self.0.offset(col as isize)).clone() }
     }
 }
 

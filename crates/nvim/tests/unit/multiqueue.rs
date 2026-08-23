@@ -335,7 +335,7 @@ fn a_oneshot_event_fires_once_however_many_queues_reach_it() {
     let shared = event_create_oneshot(wrapped, 2);
     HANDLER_CALLS.store(0, Ordering::Relaxed);
     unsafe {
-        multiqueue_put_event(left, shared);
+        multiqueue_put_event(left, shared.clone());
         multiqueue_put_event(right, shared);
         multiqueue_process_events(left);
         assert_eq!(HANDLER_CALLS.load(Ordering::Relaxed), 1);

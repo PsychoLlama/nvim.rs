@@ -235,7 +235,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                 // Currently this should only happen while processing input()
                 // prompts.
                 debug_assert!((*colored_ccline).input_fn != 0);
-                color_cb = (*colored_ccline).highlight_callback;
+                color_cb = (*colored_ccline).highlight_callback.clone();
             } else if (*colored_ccline).cmdfirstc == ':' as ::core::ffi::c_int {
                 // C's TRY_WRAP.
                 let mut tstate: TryState = TRY_STATE_INIT;

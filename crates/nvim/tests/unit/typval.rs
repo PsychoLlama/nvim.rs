@@ -322,20 +322,20 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
             type_0: kCallbackNone,
         };
         let pattern = cstr("key*");
-        tv_dict_watcher_add(d, pattern.as_ptr(), 4, callback);
+        tv_dict_watcher_add(d, pattern.as_ptr(), 4, callback.clone());
         assert!(tv_dict_is_watched(d));
 
         // A prefix of the pattern is not the pattern ...
         let shorter = cstr("key");
-        assert!(!tv_dict_watcher_remove(d, shorter.as_ptr(), 3, callback));
+        assert!(!tv_dict_watcher_remove(d, shorter.as_ptr(), 3, &callback));
         assert!(tv_dict_is_watched(d), "a shorter pattern matched");
 
         // ... and neither are different bytes of the same length.
         let same_len = cstr("kex*");
-        assert!(!tv_dict_watcher_remove(d, same_len.as_ptr(), 4, callback));
+        assert!(!tv_dict_watcher_remove(d, same_len.as_ptr(), 4, &callback));
         assert!(tv_dict_is_watched(d), "a different pattern matched");
 
-        assert!(tv_dict_watcher_remove(d, pattern.as_ptr(), 4, callback));
+        assert!(tv_dict_watcher_remove(d, pattern.as_ptr(), 4, &callback));
         assert!(!tv_dict_is_watched(d), "its own pattern did not match");
         tv_dict_free(d);
     }

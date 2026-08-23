@@ -15,7 +15,13 @@ pub type BoolVarValue = ::core::ffi::c_uint;
 /// The two `VAR_BOOL` values: `v:false` and `v:true`.
 pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
-#[derive(Copy, Clone)]
+/// A Vimscript or Lua callable, held by whatever registered it.
+///
+/// Not `Copy`. Whichever arm is live -- a funcref name, a `partial_T`
+/// refcount, a `LuaRef` -- is owned, and `callback_free` releases it.
+/// Duplicating one without `callback_copy` is a second owner of the same
+/// reference, so the copies that remain say `.clone()` and are visible.
+#[derive(Clone)]
 pub struct Callback {
     pub data: Callback_data,
     pub type_0: CallbackType,
@@ -28,7 +34,11 @@ pub union Callback_data {
     pub partial: *mut partial_T,
     pub luaref: LuaRef,
 }
-#[derive(Copy, Clone)]
+/// One `dictwatcheradd()` registration, linked into its dict's queue.
+///
+/// Not `Copy`: it owns `key_pattern`, its `callback`, and a queue node whose
+/// neighbours point back at this address.
+#[derive(Clone)]
 pub struct DictWatcher {
     pub callback: Callback,
     pub key_pattern: *mut ::core::ffi::c_char,
@@ -93,7 +103,11 @@ pub struct blobvar_S {
     pub bv_lock: VarLockStatus,
 }
 pub type dict_T = dictvar_S;
-#[derive(Copy, Clone)]
+/// A `dict_T`.
+///
+/// Not `Copy`: it owns its hashtab (itself self-referential), its watcher
+/// queue and a Lua table reference.
+#[derive(Clone)]
 pub struct dictvar_S {
     pub dv_lock: VarLockStatus,
     pub dv_scope: ScopeType,
@@ -106,7 +120,7 @@ pub struct dictvar_S {
     pub watchers: QUEUE,
     pub lua_table_ref: LuaRef,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct funccall_S {
     pub fc_func: *mut ufunc_T,
     pub fc_linenr: ::core::ffi::c_int,
@@ -184,7 +198,11 @@ pub struct listwatch_S {
     pub lw_next: *mut listwatch_T,
 }
 pub type listwatch_T = listwatch_S;
-#[derive(Copy, Clone)]
+/// A partial: a function plus bound arguments and an optional `self` dict.
+///
+/// Not `Copy`: `pt_name`, `pt_argv` and the two refcounts are owned, and
+/// `partial_unref` is what releases them.
+#[derive(Clone)]
 pub struct partial_S {
     pub pt_refcount: ::core::ffi::c_int,
     pub pt_copyID: ::core::ffi::c_int,

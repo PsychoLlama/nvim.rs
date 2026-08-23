@@ -12,12 +12,24 @@
 use super::*;
 
 pub type hash_T = size_t;
+/// One slot of a [`hashtab_T`].
+///
+/// `Copy`: `hi_key` points into the `dictitem_T` (or equivalent) that the
+/// table indexes, which the table does not own.
 #[derive(Copy, Clone)]
 pub struct hashitem_T {
     pub hi_hash: hash_T,
     pub hi_key: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
+/// Vim's open-addressed hash table.
+///
+/// **Self-referential.** While the table fits its inline array, `ht_array`
+/// points at this struct's own `ht_smallarray`, so a table is only valid at
+/// the address it was initialised at. Not `Copy` for that reason, and even a
+/// clone is only sound when the value ends up back at the address it came
+/// from -- which is exactly what `get_v_event`/`restore_v_event` do, and they
+/// say so.
+#[derive(Clone)]
 pub struct hashtab_T {
     pub ht_mask: hash_T,
     pub ht_used: size_t,

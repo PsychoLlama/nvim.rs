@@ -203,7 +203,7 @@ pub unsafe fn timer_start(
         (*timer).timeout = timeout;
         (*timer).timer_id = last_timer_id.get() as c_int;
         last_timer_id.set(last_timer_id.get().wrapping_add(1));
-        (*timer).callback = *callback;
+        (*timer).callback = (*callback).clone();
 
         time_watcher_init(main_loop.ptr(), &raw mut (*timer).tw, timer as *mut c_void);
         (*timer).tw.events = multiqueue_new_child((*main_loop.ptr()).events);

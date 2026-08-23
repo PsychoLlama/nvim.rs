@@ -102,7 +102,7 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _f
             args.get(0).vval.v_dict,
             key_pattern,
             strlen(key_pattern),
-            callback,
+            &callback,
         ) {
             semsg!("Couldn't find a watcher matching key and callback");
         }

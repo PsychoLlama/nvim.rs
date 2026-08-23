@@ -58,7 +58,7 @@ pub const QFLT_INTERNAL: qfltype_T = 2;
 pub const QFLT_LOCATION: qfltype_T = 1;
 pub const QFLT_QUICKFIX: qfltype_T = 0;
 /// One quickfix list within a stack.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct qf_list_T {
     pub qf_id: ::core::ffi::c_uint,
     pub qfl_type: qfltype_T,

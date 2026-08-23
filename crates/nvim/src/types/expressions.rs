@@ -11,11 +11,18 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// A parsed `:echo`-style expression: the error slot and the tree.
+///
+/// Not `Copy`: `root` heads a tree `viml_pexpr_free_ast` owns and frees.
+#[derive(Clone)]
 pub struct ExprAST {
     pub err: ExprASTError,
     pub root: *mut ExprASTNode,
 }
+/// Where a parse stopped, and why.
+///
+/// `Copy`: `msg` is a static string and `arg` points into the caller's own
+/// expression. It owns nothing.
 #[derive(Copy, Clone)]
 pub struct ExprASTError {
     pub msg: *const ::core::ffi::c_char,

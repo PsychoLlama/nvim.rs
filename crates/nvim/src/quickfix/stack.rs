@@ -110,9 +110,7 @@ pub(crate) unsafe fn qf_pop_stack(qi: *mut qf_info_T, adjust: bool) {
     unsafe {
         qf_free(qf_get_list(qi, 0));
         let count = (*qi).qf_listcount as usize;
-        let lists = &mut (*qi).qf_lists;
-        lists.copy_within(1..count, 0);
-        lists[count - 1] = empty_list();
+        drop_oldest_list(&mut (*qi).qf_lists, count);
         if adjust {
             (*qi).qf_listcount -= 1;
             (*qi).qf_curlist = if (*qi).qf_curlist == 0 {
@@ -122,6 +120,20 @@ pub(crate) unsafe fn qf_pop_stack(qi: *mut qf_info_T, adjust: bool) {
             };
         }
     }
+}
+
+/// Shift the newest `count - 1` lists down one slot and leave the top empty.
+///
+/// This is `slice::copy_within` without the `Copy` bound. A list owns its
+/// entries, its title and a `qf_qftf_cb`, so the lists are *moved*: cloning
+/// upwards leaves each source intact until it has been read, and the slot
+/// the shift vacates is overwritten before anything can see it -- which is
+/// exactly what the `memmove` it replaces did.
+fn drop_oldest_list(lists: &mut [qf_list_T], count: usize) {
+    for at in 1..count {
+        lists[at - 1] = lists[at].clone();
+    }
+    lists[count - 1] = empty_list();
 }
 
 /// The buffer the quickfix window shows, or `INVALID_QFBUFNR`.

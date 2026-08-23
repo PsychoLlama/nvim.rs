@@ -11,7 +11,11 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// One undo entry: the lines a change replaced.
+///
+/// Not `Copy`: `ue_array` and every string in it are owned, and
+/// `u_freeentry` releases them.
+#[derive(Clone)]
 pub struct u_entry {
     pub ue_next: *mut u_entry_T,
     pub ue_top: linenr_T,

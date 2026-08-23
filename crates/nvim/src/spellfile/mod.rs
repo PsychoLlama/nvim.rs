@@ -178,7 +178,7 @@ pub struct spellinfo_T {
 /// file as a struct image, none is named by `tools/ffigen/unit-cdefs.h` or
 /// the ABI ledger, and none crosses an `extern` boundary — so none of them
 /// carries `repr(C)`, and the compiler is free to lay them out.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct afffile_T {
     pub af_enc: *mut ::core::ffi::c_char,
     pub af_flagtype: ::core::ffi::c_int,

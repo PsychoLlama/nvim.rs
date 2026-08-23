@@ -18,9 +18,11 @@ use super::*;
 /// A channel's decoder. Zero-initialised by its owner, so every field has to
 /// mean something sensible as all-zero bytes.
 ///
-/// The layout is pinned: `test/unit/msgpack_spec.lua` allocates one with
-/// `ffi.sizeof` and drives it by writing `read_ptr`/`read_size` directly.
-#[derive(Copy, Clone)]
+/// Not `Copy`, and it must not be moved either once `unpacker_init` has run:
+/// the parser writes the unpacker's *own address* into `parser.data.p` and
+/// reads back through it. It owns an arena, two `Object`s and an `Error`
+/// besides.
+#[derive(Clone)]
 pub struct Unpacker {
     pub parser: mpack_parser_t,
     pub reader: mpack_tokbuf_t,
@@ -44,7 +46,7 @@ pub struct Unpacker {
     pub has_grid_line_event: bool,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct CallbackReader {
     pub cb: Callback,
     pub self_0: *mut dict_T,

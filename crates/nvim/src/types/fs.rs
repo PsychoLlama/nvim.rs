@@ -21,6 +21,9 @@ pub struct FileID {
     pub inode: uint64_t,
     pub device_id: uint64_t,
 }
+/// A `stat` answer.
+///
+/// `Copy`: a value.
 #[derive(Copy, Clone, Default)]
 pub struct FileInfo {
     pub stat: uv_stat_t,

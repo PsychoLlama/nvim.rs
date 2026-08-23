@@ -11,7 +11,13 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// One queued event: a handler and up to ten arguments for it.
+///
+/// Not `Copy`. The handler frees what `argv` points at, so an event is
+/// run -- and therefore delivered -- exactly once. The one place two queues
+/// receive the same event says `.clone()`, and pairs it with the two-hold
+/// one-shot wrapper that makes that correct.
+#[derive(Clone)]
 pub struct Event {
     pub handler: argv_callback,
     pub argv: [*mut ::core::ffi::c_void; 10],

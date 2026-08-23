@@ -11,6 +11,9 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
+/// The `grid_line` message being decoded, mid-flight.
+///
+/// `Copy`: counters and offsets.
 #[derive(Copy, Clone)]
 pub struct GridLineEvent {
     pub args: [::core::ffi::c_int; 3],

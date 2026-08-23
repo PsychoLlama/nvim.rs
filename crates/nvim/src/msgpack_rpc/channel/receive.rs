@@ -270,9 +270,10 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
             handler: p.handler,
             args,
             request_id: p.request_id,
-            used_mem: p.arena,
+            // The event takes the arena the request was unpacked into and
+            // frees it when it has run.
+            used_mem: mem::replace(&mut p.arena, ARENA_EMPTY),
         });
-        p.arena = ARENA_EMPTY;
         channel_incref(chan.as_ptr());
         evdata
     };
@@ -311,7 +312,7 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
         // however many queues reach it first.
         unsafe {
             let ev = event_create_oneshot(event, 2);
-            multiqueue_put_event(chan.events, ev);
+            multiqueue_put_event(chan.events, ev.clone());
             multiqueue_put_event(resize_events.get(), ev);
         }
         return;

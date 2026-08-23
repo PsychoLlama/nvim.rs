@@ -243,8 +243,10 @@ fn move_xp_pattern(mut cc: Cc, old: *mut ::core::ffi::c_char) {
 /// `normal :cmd` and overwrite it.
 pub(crate) unsafe fn save_cmdline(ccp: *mut CmdlineInfo) {
     // SAFETY: the caller's promise -- a slot to save into.
-    unsafe { *ccp = ccline.get() };
-    ccline.set(CMDLINE_INFO_INIT);
+    // The command line moves out of the cell: it owns `cmdbuff` and a
+    // highlight `Callback`, and leaving a second copy behind in `ccline`
+    // would be two owners of both. `replace` is the take, spelled once.
+    unsafe { *ccp = ccline.with_mut(|cc| core::mem::replace(cc, CMDLINE_INFO_INIT)) };
     let mut cc = Cc::current();
     cc.prev_ccline = ccp;
     cc.cmdbuff = ::core::ptr::null_mut(); // signal that ccline is not in use
@@ -253,7 +255,8 @@ pub(crate) unsafe fn save_cmdline(ccp: *mut CmdlineInfo) {
 /// Restore `ccline` after it has been saved with [`save_cmdline`].
 pub(crate) unsafe fn restore_cmdline(ccp: *mut CmdlineInfo) {
     // SAFETY: the caller's promise -- a saved command line.
-    ccline.set(unsafe { *ccp });
+    // The saved line moves back in; `ccp`'s slot is dead from here.
+    ccline.set(unsafe { ccp.read() });
 }
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,11 @@ use super::*;
 
 pub type CheckItem =
     Option<unsafe fn(*mut ::core::ffi::c_void, *const ::core::ffi::c_char) -> varnumber_T>;
-#[derive(Copy, Clone)]
+/// A buffered file handle.
+///
+/// Not `Copy`: it owns both the descriptor and the buffer, and
+/// `file_close` releases them once.
+#[derive(Clone)]
 pub struct FileDescriptor {
     pub fd: ::core::ffi::c_int,
     pub buffer: *mut ::core::ffi::c_char,

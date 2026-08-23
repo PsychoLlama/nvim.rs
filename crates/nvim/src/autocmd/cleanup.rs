@@ -85,7 +85,11 @@ pub(crate) unsafe fn au_cleanup() {
             while i < (*acs).size {
                 let ac = (*acs).items.add(i);
                 if nsize != i {
-                    *(*acs).items.add(nsize) = *ac;
+                    // A move, not a duplication: the source slot is either
+                    // this one or one the loop has already passed over, and
+                    // everything past `nsize` is dropped by the truncation
+                    // below.
+                    *(*acs).items.add(nsize) = (*ac).clone();
                 }
                 if !(*ac).pat.is_null() {
                     nsize = nsize.wrapping_add(1);

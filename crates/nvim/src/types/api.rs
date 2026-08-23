@@ -17,7 +17,14 @@ pub struct AdditionalDataBuilder {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
+/// An arena allocator: a bump pointer into `cur_blk`, which heads a chain of
+/// blocks the arena owns and `arena_mem_free` releases.
+///
+/// Not `Copy`. Two arenas over one block chain would each believe they may
+/// bump it and each free it, so every hand-off is a move -- see
+/// `unpack_object`, which lends its caller's arena to a scratch unpacker and
+/// leaves `ARENA_EMPTY` behind until it is handed back.
+#[derive(Clone)]
 pub struct Arena {
     pub cur_blk: *mut ::core::ffi::c_char,
     pub pos: size_t,
@@ -66,7 +73,10 @@ pub type ErrorType = ::core::ffi::c_int;
 pub const kErrorTypeNone: ErrorType = -1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeValidation: ErrorType = 1;
-#[derive(Copy, Clone)]
+/// A kvec of extmark pairs.
+///
+/// Not `Copy`: `items` is the array's own allocation.
+#[derive(Clone)]
 pub struct ExtmarkInfoArray {
     pub size: size_t,
     pub capacity: size_t,

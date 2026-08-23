@@ -111,7 +111,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
 /// can do (by returning `true`).
 unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     unsafe {
-        let mut callback = (*ac).handler_fn;
+        let mut callback = (*ac).handler_fn.clone();
         if callback.type_0 != kCallbackLua {
             let mut argsin = TV_INITIAL_VALUE;
             let mut rettv = TV_INITIAL_VALUE;
@@ -202,7 +202,7 @@ pub unsafe fn getnextac(
 
         let retval;
         if (*ac).handler_cmd.is_null() {
-            let mut ac_copy = *ac;
+            let mut ac_copy = (*ac).clone();
             // Mark a `++once` handler removed *before* running it, so a
             // `:doautocmd` from inside it cannot run it again (#25526).
             (*ac).pat = if oneshot {

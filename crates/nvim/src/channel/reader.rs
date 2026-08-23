@@ -65,7 +65,7 @@ pub unsafe fn callback_reader_free(reader: *mut CallbackReader) {
 }
 
 /// Whether a reader has anywhere to deliver to.
-pub(super) fn callback_reader_set(reader: CallbackReader) -> bool {
+pub(super) fn callback_reader_set(reader: &CallbackReader) -> bool {
     reader.cb.type_0 != kCallbackNone || !reader.self_0.is_null()
 }
 
@@ -114,7 +114,7 @@ unsafe fn on_channel_output(
     if eof {
         unsafe { (*reader).eof = true };
     }
-    if callback_reader_set(unsafe { *reader }) {
+    if callback_reader_set(unsafe { &*reader }) {
         unsafe {
             ga_concat_len(&raw mut (*reader).buffer, buf, count);
             schedule_channel_event(chan);

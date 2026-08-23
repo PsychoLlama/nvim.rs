@@ -157,7 +157,7 @@ impl DerefMut for Chan {
 ///
 /// It owns the arena the arguments were decoded into: the handler reads them
 /// and the arena is released once the response has been packed.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct RequestEvent {
     pub type_0: MessageType,
     pub channel: *mut Channel,

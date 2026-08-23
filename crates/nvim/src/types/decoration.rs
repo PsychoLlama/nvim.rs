@@ -25,6 +25,15 @@ pub struct DecorHighlightInline {
     pub hl_id: ::core::ffi::c_int,
     pub conceal_char: schar_T,
 }
+/// A mark's decoration: either a whole highlight held inline, or -- when
+/// `ext` -- a pair of indices into the process-wide decoration store.
+///
+/// `Copy` stays. Both arms are *handles*: the inline arm is a plain value,
+/// and the indexed arm names entries the store owns, acquired through
+/// `decor_put_sh` and released through `decor_free`. Copying one is a second
+/// name for the same entries, not a second owner of them -- which is why a
+/// range of marks all carry the same decoration and only the mark that
+/// outlives the rest frees it.
 #[derive(Copy, Clone)]
 pub struct DecorInline {
     pub ext: bool,

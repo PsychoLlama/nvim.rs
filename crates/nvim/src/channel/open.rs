@@ -130,8 +130,8 @@ pub unsafe fn channel_job_start(
         } else {
             (*proc).fwd_err = (*chan).on_stderr.fwd_err;
             (
-                rpc || callback_reader_set((*chan).on_data),
-                callback_reader_set((*chan).on_stderr),
+                rpc || callback_reader_set(&(*chan).on_data),
+                callback_reader_set(&(*chan).on_stderr),
             )
         };
         let has_in = stdin_mode == kChannelStdinPipe;

@@ -248,7 +248,7 @@ impl ClickRecs {
     pub(crate) fn iter(self) -> impl Iterator<Item = StlClickRecord> {
         (0..).map_while(move |i| {
             // SAFETY: as [`HlRuns::iter`].
-            let rec = unsafe { *self.0.add(i) };
+            let rec = unsafe { (*self.0.add(i)).clone() };
             (!rec.start.is_null()).then_some(rec)
         })
     }

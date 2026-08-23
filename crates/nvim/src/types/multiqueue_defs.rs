@@ -12,7 +12,10 @@
 use super::multiqueue_list::ItemList;
 use super::*;
 
-#[derive(Copy, Clone)]
+/// An event queue, optionally a child of another.
+///
+/// Not `Copy`: `items` is a `Box<ItemList>` this queue owns.
+#[derive(Clone)]
 pub struct multiqueue {
     pub parent: *mut MultiQueue,
     pub on_put: PutCallback,

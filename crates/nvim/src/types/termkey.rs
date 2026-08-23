@@ -15,7 +15,11 @@
 // licenses/libtermkey-LICENSE.txt.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// A libtermkey instance.
+///
+/// Not `Copy`: it owns its input buffer, its CSI state and its terminfo
+/// driver, all of which `termkey_destroy` releases.
+#[derive(Clone)]
 pub struct TermKey {
     pub flags: ::core::ffi::c_int,
     pub canonflags: ::core::ffi::c_int,

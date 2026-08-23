@@ -50,6 +50,9 @@ pub struct RemoteUI {
     pub client_col: Integer,
     pub wildmenu_active: bool,
 }
+/// One row of the UI-client redraw dispatch table.
+///
+/// `Copy`: a static name and a function pointer.
 #[derive(Copy, Clone)]
 pub struct UIClientHandler {
     pub name: *const ::core::ffi::c_char,

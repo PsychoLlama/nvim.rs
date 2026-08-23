@@ -248,7 +248,10 @@ pub unsafe fn get_user_input(
             get_echo_hl_id(),
             xp_type,
             xp_arg,
-            input_callback,
+            // The prompt installs an alias of this in `ccline` for the
+            // length of the call and restores the previous line after; the
+            // callback stays this frame's to free, below.
+            input_callback.clone(),
             false,
             ::core::ptr::null_mut::<bool>(),
         );

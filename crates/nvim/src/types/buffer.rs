@@ -16,7 +16,11 @@ use crate::undo::store::UndoStore;
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+/// One `nvim_buf_attach` subscription's Lua callbacks.
+///
+/// Not `Copy`. Each `LuaRef` is a reference into the Lua registry that
+/// `free_update_callbacks` releases; a second copy would be a second release.
+#[derive(Clone)]
 pub struct BufUpdateCallbacks {
     pub on_lines: LuaRef,
     pub on_bytes: LuaRef,

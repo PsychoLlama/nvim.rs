@@ -47,6 +47,10 @@ pub struct MarkTree {
     pub n_nodes: size_t,
     pub id2node: [Map_uint64_t_ptr_t; 1],
 }
+/// A cursor into a [`MarkTree`].
+///
+/// `Copy`, and deliberately: `x` is a borrow of a node the tree owns, and
+/// forking an iterator to look ahead is what the marktree code does with it.
 #[derive(Copy, Clone, Default)]
 pub struct MarkTreeIter {
     pub pos: MTPos,

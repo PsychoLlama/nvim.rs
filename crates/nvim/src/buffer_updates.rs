@@ -65,7 +65,7 @@ struct KVec<'a, T> {
     items: &'a mut *mut T,
 }
 
-impl<T: Copy> KVec<'_, T> {
+impl<T: Clone> KVec<'_, T> {
     /// `kv_size`.
     fn len(&self) -> size_t {
         *self.size
@@ -101,15 +101,19 @@ impl<T: Copy> KVec<'_, T> {
         assert!(i < *self.capacity, "kvec index past the allocation");
         // SAFETY: `i` is inside the allocation, and every index these loops
         // reach was written by a `push` before `size` ever passed it.
-        unsafe { *self.items.add(i) }
+        unsafe { (*self.items.add(i)).clone() }
     }
 
     /// `kv_A(v, i) = x`. [`KVec::at`]'s bound, for the same reason.
     fn set_at(&mut self, i: size_t, value: T) {
         assert!(i < *self.capacity, "kvec index past the allocation");
-        // SAFETY: as [`KVec::at`]; writing an initialised slot of a `Copy`
-        // element type needs nothing further.
-        unsafe { *self.items.add(i) = value };
+        // SAFETY: as [`KVec::at`], and `push` also reaches the first
+        // uninitialised slot past the live prefix. `write` is what covers
+        // both: it never reads what is already there. The element types are
+        // plain records whose owned handles are released by
+        // `free_update_callbacks`, not by dropping the array, so overwriting
+        // a live slot releases nothing either way.
+        unsafe { self.items.add(i).write(value) };
     }
 
     /// `kv_push`.
@@ -306,8 +310,9 @@ fn register(mut buf: Buf, channel_id: uint64_t, cb: BufUpdateCallbacks, send_buf
         // before both. Attaching the same table twice really does mean two
         // subscriptions (each carries its own refs), and `nvim_buf_attach`
         // documents `send_buffer` as "Not for Lua callbacks".
+        let utf_sizes = cb.utf_sizes;
         buf.callbacks().push(cb);
-        if cb.utf_sizes {
+        if utf_sizes {
             // Sticky: nothing clears it when the callback detaches, so the
             // buffer keeps counting codepoints for the rest of its life.
             buf.update_need_codepoints = true;

@@ -194,7 +194,11 @@ pub struct cmdmod_T {
     pub cmod_save_msg_scroll: ::core::ffi::c_int,
     pub cmod_did_esilent: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+/// One parsed Ex command line.
+///
+/// Not `Copy`: `args`/`arglens` and `cmdline_tofree` are allocations the
+/// command owns for as long as it runs.
+#[derive(Clone)]
 pub struct exarg {
     pub arg: *mut ::core::ffi::c_char,
     pub args: *mut *mut ::core::ffi::c_char,

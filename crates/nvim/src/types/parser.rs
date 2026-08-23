@@ -38,6 +38,9 @@ pub struct ParserLine {
     pub allocated: bool,
 }
 pub type ParserLineGetter = Option<unsafe fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
+/// A line and column inside a parsed string.
+///
+/// `Copy`: a position is a value.
 #[derive(Copy, Clone)]
 pub struct ParserPosition {
     pub line: size_t,

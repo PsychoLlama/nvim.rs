@@ -167,11 +167,15 @@ pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut :
 /// A watcher removed while any watcher on the queue is mid-callback is only
 /// marked `needs_free`; [`tv_dict_watcher_notify`] unlinks it when the walk
 /// that is running finishes.
+///
+/// `callback` is only compared against the registered ones — it stays the
+/// caller's to free, which is why it arrives borrowed. Contrast
+/// [`tv_dict_watcher_add`], which takes its callback over.
 pub unsafe fn tv_dict_watcher_remove(
     dict: *mut dict_T,
     key_pattern: *const ::core::ffi::c_char,
     key_pattern_len: size_t,
-    mut callback: Callback,
+    callback: &Callback,
 ) -> bool {
     unsafe {
         if dict.is_null() {
@@ -189,7 +193,7 @@ pub unsafe fn tv_dict_watcher_remove(
             if (*watcher).busy {
                 queue_is_busy = true;
             }
-            if tv_callback_equal(&raw mut (*watcher).callback, &raw mut callback)
+            if tv_callback_equal(&raw const (*watcher).callback, callback)
                 && (*watcher).key_pattern_len == key_pattern_len
                 && memcmp(
                     (*watcher).key_pattern.cast(),

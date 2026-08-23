@@ -11,6 +11,9 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
+/// How far the character under a byte starts before it and ends after it.
+///
+/// `Copy`: two offsets, and nothing else.
 #[derive(Copy, Clone)]
 pub struct CharBoundsOff {
     pub begin_off: int8_t,

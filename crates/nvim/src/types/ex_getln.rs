@@ -31,7 +31,7 @@ pub struct ColoredCmdline {
     pub cmdbuff: *mut ::core::ffi::c_char,
     pub colors: CmdlineColors,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct cmdline_info {
     pub cmdbuff: *mut ::core::ffi::c_char,
     pub cmdbufflen: ::core::ffi::c_int,

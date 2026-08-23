@@ -87,7 +87,13 @@ pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T {
         let v_event = get_vim_var_dict(Vv::Event);
         (*sve).sve_did_save = (*v_event).dv_hashtab.ht_used > 0 as size_t;
         if (*sve).sve_did_save {
-            (*sve).sve_hashtab = (*v_event).dv_hashtab;
+            // A hashtab that has not outgrown its inline array holds
+            // `ht_array` pointing *into itself*, so this is a move and not
+            // a copy: the bytes go to `sve` and `hash_init` immediately
+            // makes the source a fresh empty table. `restore_v_event` puts
+            // them back at the address they came from, which is what makes
+            // the self-reference valid again.
+            (&raw mut (*sve).sve_hashtab).write((&raw const (*v_event).dv_hashtab).read());
             hash_init(&raw mut (*v_event).dv_hashtab);
         }
         v_event
@@ -102,7 +108,8 @@ pub unsafe fn restore_v_event(v_event: *mut dict_T, sve: *mut save_v_event_T) {
     unsafe {
         tv_dict_free_contents(v_event);
         if (*sve).sve_did_save {
-            (*v_event).dv_hashtab = (*sve).sve_hashtab;
+            // The move back, to the address [`get_v_event`] took it from.
+            (&raw mut (*v_event).dv_hashtab).write((&raw const (*sve).sve_hashtab).read());
         } else {
             hash_init(&raw mut (*v_event).dv_hashtab);
         }
