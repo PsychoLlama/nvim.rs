@@ -677,7 +677,7 @@ SELF_TEST_SAFETY_DOC = [
     # Attributes sit between the comment and the item.
     ('/// # Safety\n#[unsafe(no_mangle)]\npub unsafe extern "C" fn f() {}\n', 0),
     # ... and so may a plain `//` note, which is not part of the docs.
-    ('/// # Safety\n// Keep the export.\n#[unsafe(no_mangle)]\nunsafe fn f() {}\n', 0),
+    ("/// # Safety\n// Keep the export.\n#[unsafe(no_mangle)]\nunsafe fn f() {}\n", 0),
     ("/// # Safety\n// A note.\nunsafe fn f() {}\n", 0),
     # A `//` note that is the *only* thing above still leaves it undocumented.
     ("// A note.\nunsafe fn f() {}\n", 1),

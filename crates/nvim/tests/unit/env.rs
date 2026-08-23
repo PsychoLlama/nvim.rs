@@ -4,10 +4,11 @@
 //!
 //! The environment is process-global and `cargo test` runs cases on threads,
 //! so this is the file where the LuaJIT harness's fork-per-case was doing the
-//! most work. Everything here goes through [`Env`], which takes the editor
-//! lock for the case and puts every variable it touched back the way it found
-//! it — `$PATH` above all, because `os_setenv_append_path` rewrites it and the
-//! filesystem cases in this same binary look programs up along it.
+//! most work. Everything here goes through [`Env`], a
+//! [`Sandbox`](crate::support::Sandbox) that takes the editor lock for the
+//! case and puts every variable it touched back the way it found it — `$PATH`
+//! above all, because `os_setenv_append_path` rewrites it and the filesystem
+//! cases in this same binary look programs up along it.
 //!
 //! Reads use `std::env`, which is the same libc block `uv_os_getenv` sees;
 //! writes use the entry points under test, which is what the spec did too
@@ -15,60 +16,52 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, OsString, c_char, c_int};
+use std::ffi::{c_char, c_int};
 use std::ptr;
 
 use c2rust_neovim::os::env::expand::expand_env_esc;
 use c2rust_neovim::os::env::{
     os_env_exists, os_get_hostname, os_get_pid, os_getenv, os_getenv_buf, os_getenv_noalloc,
-    os_getenvname_at_index, os_setenv, os_setenv_append_path, os_shell_is_cmdexe, os_unsetenv,
+    os_getenvname_at_index, os_setenv_append_path, os_shell_is_cmdexe,
 };
 use c2rust_neovim::types::MAXPATHL;
 
-use crate::support::{Editor, cstr, editor_lock, internalize};
+use crate::support::{Sandbox, cstr, internalize};
 
 /// Success, as `os_setenv`/`os_unsetenv` spell it. Not `OK`: these two answer
 /// 0 or -1 rather than the editor's `OK`/`FAIL` pair.
 const DONE: c_int = 0;
 
-/// The editor lock plus an undo log for every variable the case wrote.
+/// The reads and writes of the environment block this file is about, over a
+/// [`Sandbox`] that restores every variable a case touched.
 struct Env {
-    saved: Vec<(String, Option<OsString>)>,
-    _editor: Editor,
+    sandbox: Sandbox,
 }
 
 impl Env {
     fn new() -> Self {
         Env {
-            saved: Vec::new(),
-            _editor: editor_lock(),
+            sandbox: Sandbox::globals(),
         }
     }
 
-    /// Remember `name`'s current value, once, so [`Drop`] can put it back.
+    /// Remember `name`'s current value, once, so the sandbox's drop can put
+    /// it back — for a variable the *entry point* is about to rewrite.
     fn remember(&mut self, name: &str) {
-        if !self.saved.iter().any(|(seen, _)| seen == name) {
-            self.saved.push((name.to_string(), std::env::var_os(name)));
-        }
+        self.sandbox.remember_env(name);
     }
 
     fn set(&mut self, name: &str, value: &str) -> c_int {
-        self.remember(name);
-        // SAFETY: both strings are this frame's and NUL-terminated.
-        unsafe { os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 1) }
+        self.sandbox.set_env(name, value)
     }
 
     /// `os_setenv` with `overwrite` off: an existing value wins.
     fn set_if_unset(&mut self, name: &str, value: &str) -> c_int {
-        self.remember(name);
-        // SAFETY: as above.
-        unsafe { os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 0) }
+        self.sandbox.set_env_if_unset(name, value)
     }
 
     fn unset(&mut self, name: &str) -> c_int {
-        self.remember(name);
-        // SAFETY: the name is this frame's and NUL-terminated.
-        unsafe { os_unsetenv(cstr(name).as_ptr()) }
+        self.sandbox.unset_env(name)
     }
 
     /// What the C library says the variable holds — `os.getenv` in the spec.
@@ -115,27 +108,6 @@ impl Env {
     fn exists(&self, name: &str, nonempty: bool) -> bool {
         // SAFETY: the name is this frame's and NUL-terminated.
         unsafe { os_env_exists(cstr(name).as_ptr(), nonempty) }
-    }
-}
-
-impl Drop for Env {
-    fn drop(&mut self) {
-        for (name, value) in &self.saved {
-            let name = cstr(name.as_str());
-            // SAFETY: both strings are this frame's and NUL-terminated.
-            unsafe {
-                match value {
-                    Some(value) => {
-                        let value =
-                            CString::new(value.as_encoded_bytes()).expect("it came from the block");
-                        os_setenv(name.as_ptr(), value.as_ptr(), 1);
-                    }
-                    None => {
-                        os_unsetenv(name.as_ptr());
-                    }
-                }
-            }
-        }
     }
 }
 

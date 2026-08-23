@@ -1,6 +1,10 @@
 //! Shared helpers for calling the C-ABI surface from Rust tests.
 
+#[cfg(not(miri))]
+use std::ffi::OsString;
 use std::ffi::{CStr, CString, c_char};
+#[cfg(not(miri))]
+use std::path::{Path, PathBuf};
 #[cfg(not(miri))]
 use std::sync::{Mutex, MutexGuard};
 
@@ -97,6 +101,193 @@ fn init_editor() {
             view.target = c2rust_neovim::main::default_grid.ptr();
         });
     });
+}
+
+/// Everything a case has to claim before it can touch process-wide state,
+/// and everything it has to put back afterwards.
+///
+/// The LuaJIT harness got all of this by forking a child per case. Here
+/// there is one process shared with every other case, so each claim is
+/// explicit and each restoration is this type's [`Drop`]:
+///
+/// - the **editor globals**, through [`editor_lock`];
+/// - the **working directory**, saved on the way in and restored on the way
+///   out, whoever changed it and however many times;
+/// - a **private directory** to stand in, named after the case so two cases
+///   cannot delete each other's fixtures, and *canonicalised* because the
+///   temp directory is often reached through a link while the entry points
+///   under test answer resolved paths;
+/// - the **environment block**, one variable at a time: [`remember_env`] (or
+///   any of the writers here) records the old value once, and the drop puts
+///   every recorded variable back.
+///
+/// [`remember_env`]: Sandbox::remember_env
+///
+/// Take [`Sandbox::globals`] when only the editor's own state is in play and
+/// [`Sandbox::dir`] when the case needs somewhere to put files.
+#[cfg(not(miri))]
+pub struct Sandbox {
+    /// The private directory, when one was asked for.
+    dir: Option<PathBuf>,
+    saved_cwd: PathBuf,
+    /// Variables written through this sandbox, with the value they had
+    /// before the first write. One entry per name, in first-write order.
+    saved_env: Vec<(String, Option<OsString>)>,
+    _editor: Editor,
+}
+
+#[cfg(not(miri))]
+impl Sandbox {
+    /// The editor lock, plus the promise that the working directory and
+    /// every variable written through this sandbox are restored on drop.
+    pub fn globals() -> Sandbox {
+        let editor = editor_lock();
+        Sandbox {
+            dir: None,
+            saved_cwd: std::env::current_dir().expect("a working directory"),
+            saved_env: Vec::new(),
+            _editor: editor,
+        }
+    }
+
+    /// [`Sandbox::globals`] plus an empty private directory, entered.
+    ///
+    /// `name` distinguishes this case's directory from every other case's;
+    /// pass the test function's own name.
+    pub fn dir(name: &str) -> Sandbox {
+        let mut sandbox = Sandbox::globals();
+        let dir = std::env::temp_dir().join(format!("nvim-unit-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a private sandbox");
+        let dir = dir.canonicalize().expect("the sandbox resolves");
+        std::env::set_current_dir(&dir).expect("standing in the sandbox");
+        sandbox.dir = Some(dir);
+        sandbox
+    }
+
+    /// The private directory's absolute, resolved path.
+    pub fn root(&self) -> &Path {
+        self.dir.as_deref().expect("this sandbox has no directory")
+    }
+
+    /// The private directory as the string an absolute expectation is built
+    /// from.
+    pub fn as_str(&self) -> &str {
+        self.root().to_str().expect("a temp path is text")
+    }
+
+    /// A name inside the private directory. Nothing is created.
+    pub fn path(&self, name: &str) -> PathBuf {
+        self.root().join(name)
+    }
+
+    /// A directory inside the private directory, and its parents.
+    pub fn mkdir(&self, name: &str) -> PathBuf {
+        let at = self.path(name);
+        std::fs::create_dir_all(&at).expect("a fixture directory");
+        at
+    }
+
+    /// An empty file inside the private directory.
+    pub fn touch(&self, name: &str) -> PathBuf {
+        self.write(name, b"")
+    }
+
+    /// A file inside the private directory holding `contents`.
+    pub fn write(&self, name: &str, contents: &[u8]) -> PathBuf {
+        let at = self.path(name);
+        std::fs::write(&at, contents).expect("a fixture file");
+        at
+    }
+
+    /// Record `name`'s current value, once, so the drop can put it back.
+    ///
+    /// Call this before writing the variable by any route the sandbox does
+    /// not own — a direct `os_setenv`, or an entry point under test that
+    /// rewrites `$PATH` of its own accord.
+    pub fn remember_env(&mut self, name: &str) {
+        if !self.saved_env.iter().any(|(seen, _)| seen == name) {
+            self.saved_env
+                .push((name.to_string(), std::env::var_os(name)));
+        }
+    }
+
+    /// Set a variable for the rest of the case, through the crate's own
+    /// `os_setenv` — the block the editor reads is the process's, and the
+    /// spec set it this way because "Lua doesn't have setenv".
+    pub fn set_env(&mut self, name: &str, value: &str) -> std::ffi::c_int {
+        self.remember_env(name);
+        // SAFETY: both strings are this frame's and NUL-terminated.
+        unsafe { c2rust_neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 1) }
+    }
+
+    /// `os_setenv` with `overwrite` off: an existing value wins.
+    pub fn set_env_if_unset(&mut self, name: &str, value: &str) -> std::ffi::c_int {
+        self.remember_env(name);
+        // SAFETY: as above.
+        unsafe { c2rust_neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 0) }
+    }
+
+    /// Remove a variable for the rest of the case.
+    pub fn unset_env(&mut self, name: &str) -> std::ffi::c_int {
+        self.remember_env(name);
+        // SAFETY: the name is this frame's and NUL-terminated.
+        unsafe { c2rust_neovim::os::env::os_unsetenv(cstr(name).as_ptr()) }
+    }
+}
+
+#[cfg(not(miri))]
+impl Drop for Sandbox {
+    fn drop(&mut self) {
+        // The directory has to be left before it can be removed, and the
+        // caller's directory has to come back either way.
+        let _ = std::env::set_current_dir(&self.saved_cwd);
+        if let Some(dir) = &self.dir {
+            // A case may have taken the read or execute bit off something,
+            // and `remove_dir_all` cannot enter a directory it cannot read.
+            for entry in walk(dir) {
+                let _ = std::fs::set_permissions(
+                    &entry,
+                    std::os::unix::fs::PermissionsExt::from_mode(0o700),
+                );
+            }
+            let _ = std::fs::remove_dir_all(dir);
+        }
+        for (name, value) in &self.saved_env {
+            let name = cstr(name.as_str());
+            // SAFETY: both strings are this frame's and NUL-terminated.
+            unsafe {
+                match value {
+                    Some(value) => {
+                        let value =
+                            CString::new(value.as_encoded_bytes()).expect("it came from the block");
+                        c2rust_neovim::os::env::os_setenv(name.as_ptr(), value.as_ptr(), 1);
+                    }
+                    None => {
+                        c2rust_neovim::os::env::os_unsetenv(name.as_ptr());
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Every path under `at`, shallowest first, for the permission reset above.
+/// A symbolic link is listed but never descended.
+#[cfg(not(miri))]
+fn walk(at: &Path) -> Vec<PathBuf> {
+    let mut out = vec![at.to_path_buf()];
+    if let Ok(entries) = std::fs::read_dir(at) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && !path.is_symlink() {
+                out.extend(walk(&path));
+            } else {
+                out.push(path);
+            }
+        }
+    }
+    out
 }
 
 /// The Rust twin of `test/unit/testutil.lua`'s `alloc_log` and

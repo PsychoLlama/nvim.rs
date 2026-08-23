@@ -6,18 +6,18 @@
 //! Almost everything here is about a *relative* name, which means almost
 //! everything here depends on the working directory — a process-wide setting
 //! that several cases also change. So every case takes the editor lock
-//! through [`Sandbox`], which gives it a private directory to stand in and
-//! puts the old working directory back on the way out. The LuaJIT harness
+//! through [`Sandbox`](crate::support::Sandbox), which gives it a private
+//! directory to stand in and puts the old working directory — and anything
+//! it wrote to the environment — back on the way out. The LuaJIT harness
 //! forked a child per case and could `chdir` as freely as it liked.
 
 #![cfg(not(miri))]
 
 use std::ffi::{CStr, c_char, c_int};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::ptr;
 
 use c2rust_neovim::main::p_fic;
-use c2rust_neovim::os::env::os_setenv;
 use c2rust_neovim::path::{
     append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
     kEqualFiles, kOneFileMissing, path_fix_case, path_full_compare, path_full_dir_name,
@@ -26,62 +26,7 @@ use c2rust_neovim::path::{
 };
 use c2rust_neovim::types::{FAIL, OK};
 
-use crate::support::{Editor, cstr, editor_lock};
-
-/// A private directory to stand in, plus the editor lock, plus the promise
-/// that the working directory is what it was when the case ends.
-struct Sandbox {
-    dir: PathBuf,
-    saved_cwd: PathBuf,
-    _editor: Editor,
-}
-
-impl Sandbox {
-    fn new(name: &str) -> Sandbox {
-        let editor = editor_lock();
-        let saved_cwd = std::env::current_dir().expect("a working directory");
-        let dir = std::env::temp_dir().join(format!("nvim-unit-path-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a private sandbox");
-        // Canonicalised, because the temp directory itself may be reached
-        // through a link and every expectation below is a full path.
-        let dir = dir.canonicalize().expect("the sandbox resolves");
-        std::env::set_current_dir(&dir).expect("standing in the sandbox");
-        Sandbox {
-            dir,
-            saved_cwd,
-            _editor: editor,
-        }
-    }
-
-    fn path(&self, name: &str) -> PathBuf {
-        self.dir.join(name)
-    }
-
-    fn mkdir(&self, name: &str) -> PathBuf {
-        let at = self.path(name);
-        std::fs::create_dir_all(&at).expect("a fixture directory");
-        at
-    }
-
-    fn touch(&self, name: &str) -> PathBuf {
-        let at = self.path(name);
-        std::fs::write(&at, b"").expect("a fixture file");
-        at
-    }
-
-    /// The sandbox as the string every absolute expectation is built from.
-    fn as_str(&self) -> &str {
-        self.dir.to_str().expect("a temp path is text")
-    }
-}
-
-impl Drop for Sandbox {
-    fn drop(&mut self) {
-        let _ = std::env::set_current_dir(&self.saved_cwd);
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}
+use crate::support::Sandbox;
 
 /// A buffer for an entry point that writes a path into one, read back as the
 /// NUL-terminated string it left there.
@@ -129,7 +74,7 @@ unsafe fn borrowed(p: *const c_char) -> String {
 
 #[test]
 fn a_directory_name_is_resolved_against_the_working_directory() {
-    let sandbox = Sandbox::new("full-dir-name");
+    let sandbox = Sandbox::dir("path-full-dir-name");
     let real = sandbox.mkdir("unit-test-directory");
     std::os::unix::fs::symlink(&real, sandbox.path("unit-test-symlink")).expect("a link");
 
@@ -145,7 +90,7 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
     assert_eq!(resolve(""), (OK, sandbox.as_str().to_string()));
 
     let parent = sandbox
-        .dir
+        .root()
         .parent()
         .expect("the sandbox has a parent")
         .to_str()
@@ -177,7 +122,7 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
 /// standing in a directory that has been removed underneath it.
 #[test]
 fn an_absolute_directory_resolves_from_a_working_directory_that_is_gone() {
-    let sandbox = Sandbox::new("cwd-gone");
+    let sandbox = Sandbox::dir("path-cwd-gone");
     let real = sandbox.mkdir("unit-test-directory");
     std::os::unix::fs::symlink(&real, sandbox.path("unit-test-symlink")).expect("a link");
     let doomed = sandbox.mkdir("dir-to-remove");
@@ -201,7 +146,7 @@ fn an_absolute_directory_resolves_from_a_working_directory_that_is_gone() {
 /// name exists as well as on what it says.
 #[test]
 fn comparing_two_names_says_which_of_the_five_relations_holds() {
-    let sandbox = Sandbox::new("full-compare");
+    let sandbox = Sandbox::dir("path-full-compare");
     sandbox.touch("f1.o");
     sandbox.touch("f2.o");
 
@@ -225,7 +170,7 @@ fn comparing_two_names_says_which_of_the_five_relations_holds() {
 /// keeps.
 #[test]
 fn the_tail_of_a_name_is_what_follows_its_last_separator() {
-    let _sandbox = Sandbox::new("tails");
+    let _sandbox = Sandbox::dir("path-tails");
     let tail = |s: &str| {
         let name = writable(s);
         // SAFETY: `name` outlives the borrow, and the answer points into it.
@@ -260,7 +205,7 @@ fn the_tail_of_a_name_is_what_follows_its_last_separator() {
 /// not move the split.
 #[test]
 fn an_invocations_tail_stops_at_the_first_space() {
-    let _sandbox = Sandbox::new("invocation");
+    let _sandbox = Sandbox::dir("path-invocation");
     let split = |s: &str| {
         let invocation = writable(s);
         let mut len: usize = 0;
@@ -310,7 +255,7 @@ fn an_invocations_tail_stops_at_the_first_space() {
 /// under it, and repeated separators do not stop that.
 #[test]
 fn a_name_shortens_against_a_directory_it_is_under_and_nothing_else() {
-    let _sandbox = Sandbox::new("shorten");
+    let _sandbox = Sandbox::dir("path-shorten");
     let shorten = |full: Option<&str>, dir: &str| {
         let mut full = full.map(writable);
         let mut dir = writable(dir);
@@ -344,7 +289,7 @@ fn a_name_shortens_against_a_directory_it_is_under_and_nothing_else() {
 
 #[test]
 fn a_name_under_the_working_directory_shortens_against_it() {
-    let sandbox = Sandbox::new("try-shorten");
+    let sandbox = Sandbox::dir("path-try-shorten");
     let inside = sandbox.mkdir("ut_directory");
     std::env::set_current_dir(&inside).expect("standing inside");
 
@@ -376,7 +321,7 @@ fn a_name_under_the_working_directory_shortens_against_it() {
 /// directory, and a bare name is looked up along `$PATH`.
 #[test]
 fn an_executable_name_is_guessed_from_the_working_directory_or_the_path() {
-    let sandbox = Sandbox::new("guess-exepath");
+    let mut sandbox = Sandbox::dir("path-guess-exepath");
     let guess = |name: &str| {
         let name = writable(name);
         let mut buf = Buffer::new(255);
@@ -406,11 +351,8 @@ fn an_executable_name_is_guessed_from_the_working_directory_or_the_path() {
 
     let saved = std::env::var("PATH").expect("$PATH is set");
     let insane = format!("{saved}:{}", "x/".repeat(4097));
-    // SAFETY: both strings are this frame's and NUL-terminated.
-    unsafe { os_setenv(cstr("PATH").as_ptr(), cstr(insane.as_str()).as_ptr(), 1) };
+    sandbox.set_env("PATH", &insane);
     let found = guess("cat");
-    // SAFETY: as above; `$PATH` goes back before anything else runs.
-    unsafe { os_setenv(cstr("PATH").as_ptr(), cstr(saved.as_str()).as_ptr(), 1) };
     assert!(found.ends_with("bin/cat"), "{found:?}");
 }
 
@@ -419,7 +361,7 @@ fn an_executable_name_is_guessed_from_the_working_directory_or_the_path() {
 /// `#5737` is that a buffer too short still comes back NUL-terminated.
 #[test]
 fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
-    let sandbox = Sandbox::new("full-name");
+    let sandbox = Sandbox::dir("path-full-name");
     sandbox.mkdir("unit-test-directory");
     sandbox.touch("unit-test-directory/test.file");
 
@@ -455,7 +397,7 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
 
     // The successes, each with the shape of relative name it is about.
     let parent = sandbox
-        .dir
+        .root()
         .parent()
         .expect("a parent")
         .to_str()
@@ -525,7 +467,7 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
 /// is already the name it is.
 #[test]
 fn fixing_the_case_of_a_name_does_nothing_on_a_case_sensitive_system() {
-    let sandbox = Sandbox::new("fix-case");
+    let sandbox = Sandbox::dir("path-fix-case");
     sandbox.mkdir("CamelCase");
     for name in ["camelcase", "cAMELcASE", "CamelCase"] {
         let mut buf = writable(name);
@@ -540,7 +482,7 @@ fn fixing_the_case_of_a_name_does_nothing_on_a_case_sensitive_system() {
 /// needed.
 #[test]
 fn appending_to_a_path_adds_a_separator_only_where_one_is_missing() {
-    let _sandbox = Sandbox::new("append");
+    let _sandbox = Sandbox::dir("path-append");
     let join = |head: &str, tail: &str, room: usize| {
         let mut path = vec![0 as c_char; room];
         for (slot, byte) in path.iter_mut().zip(head.bytes()) {
@@ -568,7 +510,7 @@ fn appending_to_a_path_adds_a_separator_only_where_one_is_missing() {
 
 #[test]
 fn a_name_is_absolute_when_it_starts_with_a_separator_or_a_tilde() {
-    let _sandbox = Sandbox::new("absolute");
+    let _sandbox = Sandbox::dir("path-absolute");
     let absolute = |s: &str| {
         let name = writable(s);
         // SAFETY: `name` is this frame's and NUL-terminated.
@@ -583,7 +525,7 @@ fn a_name_is_absolute_when_it_starts_with_a_separator_or_a_tilde() {
 /// decides the case-sensitivity of.
 #[test]
 fn an_extension_matches_case_insensitively_only_when_the_option_says_so() {
-    let _sandbox = Sandbox::new("extension");
+    let _sandbox = Sandbox::dir("path-extension");
     let has = |name: &str, extension: &str| {
         let (name, extension) = (writable(name), writable(extension));
         // SAFETY: both are this frame's and NUL-terminated.
@@ -610,7 +552,7 @@ fn an_extension_matches_case_insensitively_only_when_the_option_says_so() {
 /// letter — is deliberately not one.
 #[test]
 fn a_scheme_makes_a_name_a_url_and_says_which_separator_follows_it() {
-    let _sandbox = Sandbox::new("url");
+    let _sandbox = Sandbox::dir("path-url");
     let url = |s: &str| {
         let name = writable(s);
         // SAFETY: `name` is this frame's and NUL-terminated.

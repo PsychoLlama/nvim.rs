@@ -5,11 +5,13 @@
 //! system: permissions, inodes, hard links, scatter reads and the recursive
 //! `mkdir`.
 //!
-//! Every case holds the editor lock and works inside a directory of its own.
-//! Both are load-bearing here for reasons the LuaJIT harness never had to
-//! think about: several cases change the working directory or the umask-like
-//! permission bits of a shared fixture, and `cargo test` runs cases on
-//! threads of one process rather than in a forked child each.
+//! Every case holds the editor lock and works inside a directory of its own,
+//! both through [`Sandbox`](crate::support::Sandbox). Both are load-bearing
+//! here for reasons the LuaJIT harness never had to think about: several
+//! cases change the working directory or the umask-like permission bits of a
+//! shared fixture, and `cargo test` runs cases on threads of one process
+//! rather than in a forked child each. The sandbox's drop is what puts those
+//! permission bits back, without which the fixture cannot be removed.
 
 #![cfg(not(miri))]
 
@@ -29,7 +31,7 @@ use c2rust_neovim::os::fs::{
 use c2rust_neovim::os::uv_error::{UV_EBADF, UV_EEXIST, UV_ENOENT};
 use c2rust_neovim::types::{FAIL, FileID, FileInfo, OK, iovec};
 
-use crate::support::{Editor, editor_lock, internalize};
+use crate::support::{Sandbox, internalize};
 
 /// The spec's fixture contents: every byte value once, sixteen times over.
 fn contents() -> Vec<u8> {
@@ -39,34 +41,17 @@ fn contents() -> Vec<u8> {
 /// `rwx------`, which is what every `mkdir` case here asks for.
 const RWX: c_int = 0o700;
 
-/// A private directory with the spec's fixtures in it, plus the editor lock,
-/// plus the promise that the working directory is what it was.
-struct Fixture {
-    dir: PathBuf,
-    saved_cwd: PathBuf,
-    _editor: Editor,
-}
+/// A [`Sandbox`] with the spec's fixtures in it: the private directory holds
+/// two regular files, a link to one of them and a link to nothing.
+struct Fixture(Sandbox);
 
 impl Fixture {
-    /// The spec's `before_each`: a directory holding two regular files, a
-    /// link to one of them and a link to nothing.
+    /// The spec's `before_each`, in a directory named after the case.
     fn new(name: &str) -> Fixture {
-        let editor = editor_lock();
-        let saved_cwd = std::env::current_dir().expect("a working directory");
-        let root = std::env::temp_dir().join(format!("nvim-unit-fs-{name}"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).expect("a private fixture root");
-        let root = root.canonicalize().expect("the root resolves");
-        std::env::set_current_dir(&root).expect("standing in the root");
-
-        let fixture = Fixture {
-            dir: root,
-            saved_cwd,
-            _editor: editor,
-        };
-        std::fs::create_dir(fixture.path("unit-test-directory")).expect("the fixture directory");
-        std::fs::write(fixture.file(), b"").expect("test.file");
-        std::fs::write(fixture.path("unit-test-directory/test_2.file"), b"").expect("test_2.file");
+        let fixture = Fixture(Sandbox::dir(&format!("fs-{name}")));
+        fixture.0.mkdir("unit-test-directory");
+        fixture.0.touch("unit-test-directory/test.file");
+        fixture.0.touch("unit-test-directory/test_2.file");
         std::os::unix::fs::symlink("test.file", fixture.link()).expect("a link to test.file");
         std::os::unix::fs::symlink(
             "non_existing_file.file",
@@ -76,8 +61,13 @@ impl Fixture {
         fixture
     }
 
+    /// The fixture root's absolute, resolved path.
+    fn root(&self) -> &Path {
+        self.0.root()
+    }
+
     fn path(&self, name: &str) -> PathBuf {
-        self.dir.join(name)
+        self.0.path(name)
     }
 
     /// `unit-test-directory/test.file`, the fixture most cases work on.
@@ -92,37 +82,8 @@ impl Fixture {
 
     /// A file holding [`contents`].
     fn filled(&self, name: &str) -> PathBuf {
-        let at = self.path(name);
-        std::fs::write(&at, contents()).expect("a filled fixture");
-        at
+        self.0.write(name, &contents())
     }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::env::set_current_dir(&self.saved_cwd);
-        // A case may have taken the read bit off something.
-        for entry in walk(&self.dir) {
-            let _ = std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700));
-        }
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}
-
-/// Every path under `at`, deepest last, for the permission reset above.
-fn walk(at: &Path) -> Vec<PathBuf> {
-    let mut out = vec![at.to_path_buf()];
-    if let Ok(entries) = std::fs::read_dir(at) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() && !path.is_symlink() {
-                out.extend(walk(&path));
-            } else {
-                out.push(path);
-            }
-        }
-    }
-    out
 }
 
 fn cpath(path: &Path) -> CString {
@@ -182,7 +143,7 @@ fn info_of(path: &Path) -> Option<FileInfo> {
 #[test]
 fn the_working_directory_is_reported_and_cannot_be_set_to_a_tilde() {
     let fixture = Fixture::new("cwd");
-    let here = fixture.dir.to_str().expect("text").to_string();
+    let here = fixture.root().to_str().expect("text").to_string();
 
     let dirname = |len: usize| {
         let mut buf = vec![0 as c_char; len];
@@ -217,7 +178,7 @@ fn only_a_directory_is_a_directory() {
     assert!(isdir("."));
     assert!(isdir(".."));
     assert!(isdir("unit-test-directory"));
-    assert!(isdir(fixture.dir.to_str().expect("text")), "absolute");
+    assert!(isdir(fixture.root().to_str().expect("text")), "absolute");
 }
 
 /// `os_can_exe` answers whether a name names something runnable, and writes
@@ -270,7 +231,7 @@ fn an_executable_is_found_by_path_or_relative_to_here() {
             .expect("text"),
     );
     let relative = can_exe(&format!("./{name}"));
-    std::env::set_current_dir(&fixture.dir).expect("back to the fixture");
+    std::env::set_current_dir(fixture.root()).expect("back to the fixture");
     assert_eq!(relative, absolute);
     assert!(relative.is_some(), "the test binary is executable");
 }

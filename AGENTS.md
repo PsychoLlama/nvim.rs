@@ -19,7 +19,7 @@
 - The cast deny is the per-module opt-in to clippy's cast family; a module that has finished its casts writes `#![deny(clippy::cast_lossless, clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss, clippy::ptr_as_ptr)]` and the count of files without it may only fall. Adding it to a file that is not ready makes `just lint` fail outright, which is the point.
 - Narrowing an `unsafe` region is progress even when it adds regions; splitting a transpiled body into functions with tight regions lowers the count. Blank and comment-only lines inside a region are free, so SAFETY notes cost nothing.
 - Lines inside a `#[cfg(test)] mod … { … }` are exempt from the 1,000-line file cap, so tests can sit next to the code they cover. Every other metric still counts them — unchecked code in a test is still unchecked code.
-- `metrics/clippy.json`'s per-file warning counts cover `crates/*/tests` as well as `crates/*/src` (clippy runs `--all-targets`), so a new warning in a *test* file fails `just lint`. Only its two posture totals (`unreachable_pub`, `unused_qualifications`) are restricted to `crates/*/src`, and `metrics/ratchet.json` never looks at `tests/` at all.
+- `metrics/clippy.json`'s per-file warning counts cover `crates/*/tests` as well as `crates/*/src` (clippy runs `--all-targets`), so a new warning in a _test_ file fails `just lint`. Only its two posture totals (`unreachable_pub`, `unused_qualifications`) are restricted to `crates/*/src`, and `metrics/ratchet.json` never looks at `tests/` at all.
 - After reducing any of them, run `just refresh` and commit the refreshed `metrics/*.{json,jsonl}`.
 - Justified growth requires `just refresh --allow-growth`.
 
