@@ -754,7 +754,7 @@ fn a_filtered_walk_visits_only_the_marked_keys() {
     let cols = scale(8, 60) as i32;
     let mut t = Tree::new();
     // Sparse enough that most subtrees hold nothing the filter wants.
-    let marked = |row: i32, col: i32| col == 0 && row % (rows / 4) == 3;
+    let marked = |row: i32, col: i32| col == 0 && row % 4 == 3;
 
     let mut want: Vec<(u32, i32, i32)> = Vec::new();
     for row in 0..rows {
