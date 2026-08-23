@@ -21,6 +21,7 @@ mod keycodes;
 mod linematch;
 mod map;
 mod marktree;
+mod mbyte;
 mod memory;
 mod r#move;
 mod multiqueue;

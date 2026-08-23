@@ -1220,7 +1220,6 @@ pub static p_hid: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_hl: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_hls: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_hi: GlobalCell<OptInt> = GlobalCell::new(0);
-#[unsafe(no_mangle)]
 pub static p_arshape: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_icon: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_iconstring: GlobalCell<*mut c_char> =

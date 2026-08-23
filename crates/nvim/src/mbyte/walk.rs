@@ -145,8 +145,7 @@ fn boundclass(code: int32_t) -> c_int {
 /// # Safety
 ///
 /// `base` must point at the start of a NUL-terminated string and `p` into it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_head_off(base_in: *const c_char, p_in: *const c_char) -> c_int {
+pub unsafe fn utf_head_off(base_in: *const c_char, p_in: *const c_char) -> c_int {
     unsafe {
         if (*p_in as u8) < 0x80 {
             return 0;
@@ -319,8 +318,7 @@ pub unsafe fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `base <= p_in`, `p_len > 0`, and `p_in` must have `p_len` readable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_cp_bounds_len(
+pub unsafe fn utf_cp_bounds_len(
     base: *const c_char,
     p_in: *const c_char,
     p_len: c_int,

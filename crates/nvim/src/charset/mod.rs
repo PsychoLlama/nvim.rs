@@ -463,8 +463,7 @@ pub unsafe fn vim_is_ident_char(c: c_int) -> bool {
 ///
 /// # Safety
 /// The current buffer must be valid.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_iswordc(c: c_int) -> bool {
+pub unsafe fn vim_iswordc(c: c_int) -> bool {
     unsafe { vim_iswordc_buf(c, curbuf.get()) }
 }
 
@@ -494,8 +493,7 @@ pub unsafe fn vim_iswordc_buf(c: c_int, buf: *mut buf_T) -> bool {
 ///
 /// # Safety
 /// `p` must point into a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_iswordp(p: *const c_char) -> bool {
+pub unsafe fn vim_iswordp(p: *const c_char) -> bool {
     unsafe { vim_iswordp_buf(p, curbuf.get()) }
 }
 

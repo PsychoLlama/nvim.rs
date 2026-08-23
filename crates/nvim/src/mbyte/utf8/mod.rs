@@ -271,8 +271,7 @@ pub fn utf_iscomposing_legacy(c: c_int) -> bool {
 /// # Safety
 ///
 /// `p` must point at a NUL-terminated string and `firstc` must be writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> schar_T {
+pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> schar_T {
     unsafe {
         let c = utf_ptr2char(p);
         *firstc = c;
@@ -390,8 +389,7 @@ pub unsafe fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
 /// # Safety
 ///
 /// `p` must point at a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utfc_ptr2len(p: *const c_char) -> c_int {
+pub unsafe fn utfc_ptr2len(p: *const c_char) -> c_int {
     unsafe {
         let first = *p as u8;
         if first == 0 {
@@ -484,8 +482,7 @@ pub fn utf_char2len(c: c_int) -> c_int {
 /// # Safety
 ///
 /// `buf` must have room for [`utf_char2len`] bytes — up to `MB_MAXCHAR`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
+pub unsafe fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
     unsafe {
         let len = utf_char2len(c) as usize;
         if len == 1 {

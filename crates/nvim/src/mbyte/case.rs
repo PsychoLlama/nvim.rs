@@ -28,8 +28,7 @@ use core::ffi::{c_char, c_int, c_uint};
 /// The case-folded form of `a`, for matching.
 ///
 /// Two characters match case-insensitively exactly when their folds are equal.
-#[unsafe(no_mangle)]
-pub extern "C" fn utf_fold(a: c_int) -> c_int {
+pub fn utf_fold(a: c_int) -> c_int {
     if a < 0x80 {
         // ASCII, without consulting a table.
         return if (0x41..=0x5a).contains(&a) {

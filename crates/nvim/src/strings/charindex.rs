@@ -29,15 +29,36 @@ use crate::memory::xmemdupz;
 use crate::types::{EvalFuncData, FAIL, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
 use ::libc::strlen;
 
-/// The character-length function a `countcc`/`comp` flag selects: with
-/// composing characters counted separately, or folded into their base.
-type Ptr2Len = unsafe extern "C" fn(*const c_char) -> c_int;
+/// The character-length rule a `countcc`/`comp` flag selects: composing
+/// characters counted separately, or folded into their base.
+///
+/// This was a function pointer until `utfc_ptr2len` shed its C ABI and the
+/// two stopped having the same type. A choice between two rules is what the
+/// flag actually is, and it reads better at the call sites than a pointer
+/// did.
+#[derive(Clone, Copy)]
+struct CharLen {
+    count_composing: bool,
+}
 
-fn char_len_fn(count_composing: bool) -> Ptr2Len {
-    if count_composing {
-        utf_ptr2len
-    } else {
-        utfc_ptr2len
+impl CharLen {
+    fn new(count_composing: bool) -> CharLen {
+        CharLen { count_composing }
+    }
+
+    /// The length of the character at `p` under this rule.
+    ///
+    /// # Safety
+    ///
+    /// `p` must point at a NUL-terminated string.
+    unsafe fn of(self, p: *const c_char) -> c_int {
+        if self.count_composing {
+            // SAFETY: the caller's contract.
+            unsafe { utf_ptr2len(p) }
+        } else {
+            // SAFETY: the caller's contract.
+            unsafe { utfc_ptr2len(p) }
+        }
     }
 }
 
@@ -45,12 +66,12 @@ fn char_len_fn(count_composing: bool) -> Ptr2Len {
 /// multi-byte character and as a **signed** `char` otherwise, so a stray
 /// byte over 0x7f is negative and never counts as a surrogate pair.
 unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
-    unsafe {
-        if char_len > 1 {
-            utf_ptr2char(p)
-        } else {
-            *p as c_int
-        }
+    if char_len > 1 {
+        // SAFETY: the caller's contract.
+        unsafe { utf_ptr2char(p) }
+    } else {
+        // SAFETY: as above; one readable byte is enough here.
+        unsafe { *p as c_int }
     }
 }
 
@@ -78,14 +99,14 @@ unsafe fn byteidx_common(argvars: *mut typval_T, rettv: *mut typval_T, comp: boo
             false
         };
 
-        let char_len = char_len_fn(comp);
+        let char_len = CharLen::new(comp);
         let mut t = str;
         while idx > 0 {
             if *t == 0 {
                 return; // End of string before the index was reached.
             }
             if utf16idx {
-                let clen = char_len(t);
+                let clen = char_len.of(t);
                 if code_point(t, clen) > 0xffff {
                     idx -= 1;
                 }
@@ -95,7 +116,7 @@ unsafe fn byteidx_common(argvars: *mut typval_T, rettv: *mut typval_T, comp: boo
                     t = t.offset(clen as isize);
                 }
             } else {
-                t = t.offset(char_len(t) as isize);
+                t = t.offset(char_len.of(t) as isize);
             }
             idx -= 1;
         }
@@ -141,7 +162,7 @@ pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             }
         }
 
-        let char_len = char_len_fn(countcc);
+        let char_len = CharLen::new(countcc);
         let mut p = str;
         let mut len: c_int = 0;
         while if utf16idx {
@@ -163,11 +184,11 @@ pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             }
             if utf16idx {
                 idx -= 1;
-                if code_point(p, char_len(p)) > 0xffff {
+                if code_point(p, char_len.of(p)) > 0xffff {
                     idx -= 1;
                 }
             }
-            p = p.offset(char_len(p) as isize);
+            p = p.offset(char_len.of(p) as isize);
             len += 1;
         }
 
@@ -251,7 +272,7 @@ pub unsafe fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             if nchar > 0 {
                 // Walk `nchar` characters in to find the byte offset.
                 while nchar > 0 && (nbyte as size_t) < slen {
-                    nbyte += char_len_fn(!skipcc)(p.offset(nbyte as isize));
+                    nbyte += CharLen::new(!skipcc).of(p.offset(nbyte as isize));
                     nchar -= 1;
                 }
             } else {
@@ -271,7 +292,7 @@ pub unsafe fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
                 len += if off < 0 {
                     1
                 } else {
-                    char_len_fn(!skipcc)(p.offset(off as isize))
+                    CharLen::new(!skipcc).of(p.offset(off as isize))
                 };
                 charlen -= 1;
             }
@@ -373,7 +394,7 @@ pub unsafe fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             }
         }
 
-        let char_len = char_len_fn(countcc);
+        let char_len = CharLen::new(countcc);
         let mut p = str;
         let mut len: c_int = 0;
         // The answer is the index of the *start* of the character the offset
@@ -397,7 +418,7 @@ pub unsafe fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
                 return;
             }
             utf16idx = len;
-            let clen = char_len(p);
+            let clen = char_len.of(p);
             if code_point(p, clen) > 0xffff {
                 len += 1;
             }
