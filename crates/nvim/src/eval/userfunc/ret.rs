@@ -605,7 +605,7 @@ pub unsafe fn get_func_line(
                 let line = ga_strings(&*gap)[(*fcp).fc_linenr as usize];
                 (*fcp).fc_linenr += 1;
                 let dup = xstrdup(line);
-                (*sourcing_entry()).es_lnum = (*fcp).fc_linenr as linenr_T;
+                crate::runtime::set_sourcing_lnum((*fcp).fc_linenr as linenr_T);
                 if do_profiling.get() == PROF_YES {
                     func_line_start(cookie);
                 }

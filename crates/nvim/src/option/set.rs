@@ -44,10 +44,9 @@ use crate::options::{
 };
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, snprintf};
-use crate::runtime::exestack;
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptVal, OptValData, OptionSetFlags, String_0, Vv, estack_T, optset_T,
-    ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, vimoption_T,
+    IOSIZE, NUL, OptIndex, OptVal, OptValData, OptionSetFlags, String_0, Vv, optset_T, ptrdiff_t,
+    scid_T, sctx_T, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
@@ -81,16 +80,9 @@ pub fn set_option_sctx(opt_idx: OptIndex, opt_flags: OptionSetFlags, mut script_
 
     // A modeline already carries the line it was found on.
     if !opt_flags.has(OptionSetFlags::MODELINE) {
-        // SAFETY: the execution stack always has the frame being sourced on
-        // top while anything can set an option.
-        script_ctx.sc_lnum += unsafe {
-            let stack = *exestack.ptr();
-            (*stack
-                .ga_data
-                .cast::<estack_T>()
-                .offset(stack.ga_len as isize - 1))
-            .es_lnum
-        };
+        // The execution stack always has the frame being sourced on top
+        // while anything can set an option.
+        script_ctx.sc_lnum += crate::runtime::innermost_frame().es_lnum;
     }
     // SAFETY: `nlua_set_sctx` only reads and rewrites the context in place.
     unsafe { nlua_set_sctx(&raw mut script_ctx) };

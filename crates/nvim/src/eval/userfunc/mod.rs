@@ -69,8 +69,7 @@ use crate::profile::{
 };
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
 use crate::runtime::{
-    autoload_name, estack_pop, estack_push_ufunc, exestack, get_sourced_lnum, script_autoload,
-    script_items,
+    autoload_name, estack_pop, estack_push_ufunc, get_sourced_lnum, script_autoload, script_items,
 };
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
@@ -236,19 +235,16 @@ pub(crate) unsafe fn uf_name_ptr(fp: *mut ufunc_T) -> *mut c_char {
 ///
 /// # Safety
 /// The exec stack is non-empty, which it is whenever anything is running.
-pub(crate) unsafe fn sourcing_entry() -> *mut estack_T {
-    unsafe {
-        let stack = &*exestack.ptr();
-        (stack.ga_data as *mut estack_T).offset(stack.ga_len as isize - 1)
-    }
+pub(crate) fn sourcing_entry() -> estack_T {
+    crate::runtime::innermost_frame()
 }
 
 /// The line number the innermost exec-stack entry is on.
 ///
 /// # Safety
 /// As [`sourcing_entry`].
-pub(crate) unsafe fn sourcing_lnum() -> linenr_T {
-    unsafe { (*sourcing_entry()).es_lnum }
+pub(crate) fn sourcing_lnum() -> linenr_T {
+    sourcing_entry().es_lnum
 }
 
 /// Append `s`, already owned, to a `char *` garray that has room for it.

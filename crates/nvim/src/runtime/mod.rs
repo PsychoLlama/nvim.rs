@@ -315,13 +315,13 @@ pub const SID_WINLAYOUT: ::core::ffi::c_int = -7;
 pub const SID_LUA: ::core::ffi::c_int = -8;
 pub const SID_API_CLIENT: ::core::ffi::c_int = -9;
 pub const SID_STR: ::core::ffi::c_int = -10;
-pub static exestack: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: ::core::mem::size_of::<estack_T>() as ::core::ffi::c_int,
-    ga_growsize: 50 as ::core::ffi::c_int,
-    ga_data: NULL_0,
-});
+/// The execution stack, outermost frame first -- see [`estack`].
+///
+/// A `Vec`, not a `garray_T`: nothing outside this crate reads it, the
+/// element type is fixed, and every walk over it is then a checked one.
+/// Reach it through [`GlobalCell::with`]/[`GlobalCell::with_mut`], which also
+/// catch a push made while a walk holds a borrow.
+pub static exestack: GlobalCell<Vec<estack_T>> = GlobalCell::new(Vec::new());
 pub static script_items: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,

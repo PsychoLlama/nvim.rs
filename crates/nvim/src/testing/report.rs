@@ -21,10 +21,10 @@ use crate::eval::vars::assert_error;
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
-use crate::runtime::{estack_sfile, exestack};
+use crate::runtime::estack_sfile;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    VAR_DICT, VAR_STRING, VAR_UNKNOWN, estack_T, garray_T, int64_t, linenr_T, size_t, typval_T,
+    VAR_DICT, VAR_STRING, VAR_UNKNOWN, garray_T, int64_t, linenr_T, size_t, typval_T,
 };
 use ::libc::strlen;
 
@@ -51,13 +51,8 @@ pub(super) unsafe fn ga_concat_lit(gap: *mut garray_T, text: &'static CStr) {
 }
 
 /// Line number being sourced or executed: the top of the exestack.
-///
-/// # Safety
-/// The exestack is non-empty, which it is for the whole of a session.
-pub(super) unsafe fn sourcing_lnum() -> linenr_T {
-    let es = exestack.get();
-    // SAFETY: the caller's contract; the stack holds `ga_len` entries.
-    unsafe { (*(es.ga_data as *mut estack_T).offset(es.ga_len as isize - 1)).es_lnum }
+pub(super) fn sourcing_lnum() -> linenr_T {
+    crate::runtime::innermost_frame().es_lnum
 }
 
 /// A fresh error buffer, opened with the sourcing position: `script line N: `.

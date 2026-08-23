@@ -26,8 +26,6 @@ use crate::smsg_c;
 /// `SIZE_MAX`, which is how [`getnextac`] and its caller see the end.
 pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
     unsafe {
-        let entry = ((*exestack.ptr()).ga_data.cast::<estack_T>())
-            .offset(((*exestack.ptr()).ga_len - 1) as isize);
         let acs = au_event_vec((*apc).event);
         debug_assert!((*apc).ausize <= (*acs).size);
 
@@ -82,9 +80,8 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
                 }
 
                 // Point the execution stack at this autocommand.
-                xfree((*entry).es_name.cast::<::core::ffi::c_void>());
-                (*entry).es_name = namep;
-                (*entry).es_info.aucmd = apc;
+                xfree(crate::runtime::replace_sourcing_name(namep).cast::<::core::ffi::c_void>());
+                crate::runtime::with_innermost(|entry| entry.es_info.aucmd = apc);
             }
 
             (*apc).lastpat = ap;
@@ -95,9 +92,11 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
         }
 
         // Nothing left: clear the ETYPE_AUCMD stack entry.
-        xfree((*entry).es_name.cast::<::core::ffi::c_void>());
-        (*entry).es_name = ::core::ptr::null_mut();
-        (*entry).es_info.aucmd = ::core::ptr::null_mut();
+        xfree(
+            crate::runtime::replace_sourcing_name(::core::ptr::null_mut())
+                .cast::<::core::ffi::c_void>(),
+        );
+        crate::runtime::with_innermost(|entry| entry.es_info.aucmd = ::core::ptr::null_mut());
 
         (*apc).lastpat = ::core::ptr::null_mut();
         (*apc).auidx = SIZE_MAX as size_t;

@@ -49,7 +49,7 @@ unsafe fn other_sourcing_name() -> bool {
     unsafe {
         if exestack_has_name() {
             if !last_sourcing_name.get().is_null() {
-                return strcmp((*sourcing_top()).es_name, last_sourcing_name.get()) != 0;
+                return strcmp(sourcing_top().es_name, last_sourcing_name.get()) != 0;
             }
             return true;
         }
@@ -58,15 +58,8 @@ unsafe fn other_sourcing_name() -> bool {
 }
 
 /// Is there an innermost exec-stack entry, and does it name a source?
-///
-/// # Safety
-/// Only that the exec stack is well formed.
-unsafe fn exestack_has_name() -> bool {
-    unsafe {
-        !(*exestack.ptr()).ga_data.is_null()
-            && (*exestack.ptr()).ga_len > 0
-            && !(*sourcing_top()).es_name.is_null()
-    }
+fn exestack_has_name() -> bool {
+    crate::runtime::innermost().is_some_and(|entry| !entry.es_name.is_null())
 }
 
 /// An allocated "Error in <script>:" line, or null when the source has
@@ -81,7 +74,7 @@ unsafe fn get_emsg_source() -> *mut c_char {
         }
         let tofree = estack_sfile(ESTACK_NONE);
         let sname = if tofree.is_null() {
-            (*sourcing_top()).es_name
+            sourcing_top().es_name
         } else {
             tofree
         };
@@ -103,16 +96,16 @@ unsafe fn get_emsg_lnum() -> *mut c_char {
     unsafe {
         // Show the source of the error, but not if it is the same as the last
         // time.
-        if (*sourcing_top()).es_name.is_null()
-            || !(other_sourcing_name() || (*sourcing_top()).es_lnum != last_sourcing_lnum.get())
-            || (*sourcing_top()).es_lnum == 0
+        if sourcing_top().es_name.is_null()
+            || !(other_sourcing_name() || sourcing_top().es_lnum != last_sourcing_lnum.get())
+            || sourcing_top().es_lnum == 0
         {
             return ptr::null_mut();
         }
         let p = gettext(c"line %4d:".as_ptr());
         let buf_len = 20 + strlen(p);
         let buf: *mut c_char = xmalloc(buf_len).cast();
-        snprintf(buf, buf_len, p, (*sourcing_top()).es_lnum);
+        snprintf(buf, buf_len, p, sourcing_top().es_lnum);
         buf
     }
 }
@@ -140,16 +133,16 @@ pub unsafe fn msg_source(hl_id: c_int) {
         if !p.is_null() {
             msg(p, HLF_N);
             xfree(p.cast());
-            last_sourcing_lnum.set((*sourcing_top()).es_lnum as c_int);
+            last_sourcing_lnum.set(sourcing_top().es_lnum as c_int);
         }
 
         // Remember the source name and line number, so we can tell when
         // the message changes.
-        if (*sourcing_top()).es_name.is_null() || other_sourcing_name() {
+        if sourcing_top().es_name.is_null() || other_sourcing_name() {
             xfree(last_sourcing_name.get().cast());
             last_sourcing_name.set(ptr::null_mut());
-            if !(*sourcing_top()).es_name.is_null() {
-                last_sourcing_name.set(xstrdup((*sourcing_top()).es_name));
+            if !sourcing_top().es_name.is_null() {
+                last_sourcing_name.set(xstrdup(sourcing_top().es_name));
                 if !redirecting() {
                     msg_putchar_hl(b'\n' as c_int, hl_id);
                 }
@@ -210,12 +203,12 @@ pub unsafe fn emsg_multiline(
 
             if in_assert_fails.get() && emsg_assert_fails_msg.get().is_null() {
                 emsg_assert_fails_msg.set(xstrdup(s));
-                emsg_assert_fails_lnum.set((*sourcing_top()).es_lnum as c_long);
+                emsg_assert_fails_lnum.set(sourcing_top().es_lnum as c_long);
                 xfree(emsg_assert_fails_context.get().cast());
-                emsg_assert_fails_context.set(xstrdup(if (*sourcing_top()).es_name.is_null() {
+                emsg_assert_fails_context.set(xstrdup(if sourcing_top().es_name.is_null() {
                     c"".as_ptr()
                 } else {
-                    (*sourcing_top()).es_name
+                    sourcing_top().es_name
                 }));
             }
 
@@ -247,7 +240,7 @@ pub unsafe fn emsg_multiline(
                     write_line(get_emsg_lnum());
                     redir_write(s, strlen(s) as ptrdiff_t);
                 }
-                if !(*sourcing_top()).es_name.is_null() && (*sourcing_top()).es_lnum != 0 {
+                if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
                     logmsg_c!(
                         LOGLVL_DBG,
                         ptr::null(),
@@ -256,8 +249,8 @@ pub unsafe fn emsg_multiline(
                         true,
                         c"(:silent) %s (%s (line %d))".as_ptr(),
                         s,
-                        (*sourcing_top()).es_name,
-                        (*sourcing_top()).es_lnum,
+                        sourcing_top().es_name,
+                        sourcing_top().es_lnum,
                     );
                 } else {
                     logmsg_c!(
@@ -273,7 +266,7 @@ pub unsafe fn emsg_multiline(
                 return true;
             }
 
-            if !(*sourcing_top()).es_name.is_null() && (*sourcing_top()).es_lnum != 0 {
+            if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
                 logmsg_c!(
                     LOGLVL_INF,
                     ptr::null(),
@@ -282,8 +275,8 @@ pub unsafe fn emsg_multiline(
                     true,
                     c"%s (%s (line %d))".as_ptr(),
                     s,
-                    (*sourcing_top()).es_name,
-                    (*sourcing_top()).es_lnum,
+                    sourcing_top().es_name,
+                    sourcing_top().es_lnum,
                 );
             } else {
                 logmsg_c!(

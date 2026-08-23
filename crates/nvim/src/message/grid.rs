@@ -386,7 +386,7 @@ pub(crate) unsafe fn inc_msg_scrolled() {
         if *get_vim_var_str(Vv::Scrollstart) == 0 {
             // v:scrollstart is empty: set it to the script/function name and
             // line number the scrolling started at.
-            let mut p = String_0::from_raw_parts((*sourcing_top()).es_name, 0);
+            let mut p = String_0::from_raw_parts(sourcing_top().es_name, 0);
             let mut tofree: *mut c_char = ptr::null_mut();
             if p.data().is_null() {
                 p = cstr_as_string(gettext(c"Unknown".as_ptr()));
@@ -398,7 +398,7 @@ pub(crate) unsafe fn inc_msg_scrolled() {
                     tofreesize,
                     gettext(c"%s line %ld".as_ptr()),
                     p.data(),
-                    (*sourcing_top()).es_lnum as int64_t,
+                    sourcing_top().es_lnum as int64_t,
                 ));
                 p.set_data(tofree);
             }

@@ -58,7 +58,7 @@ use crate::os::time::os_now;
 use crate::path::{full_name_save, path_fnamecmp, path_tail};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
-use crate::runtime::{estack_pop, estack_push, exestack};
+use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::strings::{vim_strchr, xstrnsave};
@@ -68,8 +68,8 @@ use crate::types::{
     Callback_data as C2Rust_Unnamed_5, Error, Event, Integer, LuaRetMode, Map_String_int,
     Map_int_String, Map_int_ptr_t, MapHash, Object, OptVal, OptValData, OptValType, Set_String,
     Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, auto_event, buf_T, buffblock_T,
-    buffheader_T, bufref_T, estack_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T,
-    int64_t, kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, proftime_T, ptr_t, save_redo_T,
+    buffheader_T, bufref_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t,
+    kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, proftime_T, ptr_t, save_redo_T,
     save_v_event_T, sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::ui::ui_call_win_hide;

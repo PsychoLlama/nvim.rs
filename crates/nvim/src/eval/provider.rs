@@ -32,7 +32,7 @@ use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf};
-use crate::runtime::{exestack, script_autoload};
+use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
     Callback, CallbackReader, Channel, FAIL, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
@@ -55,13 +55,9 @@ const NAMEBUF: usize = 256;
 /// The top of the execution stack, which is where a provider records who
 /// called it.
 ///
-/// # Safety
-/// The stack always holds at least one entry.
-unsafe fn top_estack() -> *mut estack_T {
-    unsafe {
-        let stack = exestack.ptr();
-        ((*stack).ga_data as *mut estack_T).offset(((*stack).ga_len - 1) as isize)
-    }
+/// The innermost execution-stack frame.
+fn top_estack() -> estack_T {
+    crate::runtime::innermost_frame()
 }
 
 /// Read the three job callbacks and the two "buffered" flags out of the
@@ -198,7 +194,7 @@ pub unsafe fn eval_call_provider(
         let saved_provider_caller_scope = provider_caller_scope.get();
         provider_caller_scope.set(caller_scope {
             script_ctx: current_sctx.get(),
-            es_entry: *top_estack(),
+            es_entry: top_estack(),
             autocmd_fname: autocmd_fname.get(),
             autocmd_match: autocmd_match.get(),
             autocmd_fname_full: autocmd_fname_full.get(),
@@ -370,16 +366,10 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
 pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
     unsafe {
         let top = top_estack();
-        if (*top).es_name.is_null() {
+        if top.es_name.is_null() {
             snprintf(buf, bufsize, c"?".as_ptr());
         } else {
-            snprintf(
-                buf,
-                bufsize,
-                c"%s:%d".as_ptr(),
-                (*top).es_name,
-                (*top).es_lnum,
-            );
+            snprintf(buf, bufsize, c"%s:%d".as_ptr(), top.es_name, top.es_lnum);
         }
     }
 }

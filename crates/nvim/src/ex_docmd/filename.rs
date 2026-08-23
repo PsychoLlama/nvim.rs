@@ -588,7 +588,7 @@ pub unsafe fn eval_vars(
                     resultbuf = result;
                 }
                 SPEC_SLNUM => {
-                    let entry = &*sourcing_entry();
+                    let entry = &sourcing_entry();
                     if entry.es_name.is_null() || entry.es_lnum == 0 {
                         *errormsg = gettext(e_no_line_number_to_use_for_slnum.as_ptr());
                         return ptr::null_mut();
@@ -604,7 +604,7 @@ pub unsafe fn eval_vars(
                 SPEC_SFLNUM => {
                     // The line the *script* is on, which is the script's own
                     // offset plus the line inside it.
-                    let lnum = (*current_sctx.ptr()).sc_lnum + (*sourcing_entry()).es_lnum;
+                    let lnum = (*current_sctx.ptr()).sc_lnum + sourcing_entry().es_lnum;
                     if lnum == 0 {
                         *errormsg = gettext(e_no_line_number_to_use_for_sflnum.as_ptr());
                         return ptr::null_mut();

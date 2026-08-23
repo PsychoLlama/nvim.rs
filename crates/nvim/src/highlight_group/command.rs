@@ -27,7 +27,6 @@ use crate::message::{emsg, msg_ext_set_kind};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
-use crate::runtime::exestack;
 use crate::types::ui::kUILinegrid;
 use crate::types::{OptVal, OptValData, OptionSetFlags, estack_T};
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
@@ -255,28 +254,14 @@ pub unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool) {
 }
 
 /// The innermost `estack_T`, which is what `SOURCING_LNUM`/`SOURCING_NAME`
-/// read. Upstream indexes `ga_len - 1` with no guard at all.
-///
-/// # Safety
-/// Main thread only.
-unsafe fn sourcing() -> estack_T {
-    // SAFETY: the editor's own stack; the index is upstream's.
-    unsafe {
-        let stack = *exestack.ptr();
-        *stack
-            .ga_data
-            .cast::<estack_T>()
-            .offset((stack.ga_len - 1) as isize)
-    }
+/// read.
+fn sourcing() -> estack_T {
+    crate::runtime::innermost_frame()
 }
 
 /// `SOURCING_LNUM`: the line of the script being sourced.
-///
-/// # Safety
-/// See [`sourcing`].
-pub(crate) unsafe fn sourcing_lnum() -> c_int {
-    // SAFETY: as the callee.
-    unsafe { sourcing().es_lnum }
+pub(crate) fn sourcing_lnum() -> c_int {
+    sourcing().es_lnum
 }
 
 /// `:highlight [default] link {from} {to}`.
@@ -357,12 +342,8 @@ unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: 
 }
 
 /// `SOURCING_NAME == NULL`: whether the innermost entry names a script.
-///
-/// # Safety
-/// See [`sourcing`].
-unsafe fn sourcing_name_is_null() -> bool {
-    // SAFETY: as the callee.
-    unsafe { sourcing().es_name.is_null() }
+fn sourcing_name_is_null() -> bool {
+    sourcing().es_name.is_null()
 }
 
 /// The `key=value` pairs of one `:highlight {group} ...` command.

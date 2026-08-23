@@ -497,10 +497,9 @@ pub unsafe fn apply_autocmds_group(
             autocmd_nested.set(save_autocmd_nested);
             // `SOURCING_NAME`: `aucmd_next` left the last one here.
             xfree(
-                (*((*exestack.ptr()).ga_data.cast::<estack_T>())
-                    .offset(((*exestack.ptr()).ga_len - 1) as isize))
-                .es_name
-                .cast::<::core::ffi::c_void>(),
+                crate::runtime::innermost_frame()
+                    .es_name
+                    .cast::<::core::ffi::c_void>(),
             );
             estack_pop();
             xfree(afile_orig.cast::<::core::ffi::c_void>());

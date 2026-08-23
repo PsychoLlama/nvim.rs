@@ -21,7 +21,6 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
-use crate::garray::ga_grow;
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::nlua_exec;
 use crate::main::{
@@ -38,9 +37,9 @@ use crate::os::cshim::gettext;
 use crate::runtime::exestack;
 use crate::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
-    String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, estack_T,
-    funccal_entry_T, funccall_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil,
-    kObjectTypeString, object, sctx_T, typval_T, uint64_t, varnumber_T,
+    String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, funccal_entry_T,
+    funccall_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, object,
+    sctx_T, typval_T, uint64_t, varnumber_T,
 };
 use crate::{semsg_c, semsg_multiline_c};
 use ::libc::strcmp;
@@ -283,10 +282,7 @@ impl ProviderScope {
             current_sctx.set((*scope).script_ctx);
             // Push the caller's execution-stack entry so that any message
             // names the caller's script, not the provider's.
-            ga_grow(exestack.ptr(), 1);
-            let stack = exestack.ptr();
-            *((*stack).ga_data as *mut estack_T).add((*stack).ga_len as usize) = (*scope).es_entry;
-            (*stack).ga_len += 1;
+            exestack.with_mut(|stack| stack.push((*scope).es_entry));
             autocmd_fname.set((*scope).autocmd_fname);
             autocmd_match.set((*scope).autocmd_match);
             autocmd_fname_full.set((*scope).autocmd_fname_full);
@@ -303,7 +299,9 @@ impl ProviderScope {
         // SAFETY: the caller's obligation.
         unsafe {
             current_sctx.set(self.sctx);
-            (*exestack.ptr()).ga_len -= 1;
+            exestack.with_mut(|stack| {
+                stack.pop();
+            });
             autocmd_fname.set(self.autocmd_fname);
             autocmd_match.set(self.autocmd_match);
             autocmd_fname_full.set(self.autocmd_fname_full);

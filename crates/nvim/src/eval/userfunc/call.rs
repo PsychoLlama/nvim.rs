@@ -280,11 +280,7 @@ pub unsafe fn call_user_func(
         estack_push_ufunc(fp, 1);
         if p_verbose.get() >= 12 {
             verbose_report(|| {
-                smsg_c!(
-                    0,
-                    gettext(c"calling %s".as_ptr()),
-                    (*sourcing_entry()).es_name,
-                );
+                smsg_c!(0, gettext(c"calling %s".as_ptr()), sourcing_entry().es_name,);
                 if p_verbose.get() >= 14 {
                     msg_puts(c"(".as_ptr());
                     for i in 0..argcount {
@@ -401,7 +397,7 @@ pub unsafe fn call_user_func(
 
         if p_verbose.get() >= 12 {
             verbose_report(|| {
-                let name = (*sourcing_entry()).es_name;
+                let name = sourcing_entry().es_name;
                 if aborting() {
                     smsg_c!(0, gettext(c"%s aborted".as_ptr()), name);
                 } else if (*(*fc).fc_rettv).v_type == VAR_NUMBER {
@@ -438,12 +434,12 @@ pub unsafe fn call_user_func(
         }
         drop(sandboxed);
 
-        if p_verbose.get() >= 12 && !(*sourcing_entry()).es_name.is_null() {
+        if p_verbose.get() >= 12 && !sourcing_entry().es_name.is_null() {
             verbose_report(|| {
                 smsg_c!(
                     0,
                     gettext(c"continuing in %s".as_ptr()),
-                    (*sourcing_entry()).es_name,
+                    sourcing_entry().es_name,
                 );
             });
         }

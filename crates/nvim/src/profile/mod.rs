@@ -41,10 +41,10 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
-use crate::runtime::{exestack, script_items};
+use crate::runtime::script_items;
 use crate::types::{
-    ExpandContext, Vv, estack_T, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T,
-    scriptitem_T, ufunc_T, varnumber_T,
+    ExpandContext, Vv, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T, scriptitem_T,
+    ufunc_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -504,8 +504,7 @@ unsafe fn profiled_funccal() -> Option<*mut funccall_T> {
 pub unsafe fn func_line_start(cookie: *mut c_void) {
     // SAFETY: the caller's call frame and its function.
     let fp = unsafe { &mut *(*(cookie as *mut funccall_T)).fc_func };
-    // SAFETY: the exestack is live while a function line is being read.
-    let lnum = unsafe { sourcing_lnum() };
+    let lnum = sourcing_lnum();
     if fp.uf_profiling != 0 && lnum >= 1 && lnum <= fp.uf_lines.ga_len as linenr_T {
         fp.uf_tml_idx = lnum as c_int - 1;
         // Skip continuation lines, which the line array stores as nulls.
@@ -736,14 +735,8 @@ unsafe fn current_script() -> Option<*mut scriptitem_T> {
 }
 
 /// Line number being sourced/executed: the top of the exestack.
-///
-/// # Safety
-/// The exestack is non-empty, which it is whenever a script or function
-/// line is being read.
-unsafe fn sourcing_lnum() -> linenr_T {
-    let es = exestack.get();
-    // SAFETY: the caller's contract; the stack holds `ga_len` entries.
-    unsafe { (*(es.ga_data as *mut estack_T).offset(es.ga_len as isize - 1)).es_lnum }
+fn sourcing_lnum() -> linenr_T {
+    crate::runtime::innermost_frame().es_lnum
 }
 
 /// Per-line counters of script `si` at `idx`.

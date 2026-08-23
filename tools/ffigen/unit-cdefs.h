@@ -3851,6 +3851,7 @@ static const int EVENT_WINNEWPRE = 142;
 static const int EVENT_WINRESIZED = 143;
 static const int EVENT_WINSCROLLED = 144;
 static const int EXACTLY = 5;
+static const int EXESTACK_GROWSIZE = 50;
 static const int EXESTACK_SLACK = 500;
 static const int EXFLAG_LIST = 1;
 static const int EXFLAG_NR = 2;

@@ -53,7 +53,8 @@ use crate::os::cshim::{gettext, memmove};
 use crate::os::input::line_breakcheck;
 use crate::profile::{func_line_end, func_line_start, script_line_end, script_line_start};
 use crate::runtime::{
-    exestack, getsourceline, source_breakpoint, source_dbg_tick, source_finished, source_level,
+    getsourceline, set_sourcing_lnum, source_breakpoint, source_dbg_tick, source_finished,
+    source_level,
 };
 use crate::types::ui::kUICmdline;
 use crate::types::{
@@ -66,16 +67,13 @@ use ::libc::{memset, strlen};
 /// The top of the execution stack: the script or function whose line is
 /// running. `SOURCING_LNUM`/`SOURCING_NAME` in the C, where they are macros
 /// over `exestack`'s last entry.
-pub(crate) unsafe fn sourcing_entry() -> *mut estack_T {
-    unsafe {
-        let stack = &*exestack.ptr();
-        (stack.ga_data as *mut estack_T).offset(stack.ga_len as isize - 1)
-    }
+pub(crate) fn sourcing_entry() -> estack_T {
+    crate::runtime::innermost_frame()
 }
 
 /// The line number the message and breakpoint machinery reports.
-pub(crate) unsafe fn sourcing_lnum() -> linenr_T {
-    unsafe { (*sourcing_entry()).es_lnum }
+pub(crate) fn sourcing_lnum() -> linenr_T {
+    crate::runtime::innermost_frame().es_lnum
 }
 
 /// A zeroed `cstack_T` with the "no conditional open" index the C's
@@ -203,7 +201,7 @@ pub unsafe fn do_cmdline(
             breakpoint = func_breakpoint(real_cookie);
             dbg_tick = func_dbg_tick(real_cookie);
         } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
-            fname = (*sourcing_entry()).es_name;
+            fname = sourcing_entry().es_name;
             breakpoint = source_breakpoint(real_cookie);
             dbg_tick = source_dbg_tick(real_cookie);
         }
@@ -292,7 +290,7 @@ pub unsafe fn do_cmdline(
 
                 let stored = (lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize);
                 next_cmdline = (*stored).line;
-                (*sourcing_entry()).es_lnum = (*stored).lnum;
+                set_sourcing_lnum((*stored).lnum);
 
                 if !breakpoint.is_null() && *breakpoint != 0 && *breakpoint <= sourcing_lnum() {
                     dbg_breakpoint(fname, sourcing_lnum());
@@ -414,7 +412,7 @@ pub unsafe fn do_cmdline(
             }
             count += 1;
 
-            if p_verbose.get() >= 15 && !(*sourcing_entry()).es_name.is_null()
+            if p_verbose.get() >= 15 && !sourcing_entry().es_name.is_null()
                 || p_verbose.get() >= 16 as OptInt
             {
                 msg_verbose_cmd(sourcing_lnum(), cmdline_copy);
@@ -529,9 +527,8 @@ pub unsafe fn do_cmdline(
             // Outside every loop, the stored lines are of no further use.
             if cstack.cs_looplevel == 0 {
                 if lines_ga.ga_len > 0 {
-                    (*sourcing_entry()).es_lnum = (*(lines_ga.ga_data as *mut wcmd_T)
-                        .offset(lines_ga.ga_len as isize - 1))
-                    .lnum;
+                    let last = (lines_ga.ga_data as *mut wcmd_T).add(lines_ga.ga_len as usize - 1);
+                    set_sourcing_lnum((*last).lnum);
                     clear_loop_lines(&raw mut lines_ga);
                 }
                 current_line = 0;

@@ -430,7 +430,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                                 // Check that the autoload name matches the
                                 // script name.
                                 let mut j = FAIL;
-                                let sourcing_name = (*sourcing_entry()).es_name;
+                                let sourcing_name = sourcing_entry().es_name;
                                 if !sourcing_name.is_null() {
                                     let scriptname = autoload_name(name, strlen(name));
                                     p = vim_strchr(scriptname, b'/' as c_int);

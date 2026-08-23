@@ -58,7 +58,7 @@ use crate::main::{
 };
 use crate::mark::mark_global_iter;
 use crate::mbyte::string_convert;
-use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
 use crate::os::cshim::gettext;
@@ -84,7 +84,11 @@ const UNSET_TV: typval_T = typval_T {
 
 /// How much slack the execution stack may keep before a collection trims
 /// it back.
-const EXESTACK_SLACK: c_int = 500;
+const EXESTACK_SLACK: usize = 500;
+
+/// The garray `growsize` the execution stack was declared with, which is the
+/// floor [`trim_exestack`] will not shrink below.
+const EXESTACK_GROWSIZE: usize = 50;
 
 /// The next mark. Two apart, so `set_ref_in_previous_funccal` can use the
 /// odd value in between.
@@ -262,23 +266,24 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
 
 /// Give back the execution stack's slack, keeping 150% of what is in use.
 ///
-/// # Safety
-/// Called with the stack initialised.
-unsafe fn trim_exestack() {
-    unsafe {
-        let st = exestack.ptr();
-        if (*st).ga_maxlen - (*st).ga_len <= EXESTACK_SLACK {
+/// Upstream reaches into the garray and reallocs by hand; a `Vec` says the
+/// same thing with `shrink_to`, which is also free to keep more than it is
+/// asked for. The `growsize` floor and the `EXESTACK_SLACK` threshold are
+/// upstream's and are kept: this runs after every garbage-collection pass, and
+/// shrinking a stack that is about to grow again is what they avoid.
+fn trim_exestack() {
+    exestack.with_mut(|stack| {
+        let len = stack.len();
+        if stack.capacity() - len <= EXESTACK_SLACK {
             return;
         }
-        let n = ((*st).ga_len / 2).max((*st).ga_growsize);
+        let keep = len + (len / 2).max(EXESTACK_GROWSIZE);
         // Never grow it here.
-        if (*st).ga_len + n >= (*st).ga_maxlen {
+        if keep >= stack.capacity() {
             return;
         }
-        let new_len = (*st).ga_itemsize as size_t * ((*st).ga_len + n) as size_t;
-        (*st).ga_data = xrealloc((*st).ga_data, new_len);
-        (*st).ga_maxlen = (*st).ga_len + n;
-    }
+        stack.shrink_to(keep);
+    });
 }
 
 /// Walk the register and global-mark iterators.

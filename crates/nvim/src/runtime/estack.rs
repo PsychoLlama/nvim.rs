@@ -10,9 +10,11 @@
 //! I am in".  [`stacktrace_create`] and [`f_getstacktrace`] are the same data
 //! as a list of dicts.
 //!
-//! The stack lives in a `garray_T`, so [`entries`] hands the rest of the file a
-//! plain slice and every walk below is checked code; only the pushes, the FFI
-//! calls and the `es_info` union reach for a pointer.
+//! The stack is a `Vec<estack_T>` behind a [`GlobalCell`], so every walk below
+//! is checked code; only the FFI calls and the `es_info` union still reach for
+//! a pointer. `with`/`with_mut` are also the guard: a push made while a walk
+//! holds a borrow is a debug panic rather than a reallocated buffer under a
+//! live slice.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -20,28 +22,11 @@ use super::*;
 
 use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use core::ptr;
 
 /// Slack [`estack_sfile`] reserves per entry on top of the name and its type
 /// prefix: enough for the `[%d]` line number and the `..` separator.
 const SFILE_ENTRY_SLACK: size_t = 26;
-
-/// The execution stack, outermost frame first.
-///
-/// # Safety
-///
-/// The slice borrows `exestack`'s buffer, which [`estack_push`] reallocates.
-/// No caller may hold it across a push.
-unsafe fn entries<'a>() -> &'a [estack_T] {
-    let ga = exestack.get();
-    if ga.ga_data.is_null() {
-        return &[];
-    }
-    // SAFETY: `exestack` is a garray of `estack_T` whose first `ga_len`
-    // elements are live entries, and the caller promises not to hold the
-    // borrow across a push.
-    unsafe { slice::from_raw_parts(ga.ga_data.cast::<estack_T>(), ga.ga_len as usize) }
-}
 
 /// A stack entry with no `es_info` payload yet; the pushers that have one fill
 /// it in through the returned pointer.
@@ -57,25 +42,22 @@ fn entry_for(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> estack_T {
 }
 
 /// Append `entry` to the execution stack and hand back the slot it landed in.
+///
+/// The pointer is how the two pushers that carry an `es_info` payload fill it
+/// in. It is valid only until the next push, which is the same rule the
+/// garray this replaced had.
 fn push_entry(entry: estack_T) -> *mut estack_T {
-    let ga = exestack.ptr();
-    // SAFETY: `exestack` is this family's own garray of `estack_T`; `ga_grow`
-    // makes room for one more element and leaves `ga_data` non-null, so the
-    // slot at `ga_len` is ours to write.
-    unsafe {
-        ga_grow(ga, 1);
-        let slot = (*ga).ga_data.cast::<estack_T>().add((*ga).ga_len as usize);
-        slot.write(entry);
-        (*ga).ga_len += 1;
-        slot
-    }
+    exestack.with_mut(|stack| {
+        stack.push(entry);
+        let last = stack.len() - 1;
+        &raw mut stack[last]
+    })
 }
 
 /// Push the bottom frame, the one that stands for "not executing anything".
-pub unsafe fn estack_init() {
-    // SAFETY: the pre-grow is upstream's hint that ten frames of nesting are
-    // the common case; `exestack` is empty at this point.
-    unsafe { ga_grow(exestack.ptr(), 10) };
+pub fn estack_init() {
+    // Ten frames of nesting are the common case; upstream pre-grows for it.
+    exestack.with_mut(|stack| stack.reserve(10));
     push_entry(entry_for(ETYPE_TOP, ptr::null_mut(), 0));
 }
 
@@ -106,20 +88,61 @@ pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
 
 /// Take an item off of the execution stack. The bottom frame stays.
 pub fn estack_pop() {
-    exestack.with_mut(|ga| {
-        if ga.ga_len > 1 {
-            ga.ga_len -= 1;
+    exestack.with_mut(|stack| {
+        if stack.len() > 1 {
+            stack.pop();
         }
     });
 }
 
 /// The frame being executed, or `None` when nothing is.
 ///
-/// Upstream cannot express the `None`: `SOURCING_NAME`/`SOURCING_LNUM` index
-/// the stack unconditionally and rely on [`estack_init`] having run.
-fn innermost() -> Option<estack_T> {
-    // SAFETY: the borrow ends with this expression.
-    unsafe { entries() }.last().copied()
+/// This is the tree's one spelling of `SOURCING_*`. Upstream cannot express
+/// the `None`: its macros index the stack unconditionally and rely on
+/// [`estack_init`] having run. Eight files each had their own copy of that
+/// index before the stack became a `Vec`.
+pub fn innermost() -> Option<estack_T> {
+    exestack.with(|stack| stack.last().copied())
+}
+
+/// The frame being executed, for the callers that cannot express "none".
+///
+/// The stack is never empty after [`estack_init`] -- the bottom frame goes on
+/// before `main` reads anything and only [`estack_pop`], which keeps it, ever
+/// removes one -- and upstream's `SOURCING_*` macros index it unconditionally
+/// on the strength of that. A `debug_assert` says so where the tests can see
+/// it; a release build answers the bottom frame rather than reading past the
+/// end of the stack, which is what upstream would do.
+#[track_caller]
+pub fn innermost_frame() -> estack_T {
+    match innermost() {
+        Some(entry) => entry,
+        None => {
+            debug_assert!(false, "the execution stack has no frame");
+            entry_for(ETYPE_TOP, ptr::null_mut(), 0)
+        }
+    }
+}
+
+/// Run `f` over the innermost frame, if there is one. See [`innermost_frame`]
+/// for why there always is.
+#[track_caller]
+pub fn with_innermost(f: impl FnOnce(&mut estack_T)) {
+    exestack.with_mut(|stack| match stack.last_mut() {
+        Some(entry) => f(entry),
+        None => debug_assert!(false, "the execution stack has no frame"),
+    });
+}
+
+/// The name of the innermost frame, replaced by `name`.
+///
+/// The caller owns whatever comes back -- this is how the autocommand and
+/// `:source` paths free the name they pushed.
+pub fn replace_sourcing_name(name: *mut c_char) -> *mut c_char {
+    exestack.with_mut(|stack| match stack.last_mut() {
+        Some(entry) => core::mem::replace(&mut entry.es_name, name),
+        None => ptr::null_mut(),
+    })
 }
 
 /// The line number the innermost frame is on -- upstream's `SOURCING_LNUM`.
@@ -135,11 +158,11 @@ pub(crate) fn sourcing_name() -> *mut c_char {
 
 /// Move the innermost frame to `lnum`.
 pub(crate) fn set_sourcing_lnum(lnum: linenr_T) {
-    let ga = exestack.get();
-    if ga.ga_len > 0 {
-        // SAFETY: the top entry of a non-empty `exestack`.
-        unsafe { (*ga.ga_data.cast::<estack_T>().add(ga.ga_len as usize - 1)).es_lnum = lnum };
-    }
+    exestack.with_mut(|stack| {
+        if let Some(entry) = stack.last_mut() {
+            entry.es_lnum = lnum;
+        }
+    });
 }
 
 /// The current value for `<sfile>`, `<stack>` or `<script>`, in allocated
@@ -148,30 +171,33 @@ pub(crate) fn set_sourcing_lnum(lnum: linenr_T) {
 /// `which` is `ESTACK_SFILE` for `<sfile>`, `ESTACK_STACK` for `<stack>` or
 /// `ESTACK_SCRIPT` for `<script>`.
 pub unsafe fn estack_sfile(which: estack_arg_T) -> *mut c_char {
-    // SAFETY: nothing reached from here pushes onto the stack, so the borrow
-    // outlives every use below.
-    let stack = unsafe { entries() };
-    let Some(innermost) = stack.last() else {
-        return ptr::null_mut();
-    };
-
-    if which == ESTACK_SFILE && innermost.es_type != ETYPE_UFUNC {
-        if innermost.es_name.is_null() {
+    // Nothing reached from inside the borrow pushes onto the stack, which is
+    // what makes holding it across these calls sound -- and `with` is now the
+    // thing that would catch it if that ever stopped being true.
+    exestack.with(|stack| {
+        let Some(innermost) = stack.last() else {
             return ptr::null_mut();
+        };
+
+        if which == ESTACK_SFILE && innermost.es_type != ETYPE_UFUNC {
+            if innermost.es_name.is_null() {
+                return ptr::null_mut();
+            }
+            // SAFETY: a non-null `es_name` is the frame's NUL-terminated name.
+            return unsafe { xstrdup(innermost.es_name) };
         }
-        // SAFETY: a non-null `es_name` is the frame's NUL-terminated name.
-        return unsafe { xstrdup(innermost.es_name) };
-    }
 
-    // Evaluated in a function or an autocommand: report the script that
-    // *defined* it. At script level the current script's path is the answer.
-    if which == ESTACK_SCRIPT {
-        // SAFETY: same borrow; `defining_script` allocates but never pushes.
-        return unsafe { defining_script(stack) };
-    }
+        // Evaluated in a function or an autocommand: report the script that
+        // *defined* it. At script level the current script's path is the
+        // answer.
+        if which == ESTACK_SCRIPT {
+            // SAFETY: `defining_script` allocates but never pushes.
+            return unsafe { defining_script(stack) };
+        }
 
-    // SAFETY: same borrow, same reason.
-    unsafe { render_stack(stack, which) }
+        // SAFETY: same reason.
+        unsafe { render_stack(stack, which) }
+    })
 }
 
 /// Walk out from the innermost frame until something says which script we are
@@ -179,7 +205,8 @@ pub unsafe fn estack_sfile(which: estack_arg_T) -> *mut c_char {
 ///
 /// # Safety
 ///
-/// `stack` must be a live borrow of `exestack`.
+/// Every frame's `es_info` must match its `es_type`, which is [`estack_push`]'s
+/// contract with its callers.
 unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
     for entry in stack.iter().rev() {
         match entry.es_type {
@@ -214,7 +241,7 @@ unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
 ///
 /// # Safety
 ///
-/// `stack` must be a live borrow of `exestack`.
+/// Every frame's `es_name`, when non-null, must be NUL-terminated.
 unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
     let mut ga = GA_EMPTY_INIT_VALUE;
     // SAFETY: `ga` is a local garray; `ga_init` only fills in its fields.
@@ -325,12 +352,13 @@ unsafe fn stacktrace_push_item(
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,
 /// outermost first.
 pub unsafe fn stacktrace_create() -> *mut list_T {
-    // SAFETY: nothing below pushes onto the execution stack.
-    let stack = unsafe { entries() };
+    // A copy of the stack, because building the dicts below runs arbitrary
+    // allocation and it is not worth holding the cell's borrow across it.
+    let stack = exestack.with(|stack| stack.clone());
     // SAFETY: a fresh list sized for the frames about to go into it.
     let l = unsafe { tv_list_alloc(stack.len() as ptrdiff_t) };
 
-    for entry in stack {
+    for entry in &stack {
         match entry.es_type {
             // SAFETY: a script frame's `es_name` is its path.
             ETYPE_SCRIPT => unsafe {

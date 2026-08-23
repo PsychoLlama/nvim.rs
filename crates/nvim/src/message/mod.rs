@@ -84,7 +84,7 @@ use crate::os::input::{input_available, os_breakcheck};
 use crate::os::time::os_delay;
 use crate::regexp::vim_regexec;
 use crate::register::write_reg_contents;
-use crate::runtime::{estack_sfile, exestack};
+use crate::runtime::estack_sfile;
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::ui::{kUIMessages, kUIMultigrid};
@@ -226,15 +226,8 @@ unsafe fn hl_attr(hlf: ::core::ffi::c_int) -> ::core::ffi::c_int {
 
 /// The innermost entry of the `:source`/function call stack, which is what
 /// C's `SOURCING_NAME` and `SOURCING_LNUM` read.
-///
-/// # Safety
-/// The exec stack must be non-empty, which it is whenever anything is
-/// running -- the outermost entry is pushed before `main()` sources a thing.
-unsafe fn sourcing_top() -> *mut estack_T {
-    unsafe {
-        let stack = (*exestack.ptr()).ga_data as *mut estack_T;
-        stack.add(((*exestack.ptr()).ga_len - 1) as usize)
-    }
+fn sourcing_top() -> estack_T {
+    crate::runtime::innermost_frame()
 }
 
 /// An [`Array`] owning nothing, C's `ARRAY_DICT_INIT`.

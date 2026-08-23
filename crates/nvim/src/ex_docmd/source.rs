@@ -36,7 +36,7 @@ use crate::message::{
     verbose_leave_scroll,
 };
 use crate::os::cshim::gettext;
-use crate::runtime::{estack_pop, estack_push};
+use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 use crate::strings::vim_snprintf;
 use crate::types::{
@@ -282,7 +282,7 @@ pub unsafe fn handle_did_throw() {
             xfree(reported as *mut c_void);
         }
 
-        xfree((*sourcing_entry()).es_name as *mut c_void);
+        xfree(sourcing_entry().es_name as *mut c_void);
         estack_pop();
     }
 }
@@ -323,7 +323,7 @@ pub(crate) unsafe fn get_loop_line(
         KeyTyped.set(false);
         cp.current_line += 1;
         let wp = ((*cp.lines_gap).ga_data as *mut wcmd_T).offset(cp.current_line as isize);
-        (*sourcing_entry()).es_lnum = (*wp).lnum;
+        set_sourcing_lnum((*wp).lnum);
         xstrdup((*wp).line)
     }
 }
@@ -333,7 +333,7 @@ pub(crate) unsafe fn store_loop_line(gap: *mut garray_T, line: *mut c_char) {
     unsafe {
         let p = ga_append_via_ptr(gap, size_of::<wcmd_T>()) as *mut wcmd_T;
         (*p).line = xstrdup(line);
-        (*p).lnum = (*sourcing_entry()).es_lnum;
+        (*p).lnum = sourcing_entry().es_lnum;
     }
 }
 
