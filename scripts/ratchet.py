@@ -115,12 +115,34 @@ unmeasured, as they were when they lived at the repo root):
               item -- a `#[cfg(test)] mod name;` declaration is a separate
               file, and that file is measured in full like any other.
 
-plus two whole-tree metrics:
+  pub_items   items at the crate's outer boundary: a `pub` declaration or
+              `pub use` re-export at column 0, which is where rustfmt puts
+              every module-level item (an indented one is an associated item
+              or lives in an inline module, and neither is nameable through a
+              `use` path). `unreachable_pub` is denied in both packages, so
+              every one of these really is reachable from outside the crate —
+              which is what makes the number mean something. It is the size of
+              a surface that ought to be a boundary and is not: c2rust made
+              every translation unit's symbols visible, so the tree is ~15k
+              items wide at the root, of which a few hundred are earned (see
+              metrics/visibility-ledger.jsonl). A `pub use` tree counts once
+              however many leaves it names; the point is pressure, not a
+              census. It falls as modules narrow, which is phase 22's business.
+
+plus three whole-tree metrics:
 
   internal_exports  the number of internal-only exports in the committed ABI
                     ledger (metrics/abi-ledger.jsonl — `just abi-ledger
                     --check` separately guarantees that file matches the
                     tree).
+
+  test_reached_pub  the number of records in metrics/visibility-ledger.jsonl:
+                    `pub` items whose only reacher from outside the crate is
+                    an integration test under crates/nvim/tests. The ABI
+                    ledger's `test` class, continued in Rust — an entry point
+                    that stays public because a ported spec drives it. Falls
+                    when a test stops needing the entry point; a new one is
+                    growth that has to be justified.
 
   files_without_forbid_unsafe  the number of source files not carrying
                     #![forbid(unsafe_code)]. The shrink-only trick inverted:
@@ -220,6 +242,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "metrics" / "ratchet.json"
 LEDGER = ROOT / "metrics" / "abi-ledger.jsonl"
+VISIBILITY = ROOT / "metrics" / "visibility-ledger.jsonl"
 
 LINE_CAP = 1000
 # name -> needles counted in the masked source, summed.
@@ -237,6 +260,13 @@ COUNTED = {
 # inside an `unsafe extern` block has the block's `{` between the two words.
 COUNTED_RE = {
     "extern_abi": re.compile(r"\bextern\s+fn [A-Za-z_]"),
+    # ABI-blind for the same reason `extern_abi` is: masking blanks the ABI
+    # string. `pub(crate)`/`pub(super)` do not match — the space is required.
+    "pub_items": re.compile(
+        r"^pub (?:unsafe )?(?:extern\s+)?"
+        r"(?:fn|static|const|struct|enum|union|trait|type|mod|use)\b",
+        re.M,
+    ),
 }
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
@@ -527,16 +557,23 @@ def measure():
     return stats, without_forbid, without_deny, without_casts
 
 
-def internal_exports():
-    if not LEDGER.exists():
-        sys.exit(f"ratchet: {LEDGER.relative_to(ROOT)} is missing; run `just refresh`")
-    return sum(
-        json.loads(line)["class"] == "internal"
-        for line in LEDGER.read_text().splitlines()
-    )
+def ledgers():
+    """The two whole-tree counts the committed ledgers carry."""
+    for path in (LEDGER, VISIBILITY):
+        if not path.exists():
+            sys.exit(
+                f"ratchet: {path.relative_to(ROOT)} is missing; run `just refresh`"
+            )
+    return {
+        "internal_exports": sum(
+            json.loads(line)["class"] == "internal"
+            for line in LEDGER.read_text().splitlines()
+        ),
+        "test_reached_pub": len(VISIBILITY.read_text().splitlines()),
+    }
 
 
-def render(stats, internal, without_forbid, without_deny, without_casts):
+def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
     """The baseline document: only metrics with ratchet room are recorded
     (nonzero counts, over-cap line counts), so files that are already clean
     and under the cap don't churn the file as they're edited."""
@@ -554,7 +591,8 @@ def render(stats, internal, without_forbid, without_deny, without_casts):
     body = ",\n".join(entries)
     return (
         "{\n"
-        f'  "internal_exports": {internal},\n'
+        f'  "internal_exports": {ledger_counts["internal_exports"]},\n'
+        f'  "test_reached_pub": {ledger_counts["test_reached_pub"]},\n'
         f'  "files_without_forbid_unsafe": {without_forbid},\n'
         f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files_without_deny_casts": {without_casts},\n'
@@ -563,12 +601,20 @@ def render(stats, internal, without_forbid, without_deny, without_casts):
     )
 
 
-def violations(stats, internal, without_forbid, without_deny, without_casts, baseline):
+LEDGER_LABEL = {
+    "internal_exports": "abi-ledger internal exports",
+    "test_reached_pub": "test-reached pub items",
+}
+
+
+def violations(stats, counts, without_forbid, without_deny, without_casts, baseline):
     """Every metric that grew past the committed baseline."""
     found = []
-    base_internal = baseline["internal_exports"]
-    if internal > base_internal:
-        found.append(f"abi-ledger internal exports: {base_internal} -> {internal}")
+    for name, label in LEDGER_LABEL.items():
+        # .get: absent from baselines committed before the metric existed.
+        base = baseline.get(name, counts[name])
+        if counts[name] > base:
+            found.append(f"{label}: {base} -> {counts[name]}")
     # .get: absent from baselines committed before the metric existed.
     base_forbid = baseline.get("files_without_forbid_unsafe", without_forbid)
     if without_forbid > base_forbid:
@@ -596,14 +642,15 @@ def violations(stats, internal, without_forbid, without_deny, without_casts, bas
     return found
 
 
-def summary(stats, internal, without_forbid, without_deny, without_casts):
+def summary(stats, counts, without_forbid, without_deny, without_casts):
     counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
     parts = [f"{n} {name}" for name, n in totals.items()]
     parts += [
         f"{over} files over {LINE_CAP} lines",
-        f"{internal} internal exports",
+        f"{counts['internal_exports']} internal exports",
+        f"{counts['test_reached_pub']} test-reached pub items",
         f"{without_forbid} files without forbid(unsafe_code)",
         f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
         f"{without_casts} files without the cast deny",
@@ -730,6 +777,28 @@ SELF_TEST_DENY = [
     ("unsafe fn f() {\n    g();\n}\n", 0),
     ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 3),
 ]
+# (source, expected pub_items)
+SELF_TEST_PUB_ITEMS = [
+    ("pub fn f() {}\n", 1),
+    ("pub unsafe fn f() {}\n", 1),
+    ('pub unsafe extern "C" fn f() {}\n', 1),
+    ("pub static mut X: c_int = 0;\n", 1),
+    ("pub const X: c_int = 0;\n", 1),
+    ("pub struct S;\npub enum E {}\npub union U {}\n", 3),
+    ("pub trait T {}\npub type A = c_int;\npub mod m;\n", 3),
+    # A re-export is public surface however many leaves it names.
+    ("pub use self::a::{b, c};\n", 1),
+    # Anything narrower is not the crate's boundary.
+    ("pub(crate) fn f() {}\npub(super) fn g() {}\npub(in crate::a) fn h() {}\n", 0),
+    # Indented: an associated item or an inline module, not nameable by path.
+    ("impl S {\n    pub fn f() {}\n}\n", 0),
+    ("mod m {\n    pub const X: c_int = 0;\n}\n", 0),
+    # Prose about one costs nothing, and neither does a string holding it.
+    ("// pub fn f() {}\n", 0),
+    ('fn f() {\n    let s = "pub fn g() {}";\n}\n', 0),
+    # `pubx` is not `pub`.
+    ("pubfn f() {}\n", 0),
+]
 
 
 def self_test():
@@ -756,6 +825,10 @@ def self_test():
     for source, expected in SELF_TEST_EXTERN_ABI:
         got = len(needle.findall(mask(source)))
         assert got == expected, f"extern_abi={got}, want {expected}, for {source!r}"
+    needle = COUNTED_RE["pub_items"]
+    for source, expected in SELF_TEST_PUB_ITEMS:
+        got = len(needle.findall(mask(source)))
+        assert got == expected, f"pub_items={got}, want {expected}, for {source!r}"
 
 
 def main():
@@ -765,8 +838,8 @@ def main():
 
     self_test()
     stats, without_forbid, without_deny, without_casts = measure()
-    internal = internal_exports()
-    content = render(stats, internal, without_forbid, without_deny, without_casts)
+    counts = ledgers()
+    content = render(stats, counts, without_forbid, without_deny, without_casts)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -776,7 +849,7 @@ def main():
             )
         if grew := violations(
             stats,
-            internal,
+            counts,
             without_forbid,
             without_deny,
             without_casts,
@@ -798,7 +871,7 @@ def main():
     if committed is not None and "--allow-growth" not in args:
         if grew := violations(
             stats,
-            internal,
+            counts,
             without_forbid,
             without_deny,
             without_casts,
@@ -812,7 +885,7 @@ def main():
     BASELINE.write_text(content)
     print(
         f"wrote {BASELINE.relative_to(ROOT)}: "
-        f"{summary(stats, internal, without_forbid, without_deny, without_casts)}"
+        f"{summary(stats, counts, without_forbid, without_deny, without_casts)}"
     )
 
 

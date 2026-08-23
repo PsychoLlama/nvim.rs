@@ -166,17 +166,28 @@ keycodes-lua *args:
 abi-ledger *args:
   @scripts/abi-ledger.py {{ args }}
 
+# Regenerate the visibility ledger (metrics/visibility-ledger.jsonl): every
+# `pub` item whose only reacher from outside the crate is an integration test
+# under crates/nvim/tests, naming the test. The ABI ledger's question in its
+# Rust form — a ported spec links the library from outside, so the entry point
+# it drives cannot be narrowed, and nothing in the module says so. It reads the
+# tests' `use` trees rather than the crate's `pub` items, so a path it cannot
+# account for is an error instead of a quietly missing row. `--check` diffs
+# against the committed ledger instead of writing.
+visibility-ledger *args:
+  @scripts/visibility-ledger.py {{ args }}
+
 # Regenerate the ratchet baseline (metrics/ratchet.json): per-file
 # unchecked-line / static mut / #[no_mangle] / variadic / GlobalCell-ptr
-# counts, file sizes (1k-line cap, current offenders grandfathered), and the
-# ledger's internal-export count may only shrink. `--check` compares against
-# the committed baseline instead.
+# counts, file sizes (1k-line cap, current offenders grandfathered), the size
+# of the crate's `pub` surface, and a count from each ledger may only shrink.
+# `--check` compares against the committed baseline instead.
 ratchet *args:
   @scripts/ratchet.py {{ args }}
 
 # Regenerate every committed baseline, in the one order that is self-consistent:
-# the generated wrappers and the keycode table, then format, then the ABI
-# ledger, then the ratchet, then re-check formatting. This is the entry point;
+# the generated wrappers and the keycode table, then format, then the two
+# ledgers, then the ratchet, then re-check formatting. This is the entry point;
 # running the pieces by hand invites a baseline that describes a tree that no
 # longer exists.
 #
@@ -186,8 +197,8 @@ ratchet *args:
 # not crate source itself, so nothing downstream reads it.
 # Formatting comes next because rustfmt rewrapping a line changes the line counts
 # the ratchet measures — and `fmt-check` (the pre-commit hook) rewrites the tree, so
-# a baseline taken before it silently stops matching mid-commit. The ledger
-# precedes the ratchet because the ratchet snapshots its internal-export count.
+# a baseline taken before it silently stops matching mid-commit. The ledgers
+# precede the ratchet because the ratchet snapshots a count from each.
 # The lint baseline comes last: it runs cargo clippy, by far the slowest step
 # (a full check-mode compile when the tree changed), and depends on nothing
 # the earlier steps write.
@@ -196,7 +207,7 @@ ratchet *args:
 # fixed point that the pre-commit hook can't move.
 #
 # Args are forwarded to the ratchet and lint, e.g. `just refresh --allow-growth`.
-refresh *args: apigen keycodes-lua fmt ffigen abi-ledger (ratchet args) (lint args)
+refresh *args: apigen keycodes-lua fmt ffigen abi-ledger visibility-ledger (ratchet args) (lint args)
   @treefmt --no-cache --fail-on-change --quiet
 
 # This is the gate CI runs on every push. It deliberately skips the slow
@@ -204,11 +215,11 @@ refresh *args: apigen keycodes-lua fmt ffigen abi-ledger (ratchet args) (lint ar
 # `just oldtest`, ...); only the fast Rust-side tests run here.
 #
 # Check that the tree is formatted, every generator still reproduces its
-# committed output, the ABI ledger is current and the ratchet holds, the
+# committed output, both ledgers are current and the ratchet holds, the
 # generators and the crate compile clean, and the safe-core tests pass.
-# fmt-check leads because it rewrites the tree. The ledger check precedes the
-# ratchet check because the ratchet snapshots the ledger's internal-export
-# count and cannot tell a stale ledger from a fresh one (both also run as
+# fmt-check leads because it rewrites the tree. The ledger checks precede the
+# ratchet check because the ratchet snapshots a count from each and cannot tell
+# a stale ledger from a fresh one (the ABI ledger and the ratchet also run as
 # pre-commit hooks, see .gitconfig). lint-tools is here rather than in `lint`
 # alone because it is seconds, where the crate's clippy pass is minutes.
-minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (ratchet "--check") lint-tools build cargo-test
+minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build cargo-test
