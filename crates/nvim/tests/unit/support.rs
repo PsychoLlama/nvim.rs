@@ -90,6 +90,7 @@ fn init_editor() {
     // SAFETY: the caller holds the editor lock, and `Once` makes this the
     // only initialisation.
     ONCE.call_once(|| unsafe {
+        c2rust_neovim::main::event_init();
         c2rust_neovim::main::early_init(std::ptr::null_mut());
         c2rust_neovim::drawscreen::default_grid_alloc();
         c2rust_neovim::main::msg_grid_adj.with_mut(|view| {

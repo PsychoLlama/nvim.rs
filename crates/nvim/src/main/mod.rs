@@ -1325,15 +1325,11 @@ pub static p_sel: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mu
 pub static p_slm: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_ssop: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static ssop_flags: GlobalCell<c_uint> = GlobalCell::new(0);
-#[unsafe(no_mangle)]
 pub static p_sh: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-#[unsafe(no_mangle)]
 pub static p_shcf: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_sp: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_shq: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-#[unsafe(no_mangle)]
 pub static p_sxq: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-#[unsafe(no_mangle)]
 pub static p_sxe: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_srr: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_stmp: GlobalCell<c_int> = GlobalCell::new(0);

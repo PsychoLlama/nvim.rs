@@ -98,15 +98,10 @@
 {"symbol":"os_setenv_append_path","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_setperm","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_shell_is_cmdexe","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"os_system","kind":"fn","file":"crates/nvim/src/os/shell/system.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_unsetenv","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_write","kind":"fn","file":"crates/nvim/src/os/fs/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"p_arshape","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"p_fic","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"p_sh","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"p_shcf","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"p_sxe","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"p_sxq","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"pat_has_uppercase","kind":"fn","file":"crates/nvim/src/search/pattern.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"path_fix_case","kind":"fn","file":"crates/nvim/src/path/compare.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"path_full_compare","kind":"fn","file":"crates/nvim/src/path/compare.rs","class":"test","refs":["unit-specs"]}
@@ -125,8 +120,6 @@
 {"symbol":"schar_get","kind":"fn","file":"crates/nvim/src/grid/schar.rs","class":"test","refs":["unit-fixtures.so","unit-specs"]}
 {"symbol":"search_regcomp","kind":"fn","file":"crates/nvim/src/search/pattern.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"setfname","kind":"fn","file":"crates/nvim/src/buffer/name.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"shell_argv_to_str","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"shell_build_argv","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"starting","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"test_disable_char_avail","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"trunc_string","kind":"fn","file":"crates/nvim/src/message/mod.rs","class":"test","refs":["unit-specs"]}

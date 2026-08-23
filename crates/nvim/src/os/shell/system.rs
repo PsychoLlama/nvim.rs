@@ -51,8 +51,7 @@ use crate::ui::{ui_busy_start, ui_busy_stop};
 /// # Safety
 /// `argv` must be a NULL-terminated, owned argument vector; `input` readable
 /// for `len` bytes or NULL; `output` and `nread` writable or NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_system(
+pub unsafe fn os_system(
     argv: *mut *mut c_char,
     input: *const c_char,
     len: size_t,

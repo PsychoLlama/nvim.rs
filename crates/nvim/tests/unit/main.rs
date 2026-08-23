@@ -27,6 +27,7 @@ mod packer;
 mod parser;
 mod profile;
 mod sha256;
+mod shell;
 mod strings;
 mod terminfo;
 mod termkey;

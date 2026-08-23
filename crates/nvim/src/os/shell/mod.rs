@@ -113,11 +113,7 @@ const STRINGBUILDER_INIT: StringBuilder = StringBuilder {
 ///
 /// # Safety
 /// `cmd` and `extra_args` must be NUL-terminated strings or NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shell_build_argv(
-    cmd: *const c_char,
-    extra_args: *const c_char,
-) -> *mut *mut c_char {
+pub unsafe fn shell_build_argv(cmd: *const c_char, extra_args: *const c_char) -> *mut *mut c_char {
     // SAFETY: the caller's contract; `p_sh`/`p_shcf` are option values.
     unsafe {
         // Counted first, because the vector is allocated once: the words of
@@ -170,8 +166,7 @@ pub unsafe fn shell_free_argv(argv: *mut *mut c_char) {
 ///
 /// # Safety
 /// `argv` must be a NULL-terminated vector of NUL-terminated strings.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shell_argv_to_str(argv: *mut *mut c_char) -> *mut c_char {
+pub unsafe fn shell_argv_to_str(argv: *mut *mut c_char) -> *mut c_char {
     const MAXSIZE: usize = 256;
     // SAFETY: the caller's contract. `xstrlcat` always terminates and answers
     // the length the result would have had.
