@@ -437,12 +437,21 @@ def has_safety_doc(lines, at):
     """Whether a `# Safety` heading sits in the doc comment above line `at`.
 
     Attribute lines are skipped: they sit between the doc comment and the item.
+    So are plain `//` comments, which sit there too — a note to the next
+    reader that is deliberately not part of the rendered docs (`// keep the
+    export: <spec> still resolves it`, say). Counting one of those as the end
+    of the doc comment scored the item as undocumented while its `# Safety`
+    section sat two lines above.
+
     A doc comment hidden behind an attribute rustfmt wrapped over several lines
     would read as absent, which over-counts — the direction that keeps the
     ratchet honest.
     """
     i = at - 1
-    while i >= 0 and lines[i].lstrip().startswith("#"):
+    while i >= 0 and (
+        lines[i].lstrip().startswith("#")
+        or (lines[i].lstrip().startswith("//") and not DOC_LINE.match(lines[i]))
+    ):
         i -= 1
     while i >= 0 and DOC_LINE.match(lines[i]):
         if SAFETY_HEADING.match(lines[i]):
@@ -667,6 +676,13 @@ SELF_TEST_SAFETY_DOC = [
     ("/// # Safety\n\nunsafe fn f() {}\n", 1),
     # Attributes sit between the comment and the item.
     ('/// # Safety\n#[unsafe(no_mangle)]\npub unsafe extern "C" fn f() {}\n', 0),
+    # ... and so may a plain `//` note, which is not part of the docs.
+    ('/// # Safety\n// Keep the export.\n#[unsafe(no_mangle)]\nunsafe fn f() {}\n', 0),
+    ("/// # Safety\n// A note.\nunsafe fn f() {}\n", 0),
+    # A `//` note that is the *only* thing above still leaves it undocumented.
+    ("// A note.\nunsafe fn f() {}\n", 1),
+    # A note after the previous item does not reach back past it.
+    ("/// # Safety\nunsafe fn f() {}\n// A note.\nunsafe fn g() {}\n", 1),
     # A trait's declaration carries the obligation too.
     ("trait T {\n    unsafe fn f();\n}\n", 1),
     # ... but a C library's does not.
