@@ -151,7 +151,6 @@
 {"symbol":"shell_argv_to_str","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"shell_build_argv","kind":"fn","file":"crates/nvim/src/os/shell/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"starting","kind":"static","file":"crates/nvim/src/main/mod.rs","class":"test","refs":["functional-specs"]}
-{"symbol":"terminfo_fmt","kind":"fn","file":"crates/nvim/src/tui/terminfo/mod.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"termkey_canonicalise","kind":"fn","file":"crates/nvim/src/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"termkey_destroy","kind":"fn","file":"crates/nvim/src/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"termkey_get_buffer_remaining","kind":"fn","file":"crates/nvim/src/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}

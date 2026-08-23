@@ -265,8 +265,7 @@ pub unsafe fn terminfo_info_msg(
 /// `[buf_start, buf_end)` is one writable range, `capability` is
 /// NUL-terminated, and `params` addresses nine `TPVAR`s whose non-null
 /// strings are NUL-terminated and outlive the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminfo_fmt(
+pub(crate) unsafe fn terminfo_fmt(
     buf_start: *mut c_char,
     buf_end: *mut c_char,
     capability: *const c_char,

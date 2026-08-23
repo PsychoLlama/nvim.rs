@@ -9119,7 +9119,6 @@ int search_regcomp(char *, size_t, char **, int, int, int, regmmatch_T *);
 int setfname(buf_T *, char *, char *, bool);
 char *shell_argv_to_str(char **);
 char **shell_build_argv(const char *, const char *);
-size_t terminfo_fmt(char *, char *, const char *, TPVAR *);
 void termkey_canonicalise(TermKey *, TermKeyKey *);
 void termkey_destroy(TermKey *);
 size_t termkey_get_buffer_remaining(TermKey *);
