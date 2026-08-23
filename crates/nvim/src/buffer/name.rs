@@ -125,8 +125,7 @@ pub unsafe fn buflist_name_nr(fnum: c_int, fname: *mut *mut c_char, lnum: *mut l
 ///
 /// Fails, with `message`, when another *loaded* buffer already has the name;
 /// an unloaded one is wiped to make room.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn setfname(
+pub unsafe fn setfname(
     buf: *mut buf_T,
     ffname_arg: *mut c_char,
     sfname_arg: *mut c_char,

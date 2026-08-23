@@ -36,6 +36,7 @@ mod profile;
 mod search;
 mod sha256;
 mod shell;
+mod statusline;
 mod strings;
 mod terminfo;
 mod termkey;

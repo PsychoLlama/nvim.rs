@@ -616,36 +616,85 @@ fn put_number(out: &mut [u8], at: usize, plan: &parse::NumPlan) -> usize {
 // The entry point
 // ---------------------------------------------------------------------------
 
+/// Where a format came from: the option that holds it, and the scope that
+/// option was read in.
+///
+/// The pair decides two things and is never split: whether the expansion
+/// runs in the sandbox (a `'statusline'` set from a modeline is not
+/// trusted), and which option to reset to its default when expanding it
+/// provokes an error.
+#[derive(Clone, Copy)]
+pub struct FmtSource {
+    pub opt_idx: OptIndex,
+    pub opt_scope: OptionSetFlags,
+}
+
+impl FmtSource {
+    /// A format that is nobody's option — which is what switches the
+    /// sandbox off, so `nvim_eval_statusline()` can never reach it.
+    pub const NONE: FmtSource = FmtSource {
+        opt_idx: kOptInvalid,
+        opt_scope: OptionSetFlags::NONE,
+    };
+}
+
+/// Where [`build_stl_str_hl`] puts what it recorded on the way, beyond the
+/// text itself. Each is optional: a null says the caller does not want it.
+///
+/// `hltab` and `tabtab` answer raw pointers into two of the expander's
+/// arenas, which the next expansion reuses — see this module's header.
+#[derive(Clone, Copy)]
+pub struct StlSinks {
+    /// The highlight runs, one per group change.
+    pub hltab: *mut *mut stl_hlrec_t,
+    /// How many of them, which only `nvim_eval_statusline()` reads.
+    pub hltab_len: *mut size_t,
+    /// The `%@Func@` click records.
+    pub tabtab: *mut *mut StlClickRecord,
+    /// The `'statuscolumn'` state, in and out.
+    pub stcp: *mut statuscol_T,
+}
+
+impl StlSinks {
+    /// A caller that wants the text and nothing else.
+    pub const NONE: StlSinks = StlSinks {
+        hltab: ptr::null_mut(),
+        hltab_len: ptr::null_mut(),
+        tabtab: ptr::null_mut(),
+        stcp: ptr::null_mut(),
+    };
+}
+
 /// Build a string from the status line items in `fmt`, answering its width in
 /// screen cells.
 ///
 /// Normally works for window `wp`, except when working for `'tabline'`, when
 /// it is `curwin`. `out` is the buffer to write into and must not be
-/// `NameBuff`, which the expander uses as scratch; `hltab`, `hltab_len`,
-/// `tabtab` and `stcp` may each be null.
+/// `NameBuff`, which the expander uses as scratch.
 ///
 /// # Safety
-/// `wp` must be a live window, `out` must have `outlen` writable bytes, `fmt`
-/// must be NUL-terminated, and the four out-parameters must each be null or
-/// writable. This re-enters the editor, so nothing may be held across it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn build_stl_str_hl(
+/// `wp` must be a live window, `fmt` must be NUL-terminated, and every
+/// pointer in `sinks` must be null or writable. This re-enters the editor,
+/// so nothing may be held across it.
+pub unsafe fn build_stl_str_hl(
     wp: *mut win_T,
-    out: *mut c_char,
-    outlen: size_t,
+    out: &mut [c_char],
     fmt: *mut c_char,
-    opt_idx: OptIndex,
-    opt_scope: OptionSetFlags,
+    from: FmtSource,
     fillchar: schar_T,
     maxwidth: c_int,
-    hltab: *mut *mut stl_hlrec_t,
-    hltab_len: *mut size_t,
-    tabtab: *mut *mut StlClickRecord,
-    stcp: *mut statuscol_T,
+    sinks: StlSinks,
 ) -> c_int {
+    let StlSinks {
+        hltab,
+        hltab_len,
+        tabtab,
+        stcp,
+    } = sinks;
+    let FmtSource { opt_idx, opt_scope } = from;
     // SAFETY: the caller's buffer with its own length. The expander works in
-    // bytes; the C signature spells them `char`.
-    let out = unsafe { slice::from_raw_parts_mut(out.cast::<u8>(), outlen) };
+    // bytes; the caller's slice spells them `char`.
+    let out = unsafe { slice::from_raw_parts_mut(out.as_mut_ptr().cast::<u8>(), out.len()) };
     // SAFETY: the caller's live window.
     let win = unsafe { Win::new(wp) };
     let save_redraw_not_allowed = redraw_not_allowed.get();

@@ -817,7 +817,6 @@ pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
 pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
 pub static firstbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub static lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-#[unsafe(no_mangle)]
 pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
     al_ga: garray_T {

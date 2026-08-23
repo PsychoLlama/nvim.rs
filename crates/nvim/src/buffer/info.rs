@@ -44,7 +44,7 @@ use crate::os::env::home_replace;
 use crate::os::input::line_breakcheck;
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
-use crate::statusline::build_stl_str_hl;
+use crate::statusline::{FmtSource, StlSinks, build_stl_str_hl};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
@@ -671,22 +671,14 @@ fn opt_is_set(s: *const c_char) -> bool {
 /// `build_stl_str_hl` for the title and icon, which want the text and
 /// nothing else it can report.
 fn build_stl(dst: &mut [c_char; IOSIZE as usize], fmt: *mut c_char, opt: OptIndex, maxlen: c_int) {
-    let (win, out, cap) = (current_win().raw(), dst.as_mut_ptr(), dst.len());
-    let (hl, hllen, click, stc) = (
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-    );
-    // SAFETY: a live window, a writable buffer of `cap` bytes, a
-    // NUL-terminated format, and four out-parameters this caller declines.
+    let win = current_win().raw();
     // The title and icon are global: neither names a scope.
-    let scope = OptionSetFlags::NONE;
-    unsafe {
-        build_stl_str_hl(
-            win, out, cap, fmt, opt, scope, 0, maxlen, hl, hllen, click, stc,
-        )
+    let from = FmtSource {
+        opt_idx: opt,
+        opt_scope: OptionSetFlags::NONE,
     };
+    // SAFETY: a live window, a NUL-terminated format, and no sink asked for.
+    unsafe { build_stl_str_hl(win, dst, fmt, from, 0, maxlen, StlSinks::NONE) };
 }
 
 /// The default icon text: the buffer's name, truncated to 100 bytes at a

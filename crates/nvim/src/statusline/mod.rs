@@ -323,16 +323,18 @@ impl StlJob<'_> {
         } else {
             ptr::null_mut()
         };
-        // The twelve arguments, in the order the C entry point takes them:
-        // the window, the output buffer and its size, the format, the
-        // option and its scope, the fill character, the width, and the four
-        // out-parameters.
-        let (w, o, n, f) = (self.win.raw(), out.as_mut_ptr(), out.len(), self.fmt.text);
-        let ((oi, os), fc, mw, hll) = (self.opt, self.fillchar, self.maxwidth, &raw mut hl_len);
-        // SAFETY: `out` is the caller's buffer with its own length, `fmt`
-        // is NUL-terminated by [`Fmt`]'s constructors, and the remaining
-        // out-parameters are locals of this frame.
-        let width = unsafe { build_stl_str_hl(w, o, n, f, oi, os, fc, mw, hltab, hll, clk, stcp) };
+        let (opt_idx, opt_scope) = self.opt;
+        let from = FmtSource { opt_idx, opt_scope };
+        let sinks = StlSinks {
+            hltab,
+            hltab_len: &raw mut hl_len,
+            tabtab: clk,
+            stcp,
+        };
+        let (w, f, fc, mw) = (self.win.raw(), self.fmt.text, self.fillchar, self.maxwidth);
+        // SAFETY: `fmt` is NUL-terminated by [`Fmt`]'s constructors, the
+        // window is live, and every sink is null or a local of this frame.
+        let width = unsafe { build_stl_str_hl(w, out, f, from, fc, mw, sinks) };
         StlBuilt {
             width,
             hl: (self.hl == HlDest::Runs).then_some(HlRuns(runs)),

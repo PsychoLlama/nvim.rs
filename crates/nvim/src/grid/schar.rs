@@ -55,8 +55,7 @@ pub const fn schar_from_ascii(c: u8) -> schar_T {
 
 /// # Safety
 /// `str` must be NUL-terminated or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn schar_from_str(str: *const c_char) -> schar_T {
+pub unsafe fn schar_from_str(str: *const c_char) -> schar_T {
     unsafe {
         if str.is_null() {
             return 0;
