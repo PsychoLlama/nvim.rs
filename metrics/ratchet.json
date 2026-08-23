@@ -55,7 +55,7 @@
     "crates/nvim/src/api/private/dispatch_wrappers/win_config.rs": {"cell_ptr": 1, "missing_safety_doc": 3, "unsafe_lines": 15},
     "crates/nvim/src/api/private/dispatch_wrappers/window.rs": {"missing_safety_doc": 19, "unsafe_lines": 29},
     "crates/nvim/src/api/private/helpers/keydict.rs": {"missing_safety_doc": 4, "unsafe_lines": 193},
-    "crates/nvim/src/api/private/helpers/mod.rs": {"cell_ptr": 12, "extern_abi": 2, "missing_safety_doc": 11, "no_mangle": 1, "unsafe_lines": 206, "variadic": 1},
+    "crates/nvim/src/api/private/helpers/mod.rs": {"cell_ptr": 12, "extern_abi": 1, "missing_safety_doc": 11, "unsafe_lines": 206, "variadic": 1},
     "crates/nvim/src/api/private/helpers/text.rs": {"missing_safety_doc": 9, "unsafe_lines": 110},
     "crates/nvim/src/api/private/helpers/value.rs": {"cell_ptr": 2, "missing_safety_doc": 18, "unsafe_lines": 234},
     "crates/nvim/src/api/private/helpers/vimdict.rs": {"missing_safety_doc": 3, "unsafe_lines": 123},

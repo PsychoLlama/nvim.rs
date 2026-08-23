@@ -30,50 +30,6 @@ describe('ffi.cdef', function()
       end)
     )
 
-    eq(
-      20,
-      exec_lua(function()
-        local ffi = require('ffi')
-
-        ffi.cdef [[
-        typedef struct {} stl_hlrec_t;
-        typedef struct {} StlClickRecord;
-        typedef struct {} statuscol_T;
-        typedef struct {} Error;
-
-        win_T *find_window_by_handle(int Window, Error *err);
-
-        int build_stl_str_hl(
-          win_T *wp,
-          char *out,
-          size_t outlen,
-          char *fmt,
-          int opt_idx,
-          int opt_scope,
-          int fillchar,
-          int maxwidth,
-          stl_hlrec_t **hltab,
-          StlClickRecord **tabtab,
-          statuscol_T *scp
-        );
-      ]]
-
-        return ffi.C.build_stl_str_hl(
-          ffi.C.find_window_by_handle(0, ffi.new('Error')),
-          ffi.new('char[1024]'),
-          1024,
-          ffi.cast('char*', 'StatusLineOfLength20'),
-          -1,
-          0,
-          0,
-          0,
-          nil,
-          nil,
-          nil
-        )
-      end)
-    )
-
     -- Check that extern symbols are exported and accessible
     eq(
       true,

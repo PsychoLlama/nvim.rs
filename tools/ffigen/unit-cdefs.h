@@ -8504,7 +8504,6 @@ int check_ff_value(char *);
 void early_init(mparm_T *);
 void event_init(void);
 char *file_pat_to_reg_pat(const char *, const char *, char *, int);
-win_T *find_window_by_handle(Window, Error *);
 ScreenCell *getcell(const VTermScreen *, int, int);
 mpack_token_t mpack_pack_number(double);
 void multiqueue_free(MultiQueue *);

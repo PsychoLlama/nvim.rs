@@ -147,6 +147,18 @@ def deps_libraries():
 DYNAMIC_SPEC_REFS: set[str] = set()
 
 
+# A declaration inside a cdef chunk: a return type, then the name, then `(`.
+CDEF_DECL_RE = re.compile(r"\b[A-Za-z_]\w*[\s\*]+([A-Za-z_]\w*)\s*\(")
+# `extern <type> name;`
+CDEF_EXTERN_RE = re.compile(r"\bextern\s+[\w\s\*]*?([A-Za-z_]\w*)\s*;")
+# A top-level item of the crate, whatever its visibility or ABI.
+CRATE_ITEM_RE = re.compile(
+    r'^(?:pub(?:\(crate\))?) (?:unsafe )?(?:extern "C(?:-unwind)?" )?'
+    r"(?:fn|static mut|static) ([A-Za-z0-9_]+)",
+    re.M,
+)
+
+
 # ffi.cdef arguments in functional specs: a long-bracket string (optionally
 # parenthesized) or a plain quoted string. The chunk contents are tokenized;
 # type names over-match harmlessly (same safe direction as the unit scan).
@@ -177,8 +189,8 @@ def spec_tokens():
     return tokens
 
 
-def functional_cdef_tokens():
-    tokens = set()
+def cdef_chunks():
+    """Every `ffi.cdef` argument in a functional spec or the oldtest harness."""
     specs = [
         *ROOT.glob("test/functional/**/*.lua"),
         # runtest.vim's Ntest_override cdefs `starting` and
@@ -187,13 +199,53 @@ def functional_cdef_tokens():
     ]
     for spec in specs:
         for m in CDEF_RE.finditer(spec.read_text(errors="replace")):
-            chunk = m.group("long") or m.group("sq") or m.group("dq") or ""
-            tokens.update(TOKEN_RE.findall(chunk))
+            yield spec, m.group("long") or m.group("sq") or m.group("dq") or ""
+
+
+def functional_cdef_tokens():
+    tokens = set()
+    for _, chunk in cdef_chunks():
+        tokens.update(TOKEN_RE.findall(chunk))
     return tokens
+
+
+def check_cdef_declarations(exports):
+    """Fail if a functional spec declares an entry point that is not exported.
+
+    The classification below can only speak about names that *are* exported,
+    so it cannot notice one that was de-exported by mistake -- and the failure
+    that follows is a runtime "undefined symbol" from one functional spec,
+    which is a long way from the commit that caused it (`build_stl_str_hl`
+    sat broken for a slice that way).
+
+    Unlike the token scan, this reads only *declarations*: a name with a
+    return type in front of it and a `(` after it, or an `extern ... name;`.
+    That is narrow enough to name the crate's own items without matching the
+    parameter names and Lua calls a whole-chunk token scan sweeps up.
+    """
+    declared = {}
+    for spec, chunk in cdef_chunks():
+        for name in CDEF_DECL_RE.findall(chunk) + CDEF_EXTERN_RE.findall(chunk):
+            declared.setdefault(name, spec)
+    items = set()
+    for path in (ROOT / "crates").glob("*/src/**/*.rs"):
+        items.update(CRATE_ITEM_RE.findall(path.read_text()))
+    missing = sorted((declared.keys() & items) - exports.keys())
+    if missing:
+        lines = "\n".join(
+            f"  {name}  (declared by {declared[name].relative_to(ROOT)})"
+            for name in missing
+        )
+        sys.exit(
+            "abi-ledger: these are declared by a functional spec's ffi.cdef but "
+            f"are no longer exported:\n{lines}\n"
+            "Restore the #[unsafe(no_mangle)] or update the spec."
+        )
 
 
 def build_ledger():
     exports = collect_exports()
+    check_cdef_declarations(exports)
 
     # refs: name -> sorted consumer labels (drives the classification below)
     refs = {name: [] for name in exports}

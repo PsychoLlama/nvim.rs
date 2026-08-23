@@ -153,8 +153,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *
 }
 
 /// [`find_buffer_by_handle`] for a window.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T {
+pub unsafe fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T {
     // SAFETY: `err` is the caller's out-parameter.
     unsafe {
         if window == 0 {
