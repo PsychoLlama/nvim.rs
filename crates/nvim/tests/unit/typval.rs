@@ -125,12 +125,20 @@ unsafe fn strings(l: *const c2rust_neovim::types::list_T) -> Vec<Option<&'static
 #[test]
 fn tv_dict_item_is_allocated_around_its_key() {
     let log = AllocLog::start();
+    // The last two rows are not in the spec, and they are the only ones
+    // that can see the arithmetic at all: `size_of::<dictitem_T>()`
+    // dominates the `max` for every key shorter than seven bytes, so a
+    // mutation of the `+ 1` — the room the terminator needs — changes no
+    // answer on the spec's five rows. Measured: `+ 1` → `+ 2` is NOT CAUGHT
+    // without them and CAUGHT with.
     for (key, len) in [
         ("", None),
         ("t", None),
         ("TEST", None),
         ("", Some(0)),
         ("TEST", Some(2)),
+        ("a_key_long_enough_to_grow_the_item", None),
+        ("a_key_long_enough_to_grow_the_item", Some(9)),
     ] {
         // SAFETY: the item is this iteration's own and is freed below; the
         // key outlives the allocation that copies it.
