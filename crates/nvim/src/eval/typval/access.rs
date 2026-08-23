@@ -18,12 +18,21 @@
 use super::*;
 
 /// True when an intrusive queue head has no entries.
+///
+/// # Safety
+/// `q` must point at an initialised queue node — one that has been through
+/// [`queue_init`] or spliced onto a queue that has.
 #[inline(always)]
 pub unsafe fn queue_empty(q: *const QUEUE) -> bool {
     unsafe { q == (*q).next }
 }
 
 /// Make `q` an empty queue head, pointing at itself both ways.
+///
+/// # Safety
+/// `q` must point at writable `QUEUE`-sized storage. Anything it was
+/// already linked into is left pointing at it, so only initialise a node
+/// that is on no queue.
 #[inline(always)]
 pub unsafe fn queue_init(q: *mut QUEUE) {
     unsafe {
@@ -33,6 +42,10 @@ pub unsafe fn queue_init(q: *mut QUEUE) {
 }
 
 /// Splice `q` in as the last entry of the queue headed by `h`.
+///
+/// # Safety
+/// `h` must be an initialised queue head and `q` a node that is on no
+/// queue. Both must outlive the link.
 #[inline(always)]
 pub(crate) unsafe fn queue_insert_tail(h: *mut QUEUE, q: *mut QUEUE) {
     unsafe {
@@ -44,6 +57,11 @@ pub(crate) unsafe fn queue_insert_tail(h: *mut QUEUE, q: *mut QUEUE) {
 }
 
 /// Unlink `q` from whatever queue it is on.
+///
+/// # Safety
+/// `q` must be a node currently on a queue, and its neighbours must still
+/// be live. The node's own links are left stale, so it has to be
+/// re-initialised before it is used as a head again.
 #[inline(always)]
 pub(crate) unsafe fn queue_remove(q: *mut QUEUE) {
     unsafe {
@@ -53,6 +71,10 @@ pub(crate) unsafe fn queue_remove(q: *mut QUEUE) {
 }
 
 /// Increase the reference count of `l`; does nothing for a NULL list.
+///
+/// # Safety
+/// `l` is null or points at a live list. The caller gains a reference and
+/// owes a matching `tv_list_unref`.
 #[inline(always)]
 pub unsafe fn tv_list_ref(l: *mut list_T) {
     if let Some(l) = unsafe { l.as_mut() } {
@@ -61,6 +83,10 @@ pub unsafe fn tv_list_ref(l: *mut list_T) {
 }
 
 /// Store `l` in `tv` as the return value, taking a reference to it.
+///
+/// # Safety
+/// `tv` must point at a writable `typval_T` holding no value yet — the old
+/// contents are overwritten, not cleared — and `l` is null or a live list.
 #[inline(always)]
 pub unsafe fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
     unsafe {
@@ -71,12 +97,19 @@ pub unsafe fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
 }
 
 /// Lock status of `l`; a NULL list reads as `VAR_FIXED`.
+///
+/// # Safety
+/// `l` is null or points at a live list.
 #[inline]
 pub unsafe fn tv_list_locked(l: *const list_T) -> VarLockStatus {
     unsafe { l.as_ref() }.map_or(VAR_FIXED, |l| l.lv_lock)
 }
 
 /// Set the lock status of `l`.  A NULL list may only be "set" to `VAR_FIXED`.
+///
+/// # Safety
+/// `l` is null or points at a live list. A null list can only be "set" to
+/// `VAR_FIXED`, which is what a `debug_assert` here checks.
 #[inline]
 pub unsafe fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     match unsafe { l.as_mut() } {
@@ -86,6 +119,10 @@ pub unsafe fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
 }
 
 /// Set the copyID of `l`.  Does not expect a NULL list, be careful.
+///
+/// # Safety
+/// `l` must point at a live list — **not** null, unlike its neighbours. The
+/// `copyid` must be one the caller reserved from `get_copyID`.
 #[inline]
 pub unsafe fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
     unsafe {
@@ -94,12 +131,18 @@ pub unsafe fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
 }
 
 /// Number of items in `l`; a NULL list is empty.
+///
+/// # Safety
+/// `l` is null or points at a live list.
 #[inline]
 pub unsafe fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
     unsafe { l.as_ref() }.map_or(0, |l| l.lv_len)
 }
 
 /// The copyID of `l`.  Does not expect a NULL list, be careful.
+///
+/// # Safety
+/// `l` must point at a live list — **not** null, unlike its neighbours.
 #[inline]
 pub unsafe fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
     unsafe { (*l).lv_copyID }
@@ -108,6 +151,9 @@ pub unsafe fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
 /// Normalise a possibly negative list index against `l`'s length.
 ///
 /// Returns an index in `0..tv_list_len(l)`, or -1 when it is out of range.
+///
+/// # Safety
+/// `l` is null or points at a live list.
 #[inline]
 pub unsafe fn tv_list_uidx(l: *const list_T, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
     unsafe {
@@ -118,12 +164,20 @@ pub unsafe fn tv_list_uidx(l: *const list_T, n: ::core::ffi::c_int) -> ::core::f
 }
 
 /// First item of `l`, or NULL when it is empty or NULL.
+///
+/// # Safety
+/// `l` is null or points at a live list. The item borrows the list, so it
+/// is only valid while the list is.
 #[inline]
 pub unsafe fn tv_list_first(l: *const list_T) -> *mut listitem_T {
     unsafe { l.as_ref() }.map_or(::core::ptr::null_mut(), |l| l.lv_first)
 }
 
 /// Last item of `l`, or NULL when it is empty or NULL.
+///
+/// # Safety
+/// `l` is null or points at a live list. The item borrows the list, so it
+/// is only valid while the list is.
 #[inline]
 pub unsafe fn tv_list_last(l: *const list_T) -> *mut listitem_T {
     unsafe { l.as_ref() }.map_or(::core::ptr::null_mut(), |l| l.lv_last)
@@ -168,6 +222,11 @@ pub(crate) fn tv_list_iter(l: Option<&list_T>) -> ListIter {
 }
 
 /// Store `d` in `tv` as the return value, taking a reference to it.
+///
+/// # Safety
+/// `tv` must point at a writable `typval_T` holding no value yet — the old
+/// contents are overwritten, not cleared — and `d` is null or a live
+/// dictionary.
 #[inline(always)]
 pub unsafe fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
     unsafe {
@@ -180,12 +239,19 @@ pub unsafe fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
 }
 
 /// Number of items in `d`; a NULL dictionary is empty.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary.
 #[inline]
 pub unsafe fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
     unsafe { d.as_ref() }.map_or(0, |d| d.dv_hashtab.ht_used as ::core::ffi::c_long)
 }
 
 /// Whether at least one watcher is registered on `d`.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary whose watcher queue has been
+/// initialised (every dictionary from `tv_dict_alloc` has).
 #[inline]
 pub unsafe fn tv_dict_is_watched(d: *const dict_T) -> bool {
     unsafe {
@@ -200,6 +266,12 @@ pub unsafe fn tv_dict_is_watched(d: *const dict_T) -> bool {
 /// the `dictitem_T` so the NUL-terminated key sits in the tail.  The field
 /// itself covers zero bytes, so the pointer has to be formed with `&raw`, not
 /// by autoreffing the array.
+///
+/// # Safety
+/// `di` must point at a `dictitem_T` allocated by
+/// [`tv_dict_item_alloc_len`](super::tv_dict_item_alloc_len) or embedded
+/// in a fixed-variable array — the key is read out of the allocation's
+/// tail, so an item that was not over-allocated for its key has none.
 #[inline(always)]
 pub(crate) unsafe fn tv_dict_item_key(di: *const dictitem_T) -> *mut ::core::ffi::c_char {
     unsafe {
@@ -214,6 +286,11 @@ pub(crate) unsafe fn tv_dict_item_key(di: *const dictitem_T) -> *mut ::core::ffi
 ///
 /// A dictionary's hashtab does not store a pointer to its item; `hi_key` points
 /// *at* the item's own `di_key`, so the item is that many bytes back.
+///
+/// # Safety
+/// `hi` must be an *occupied* slot of a dictionary's hashtab. The item is
+/// found by subtracting an offset from `hi_key`, so an empty or removed
+/// slot yields a wild pointer rather than null.
 #[inline(always)]
 pub(crate) unsafe fn tv_dict_hi2di(hi: *const hashitem_T) -> *mut dictitem_T {
     unsafe {
@@ -285,6 +362,10 @@ pub(crate) fn tv_ht_iter(ht: &hashtab_T) -> DictIter {
 }
 
 /// Store `b` in `tv` as the return value, taking a reference to it.
+///
+/// # Safety
+/// `tv` must point at a writable `typval_T` holding no value yet — the old
+/// contents are overwritten, not cleared — and `b` is null or a live blob.
 #[inline(always)]
 pub unsafe fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
     unsafe {
@@ -297,18 +378,29 @@ pub unsafe fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
 }
 
 /// Length of `b`'s data in bytes; a NULL blob is empty.
+///
+/// # Safety
+/// `b` is null or points at a live blob.
 #[inline]
 pub unsafe fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
     unsafe { b.as_ref() }.map_or(0, |b| b.bv_ga.ga_len)
 }
 
 /// The byte at `idx` in `b`.  `b` must be non-NULL and `idx` in range.
+///
+/// # Safety
+/// `b` must point at a live blob and `idx` must be in `0..tv_blob_len(b)`.
+/// Neither is checked.
 #[inline(always)]
 pub unsafe fn tv_blob_get(b: *const blob_T, idx: ::core::ffi::c_int) -> uint8_t {
     unsafe { *(*b).bv_ga.ga_data.cast::<uint8_t>().offset(idx as isize) }
 }
 
 /// Store `c` at `idx` in `blob`.  `blob` must be non-NULL and `idx` in range.
+///
+/// # Safety
+/// `blob` must point at a live blob and `idx` must be in
+/// `0..tv_blob_len(blob)`. Neither is checked.
 #[inline(always)]
 pub unsafe fn tv_blob_set(blob: *mut blob_T, idx: ::core::ffi::c_int, c: uint8_t) {
     unsafe {
@@ -321,6 +413,11 @@ pub unsafe fn tv_blob_set(blob: *mut blob_T, idx: ::core::ffi::c_int, c: uint8_t
 /// Upstream spells this out as a function rather than the macro purely so it
 /// can carry `FUNC_ATTR_NO_SANITIZE_ADDRESS`: ASan does not follow the pointer
 /// arithmetic back out of the struct.
+///
+/// # Safety
+/// `q` must be the `node` field of a live `DictWatcher` — a node from any
+/// other queue yields a wild pointer, since the watcher is found by
+/// subtracting an offset.
 #[inline(always)]
 pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
     unsafe {

@@ -13,6 +13,10 @@ use crate::types::{FAIL, NUL, OK};
 
 /// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`
 /// naming the argument's one-based position and answer `FAIL`.
+///
+/// # Safety
+/// `errmsg` must be a NUL-terminated format string taking exactly one
+/// integer conversion, and the caller must be on the editor's main thread.
 #[inline]
 unsafe fn arg_check(
     ok: bool,
@@ -30,6 +34,11 @@ unsafe fn arg_check(
 
 /// Whether `tv` is a Number or a String, raising the type-specific error if
 /// not.
+///
+/// # Safety
+/// `tv` must point at an initialised value.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
     unsafe {
         let message = match (*tv).v_type {
@@ -56,6 +65,11 @@ pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
 }
 
 /// Whether `tv` has a Number value, raising the type-specific error if not.
+///
+/// # Safety
+/// `tv` must point at an initialised value.
+/// The message comes out of the global `num_errors` table, so the caller must
+/// be on the editor's main thread.
 pub unsafe fn tv_check_num(tv: *const typval_T) -> bool {
     unsafe {
         match (*tv).v_type {
@@ -70,6 +84,11 @@ pub unsafe fn tv_check_num(tv: *const typval_T) -> bool {
 }
 
 /// Whether `tv` has a String value, raising the type-specific error if not.
+///
+/// # Safety
+/// `tv` must point at an initialised value.
+/// The message comes out of the global `str_errors` table, so the caller must
+/// be on the editor's main thread.
 pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
     unsafe {
         match (*tv).v_type {
@@ -84,6 +103,12 @@ pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
 }
 
 /// `E1174`: argument `idx` must be a String.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -99,6 +124,12 @@ pub unsafe fn tv_check_for_string_arg(
 }
 
 /// `E1175`: argument `idx` must be a String that is not empty.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_nonempty_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -117,6 +148,12 @@ pub unsafe fn tv_check_for_nonempty_string_arg(
 }
 
 /// [`tv_check_for_string_arg`], accepting a missing argument.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` values, the last of which may
+/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -130,6 +167,12 @@ pub unsafe fn tv_check_for_opt_string_arg(
 }
 
 /// `E1210`: argument `idx` must be a Number.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -145,6 +188,12 @@ pub unsafe fn tv_check_for_number_arg(
 }
 
 /// [`tv_check_for_number_arg`], accepting a missing argument.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` values, the last of which may
+/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -158,6 +207,12 @@ pub unsafe fn tv_check_for_opt_number_arg(
 }
 
 /// `E1219`: argument `idx` must be a Float or a Number.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_float_or_nr_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -173,6 +228,12 @@ pub unsafe fn tv_check_for_float_or_nr_arg(
 }
 
 /// `E1212`: argument `idx` must be a Bool, or the Number 0 or 1.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -190,6 +251,12 @@ pub unsafe fn tv_check_for_bool_arg(
 }
 
 /// [`tv_check_for_bool_arg`], accepting a missing argument.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` values, the last of which may
+/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -203,6 +270,12 @@ pub unsafe fn tv_check_for_opt_bool_arg(
 }
 
 /// `E1238`: argument `idx` must be a Blob.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -218,6 +291,12 @@ pub unsafe fn tv_check_for_blob_arg(
 }
 
 /// `E1211`: argument `idx` must be a List.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -233,6 +312,12 @@ pub unsafe fn tv_check_for_list_arg(
 }
 
 /// `E1206`: argument `idx` must be a Dictionary.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -248,6 +333,12 @@ pub unsafe fn tv_check_for_dict_arg(
 }
 
 /// `E1297`: argument `idx` must be a Dictionary that is not the NULL one.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_nonnull_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -265,6 +356,12 @@ pub unsafe fn tv_check_for_nonnull_dict_arg(
 }
 
 /// [`tv_check_for_dict_arg`], accepting a missing argument.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` values, the last of which may
+/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -278,6 +375,12 @@ pub unsafe fn tv_check_for_opt_dict_arg(
 }
 
 /// `E1220`: argument `idx` must be a String or a Number.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -293,6 +396,12 @@ pub unsafe fn tv_check_for_string_or_number_arg(
 }
 
 /// Argument `idx` must name a buffer: a String or a Number.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_buffer_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -301,6 +410,12 @@ pub unsafe fn tv_check_for_buffer_arg(
 }
 
 /// Argument `idx` must name a line: a String or a Number.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_lnum_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -309,6 +424,12 @@ pub unsafe fn tv_check_for_lnum_arg(
 }
 
 /// `E1222`: argument `idx` must be a String or a List.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -324,6 +445,12 @@ pub unsafe fn tv_check_for_string_or_list_arg(
 }
 
 /// `E1252`: argument `idx` must be a String, a List or a Blob.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -339,6 +466,12 @@ pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
 }
 
 /// [`tv_check_for_string_or_list_arg`], accepting a missing argument.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` values, the last of which may
+/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -352,6 +485,12 @@ pub unsafe fn tv_check_for_opt_string_or_list_arg(
 }
 
 /// `E1256`: argument `idx` must be a String, a Funcref or a partial.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_func_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -367,6 +506,12 @@ pub unsafe fn tv_check_for_string_or_func_arg(
 }
 
 /// `E1226`: argument `idx` must be a List or a Blob.
+///
+/// # Safety
+/// `args` must point at at least `idx + 1` initialised values and `idx`
+/// must be non-negative.
+/// Raising the error goes through the editor's message state, so the
+/// caller must be on the main thread.
 pub unsafe fn tv_check_for_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,

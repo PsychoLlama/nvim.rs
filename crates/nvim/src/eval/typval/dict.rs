@@ -40,6 +40,14 @@ pub fn added(status: ::core::ffi::c_int) -> Result<(), KeyTaken> {
 /// The item is over-allocated so the NUL-terminated key fits in the `di_key`
 /// flexible array member — but never below `size_of::<dictitem_T>()`, which is
 /// what upstream's `MAX` guards.
+///
+/// # Safety
+/// `key` must be readable for `key_len` bytes; it need not be
+/// NUL-terminated, since the copy terminates itself.
+///
+/// The item comes back owned by the caller, holding `VAR_UNKNOWN`. It has
+/// to reach either [`tv_dict_add`] (which takes it on `OK` and leaves it on
+/// `FAIL`) or [`tv_dict_item_free`]; nothing else frees it.
 pub unsafe fn tv_dict_item_alloc_len(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -59,12 +67,23 @@ pub unsafe fn tv_dict_item_alloc_len(
 }
 
 /// [`tv_dict_item_alloc_len`] for a NUL-terminated key.
+///
+/// # Safety
+/// `key` must be a NUL-terminated string. Otherwise as
+/// [`tv_dict_item_alloc_len`], including the caller's ownership of the
+/// result.
 pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T {
     unsafe { tv_dict_item_alloc_len(key, strlen(key)) }
 }
 
 /// Clear `item`'s value and free it, if it was allocated (rather than embedded
 /// in a `funccall_S`'s fixed-variable array or a scope dictionary).
+///
+/// # Safety
+/// `item` must be a live item that is **not** in any hashtab — remove it
+/// first, or the hashtab is left pointing at freed memory. An item with
+/// `DI_FLAGS_ALLOC` is dangling afterwards; one embedded in a `funccall_S`
+/// or a scope dictionary is merely emptied.
 pub unsafe fn tv_dict_item_free(item: *mut dictitem_T) {
     unsafe {
         tv_clear(&raw mut (*item).di_tv);
@@ -75,6 +94,10 @@ pub unsafe fn tv_dict_item_free(item: *mut dictitem_T) {
 }
 
 /// A fresh item holding a copy of `di`'s key and value.
+///
+/// # Safety
+/// `di` must be a live item. The copy is the caller's, with the same
+/// obligation as [`tv_dict_item_alloc_len`]'s result.
 pub unsafe fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
     unsafe {
         let new_di = tv_dict_item_alloc(tv_dict_item_key(di));
@@ -84,6 +107,10 @@ pub unsafe fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
 }
 
 /// Remove `item` from `dict` and free it.
+///
+/// # Safety
+/// `item` must be an item of `dict`, and both must be live. `item` is
+/// freed, so the caller must not hold it afterwards.
 pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
     unsafe {
         let hi = hash_find(&raw mut (*dict).dv_hashtab, tv_dict_item_key(item));
@@ -100,6 +127,14 @@ pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
 }
 
 /// Allocate an empty dictionary.  The caller owns the reference count.
+///
+/// # Safety
+/// The caller must own the garbage collector's dictionary chain — the
+/// editor's main thread — because the new dictionary is linked onto
+/// `gc_first_dict`.
+///
+/// The result has a reference count of zero: the caller either raises it
+/// or hands the dictionary somewhere that does.
 pub unsafe fn tv_dict_alloc() -> *mut dict_T {
     unsafe {
         let d = xcalloc(1, ::core::mem::size_of::<dict_T>()) as *mut dict_T;
@@ -126,6 +161,11 @@ pub unsafe fn tv_dict_alloc() -> *mut dict_T {
 
 /// Free every item and watcher of `d`, leaving the `dict_T` itself allocated
 /// and empty.
+///
+/// # Safety
+/// `d` must point at a live dictionary that nothing else is walking: the
+/// hashtab is locked for the walk, so a re-entrant call through a watcher
+/// callback would see a half-emptied dictionary.
 pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
     unsafe {
         // Lock the hashtab so `hash_remove` below cannot rehash it under the
@@ -153,6 +193,12 @@ pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
 }
 
 /// Unlink `d` from the garbage collector's chain and free the `dict_T` itself.
+///
+/// # Safety
+/// `d` must point at a live dictionary whose contents have already been
+/// freed ([`tv_dict_free_contents`]), and the caller must own
+/// `gc_first_dict`, which this unlinks it from. `d` is dangling
+/// afterwards.
 pub unsafe fn tv_dict_free_dict(d: *mut dict_T) {
     unsafe {
         // Remove the dictionary from the list of dictionaries for garbage
@@ -176,6 +222,9 @@ pub unsafe fn tv_dict_free_dict(d: *mut dict_T) {
 
 /// Free `d` and everything in it.  A no-op while `free_unref_items()` is
 /// walking, which frees the whole graph itself.
+///
+/// # Safety
+/// `d` must point at a live dictionary that nothing still references.
 pub unsafe fn tv_dict_free(d: *mut dict_T) {
     unsafe {
         if tv_in_free_unref_items.get() {
@@ -187,6 +236,11 @@ pub unsafe fn tv_dict_free(d: *mut dict_T) {
 }
 
 /// Drop a reference to `d`, freeing it when the last one goes.
+///
+/// # Safety
+/// `d` is null, or points at a live dictionary of which the caller holds a
+/// reference. That reference is given up here, so the caller must not use
+/// `d` again.
 pub unsafe fn tv_dict_unref(d: *mut dict_T) {
     unsafe {
         if let Some(dict) = d.as_mut() {
@@ -200,6 +254,11 @@ pub unsafe fn tv_dict_unref(d: *mut dict_T) {
 
 /// Add `item` to `d`.  `FAIL` when the key is already there, or when it would
 /// shadow a builtin function in a scope dictionary.
+///
+/// # Safety
+/// `d` must point at a live dictionary and `item` at a fresh item that is
+/// in no hashtab. On `OK` the dictionary owns `item`; on `FAIL` it is
+/// still the caller's to free.
 pub unsafe fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
     unsafe {
         let key = tv_dict_item_key(item);
@@ -211,6 +270,11 @@ pub unsafe fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi:
 }
 
 /// Add `list` to `d` under `key`, taking a reference to it.
+///
+/// # Safety
+/// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
+/// and `list` is null or a live list. A reference to `list` is taken on
+/// success and dropped again on failure.
 pub unsafe fn tv_dict_add_list(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -227,6 +291,11 @@ pub unsafe fn tv_dict_add_list(
 }
 
 /// Add a copy of `tv` to `d` under `key`.
+///
+/// # Safety
+/// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
+/// and `tv` points at a value that is safe to copy — the copy takes its own
+/// reference, so `tv` stays the caller's either way.
 pub unsafe fn tv_dict_add_tv(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -241,6 +310,11 @@ pub unsafe fn tv_dict_add_tv(
 }
 
 /// Add `dict` to `d` under `key`, taking a reference to it.
+///
+/// # Safety
+/// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
+/// and `dict` points at a live dictionary (not null: the reference count is
+/// raised unconditionally).
 pub unsafe fn tv_dict_add_dict(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -257,6 +331,10 @@ pub unsafe fn tv_dict_add_dict(
 }
 
 /// Add the number `nr` to `d` under `key`.
+///
+/// # Safety
+/// `d` points at a live dictionary and `key` is readable for `key_len`
+/// bytes.
 pub unsafe fn tv_dict_add_nr(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -272,6 +350,10 @@ pub unsafe fn tv_dict_add_nr(
 }
 
 /// Add the float `nr` to `d` under `key`.
+///
+/// # Safety
+/// `d` points at a live dictionary and `key` is readable for `key_len`
+/// bytes.
 pub unsafe fn tv_dict_add_float(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -287,6 +369,10 @@ pub unsafe fn tv_dict_add_float(
 }
 
 /// Add the boolean `val` to `d` under `key`.
+///
+/// # Safety
+/// `d` points at a live dictionary and `key` is readable for `key_len`
+/// bytes.
 pub unsafe fn tv_dict_add_bool(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -302,6 +388,10 @@ pub unsafe fn tv_dict_add_bool(
 }
 
 /// Add a copy of the NUL-terminated string `val` to `d` under `key`.
+///
+/// # Safety
+/// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
+/// and `val` is null or a NUL-terminated string. The string is copied.
 pub unsafe fn tv_dict_add_str(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -313,6 +403,11 @@ pub unsafe fn tv_dict_add_str(
 
 /// Add a copy of `val`'s first `len` bytes to `d` under `key`.  A negative
 /// `len` means the whole NUL-terminated string; a NULL `val` stores NULL.
+///
+/// # Safety
+/// `d` points at a live dictionary and `key` is readable for `key_len`
+/// bytes. `val` is null, or readable for `len` bytes, or — when `len` is
+/// negative — NUL-terminated. The bytes are copied.
 pub unsafe fn tv_dict_add_str_len(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -333,6 +428,12 @@ pub unsafe fn tv_dict_add_str_len(
 }
 
 /// Add `val` to `d` under `key`, taking ownership of the allocation.
+///
+/// # Safety
+/// `d` points at a live dictionary and `key` is readable for `key_len`
+/// bytes. `val` is null or an allocation from the `xmalloc` family, and
+/// **this takes it over** whether the key was free or not — the caller must
+/// not free it on either answer.
 pub unsafe fn tv_dict_add_allocated_str(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -348,6 +449,12 @@ pub unsafe fn tv_dict_add_allocated_str(
 }
 
 /// Add a funcref to `fp` to `d` under `key`.
+///
+/// # Safety
+/// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
+/// and `fp` points at a live `ufunc_T` whose `uf_name` is `uf_namelen`
+/// readable bytes. Only the name is copied; the funcref counts as a use of
+/// the function.
 pub unsafe fn tv_dict_add_func(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -370,6 +477,11 @@ pub unsafe fn tv_dict_add_func(
 
 /// The tail every `tv_dict_add_*` shares: hand `item` to `d`, or free it again
 /// when the key is taken.
+///
+/// # Safety
+/// As [`tv_dict_add`], except that a taken key frees `item` rather than
+/// handing it back — so the caller must not touch `item` after this returns
+/// on either answer.
 #[inline]
 unsafe fn add_or_free(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
     unsafe {
@@ -382,6 +494,10 @@ unsafe fn add_or_free(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_i
 }
 
 /// Free every item of `d`, leaving it allocated and empty.
+///
+/// # Safety
+/// `d` must point at a live dictionary that nothing else is walking; as
+/// [`tv_dict_free_contents`], the hashtab is locked for the walk.
 pub unsafe fn tv_dict_clear(d: *mut dict_T) {
     unsafe {
         // Lock the hashtab so `hash_remove` below cannot rehash it under the
@@ -401,6 +517,11 @@ pub unsafe fn tv_dict_clear(d: *mut dict_T) {
 /// `action` is `"keep"`, `"force"` or `"error"`, tested by its first byte —
 /// plus the internal `"move"`, which takes each item out of `d2` rather than
 /// copying it.
+///
+/// # Safety
+/// `d1` and `d2` must point at live dictionaries and `action` at a string
+/// of at least one byte. `"move"` empties `d2`, so it must not be the same
+/// dictionary as `d1` and must not be locked against a walk.
 pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char) {
     unsafe {
         let watched = tv_dict_is_watched(d1);
@@ -493,6 +614,11 @@ pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::
 }
 
 /// Whether `d1` and `d2` hold the same keys with equal values.
+///
+/// # Safety
+/// `d1` and `d2` are each null or a live dictionary. Comparing values can
+/// recurse, so a cycle must already have been ruled out by the caller's
+/// `copyID` bookkeeping.
 pub unsafe fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: bool) -> bool {
     unsafe {
         if d1 == d2 {
@@ -523,6 +649,12 @@ pub unsafe fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: bool) -> bool 
 ///
 /// `copyID` is the garbage collector's mark: non-zero records the copy on the
 /// original so a self-referencing dictionary resolves to the same copy.
+///
+/// # Safety
+/// `orig` is null or a live dictionary and `conv` is null or a live
+/// converter. A non-zero `copyID` is written onto `orig`, so it must be one
+/// the caller reserved from `get_copyID`; passing a stale one makes an
+/// unrelated walk think this dictionary is already visited.
 pub unsafe fn tv_dict_copy(
     conv: *const vimconv_T,
     orig: *mut dict_T,
@@ -591,6 +723,9 @@ pub unsafe fn tv_dict_copy(
 }
 
 /// Mark every key of `dict` read-only and fixed.
+///
+/// # Safety
+/// `dict` must point at a live dictionary.
 pub unsafe fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
     unsafe {
         for hi in tv_dict_iter(&*dict) {
@@ -601,6 +736,10 @@ pub unsafe fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
 }
 
 /// Allocate an empty dictionary with the given lock status.
+///
+/// # Safety
+/// As [`tv_dict_alloc`]: the caller owns `gc_first_dict`, and the result
+/// arrives with a reference count of zero.
 pub unsafe fn tv_dict_alloc_lock(lock: VarLockStatus) -> *mut dict_T {
     unsafe {
         let d = tv_dict_alloc();
@@ -610,6 +749,10 @@ pub unsafe fn tv_dict_alloc_lock(lock: VarLockStatus) -> *mut dict_T {
 }
 
 /// Allocate an empty dictionary and store it in `ret_tv` as the return value.
+///
+/// # Safety
+/// `ret_tv` must point at a writable `typval_T` that holds no value yet —
+/// whatever was there is overwritten, not cleared.
 pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut typval_T) {
     unsafe {
         let d = tv_dict_alloc_lock(VAR_UNLOCKED);
@@ -618,6 +761,12 @@ pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut typval_T) {
 }
 
 /// `remove()` over a dictionary: move `argvars[0][argvars[1]]` into `rettv`.
+///
+/// # Safety
+/// `argvars` must point at at least three values, the first a `VAR_DICT`
+/// and the third the `VAR_UNKNOWN` terminator when there is no third
+/// argument. `rettv` must be writable and hold no value yet, and
+/// `arg_errmsg` must be a NUL-terminated string.
 pub unsafe fn tv_dict_remove(
     argvars: *mut typval_T,
     rettv: *mut typval_T,

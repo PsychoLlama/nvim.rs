@@ -14,6 +14,11 @@ use crate::semsg_c;
 use crate::types::{FAIL, NUL, OK};
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
+///
+/// # Safety
+/// `argvars[0]` must be a `VAR_BLOB`; argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub(crate) unsafe fn tv_blob2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         let blob = (*argvars).vval.v_blob;
@@ -28,6 +33,11 @@ pub(crate) unsafe fn tv_blob2items(argvars: *mut typval_T, rettv: *mut typval_T)
 }
 
 /// `items()` over a dictionary: a list of `[key, value]` pairs.
+///
+/// # Safety
+/// `argvars[0]` must be a `VAR_DICT`; argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub(crate) unsafe fn tv_dict2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         tv_dict2list(argvars, rettv, kDict2ListItems);
@@ -35,6 +45,11 @@ pub(crate) unsafe fn tv_dict2items(argvars: *mut typval_T, rettv: *mut typval_T)
 }
 
 /// `items()` over a list: a list of `[index, value]` pairs.
+///
+/// # Safety
+/// `argvars[0]` must be a `VAR_LIST`; argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub(crate) unsafe fn tv_list2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         let l = (*argvars).vval.v_list;
@@ -52,6 +67,12 @@ pub(crate) unsafe fn tv_list2items(argvars: *mut typval_T, rettv: *mut typval_T)
 }
 
 /// `items()` over a string: a list of `[index, character]` pairs.
+///
+/// # Safety
+/// `argvars[0]` must be a `VAR_STRING` whose value is null or
+/// NUL-terminated; argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub(crate) unsafe fn tv_string2items(argvars: *mut typval_T, rettv: *mut typval_T) {
     unsafe {
         let mut p = (*argvars).vval.v_string.cast_const();
@@ -80,6 +101,11 @@ pub(crate) unsafe fn tv_string2items(argvars: *mut typval_T, rettv: *mut typval_
 /// The item `d[key]`, or NULL when there is none.
 ///
 /// A negative `len` means `key` is NUL-terminated.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary. `key` must be readable for
+/// `len` bytes, or NUL-terminated when `len` is negative. The item borrows
+/// the dictionary.
 pub unsafe fn tv_dict_find(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -102,11 +128,20 @@ pub unsafe fn tv_dict_find(
 }
 
 /// Whether `d` has `key`.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, and `key` must be a
+/// NUL-terminated string.
 pub unsafe fn tv_dict_has_key(d: *const dict_T, key: *const ::core::ffi::c_char) -> bool {
     unsafe { !tv_dict_find(d, key, -1).is_null() }
 }
 
 /// Copy `d[key]` into `rettv`.  `FAIL` when there is no such key.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, `key` must be a
+/// NUL-terminated string, and `rettv` must point at a writable `typval_T`
+/// holding no value yet.
 pub unsafe fn tv_dict_get_tv(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -123,11 +158,21 @@ pub unsafe fn tv_dict_get_tv(
 }
 
 /// `d[key]` as a number, or 0 when there is no such key.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, and `key` must be a
+/// NUL-terminated string. Coercing the value can raise an error, so the
+/// caller must be on the editor's main thread.
 pub unsafe fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T {
     unsafe { tv_dict_get_number_def(d, key, 0) }
 }
 
 /// `d[key]` as a number, or `def` when there is no such key.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, and `key` must be a
+/// NUL-terminated string. Coercing the value can raise an error, so the
+/// caller must be on the editor's main thread.
 pub unsafe fn tv_dict_get_number_def(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -143,6 +188,10 @@ pub unsafe fn tv_dict_get_number_def(
 }
 
 /// `d[key]` as a boolean, or `def` when there is no such key.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, and `key` must be a
+/// NUL-terminated string.
 pub unsafe fn tv_dict_get_bool(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -161,6 +210,11 @@ pub unsafe fn tv_dict_get_bool(
 ///
 /// Every string, and the array itself, is freshly allocated; the caller owns
 /// the lot.
+///
+/// # Safety
+/// `denv` must point at a live dictionary — **not** null — every value of
+/// which has a string form. The array and every string in it are the
+/// caller's to free.
 pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char {
     unsafe {
         let env_size = tv_dict_len(denv) as size_t;
@@ -190,6 +244,14 @@ pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char
 /// With `save`, the answer is a fresh allocation the caller owns; without it,
 /// the answer may point into that shared buffer and only lasts until the next
 /// call.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, and `key` must be a
+/// NUL-terminated string.
+///
+/// Without `save` the answer may point into a process-wide scratch buffer
+/// that the next call overwrites, so two live answers cannot be held at
+/// once; with `save` it is a fresh allocation the caller owns.
 pub unsafe fn tv_dict_get_string(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -206,6 +268,11 @@ pub unsafe fn tv_dict_get_string(
 }
 
 /// `d[key]` as a string, formatting a number into `numbuf`.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, `key` must be a
+/// NUL-terminated string, and `numbuf` must be writable for `NUMBUFLEN`
+/// bytes. The answer may point into `numbuf` or borrow the item.
 pub unsafe fn tv_dict_get_string_buf(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -222,6 +289,12 @@ pub unsafe fn tv_dict_get_string_buf(
 
 /// [`tv_dict_get_string_buf`] answering `def` for a missing key, and NULL with
 /// an error raised for a value that has no string form.
+///
+/// # Safety
+/// `d` is null or points at a live dictionary, `key` must be readable for
+/// `key_len` bytes (or NUL-terminated when it is negative), and `numbuf`
+/// must be writable for `NUMBUFLEN` bytes. `def` is returned as-is for a
+/// missing key, so its lifetime is the caller's problem.
 pub unsafe fn tv_dict_get_string_buf_chk(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
@@ -242,6 +315,13 @@ pub unsafe fn tv_dict_get_string_buf_chk(
 ///
 /// A missing key answers true with `result` left as `kCallbackNone`; a value
 /// that is neither a function nor a string answers false with `E6000` raised.
+///
+/// # Safety
+/// `d` must point at a live dictionary, `key` must be readable for
+/// `key_len` bytes (or NUL-terminated when it is negative), and `result`
+/// must point at a writable `Callback` holding no callback yet — it is
+/// overwritten, not freed. On `true` the caller owns whatever it now
+/// holds.
 pub unsafe fn tv_dict_get_callback(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -273,6 +353,12 @@ pub unsafe fn tv_dict_get_callback(
 /// Whether storing `tv` under `name` in `d` would shadow a builtin function.
 ///
 /// Only the global scope and a function's local scope are guarded.
+///
+/// # Safety
+/// `d` must point at a live dictionary, `tv` at an initialised value, and
+/// `name` at a NUL-terminated string. The global and function-local scope
+/// dictionaries are read, so the caller must be on the editor's main
+/// thread.
 pub unsafe fn tv_dict_wrong_func_name(
     d: *mut dict_T,
     tv: *mut typval_T,
@@ -286,6 +372,11 @@ pub unsafe fn tv_dict_wrong_func_name(
 }
 
 /// The shared body of `keys()`, `values()` and `items()` over a dictionary.
+///
+/// # Safety
+/// `argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub(crate) unsafe fn tv_dict2list(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
@@ -335,6 +426,11 @@ pub(crate) unsafe fn tv_dict2list(
 }
 
 /// `items()`: index/value pairs of a string, list, blob or dictionary.
+///
+/// # Safety
+/// `argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub unsafe fn f_items(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         match (*argvars).v_type {
@@ -353,6 +449,11 @@ pub unsafe fn f_items(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 }
 
 /// `keys()`: the keys of a dictionary.
+///
+/// # Safety
+/// `argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub unsafe fn f_keys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         tv_dict2list(argvars, rettv, kDict2ListKeys);
@@ -360,6 +461,11 @@ pub unsafe fn f_keys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 }
 
 /// `values()`: the values of a dictionary.
+///
+/// # Safety
+/// `argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub unsafe fn f_values(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         tv_dict2list(argvars, rettv, kDict2ListValues);
@@ -367,6 +473,11 @@ pub unsafe fn f_values(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 }
 
 /// `has_key()`: whether a dictionary has a key.
+///
+/// # Safety
+/// `argvars` must point at the builtin's argument array, terminated by a
+/// `VAR_UNKNOWN`, and `rettv` at a writable `typval_T` holding no value
+/// yet.
 pub unsafe fn f_has_key(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if tv_check_for_dict_arg(argvars, 0) == FAIL {

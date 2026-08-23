@@ -14,6 +14,11 @@ use crate::semsg_c;
 use crate::types::{FAIL, OK};
 
 /// Link `ni` into `l` in front of `item`, or at the tail when `item` is NULL.
+///
+/// # Safety
+/// `l` must point at a live list, `ni` at a fresh item on no list, and
+/// `item` must be null or an item **of `l`** — the links are rewritten
+/// around it, so an item from another list corrupts both.
 pub unsafe fn tv_list_insert(l: *mut list_T, ni: *mut listitem_T, item: *mut listitem_T) {
     unsafe {
         if item.is_null() {
@@ -43,6 +48,11 @@ pub unsafe fn tv_list_insert(l: *mut list_T, ni: *mut listitem_T, item: *mut lis
 }
 
 /// Insert a copy of `tv` into `l` in front of `item`.
+///
+/// # Safety
+/// `l` must point at a live list, `tv` at a value that is safe to copy, and
+/// `item` must be null or an item of `l`. The copy takes its own
+/// references, so `tv` stays the caller's.
 pub unsafe fn tv_list_insert_tv(l: *mut list_T, tv: *mut typval_T, item: *mut listitem_T) {
     unsafe {
         let ni = tv_list_item_alloc();
@@ -52,6 +62,10 @@ pub unsafe fn tv_list_insert_tv(l: *mut list_T, tv: *mut typval_T, item: *mut li
 }
 
 /// Link `item` onto `l`'s tail.
+///
+/// # Safety
+/// `l` must point at a live list and `item` at a fresh item that is on no
+/// list. The list takes it over.
 pub unsafe fn tv_list_append(l: *mut list_T, item: *mut listitem_T) {
     unsafe {
         match (*l).lv_last.as_mut() {
@@ -71,6 +85,10 @@ pub unsafe fn tv_list_append(l: *mut list_T, item: *mut listitem_T) {
 }
 
 /// Append a copy of `tv` to `l`.
+///
+/// # Safety
+/// `l` must point at a live list and `tv` at a value that is safe to copy;
+/// `tv` stays the caller's.
 pub unsafe fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T) {
     unsafe {
         let li = tv_list_item_alloc();
@@ -82,6 +100,12 @@ pub unsafe fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T) {
 /// Append `tv` to `l`, taking over whatever it owns.
 ///
 /// Answers the appended item's value, so the caller can keep filling it in.
+///
+/// # Safety
+/// `l` must point at a live list, and `tv` must be a value whose references
+/// and allocations the caller is giving up — the list owns them now. The
+/// returned pointer borrows the item and is invalidated by anything that
+/// removes it.
 pub unsafe fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T {
     unsafe {
         let li = tv_list_item_alloc();
@@ -92,6 +116,10 @@ pub unsafe fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typv
 }
 
 /// Append `itemlist` to `l`, taking a reference to it.
+///
+/// # Safety
+/// `l` must point at a live list, and `itemlist` is null or a live list. A
+/// reference to `itemlist` is taken.
 pub unsafe fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T) {
     unsafe {
         tv_list_append_owned_tv(
@@ -107,6 +135,10 @@ pub unsafe fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T) {
 }
 
 /// Append `dict` to `l`, taking a reference to it.
+///
+/// # Safety
+/// `l` must point at a live list, and `dict` is null or a live dictionary.
+/// A reference to `dict` is taken.
 pub unsafe fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) {
     unsafe {
         tv_list_append_owned_tv(
@@ -127,6 +159,11 @@ pub unsafe fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) {
 ///
 /// A negative `len` means the whole NUL-terminated string; a NULL `str`
 /// appends a NULL string.
+///
+/// # Safety
+/// `l` must point at a live list. `str` is null, or readable for `len`
+/// bytes, or — when `len` is negative — NUL-terminated. The bytes are
+/// copied, so `str` stays the caller's.
 pub unsafe fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t) {
     unsafe {
         let copied = if str.is_null() {
@@ -141,6 +178,11 @@ pub unsafe fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_c
 }
 
 /// Append `str` to `l`, taking ownership of the allocation.
+///
+/// # Safety
+/// `l` must point at a live list, and `str` is null or an allocation from
+/// the `xmalloc` family. **The list takes it over**; the caller must not
+/// free it.
 pub unsafe fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char) {
     unsafe {
         tv_list_append_owned_tv(
@@ -155,6 +197,9 @@ pub unsafe fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::
 }
 
 /// Append the number `n` to `l`.
+///
+/// # Safety
+/// `l` must point at a live list.
 pub unsafe fn tv_list_append_number(l: *mut list_T, n: varnumber_T) {
     unsafe {
         tv_list_append_owned_tv(
@@ -173,6 +218,12 @@ pub unsafe fn tv_list_append_number(l: *mut list_T, n: varnumber_T) {
 /// `copyID` is the garbage collector's mark: non-zero records the copy on the
 /// original *before* any item is added, so a list containing itself resolves
 /// to the same copy.  Answers NULL when a deep copy of an item failed.
+///
+/// # Safety
+/// `orig` is null or a live list and `conv` is null or a live converter. A
+/// non-zero `copyID` must be one the caller reserved from `get_copyID`: it
+/// is written onto `orig`, and a stale one makes an unrelated walk believe
+/// this list is already visited.
 pub unsafe fn tv_list_copy(
     conv: *const vimconv_T,
     orig: *mut list_T,
@@ -221,6 +272,11 @@ pub unsafe fn tv_list_copy(
 }
 
 /// Insert copies of `l2`'s items into `l1` in front of `bef`.
+///
+/// # Safety
+/// `l1` and `l2` must point at live lists, and `bef` must be null or an
+/// item of `l1`. `l1` and `l2` may be the same list — the walk stops after
+/// the original item count for exactly that case.
 pub unsafe fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T) {
     unsafe {
         let mut todo = tv_list_len(l2);
@@ -252,6 +308,10 @@ pub unsafe fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listite
 }
 
 /// `l1 + l2`: store a shallow copy of the two lists joined in `tv`.
+///
+/// # Safety
+/// `l1` and `l2` are each null or a live list, and `tv` must point at a
+/// writable `typval_T` holding no value yet.
 pub unsafe fn tv_list_concat(
     l1: *mut list_T,
     l2: *mut list_T,
@@ -281,6 +341,12 @@ pub unsafe fn tv_list_concat(
 
 /// `remove()` over a list: move one item, or the range `[idx, end]`, into
 /// `rettv`.
+///
+/// # Safety
+/// `argvars` must point at at least three values, the first a `VAR_LIST`
+/// and the third the `VAR_UNKNOWN` terminator when no range was given.
+/// `rettv` must be writable and hold no value yet, and `arg_errmsg` must be
+/// a NUL-terminated string.
 pub unsafe fn tv_list_remove(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
@@ -355,6 +421,11 @@ pub unsafe fn tv_list_remove(
 
 /// Whether `l1` and `l2` hold equal items in the same order.  An empty list and
 /// a NULL one are equal.
+///
+/// # Safety
+/// `l1` and `l2` are each null or a live list. Comparing values can
+/// recurse, so a cycle must already have been ruled out by the caller's
+/// `copyID` bookkeeping.
 pub unsafe fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: bool) -> bool {
     unsafe {
         if l1 == l2 {
@@ -387,6 +458,10 @@ pub unsafe fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: bool) -> bool 
 }
 
 /// Reverse `l` in place.
+///
+/// # Safety
+/// `l` is null or points at a live list. Every item's links are rewritten,
+/// so nothing may be walking the list.
 pub unsafe fn tv_list_reverse(l: *mut list_T) {
     unsafe {
         if tv_list_len(l) <= 1 {
@@ -408,6 +483,11 @@ pub unsafe fn tv_list_reverse(l: *mut list_T) {
 ///
 /// Caches the index it lands on in the list, and starts the next walk from
 /// whichever of the head, the tail and that cache is nearest.
+///
+/// # Safety
+/// `l` is null or points at a live list. The item borrows the list; the
+/// index cache this writes into `l` is invalidated by any change to the
+/// list's shape, which the mutating entry points here take care of.
 pub unsafe fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T {
     unsafe {
         if l.is_null() {
@@ -458,6 +538,10 @@ pub unsafe fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listit
 
 /// The number at index `n` of `l`.  Sets `*ret_error` when there is no such
 /// item.
+///
+/// # Safety
+/// `l` is null or points at a live list, and `ret_error` is null or points
+/// at a writable `bool`.
 pub unsafe fn tv_list_find_nr(
     l: *mut list_T,
     n: ::core::ffi::c_int,
@@ -476,6 +560,11 @@ pub unsafe fn tv_list_find_nr(
 }
 
 /// The string at index `n` of `l`, or NULL with `E684` raised.
+///
+/// # Safety
+/// `l` is null or points at a live list. The string borrows the item, so
+/// it is only valid until the list changes; raising `E684` goes through the
+/// editor's message state, so the caller must be on the main thread.
 pub unsafe fn tv_list_find_str(
     l: *mut list_T,
     n: ::core::ffi::c_int,
@@ -496,6 +585,10 @@ pub unsafe fn tv_list_find_str(
 /// [`tv_list_find`], clamping a negative index that fell off the front to 0.
 ///
 /// `*idx` is updated to the index actually used.
+///
+/// # Safety
+/// `l` is null or points at a live list, and `idx` must point at a writable
+/// `c_int`, which is updated to the index actually used.
 pub(crate) unsafe fn tv_list_find_index(
     l: *mut list_T,
     idx: *mut ::core::ffi::c_int,
@@ -514,6 +607,10 @@ pub(crate) unsafe fn tv_list_find_index(
 }
 
 /// The index of `item` in `l`, or -1 when it is not there.
+///
+/// # Safety
+/// `l` is null or points at a live list. `item` is only compared, never
+/// read, so it may be any pointer.
 pub unsafe fn tv_list_idx_of_item(l: *const list_T, item: *const listitem_T) -> ::core::ffi::c_int {
     unsafe {
         if l.is_null() {
