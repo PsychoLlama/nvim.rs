@@ -27,7 +27,7 @@ mod sizes {
     /// it with `snprintf` into a 64-byte buffer, and since each level appends
     /// to its parent's name a deep tree really does hit the limit — the
     /// truncation is part of the output, not an accident of the buffer.
-    pub const DOT_NAME_MAX: usize = 63;
+    pub(super) const DOT_NAME_MAX: usize = 63;
 }
 use sizes::DOT_NAME_MAX;
 

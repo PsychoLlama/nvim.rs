@@ -74,7 +74,7 @@ pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         // otherwise the one remembered for this window in the buffer's
         // window-info list. A buffer this window has never shown reports
         // the end of the list.
-        let index = if core::ptr::eq(buf, (*curwin.get()).w_buffer) {
+        let index = if ptr::eq(buf, (*curwin.get()).w_buffer) {
             (*curwin.get()).w_changelistidx
         } else {
             (0..(*buf).b_wininfo.size)

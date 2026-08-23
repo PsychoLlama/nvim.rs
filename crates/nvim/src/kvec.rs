@@ -14,7 +14,7 @@
 //! the MIT license; the notice is reproduced in licenses/klib-LICENSE.txt.
 
 use core::ffi::c_void;
-use core::{mem, ptr, slice};
+use core::{ptr, slice};
 
 use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::types::size_t;
@@ -131,7 +131,7 @@ impl<'a, T: Copy> InitVec<'a, T> {
         unsafe {
             let filled = *self.size;
             let grown = (capacity * 2).max(self.init_capacity);
-            let bytes = grown * mem::size_of::<T>();
+            let bytes = grown * size_of::<T>();
             let base = self.base();
             *self.items = match (grown == self.init_capacity, self.is_inline()) {
                 (true, true) => self.init,
@@ -204,10 +204,8 @@ impl<'a, T> Kvec<'a, T> {
                 } else {
                     8
                 };
-                *self.items = xrealloc(
-                    *self.items as *mut c_void,
-                    *self.capacity * mem::size_of::<T>(),
-                ) as *mut T;
+                *self.items =
+                    xrealloc(*self.items as *mut c_void, *self.capacity * size_of::<T>()) as *mut T;
             }
             self.items.add(*self.size).write(value);
         }

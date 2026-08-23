@@ -272,7 +272,7 @@ pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
 ///
 /// A space resets the count, so what is returned is the count after the
 /// last space. Zero means the language defines no syllables.
-pub unsafe fn count_syllables(slang: *mut slang_T, word: *const c_char) -> c_int {
+pub(super) unsafe fn count_syllables(slang: *mut slang_T, word: *const c_char) -> c_int {
     unsafe {
         if (*slang).sl_syllable.is_null() {
             return 0;

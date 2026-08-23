@@ -55,7 +55,7 @@ unsafe fn callable_name(tv: *mut typval_T) -> *mut c_char {
 ///
 /// # Safety
 /// Both operands must be `VAR_FUNC` or `VAR_PARTIAL` typvals.
-pub unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool {
+pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool {
     unsafe {
         let s1 = callable_name(tv1);
         let s2 = callable_name(tv2);
@@ -166,7 +166,7 @@ fn from_ordering(op: exprtype_T, i: c_int) -> varnumber_T {
 /// # Safety
 /// Both operands must be valid typvals; `typ1` is cleared either way and
 /// receives the result.
-pub unsafe fn typval_compare(
+pub(crate) unsafe fn typval_compare(
     typ1: *mut typval_T,
     typ2: *mut typval_T,
     op: exprtype_T,

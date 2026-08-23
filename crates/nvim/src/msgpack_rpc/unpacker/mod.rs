@@ -67,10 +67,10 @@ pub const kUnpackTypeStringArray: c_int = -1;
 mod field_type {
     use core::ffi::c_int;
 
-    pub const BOOLEAN: c_int = 1;
-    pub const INTEGER: c_int = 2;
-    pub const STRING: c_int = 4;
-    pub const STRING_ARRAY: c_int = super::kUnpackTypeStringArray;
+    pub(super) const BOOLEAN: c_int = 1;
+    pub(super) const INTEGER: c_int = 2;
+    pub(super) const STRING: c_int = 4;
+    pub(super) const STRING_ARRAY: c_int = super::kUnpackTypeStringArray;
 }
 
 /// libmpack's parse results: ok, ran out of input, malformed, too deep.

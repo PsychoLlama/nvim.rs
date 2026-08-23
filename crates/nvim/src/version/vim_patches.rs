@@ -20,7 +20,7 @@
 use core::ffi::{CStr, c_int};
 
 /// A Vim release line, and the patches from it that Nvim picked up.
-pub struct VimBaseline {
+pub(super) struct VimBaseline {
     /// How `:version` names the line, e.g. `8.1`.
     pub name: &'static CStr,
     /// The line as `has("patch-M.m.PPPP")` encodes it: `M * 100 + m`.
@@ -34,7 +34,7 @@ pub struct VimBaseline {
 /// The first entry is the baseline Vim: `v:version` reports it, patches asked
 /// about without a version (`has("patch1234")`) are looked up in its list,
 /// and any *older* Vim version counts as fully covered.
-pub static VIM_BASELINES: [VimBaseline; 5] = [
+pub(super) static VIM_BASELINES: [VimBaseline; 5] = [
     VimBaseline {
         name: c"8.1",
         number: 801,

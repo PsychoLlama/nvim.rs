@@ -117,7 +117,7 @@ impl SplWriter {
 /// Kept on the C ABI for `qsort`: entries that compare equal have no
 /// defined order, so which of them ends up first is the sort's choice, and
 /// a Rust sort would be free to choose differently.
-pub unsafe extern "C" fn rep_compare(s1: *const c_void, s2: *const c_void) -> c_int {
+pub(super) unsafe extern "C" fn rep_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     // SAFETY: qsort passes elements of the `fromto_T` array it was given.
     unsafe {
         strcmp(
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn rep_compare(s1: *const c_void, s2: *const c_void) -> c_
 ///
 /// `fname` must be a NUL-terminated path and `spin` must hold finished,
 /// compressed trees.
-pub unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char) -> c_int {
+pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char) -> c_int {
     // SAFETY: every pointer read below comes from `spin`, whose strings are
     // arena-allocated and NUL-terminated, or from the word trees.
     unsafe {
@@ -311,7 +311,7 @@ unsafe fn put_rep_and_sal(w: &mut SplWriter, spin: &mut spellinfo_T) {
                 qsort(
                     (*gap).ga_data,
                     (*gap).ga_len as size_t,
-                    core::mem::size_of::<fromto_T>(),
+                    size_of::<fromto_T>(),
                     Some(rep_compare),
                 );
             }
@@ -533,10 +533,8 @@ unsafe fn put_trees(w: &mut SplWriter, spin: &mut spellinfo_T, regionmask: c_int
             let nodecount =
                 put_node(core::ptr::null_mut(), tree, 0, regionmask, prefixtree) as usize;
             w.u32(nodecount);
-            debug_assert!(
-                nodecount + nodecount * core::mem::size_of::<c_int>() < c_int::MAX as usize
-            );
-            spin.si_memtot += (nodecount + nodecount * core::mem::size_of::<c_int>()) as c_int;
+            debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
+            spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
 
             put_node(w.fd, tree, 0, regionmask, prefixtree);
         }
@@ -549,7 +547,7 @@ unsafe fn put_trees(w: &mut SplWriter, spin: &mut spellinfo_T, regionmask: c_int
 /// # Safety
 ///
 /// `node` must be null or head a live sibling chain.
-pub unsafe fn clear_node(node: *mut wordnode_T) {
+pub(super) unsafe fn clear_node(node: *mut wordnode_T) {
     // SAFETY: the caller promises the chain; recursion stays inside it.
     unsafe {
         let mut np = node;
@@ -579,7 +577,7 @@ pub unsafe fn clear_node(node: *mut wordnode_T) {
 ///
 /// `node` must be null or head a live sibling chain that [`clear_node`] has
 /// just been run over.
-pub unsafe fn put_node(
+pub(super) unsafe fn put_node(
     fd: *mut FILE,
     node: *mut wordnode_T,
     idx: c_int,
@@ -707,7 +705,11 @@ unsafe fn put_word_end(fd: *mut FILE, np: *mut wordnode_T, regionmask: c_int, pr
 /// # Safety
 ///
 /// `gap` must hold `ga_len` pointers, each null or NUL-terminated.
-pub unsafe fn write_spell_prefcond(fd: *mut FILE, gap: *mut garray_T, ok: &mut bool) -> c_int {
+pub(super) unsafe fn write_spell_prefcond(
+    fd: *mut FILE,
+    gap: *mut garray_T,
+    ok: &mut bool,
+) -> c_int {
     // SAFETY: the caller promises the array's shape.
     unsafe {
         debug_assert!((*gap).ga_len >= 0);

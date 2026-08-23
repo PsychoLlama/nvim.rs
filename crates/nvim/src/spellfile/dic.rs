@@ -72,7 +72,7 @@ use super::{
 ///
 /// `fname` must be a NUL-terminated path and `affile` the affix file that
 /// goes with it.
-pub unsafe fn spell_read_dic(
+pub(super) unsafe fn spell_read_dic(
     spin: *mut spellinfo_T,
     fname: *mut c_char,
     affile: *mut afffile_T,
@@ -184,7 +184,7 @@ pub unsafe fn spell_read_dic(
                     last_msg_time = os_time();
                     vim_snprintf(
                         message.as_mut_ptr(),
-                        core::mem::size_of_val(&message),
+                        size_of_val(&message),
                         gettext(c"line %6d, word %6d - %s".as_ptr()),
                         lnum,
                         (*spin).si_foldwcount + (*spin).si_keepwcount,
@@ -457,7 +457,7 @@ unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_affl
 /// `word` and `afflist` must be NUL-terminated; `ht` and `affile` live;
 /// `pfxlist`, when given, must have room past `pfxlen` for more ids.
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn store_aff_word(
+pub(super) unsafe fn store_aff_word(
     spin: *mut spellinfo_T,
     word: *mut c_char,
     afflist: *mut c_char,

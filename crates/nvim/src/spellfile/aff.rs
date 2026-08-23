@@ -58,14 +58,14 @@ use super::{
 };
 
 /// The most items one `.aff` line is split into; the rest are ignored.
-pub const MAXITEMCNT: usize = 30;
+pub(super) const MAXITEMCNT: usize = 30;
 
 /// What one `.aff` file accumulates while its lines are read.
 ///
 /// Most of this is not applied until the end: several keywords have to be
 /// checked against what an *earlier* `.aff` file of the same run already
 /// set, which cannot happen until the file is known to be complete.
-pub struct AffState {
+pub(super) struct AffState {
     /// Entries still expected in the affix block being read.
     pub aff_todo: c_int,
     pub cur_aff: *mut affheader_T,
@@ -275,7 +275,7 @@ unsafe fn spell_info_item(s: *mut c_char) -> bool {
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) -> *mut afffile_T {
+pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) -> *mut afffile_T {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, the
     // bound `vim_fgets` is given.
     unsafe {
@@ -693,7 +693,7 @@ unsafe fn handle_line(
 /// # Safety
 ///
 /// None beyond reading the locale table.
-pub unsafe fn is_digit_byte(c: c_char) -> bool {
+pub(super) unsafe fn is_digit_byte(c: c_char) -> bool {
     // SAFETY: the index is a byte value, which the table covers.
     unsafe {
         *(*__ctype_b_loc()).offset(c as uint8_t as c_int as isize) as c_int
@@ -893,7 +893,7 @@ unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CSt
 /// # Safety
 ///
 /// Non-null arguments must be NUL-terminated.
-pub unsafe fn str_equal(s1: *mut c_char, s2: *mut c_char) -> bool {
+pub(super) unsafe fn str_equal(s1: *mut c_char, s2: *mut c_char) -> bool {
     // SAFETY: the caller promises the strings.
     unsafe {
         if s1.is_null() || s2.is_null() {

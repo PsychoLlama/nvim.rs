@@ -77,7 +77,7 @@ use crate::window::prevwin_curwin;
 use ::libc::strlen;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
-use core::{mem, ptr, slice};
+use core::{ptr, slice};
 
 pub const UC_BUFFER: c_int = 1;
 pub const LUA_NOREF: c_int = -2;
@@ -86,7 +86,7 @@ pub const LUA_NOREF: c_int = -2;
 pub static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0,
     ga_maxlen: 0,
-    ga_itemsize: mem::size_of::<ucmd_T>() as c_int,
+    ga_itemsize: size_of::<ucmd_T>() as c_int,
     ga_growsize: 4,
     ga_data: ptr::null_mut(),
 });
@@ -351,7 +351,7 @@ pub unsafe fn uc_add_command(
         unsafe {
             let gap = &raw mut (*curbuf.get()).b_ucmds;
             if (*gap).ga_itemsize == 0 {
-                ga_init(gap, mem::size_of::<ucmd_T>() as c_int, 4);
+                ga_init(gap, size_of::<ucmd_T>() as c_int, 4);
             }
             gap
         }
@@ -417,7 +417,7 @@ pub unsafe fn uc_add_command(
             memmove(
                 slot.add(1).cast(),
                 slot.cast(),
-                (((*gap).ga_len as usize) - idx) * mem::size_of::<ucmd_T>(),
+                (((*gap).ga_len as usize) - idx) * size_of::<ucmd_T>(),
             );
             (*gap).ga_len += 1;
             (*slot).uc_name = xstrnsave(name, name_len);
@@ -694,11 +694,7 @@ pub unsafe fn ex_delcommand(eap: *mut exarg_T) {
         (*gap).ga_len -= 1;
         let tail = (*gap).ga_len as usize - idx;
         if tail > 0 {
-            memmove(
-                cmd.cast(),
-                cmd.add(1).cast(),
-                tail * mem::size_of::<ucmd_T>(),
-            );
+            memmove(cmd.cast(), cmd.add(1).cast(), tail * size_of::<ucmd_T>());
         }
     }
 }

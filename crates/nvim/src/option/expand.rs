@@ -569,15 +569,13 @@ pub unsafe fn expand_settings(
                 }
                 *numMatches = num_normal;
                 if fuzzy {
-                    fuzmatch = xmalloc(
-                        (num_normal as size_t).wrapping_mul(core::mem::size_of::<fuzmatch_str_T>()),
-                    )
-                    .cast::<fuzmatch_str_T>();
+                    fuzmatch =
+                        xmalloc((num_normal as size_t).wrapping_mul(size_of::<fuzmatch_str_T>()))
+                            .cast::<fuzmatch_str_T>();
                 } else {
-                    *matches = xmalloc(
-                        (num_normal as size_t).wrapping_mul(core::mem::size_of::<*mut c_char>()),
-                    )
-                    .cast::<*mut c_char>();
+                    *matches =
+                        xmalloc((num_normal as size_t).wrapping_mul(size_of::<*mut c_char>()))
+                            .cast::<*mut c_char>();
                 }
             }
         }
@@ -608,7 +606,7 @@ pub unsafe fn expand_old_setting(numMatches: *mut c_int, matches: *mut *mut *mut
     // SAFETY: the caller's out-parameters, and the option table.
     unsafe {
         *numMatches = 0;
-        *matches = xmalloc(core::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+        *matches = xmalloc(size_of::<*mut c_char>()).cast::<*mut c_char>();
 
         // A terminal option has no table row, so it is looked up by the
         // name `set_context_in_set_cmd` spelled out.
@@ -708,11 +706,7 @@ pub unsafe fn expand_setting_subtract(
                 ga_growsize: 0,
                 ga_data: ptr::null_mut(),
             };
-            ga_init(
-                &raw mut ga,
-                core::mem::size_of::<*mut c_char>() as c_int,
-                10,
-            );
+            ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10);
             let mut next = copy;
             loop {
                 let item = next;
@@ -754,10 +748,8 @@ pub unsafe fn expand_setting_subtract(
             if num_flags == 0 {
                 return FAIL;
             }
-            *matches = xmalloc(
-                core::mem::size_of::<*mut c_char>().wrapping_mul(num_flags.wrapping_add(1)),
-            )
-            .cast::<*mut c_char>();
+            *matches = xmalloc(size_of::<*mut c_char>().wrapping_mul(num_flags.wrapping_add(1)))
+                .cast::<*mut c_char>();
             let mut count = 0;
             *(*matches) = xmemdupz(value.cast::<c_void>(), num_flags).cast::<c_char>();
             count += 1;

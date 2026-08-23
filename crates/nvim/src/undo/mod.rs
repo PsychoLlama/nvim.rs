@@ -75,26 +75,26 @@ use core::ptr;
 mod header {
     use super::{ExtmarkOp, UndoObjectType, c_int, c_ulong};
 
-    pub const EOF: c_int = -1;
-    pub const SIZE_MAX: c_ulong = 18446744073709551615;
-    pub const NMARKS: c_int = 26;
+    pub(super) const EOF: c_int = -1;
+    pub(super) const SIZE_MAX: c_ulong = 18446744073709551615;
+    pub(super) const NMARKS: c_int = 26;
 
     /// `open` flags.
-    pub const O_RDONLY: c_int = 0;
-    pub const O_WRONLY: c_int = 0o1;
-    pub const O_CREAT: c_int = 0o100;
-    pub const O_EXCL: c_int = 0o200;
-    pub const O_NOFOLLOW: c_int = 0o400000;
+    pub(super) const O_RDONLY: c_int = 0;
+    pub(super) const O_WRONLY: c_int = 0o1;
+    pub(super) const O_CREAT: c_int = 0o100;
+    pub(super) const O_EXCL: c_int = 0o200;
+    pub(super) const O_NOFOLLOW: c_int = 0o400000;
 
     /// The `u_header_T::uh_flags` bits.
-    pub const UH_CHANGED: c_int = 1;
-    pub const UH_EMPTYBUF: c_int = 2;
-    pub const UH_RELOAD: c_int = 4;
+    pub(super) const UH_CHANGED: c_int = 1;
+    pub(super) const UH_EMPTYBUF: c_int = 2;
+    pub(super) const UH_RELOAD: c_int = 4;
 
-    pub const kExtmarkNOOP: ExtmarkOp = 0;
-    pub const kExtmarkUndo: ExtmarkOp = 1;
-    pub const kExtmarkSplice: UndoObjectType = 0;
-    pub const kExtmarkMove: UndoObjectType = 1;
+    pub(super) const kExtmarkNOOP: ExtmarkOp = 0;
+    pub(super) const kExtmarkUndo: ExtmarkOp = 1;
+    pub(super) const kExtmarkSplice: UndoObjectType = 0;
+    pub(super) const kExtmarkMove: UndoObjectType = 1;
 }
 use header::*;
 
@@ -345,7 +345,7 @@ pub unsafe fn u_savecommon(
             if !undo_allowed(buf) {
                 return FAIL;
             }
-            if core::ptr::eq(buf, curbuf.get()) {
+            if ptr::eq(buf, curbuf.get()) {
                 change_warning(buf, 0);
             }
             if bot > b.line_count() + 1 {

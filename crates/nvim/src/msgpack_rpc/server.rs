@@ -36,11 +36,11 @@ mod known {
     use core::ffi::{c_int, c_uint};
 
     /// `XDGVarType` of the runtime directory generated addresses live in.
-    pub const XDG_RUNTIME_DIR: c_int = 4;
+    pub(super) const XDG_RUNTIME_DIR: c_int = 4;
     /// libuv's handle type for a TCP socket.
-    pub const UV_TCP: c_uint = 12;
+    pub(super) const UV_TCP: c_uint = 12;
     /// How many connections the kernel may queue behind a listening socket.
-    pub const MAX_CONNECTIONS: c_int = 32;
+    pub(super) const MAX_CONNECTIONS: c_int = 32;
 }
 
 use known::*;

@@ -263,7 +263,7 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
     // SAFETY: `xmalloc` hands back `size_of::<RequestEvent>()` writable bytes,
     // and the reference taken here is dropped by `request_event`.
     let evdata = unsafe {
-        let evdata = xmalloc(mem::size_of::<RequestEvent>()).cast::<RequestEvent>();
+        let evdata = xmalloc(size_of::<RequestEvent>()).cast::<RequestEvent>();
         evdata.write(RequestEvent {
             type_0: p.type_0,
             channel: chan.as_ptr(),

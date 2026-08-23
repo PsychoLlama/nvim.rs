@@ -63,7 +63,7 @@ pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *c
             read_undo_file(fp, file_name, name.is_null(), hash);
             fclose(fp);
         }
-        if !core::ptr::eq(file_name, name) {
+        if !ptr::eq(file_name, name) {
             xfree(file_name.cast());
         }
     }

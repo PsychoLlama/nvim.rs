@@ -51,7 +51,7 @@ pub(crate) struct How {
 /// `lines_to_read` is `MAXLNUM`.
 ///
 /// @return  FAIL for failure, NOTDONE for a directory (also a failure), or OK
-pub unsafe fn readfile(
+pub(crate) unsafe fn readfile(
     fname: *mut c_char,
     sfname: *mut c_char,
     from: linenr_T,
@@ -86,9 +86,9 @@ pub unsafe fn readfile(
 
         let mut lnum = from;
         let mut w = Window {
-            buffer: core::ptr::null_mut(),
-            ptr: core::ptr::null_mut(),
-            line_start: core::ptr::null_mut(),
+            buffer: ptr::null_mut(),
+            ptr: ptr::null_mut(),
+            line_start: ptr::null_mut(),
             size: 0,
             real_size: 0,
             linerest: 0,
@@ -112,10 +112,10 @@ pub unsafe fn readfile(
         // Don't retry when a character doesn't fit in the destination
         // encoding.
         let mut keep_dest_enc = false;
-        let mut tmpname: *mut c_char = core::ptr::null_mut();
-        let mut fenc: *mut c_char = core::ptr::null_mut();
+        let mut tmpname: *mut c_char = ptr::null_mut();
+        let mut fenc: *mut c_char = ptr::null_mut();
         let mut fenc_alloced = false;
-        let mut fenc_next: *mut c_char = core::ptr::null_mut();
+        let mut fenc_next: *mut c_char = ptr::null_mut();
         let mut advance_fenc = false;
         let mut did_iconv = false; // iconv() failed, try 'charconvert' next
         let mut converted = false;
@@ -295,7 +295,7 @@ pub unsafe fn readfile(
                     if !tmpname.is_null() {
                         os_remove(tmpname); // delete the converted file
                         xfree(tmpname.cast());
-                        tmpname = core::ptr::null_mut();
+                        tmpname = ptr::null_mut();
                     }
                 }
 
@@ -404,7 +404,7 @@ pub unsafe fn readfile(
                         *w.ptr = NL as c_char; // split the line by inserting a NL
                         w.size = 1;
                     } else if !skip_read {
-                        let mut new_buffer: *mut c_char = core::ptr::null_mut();
+                        let mut new_buffer: *mut c_char = ptr::null_mut();
                         while w.size >= 10 {
                             new_buffer =
                                 verbose_try_malloc(w.size as usize + w.linerest as usize + 1)
@@ -420,11 +420,7 @@ pub unsafe fn readfile(
                         }
                         if w.linerest != 0 {
                             // Copy the characters from the previous buffer.
-                            core::ptr::copy(
-                                w.ptr.offset(-w.linerest),
-                                new_buffer,
-                                w.linerest as usize,
-                            );
+                            ptr::copy(w.ptr.offset(-w.linerest), new_buffer, w.linerest as usize);
                         }
                         xfree(w.buffer.cast());
                         w.buffer = new_buffer;
@@ -589,7 +585,7 @@ pub unsafe fn readfile(
                             // Remove the BOM from the text.
                             filesize += blen as off_T;
                             w.size -= blen as ptrdiff_t;
-                            core::ptr::copy(w.ptr.add(blen), w.ptr, w.size as usize);
+                            ptr::copy(w.ptr.add(blen), w.ptr, w.size as usize);
                             if set_options {
                                 (*curbuf.get()).b_p_bomb = true as c_int;
                                 (*curbuf.get()).b_start_bomb = true as c_int;
@@ -909,7 +905,7 @@ pub unsafe fn readfile(
             // When opening a new file, locate the undo info and read it.
             if read_undo_file {
                 let mut hash = sha_ctx.finish();
-                u_read_undo(core::ptr::null_mut(), hash.as_mut_ptr(), fname);
+                u_read_undo(ptr::null_mut(), hash.as_mut_ptr(), fname);
             }
 
             if !how.stdin && !how.fifo && (!how.buffer || !sfname.is_null()) {
@@ -929,7 +925,7 @@ pub unsafe fn readfile(
                 if how.filtering {
                     apply_autocmds_exarg(
                         EVENT_FILTERREADPOST,
-                        core::ptr::null_mut(),
+                        ptr::null_mut(),
                         sfname,
                         false,
                         curbuf.get(),
@@ -938,7 +934,7 @@ pub unsafe fn readfile(
                 } else if how.newfile || (how.buffer && !sfname.is_null()) {
                     apply_autocmds_exarg(
                         EVENT_BUFREADPOST,
-                        core::ptr::null_mut(),
+                        ptr::null_mut(),
                         sfname,
                         false,
                         curbuf.get(),
@@ -961,7 +957,7 @@ pub unsafe fn readfile(
                         sfname,
                         sfname,
                         false,
-                        core::ptr::null_mut(),
+                        ptr::null_mut(),
                         eap,
                     );
                 }

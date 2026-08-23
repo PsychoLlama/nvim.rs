@@ -64,7 +64,11 @@ const UNSET_GA: garray_T = garray_T {
 /// # Safety
 /// `arg` must point at the cursor into a writable, NUL-terminated
 /// expression; `rettv` must be null or valid.
-pub unsafe fn eval_option(arg: *mut *const c_char, rettv: *mut typval_T, evaluate: bool) -> c_int {
+pub(crate) unsafe fn eval_option(
+    arg: *mut *const c_char,
+    rettv: *mut typval_T,
+    evaluate: bool,
+) -> c_int {
     unsafe {
         let working = **arg == b'+' as c_char; // has("+option")
         let mut opt_idx: OptIndex = kOptAleph;
@@ -535,7 +539,7 @@ pub(crate) unsafe fn eval_lit_string(
 ///
 /// # Safety
 /// As `eval_string`.
-pub unsafe fn eval_interp_string(
+pub(crate) unsafe fn eval_interp_string(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evaluate: bool,
@@ -594,7 +598,7 @@ pub unsafe fn eval_interp_string(
 ///
 /// # Safety
 /// `text` must be NUL-terminated and `ret_value` valid.
-pub unsafe fn string2float(text: *const c_char, ret_value: *mut float_T) -> size_t {
+pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut float_T) -> size_t {
     unsafe {
         for (name, len, value) in [
             (c"inf", 3, f64::INFINITY),

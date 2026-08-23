@@ -81,7 +81,7 @@ unsafe fn has_sound_tree(slang: *mut slang_T) -> bool {
 /// # Safety
 ///
 /// The current window must have its languages loaded.
-pub unsafe fn suggest_try_soundalike_prep() {
+pub(super) unsafe fn suggest_try_soundalike_prep() {
     // SAFETY: the caller guarantees the window's spell state.
     unsafe {
         for lp in crate::spellsuggest::window_langs() {
@@ -100,7 +100,7 @@ pub unsafe fn suggest_try_soundalike_prep() {
 ///
 /// `su` must be valid and the current window must have its languages
 /// loaded.
-pub unsafe fn suggest_try_soundalike(su: *mut suginfo_T) {
+pub(super) unsafe fn suggest_try_soundalike(su: *mut suginfo_T) {
     // SAFETY: the caller guarantees `su` and the window's spell state.
     unsafe {
         for lp in crate::spellsuggest::window_langs() {
@@ -126,7 +126,7 @@ pub unsafe fn suggest_try_soundalike(su: *mut suginfo_T) {
 /// # Safety
 ///
 /// The current window must have its languages loaded.
-pub unsafe fn suggest_try_soundalike_finish() {
+pub(super) unsafe fn suggest_try_soundalike_finish() {
     // SAFETY: the caller guarantees the window's spell state; every key in
     // the table is the inline word of a `sftword_T` this module allocated.
     unsafe {
@@ -141,7 +141,7 @@ pub unsafe fn suggest_try_soundalike_finish() {
             let mut hi: *mut hashitem_T = (*done).ht_array;
             while todo > 0 {
                 let key = (*hi).hi_key;
-                if !(key.is_null() || core::ptr::eq(key, &raw const hash_removed)) {
+                if !(key.is_null() || ptr::eq(key, &raw const hash_removed)) {
                     xfree(key.sub(SFT_WORD_OFF) as *mut c_void);
                     todo -= 1;
                 }
@@ -197,7 +197,7 @@ fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
 /// # Safety
 ///
 /// `su` and `lp` must be valid and the language must have a loaded `.sug`.
-pub unsafe fn add_sound_suggest(
+pub(super) unsafe fn add_sound_suggest(
     su: *mut suginfo_T,
     goodword: *mut c_char,
     score: c_int,
@@ -214,7 +214,7 @@ pub unsafe fn add_sound_suggest(
         let goodword_len = libc::strlen(goodword) as usize;
         let hi = hash_lookup(&raw mut (*slang).sl_sounddone, goodword, goodword_len, hash);
         let key = (*hi).hi_key;
-        if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
+        if key.is_null() || ptr::eq(key, &raw const hash_removed) {
             let sft = xmalloc(SFT_WORD_OFF + goodword_len + 1) as *mut sftword_T;
             (*sft).sft_score = score as int16_t;
             let word = (sft as *mut u8).add(SFT_WORD_OFF);
@@ -460,7 +460,7 @@ unsafe fn emit_word(
 /// # Safety
 ///
 /// `slang` must have a loaded `.sug` and `word` must be NUL-terminated.
-pub unsafe fn soundfold_find(slang: *mut slang_T, word: *mut c_char) -> c_int {
+pub(super) unsafe fn soundfold_find(slang: *mut slang_T, word: *mut c_char) -> c_int {
     // SAFETY: the caller guarantees the tree and the word; each node's
     // first byte is its child count, which bounds every index below.
     unsafe {
@@ -555,7 +555,11 @@ struct KeepCapLevel {
 ///
 /// `fword` must be NUL-terminated and `kword` must have room for
 /// `MAXWLEN` bytes.
-pub unsafe fn find_keepcap_word(slang: *mut slang_T, fword: *mut c_char, kword: *mut c_char) {
+pub(super) unsafe fn find_keepcap_word(
+    slang: *mut slang_T,
+    fword: *mut c_char,
+    kword: *mut c_char,
+) {
     // SAFETY: the caller guarantees the words; the tree indices are bounded
     // by each node's child count.
     unsafe {

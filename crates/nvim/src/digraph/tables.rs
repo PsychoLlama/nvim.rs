@@ -21,16 +21,16 @@ use core::ffi::c_int;
 /// A `:digraphs!` section header: the first codepoint of a Unicode block
 /// and its display name (NUL-terminated, translated with `gettext` when
 /// printed).
-pub struct BlockHeader {
+pub(super) struct BlockHeader {
     pub start: c_int,
     pub name: &'static [u8],
 }
 
 /// Exclusive upper bound of the last header block.
-pub const BLOCK_END: c_int = 0xfffffff;
+pub(super) const BLOCK_END: c_int = 0xfffffff;
 
 /// Section headers for `:digraphs!`, in display order.
-pub const BLOCK_HEADERS: [BlockHeader; 26] = [
+pub(super) const BLOCK_HEADERS: [BlockHeader; 26] = [
     BlockHeader {
         start: 0xa1,
         name: b"Latin supplement\0",
@@ -147,7 +147,7 @@ const fn d(char1: u8, char2: u8, result: c_int) -> Digraph {
 
 /// The default digraphs, in Vim's canonical order.
 #[rustfmt::skip]
-pub const DEFAULT_DIGRAPHS: [Digraph; 1366] = [
+pub(super) const DEFAULT_DIGRAPHS: [Digraph; 1366] = [
     d(b'N',b'U',0x000a), d(b'S',b'H',0x0001), d(b'S',b'X',0x0002), d(b'E',b'X',0x0003),
     d(b'E',b'T',0x0004), d(b'E',b'Q',0x0005), d(b'A',b'K',0x0006), d(b'B',b'L',0x0007),
     d(b'B',b'S',0x0008), d(b'H',b'T',0x0009), d(b'L',b'F',0x000a), d(b'V',b'T',0x000b),

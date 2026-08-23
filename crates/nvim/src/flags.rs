@@ -46,6 +46,11 @@
 /// the boundaries where a raw `c_int` is unavoidable, `has` (any of the
 /// asked-for bits are set), `has_all` (all of them), `masked`,
 /// `without`/`clear`, `is_empty`, and `|`/`|=`.
+///
+/// Every generated item takes the *declared* visibility, not a blanket `pub`:
+/// an associated item cannot be seen further than its type, so a `pub fn` on a
+/// `pub(crate)` family is `unreachable_pub` at the macro's own lines — once for
+/// the definition, however many families expand it.
 #[macro_export]
 macro_rules! flag_set {
     (
@@ -65,27 +70,27 @@ macro_rules! flag_set {
         #[allow(dead_code)]
         impl $Name {
             /// No flag at all.
-            pub const NONE: Self = Self(0);
+            $vis const NONE: Self = Self(0);
 
-            $( $(#[$cmeta])* pub const $MEMBER: Self = Self($value); )+
+            $( $(#[$cmeta])* $vis const $MEMBER: Self = Self($value); )+
 
             /// The flag word as the C `int` the unrewritten callees take.
             #[inline]
-            pub const fn bits(self) -> ::core::ffi::c_int {
+            $vis const fn bits(self) -> ::core::ffi::c_int {
                 self.0
             }
 
             /// A flag word arriving from C, or from a caller that still
             /// threads one as an `int`.
             #[inline]
-            pub const fn from_bits(bits: ::core::ffi::c_int) -> Self {
+            $vis const fn from_bits(bits: ::core::ffi::c_int) -> Self {
                 Self(bits)
             }
 
             /// Whether *any* of `flags`' bits are set — the C `opts & FOO`
             /// test, and `opts & (FOO | BAR)` when `flags` names several.
             #[inline]
-            pub const fn has(self, flags: Self) -> bool {
+            $vis const fn has(self, flags: Self) -> bool {
                 self.0 & flags.0 != 0
             }
 
@@ -94,21 +99,21 @@ macro_rules! flag_set {
             /// different question from [`has`](Self::has) and reads the
             /// same until you look twice.
             #[inline]
-            pub const fn has_all(self, flags: Self) -> bool {
+            $vis const fn has_all(self, flags: Self) -> bool {
                 self.0 & flags.0 == flags.0
             }
 
             /// Both sets of flags — `|`, in a `const` context, where the
             /// operator trait cannot be called.
             #[inline]
-            pub const fn or(self, flags: Self) -> Self {
+            $vis const fn or(self, flags: Self) -> Self {
                 Self(self.0 | flags.0)
             }
 
             /// `self` when `cond` holds and nothing otherwise — C's
             /// `cond ? FOO : 0`, which is how half of these are built up.
             #[inline]
-            pub const fn when(self, cond: bool) -> Self {
+            $vis const fn when(self, cond: bool) -> Self {
                 if cond { self } else { Self::NONE }
             }
 
@@ -116,7 +121,7 @@ macro_rules! flag_set {
             /// family with a sub-field that is asked *which* of several
             /// mutually exclusive values it holds.
             #[inline]
-            pub const fn masked(self, flags: Self) -> Self {
+            $vis const fn masked(self, flags: Self) -> Self {
                 Self(self.0 & flags.0)
             }
 
@@ -124,18 +129,18 @@ macro_rules! flag_set {
             /// counterpart, and the reason the field's own name need not
             /// appear twice.
             #[inline]
-            pub const fn clear(&mut self, flags: Self) {
+            $vis const fn clear(&mut self, flags: Self) {
                 self.0 &= !flags.0;
             }
 
             /// Every flag of `self` that is not in `flags`: C's `& ~FOO`.
             #[inline]
-            pub const fn without(self, flags: Self) -> Self {
+            $vis const fn without(self, flags: Self) -> Self {
                 Self(self.0 & !flags.0)
             }
 
             #[inline]
-            pub const fn is_empty(self) -> bool {
+            $vis const fn is_empty(self) -> bool {
                 self.0 == 0
             }
         }
@@ -205,26 +210,26 @@ macro_rules! char_flags {
         // edge still gets `as_c_int`, because the macro is uniform.
         #[allow(dead_code)]
         impl $Name {
-            $( $(#[$cmeta])* pub const $MEMBER: Self = Self($value); )+
+            $( $(#[$cmeta])* $vis const $MEMBER: Self = Self($value); )+
 
             /// Whether `letters` — a string option's value — names this
             /// flag. Upstream writes `vim_strchr(p_xx, FLAG) != NULL`; the
             /// needle is always ASCII, where `vim_strchr` is `strchr`, so a
             /// byte search is the same answer.
             #[inline]
-            pub fn is_in(self, letters: &::core::ffi::CStr) -> bool {
+            $vis fn is_in(self, letters: &::core::ffi::CStr) -> bool {
                 letters.to_bytes().contains(&self.0)
             }
 
             /// The letter itself.
             #[inline]
-            pub const fn byte(self) -> u8 {
+            $vis const fn byte(self) -> u8 {
                 self.0
             }
 
             /// The letter as the `c_int` the unrewritten callees take.
             #[inline]
-            pub const fn as_c_int(self) -> ::core::ffi::c_int {
+            $vis const fn as_c_int(self) -> ::core::ffi::c_int {
                 self.0 as ::core::ffi::c_int
             }
         }

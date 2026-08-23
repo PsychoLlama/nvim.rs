@@ -11,10 +11,10 @@ use std::sync::{Mutex, MutexGuard};
 use c2rust_neovim::memory::xfree;
 
 #[cfg(not(miri))]
-pub mod tv;
+pub(crate) mod tv;
 
 /// A NUL-terminated copy of `s`, kept alive by the caller's binding.
-pub fn cstr(s: impl Into<Vec<u8>>) -> CString {
+pub(crate) fn cstr(s: impl Into<Vec<u8>>) -> CString {
     CString::new(s).unwrap()
 }
 
@@ -23,7 +23,7 @@ pub fn cstr(s: impl Into<Vec<u8>>) -> CString {
 ///
 /// # Safety
 /// `ptr` must be a valid NUL-terminated string from the `xmalloc` family.
-pub unsafe fn take_bytes(ptr: *mut c_char) -> Vec<u8> {
+pub(crate) unsafe fn take_bytes(ptr: *mut c_char) -> Vec<u8> {
     let owned = CStr::from_ptr(ptr).to_bytes().to_vec();
     xfree(ptr.cast());
     owned
@@ -33,7 +33,7 @@ pub unsafe fn take_bytes(ptr: *mut c_char) -> Vec<u8> {
 ///
 /// # Safety
 /// `ptr` must be a valid NUL-terminated string from the `xmalloc` family.
-pub unsafe fn internalize(ptr: *mut c_char) -> String {
+pub(crate) unsafe fn internalize(ptr: *mut c_char) -> String {
     String::from_utf8(take_bytes(ptr)).unwrap()
 }
 
@@ -61,13 +61,13 @@ static EDITOR: Mutex<()> = Mutex::new(());
 /// up. Without the token, a case that runs before the first lock and one
 /// that runs after would see different globals.
 #[cfg(not(miri))]
-pub struct Editor {
+pub(crate) struct Editor {
     _guard: MutexGuard<'static, ()>,
 }
 
 /// Exclusive use of the editor's globals for the caller's scope.
 #[cfg(not(miri))]
-pub fn editor_lock() -> Editor {
+pub(crate) fn editor_lock() -> Editor {
     let guard = EDITOR.lock().unwrap_or_else(|e| e.into_inner());
     init_editor();
     Editor { _guard: guard }
@@ -129,7 +129,7 @@ fn init_editor() {
 /// Take [`Sandbox::globals`] when only the editor's own state is in play and
 /// [`Sandbox::dir`] when the case needs somewhere to put files.
 #[cfg(not(miri))]
-pub struct Sandbox {
+pub(crate) struct Sandbox {
     /// The private directory, when one was asked for.
     dir: Option<PathBuf>,
     saved_cwd: PathBuf,
@@ -143,7 +143,7 @@ pub struct Sandbox {
 impl Sandbox {
     /// The editor lock, plus the promise that the working directory and
     /// every variable written through this sandbox are restored on drop.
-    pub fn globals() -> Sandbox {
+    pub(crate) fn globals() -> Sandbox {
         let editor = editor_lock();
         Sandbox {
             dir: None,
@@ -157,7 +157,7 @@ impl Sandbox {
     ///
     /// `name` distinguishes this case's directory from every other case's;
     /// pass the test function's own name.
-    pub fn dir(name: &str) -> Sandbox {
+    pub(crate) fn dir(name: &str) -> Sandbox {
         let mut sandbox = Sandbox::globals();
         let dir = std::env::temp_dir().join(format!("nvim-unit-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
@@ -171,40 +171,40 @@ impl Sandbox {
     /// The editor lock this sandbox holds, to hand to a helper whose
     /// precondition is "the caller holds it" — the same token
     /// [`editor_lock`] answers.
-    pub fn editor(&self) -> &Editor {
+    pub(crate) fn editor(&self) -> &Editor {
         &self.editor
     }
 
     /// The private directory's absolute, resolved path.
-    pub fn root(&self) -> &Path {
+    pub(crate) fn root(&self) -> &Path {
         self.dir.as_deref().expect("this sandbox has no directory")
     }
 
     /// The private directory as the string an absolute expectation is built
     /// from.
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         self.root().to_str().expect("a temp path is text")
     }
 
     /// A name inside the private directory. Nothing is created.
-    pub fn path(&self, name: &str) -> PathBuf {
+    pub(crate) fn path(&self, name: &str) -> PathBuf {
         self.root().join(name)
     }
 
     /// A directory inside the private directory, and its parents.
-    pub fn mkdir(&self, name: &str) -> PathBuf {
+    pub(crate) fn mkdir(&self, name: &str) -> PathBuf {
         let at = self.path(name);
         std::fs::create_dir_all(&at).expect("a fixture directory");
         at
     }
 
     /// An empty file inside the private directory.
-    pub fn touch(&self, name: &str) -> PathBuf {
+    pub(crate) fn touch(&self, name: &str) -> PathBuf {
         self.write(name, b"")
     }
 
     /// A file inside the private directory holding `contents`.
-    pub fn write(&self, name: &str, contents: &[u8]) -> PathBuf {
+    pub(crate) fn write(&self, name: &str, contents: &[u8]) -> PathBuf {
         let at = self.path(name);
         std::fs::write(&at, contents).expect("a fixture file");
         at
@@ -215,7 +215,7 @@ impl Sandbox {
     /// Call this before writing the variable by any route the sandbox does
     /// not own — a direct `os_setenv`, or an entry point under test that
     /// rewrites `$PATH` of its own accord.
-    pub fn remember_env(&mut self, name: &str) {
+    pub(crate) fn remember_env(&mut self, name: &str) {
         if !self.saved_env.iter().any(|(seen, _)| seen == name) {
             self.saved_env
                 .push((name.to_string(), std::env::var_os(name)));
@@ -225,21 +225,21 @@ impl Sandbox {
     /// Set a variable for the rest of the case, through the crate's own
     /// `os_setenv` — the block the editor reads is the process's, and the
     /// spec set it this way because "Lua doesn't have setenv".
-    pub fn set_env(&mut self, name: &str, value: &str) -> std::ffi::c_int {
+    pub(crate) fn set_env(&mut self, name: &str, value: &str) -> std::ffi::c_int {
         self.remember_env(name);
         // SAFETY: both strings are this frame's and NUL-terminated.
         unsafe { c2rust_neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 1) }
     }
 
     /// `os_setenv` with `overwrite` off: an existing value wins.
-    pub fn set_env_if_unset(&mut self, name: &str, value: &str) -> std::ffi::c_int {
+    pub(crate) fn set_env_if_unset(&mut self, name: &str, value: &str) -> std::ffi::c_int {
         self.remember_env(name);
         // SAFETY: as above.
         unsafe { c2rust_neovim::os::env::os_setenv(cstr(name).as_ptr(), cstr(value).as_ptr(), 0) }
     }
 
     /// Remove a variable for the rest of the case.
-    pub fn unset_env(&mut self, name: &str) -> std::ffi::c_int {
+    pub(crate) fn unset_env(&mut self, name: &str) -> std::ffi::c_int {
         self.remember_env(name);
         // SAFETY: the name is this frame's and NUL-terminated.
         unsafe { c2rust_neovim::os::env::os_unsetenv(cstr(name).as_ptr()) }
@@ -333,7 +333,7 @@ fn walk(at: &Path) -> Vec<PathBuf> {
 /// is what makes an expectation a statement about the allocation rather than
 /// about this machine, and it is why the cases port at all.
 #[cfg(not(miri))]
-pub mod alloc {
+pub(crate) mod alloc {
     use std::ffi::{c_char, c_void};
     use std::mem::{offset_of, size_of};
 
@@ -346,14 +346,14 @@ pub mod alloc {
     /// — recording only means anything with one case running at a time.
     ///
     /// Dropping it stops the recording and releases the lock.
-    pub struct AllocLog {
+    pub(crate) struct AllocLog {
         recorder: Recorder,
         editor: super::Editor,
     }
 
     impl AllocLog {
         /// Take the editor and start recording.
-        pub fn start() -> AllocLog {
+        pub(crate) fn start() -> AllocLog {
             let editor = super::editor_lock();
             AllocLog {
                 recorder: Recorder::start(),
@@ -363,14 +363,14 @@ pub mod alloc {
 
         /// The editor lock this recording holds, to hand to a helper that
         /// needs one — [`check_emsg`](super::check_emsg), say.
-        pub fn editor(&self) -> &super::Editor {
+        pub(crate) fn editor(&self) -> &super::Editor {
             &self.editor
         }
 
         /// Assert the events recorded since the last check, and start over —
         /// `alloc_log:check(exp)`, which also clears.
         #[track_caller]
-        pub fn check(&self, expected: &[AllocEvent]) {
+        pub(crate) fn check(&self, expected: &[AllocEvent]) {
             let actual = self.recorder.take();
             assert_eq!(actual, expected, "allocation sequence");
         }
@@ -378,7 +378,7 @@ pub mod alloc {
         /// [`check`](Self::check), with the temporary allocations dropped
         /// first — `alloc_log:clear_tmp_allocs(..)` followed by a check.
         #[track_caller]
-        pub fn check_net(&self, clear_null_frees: bool, expected: &[AllocEvent]) {
+        pub(crate) fn check_net(&self, clear_null_frees: bool, expected: &[AllocEvent]) {
             let mut actual = self.recorder.take();
             clear_tmp_allocs(&mut actual, clear_null_frees);
             assert_eq!(actual, expected, "net allocation sequence");
@@ -387,18 +387,18 @@ pub mod alloc {
         /// Everything recorded since the last check, oldest first, leaving
         /// the log empty. For a case whose assertion is not a fixed
         /// sequence — "did this allocate at all".
-        pub fn take(&self) -> Vec<AllocEvent> {
+        pub(crate) fn take(&self) -> Vec<AllocEvent> {
             self.recorder.take()
         }
 
         /// Forget everything recorded so far — `alloc_log:clear()`.
-        pub fn clear(&self) {
+        pub(crate) fn clear(&self) {
             self.recorder.clear();
         }
     }
 
     /// `tv_list_alloc`'s allocation: `a.list(l)`.
-    pub fn list(l: *const list_T) -> AllocEvent {
+    pub(crate) fn list(l: *const list_T) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
             size: size_of::<list_T>(),
@@ -407,7 +407,7 @@ pub mod alloc {
     }
 
     /// `tv_list_item_alloc`'s allocation: `a.li(li)`.
-    pub fn li(li: *const listitem_T) -> AllocEvent {
+    pub(crate) fn li(li: *const listitem_T) -> AllocEvent {
         AllocEvent::Malloc {
             size: size_of::<listitem_T>(),
             ret: li as *mut c_void,
@@ -415,7 +415,7 @@ pub mod alloc {
     }
 
     /// `tv_dict_alloc`'s allocation: `a.dict(d)`.
-    pub fn dict(d: *const dict_T) -> AllocEvent {
+    pub(crate) fn dict(d: *const dict_T) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
             size: size_of::<dict_T>(),
@@ -428,7 +428,7 @@ pub mod alloc {
     /// The size is the whole point of the case — a `dictitem_T` is
     /// over-allocated so the NUL-terminated key fits in its flexible `di_key`
     /// member, but never below the struct's own size.
-    pub fn di(di: *const dictitem_T, key_len: usize) -> AllocEvent {
+    pub(crate) fn di(di: *const dictitem_T, key_len: usize) -> AllocEvent {
         AllocEvent::Malloc {
             size: size_of::<dictitem_T>().max(offset_of!(dictitem_T, di_key) + key_len + 1),
             ret: di as *mut c_void,
@@ -436,7 +436,7 @@ pub mod alloc {
     }
 
     /// A NUL-terminated copy of `len` bytes: `a.str(s, len)`.
-    pub fn string(s: *const c_char, len: usize) -> AllocEvent {
+    pub(crate) fn string(s: *const c_char, len: usize) -> AllocEvent {
         AllocEvent::Malloc {
             size: len + 1,
             ret: s as *mut c_void,
@@ -444,7 +444,7 @@ pub mod alloc {
     }
 
     /// `tv_dict_watcher_add`'s allocation: `a.dwatcher(w)`.
-    pub fn dwatcher(w: *const DictWatcher) -> AllocEvent {
+    pub(crate) fn dwatcher(w: *const DictWatcher) -> AllocEvent {
         AllocEvent::Malloc {
             size: size_of::<DictWatcher>(),
             ret: w as *mut c_void,
@@ -453,7 +453,7 @@ pub mod alloc {
 
     /// A `partial_T` built by the harness rather than by the code under
     /// test: the spec's `a.lua_pt(pt)`.
-    pub fn partial(pt: *const partial_T) -> AllocEvent {
+    pub(crate) fn partial(pt: *const partial_T) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
             size: size_of::<partial_T>(),
@@ -463,7 +463,7 @@ pub mod alloc {
 
     /// A partial's argument vector, likewise the harness's: the spec's
     /// `a.lua_tvs(argv, argc)`.
-    pub fn argv(argv: *const typval_T, argc: usize) -> AllocEvent {
+    pub(crate) fn argv(argv: *const typval_T, argc: usize) -> AllocEvent {
         AllocEvent::Malloc {
             size: size_of::<typval_T>() * argc,
             ret: argv as *mut c_void,
@@ -471,7 +471,7 @@ pub mod alloc {
     }
 
     /// A release: `a.freed(p)`.
-    pub fn freed<T>(p: *const T) -> AllocEvent {
+    pub(crate) fn freed<T>(p: *const T) -> AllocEvent {
         AllocEvent::Free {
             ptr: p as *mut c_void,
         }
@@ -488,7 +488,7 @@ pub mod alloc {
 /// see [`editor_lock`].
 #[cfg(not(miri))]
 #[track_caller]
-pub fn check_emsg<R>(editor: &Editor, f: impl FnOnce() -> R, msg: Option<&str>) -> R {
+pub(crate) fn check_emsg<R>(editor: &Editor, f: impl FnOnce() -> R, msg: Option<&str>) -> R {
     check_emsg_bytes(editor, f, msg.map(str::as_bytes))
 }
 
@@ -499,7 +499,11 @@ pub fn check_emsg<R>(editor: &Editor, f: impl FnOnce() -> R, msg: Option<&str>) 
 /// same replacement character, so the assertion has to be over bytes.
 #[cfg(not(miri))]
 #[track_caller]
-pub fn check_emsg_bytes<R>(_editor: &Editor, f: impl FnOnce() -> R, msg: Option<&[u8]>) -> R {
+pub(crate) fn check_emsg_bytes<R>(
+    _editor: &Editor,
+    f: impl FnOnce() -> R,
+    msg: Option<&[u8]>,
+) -> R {
     use c2rust_neovim::message::msg_hist_last;
 
     let before = msg_hist_last.get();

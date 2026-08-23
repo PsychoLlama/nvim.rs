@@ -53,7 +53,7 @@ use super::{
 /// # Safety
 ///
 /// `pp` must point at a pointer into a NUL-terminated string.
-pub unsafe fn get_affitem(flagtype: c_int, pp: *mut *mut c_char) -> c_uint {
+pub(super) unsafe fn get_affitem(flagtype: c_int, pp: *mut *mut c_char) -> c_uint {
     // SAFETY: the caller promises the string; each branch advances `pp` by
     // at most what it read.
     unsafe {
@@ -93,7 +93,7 @@ pub unsafe fn get_affitem(flagtype: c_int, pp: *mut *mut c_char) -> c_uint {
 /// # Safety
 ///
 /// `item` and `fname` must be NUL-terminated.
-pub unsafe fn affitem2flag(
+pub(super) unsafe fn affitem2flag(
     flagtype: c_int,
     item: *mut c_char,
     fname: *mut c_char,
@@ -125,7 +125,7 @@ pub unsafe fn affitem2flag(
 /// # Safety
 ///
 /// `afflist` must be NUL-terminated.
-pub unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag: c_uint) -> bool {
+pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag: c_uint) -> bool {
     // SAFETY: the caller promises the string; every walk stops at its NUL.
     unsafe {
         match flagtype {
@@ -177,7 +177,7 @@ pub unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag: c_uin
 /// # Safety
 ///
 /// `entry` and `affile` must be live, and `ae_flags` NUL-terminated.
-pub unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affentry_T) {
+pub(super) unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affentry_T) {
     // SAFETY: the caller promises both; the memmove closes a gap inside one
     // string, so source and destination share an allocation.
     unsafe {
@@ -217,7 +217,7 @@ pub unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affentry_T) 
 /// # Safety
 ///
 /// `compflags` must be NUL-terminated and `aff` live.
-pub unsafe fn process_compflags(
+pub(super) unsafe fn process_compflags(
     spin: *mut spellinfo_T,
     aff: *mut afffile_T,
     compflags: *mut c_char,
@@ -299,7 +299,7 @@ pub unsafe fn process_compflags(
 /// # Safety
 ///
 /// `spin` must be live.
-pub unsafe fn check_renumber(spin: *mut spellinfo_T) {
+pub(super) unsafe fn check_renumber(spin: *mut spellinfo_T) {
     // SAFETY: the caller promises `spin`.
     unsafe {
         if (*spin).si_newprefID == (*spin).si_newcompID && (*spin).si_newcompID < 128 {
@@ -315,7 +315,7 @@ pub unsafe fn check_renumber(spin: *mut spellinfo_T) {
 /// # Safety
 ///
 /// `aff` must be a live affix file that is not used again.
-pub unsafe fn spell_free_aff(aff: *mut afffile_T) {
+pub(super) unsafe fn spell_free_aff(aff: *mut afffile_T) {
     // SAFETY: the caller promises the affix file; the regexps below are the
     // only heap allocations the entries own.
     unsafe {

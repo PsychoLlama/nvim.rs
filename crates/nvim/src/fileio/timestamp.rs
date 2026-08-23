@@ -304,7 +304,7 @@ unsafe fn warn_changed(
                     tbuf.as_ptr(),
                     gettext(c"&OK\n&Load File\nLoad File &and Options".as_ptr()),
                     1,
-                    core::ptr::null(),
+                    ptr::null(),
                     true as c_int,
                 ) {
                     2 => Reload::Text,
@@ -496,7 +496,7 @@ pub unsafe fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
                 // Any existing undo file is unusable, write it now.
                 let mut hash = [0u8; UNDO_HASH_SIZE as usize];
                 u_compute_hash(buf, hash.as_mut_ptr());
-                u_write_undo(core::ptr::null(), false, buf, hash.as_mut_ptr());
+                u_write_undo(ptr::null(), false, buf, hash.as_mut_ptr());
             }
         }
 
@@ -563,16 +563,11 @@ pub unsafe fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool
         // contents. But if reading the file fails we should keep the old
         // contents. Memory alone will not do, the file might be too big, so
         // move the buffer contents to a hidden buffer.
-        let mut savebuf = core::ptr::null_mut::<buf_T>();
+        let mut savebuf = ptr::null_mut::<buf_T>();
         let mut bufref = bufref_T::default();
         if !(buf_is_empty(curbuf.get()) || saved == FAIL) {
             // Allocate a buffer without putting it in the buffer list.
-            savebuf = buflist_new(
-                core::ptr::null_mut(),
-                core::ptr::null_mut(),
-                1,
-                BLN_DUMMY as c_int,
-            );
+            savebuf = buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int);
             set_bufref(&raw mut bufref, savebuf);
             if !savebuf.is_null() && buf == curbuf.get() {
                 // Open the memline.

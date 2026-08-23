@@ -149,7 +149,7 @@ impl MapKey for String_0 {
 
 /// Discard the bucket table and start again with room for `n_min_buckets`.
 /// The keys are untouched: the caller rehashes them.
-pub fn realloc(h: &mut MapHash, n_min_buckets: uint32_t) {
+pub(super) fn realloc(h: &mut MapHash, n_min_buckets: uint32_t) {
     let n_buckets = policy::bucket_count(n_min_buckets);
     // SAFETY: `h.hash` is this module's own allocation, or null.
     let table = unsafe {
@@ -164,7 +164,7 @@ pub fn realloc(h: &mut MapHash, n_min_buckets: uint32_t) {
 }
 
 /// Forget every entry, keeping the bucket table's allocation.
-pub fn clear(h: &mut MapHash) {
+pub(super) fn clear(h: &mut MapHash) {
     if h.hash.is_null() {
         return;
     }
@@ -240,7 +240,12 @@ pub fn probe(
 /// # Safety
 /// `keys` must point at `h.n_keys` live keys and `h.hash` at `h.n_buckets`
 /// slots.
-pub unsafe fn find_bucket<K: MapKey>(h: &MapHash, keys: *const K, key: &K, put: bool) -> uint32_t {
+pub(super) unsafe fn find_bucket<K: MapKey>(
+    h: &MapHash,
+    keys: *const K,
+    key: &K,
+    put: bool,
+) -> uint32_t {
     // SAFETY: the caller promises the table and the keys array.
     let buckets = unsafe { buckets(h) };
     probe(buckets, h.n_buckets - 1, key.map_hash(), put, |k| {
@@ -253,7 +258,7 @@ pub unsafe fn find_bucket<K: MapKey>(h: &MapHash, keys: *const K, key: &K, put: 
 ///
 /// # Safety
 /// As [`find_bucket`].
-pub unsafe fn get<K: MapKey>(h: &MapHash, keys: *const K, key: &K) -> uint32_t {
+pub(super) unsafe fn get<K: MapKey>(h: &MapHash, keys: *const K, key: &K) -> uint32_t {
     if h.n_buckets == 0 {
         return MH_TOMBSTONE;
     }
@@ -294,7 +299,7 @@ unsafe fn rehash<K: MapKey>(h: &mut MapHash, keys: *const K) {
 /// # Safety
 /// As [`find_bucket`]; `keys` must be the `keys` field itself, since this may
 /// reallocate it.
-pub unsafe fn put<K: MapKey>(
+pub(super) unsafe fn put<K: MapKey>(
     h: &mut MapHash,
     keys: &mut *mut K,
     key: K,
@@ -361,7 +366,7 @@ pub unsafe fn put<K: MapKey>(
 ///
 /// # Safety
 /// As [`find_bucket`].
-pub unsafe fn delete<K: MapKey>(h: &mut MapHash, keys: *mut K, key: &mut K) -> uint32_t {
+pub(super) unsafe fn delete<K: MapKey>(h: &mut MapHash, keys: *mut K, key: &mut K) -> uint32_t {
     if h.size == 0 {
         return MH_TOMBSTONE;
     }
@@ -405,7 +410,7 @@ pub unsafe fn delete<K: MapKey>(h: &mut MapHash, keys: *mut K, key: &mut K) -> u
 ///
 /// # Safety
 /// As [`find_bucket`]; `values` must be as long as `keys`.
-pub unsafe fn map_ref<K: MapKey, V>(
+pub(super) unsafe fn map_ref<K: MapKey, V>(
     h: &MapHash,
     keys: *mut K,
     values: *mut V,
@@ -431,7 +436,7 @@ pub unsafe fn map_ref<K: MapKey, V>(
 ///
 /// # Safety
 /// As [`put`]; `values` must be the `values` field itself.
-pub unsafe fn map_put_ref<K: MapKey, V: Copy>(
+pub(super) unsafe fn map_put_ref<K: MapKey, V: Copy>(
     h: &mut MapHash,
     keys: &mut *mut K,
     values: &mut *mut V,
@@ -471,7 +476,7 @@ pub unsafe fn map_put_ref<K: MapKey, V: Copy>(
 ///
 /// # Safety
 /// As [`delete`]; `values` must be as long as `keys`.
-pub unsafe fn map_del<K: MapKey, V: Copy>(
+pub(super) unsafe fn map_del<K: MapKey, V: Copy>(
     h: &mut MapHash,
     keys: *mut K,
     values: *mut V,

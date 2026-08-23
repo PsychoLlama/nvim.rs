@@ -22,7 +22,7 @@ const BREAKS: &core::ffi::CStr = c"\"'+-*/%.=!?~|&$([<>,#";
 /// # Safety
 /// `xp` must be valid and `arg` a NUL-terminated string that outlives it —
 /// `xp_pattern` is left pointing into it.
-pub unsafe fn set_context_for_expression(
+pub(crate) unsafe fn set_context_for_expression(
     xp: *mut expand_T,
     mut arg: *mut c_char,
     cmdidx: cmdidx_T,

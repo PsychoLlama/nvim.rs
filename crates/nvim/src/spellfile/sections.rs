@@ -58,7 +58,11 @@ use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 /// # Safety
 ///
 /// `fd` must be open and `cntp` writable.
-pub unsafe fn read_cnt_string(fd: *mut FILE, cnt_bytes: c_int, cntp: *mut c_int) -> *mut c_char {
+pub(super) unsafe fn read_cnt_string(
+    fd: *mut FILE,
+    cnt_bytes: c_int,
+    cntp: *mut c_int,
+) -> *mut c_char {
     // SAFETY: the caller promises the file and the out-pointer.
     unsafe {
         let mut cnt: c_int = 0;
@@ -87,7 +91,7 @@ pub unsafe fn read_cnt_string(fd: *mut FILE, cnt_bytes: c_int, cntp: *mut c_int)
 /// # Safety
 ///
 /// `fd` must be positioned at the payload and `lp` be live.
-pub unsafe fn read_region_section(fd: *mut FILE, lp: *mut slang_T, len: c_int) -> c_int {
+pub(super) unsafe fn read_region_section(fd: *mut FILE, lp: *mut slang_T, len: c_int) -> c_int {
     // SAFETY: the length check below keeps the read inside `sl_regions`,
     // which holds MAXREGIONS * 2 letters plus a terminator.
     unsafe {
@@ -109,7 +113,7 @@ pub unsafe fn read_region_section(fd: *mut FILE, lp: *mut slang_T, len: c_int) -
 /// # Safety
 ///
 /// `fd` must be positioned at the payload.
-pub unsafe fn read_charflags_section(fd: *mut FILE) -> c_int {
+pub(super) unsafe fn read_charflags_section(fd: *mut FILE) -> c_int {
     // SAFETY: `fd` is open; both strings are owned here and freed here.
     unsafe {
         let mut flagslen: c_int = 0;
@@ -141,7 +145,7 @@ pub unsafe fn read_charflags_section(fd: *mut FILE) -> c_int {
 /// # Safety
 ///
 /// `fd` must be positioned at the payload and `lp` be live.
-pub unsafe fn read_prefcond_section(fd: *mut FILE, lp: *mut slang_T) -> c_int {
+pub(super) unsafe fn read_prefcond_section(fd: *mut FILE, lp: *mut slang_T) -> c_int {
     // SAFETY: `buf` is MAXWLEN + 1 and `n` is bounded below by MAXWLEN, so
     // the caret, the payload and the terminator all fit.
     unsafe {
@@ -150,7 +154,7 @@ pub unsafe fn read_prefcond_section(fd: *mut FILE, lp: *mut slang_T) -> c_int {
             return SP_FORMERROR;
         }
         (*lp).sl_prefprog =
-            xcalloc(cnt as size_t, core::mem::size_of::<*mut regprog_T>()).cast::<*mut regprog_T>();
+            xcalloc(cnt as size_t, size_of::<*mut regprog_T>()).cast::<*mut regprog_T>();
         (*lp).sl_prefixcnt = cnt;
 
         for i in 0..cnt {
@@ -181,7 +185,11 @@ pub unsafe fn read_prefcond_section(fd: *mut FILE, lp: *mut slang_T) -> c_int {
 ///
 /// `fd` must be positioned at the payload; `gap` must be an initialised
 /// `fromto_T` array and `first` a 256-entry table.
-pub unsafe fn read_rep_section(fd: *mut FILE, gap: *mut garray_T, first: *mut int16_t) -> c_int {
+pub(super) unsafe fn read_rep_section(
+    fd: *mut FILE,
+    gap: *mut garray_T,
+    first: *mut int16_t,
+) -> c_int {
     // SAFETY: the caller promises the array and the table; `ga_grow` makes
     // room for `cnt` entries before any is written.
     unsafe {
@@ -238,7 +246,7 @@ pub unsafe fn read_rep_section(fd: *mut FILE, gap: *mut garray_T, first: *mut in
 /// # Safety
 ///
 /// `fd` must be positioned at the payload and `slang` be live.
-pub unsafe fn read_sal_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
+pub(super) unsafe fn read_sal_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
     // SAFETY: each entry's buffer is `ccnt + 2` bytes, and the writes below
     // add at most `ccnt` characters plus two terminators.
     unsafe {
@@ -260,7 +268,7 @@ pub unsafe fn read_sal_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
             return SP_TRUNCERROR;
         }
         let gap = &raw mut (*slang).sl_sal;
-        ga_init(gap, core::mem::size_of::<salitem_T>() as c_int, 10);
+        ga_init(gap, size_of::<salitem_T>() as c_int, 10);
         // One spare for the terminating entry appended below.
         ga_grow(gap, cnt + 1);
 
@@ -383,7 +391,7 @@ pub unsafe fn read_sal_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
 /// # Safety
 ///
 /// `fd` must be positioned at the payload and `lp` be live.
-pub unsafe fn read_words_section(fd: *mut FILE, lp: *mut slang_T, len: c_int) -> c_int {
+pub(super) unsafe fn read_words_section(fd: *mut FILE, lp: *mut slang_T, len: c_int) -> c_int {
     // SAFETY: `word` is MAXWLEN and the loop refuses to fill its last slot.
     unsafe {
         let mut word: [uint8_t; MAXWLEN] = [0; MAXWLEN];
@@ -416,7 +424,7 @@ pub unsafe fn read_words_section(fd: *mut FILE, lp: *mut slang_T, len: c_int) ->
 /// # Safety
 ///
 /// `fd` must be positioned at the payload and `slang` be live.
-pub unsafe fn read_sofo_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
+pub(super) unsafe fn read_sofo_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
     // SAFETY: both strings are owned here and freed here.
     unsafe {
         (*slang).sl_sofo = true;
@@ -455,7 +463,7 @@ pub unsafe fn read_sofo_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
 /// # Safety
 ///
 /// `fd` must be positioned at the payload and `slang` be live.
-pub unsafe fn read_compound(fd: *mut FILE, slang: *mut slang_T, len: c_int) -> c_int {
+pub(super) unsafe fn read_compound(fd: *mut FILE, slang: *mut slang_T, len: c_int) -> c_int {
     // SAFETY: `pat` is sized from `todo` for the worst case — two bytes per
     // flag for the escaped forms, plus the fixed wrapper — and the flag
     // buffers are `todo + 1`, which is one per flag plus a terminator.
@@ -492,7 +500,7 @@ pub unsafe fn read_compound(fd: *mut FILE, slang: *mut slang_T, len: c_int) -> c
                 return SP_TRUNCERROR;
             }
             todo -= 2;
-            ga_init(gap, core::mem::size_of::<*mut c_char>() as c_int, cnt);
+            ga_init(gap, size_of::<*mut c_char>() as c_int, cnt);
             ga_grow(gap, cnt);
             while cnt > 0 {
                 cnt -= 1;
@@ -632,9 +640,9 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
     // exactly as many pairs as the first pass counted.
     unsafe {
         let gap = &raw mut (*lp).sl_sal;
-        ga_init(gap, core::mem::size_of::<*mut c_int>() as c_int, 1);
+        ga_init(gap, size_of::<*mut c_int>() as c_int, 1);
         ga_grow(gap, 256);
-        memset((*gap).ga_data, 0, core::mem::size_of::<*mut c_int>() * 256);
+        memset((*gap).ga_data, 0, size_of::<*mut c_int>() * 256);
         (*gap).ga_len = 256;
 
         // First pass: how many high characters share each low byte.
@@ -656,7 +664,7 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
             if (*lp).sl_sal_first[i] > 0 {
                 // Room for each pair plus a zero terminator.
                 let n = (*lp).sl_sal_first[i] as size_t * 2 + 1;
-                let list = xmalloc(core::mem::size_of::<c_int>() * n).cast::<c_int>();
+                let list = xmalloc(size_of::<c_int>() * n).cast::<c_int>();
                 *(*gap).ga_data.cast::<*mut c_int>().add(i) = list;
                 *list = 0;
             }
@@ -664,7 +672,7 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
         memset(
             (&raw mut (*lp).sl_sal_first).cast(),
             0,
-            core::mem::size_of::<salfirst_T>() * 256,
+            size_of::<salfirst_T>() * 256,
         );
 
         // Second pass: fill the lists and the direct table.
@@ -750,8 +758,7 @@ unsafe fn set_sal_first(lp: *mut slang_T) {
 unsafe fn mb_str2wide(s: *const c_char) -> *mut c_int {
     // SAFETY: the array is sized from the string's character count.
     unsafe {
-        let res =
-            xmalloc((mb_charlen(s) as size_t + 1) * core::mem::size_of::<c_int>()).cast::<c_int>();
+        let res = xmalloc((mb_charlen(s) as size_t + 1) * size_of::<c_int>()).cast::<c_int>();
         let mut i = 0;
         let mut p = s;
         while *p as c_int != NUL {
@@ -772,7 +779,7 @@ unsafe fn mb_str2wide(s: *const c_char) -> *mut c_int {
 /// # Safety
 ///
 /// `map` must be a NUL-terminated string.
-pub unsafe fn set_map_str(lp: *mut slang_T, map: *const c_char) {
+pub(super) unsafe fn set_map_str(lp: *mut slang_T, map: *const c_char) {
     // SAFETY: the caller promises the string; each hash key is its own
     // allocation, owned by the table.
     unsafe {

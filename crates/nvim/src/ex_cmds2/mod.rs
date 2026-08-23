@@ -100,22 +100,22 @@ mod flag {
     use crate::types::{dobuf_action_values, dobuf_start_values};
 
     /// `check_changed` flags.
-    pub const CCGD_AW: c_int = 1;
-    pub const CCGD_MULTWIN: c_int = 2;
-    pub const CCGD_FORCEIT: c_int = 4;
-    pub const CCGD_ALLBUF: c_int = 8;
-    pub const CCGD_EXCMD: c_int = 16;
+    pub(super) const CCGD_AW: c_int = 1;
+    pub(super) const CCGD_MULTWIN: c_int = 2;
+    pub(super) const CCGD_FORCEIT: c_int = 4;
+    pub(super) const CCGD_ALLBUF: c_int = 8;
+    pub(super) const CCGD_EXCMD: c_int = 16;
 
     /// `do_buffer` actions and starting points.
-    pub const DOBUF_GOTO: dobuf_action_values = 0;
-    pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-    pub const DOBUF_FIRST: dobuf_start_values = 1;
+    pub(super) const DOBUF_GOTO: dobuf_action_values = 0;
+    pub(super) const DOBUF_UNLOAD: dobuf_action_values = 2;
+    pub(super) const DOBUF_FIRST: dobuf_start_values = 1;
 
     /// `do_dialog` types; the answers live in `message.rs`.
-    pub const VIM_QUESTION: c_int = 4;
+    pub(super) const VIM_QUESTION: c_int = 4;
 
     /// The buffer `dialog_msg` formats into.
-    pub const DIALOG_MSG_SIZE: usize = 1000;
+    pub(super) const DIALOG_MSG_SIZE: usize = 1000;
 }
 
 // -- List walks -------------------------------------------------------------

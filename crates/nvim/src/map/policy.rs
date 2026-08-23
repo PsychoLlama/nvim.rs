@@ -16,24 +16,24 @@ mod limits {
     use crate::types::uint32_t;
 
     /// Smallest bucket table. Below this the probe sequence is not worth it.
-    pub const MIN_BUCKETS: uint32_t = 16;
+    pub(super) const MIN_BUCKETS: uint32_t = 16;
 
     /// Occupancy at which the table is considered full. `n_occupied` counts
     /// tombstones as well as live entries.
-    pub const UPPER_FILL: f64 = 0.77;
+    pub(super) const UPPER_FILL: f64 = 0.77;
 
     /// A table whose live entries are at least this fraction of the upper
     /// bound has genuinely outgrown it; below it, the pressure is tombstones.
-    pub const GROW_AT: f64 = 0.9;
+    pub(super) const GROW_AT: f64 = 0.9;
 
     /// The dense keys array's first heap size.
-    pub const MIN_KEYS: uint32_t = 8;
+    pub(crate) const MIN_KEYS: uint32_t = 8;
 }
 
-pub use limits::MIN_KEYS;
+pub(super) use limits::MIN_KEYS;
 
 /// Round a request up to a power of two, never below `MIN_BUCKETS`.
-pub fn bucket_count(n_min_buckets: uint32_t) -> uint32_t {
+pub(super) fn bucket_count(n_min_buckets: uint32_t) -> uint32_t {
     let n = n_min_buckets.max(limits::MIN_BUCKETS);
     // `next_power_of_two` of an exact power of two is itself, which is what
     // the C's decrement-smear-increment produces.
@@ -41,13 +41,13 @@ pub fn bucket_count(n_min_buckets: uint32_t) -> uint32_t {
 }
 
 /// How many buckets may be occupied before the table is resized.
-pub fn upper_bound(n_buckets: uint32_t) -> uint32_t {
+pub(super) fn upper_bound(n_buckets: uint32_t) -> uint32_t {
     (n_buckets as f64 * limits::UPPER_FILL + 0.5) as uint32_t
 }
 
 /// At the upper bound: grow the table, or just drop the tombstones and rehash
 /// in place?
-pub fn should_grow(size: uint32_t, upper_bound: uint32_t) -> bool {
+pub(super) fn should_grow(size: uint32_t, upper_bound: uint32_t) -> bool {
     size as f64 >= upper_bound as f64 * limits::GROW_AT
 }
 

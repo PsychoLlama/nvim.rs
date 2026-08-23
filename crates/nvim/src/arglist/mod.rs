@@ -76,24 +76,24 @@ mod flag {
     use super::{bln_values, c_int, c_uint, file_comparison};
 
     /// `buflist_new` flags.
-    pub const BLN_CURBUF: bln_values = 1;
-    pub const BLN_LISTED: bln_values = 2;
+    pub(super) const BLN_CURBUF: bln_values = 1;
+    pub(super) const BLN_LISTED: bln_values = 2;
 
     /// `check_changed` flags.
-    pub const CCGD_AW: c_uint = 1;
-    pub const CCGD_MULTWIN: c_uint = 2;
-    pub const CCGD_FORCEIT: c_uint = 4;
-    pub const CCGD_EXCMD: c_uint = 16;
+    pub(super) const CCGD_AW: c_uint = 1;
+    pub(super) const CCGD_MULTWIN: c_uint = 2;
+    pub(super) const CCGD_FORCEIT: c_uint = 4;
+    pub(super) const CCGD_EXCMD: c_uint = 16;
 
     /// `do_ecmd` flags and its `lnum` sentinels.
-    pub const ECMD_HIDE: c_uint = 1;
-    pub const ECMD_OLDBUF: c_uint = 4;
-    pub const ECMD_FORCEIT: c_uint = 8;
-    pub const ECMD_ONE: c_int = 1;
-    pub const ECMD_LAST: c_int = -1;
+    pub(super) const ECMD_HIDE: c_uint = 1;
+    pub(super) const ECMD_OLDBUF: c_uint = 4;
+    pub(super) const ECMD_FORCEIT: c_uint = 8;
+    pub(super) const ECMD_ONE: c_int = 1;
+    pub(super) const ECMD_LAST: c_int = -1;
 
     /// `path_full_compare` result bit meaning "the same file".
-    pub const kEqualFiles: file_comparison = 1;
+    pub(super) const kEqualFiles: file_comparison = 1;
 }
 use flag::*;
 

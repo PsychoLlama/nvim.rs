@@ -11,7 +11,7 @@
 use super::*;
 use crate::types::ExArgt;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{mem, ptr};
+use core::ptr;
 
 /// Nothing but spaces and tabs.
 ///
@@ -168,7 +168,7 @@ pub(crate) unsafe fn build_cmdline_str(
         // offsets below be recovered from the lengths alone.
         (*eap).argc = argc;
         (*eap).arglens = if argc > 0 {
-            xcalloc(argc, mem::size_of::<size_t>()).cast::<size_t>()
+            xcalloc(argc, size_of::<size_t>()).cast::<size_t>()
         } else {
             ptr::null_mut::<size_t>()
         };
@@ -184,7 +184,7 @@ pub(crate) unsafe fn build_cmdline_str(
 
         (*eap).cmd = cmdline.items.add(cmdname_idx);
         (*eap).args = if argc > 0 {
-            xcalloc(argc, mem::size_of::<*mut c_char>()).cast::<*mut c_char>()
+            xcalloc(argc, size_of::<*mut c_char>()).cast::<*mut c_char>()
         } else {
             ptr::null_mut::<*mut c_char>()
         };

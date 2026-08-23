@@ -85,15 +85,15 @@ mod flag {
     use super::{CdCause, c_char, c_int};
 
     /// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
-    pub const kCdCauseOther: CdCause = -1;
+    pub(super) const kCdCauseOther: CdCause = -1;
     /// `vim_strsave_fnameescape`: escape for an Ex command line.
-    pub const VSE_NONE: c_int = 0;
+    pub(super) const VSE_NONE: c_int = 0;
     /// `do_source`: this is not a vimrc.
-    pub const DOSO_NONE: c_int = 0;
+    pub(super) const DOSO_NONE: c_int = 0;
 
     /// Frame layouts.
-    pub const FR_LEAF: c_char = 0;
-    pub const FR_COL: c_char = 2;
+    pub(super) const FR_LEAF: c_char = 0;
+    pub(super) const FR_COL: c_char = 2;
 }
 
 use flag::{DOSO_NONE, VSE_NONE};

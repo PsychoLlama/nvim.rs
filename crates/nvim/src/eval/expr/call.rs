@@ -327,7 +327,7 @@ pub(crate) unsafe fn eval_method(
 ///
 /// # Safety
 /// `pt` must be null or valid.
-pub unsafe fn partial_name(pt: *mut partial_T) -> *mut c_char {
+pub(crate) unsafe fn partial_name(pt: *mut partial_T) -> *mut c_char {
     unsafe {
         if !pt.is_null() {
             if !(*pt).pt_name.is_null() {
@@ -366,7 +366,7 @@ unsafe fn partial_free(pt: *mut partial_T) {
 ///
 /// # Safety
 /// `pt` must be null or valid.
-pub unsafe fn partial_unref(pt: *mut partial_T) {
+pub(crate) unsafe fn partial_unref(pt: *mut partial_T) {
     unsafe {
         if pt.is_null() {
             return;

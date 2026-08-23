@@ -70,7 +70,7 @@ fn max_count(su: &suginfo_T) -> c_int {
 /// # Safety
 ///
 /// `gap` must be a garray of `suggest_T`.
-pub unsafe fn suggestions<'a>(gap: *mut garray_T) -> &'a mut [suggest_T] {
+pub(super) unsafe fn suggestions<'a>(gap: *mut garray_T) -> &'a mut [suggest_T] {
     // SAFETY: the caller guarantees the element type; an empty garray has a
     // null data pointer, which `from_raw_parts_mut` rejects even at length
     // zero.
@@ -94,7 +94,7 @@ pub unsafe fn suggestions<'a>(gap: *mut garray_T) -> &'a mut [suggest_T] {
 /// `su` and `gap` must be valid, `goodword` NUL-terminated, and `su`'s bad
 /// word must still point into the line it came from.
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn add_suggestion(
+pub(super) unsafe fn add_suggestion(
     su: *mut suginfo_T,
     gap: *mut garray_T,
     goodword: *const c_char,
@@ -177,7 +177,7 @@ pub unsafe fn add_suggestion(
             return;
         }
 
-        let stp = ga_append_via_ptr(gap, mem::size_of::<suggest_T>()) as *mut suggest_T;
+        let stp = ga_append_via_ptr(gap, size_of::<suggest_T>()) as *mut suggest_T;
         *stp = suggest_T {
             st_word: xmemdupz(goodword as *const c_void, goodlen as usize) as *mut c_char,
             st_wordlen: goodlen,
@@ -210,7 +210,7 @@ pub unsafe fn add_suggestion(
 /// # Safety
 ///
 /// `su` and `gap` must be valid and `gap` must hold `suggest_T`s.
-pub unsafe fn check_suggestions(su: *mut suginfo_T, gap: *mut garray_T) {
+pub(super) unsafe fn check_suggestions(su: *mut suginfo_T, gap: *mut garray_T) {
     // SAFETY: the caller guarantees the pointers; `longword` is sized for
     // any word plus a terminator and every copy into it is bounded.
     unsafe {
@@ -258,7 +258,7 @@ pub unsafe fn check_suggestions(su: *mut suginfo_T, gap: *mut garray_T) {
 /// # Safety
 ///
 /// `su` must be valid and `word` NUL-terminated.
-pub unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
+pub(super) unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
     // SAFETY: the caller guarantees the pointers; the copy handed to the
     // table is owned by it until `hash_clear_all` frees it.
     unsafe {
@@ -266,7 +266,7 @@ pub unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
         let word_len = strlen(word) as usize;
         let hi = hash_lookup(&raw mut (*su).su_banned, word, word_len, hash);
         let key = (*hi).hi_key;
-        if !(key.is_null() || core::ptr::eq(key, &raw const hash_removed)) {
+        if !(key.is_null() || ptr::eq(key, &raw const hash_removed)) {
             return; // already present
         }
         let owned = xmemdupz(word as *const c_void, word_len) as *mut c_char;
@@ -280,7 +280,7 @@ pub unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
 /// # Safety
 ///
 /// `su` must be valid.
-pub unsafe fn rescore_suggestions(su: *mut suginfo_T) {
+pub(super) unsafe fn rescore_suggestions(su: *mut suginfo_T) {
     // SAFETY: the caller guarantees the pointer.
     unsafe {
         if (*su).su_sallang.is_null() {
@@ -299,7 +299,7 @@ pub unsafe fn rescore_suggestions(su: *mut suginfo_T) {
 /// # Safety
 ///
 /// `su` must be valid.
-pub unsafe fn rescore_one(su: *mut suginfo_T, stp: &mut suggest_T) {
+pub(super) unsafe fn rescore_one(su: *mut suginfo_T, stp: &mut suggest_T) {
     let slang = stp.st_slang;
     // SAFETY: the caller guarantees `su`; `st_slang` is either null or a
     // loaded language that outlives the suggestion list.
@@ -342,7 +342,7 @@ pub unsafe fn rescore_one(su: *mut suginfo_T, stp: &mut suggest_T) {
 /// # Safety
 ///
 /// Both pointers must be to `suggest_T`s, as `qsort` guarantees.
-pub unsafe extern "C" fn sug_compare(s1: *const c_void, s2: *const c_void) -> c_int {
+pub(super) unsafe extern "C" fn sug_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     // SAFETY: `qsort` passes pointers to the elements of the array it was
     // given, which is an array of `suggest_T`.
     unsafe {
@@ -367,7 +367,11 @@ pub unsafe extern "C" fn sug_compare(s1: *const c_void, s2: *const c_void) -> c_
 /// # Safety
 ///
 /// `gap` must hold `suggest_T`s.
-pub unsafe fn cleanup_suggestions(gap: *mut garray_T, maxscore: c_int, keep: c_int) -> c_int {
+pub(super) unsafe fn cleanup_suggestions(
+    gap: *mut garray_T,
+    maxscore: c_int,
+    keep: c_int,
+) -> c_int {
     // SAFETY: the caller guarantees the element type; the comparator reads
     // exactly the elements `qsort` hands it.
     unsafe {
@@ -378,7 +382,7 @@ pub unsafe fn cleanup_suggestions(gap: *mut garray_T, maxscore: c_int, keep: c_i
         qsort(
             (*gap).ga_data,
             (*gap).ga_len as size_t,
-            mem::size_of::<suggest_T>() as size_t,
+            size_of::<suggest_T>() as size_t,
             Some(sug_compare as unsafe extern "C" fn(*const c_void, *const c_void) -> c_int)
                 as __compar_fn_t,
         );
@@ -406,7 +410,7 @@ pub unsafe fn cleanup_suggestions(gap: *mut garray_T, maxscore: c_int, keep: c_i
 ///
 /// `su` must be valid and the current window must have its languages
 /// loaded.
-pub unsafe fn score_comp_sal(su: *mut suginfo_T) {
+pub(super) unsafe fn score_comp_sal(su: *mut suginfo_T) {
     // SAFETY: the caller guarantees `su`; the languages come from the
     // current window's loaded list.
     unsafe {
@@ -457,7 +461,7 @@ pub unsafe fn score_comp_sal(su: *mut suginfo_T) {
 /// # Safety
 ///
 /// `su` must be valid.
-pub unsafe fn score_combine(su: *mut suginfo_T) {
+pub(super) unsafe fn score_combine(su: *mut suginfo_T) {
     // SAFETY: the caller guarantees `su`; both lists hold `suggest_T`s and
     // own their words until they are moved into the merged list.
     unsafe {
@@ -518,7 +522,7 @@ pub unsafe fn score_combine(su: *mut suginfo_T) {
         cleanup_suggestions(&raw mut (*su).su_sga, (*su).su_maxscore, (*su).su_maxcount);
 
         let mut ga: garray_T = mem::zeroed();
-        ga_init(&raw mut ga, mem::size_of::<suggest_T>() as c_int, 1);
+        ga_init(&raw mut ga, size_of::<suggest_T>() as c_int, 1);
         ga_grow(&raw mut ga, (*su).su_ga.ga_len + (*su).su_sga.ga_len);
         let merged = ga.ga_data as *mut suggest_T;
 

@@ -24,38 +24,38 @@
 mod tag {
     /// The longest sequence any encoder here produces: a one-byte tag plus an
     /// eight-byte payload. The packer guarantees this much room per item.
-    pub const ITEM_MAX: usize = 9;
+    pub(super) const ITEM_MAX: usize = 9;
 
-    pub const NIL: u8 = 0xc0;
-    pub const FALSE: u8 = 0xc2;
-    pub const BIN8: u8 = 0xc4;
-    pub const BIN16: u8 = 0xc5;
-    pub const BIN32: u8 = 0xc6;
-    pub const EXT8: u8 = 0xc7;
-    pub const EXT16: u8 = 0xc8;
-    pub const EXT32: u8 = 0xc9;
-    pub const FLOAT64: u8 = 0xcb;
-    pub const UINT8: u8 = 0xcc;
-    pub const UINT16: u8 = 0xcd;
-    pub const UINT32: u8 = 0xce;
-    pub const UINT64: u8 = 0xcf;
-    pub const INT8: u8 = 0xd0;
-    pub const INT16: u8 = 0xd1;
-    pub const INT32: u8 = 0xd2;
-    pub const INT64: u8 = 0xd3;
-    pub const FIXEXT1: u8 = 0xd4;
-    pub const FIXEXT2: u8 = 0xd5;
-    pub const STR8: u8 = 0xd9;
-    pub const STR16: u8 = 0xda;
-    pub const STR32: u8 = 0xdb;
+    pub(super) const NIL: u8 = 0xc0;
+    pub(super) const FALSE: u8 = 0xc2;
+    pub(super) const BIN8: u8 = 0xc4;
+    pub(super) const BIN16: u8 = 0xc5;
+    pub(super) const BIN32: u8 = 0xc6;
+    pub(super) const EXT8: u8 = 0xc7;
+    pub(super) const EXT16: u8 = 0xc8;
+    pub(super) const EXT32: u8 = 0xc9;
+    pub(super) const FLOAT64: u8 = 0xcb;
+    pub(super) const UINT8: u8 = 0xcc;
+    pub(super) const UINT16: u8 = 0xcd;
+    pub(super) const UINT32: u8 = 0xce;
+    pub(super) const UINT64: u8 = 0xcf;
+    pub(super) const INT8: u8 = 0xd0;
+    pub(super) const INT16: u8 = 0xd1;
+    pub(super) const INT32: u8 = 0xd2;
+    pub(super) const INT64: u8 = 0xd3;
+    pub(super) const FIXEXT1: u8 = 0xd4;
+    pub(super) const FIXEXT2: u8 = 0xd5;
+    pub(super) const STR8: u8 = 0xd9;
+    pub(super) const STR16: u8 = 0xda;
+    pub(super) const STR32: u8 = 0xdb;
     pub const ARRAY16: u8 = 0xdc;
-    pub const ARRAY32: u8 = 0xdd;
-    pub const MAP16: u8 = 0xde;
-    pub const MAP32: u8 = 0xdf;
+    pub(super) const ARRAY32: u8 = 0xdd;
+    pub(super) const MAP16: u8 = 0xde;
+    pub(super) const MAP32: u8 = 0xdf;
 
-    pub const FIXSTR: u8 = 0xa0;
-    pub const FIXARRAY: u8 = 0x90;
-    pub const FIXMAP: u8 = 0x80;
+    pub(super) const FIXSTR: u8 = 0xa0;
+    pub(super) const FIXARRAY: u8 = 0x90;
+    pub(super) const FIXMAP: u8 = 0x80;
 }
 
 use tag::ITEM_MAX;
@@ -197,7 +197,7 @@ pub fn array_header(len: u32) -> Item {
             tag::FIXARRAY | u8::try_from(len).expect("the msgpack width chosen above bounds this")
         ])
     } else if len < 0x10000 {
-        let mut item = Item::of(&[tag::ARRAY16]);
+        let mut item = Item::of(&[ARRAY16]);
         item.push_all(
             &u16::try_from(len)
                 .expect("the msgpack width chosen above bounds this")

@@ -141,8 +141,8 @@ pub unsafe fn arena_alloc_block(arena: *mut Arena) {
 }
 
 pub const ARENA_ALIGN: usize = {
-    let ptr_size = core::mem::size_of::<*mut c_void>();
-    let double_size = core::mem::size_of::<f64>();
+    let ptr_size = size_of::<*mut c_void>();
+    let double_size = size_of::<f64>();
     if ptr_size > double_size {
         ptr_size
     } else {

@@ -46,7 +46,7 @@ pub(super) struct Spec {
 impl Spec {
     /// Read `%0`, `%-` and the first digit group, which is as far as the
     /// item letters that overload the minimum width need.
-    pub fn read(fmt: &[u8], p: &mut usize) -> Self {
+    pub(super) fn read(fmt: &[u8], p: &mut usize) -> Self {
         // Numbers are left-padded with zeros.
         let zeropad = fmt[*p] == b'0';
         if zeropad {
@@ -72,7 +72,7 @@ impl Spec {
 
     /// Read the `.<maxwid>` half, then bound the minimum width and give it
     /// the sign that says which way the item is aligned.
-    pub fn finish(&mut self, fmt: &[u8], p: &mut usize) {
+    pub(super) fn finish(&mut self, fmt: &[u8], p: &mut usize) {
         if *p < fmt.len() && fmt[*p] == b'.' {
             *p += 1;
             if *p < fmt.len() && fmt[*p].is_ascii_digit() {
@@ -129,7 +129,7 @@ pub(super) struct NumPlan {
 
 impl NumPlan {
     /// The template, for the caller to hand to `vim_snprintf`.
-    pub fn template(&self) -> &CStr {
+    pub(super) fn template(&self) -> &CStr {
         cstr::in_bytes(&self.template)
     }
 }

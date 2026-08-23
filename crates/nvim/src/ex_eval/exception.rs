@@ -173,7 +173,7 @@ unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe:
             plist = &raw mut (**plist).next;
         }
 
-        let elem: *mut msglist_T = xmalloc(core::mem::size_of::<msglist_T>()).cast();
+        let elem: *mut msglist_T = xmalloc(size_of::<msglist_T>()).cast();
         (*elem).msg = xstrdup(mesg);
         (*elem).multiline = multiline;
         (*elem).next = ptr::null_mut();
@@ -422,7 +422,7 @@ pub(super) unsafe fn throw_exception(
             }
         }
 
-        let excp: *mut except_T = xmalloc(core::mem::size_of::<except_T>()).cast();
+        let excp: *mut except_T = xmalloc(size_of::<except_T>()).cast();
         if type_0 == ET_ERROR {
             // Keep the original messages; the value is prefixed below.
             (*excp).messages = value.cast();

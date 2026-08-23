@@ -18,7 +18,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// How much room `[>999/>999]` and its `W ` prefix need.
-const STAT_BUF_LEN: usize = super::SEARCH_STAT_BUF_LEN as usize;
+const STAT_BUF_LEN: usize = SEARCH_STAT_BUF_LEN as usize;
 
 /// What `[N/M]` and `searchcount()` report.
 #[derive(Clone, Copy, Default)]

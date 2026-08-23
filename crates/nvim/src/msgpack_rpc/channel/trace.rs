@@ -24,12 +24,12 @@ use crate::types::{uint32_t, uint64_t};
 mod column {
     use core::ffi::{CStr, c_int};
 
-    pub const LOGLVL_DBG: c_int = 1;
+    pub(super) const LOGLVL_DBG: c_int = 1;
 
-    pub const REQUEST: &CStr = c"[request]  ";
-    pub const RESPONSE: &CStr = c"[response] ";
-    pub const NOTIFY: &CStr = c"[notify]   ";
-    pub const ERROR: &CStr = c"[error]    ";
+    pub(super) const REQUEST: &CStr = c"[request]  ";
+    pub(super) const RESPONSE: &CStr = c"[response] ";
+    pub(super) const NOTIFY: &CStr = c"[notify]   ";
+    pub(super) const ERROR: &CStr = c"[error]    ";
 
     /// Sent by this editor.
     pub const SEND: &CStr = c"->";
@@ -38,13 +38,13 @@ mod column {
 
     /// The prefix every trace line shares. Passed as `logmsg`'s context rather
     /// than baked into the format, which is how the log file groups them.
-    pub const TAG: &CStr = c"RPC: ";
+    pub(super) const TAG: &CStr = c"RPC: ";
 
     /// The three line shapes. A traced line is always
     /// `<direction> <channel>: <column>` and then whatever the kind adds.
-    pub const FMT_ID_NAME: &CStr = c"%s %lu: %s id=%u: %s\n";
-    pub const FMT_NAME: &CStr = c"%s %lu: %s %s\n";
-    pub const FMT_ID: &CStr = c"%s %lu: %s id=%u\n";
+    pub(super) const FMT_ID_NAME: &CStr = c"%s %lu: %s id=%u: %s\n";
+    pub(super) const FMT_NAME: &CStr = c"%s %lu: %s %s\n";
+    pub(super) const FMT_ID: &CStr = c"%s %lu: %s id=%u\n";
 }
 
 pub use column::{RECV, SEND};

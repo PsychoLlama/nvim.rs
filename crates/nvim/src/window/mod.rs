@@ -368,7 +368,7 @@ pub unsafe fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool
 
 /// Whether `win` is on `tp`'s window list. `win` is only compared.
 fn valid_win_in_tab(tp: TabPage, win: *const win_T) -> bool {
-    !win.is_null() && windows_in_tab(tp).any(|wp| core::ptr::eq(wp.raw(), win))
+    !win.is_null() && windows_in_tab(tp).any(|wp| ptr::eq(wp.raw(), win))
 }
 
 pub fn win_find_by_handle(handle: handle_T) -> *mut win_T {

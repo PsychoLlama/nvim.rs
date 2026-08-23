@@ -17,7 +17,7 @@ use crate::tui::terminfo::caps::key_slot::*;
 use crate::tui::terminfo::caps::*;
 
 /// Cygwin's terminal.
-pub static CYGWIN: Description = Description {
+pub(super) static CYGWIN: Description = Description {
     bce: false,
     has_tc_or_rgb: false,
     su: false,
@@ -97,7 +97,7 @@ pub static CYGWIN: Description = Description {
 };
 
 /// The classic Windows console, before it spoke escape sequences.
-pub static WIN32CON: Description = Description {
+pub(super) static WIN32CON: Description = Description {
     bce: false,
     has_tc_or_rgb: false,
     su: false,
@@ -196,7 +196,7 @@ pub static WIN32CON: Description = Description {
 };
 
 /// ConEmu.
-pub static CONEMU: Description = Description {
+pub(super) static CONEMU: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -306,7 +306,7 @@ pub static CONEMU: Description = Description {
 };
 
 /// Windows' virtual-terminal console mode.
-pub static VTPCON: Description = Description {
+pub(super) static VTPCON: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,

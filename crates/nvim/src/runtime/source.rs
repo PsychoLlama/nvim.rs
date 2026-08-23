@@ -310,7 +310,7 @@ pub unsafe fn cmd_source_buffer(eap: *const exarg_T, ex_lua: bool) {
 /// `str` is NUL-terminated and `traceback_name` names the caller.
 pub unsafe fn do_source_str(str: *const c_char, mut traceback_name: *mut c_char) -> c_int {
     let mut sname_buf = [0 as c_char; 256];
-    let (name, lnum) = (estack::sourcing_name(), estack::sourcing_lnum());
+    let (name, lnum) = (sourcing_name(), sourcing_lnum());
     if !name.is_null() {
         let fmt = c"%s called at %s:%d".as_ptr();
         // SAFETY: `traceback_name` and `name` are NUL-terminated, and
@@ -506,8 +506,8 @@ unsafe fn open_script(cookie: &mut source_cookie_T, fname_exp: *mut c_char, chec
 /// # Safety
 /// Both formats take a `%s` for `fname`, and `numbered` a leading `%ld`.
 unsafe fn verbose_source_msg(plain: &CStr, numbered: &CStr, fname: *const c_char) {
-    let name = estack::sourcing_name();
-    let lnum = estack::sourcing_lnum() as int64_t;
+    let name = sourcing_name();
+    let lnum = sourcing_lnum() as int64_t;
     // SAFETY: the caller's contract on the two formats.
     unsafe {
         verbose_enter();
@@ -867,7 +867,7 @@ unsafe fn source_bracket(
         estack_pop();
     }
     if p_verbose.get() > 1 {
-        let resumed = estack::sourcing_name();
+        let resumed = sourcing_name();
         // SAFETY: both messages take a NUL-terminated name.
         unsafe {
             verbose_enter();

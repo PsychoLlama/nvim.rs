@@ -68,7 +68,7 @@ use super::{
 /// # Safety
 ///
 /// `wfname` must be the NUL-terminated path of a readable `.spl`.
-pub unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_char) {
+pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_char) {
     // SAFETY: `wfname` is a valid path and every pointer below is either
     // from `spin` or from the language just loaded.
     unsafe {
@@ -407,8 +407,8 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
         clear_node(tree);
         let nodecount = put_node(core::ptr::null_mut::<FILE>(), tree, 0, 0, false) as usize;
         put_bytes(fd, nodecount as uintmax_t, 4);
-        debug_assert!(nodecount + nodecount * core::mem::size_of::<c_int>() < c_int::MAX as usize);
-        spin.si_memtot += (nodecount + nodecount * core::mem::size_of::<c_int>()) as c_int;
+        debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
+        spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
         put_node(fd, tree, 0, 0, false);
 
         let wcount = (*spin.si_spellbuf).b_ml.ml_line_count;

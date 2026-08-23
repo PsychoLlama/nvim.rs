@@ -90,7 +90,7 @@ pub unsafe fn simplify_key(key: c_int, modifiers: *mut c_int) -> c_int {
             *modifiers &= !MOD_MASK_SHIFT;
             return K_S_TAB;
         }
-        match tables::simplify(key, *modifiers) {
+        match simplify(key, *modifiers) {
             Some((simplified, left)) => {
                 *modifiers = left;
                 simplified

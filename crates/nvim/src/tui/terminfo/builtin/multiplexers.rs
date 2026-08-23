@@ -17,7 +17,7 @@ use crate::tui::terminfo::caps::key_slot::*;
 use crate::tui::terminfo::caps::*;
 
 /// GNU screen.
-pub static SCREEN_256COLOUR: Description = Description {
+pub(super) static SCREEN_256COLOUR: Description = Description {
     bce: false,
     has_tc_or_rgb: false,
     su: false,
@@ -81,7 +81,7 @@ pub static SCREEN_256COLOUR: Description = Description {
 };
 
 /// tmux.
-pub static TMUX_256COLOUR: Description = Description {
+pub(super) static TMUX_256COLOUR: Description = Description {
     bce: false,
     has_tc_or_rgb: false,
     su: false,

@@ -61,7 +61,7 @@ unsafe fn try_to_free_memory() {
     unsafe {
         clear_sb_text(true);
         mf_release_all();
-        arena::free_reuse_blks();
+        free_reuse_blks();
     }
     trying_to_free.set(false);
 }

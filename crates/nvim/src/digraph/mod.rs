@@ -742,11 +742,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
     // cleared.
     unsafe {
         (*buf).b_kmap_state = 0;
-        ga_init(
-            &raw mut (*buf).b_kmap_ga,
-            core::mem::size_of::<kmap_T>() as c_int,
-            20,
-        );
+        ga_init(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>() as c_int, 20);
     }
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
@@ -796,10 +792,8 @@ unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
                 // SAFETY: the garray is sized for `kmap_T`, so the appended
                 // slot is one; `xmemdupz` copies both slices out of `line`.
                 unsafe {
-                    let kp = ga_append_via_ptr(
-                        &raw mut (*buf).b_kmap_ga,
-                        core::mem::size_of::<kmap_T>(),
-                    ) as *mut kmap_T;
+                    let kp = ga_append_via_ptr(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>())
+                        as *mut kmap_T;
                     (*kp).from =
                         xmemdupz(from.as_ptr() as *const c_void, from.len()) as *mut c_char;
                     (*kp).to = xmemdupz(to.as_ptr() as *const c_void, to.len()) as *mut c_char;

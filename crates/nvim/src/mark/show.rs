@@ -457,7 +457,7 @@ pub(super) unsafe fn mark_line(pos: pos_T, lead_len: c_int) -> *mut c_char {
 /// live.
 pub unsafe fn fm_getname(fmark: *mut fmark_T, lead_len: c_int) -> *mut c_char {
     // SAFETY: the caller promised a live record; `curbuf` is live.
-    let (fm, buf) = unsafe { (super::store::Fmark::new(fmark), Buf::current()) };
+    let (fm, buf) = unsafe { (Fmark::new(fmark), Buf::current()) };
     if fm.fnum() == buf.handle {
         // SAFETY: `curbuf` is live.
         return unsafe { mark_line(fm.pos(), lead_len) };

@@ -44,6 +44,19 @@ nvim-mainthread = { path = "../mainthread" }
 [lints.rust]
 unsafe_op_in_unsafe_fn = "allow"
 
+# The crate root is a flat namespace of ~130 `pub mod`s, so for most of the
+# migration "pub" said nothing: an item was `pub` because c2rust made every
+# translation unit's symbols visible, not because anything outside reached it.
+# Both of these were counted down to zero as ratcheted totals (they are
+# allow-by-default, so the count had to be asked for) and are denied here
+# instead, the same way the `warnings` metric retired into RUSTFLAGS once it
+# hit zero. What the deny buys is a real invariant: inside this crate,
+# **`pub` now means externally reachable**, which is what makes a visibility
+# ledger over the `pub` surface mean anything. The fix for a new finding is to
+# narrow the item, not to widen its module.
+unreachable_pub = "deny"
+unused_qualifications = "deny"
+
 # `just lint` runs clippy with correctness at its deny default; suspicious/
 # complexity/perf/style warn and burn down through the ratchet
 # (metrics/clippy.json). The opt-in groups (pedantic, restriction, nursery,

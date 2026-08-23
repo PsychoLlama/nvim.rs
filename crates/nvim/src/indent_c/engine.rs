@@ -196,7 +196,7 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
         }
 
         let mut amount = if paren.is_null() {
-            inblock::indent_in_block(line, *brace)
+            indent_in_block(line, *brace)
         } else {
             inparen::indent_in_parens(line, *paren)
         };

@@ -52,10 +52,10 @@ use ::libc::{strcpy, strlen};
 use core::ffi::{c_char, c_int};
 
 /// A sound-folded word and the room around it, as the callers keep it.
-pub type SoundBuf = [c_char; MAXWLEN];
+pub(super) type SoundBuf = [c_char; MAXWLEN];
 
 /// An empty sound-fold buffer, ready to be filled by `spell_soundfold`.
-pub const EMPTY_SOUND: SoundBuf = [0; MAXWLEN];
+pub(super) const EMPTY_SOUND: SoundBuf = [0; MAXWLEN];
 
 /// The character that sound-folding puts at the front of a word starting
 /// with a vowel. Adding or dropping one is cheaper than a real edit.
@@ -64,7 +64,7 @@ const SOUND_VOWEL: c_char = b'*' as c_char;
 /// Fold a character for comparison, mirroring the `SPELL_TOFOLD` macro:
 /// the byte table covers Latin-1, everything above it goes through the
 /// Unicode fold.
-pub fn spell_tofold(c: c_int) -> c_int {
+pub(super) fn spell_tofold(c: c_int) -> c_int {
     if c >= 128 {
         utf_fold(c)
     } else {
@@ -77,7 +77,7 @@ pub fn spell_tofold(c: c_int) -> c_int {
 
 /// Is this character upper-case? The byte table covers Latin-1,
 /// everything above it goes through Unicode.
-pub fn spell_isupper(c: c_int) -> bool {
+pub(super) fn spell_isupper(c: c_int) -> bool {
     if c >= 128 {
         mb_isupper(c)
     } else {
@@ -113,7 +113,7 @@ unsafe fn word_chars(word: *const c_char, out: &mut [c_int; MAXWLEN]) -> usize {
 
 /// Returns true if `c1` and `c2` are similar characters according to the
 /// `MAP` lines in the .aff file.
-pub fn similar_chars(slang: &slang_T, c1: c_int, c2: c_int) -> bool {
+pub(super) fn similar_chars(slang: &slang_T, c1: c_int, c2: c_int) -> bool {
     let m1 = map_class(slang, c1);
     // A character with no MAP entry is similar to nothing, not even to
     // another character with no entry.
@@ -151,7 +151,7 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
 /// # Safety
 ///
 /// `word` must be a NUL-terminated string.
-pub unsafe fn score_wordcount_adj(
+pub(super) unsafe fn score_wordcount_adj(
     slang: &slang_T,
     score: c_int,
     word: *mut c_char,
@@ -250,7 +250,7 @@ fn tail_len(buf: &SoundBuf, from: usize) -> usize {
 ///
 /// Both arguments are whole buffers rather than strings; see the module
 /// docs for why.
-pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
+pub(super) fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
     let mut gi = 0;
     let mut bi = 0;
     let mut score = 0;
@@ -458,7 +458,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
 ///
 /// Both words must be NUL-terminated and shorter than `MAXWLEN`
 /// characters.
-pub unsafe fn spell_edit_score(
+pub(super) unsafe fn spell_edit_score(
     slang: Option<&slang_T>,
     badword: *const c_char,
     goodword: *const c_char,
@@ -544,7 +544,7 @@ const SCORE_EDIT_MIN: c_int = SCORE_SIMILAR;
 ///
 /// Both words must be NUL-terminated and shorter than `MAXWLEN`
 /// characters.
-pub unsafe fn spell_edit_score_limit(
+pub(super) unsafe fn spell_edit_score_limit(
     slang: Option<&slang_T>,
     badword: *const c_char,
     goodword: *const c_char,
@@ -708,7 +708,7 @@ fn pop(
 ///
 /// `stp` and `su` must be valid, and `su`'s bad word must still point into
 /// the line it was taken from.
-pub unsafe fn stp_sal_score(
+pub(super) unsafe fn stp_sal_score(
     stp: &suggest_T,
     su: &suginfo_T,
     slang: *mut slang_T,

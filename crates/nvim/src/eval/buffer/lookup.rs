@@ -180,7 +180,7 @@ unsafe fn buf_win_common(args: Args<'_>, rettv: &mut typval_T, get_nr: bool) {
     let mut winnr = 0;
     let found = windows_in_tab(tp).find(|wp| {
         winnr += c_int::from(wp.has_winnr(tp));
-        core::ptr::eq(wp.w_buffer, buf) && (!get_nr || wp.has_winnr(tp))
+        ptr::eq(wp.w_buffer, buf) && (!get_nr || wp.has_winnr(tp))
     });
     rettv.vval.v_number = match found {
         Some(wp) => varnumber_T::from(if get_nr { winnr } else { wp.handle }),

@@ -131,7 +131,7 @@ pub(super) struct Env {
 
 impl Env {
     /// Whether this is a `'statuscolumn'` expansion.
-    pub fn is_statuscol(&self) -> bool {
+    pub(super) fn is_statuscol(&self) -> bool {
         !self.stcp.is_null()
     }
 
@@ -141,7 +141,7 @@ impl Env {
     /// No arena borrow may be live across this: it re-enters the evaluator,
     /// which can reach `nvim_eval_statusline()` and land back in
     /// [`build_stl_str_hl`].
-    pub fn eval(&self, expr: &CStr) -> Option<Vec<u8>> {
+    pub(super) fn eval(&self, expr: &CStr) -> Option<Vec<u8>> {
         // Upstream publishes the *real* current buffer and window under
         // `g:actual_curbuf`/`g:actual_curwin`, because the two below are
         // about to be swapped out from under the expression.
@@ -173,7 +173,7 @@ impl Env {
     /// The `%f`/`%F`/`%t` file name: the buffer's special name if it has one,
     /// otherwise its path with `$HOME` folded away, made printable and
     /// optionally cut down to its last component.
-    pub fn file_name(&self, full: bool, tail: bool, text: &mut Vec<u8>) {
+    pub(super) fn file_name(&self, full: bool, tail: bool, text: &mut Vec<u8>) {
         // SAFETY: a live buffer; `buf_spname` answers a string or null.
         let name = unsafe { buf_spname(self.buf.raw()) };
         with_name_buff(|nb| {
@@ -216,7 +216,7 @@ impl Env {
     }
 
     /// The byte offset of the cursor line, for `%o`/`%O`.
-    pub fn line_offset(&self) -> c_int {
+    pub(super) fn line_offset(&self) -> c_int {
         // SAFETY: a live buffer and its own cursor line.
         unsafe {
             ml_find_line_or_offset(
@@ -229,7 +229,7 @@ impl Env {
     }
 
     /// `%p`: how far through the buffer the cursor is, as a percentage.
-    pub fn percentage(&self) -> c_int {
+    pub(super) fn percentage(&self) -> c_int {
         calc_percentage(
             self.win.w_cursor.lnum as int64_t,
             self.buf.b_ml.ml_line_count as int64_t,
@@ -237,7 +237,7 @@ impl Env {
     }
 
     /// `%P`: the same, but as `Top`/`Bot`/`All` when it has a name.
-    pub fn rel_pos(&self, text: &mut Vec<u8>) {
+    pub(super) fn rel_pos(&self, text: &mut Vec<u8>) {
         let mut buf = [0u8; TMPLEN as usize];
         // SAFETY: the buffer is this frame's, and its length is what
         // `get_rel_pos` is told.
@@ -246,7 +246,7 @@ impl Env {
     }
 
     /// `%a`: the argument list position, when there is one.
-    pub fn arg_number(&self, text: &mut Vec<u8>) {
+    pub(super) fn arg_number(&self, text: &mut Vec<u8>) {
         let mut buf = [0u8; TMPLEN as usize];
         // SAFETY: as [`Env::rel_pos`]. The buffer starts empty because
         // `append_arg_number` appends to what is already there.
@@ -263,7 +263,7 @@ impl Env {
     }
 
     /// `%k`: the active `'keymap'`, in angle brackets.
-    pub fn keymap(&self, text: &mut Vec<u8>) {
+    pub(super) fn keymap(&self, text: &mut Vec<u8>) {
         // SAFETY: a live window.
         let Some(name) = (unsafe { keymap_str(self.win.raw()) }) else {
             return;
@@ -279,7 +279,7 @@ impl Env {
     }
 
     /// `%q`: the quickfix or location list title, when this is one.
-    pub fn quickfix_title(&self, text: &mut Vec<u8>) {
+    pub(super) fn quickfix_title(&self, text: &mut Vec<u8>) {
         // SAFETY: a live buffer.
         if !unsafe { bt_quickfix(self.buf.raw()) } {
             return;
@@ -295,14 +295,14 @@ impl Env {
     }
 
     /// `%m`/`%M`: whether the buffer has unsaved changes.
-    pub fn is_changed(&self) -> bool {
+    pub(super) fn is_changed(&self) -> bool {
         // SAFETY: a live buffer.
         unsafe { buf_is_changed(self.buf.raw()) }
     }
 
     /// `%b`/`%B`: the character under the cursor, with the line ending the
     /// file format actually uses.
-    pub fn byte_value(&self) -> c_int {
+    pub(super) fn byte_value(&self) -> c_int {
         let num = self.byteval;
         if num == NL {
             0
@@ -321,7 +321,7 @@ impl Env {
 
     /// `%S`: `'showcmd'`'s pending keys, but only in the option
     /// `'showcmdloc'` names.
-    pub fn showcmd(&self, text: &mut Vec<u8>) {
+    pub(super) fn showcmd(&self, text: &mut Vec<u8>) {
         if p_sc.get() == 0 {
             return;
         }
@@ -336,14 +336,14 @@ impl Env {
     }
 
     /// How wide the fold column is here, which is what `%C` draws.
-    pub fn fold_column_width(&self) -> c_int {
+    pub(super) fn fold_column_width(&self) -> c_int {
         // SAFETY: a live window.
         unsafe { compute_foldcolumn(self.win.raw(), 0) }
     }
 
     /// Draw the fold column's `fdc` glyphs into `text`, answering the
     /// highlight id they draw in.
-    pub fn fold_glyphs(&self, fdc: c_int, text: &mut Vec<u8>) -> c_int {
+    pub(super) fn fold_glyphs(&self, fdc: c_int, text: &mut Vec<u8>) -> c_int {
         let mut glyphs = [0 as schar_T; 9];
         // The line the fold item describes is `v:lnum`, not the cursor line.
         let lnum = vim_var(Vv::Lnum) as linenr_T;
@@ -373,7 +373,7 @@ impl Env {
     }
 
     /// The buffer's `'filetype'`, which `%y` and `%Y` bracket.
-    pub fn with_filetype<R>(&self, f: impl FnOnce(&[u8]) -> R) -> R {
+    pub(super) fn with_filetype<R>(&self, f: impl FnOnce(&[u8]) -> R) -> R {
         // SAFETY: a string option always holds a NUL-terminated string, and
         // the borrow ends before anything can `:set` it.
         f(unsafe { CStr::from_ptr(self.buf.b_p_ft) }.to_bytes())
@@ -383,7 +383,7 @@ impl Env {
     ///
     /// Answers `None` where there is no sign, which is drawn as two blanks
     /// in the default highlight.
-    pub fn sign_text(&self, i: usize, text: &mut Vec<u8>) -> Option<c_int> {
+    pub(super) fn sign_text(&self, i: usize, text: &mut Vec<u8>) -> Option<c_int> {
         // SAFETY: `stcp` is non-null here, and `sattrs` holds at least
         // `w_scwidth` entries -- which is the loop bound the caller uses.
         let mut sattr = unsafe { *(*self.stcp).sattrs.add(i) };
@@ -408,7 +408,7 @@ impl Env {
 
     /// Whether the sign column is the number column and already has a sign
     /// in it, which is what makes `%l` draw the sign instead.
-    pub fn number_column_has_sign(&self) -> bool {
+    pub(super) fn number_column_has_sign(&self) -> bool {
         // SAFETY: `stcp` is non-null here, and `sattrs` is never empty.
         unsafe { (*(*self.stcp).sattrs).text[0] != 0 }
     }
@@ -560,12 +560,12 @@ impl Fill {
     }
 
     /// How many bytes one of it takes.
-    pub fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         self.len
     }
 
     /// Whether it is the `-` that must not be put in front of a digit.
-    pub fn is_dash(&self) -> bool {
+    pub(super) fn is_dash(&self) -> bool {
         self.schar == b'-' as schar_T
     }
 
@@ -574,7 +574,7 @@ impl Fill {
     /// The slice bound is real: upstream guards only that `at` is before the
     /// last byte of the buffer, so a fill character several bytes wide could
     /// write past its end. Here that panics instead.
-    pub fn put(&self, out: &mut [u8], at: usize) -> usize {
+    pub(super) fn put(&self, out: &mut [u8], at: usize) -> usize {
         out[at..at + self.len].copy_from_slice(&self.bytes[..self.len]);
         at + self.len
     }

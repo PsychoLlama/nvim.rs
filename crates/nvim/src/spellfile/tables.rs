@@ -32,7 +32,7 @@ use super::{MAXWLEN, e_afftrailing, spellinfo_T};
 /// # Safety
 ///
 /// As [`handle_line`].
-pub unsafe fn append_info(spin: *mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn append_info(spin: *mut spellinfo_T, items: &[*mut c_char]) {
     // SAFETY: the buffer is sized for the old text, a newline, both items
     // and a space, plus the terminator.
     unsafe {
@@ -60,7 +60,7 @@ pub unsafe fn append_info(spin: *mut spellinfo_T, items: &[*mut c_char]) {
 /// # Safety
 ///
 /// As [`handle_line`].
-pub unsafe fn add_comppat(spin: *mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn add_comppat(spin: *mut spellinfo_T, items: &[*mut c_char]) {
     // SAFETY: `ga_grow(2)` makes room for the pair appended below.
     unsafe {
         let gap = &raw mut (*spin).si_comppat;
@@ -90,7 +90,7 @@ pub unsafe fn add_comppat(spin: *mut spellinfo_T, items: &[*mut c_char]) {
 /// # Safety
 ///
 /// As [`handle_line`].
-pub unsafe fn add_rep_entry(
+pub(super) unsafe fn add_rep_entry(
     spin: *mut spellinfo_T,
     st: &AffState,
     items: &[*mut c_char],
@@ -131,7 +131,7 @@ pub unsafe fn add_rep_entry(
 /// # Safety
 ///
 /// As [`handle_line`].
-pub unsafe fn handle_map(
+pub(super) unsafe fn handle_map(
     spin: *mut spellinfo_T,
     st: &mut AffState,
     items: &[*mut c_char],
@@ -183,7 +183,7 @@ pub unsafe fn handle_map(
 /// # Safety
 ///
 /// As [`handle_line`].
-pub unsafe fn handle_sal(spin: *mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn handle_sal(spin: *mut spellinfo_T, items: &[*mut c_char]) {
     // SAFETY: the caller promises the items.
     unsafe {
         let settings: [(&CStr, *mut c_int); 3] = [
@@ -212,7 +212,7 @@ pub unsafe fn handle_sal(spin: *mut spellinfo_T, items: &[*mut c_char]) {
 /// # Safety
 ///
 /// `from` and `to` must be NUL-terminated and `gap` a `fromto_T` array.
-pub unsafe fn add_fromto(
+pub(super) unsafe fn add_fromto(
     spin: *mut spellinfo_T,
     gap: *mut garray_T,
     from: *mut c_char,
@@ -220,7 +220,7 @@ pub unsafe fn add_fromto(
 ) {
     // SAFETY: `word` is MAXWLEN, the bound spell_casefold is given.
     unsafe {
-        let ftp = ga_append_via_ptr(gap, core::mem::size_of::<fromto_T>()).cast::<fromto_T>();
+        let ftp = ga_append_via_ptr(gap, size_of::<fromto_T>()).cast::<fromto_T>();
         let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
 
         spell_casefold(
@@ -247,7 +247,7 @@ pub unsafe fn add_fromto(
 /// # Safety
 ///
 /// `s` must be NUL-terminated.
-pub unsafe fn sal_to_bool(s: *mut c_char) -> bool {
+pub(super) unsafe fn sal_to_bool(s: *mut c_char) -> bool {
     // SAFETY: the caller promises the string.
     unsafe { strcmp(s, c"1".as_ptr()) == 0 || strcmp(s, c"true".as_ptr()) == 0 }
 }

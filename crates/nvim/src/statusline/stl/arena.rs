@@ -172,7 +172,7 @@ impl StlScratch {
     /// writes past the arena when the cursor was near its end. Here every
     /// recording call asks first, which cannot overflow and grows the arena
     /// at the same points otherwise.
-    pub fn grow(&mut self) {
+    pub(super) fn grow(&mut self) {
         if self.curitem < self.items.len() {
             return;
         }
@@ -189,7 +189,7 @@ impl StlScratch {
     }
 
     /// Record `item` and advance the cursor.
-    pub fn push_item(&mut self, item: StlItem) {
+    pub(super) fn push_item(&mut self, item: StlItem) {
         self.grow();
         let at = self.curitem;
         self.items[at] = item;
@@ -198,7 +198,7 @@ impl StlScratch {
 
     /// Record `kind` starting at `start`, which is all the items that carry
     /// no argument need.
-    pub fn push(&mut self, kind: Kind, start: usize) {
+    pub(super) fn push(&mut self, kind: Kind, start: usize) {
         self.push_item(StlItem {
             start,
             kind,
@@ -252,7 +252,7 @@ impl Built {
     /// habit of storing an absolute item index in the *count*, which for a
     /// nested expansion names a range running off the end. Upstream reads
     /// past the arena there; here the reading stops at it.
-    pub fn items(&self, arena: usize) -> core::ops::Range<usize> {
+    pub(super) fn items(&self, arena: usize) -> core::ops::Range<usize> {
         self.evalstart..(self.evalstart + self.itemcnt).min(arena)
     }
 }

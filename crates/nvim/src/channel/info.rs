@@ -356,12 +356,12 @@ pub unsafe fn channel_all_info(arena: *mut Arena) -> Array {
     // bump allocator, so building the dicts leaves the id array where it is.
     unsafe {
         let n = (*map).set.h.n_keys as usize;
-        let ids = arena_alloc(arena, mem::size_of::<int64_t>() * n, true).cast::<int64_t>();
+        let ids = arena_alloc(arena, size_of::<int64_t>() * n, true).cast::<int64_t>();
         for i in 0..n {
             *ids.add(i) = *(*map).set.keys.add(i) as int64_t;
         }
         // The map iterates in hash order; the API contract is ascending id.
-        qsort(ids.cast(), n, mem::size_of::<int64_t>(), Some(int64_t_cmp));
+        qsort(ids.cast(), n, size_of::<int64_t>(), Some(int64_t_cmp));
 
         let mut ret = arena_array(arena, n);
         for i in 0..n {

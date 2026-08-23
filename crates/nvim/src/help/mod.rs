@@ -69,29 +69,29 @@ mod flag {
     use core::ffi::c_uint;
 
     /// `find_tags` flags.
-    pub const TAG_HELP: c_uint = 1;
-    pub const TAG_NAMES: c_uint = 2;
-    pub const TAG_REGEXP: c_uint = 4;
-    pub const TAG_VERBOSE: c_uint = 32;
-    pub const TAG_KEEP_LANG: c_uint = 128;
-    pub const TAG_NO_TAGFUNC: c_uint = 256;
+    pub(super) const TAG_HELP: c_uint = 1;
+    pub(super) const TAG_NAMES: c_uint = 2;
+    pub(super) const TAG_REGEXP: c_uint = 4;
+    pub(super) const TAG_VERBOSE: c_uint = 32;
+    pub(super) const TAG_KEEP_LANG: c_uint = 128;
+    pub(super) const TAG_NO_TAGFUNC: c_uint = 256;
     /// The longest match list `:help` will show.
-    pub const TAG_MANY: c_uint = 300;
+    pub(super) const TAG_MANY: c_uint = 300;
     /// `do_tag`'s "this is a help tag" kind.
-    pub const DT_HELP: c_uint = 8;
+    pub(super) const DT_HELP: c_uint = 8;
 
     /// `do_ecmd` flags and its "last line" line number.
-    pub const ECMD_HIDE: c_uint = 1;
-    pub const ECMD_SET_HELP: c_uint = 2;
-    pub const ECMD_LASTL: c_int = 0;
+    pub(super) const ECMD_HIDE: c_uint = 1;
+    pub(super) const ECMD_SET_HELP: c_uint = 2;
+    pub(super) const ECMD_LASTL: c_int = 0;
 
     /// `path_full_compare`'s "same file" answer.
-    pub const kEqualFiles: file_comparison = 1;
+    pub(super) const kEqualFiles: file_comparison = 1;
     /// `nlua_exec` return modes.
-    pub const kRetObject: LuaRetMode = 0;
-    pub const kRetNilBool: LuaRetMode = 1;
+    pub(super) const kRetObject: LuaRetMode = 0;
+    pub(super) const kRetNilBool: LuaRetMode = 1;
     /// `OptVal`'s string tag.
-    pub const kOptValTypeString: c_int = 2;
+    pub(super) const kOptValTypeString: c_int = 2;
 }
 
 use flag::{

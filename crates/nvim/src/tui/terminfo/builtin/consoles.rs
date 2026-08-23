@@ -18,7 +18,7 @@ use crate::tui::terminfo::caps::key_slot::*;
 use crate::tui::terminfo::caps::*;
 
 /// The last-resort description: what any ANSI/ECMA-48 terminal can be assumed to do.
-pub static ANSI: Description = Description {
+pub(super) static ANSI: Description = Description {
     bce: false,
     has_tc_or_rgb: false,
     su: false,
@@ -68,7 +68,7 @@ pub static ANSI: Description = Description {
 };
 
 /// Interix, the POSIX subsystem Microsoft once shipped for Windows.
-pub static INTERIX_8COLOUR: Description = Description {
+pub(super) static INTERIX_8COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -181,7 +181,7 @@ pub static INTERIX_8COLOUR: Description = Description {
 };
 
 /// The Linux kernel console.
-pub static LINUX_16COLOUR: Description = Description {
+pub(super) static LINUX_16COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,

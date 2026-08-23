@@ -39,18 +39,18 @@ type Params<'a> = [Option<&'a [u8]>; CSI_MAX_PARAMS];
 /// Nested so these short, generic names stay out of the flat namespace the unit
 /// tests' generated C declarations share.
 mod byte {
-    pub const ESC: u8 = 0x1b;
-    pub const BEL: u8 = 0x07;
-    pub const SS3_7BIT: u8 = b'O';
-    pub const CSI_7BIT: u8 = b'[';
-    pub const DCS_7BIT: u8 = b'P';
-    pub const OSC_7BIT: u8 = b']';
-    pub const APC_7BIT: u8 = b'_';
-    pub const SS3_8BIT: u8 = 0x8f;
-    pub const DCS_8BIT: u8 = 0x90;
-    pub const CSI_8BIT: u8 = 0x9b;
-    pub const STRING_TERMINATOR_8BIT: u8 = 0x9c;
-    pub const OSC_8BIT: u8 = 0x9d;
+    pub(super) const ESC: u8 = 0x1b;
+    pub(super) const BEL: u8 = 0x07;
+    pub(super) const SS3_7BIT: u8 = b'O';
+    pub(super) const CSI_7BIT: u8 = b'[';
+    pub(super) const DCS_7BIT: u8 = b'P';
+    pub(super) const OSC_7BIT: u8 = b']';
+    pub(super) const APC_7BIT: u8 = b'_';
+    pub(super) const SS3_8BIT: u8 = 0x8f;
+    pub(super) const DCS_8BIT: u8 = 0x90;
+    pub(super) const CSI_8BIT: u8 = 0x9b;
+    pub(super) const STRING_TERMINATOR_8BIT: u8 = 0x9c;
+    pub(super) const OSC_8BIT: u8 = 0x9d;
 }
 use byte::{
     APC_7BIT, BEL, CSI_7BIT, CSI_8BIT, DCS_7BIT, DCS_8BIT, ESC, OSC_7BIT, OSC_8BIT, SS3_7BIT,

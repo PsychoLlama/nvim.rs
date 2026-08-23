@@ -17,44 +17,44 @@
 use crate::types::{cc_t, tcflag_t, termios};
 
 // Input modes.
-pub const ICRNL: tcflag_t = 0o400;
-pub const IXON: tcflag_t = 0o2000;
-pub const IUTF8: tcflag_t = 0o40000;
+pub(super) const ICRNL: tcflag_t = 0o400;
+pub(super) const IXON: tcflag_t = 0o2000;
+pub(super) const IUTF8: tcflag_t = 0o40000;
 
 // Output modes.
-pub const OPOST: tcflag_t = 0o1;
-pub const ONLCR: tcflag_t = 0o4;
+pub(super) const OPOST: tcflag_t = 0o1;
+pub(super) const ONLCR: tcflag_t = 0o4;
 
 // Control modes.
-pub const CS8: tcflag_t = 0o60;
-pub const CREAD: tcflag_t = 0o200;
+pub(super) const CS8: tcflag_t = 0o60;
+pub(super) const CREAD: tcflag_t = 0o200;
 
 // Local modes.
-pub const ISIG: tcflag_t = 0o1;
-pub const ICANON: tcflag_t = 0o2;
-pub const ECHO: tcflag_t = 0o10;
-pub const ECHOE: tcflag_t = 0o20;
-pub const ECHOK: tcflag_t = 0o40;
-pub const ECHOCTL: tcflag_t = 0o1000;
-pub const ECHOKE: tcflag_t = 0o4000;
-pub const IEXTEN: tcflag_t = 0o100000;
+pub(super) const ISIG: tcflag_t = 0o1;
+pub(super) const ICANON: tcflag_t = 0o2;
+pub(super) const ECHO: tcflag_t = 0o10;
+pub(super) const ECHOE: tcflag_t = 0o20;
+pub(super) const ECHOK: tcflag_t = 0o40;
+pub(super) const ECHOCTL: tcflag_t = 0o1000;
+pub(super) const ECHOKE: tcflag_t = 0o4000;
+pub(super) const IEXTEN: tcflag_t = 0o100000;
 
 // Indices into `c_cc`.
-pub const VINTR: usize = 0;
-pub const VQUIT: usize = 1;
-pub const VERASE: usize = 2;
-pub const VKILL: usize = 3;
-pub const VEOF: usize = 4;
-pub const VTIME: usize = 5;
-pub const VMIN: usize = 6;
-pub const VSTART: usize = 8;
-pub const VSTOP: usize = 9;
-pub const VSUSP: usize = 10;
-pub const VEOL: usize = 11;
-pub const VREPRINT: usize = 12;
-pub const VWERASE: usize = 14;
-pub const VLNEXT: usize = 15;
-pub const VEOL2: usize = 16;
+pub(super) const VINTR: usize = 0;
+pub(super) const VQUIT: usize = 1;
+pub(super) const VERASE: usize = 2;
+pub(super) const VKILL: usize = 3;
+pub(super) const VEOF: usize = 4;
+pub(super) const VTIME: usize = 5;
+pub(super) const VMIN: usize = 6;
+pub(super) const VSTART: usize = 8;
+pub(super) const VSTOP: usize = 9;
+pub(super) const VSUSP: usize = 10;
+pub(super) const VEOL: usize = 11;
+pub(super) const VREPRINT: usize = 12;
+pub(super) const VWERASE: usize = 14;
+pub(super) const VLNEXT: usize = 15;
+pub(super) const VEOL2: usize = 16;
 
 /// The control character `ch` names, e.g. `ctrl(b'C')` for `^C`.
 const fn ctrl(ch: u8) -> cc_t {
@@ -69,7 +69,7 @@ const fn ctrl(ch: u8) -> cc_t {
 /// Upstream also ORs `TAB0`, `NL0`, `CR0`, `BS0`, `VT0` and `FF0` into
 /// `c_oflag`; every one of them is the zero member of its own mask, so they
 /// are named for intent and change nothing.
-pub fn default_termios() -> termios {
+pub(super) fn default_termios() -> termios {
     /// The value that disables a control character.
     const POSIX_VDISABLE: cc_t = 0;
 

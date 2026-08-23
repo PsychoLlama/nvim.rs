@@ -107,8 +107,8 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
         msg_add_lines(noted as c_int, out.linecnt, out.filesize);
 
         xfree(keep_msg.get().cast());
-        keep_msg.set(core::ptr::null_mut());
-        let mut shown: *mut c_char = core::ptr::null_mut();
+        keep_msg.set(ptr::null_mut());
+        let mut shown: *mut c_char = ptr::null_mut();
         msg_scrolled_ign.set(true);
 
         if !how.stdin && !how.buffer {

@@ -189,7 +189,7 @@ pub(crate) unsafe fn check_can_index(rettv: *mut typval_T, evaluate: bool, verbo
 ///
 /// # Safety
 /// Called through the builtin table with a terminated argument array.
-pub unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
         if check_can_index(argvars, true, false) != OK {
             return;
@@ -472,7 +472,7 @@ pub(crate) unsafe fn string_slice(
 /// `arg` must point at the cursor into a NUL-terminated expression whose
 /// preceding byte is readable; `rettv` must be valid; `evalarg` null or
 /// valid.
-pub unsafe fn handle_subscript(
+pub(crate) unsafe fn handle_subscript(
     arg: *mut *const c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
@@ -578,7 +578,7 @@ pub unsafe fn handle_subscript(
 /// # Safety
 /// `rettv` must be valid and `selfdict` must be a reference this call takes
 /// over.
-pub unsafe fn set_selfdict(rettv: *mut typval_T, selfdict: *mut dict_T) {
+pub(crate) unsafe fn set_selfdict(rettv: *mut typval_T, selfdict: *mut dict_T) {
     unsafe {
         // Not for a partial that was bound explicitly (`pt_auto` clear).
         if (*rettv).v_type == VAR_PARTIAL

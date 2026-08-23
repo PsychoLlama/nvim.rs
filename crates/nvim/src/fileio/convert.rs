@@ -30,7 +30,7 @@ use crate::types::FAIL;
 
 /// The iconv descriptor value that means "no iconv".
 pub(crate) fn no_iconv() -> iconv_t {
-    core::ptr::with_exposed_provenance_mut::<c_void>(-1i32 as usize)
+    ptr::with_exposed_provenance_mut::<c_void>(-1i32 as usize)
 }
 
 /// Find the next `'fileencodings'` entry to try.
@@ -42,7 +42,7 @@ pub(crate) unsafe fn next_fenc(pp: &mut *mut c_char, alloced: &mut bool) -> *mut
     unsafe {
         *alloced = false;
         if **pp == 0 {
-            *pp = core::ptr::null_mut();
+            *pp = ptr::null_mut();
             return c"".as_ptr().cast_mut();
         }
         let comma = vim_strchr(*pp, b',' as c_int);
@@ -101,7 +101,7 @@ pub(crate) unsafe fn readfile_charconvert(
             if !tmpname.is_null() {
                 os_remove(tmpname); // delete converted file
                 xfree(tmpname.cast());
-                tmpname = core::ptr::null_mut();
+                tmpname = ptr::null_mut();
             }
         }
 
@@ -251,7 +251,7 @@ impl Window {
     unsafe fn move_linerest(&mut self, at: *mut c_char) {
         unsafe {
             self.line_start = at.offset(-self.linerest);
-            core::ptr::copy(self.buffer, self.line_start, self.linerest as usize);
+            ptr::copy(self.buffer, self.line_start, self.linerest as usize);
         }
     }
 }
@@ -330,7 +330,7 @@ impl Conv {
 
     /// Keep `len` bytes at `from` for the next read.
     unsafe fn stash(&mut self, from: *const c_char, len: usize) {
-        unsafe { core::ptr::copy(from, self.rest.as_mut_ptr(), len) };
+        unsafe { ptr::copy(from, self.rest.as_mut_ptr(), len) };
         self.restlen = len as c_int;
     }
 
@@ -340,7 +340,7 @@ impl Conv {
     /// read so that the read appends to them, and only counted back in once
     /// the read is done.
     pub(crate) unsafe fn restore(&self, ptr: *mut c_char) {
-        unsafe { core::ptr::copy(self.rest.as_ptr(), ptr, self.restlen as usize) };
+        unsafe { ptr::copy(self.rest.as_ptr(), ptr, self.restlen as usize) };
     }
 
     /// Convert the bytes in `w` with iconv.
@@ -412,7 +412,7 @@ impl Conv {
             let mut dest = w.ptr.offset(w.real_size as isize);
             let mut p: *const u8 = start.offset(w.size);
             // An incomplete sequence at the end, to be kept for next time.
-            let mut tail: *const u8 = core::ptr::null();
+            let mut tail: *const u8 = ptr::null();
 
             if flags == FIO_LATIN1 || flags == FIO_UTF8 {
                 if flags == FIO_UTF8 {
@@ -625,7 +625,7 @@ impl Conv {
 
                 // Drop, keep or replace the bad byte.
                 if self.bad_char == BAD_DROP {
-                    core::ptr::copy(p.add(1), p, todo as usize - 1);
+                    ptr::copy(p.add(1), p, todo as usize - 1);
                     w.size -= 1;
                 } else {
                     if self.bad_char != BAD_KEEP {

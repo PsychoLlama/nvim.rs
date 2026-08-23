@@ -91,58 +91,58 @@ pub(crate) mod flag {
     use crate::types::{estack_arg_T, except_type_T};
 
     /// How deep `:if`/`:while`/`:for`/`:try` may nest.
-    pub const CSTACK_LEN: c_int = 50;
+    pub(crate) const CSTACK_LEN: c_int = 50;
 
     /// `cstack_T.cs_flags`: what a conditional stack entry is, and how it
     /// stands. The first two are the state; the rest name the command.
-    pub const CSF_TRUE: c_int = 1;
-    pub const CSF_ACTIVE: c_int = 2;
-    pub const CSF_ELSE: c_int = 4;
-    pub const CSF_WHILE: c_int = 8;
-    pub const CSF_FOR: c_int = 16;
-    pub const CSF_TRY: c_int = 256;
-    pub const CSF_FINALLY: c_int = 512;
+    pub(crate) const CSF_TRUE: c_int = 1;
+    pub(crate) const CSF_ACTIVE: c_int = 2;
+    pub(crate) const CSF_ELSE: c_int = 4;
+    pub(crate) const CSF_WHILE: c_int = 8;
+    pub(crate) const CSF_FOR: c_int = 16;
+    pub(crate) const CSF_TRY: c_int = 256;
+    pub(crate) const CSF_FINALLY: c_int = 512;
     /// An exception was thrown and this `:try` should check its `:catch`es.
-    pub const CSF_THROWN: c_int = 2048;
+    pub(crate) const CSF_THROWN: c_int = 2048;
     /// One of them matched.
-    pub const CSF_CAUGHT: c_int = 4096;
+    pub(crate) const CSF_CAUGHT: c_int = 4096;
     /// And that catch clause has ended.
-    pub const CSF_FINISHED: c_int = 8192;
+    pub(crate) const CSF_FINISHED: c_int = 8192;
     /// This `:try` reset `emsg_silent`; the old value is on
     /// `cs_emsg_silent_list`.
-    pub const CSF_SILENT: c_int = 16384;
+    pub(crate) const CSF_SILENT: c_int = 16384;
 
     /// `cstack_T.cs_pending`: what a finally clause postponed. The last
     /// three are alternatives, not bits -- `CSTP_RETURN` deliberately
     /// overlaps `CSTP_BREAK | CSTP_CONTINUE`, as upstream defines it.
-    pub const CSTP_NONE: c_int = 0;
-    pub const CSTP_ERROR: c_int = 1;
-    pub const CSTP_INTERRUPT: c_int = 2;
-    pub const CSTP_THROW: c_int = 4;
-    pub const CSTP_BREAK: c_int = 8;
-    pub const CSTP_CONTINUE: c_int = 16;
-    pub const CSTP_RETURN: c_int = 24;
-    pub const CSTP_FINISH: c_int = 32;
+    pub(crate) const CSTP_NONE: c_int = 0;
+    pub(crate) const CSTP_ERROR: c_int = 1;
+    pub(crate) const CSTP_INTERRUPT: c_int = 2;
+    pub(crate) const CSTP_THROW: c_int = 4;
+    pub(crate) const CSTP_BREAK: c_int = 8;
+    pub(crate) const CSTP_CONTINUE: c_int = 16;
+    pub(crate) const CSTP_RETURN: c_int = 24;
+    pub(crate) const CSTP_FINISH: c_int = 32;
 
     /// `cstack_T.cs_lflags`: what `do_cmdline` should do next about the
     /// innermost loop.
-    pub const CSL_HAD_LOOP: c_int = 1;
-    pub const CSL_HAD_ENDLOOP: c_int = 2;
-    pub const CSL_HAD_CONT: c_int = 4;
-    pub const CSL_HAD_FINA: c_int = 8;
+    pub(crate) const CSL_HAD_LOOP: c_int = 1;
+    pub(crate) const CSL_HAD_ENDLOOP: c_int = 2;
+    pub(crate) const CSL_HAD_CONT: c_int = 4;
+    pub(crate) const CSL_HAD_FINA: c_int = 8;
 
     /// `except_T.type_0`.
-    pub const ET_USER: except_type_T = 0;
-    pub const ET_ERROR: except_type_T = 1;
-    pub const ET_INTERRUPT: except_type_T = 2;
+    pub(crate) const ET_USER: except_type_T = 0;
+    pub(crate) const ET_ERROR: except_type_T = 1;
+    pub(crate) const ET_INTERRUPT: except_type_T = 2;
 
     /// Whether an error under an active try conditional becomes a catchable
     /// exception rather than terminating the script after the finally
     /// clauses. True for a Vim release; upstream keeps the switch for its
     /// `THROW_TEST` builds, which this tree does not have.
-    pub const THROW_ON_ERROR: bool = true;
+    pub(crate) const THROW_ON_ERROR: bool = true;
 
-    pub const ESTACK_NONE: estack_arg_T = 0;
+    pub(crate) const ESTACK_NONE: estack_arg_T = 0;
 }
 
 const E_MULTIPLE_ELSE: &CStr = c"E583: Multiple :else";

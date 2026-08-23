@@ -34,7 +34,7 @@ use super::{
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) -> c_int {
+pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) -> c_int {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, which is
     // the bound `vim_fgets` is given.
     unsafe {

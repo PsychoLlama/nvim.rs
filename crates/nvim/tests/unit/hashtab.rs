@@ -45,7 +45,7 @@ fn owned_key(text: &str) -> *mut c_char {
 
 fn slot_of(ht: &hashtab_T, key: &CStr) -> usize {
     let hi = unsafe { hash_find(ht, key.as_ptr()) };
-    (hi.addr() - ht.ht_array.addr()) / core::mem::size_of::<hashitem_T>()
+    (hi.addr() - ht.ht_array.addr()) / size_of::<hashitem_T>()
 }
 
 /// Hand-computed against the C: `hash_hash("a")` is 97, so on a 16-slot
@@ -164,7 +164,7 @@ fn clear_all_frees_the_allocation_the_key_sits_in() {
     unsafe {
         hash_init(&raw mut ht);
         for (i, text) in ["ab", "cd"].iter().enumerate() {
-            let entry = xcalloc(1, core::mem::size_of::<Entry>()) as *mut Entry;
+            let entry = xcalloc(1, size_of::<Entry>()) as *mut Entry;
             (*entry).payload = i as u64;
             (*entry).key[0] = text.as_bytes()[0] as c_char;
             (*entry).key[1] = text.as_bytes()[1] as c_char;

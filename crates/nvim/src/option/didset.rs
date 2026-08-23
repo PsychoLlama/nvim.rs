@@ -871,7 +871,7 @@ pub(crate) unsafe fn do_spelllang_source(win: *mut win_T) {
         if p > q {
             vim_snprintf(
                 fname.as_mut_ptr(),
-                core::mem::size_of::<[c_char; 200]>(),
+                size_of::<[c_char; 200]>(),
                 c"spell/%.*s.*".as_ptr(),
                 p.offset_from(q) as c_int,
                 q,

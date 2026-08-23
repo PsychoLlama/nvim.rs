@@ -36,7 +36,7 @@ const NUMBUFLEN: usize = 65;
 /// numerator — and `VARNUMBER_MIN` for `0 / 0`, which upstream describes as
 /// "similar to NaN". `VARNUMBER_MIN / -1` would be a positive number that
 /// does not fit, and traps on x86; it answers `VARNUMBER_MAX`.
-pub fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
+pub(crate) fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
     if n2 == 0 {
         if n1 == 0 {
             VARNUMBER_MIN as varnumber_T
@@ -58,7 +58,7 @@ pub fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
 /// debug build in Rust, so it goes through `wrapping_rem`. Upstream has no
 /// guard for it — `num_divide`'s companion case is guarded and this one is
 /// not.
-pub fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
+pub(crate) fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
     if n2 == 0 { 0 } else { n1.wrapping_rem(n2) }
 }
 
@@ -132,7 +132,7 @@ pub(crate) unsafe fn eval_addlist(tv1: *mut typval_T, tv2: *mut typval_T) -> boo
 /// # Safety
 /// `tv1` must be a valid typval and `s2` a NUL-terminated string that does
 /// not point into `tv1`'s own allocation.
-pub unsafe fn grow_string_tv(tv1: *mut typval_T, s2: *const c_char) -> bool {
+pub(crate) unsafe fn grow_string_tv(tv1: *mut typval_T, s2: *const c_char) -> bool {
     unsafe {
         if (*tv1).v_type != VAR_STRING || (*tv1).vval.v_string.is_null() {
             return false;

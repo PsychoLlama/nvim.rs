@@ -34,7 +34,7 @@ const LOCK_SH: c_int = 1;
 static VIM_TEMPDIR: GlobalCell<Option<CString>> = GlobalCell::new(None);
 
 /// An open handle on it, holding a shared `flock` so it is not auto-cleaned.
-static VIM_TEMPDIR_DP: GlobalCell<*mut DIR> = GlobalCell::new(core::ptr::null_mut::<DIR>());
+static VIM_TEMPDIR_DP: GlobalCell<*mut DIR> = GlobalCell::new(ptr::null_mut::<DIR>());
 
 /// `DLOG`/`WLOG`/`ELOG` from `log.h`.
 ///
@@ -306,7 +306,7 @@ unsafe fn delete_tree(name: &[u8]) -> c_int {
         }
 
         let mut ga = garray_T::default();
-        if readdir_core(&raw mut ga, path.as_ptr(), core::ptr::null_mut(), None) != OK {
+        if readdir_core(&raw mut ga, path.as_ptr(), ptr::null_mut(), None) != OK {
             return -1;
         }
 
@@ -341,7 +341,7 @@ unsafe fn vim_opentempdir() {
         }
         let dp = VIM_TEMPDIR.with(|dir| match dir {
             Some(dir) => opendir(dir.as_ptr()),
-            None => core::ptr::null_mut(),
+            None => ptr::null_mut(),
         });
         if dp.is_null() {
             return;
@@ -357,7 +357,7 @@ unsafe fn vim_closetempdir() {
         let dp = VIM_TEMPDIR_DP.get();
         if !dp.is_null() {
             closedir(dp);
-            VIM_TEMPDIR_DP.set(core::ptr::null_mut());
+            VIM_TEMPDIR_DP.set(ptr::null_mut());
         }
     }
 }
@@ -406,7 +406,7 @@ pub unsafe fn vim_gettempdir() -> *mut c_char {
         }
         VIM_TEMPDIR.with(|dir| match dir {
             Some(dir) => dir.as_ptr().cast_mut(),
-            None => core::ptr::null_mut(),
+            None => ptr::null_mut(),
         })
     }
 }
@@ -449,7 +449,7 @@ pub unsafe fn vim_tempname() -> *mut c_char {
     unsafe {
         let tempdir = vim_gettempdir();
         if tempdir.is_null() {
-            return core::ptr::null_mut();
+            return ptr::null_mut();
         }
         let count = TEMP_COUNT.get();
         TEMP_COUNT.set(count.wrapping_add(1));

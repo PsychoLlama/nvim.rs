@@ -244,7 +244,7 @@ pub(crate) unsafe fn match_at_original_text(match_0: *const compl_T) -> bool {
 
 /// True if `match_0` is the first match in the completion list.
 pub(crate) fn is_first_match(match_0: *const compl_T) -> bool {
-    core::ptr::eq(match_0, compl_first_match.get())
+    ptr::eq(match_0, compl_first_match.get())
 }
 
 /// Is `c` part of the item being completed?  Decides whether typing it

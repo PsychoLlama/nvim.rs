@@ -21,7 +21,7 @@ use crate::types::{FAIL, NUL, OK};
 
 crate::flag_set! {
     /// What [`beginline`] should do about the column -- upstream's `BL_*`.
-    pub struct BeginlineOpts;
+    pub(crate) struct BeginlineOpts;
 
     /// Stop at the first non-white character.
     const WHITE = 1;

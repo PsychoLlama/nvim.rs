@@ -146,7 +146,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             let mut tp: *const tabpage_T = first_tabpage.get();
             while !tp.is_null() {
                 let mut next_tp = (*tp).tp_next;
-                let mut wp = if core::ptr::eq(tp, curtab.get()) {
+                let mut wp = if ptr::eq(tp, curtab.get()) {
                     firstwin.get()
                 } else {
                     (*tp).tp_firstwin

@@ -21,13 +21,13 @@ use crate::types::ClientType;
 mod kind {
     use super::ClientType;
 
-    pub const UNKNOWN: ClientType = -1;
-    pub const REMOTE: ClientType = 0;
-    pub const UI: ClientType = 1;
-    pub const EMBEDDER: ClientType = 2;
-    pub const HOST: ClientType = 3;
-    pub const PLUGIN: ClientType = 4;
-    pub const MSGPACK_RPC: ClientType = 5;
+    pub(super) const UNKNOWN: ClientType = -1;
+    pub(super) const REMOTE: ClientType = 0;
+    pub(super) const UI: ClientType = 1;
+    pub(super) const EMBEDDER: ClientType = 2;
+    pub(super) const HOST: ClientType = 3;
+    pub(super) const PLUGIN: ClientType = 4;
+    pub(super) const MSGPACK_RPC: ClientType = 5;
 }
 
 /// Classifies a peer from the `type` it declared.

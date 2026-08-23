@@ -180,7 +180,7 @@ unsafe fn report_failed_notification(
 mod wire {
     use core::ffi::c_char;
 
-    pub const NIL: c_char = 0xc0u8.cast_signed();
+    pub(super) const NIL: c_char = 0xc0u8.cast_signed();
 }
 
 /// Writes one raw byte through the packer's cursor.

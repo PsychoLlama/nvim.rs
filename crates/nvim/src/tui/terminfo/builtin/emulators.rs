@@ -17,7 +17,7 @@ use crate::tui::terminfo::caps::key_slot::*;
 use crate::tui::terminfo::caps::*;
 
 /// Ghostty. ncurses' description does not exactly match what Ghostty itself ships.
-pub static GHOSTTY: Description = Description {
+pub(super) static GHOSTTY: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -103,7 +103,7 @@ pub static GHOSTTY: Description = Description {
 };
 
 /// iTerm2.
-pub static ITERM_256COLOUR: Description = Description {
+pub(super) static ITERM_256COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -201,7 +201,7 @@ pub static ITERM_256COLOUR: Description = Description {
 };
 
 /// PuTTY.
-pub static PUTTY_256COLOUR: Description = Description {
+pub(super) static PUTTY_256COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -295,7 +295,7 @@ pub static PUTTY_256COLOUR: Description = Description {
 };
 
 /// rxvt.
-pub static RXVT_256COLOUR: Description = Description {
+pub(super) static RXVT_256COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -410,7 +410,7 @@ pub static RXVT_256COLOUR: Description = Description {
 };
 
 /// suckless' st.
-pub static ST_256COLOUR: Description = Description {
+pub(super) static ST_256COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -496,7 +496,7 @@ pub static ST_256COLOUR: Description = Description {
 };
 
 /// VTE, the widget behind GNOME Terminal and its relatives.
-pub static VTE_256COLOUR: Description = Description {
+pub(super) static VTE_256COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,
@@ -584,7 +584,7 @@ pub static VTE_256COLOUR: Description = Description {
 };
 
 /// xterm.
-pub static XTERM_256COLOUR: Description = Description {
+pub(super) static XTERM_256COLOUR: Description = Description {
     bce: true,
     has_tc_or_rgb: false,
     su: false,

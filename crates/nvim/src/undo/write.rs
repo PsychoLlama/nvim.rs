@@ -43,7 +43,7 @@ pub unsafe fn u_write_undo(
     };
     // SAFETY: a live buffer and a NUL-terminated path, by the above.
     unsafe { write_undo_file(file_name, name.is_null(), forceit, buf, hash) };
-    if !core::ptr::eq(file_name.cast_const(), name) {
+    if !ptr::eq(file_name.cast_const(), name) {
         // SAFETY: `u_get_undo_file_name`'s allocation, which the caller's own
         // `name` is never.
         unsafe { xfree(file_name.cast()) };

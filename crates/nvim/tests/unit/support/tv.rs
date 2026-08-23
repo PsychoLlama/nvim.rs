@@ -43,7 +43,7 @@ use super::cstr;
 
 /// A Vimscript value, as the spec's Lua tables spelled one.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Tv {
+pub(crate) enum Tv {
     /// `VAR_UNKNOWN` — the type a fresh `typval_T` starts in.
     Unknown,
     /// `VAR_SPECIAL`, `v:null`; the spec's `nil_value`.
@@ -82,7 +82,7 @@ pub enum Tv {
 
 /// A `partial_T`, as `partial2lua` spelled one.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct Pt {
+pub(crate) struct Pt {
     /// `pt_name`.
     pub value: Vec<u8>,
     /// `pt_auto`.
@@ -95,12 +95,12 @@ pub struct Pt {
 
 impl Tv {
     /// `Tv::Str` from anything string-shaped.
-    pub fn s(bytes: impl AsRef<[u8]>) -> Tv {
+    pub(crate) fn s(bytes: impl AsRef<[u8]>) -> Tv {
         Tv::Str(bytes.as_ref().to_vec())
     }
 
     /// `Tv::Dict` from `&str` keys.
-    pub fn dict<const N: usize>(entries: [(&str, Tv); N]) -> Tv {
+    pub(crate) fn dict<const N: usize>(entries: [(&str, Tv); N]) -> Tv {
         Tv::Dict(
             entries
                 .into_iter()
@@ -117,7 +117,7 @@ impl Tv {
     /// # Safety
     /// The editor must be up (the caller holds the editor lock): building a
     /// list or a dict calls into the allocator and the hashtab.
-    pub unsafe fn build(&self) -> typval_T {
+    pub(crate) unsafe fn build(&self) -> typval_T {
         let mut path = Vec::new();
         unsafe { self.build_at(&mut path) }
     }
@@ -289,7 +289,7 @@ impl Container {
 ///
 /// # Safety
 /// `tv` points at a live `typval_T` whose contents are live.
-pub unsafe fn read(tv: *const typval_T) -> Tv {
+pub(crate) unsafe fn read(tv: *const typval_T) -> Tv {
     let mut path = Vec::new();
     unsafe { read_at(tv, &mut path) }
 }
@@ -298,7 +298,7 @@ pub unsafe fn read(tv: *const typval_T) -> Tv {
 ///
 /// # Safety
 /// `l` is NULL or points at a live list.
-pub unsafe fn read_list(l: *const list_T) -> Tv {
+pub(crate) unsafe fn read_list(l: *const list_T) -> Tv {
     let mut path = Vec::new();
     unsafe { read_list_at(l, &mut path) }
 }
@@ -307,7 +307,7 @@ pub unsafe fn read_list(l: *const list_T) -> Tv {
 ///
 /// # Safety
 /// `d` is NULL or points at a live dict.
-pub unsafe fn read_dict(d: *const dict_T) -> Tv {
+pub(crate) unsafe fn read_dict(d: *const dict_T) -> Tv {
     let mut path = Vec::new();
     unsafe { read_dict_at(d, &mut path) }
 }
@@ -414,7 +414,7 @@ fn seen(path: &[Container], at: *const c_void) -> Option<usize> {
 ///
 /// # Safety
 /// The editor must be up.
-pub unsafe fn list_item_alloc() -> *mut listitem_T {
+pub(crate) unsafe fn list_item_alloc() -> *mut listitem_T {
     unsafe { xmalloc(size_of::<listitem_T>()) }.cast()
 }
 
@@ -422,7 +422,7 @@ pub unsafe fn list_item_alloc() -> *mut listitem_T {
 ///
 /// # Safety
 /// As [`list_item_alloc`].
-pub unsafe fn li_alloc() -> *mut listitem_T {
+pub(crate) unsafe fn li_alloc() -> *mut listitem_T {
     let li = unsafe { list_item_alloc() };
     unsafe {
         (*li).li_next = ptr::null_mut();
@@ -441,7 +441,7 @@ pub unsafe fn li_alloc() -> *mut listitem_T {
 ///
 /// # Safety
 /// The editor must be up.
-pub unsafe fn new_list(items: &[Tv]) -> *mut list_T {
+pub(crate) unsafe fn new_list(items: &[Tv]) -> *mut list_T {
     let tv = unsafe { Tv::List(items.to_vec()).build() };
     unsafe { tv.vval.v_list }
 }
@@ -450,7 +450,7 @@ pub unsafe fn new_list(items: &[Tv]) -> *mut list_T {
 ///
 /// # Safety
 /// The editor must be up.
-pub unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut dict_T {
+pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut dict_T {
     let entries: Vec<(Vec<u8>, Tv)> = entries
         .iter()
         .map(|(k, v)| (k.as_bytes().to_vec(), v.clone()))
@@ -463,7 +463,7 @@ pub unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut dict_T {
 ///
 /// # Safety
 /// `l` is NULL or points at a live list.
-pub unsafe fn list_items(l: *const list_T) -> Vec<*mut listitem_T> {
+pub(crate) unsafe fn list_items(l: *const list_T) -> Vec<*mut listitem_T> {
     let mut items = Vec::new();
     if l.is_null() {
         return items;
@@ -481,7 +481,7 @@ pub unsafe fn list_items(l: *const list_T) -> Vec<*mut listitem_T> {
 ///
 /// # Safety
 /// `d` points at a live dict.
-pub unsafe fn dict_items(d: *const dict_T) -> Vec<(Vec<u8>, *mut dictitem_T)> {
+pub(crate) unsafe fn dict_items(d: *const dict_T) -> Vec<(Vec<u8>, *mut dictitem_T)> {
     let ht = unsafe { &raw const (*d).dv_hashtab };
     let mut out = Vec::new();
     let mut todo = unsafe { (*ht).ht_used };
@@ -505,7 +505,7 @@ pub unsafe fn dict_items(d: *const dict_T) -> Vec<(Vec<u8>, *mut dictitem_T)> {
 ///
 /// # Safety
 /// As [`dict_items`].
-pub unsafe fn di_of(d: *const dict_T, key: &str) -> *mut dictitem_T {
+pub(crate) unsafe fn di_of(d: *const dict_T, key: &str) -> *mut dictitem_T {
     unsafe { dict_items(d) }
         .into_iter()
         .find(|(k, _)| k == key.as_bytes())
@@ -517,14 +517,14 @@ pub unsafe fn di_of(d: *const dict_T, key: &str) -> *mut dictitem_T {
 ///
 /// # Safety
 /// As [`dict_items`].
-pub unsafe fn first_di(d: *const dict_T) -> *mut dictitem_T {
+pub(crate) unsafe fn first_di(d: *const dict_T) -> *mut dictitem_T {
     let items = unsafe { dict_items(d) };
     items[0].1
 }
 
 /// A `Callback`, as `callback2tbl` spelled one.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Cb {
+pub(crate) enum Cb {
     /// `kCallbackNone`.
     None,
     /// `kCallbackFuncref`, and the name it holds.
@@ -537,7 +537,7 @@ pub enum Cb {
 ///
 /// # Safety
 /// `cb` points at a live callback.
-pub unsafe fn read_callback(cb: *const Callback) -> Cb {
+pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
     let mut path = Vec::new();
     match unsafe { (*cb).type_0 } {
         c2rust_neovim::eval::typval::kCallbackNone => Cb::None,
@@ -559,7 +559,7 @@ pub unsafe fn read_callback(cb: *const Callback) -> Cb {
 ///
 /// # Safety
 /// The editor must be up.
-pub unsafe fn build_callback(cb: &Cb) -> Callback {
+pub(crate) unsafe fn build_callback(cb: &Cb) -> Callback {
     let (type_0, data): (CallbackType, Callback_data) = match cb {
         Cb::None => (
             c2rust_neovim::eval::typval::kCallbackNone,
@@ -586,7 +586,7 @@ pub unsafe fn build_callback(cb: &Cb) -> Callback {
 
 /// One registered dict watcher, as `dict_watchers` spelled it.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Watcher {
+pub(crate) struct Watcher {
     /// The watcher itself, for the allocation log.
     pub at: *mut DictWatcher,
     /// `key_pattern`, for the allocation log.
@@ -603,7 +603,7 @@ pub struct Watcher {
 ///
 /// # Safety
 /// `d` points at a live dict.
-pub unsafe fn dict_watchers(d: *const dict_T) -> Vec<Watcher> {
+pub(crate) unsafe fn dict_watchers(d: *const dict_T) -> Vec<Watcher> {
     let head = unsafe { &raw const (*d).watchers };
     let mut out = Vec::new();
     let mut q = unsafe { (*head).next };
@@ -624,7 +624,7 @@ pub unsafe fn dict_watchers(d: *const dict_T) -> Vec<Watcher> {
 }
 
 /// The spec's `ga_alloc`: a `garray_T` on the caller's stack, initialised.
-pub fn ga_alloc(itemsize: c_int, growsize: c_int) -> c2rust_neovim::types::garray_T {
+pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> c2rust_neovim::types::garray_T {
     let mut ga = c2rust_neovim::types::garray_T {
         ga_len: 0,
         ga_maxlen: 0,
@@ -642,7 +642,7 @@ pub fn ga_alloc(itemsize: c_int, growsize: c_int) -> c2rust_neovim::types::garra
 ///
 /// # Safety
 /// The editor must be up. The answer owns its contents; clear it.
-pub unsafe fn eval0(expr: &str) -> Option<typval_T> {
+pub(crate) unsafe fn eval0(expr: &str) -> Option<typval_T> {
     use c2rust_neovim::eval::EVAL_EVALUATE;
     use c2rust_neovim::types::evalarg_T;
 
@@ -678,7 +678,7 @@ pub unsafe fn eval0(expr: &str) -> Option<typval_T> {
 /// all (a partial converts to nil), which is most of what the conversion
 /// cases are about.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Obj {
+pub(crate) enum Obj {
     /// `kObjectTypeNil`.
     Nil,
     /// `kObjectTypeBoolean`.
@@ -697,12 +697,12 @@ pub enum Obj {
 
 impl Obj {
     /// `Obj::Str` from anything string-shaped.
-    pub fn s(bytes: impl AsRef<[u8]>) -> Obj {
+    pub(crate) fn s(bytes: impl AsRef<[u8]>) -> Obj {
         Obj::Str(bytes.as_ref().to_vec())
     }
 
     /// `Obj::Dict` from `&str` keys.
-    pub fn dict<const N: usize>(entries: [(&str, Obj); N]) -> Obj {
+    pub(crate) fn dict<const N: usize>(entries: [(&str, Obj); N]) -> Obj {
         Obj::Dict(
             entries
                 .into_iter()
@@ -716,7 +716,7 @@ impl Obj {
 ///
 /// # Safety
 /// `o` points at a live `Object` whose contents are live.
-pub unsafe fn read_object(o: *const Object) -> Obj {
+pub(crate) unsafe fn read_object(o: *const Object) -> Obj {
     let data = unsafe { (*o).data };
     let type_0 = unsafe { (*o).type_0 };
     // The `kObjectType*` constants are `const`s, not variants, so a `match`

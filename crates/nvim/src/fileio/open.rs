@@ -110,7 +110,7 @@ pub(crate) unsafe fn open_source(
             if how.newfile {
                 if apply_autocmds_exarg(
                     EVENT_BUFREADCMD,
-                    core::ptr::null_mut(),
+                    ptr::null_mut(),
                     sfname,
                     false,
                     curbuf.get(),
@@ -131,7 +131,7 @@ pub(crate) unsafe fn open_source(
                 sfname,
                 sfname,
                 false,
-                core::ptr::null_mut(),
+                ptr::null_mut(),
                 eap,
             ) {
                 retval = if aborting() { FAIL } else { OK };
@@ -424,7 +424,7 @@ pub(crate) unsafe fn open_source(
             if how.filtering {
                 apply_autocmds_exarg(
                     EVENT_FILTERREADPRE,
-                    core::ptr::null_mut(),
+                    ptr::null_mut(),
                     sfname,
                     false,
                     curbuf.get(),
@@ -433,7 +433,7 @@ pub(crate) unsafe fn open_source(
             } else if how.stdin {
                 apply_autocmds_exarg(
                     EVENT_STDINREADPRE,
-                    core::ptr::null_mut(),
+                    ptr::null_mut(),
                     sfname,
                     false,
                     curbuf.get(),
@@ -442,7 +442,7 @@ pub(crate) unsafe fn open_source(
             } else if how.newfile {
                 apply_autocmds_exarg(
                     EVENT_BUFREADPRE,
-                    core::ptr::null_mut(),
+                    ptr::null_mut(),
                     sfname,
                     false,
                     curbuf.get(),
@@ -454,7 +454,7 @@ pub(crate) unsafe fn open_source(
                     sfname,
                     sfname,
                     false,
-                    core::ptr::null_mut(),
+                    ptr::null_mut(),
                     eap,
                 );
             }

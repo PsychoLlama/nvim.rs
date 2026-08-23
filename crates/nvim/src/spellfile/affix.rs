@@ -47,7 +47,7 @@ use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 /// # Safety
 ///
 /// As [`handle_line`].
-pub unsafe fn handle_affix_header(
+pub(super) unsafe fn handle_affix_header(
     spin: *mut spellinfo_T,
     aff: *mut afffile_T,
     st: &mut AffState,
@@ -173,7 +173,7 @@ pub unsafe fn handle_affix_header(
 /// # Safety
 ///
 /// As [`handle_line`].
-pub unsafe fn handle_affix_entry(
+pub(super) unsafe fn handle_affix_entry(
     spin: *mut spellinfo_T,
     aff: *mut afffile_T,
     st: &mut AffState,
@@ -227,7 +227,7 @@ pub unsafe fn handle_affix_entry(
             let pattern = if is_prefix { c"^%s" } else { c"%s$" };
             snprintf(
                 buf.as_mut_ptr(),
-                core::mem::size_of_val(&buf),
+                size_of_val(&buf),
                 pattern.as_ptr(),
                 items[4],
             );
@@ -254,7 +254,7 @@ pub unsafe fn handle_affix_entry(
 /// # Safety
 ///
 /// As [`handle_affix_entry`].
-pub unsafe fn postpone_prefix(
+pub(super) unsafe fn postpone_prefix(
     spin: *mut spellinfo_T,
     st: &mut AffState,
     entry: *mut affentry_T,
@@ -325,7 +325,7 @@ pub unsafe fn postpone_prefix(
 /// # Safety
 ///
 /// As [`postpone_prefix`].
-pub unsafe fn file_postponed_prefix(
+pub(super) unsafe fn file_postponed_prefix(
     spin: *mut spellinfo_T,
     st: &mut AffState,
     entry: *mut affentry_T,
@@ -348,11 +348,8 @@ pub unsafe fn file_postponed_prefix(
         }
         if idx < 0 {
             idx = (*spin).si_prefcond.ga_len;
-            let pp = ga_append_via_ptr(
-                &raw mut (*spin).si_prefcond,
-                core::mem::size_of::<*mut c_char>(),
-            )
-            .cast::<*mut c_char>();
+            let pp = ga_append_via_ptr(&raw mut (*spin).si_prefcond, size_of::<*mut c_char>())
+                .cast::<*mut c_char>();
             *pp = if (*entry).ae_cond.is_null() {
                 core::ptr::null_mut()
             } else {

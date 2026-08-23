@@ -91,7 +91,7 @@ pub unsafe fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         let timeout = args.get(0).vval.v_number as c_int;
         let expr = *args.get(1);
 
-        let tw = xmalloc(core::mem::size_of::<TimeWatcher>()) as *mut TimeWatcher;
+        let tw = xmalloc(size_of::<TimeWatcher>()) as *mut TimeWatcher;
         time_watcher_init(main_loop.ptr(), tw, ptr::null_mut());
         (*tw).events = ptr::null_mut::<MultiQueue>();
         time_watcher_start(

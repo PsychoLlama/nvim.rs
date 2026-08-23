@@ -49,7 +49,7 @@ use crate::types::{
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
-use core::{mem, ptr};
+use core::ptr;
 
 mod dict;
 mod handles;
@@ -275,7 +275,7 @@ pub fn decor_put_sh(item: DecorSignHighlight) -> uint32_t {
 pub fn decor_put_vt(vt: DecorVirtText, next: *mut DecorVirtText) -> *mut DecorVirtText {
     // SAFETY: `xmalloc` never answers null and the size is this type's.
     unsafe {
-        let alloc: *mut DecorVirtText = xmalloc(mem::size_of::<DecorVirtText>()).cast();
+        let alloc: *mut DecorVirtText = xmalloc(size_of::<DecorVirtText>()).cast();
         *alloc = vt;
         (*alloc).next = next;
         alloc

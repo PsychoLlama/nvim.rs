@@ -631,7 +631,7 @@ mod tests {
         // `used` is the contract, not the array's contents: the walk stops
         // after that many kept items, which is what makes it O(used) rather
         // than O(size) on a mostly-empty table.
-        let key: *mut c_char = std::ptr::without_provenance_mut(0x1000);
+        let key: *mut c_char = ptr::without_provenance_mut(0x1000);
         let mut old = [EMPTY_ITEM; 16];
         for (i, slot) in old.iter_mut().enumerate() {
             *slot = hashitem_T {
@@ -650,7 +650,7 @@ mod tests {
     fn rehash_probes_past_a_taken_slot() {
         // Four hashes that all mask to slot 1 under mask 7 land in the four
         // successive slots the probe sequence visits, in insertion order.
-        let key: *mut c_char = std::ptr::without_provenance_mut(0x1000);
+        let key: *mut c_char = ptr::without_provenance_mut(0x1000);
         let mut old = [EMPTY_ITEM; 16];
         for (n, slot) in old.iter_mut().take(4).enumerate() {
             *slot = hashitem_T {
@@ -674,7 +674,7 @@ mod tests {
         let sentinel = removed_sentinel();
         // Dangling but never dereferenced; without_provenance keeps Miri
         // from treating it as an exposed integer-to-pointer cast.
-        let key: *mut c_char = std::ptr::without_provenance_mut(0x1000);
+        let key: *mut c_char = ptr::without_provenance_mut(0x1000);
         let mut old = [EMPTY_ITEM; 16];
         old[2] = hashitem_T {
             hi_hash: 2,

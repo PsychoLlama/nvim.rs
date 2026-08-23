@@ -25,7 +25,7 @@
 use crate::os::uv_error::UV_EPIPE;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
-use core::{mem, ptr, slice};
+use core::{ptr, slice};
 
 use crate::api::private::helpers::{api_free_dict, api_set_error, arena_string, cstr_as_string};
 use crate::api::ui::remote_ui_disconnect;
@@ -69,25 +69,25 @@ use receive::{parse_msgpack, receive_msgpack};
 mod known {
     use super::{ChannelPart, ChannelStreamType, ClientType, MessageType};
 
-    pub const kMessageTypeRequest: MessageType = 0;
-    pub const kMessageTypeResponse: MessageType = 1;
-    pub const kMessageTypeNotification: MessageType = 2;
-    pub const kMessageTypeRedrawEvent: MessageType = 3;
+    pub(super) const kMessageTypeRequest: MessageType = 0;
+    pub(super) const kMessageTypeResponse: MessageType = 1;
+    pub(super) const kMessageTypeNotification: MessageType = 2;
+    pub(super) const kMessageTypeRedrawEvent: MessageType = 3;
 
-    pub const kChannelStreamProc: ChannelStreamType = 0;
-    pub const kChannelStreamStdio: ChannelStreamType = 2;
-    pub const kChannelStreamInternal: ChannelStreamType = 4;
-    pub const kChannelPartRpc: ChannelPart = 3;
+    pub(super) const kChannelStreamProc: ChannelStreamType = 0;
+    pub(super) const kChannelStreamStdio: ChannelStreamType = 2;
+    pub(super) const kChannelStreamInternal: ChannelStreamType = 4;
+    pub(super) const kChannelPartRpc: ChannelPart = 3;
 
-    pub const kClientTypeMsgpackRpc: ClientType = 5;
+    pub(super) const kClientTypeMsgpackRpc: ClientType = 5;
 
     /// libuv's "the peer hung up" error.
     /// The arena block size the RPC packer writes into.
-    pub const ARENA_BLOCK_SIZE: usize = 4096;
+    pub(super) const ARENA_BLOCK_SIZE: usize = 4096;
 
     /// The widest message any of the close paths formats, matching the
     /// `char buf[256]` upstream declares at each of them.
-    pub const CLOSE_MSG_MAX: usize = 256;
+    pub(super) const CLOSE_MSG_MAX: usize = 256;
 }
 
 use known::*;
@@ -198,7 +198,7 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
 
     // SAFETY: `xcalloc` hands back `size_of::<Unpacker>()` zeroed bytes, which
     // is what `unpacker_init` expects to be handed.
-    let unpacker = unsafe { xcalloc(1, mem::size_of::<Unpacker>()) }.cast::<Unpacker>();
+    let unpacker = unsafe { xcalloc(1, size_of::<Unpacker>()) }.cast::<Unpacker>();
     // SAFETY: as above.
     unsafe { unpacker_init(unpacker) };
 

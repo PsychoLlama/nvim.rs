@@ -35,7 +35,7 @@ pub unsafe fn shorten_buf_fname(buf: *mut buf_T, dirname: *mut c_char, force: c_
         }
         if (*buf).b_sfname != (*buf).b_ffname {
             xfree((*buf).b_sfname.cast());
-            (*buf).b_sfname = core::ptr::null_mut();
+            (*buf).b_sfname = ptr::null_mut();
         }
         let p = path_shorten_fname((*buf).b_ffname, dirname);
         if p.is_null() {
@@ -94,7 +94,7 @@ pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: boo
             if os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) == FAIL
                 || CStr::from_ptr(cwd.as_ptr()).is_empty()
             {
-                return core::ptr::null_mut();
+                return ptr::null_mut();
             }
             add_pathsep(cwd.as_mut_ptr());
             prepend_dot = false; // nothing to prepend a dot to
@@ -167,7 +167,7 @@ unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
         }
 
         let mut tempname = [0 as c_char; MAXPATHL as usize + 1];
-        core::ptr::copy_nonoverlapping(from, tempname.as_mut_ptr(), from_len + 1);
+        ptr::copy_nonoverlapping(from, tempname.as_mut_ptr(), from_len + 1);
         // Everything up to the tail stays put; only the last component is
         // replaced with a number.
         let tail = tail_index(CStr::from_ptr(tempname.as_ptr()).to_bytes());
@@ -369,7 +369,7 @@ pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *m
             let mut allow_dirs: c_char = 0;
             let regpat = file_pat_to_reg_pat(
                 buf.as_ptr(),
-                core::ptr::null(),
+                ptr::null(),
                 &raw mut allow_dirs,
                 false as c_int,
             );
@@ -378,7 +378,7 @@ pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *m
             }
             let matched = match_file_pat(
                 regpat,
-                core::ptr::null_mut(),
+                ptr::null_mut(),
                 ffname,
                 sfname,
                 tail,
@@ -540,7 +540,7 @@ pub unsafe fn file_pat_to_reg_pat(
             } else {
                 c"E220: Missing }.".as_ptr()
             }));
-            return core::ptr::null_mut();
+            return ptr::null_mut();
         }
         xmemdupz(reg.as_ptr().cast::<c_void>(), reg.len()).cast()
     }

@@ -539,7 +539,7 @@ pub(crate) unsafe fn option_value2string(opt: *mut vimoption_T, opt_flags: Optio
         let varp = get_varp_scope(opt, opt_flags);
         debug_assert!(!varp.is_null());
         let buf = NameBuff.ptr().cast::<c_char>();
-        let cap = core::mem::size_of::<[c_char; 4096]>();
+        let cap = size_of::<[c_char; 4096]>();
 
         if option_has_type(get_opt_idx(opt), kOptValTypeNumber) {
             let mut wc: OptInt = 0;

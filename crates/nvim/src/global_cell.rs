@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(CELL.ptr(), CELL.as_raw());
         // repr(transparent): the cell's address IS the value's address.
         assert_eq!(&CELL as *const _ as usize, CELL.as_raw() as usize);
-        assert_eq!(core::mem::size_of::<GlobalCell<u64>>(), 8);
+        assert_eq!(size_of::<GlobalCell<u64>>(), 8);
     }
 
     #[test]

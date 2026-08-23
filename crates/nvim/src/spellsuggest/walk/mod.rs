@@ -304,7 +304,7 @@ pub(crate) struct Walk {
 ///
 /// `su` and `lp` must be valid, `lp`'s language must have its trees
 /// loaded, and `fword` must be a NUL-terminated buffer of `MAXWLEN` bytes.
-pub unsafe fn suggest_trie_walk(
+pub(super) unsafe fn suggest_trie_walk(
     su: *mut suginfo_T,
     lp: *mut langp_T,
     fword: *mut c_char,

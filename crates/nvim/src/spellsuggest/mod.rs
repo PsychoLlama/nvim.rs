@@ -431,11 +431,7 @@ pub unsafe fn spell_suggest_list(
             interactive,
         );
 
-        ga_init(
-            gap,
-            mem::size_of::<*mut c_char>() as c_int,
-            sug.su_ga.ga_len + 1,
-        );
+        ga_init(gap, size_of::<*mut c_char>() as c_int, sug.su_ga.ga_len + 1);
         ga_grow(gap, sug.su_ga.ga_len);
         for stp in suggestions(&raw mut sug.su_ga) {
             // A suggestion may replace only part of `word`; what it does
@@ -489,16 +485,8 @@ unsafe fn spell_find_suggest(
         let bufp = buf.as_mut_ptr();
 
         ptr::write_bytes(su, 0, 1);
-        ga_init(
-            &raw mut (*su).su_ga,
-            mem::size_of::<suggest_T>() as c_int,
-            10,
-        );
-        ga_init(
-            &raw mut (*su).su_sga,
-            mem::size_of::<suggest_T>() as c_int,
-            10,
-        );
+        ga_init(&raw mut (*su).su_ga, size_of::<suggest_T>() as c_int, 10);
+        ga_init(&raw mut (*su).su_sga, size_of::<suggest_T>() as c_int, 10);
         if *badptr as c_int == NUL {
             return;
         }

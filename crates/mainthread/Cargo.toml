@@ -6,3 +6,8 @@ edition = "2024"
 
 [lib]
 path = "lib.rs"
+
+# See crates/nvim/Cargo.toml: `pub` means externally reachable, tree-wide.
+[lints.rust]
+unreachable_pub = "deny"
+unused_qualifications = "deny"

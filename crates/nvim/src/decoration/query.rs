@@ -30,7 +30,7 @@ use crate::types::{
 use crate::winlayer::{Buf, Win};
 use ::libc::memcpy;
 use core::ffi::{c_char, c_int};
-use core::{mem, ptr, slice};
+use core::{ptr, slice};
 
 /// Marktree filters, indexed by `MetaIndex`: `kMTMetaLines` is 1 and
 /// `kMTMetaConcealLines` 4.
@@ -291,11 +291,10 @@ unsafe fn append_virt_lines(dst: &mut VirtLines, src: VirtLines) {
         dst.capacity = wanted.next_power_of_two();
         // SAFETY: `dst` owns `items`, which `xrealloc` grows in place.
         dst.items =
-            unsafe { xrealloc(dst.items.cast(), mem::size_of::<virt_line>() * dst.capacity) }
-                .cast();
+            unsafe { xrealloc(dst.items.cast(), size_of::<virt_line>() * dst.capacity) }.cast();
     }
     assert!(!dst.items.is_null());
-    let bytes = mem::size_of::<virt_line>() * src.size;
+    let bytes = size_of::<virt_line>() * src.size;
     let end = dst.items.wrapping_add(dst.size).cast();
     // SAFETY: `dst` now has room for `src`'s entries, and the two vectors
     // never overlap — `src` belongs to a decoration, `dst` to the caller.

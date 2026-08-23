@@ -9,7 +9,7 @@
 
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
-use core::{mem, ptr};
+use core::ptr;
 
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
@@ -46,7 +46,7 @@ fn unknown_tv() -> typval_T {
 /// `reader` is a live, zeroed or cleared reader; `type_0` is a `'static` C
 /// string.
 pub unsafe fn callback_reader_start(reader: *mut CallbackReader, type_0: *const c_char) {
-    let elem_size = mem::size_of::<*mut c_char>() as c_int;
+    let elem_size = size_of::<*mut c_char>() as c_int;
     // SAFETY: the caller's reader.
     unsafe {
         ga_init(&raw mut (*reader).buffer, elem_size, 32);

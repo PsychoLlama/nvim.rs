@@ -63,29 +63,29 @@ mod known {
     use super::{ChannelPart, ChannelStreamType};
     use core::ffi::c_int;
 
-    pub const kChannelStreamProc: ChannelStreamType = 0;
-    pub const kChannelStreamSocket: ChannelStreamType = 1;
-    pub const kChannelStreamStdio: ChannelStreamType = 2;
-    pub const kChannelStreamStderr: ChannelStreamType = 3;
-    pub const kChannelStreamInternal: ChannelStreamType = 4;
+    pub(super) const kChannelStreamProc: ChannelStreamType = 0;
+    pub(super) const kChannelStreamSocket: ChannelStreamType = 1;
+    pub(super) const kChannelStreamStdio: ChannelStreamType = 2;
+    pub(super) const kChannelStreamStderr: ChannelStreamType = 3;
+    pub(super) const kChannelStreamInternal: ChannelStreamType = 4;
 
-    pub const kChannelPartStdin: ChannelPart = 0;
-    pub const kChannelPartStdout: ChannelPart = 1;
-    pub const kChannelPartStderr: ChannelPart = 2;
-    pub const kChannelPartRpc: ChannelPart = 3;
-    pub const kChannelPartAll: ChannelPart = 4;
+    pub(super) const kChannelPartStdin: ChannelPart = 0;
+    pub(super) const kChannelPartStdout: ChannelPart = 1;
+    pub(super) const kChannelPartStderr: ChannelPart = 2;
+    pub(super) const kChannelPartRpc: ChannelPart = 3;
+    pub(super) const kChannelPartAll: ChannelPart = 4;
 
-    pub const kProcTypePty: c_int = 1;
-    pub const LUA_NOREF: c_int = -2;
+    pub(super) const kProcTypePty: c_int = 1;
+    pub(super) const LUA_NOREF: c_int = -2;
 
     /// `fcntl` command: dup to the lowest free descriptor at or above the
     /// third argument, with close-on-exec set.
-    pub const F_DUPFD_CLOEXEC: c_int = 1030;
+    pub(super) const F_DUPFD_CLOEXEC: c_int = 1030;
 
     /// The id of the channel over this process's own stdin/stdout.
-    pub const CHAN_STDIO: c_int = 1;
+    pub(super) const CHAN_STDIO: c_int = 1;
     /// The id of the channel over this process's own stderr.
-    pub const CHAN_STDERR: c_int = 2;
+    pub(super) const CHAN_STDERR: c_int = 2;
 }
 
 use known::*;

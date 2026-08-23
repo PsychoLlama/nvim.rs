@@ -17,9 +17,9 @@ use core::ffi::{c_char, c_int};
 ///
 /// [`UPSEG_TAIL`] is what gets inserted; the four-byte form with the leading
 /// separator is what an existing "../" step is recognised by.
-const UPSEG: &core::ffi::CStr = c"/../";
+const UPSEG: &CStr = c"/../";
 /// [`UPSEG`] without its leading separator.
-const UPSEG_TAIL: &core::ffi::CStr = c"../";
+const UPSEG_TAIL: &CStr = c"../";
 const _: () = assert!(
     PATHSEP == b'/' as c_int,
     "UPSEG hard-codes the path separator"

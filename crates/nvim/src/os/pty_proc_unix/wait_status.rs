@@ -18,7 +18,7 @@ use core::ffi::c_int;
 
 /// What one `waitpid` report says happened to the child.
 #[derive(Debug, PartialEq, Eq)]
-pub enum ChildState {
+pub(super) enum ChildState {
     /// Suspended, by SIGSTOP/SIGTSTP or the like.
     Stopped,
     /// Resumed by SIGCONT.
@@ -30,7 +30,7 @@ pub enum ChildState {
     Exited { status: Option<c_int> },
 }
 
-pub fn decode(stat: c_int) -> ChildState {
+pub(super) fn decode(stat: c_int) -> ChildState {
     if stat & 0xff == 0x7f {
         return ChildState::Stopped;
     }

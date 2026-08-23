@@ -60,9 +60,9 @@ const SBLOCKSIZE: usize = 16000;
 
 /// The part of a word node's flags that is stored in the tree; the caller
 /// passes extra bits above it that only steer where the word is filed.
-pub const WN_MASK: c_int = 0xffff;
+pub(super) const WN_MASK: c_int = 0xffff;
 
-pub const MSG_COMPRESSING: &core::ffi::CStr = c"Compressing word tree...";
+pub(super) const MSG_COMPRESSING: &core::ffi::CStr = c"Compressing word tree...";
 
 /// A bump allocator for everything a spell file under construction owns.
 ///
@@ -101,10 +101,10 @@ impl SpellArena {
     pub fn alloc_bytes(&mut self, len: usize, align: bool) -> *mut c_char {
         debug_assert!(len <= SBLOCKSIZE);
         if align && !self.head.is_null() {
-            self.used = self.used.next_multiple_of(mem::align_of::<*mut c_char>());
+            self.used = self.used.next_multiple_of(align_of::<*mut c_char>());
         }
         if self.head.is_null() || self.used + len > SBLOCKSIZE {
-            let mut block = vec![0u64; SBLOCKSIZE / mem::size_of::<u64>()];
+            let mut block = vec![0u64; SBLOCKSIZE / size_of::<u64>()];
             self.head = block.as_mut_ptr().cast::<u8>();
             self.blocks.push(block);
             self.used = 0;
@@ -119,8 +119,8 @@ impl SpellArena {
 
     /// Hand out one zeroed `T`.
     pub fn alloc<T>(&mut self) -> *mut T {
-        const { assert!(mem::align_of::<T>() <= mem::align_of::<*mut c_char>()) };
-        self.alloc_bytes(mem::size_of::<T>(), true).cast::<T>()
+        const { assert!(align_of::<T>() <= align_of::<*mut c_char>()) };
+        self.alloc_bytes(size_of::<T>(), true).cast::<T>()
     }
 
     /// Copy a NUL-terminated string into the arena.
@@ -148,7 +148,7 @@ impl SpellArena {
     }
 }
 
-pub type wordnode_T = wordnode_S;
+pub(super) type wordnode_T = wordnode_S;
 
 /// One byte of one word, or — when [`wn_byte`](Self::wn_byte) is NUL — the
 /// end of a word and the properties that go with it.
@@ -231,19 +231,19 @@ static compress_inc: GlobalCell<c_int> = GlobalCell::new(100);
 static compress_added: GlobalCell<c_int> = GlobalCell::new(500_000);
 
 /// Install the `'mkspellmem'` values, already scaled to blocks.
-pub fn set_compression_limits(start: c_int, incr: c_int, added: c_int) {
+pub(super) fn set_compression_limits(start: c_int, incr: c_int, added: c_int) {
     compress_start.set(start);
     compress_inc.set(incr);
     compress_added.set(added);
 }
 
 /// The `'mkspellmem'` block count a run starts at, for validating the option.
-pub const fn block_size() -> c_int {
+pub(super) const fn block_size() -> c_int {
     SBLOCKSIZE as c_int
 }
 
 /// Allocate a tree's root node.
-pub fn wordtree_alloc(spin: &mut spellinfo_T) -> *mut wordnode_T {
+pub(super) fn wordtree_alloc(spin: &mut spellinfo_T) -> *mut wordnode_T {
     spin.si_arena.alloc::<wordnode_T>()
 }
 
@@ -253,7 +253,7 @@ pub fn wordtree_alloc(spin: &mut spellinfo_T) -> *mut wordnode_T {
 /// # Safety
 ///
 /// `word` and `end` must delimit one readable range.
-pub unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -> bool {
+pub(super) unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -> bool {
     // SAFETY: the caller promises the range; the walk stops at `end`.
     unsafe {
         if !utf_valid_string(word, end) {
@@ -283,7 +283,7 @@ pub unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -> bool 
 /// # Safety
 ///
 /// `word` must be NUL-terminated, and `pfxlist` either null or likewise.
-pub unsafe fn store_word(
+pub(super) unsafe fn store_word(
     spin: &mut spellinfo_T,
     word: *mut c_char,
     flags: c_int,
@@ -379,7 +379,7 @@ unsafe fn add_per_affix(
 /// # Safety
 ///
 /// `word` must be NUL-terminated and `root` a node of this arena's tree.
-pub unsafe fn tree_add_word(
+pub(super) unsafe fn tree_add_word(
     spin: &mut spellinfo_T,
     word: *const c_char,
     root: *mut wordnode_T,
@@ -640,7 +640,7 @@ unsafe fn free_wordnode(spin: &mut spellinfo_T, n: *mut wordnode_T) {
 /// # Safety
 ///
 /// `root` must be the root node of one of this arena's trees.
-pub unsafe fn wordtree_compress(
+pub(super) unsafe fn wordtree_compress(
     spin: &mut spellinfo_T,
     root: *mut wordnode_T,
     name: &core::ffi::CStr,

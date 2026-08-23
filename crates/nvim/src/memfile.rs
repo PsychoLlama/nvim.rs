@@ -932,7 +932,7 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
 }
 
 /// `PERROR`: an error message with the failing call's `strerror` after it.
-unsafe fn perror_msg(message: &core::ffi::CStr) {
+unsafe fn perror_msg(message: &CStr) {
     unsafe {
         semsg_c!(
             c"%s: %s".as_ptr(),

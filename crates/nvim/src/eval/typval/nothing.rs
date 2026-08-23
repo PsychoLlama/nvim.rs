@@ -140,7 +140,7 @@ impl TypvalSink for NothingSink {
                 }
             } else {
                 func_unref(fun);
-                if !core::ptr::eq(fun, tv_empty_string.get()) {
+                if !ptr::eq(fun, tv_empty_string.get()) {
                     xfree(fun.cast::<c_void>());
                 }
                 (*tv).vval.v_string = ptr::null_mut();

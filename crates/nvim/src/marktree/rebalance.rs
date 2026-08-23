@@ -60,7 +60,7 @@ mod sizes {
     /// The branch factor, as the index type the rest of this file counts in. A
     /// node splits at [`MAX_KEYS`](super::MAX_KEYS) keys and each half keeps
     /// `T - 1` of them.
-    pub const T: usize = MT_BRANCH_FACTOR as usize;
+    pub(super) const T: usize = MT_BRANCH_FACTOR as usize;
 }
 use sizes::T;
 

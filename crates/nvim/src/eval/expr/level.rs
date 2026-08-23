@@ -153,7 +153,7 @@ pub(crate) unsafe fn eval_func(
 ///
 /// # Safety
 /// `evalarg` may be null; `eap` may be null.
-pub unsafe fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T) {
+pub(crate) unsafe fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T) {
     unsafe {
         if evalarg.is_null() || (*evalarg).eval_tofree.is_null() {
             return;
@@ -225,7 +225,7 @@ pub unsafe fn eval0(
 ///
 /// # Safety
 /// `arg` must be a NUL-terminated expression.
-pub unsafe fn may_call_simple_func(arg: *const c_char, rettv: *mut typval_T) -> c_int {
+pub(crate) unsafe fn may_call_simple_func(arg: *const c_char, rettv: *mut typval_T) -> c_int {
     unsafe {
         let parens = strstr(arg, c"()".as_ptr());
         if parens.is_null() || *skipwhite(parens.add(2)) as c_int != NUL {
@@ -275,7 +275,11 @@ pub(crate) unsafe fn eval0_simple_funccal(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression.
-pub unsafe fn eval1(arg: *mut *mut c_char, rettv: *mut typval_T, evalarg: *mut evalarg_T) -> c_int {
+pub(crate) unsafe fn eval1(
+    arg: *mut *mut c_char,
+    rettv: *mut typval_T,
+    evalarg: *mut evalarg_T,
+) -> c_int {
     unsafe {
         write_bytes(rettv, 0, 1);
         if eval2(arg, rettv, evalarg) == FAIL {

@@ -44,7 +44,7 @@ impl Stream {
         // SAFETY: `Unpacker` is plain data — parser state, byte buffers,
         // handles and two `Object`s, all of which read as their zero — so a
         // zeroed allocation of the right size is a valid uninitialised one.
-        let p = unsafe { xcalloc(1, std::mem::size_of::<Unpacker>()) }.cast::<Unpacker>();
+        let p = unsafe { xcalloc(1, size_of::<Unpacker>()) }.cast::<Unpacker>();
         unsafe { unpacker_init(p) };
         Stream(p)
     }

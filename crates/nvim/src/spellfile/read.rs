@@ -65,14 +65,14 @@ use super::{
 
 /// Marks a tree index that already points at a shared sub-tree, so the
 /// second pass over a node's bytes knows not to descend into it again.
-pub const SHARED_MASK: c_int = 0x8000000;
+pub(super) const SHARED_MASK: c_int = 0x8000000;
 
 /// Read exactly `n` bytes, or say why not.
 ///
 /// # Safety
 ///
 /// `buf` must have room for `n` bytes.
-pub unsafe fn read_bytes(fd: *mut FILE, buf: *mut c_char, n: usize) -> Result<(), c_int> {
+pub(super) unsafe fn read_bytes(fd: *mut FILE, buf: *mut c_char, n: usize) -> Result<(), c_int> {
     // SAFETY: the caller promises the buffer; `fd` is open.
     unsafe {
         if fread(buf.cast(), 1, n, fd) as usize == n {
@@ -94,7 +94,11 @@ pub unsafe fn read_bytes(fd: *mut FILE, buf: *mut c_char, n: usize) -> Result<()
 /// # Safety
 ///
 /// `buf` must have room for `n` bytes.
-pub unsafe fn read_nonnul_bytes(fd: *mut FILE, buf: *mut c_char, n: usize) -> Result<(), c_int> {
+pub(super) unsafe fn read_nonnul_bytes(
+    fd: *mut FILE,
+    buf: *mut c_char,
+    n: usize,
+) -> Result<(), c_int> {
     // SAFETY: as above.
     unsafe {
         read_bytes(fd, buf, n)?;
@@ -724,7 +728,7 @@ unsafe fn spell_read_tree(
         }
         // The index array is `len` ints; refuse a length that could not be
         // allocated rather than wrapping the multiplication.
-        if len as usize > usize::MAX / core::mem::size_of::<c_int>() {
+        if len as usize > usize::MAX / size_of::<c_int>() {
             return SP_FORMERROR;
         }
         if len == 0 {
@@ -736,7 +740,7 @@ unsafe fn spell_read_tree(
         if !bytsp_len.is_null() {
             *bytsp_len = len;
         }
-        let ip = xcalloc(len as size_t, core::mem::size_of::<idx_T>()).cast::<idx_T>();
+        let ip = xcalloc(len as size_t, size_of::<idx_T>()).cast::<idx_T>();
         *idxsp = ip;
 
         let idx = read_tree_node(fd, bp, ip, len, 0, prefixtree, prefixcnt, 0);
@@ -880,7 +884,7 @@ unsafe fn read_tree_node(
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
+pub(super) unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
     // SAFETY: the caller promises the path; the language list is global
     // and only walked here.
     unsafe {
