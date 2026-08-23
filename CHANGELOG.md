@@ -7,6 +7,15 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Moved the unit tests into the editor's own source tree, so it no longer
+  publishes a second, C-shaped copy of itself for a test harness to call
+  from outside: the exported symbols that existed only for those tests, the
+  swappable allocator one of them installed underneath every allocation, and
+  the C memory layout most of the editor's internal records were held in are
+  all gone. Nothing the editor does changes.
+
 ## [2026.08.21-c764fbe67d]
 
 ### Changed
