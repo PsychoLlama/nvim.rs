@@ -8095,7 +8095,6 @@ extern char vterm_primary_device_attr[9];
 void block_autocmds(void);
 void early_init(mparm_T *);
 void event_init(void);
-char *file_pat_to_reg_pat(const char *, const char *, char *, int);
 ScreenCell *getcell(const VTermScreen *, int, int);
 mpack_token_t mpack_pack_number(double);
 void multiqueue_free(MultiQueue *);

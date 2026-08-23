@@ -409,8 +409,7 @@ pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *m
 ///
 /// @return            [allocated] the regexp, or NULL when the braces in the
 ///                    pattern do not balance.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn file_pat_to_reg_pat(
+pub unsafe fn file_pat_to_reg_pat(
     pat: *const c_char,
     pat_end: *const c_char,
     allow_dirs: *mut c_char,

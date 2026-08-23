@@ -410,7 +410,7 @@
     "crates/nvim/src/fileio/convert.rs": {"missing_safety_doc": 15, "unsafe_lines": 396},
     "crates/nvim/src/fileio/lines.rs": {"missing_safety_doc": 2, "unsafe_lines": 117},
     "crates/nvim/src/fileio/mod.rs": {"cell_ptr": 3, "missing_safety_doc": 20, "unsafe_lines": 323},
-    "crates/nvim/src/fileio/names.rs": {"extern_abi": 1, "missing_safety_doc": 8, "no_mangle": 1, "unsafe_lines": 343},
+    "crates/nvim/src/fileio/names.rs": {"missing_safety_doc": 8, "unsafe_lines": 343},
     "crates/nvim/src/fileio/open.rs": {"cell_ptr": 3, "missing_safety_doc": 1, "unsafe_lines": 340},
     "crates/nvim/src/fileio/read.rs": {"cell_ptr": 1, "missing_safety_doc": 1, "unsafe_lines": 713},
     "crates/nvim/src/fileio/report.rs": {"cell_ptr": 1, "missing_safety_doc": 1, "unsafe_lines": 90},

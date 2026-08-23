@@ -18,6 +18,7 @@ mod eval_decode;
 mod eval_encode;
 mod expressions;
 mod fileio;
+mod fileio_names;
 mod fold;
 mod fpconv;
 mod fs;
