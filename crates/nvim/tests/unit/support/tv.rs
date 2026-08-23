@@ -22,8 +22,6 @@
 //! is the same answer for every structure in the specs and a shorter one
 //! to write down.
 
-#![allow(dead_code)] // TEMPORARY
-
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::mem::offset_of;
 use std::ptr;

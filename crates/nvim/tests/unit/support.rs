@@ -488,7 +488,18 @@ pub mod alloc {
 /// see [`editor_lock`].
 #[cfg(not(miri))]
 #[track_caller]
-pub fn check_emsg<R>(_editor: &Editor, f: impl FnOnce() -> R, msg: Option<&str>) -> R {
+pub fn check_emsg<R>(editor: &Editor, f: impl FnOnce() -> R, msg: Option<&str>) -> R {
+    check_emsg_bytes(editor, f, msg.map(str::as_bytes))
+}
+
+/// [`check_emsg`] over the message's raw bytes.
+///
+/// A decoder error quotes the input it choked on, which is not always
+/// valid UTF-8 — and a lossy decode would turn every invalid byte into the
+/// same replacement character, so the assertion has to be over bytes.
+#[cfg(not(miri))]
+#[track_caller]
+pub fn check_emsg_bytes<R>(_editor: &Editor, f: impl FnOnce() -> R, msg: Option<&[u8]>) -> R {
     use c2rust_neovim::message::msg_hist_last;
 
     let before = msg_hist_last.get();
@@ -498,12 +509,22 @@ pub fn check_emsg<R>(_editor: &Editor, f: impl FnOnce() -> R, msg: Option<&str>)
         Some(expected) => {
             assert!(
                 !after.is_null(),
-                "expected the message {expected:?}, got none"
+                "expected the message {:?}, got none",
+                String::from_utf8_lossy(expected)
             );
-            assert_ne!(before, after, "expected a new message: {expected:?}");
+            assert_ne!(
+                before,
+                after,
+                "expected a new message: {:?}",
+                String::from_utf8_lossy(expected)
+            );
             let chunk = unsafe { *(*after).msg.items };
             let text = unsafe { CStr::from_ptr(chunk.text.data()) };
-            assert_eq!(text.to_string_lossy(), expected);
+            assert_eq!(
+                String::from_utf8_lossy(text.to_bytes()),
+                String::from_utf8_lossy(expected)
+            );
+            assert_eq!(text.to_bytes(), expected);
         }
         None => assert_eq!(before, after, "unexpected message"),
     }

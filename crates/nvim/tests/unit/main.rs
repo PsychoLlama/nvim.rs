@@ -13,6 +13,8 @@ mod cmdhist;
 mod cursor;
 mod digraph;
 mod env;
+mod eval_decode;
+mod eval_encode;
 mod expressions;
 mod fileio;
 mod fold;
