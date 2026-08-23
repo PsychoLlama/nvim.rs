@@ -385,8 +385,7 @@ pub unsafe fn buf_close_terminal(buf: *mut buf_T) {
 ///
 /// # Safety
 /// `buf` must be a live buffer; `win` a live window or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn close_buffer(
+pub unsafe fn close_buffer(
     win: *mut win_T,
     buf: *mut buf_T,
     action: c_int,

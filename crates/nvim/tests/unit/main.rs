@@ -7,6 +7,7 @@ mod support;
 
 mod arena;
 mod arglist;
+mod buffer;
 mod charset;
 mod cmdhist;
 mod cursor;

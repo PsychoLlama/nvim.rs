@@ -351,8 +351,12 @@ pub unsafe fn bufref_valid(bufref: *mut bufref_T) -> bool {
 ///
 /// # Safety
 /// `buf` may be any pointer, live or dangling: it is only ever compared.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn buf_valid(buf: *mut buf_T) -> bool {
+///
+/// The null test is a short circuit and nothing more: no buffer in the list
+/// has a null address, so removing it changes no answer. That is why the
+/// "NULL is not a valid buffer" case cannot fail — it states the contract
+/// callers rely on rather than covering a branch.
+pub unsafe fn buf_valid(buf: *mut buf_T) -> bool {
     // Assume that we more often have a recent buffer, start with the last one.
     !buf.is_null() && buffers_backwards().any(|b| b.raw() == buf)
 }

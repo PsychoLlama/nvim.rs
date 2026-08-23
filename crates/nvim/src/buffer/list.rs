@@ -235,8 +235,7 @@ fn check_cursor_line(mut win: Win) {
 ///
 /// `lnum` is the line to remember for it and `flags` the `BLN_*` set. The
 /// answer is null when an autocommand deleted the buffer under us.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn buflist_new(
+pub unsafe fn buflist_new(
     ffname_arg: *mut c_char,
     sfname_arg: *mut c_char,
     lnum: linenr_T,
@@ -750,8 +749,7 @@ pub(crate) fn buflist_findname_file_id(
 ///
 /// `unlisted` searches the unlisted buffers too, when no listed one matched;
 /// `curtab_only` ignores buffers not open in the current tab page.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn buflist_findpat(
+pub unsafe fn buflist_findpat(
     pattern: *const c_char,
     pattern_end: *const c_char,
     unlisted: bool,
