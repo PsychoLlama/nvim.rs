@@ -107,19 +107,19 @@ pub(super) fn comparison(p: &mut ExprParser) -> Flow {
     p.add_value_if_missing(c"E15: Expected value, got comparison operator: %.*s");
     let node = p.new_node(kExprNodeComparison);
     let cmp = if p.cur_token.type_0 == kExprLexInvalid {
-        expr_ast_node_data_cmp {
+        ExprNodeComparison {
             type_0: kExprCmpEqual,
             ccs: kCCStrategyUseOption,
             inv: false,
         }
     } else {
-        expr_ast_node_data_cmp {
+        ExprNodeComparison {
             type_0: p.cur_token.comparison().type_0,
             ccs: p.cur_token.comparison().ccs,
             inv: p.cur_token.comparison().inv,
         }
     };
-    set_node_data(node, expr_ast_node_data { cmp });
+    set_node_data(node, ExprNodeData::Comparison(cmp));
     p.add_op_node(node);
     // Note: the strategy read here is the *token's*, which for an invalid
     // token is whatever the lexer left in `err`. The C reads the same bytes.
@@ -170,9 +170,7 @@ pub(super) fn question(p: &mut ExprParser) -> Flow {
     let ter_val_node = p.new_node(kExprNodeTernaryValue);
     set_node_data(
         ter_val_node,
-        expr_ast_node_data {
-            ter: expr_ast_node_data_ter { got_colon: false },
-        },
+        ExprNodeData::Ternary(ExprNodeTernary { got_colon: false }),
     );
     let first = node_children(node);
     debug_assert!(!first.is_null(), "cur_node->children != NULL");
@@ -256,11 +254,9 @@ pub(super) fn assignment(p: &mut ExprParser) -> Flow {
     let node = p.new_node(kExprNodeAssignment);
     set_node_data(
         node,
-        expr_ast_node_data {
-            ass: expr_ast_node_data_ass {
-                type_0: p.cur_token.assignment_type(),
-            },
-        },
+        ExprNodeData::Assignment(ExprNodeAssignment {
+            type_0: p.cur_token.assignment_type(),
+        }),
     );
     match p.cur_token.assignment_type() {
         kExprAsgnPlain => p.hl_token(hl!(p, PlainAssignment)),

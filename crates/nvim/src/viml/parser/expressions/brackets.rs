@@ -116,9 +116,7 @@ pub(super) fn colon(p: &mut ExprParser) -> Flow {
                 is_ternary = true;
                 set_node_data(
                     node,
-                    expr_ast_node_data {
-                        ter: expr_ast_node_data_ter { got_colon: true },
-                    },
+                    ExprNodeData::Ternary(ExprNodeTernary { got_colon: true }),
                 );
                 p.add_value_if_missing(EXPECTED_VALUE);
                 let first = node_children(node);

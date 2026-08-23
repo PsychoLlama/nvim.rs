@@ -59,7 +59,7 @@ fn node_detail(node: *const ExprASTNode) -> String {
     unsafe {
         match name {
             "UnknownFigure" | "DictLiteral" | "CurlyBracesIdentifier" | "Lambda" => {
-                let guesses = (*node).data.fig.type_guesses;
+                let guesses = (*node).data.figure().type_guesses;
                 format!(
                     "{name}({}{}{})",
                     if guesses.allow_lambda { "\\" } else { "-" },
@@ -68,7 +68,7 @@ fn node_detail(node: *const ExprASTNode) -> String {
                 )
             }
             "SingleQuotedString" | "DoubleQuotedString" => {
-                let literal = (*node).data.str;
+                let literal = *(*node).data.string();
                 if literal.value.is_null() {
                     format!("{name}(val=NULL)")
                 } else {

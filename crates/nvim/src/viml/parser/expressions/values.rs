@@ -33,11 +33,9 @@ pub(super) fn register(p: &mut ExprParser) -> Flow {
     let node = p.new_node(kExprNodeRegister);
     set_node_data(
         node,
-        expr_ast_node_data {
-            reg: expr_ast_node_data_reg {
-                name: p.cur_token.register_name(),
-            },
-        },
+        ExprNodeData::Register(ExprNodeRegister {
+            name: p.cur_token.register_name(),
+        }),
     );
     set_slot_node(p.top_node_p, node);
     p.want_node = kENodeOperator;
@@ -59,7 +57,7 @@ pub(super) fn option(p: &mut ExprParser) -> Flow {
             p.cur_token.len == 1 || p.cur_token.len == 3 && p.line_byte(at.wrapping_add(2)) == b':',
             "cur_token.len == 1 || (cur_token.len == 3 && pline.data[cur_token.start.col + 2] == ':')"
         );
-        expr_ast_node_data_opt {
+        ExprNodeOption {
             ident: p.line_ptr(at.wrapping_add(p.cur_token.len)),
             ident_len: 0,
             scope: if p.cur_token.len == 3 {
@@ -69,13 +67,13 @@ pub(super) fn option(p: &mut ExprParser) -> Flow {
             },
         }
     } else {
-        expr_ast_node_data_opt {
+        ExprNodeOption {
             ident: p.cur_token.option().name,
             ident_len: p.cur_token.option().len,
             scope: p.cur_token.option().scope,
         }
     };
-    set_node_data(node, expr_ast_node_data { opt });
+    set_node_data(node, ExprNodeData::Opt(opt));
     set_slot_node(p.top_node_p, node);
     p.want_node = kENodeOperator;
     p.hl_at(p.cur_token.start, 1, hl!(p, OptionSigil));
@@ -108,11 +106,11 @@ pub(super) fn environment(p: &mut ExprParser) -> Flow {
         return p.op_missing();
     }
     let node = p.new_node(kExprNodeEnvironment);
-    let env = expr_ast_node_data_env {
+    let env = ExprNodeEnvironment {
         ident: p.line_ptr(p.cur_token.start.col.wrapping_add(1)),
         ident_len: p.cur_token.len.wrapping_sub(1),
     };
-    set_node_data(node, expr_ast_node_data { env });
+    set_node_data(node, ExprNodeData::Environment(env));
     if env.ident_len == 0 {
         p.error(c"E15: Environment variable name missing");
     }
@@ -136,13 +134,11 @@ pub(super) fn number(p: &mut ExprParser) -> Flow {
         let node = p.new_node(kExprNodePlainKey);
         set_node_data(
             node,
-            expr_ast_node_data {
-                var: expr_ast_node_data_var {
-                    scope: kExprVarScopeMissing,
-                    ident: p.line_ptr(p.cur_token.start.col),
-                    ident_len: p.cur_token.len,
-                },
-            },
+            ExprNodeData::Variable(ExprNodeVariable {
+                scope: kExprVarScopeMissing,
+                ident: p.line_ptr(p.cur_token.start.col),
+                ident_len: p.cur_token.len,
+            }),
         );
         p.hl_token(hl!(p, IdentifierKey));
         node
@@ -150,11 +146,9 @@ pub(super) fn number(p: &mut ExprParser) -> Flow {
         let node = p.new_node(kExprNodeFloat);
         set_node_data(
             node,
-            expr_ast_node_data {
-                flt: expr_ast_node_data_flt {
-                    value: p.cur_token.number_float(),
-                },
-            },
+            ExprNodeData::Float(ExprNodeFloat {
+                value: p.cur_token.number_float(),
+            }),
         );
         p.hl_token(hl!(p, Float));
         node
@@ -162,11 +156,9 @@ pub(super) fn number(p: &mut ExprParser) -> Flow {
         let node = p.new_node(kExprNodeInteger);
         set_node_data(
             node,
-            expr_ast_node_data {
-                num: expr_ast_node_data_num {
-                    value: p.cur_token.number_integer(),
-                },
-            },
+            ExprNodeData::Integer(ExprNodeInteger {
+                value: p.cur_token.number_integer(),
+            }),
         );
         let prefix_length = base_to_prefix_length[p.cur_token.number().base as usize] as size_t;
         p.hl_at(p.cur_token.start, prefix_length, hl!(p, NumberPrefix));
@@ -199,13 +191,11 @@ pub(super) fn plain_identifier(p: &mut ExprParser) -> Flow {
         let scope_shift: size_t = if scope == kExprVarScopeMissing { 0 } else { 2 };
         set_node_data(
             node,
-            expr_ast_node_data {
-                var: expr_ast_node_data_var {
-                    scope,
-                    ident: p.line_ptr(p.cur_token.start.col.wrapping_add(scope_shift)),
-                    ident_len: p.cur_token.len.wrapping_sub(scope_shift),
-                },
-            },
+            ExprNodeData::Variable(ExprNodeVariable {
+                scope,
+                ident: p.line_ptr(p.cur_token.start.col.wrapping_add(scope_shift)),
+                ident_len: p.cur_token.len.wrapping_sub(scope_shift),
+            }),
         );
         set_slot_node(p.top_node_p, node);
         if scope_shift != 0 {
@@ -239,13 +229,11 @@ pub(super) fn plain_identifier(p: &mut ExprParser) -> Flow {
     let node = p.new_node(kExprNodePlainIdentifier);
     set_node_data(
         node,
-        expr_ast_node_data {
-            var: expr_ast_node_data_var {
-                scope,
-                ident: p.line_ptr(p.cur_token.start.col),
-                ident_len: p.cur_token.len,
-            },
-        },
+        ExprNodeData::Variable(ExprNodeVariable {
+            scope,
+            ident: p.line_ptr(p.cur_token.start.col),
+            ident_len: p.cur_token.len,
+        }),
     );
     p.want_node = kENodeOperator;
     set_slot_node(slot, node);

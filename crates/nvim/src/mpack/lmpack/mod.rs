@@ -69,8 +69,13 @@ const EMPTY_DICT_NAME: *const c_char = c"mpack.empty_dict".as_ptr();
 /// out at a time.
 const BUFFER_SIZE: size_t = 8192;
 
-#[derive(Copy, Clone)]
-#[repr(C)]
+/// One `mpack.Unpacker` instance, held in a Lua userdata block.
+///
+/// Not `Copy`: `string_buffer` is its own allocation and `reg`/`ext`/`mtdict`
+/// are registry references it releases when Lua collects it. No `repr(C)` --
+/// nothing outside this module reads the block's fields, and [`Packer`]
+/// beside it never had one.
+#[derive(Clone)]
 pub struct Unpacker {
     pub L: *mut lua_State,
     pub parser: *mut mpack_parser_t,

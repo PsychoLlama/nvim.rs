@@ -440,12 +440,13 @@ pub(super) unsafe fn parse_quoted_string(
             buffer.cast::<c_char>()
         }
     };
+    let literal = ExprNodeStr {
+        value: buffer,
+        size: if buffer.is_null() { 0 } else { value.len() },
+    };
     // SAFETY: `node` is the caller's, and its value slot is unset, so nothing
     // is leaked by writing it.
-    unsafe {
-        (*node).data.str.value = buffer;
-        (*node).data.str.size = if buffer.is_null() { 0 } else { value.len() };
-    }
+    unsafe { (*node).data = ExprNodeData::Str(literal) }
 
     if colors {
         let body = body_group(is_double, is_invalid);

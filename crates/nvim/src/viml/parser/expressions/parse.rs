@@ -646,7 +646,7 @@ impl ExprParser {
                 {
                     let mut fig = node_fig(self.lambda_node);
                     fig.type_guesses.allow_lambda = false;
-                    set_node_data(self.lambda_node, expr_ast_node_data { fig });
+                    set_node_data(self.lambda_node, ExprNodeData::Figure(fig));
                     let first = node_children(self.lambda_node);
                     if !first.is_null() && node_type(first) == kExprNodeComma {
                         // A comma child means the parser has already seen at

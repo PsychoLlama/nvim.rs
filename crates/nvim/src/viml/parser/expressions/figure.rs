@@ -28,22 +28,16 @@ use super::*;
 /// uninitialised outright. Every read of it is behind the same `colors` check
 /// and the arm that reads it is unreachable for that node, so filling it in
 /// here is unobservable — and it is one read of uninitialised memory fewer.
-fn unhighlighted(
-    p: &ExprParser,
-    guesses: expr_ast_node_data_fig_type_guesses,
-) -> expr_ast_node_data_fig {
-    expr_ast_node_data_fig {
+fn unhighlighted(p: &ExprParser, guesses: ExprFigureGuesses) -> ExprNodeFigure {
+    ExprNodeFigure {
         type_guesses: guesses,
         opening_hl_idx: p.highlight_count().unwrap_or(0),
     }
 }
 
 /// As [`unhighlighted`], for a brace whose chunk has just been recorded.
-fn highlighted(
-    p: &ExprParser,
-    guesses: expr_ast_node_data_fig_type_guesses,
-) -> expr_ast_node_data_fig {
-    expr_ast_node_data_fig {
+fn highlighted(p: &ExprParser, guesses: ExprFigureGuesses) -> ExprNodeFigure {
+    ExprNodeFigure {
         type_guesses: guesses,
         opening_hl_idx: p.highlight_count().map_or(0, |count| count - 1),
     }
@@ -63,26 +57,26 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
             let node = p.new_node(kExprNodeCurlyBracesIdentifier);
             let fig = highlighted(
                 p,
-                expr_ast_node_data_fig_type_guesses {
+                ExprFigureGuesses {
                     allow_dict: false,
                     allow_lambda: false,
                     allow_ident: true,
                 },
             );
-            set_node_data(node, expr_ast_node_data { fig });
+            set_node_data(node, ExprNodeData::Figure(fig));
             p.pt_stack.push(kEPTExpr);
             node
         } else {
             let node = p.new_node(kExprNodeUnknownFigure);
             let fig = highlighted(
                 p,
-                expr_ast_node_data_fig_type_guesses {
+                ExprFigureGuesses {
                     allow_dict: true,
                     allow_lambda: true,
                     allow_ident: true,
                 },
             );
-            set_node_data(node, expr_ast_node_data { fig });
+            set_node_data(node, ExprNodeData::Figure(fig));
             node
         };
         set_slot_node(p.top_node_p, node);
@@ -118,13 +112,13 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
         // chunk is the next one to be recorded.
         let fig = unhighlighted(
             p,
-            expr_ast_node_data_fig_type_guesses {
+            ExprFigureGuesses {
                 allow_dict: false,
                 allow_lambda: false,
                 allow_ident: true,
             },
         );
-        set_node_data(node, expr_ast_node_data { fig });
+        set_node_data(node, ExprNodeData::Figure(fig));
         p.ast_stack.push(children_slot(node));
         if pt_is_assignment(p.cur_pt) {
             p.pt_stack.push(kEPTExpr);
@@ -154,13 +148,13 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
         let node = p.new_node(kExprNodeUnknownFigure);
         let fig = unhighlighted(
             p,
-            expr_ast_node_data_fig_type_guesses {
+            ExprFigureGuesses {
                 allow_dict: false,
                 allow_lambda: false,
                 allow_ident: false,
             },
         );
-        set_node_data(node, expr_ast_node_data { fig });
+        set_node_data(node, ExprNodeData::Figure(fig));
         set_node_len(node, 0);
         if p.want_node != kENodeValue {
             set_node_children(node, slot_node(p.top_node_p));

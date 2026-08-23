@@ -44,90 +44,201 @@ pub struct expr_ast_node {
     pub next: *mut ExprASTNode,
     pub start: ParserPosition,
     pub len: size_t,
-    pub data: expr_ast_node_data,
+    pub data: ExprNodeData,
+}
+/// The payload of an [`expr_ast_node`], as its [`ExprASTNodeType`] selects.
+///
+/// Upstream this is a union with no tag of its own: the node's `type_0` says
+/// which member is live and every read has to agree. Here the tag is the
+/// enum's, so reading the wrong arm is a panic rather than a
+/// reinterpretation, and `type_0` and the payload can no longer disagree
+/// silently. The node types that carry nothing get [`ExprNodeData::None`],
+/// which is also what a freshly allocated node starts as -- upstream left
+/// those bytes uninitialised.
+#[derive(Copy, Clone)]
+pub enum ExprNodeData {
+    /// Every node type that carries no payload.
+    None,
+    /// `kExprNodeRegister`.
+    Register(ExprNodeRegister),
+    /// `kExprNodeUnknownFigure`, `kExprNodeLambda`, `kExprNodeDictLiteral`
+    /// and `kExprNodeCurlyBracesIdentifier`.
+    Figure(ExprNodeFigure),
+    /// `kExprNodePlainIdentifier` and `kExprNodePlainKey`.
+    Variable(ExprNodeVariable),
+    /// `kExprNodeTernaryValue`.
+    Ternary(ExprNodeTernary),
+    /// `kExprNodeComparison`.
+    Comparison(ExprNodeComparison),
+    /// `kExprNodeInteger`.
+    Integer(ExprNodeInteger),
+    /// `kExprNodeFloat`.
+    Float(ExprNodeFloat),
+    /// `kExprNodeSingleQuotedString` and `kExprNodeDoubleQuotedString`.
+    Str(ExprNodeStr),
+    /// `kExprNodeOption`.
+    Opt(ExprNodeOption),
+    /// `kExprNodeEnvironment`.
+    Environment(ExprNodeEnvironment),
+    /// `kExprNodeAssignment`.
+    Assignment(ExprNodeAssignment),
+}
+
+impl ExprNodeData {
+    /// The payload of a figure-brace node.
+    #[track_caller]
+    pub fn figure(&self) -> &ExprNodeFigure {
+        match self {
+            Self::Figure(v) => v,
+            _ => panic!("node payload is not a figure brace"),
+        }
+    }
+
+    /// The payload of a ternary-value node.
+    #[track_caller]
+    pub fn ternary(&self) -> &ExprNodeTernary {
+        match self {
+            Self::Ternary(v) => v,
+            _ => panic!("node payload is not a ternary value"),
+        }
+    }
+
+    /// The payload of a string-literal node.
+    #[track_caller]
+    pub fn string(&self) -> &ExprNodeStr {
+        match self {
+            Self::Str(v) => v,
+            _ => panic!("node payload is not a string literal"),
+        }
+    }
+
+    /// The payload of an option node.
+    #[track_caller]
+    pub fn option(&self) -> &ExprNodeOption {
+        match self {
+            Self::Opt(v) => v,
+            _ => panic!("node payload is not an option"),
+        }
+    }
+
+    /// The payload of an identifier or key node.
+    #[track_caller]
+    pub fn variable(&self) -> &ExprNodeVariable {
+        match self {
+            Self::Variable(v) => v,
+            _ => panic!("node payload is not an identifier"),
+        }
+    }
+
+    /// The payload of an environment-variable node.
+    #[track_caller]
+    pub fn environment(&self) -> &ExprNodeEnvironment {
+        match self {
+            Self::Environment(v) => v,
+            _ => panic!("node payload is not an environment variable"),
+        }
+    }
+
+    /// The payload of a register node.
+    #[track_caller]
+    pub fn register(&self) -> &ExprNodeRegister {
+        match self {
+            Self::Register(v) => v,
+            _ => panic!("node payload is not a register"),
+        }
+    }
+
+    /// The payload of a comparison node.
+    #[track_caller]
+    pub fn comparison(&self) -> &ExprNodeComparison {
+        match self {
+            Self::Comparison(v) => v,
+            _ => panic!("node payload is not a comparison"),
+        }
+    }
+
+    /// The payload of an integer-literal node.
+    #[track_caller]
+    pub fn integer(&self) -> &ExprNodeInteger {
+        match self {
+            Self::Integer(v) => v,
+            _ => panic!("node payload is not an integer literal"),
+        }
+    }
+
+    /// The payload of a float-literal node.
+    #[track_caller]
+    pub fn float(&self) -> &ExprNodeFloat {
+        match self {
+            Self::Float(v) => v,
+            _ => panic!("node payload is not a float literal"),
+        }
+    }
+
+    /// The payload of an assignment node.
+    #[track_caller]
+    pub fn assignment(&self) -> &ExprNodeAssignment {
+        match self {
+            Self::Assignment(v) => v,
+            _ => panic!("node payload is not an assignment"),
+        }
+    }
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union expr_ast_node_data {
-    pub reg: expr_ast_node_data_reg,
-    pub fig: expr_ast_node_data_fig,
-    pub var: expr_ast_node_data_var,
-    pub ter: expr_ast_node_data_ter,
-    pub cmp: expr_ast_node_data_cmp,
-    pub num: expr_ast_node_data_num,
-    pub flt: expr_ast_node_data_flt,
-    pub str: expr_ast_node_data_str,
-    pub opt: expr_ast_node_data_opt,
-    pub env: expr_ast_node_data_env,
-    pub ass: expr_ast_node_data_ass,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_ass {
+pub struct ExprNodeAssignment {
     pub type_0: ExprAssignmentType,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_cmp {
+pub struct ExprNodeComparison {
     pub type_0: ExprComparisonType,
     pub ccs: ExprCaseCompareStrategy,
     pub inv: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_env {
+pub struct ExprNodeEnvironment {
     pub ident: *const ::core::ffi::c_char,
     pub ident_len: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_fig {
-    pub type_guesses: expr_ast_node_data_fig_type_guesses,
+pub struct ExprNodeFigure {
+    pub type_guesses: ExprFigureGuesses,
     pub opening_hl_idx: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_fig_type_guesses {
+pub struct ExprFigureGuesses {
     pub allow_dict: bool,
     pub allow_lambda: bool,
     pub allow_ident: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_flt {
+pub struct ExprNodeFloat {
     pub value: float_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_num {
+pub struct ExprNodeInteger {
     pub value: uvarnumber_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_opt {
+pub struct ExprNodeOption {
     pub ident: *const ::core::ffi::c_char,
     pub ident_len: size_t,
     pub scope: ExprOptScope,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_reg {
+pub struct ExprNodeRegister {
     pub name: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_str {
+pub struct ExprNodeStr {
     pub value: *mut ::core::ffi::c_char,
     pub size: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_ter {
+pub struct ExprNodeTernary {
     pub got_colon: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expr_ast_node_data_var {
+pub struct ExprNodeVariable {
     pub scope: ExprVarScope,
     pub ident: *const ::core::ffi::c_char,
     pub ident_len: size_t,

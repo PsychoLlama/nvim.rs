@@ -279,47 +279,43 @@ unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut 
         let string_body = |value: *mut c_char, size: size_t| {
             Object::string(arena_string(arena, String_0::from_raw_parts(value, size)))
         };
+        // The payload, once, so each arm below reads as the field list its
+        // node type carries rather than as a chain through the pointer.
+        let data = (*node).data;
         match type_0 {
             kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString => {
-                let str = string_body((*node).data.str.value, (*node).data.str.size);
+                let str = string_body(data.string().value, data.string().size);
                 dict_put(ret_node, c"svalue", str);
-                xfree((*node).data.str.value.cast());
+                xfree(data.string().value.cast());
             }
             kExprNodeOption => {
                 dict_put(
                     ret_node,
                     c"scope",
-                    Object::integer((*node).data.opt.scope as Integer),
+                    Object::integer(data.option().scope as Integer),
                 );
-                let ident = string_body(
-                    (*node).data.opt.ident.cast_mut(),
-                    (*node).data.opt.ident_len,
-                );
+                let ident = string_body(data.option().ident.cast_mut(), data.option().ident_len);
                 dict_put(ret_node, c"ident", ident);
             }
             kExprNodePlainIdentifier => {
                 dict_put(
                     ret_node,
                     c"scope",
-                    Object::integer((*node).data.var.scope as Integer),
+                    Object::integer(data.variable().scope as Integer),
                 );
-                let ident = string_body(
-                    (*node).data.var.ident.cast_mut(),
-                    (*node).data.var.ident_len,
-                );
+                let ident =
+                    string_body(data.variable().ident.cast_mut(), data.variable().ident_len);
                 dict_put(ret_node, c"ident", ident);
             }
             kExprNodePlainKey => {
-                let ident = string_body(
-                    (*node).data.var.ident.cast_mut(),
-                    (*node).data.var.ident_len,
-                );
+                let ident =
+                    string_body(data.variable().ident.cast_mut(), data.variable().ident_len);
                 dict_put(ret_node, c"ident", ident);
             }
             kExprNodeEnvironment => {
                 let ident = string_body(
-                    (*node).data.env.ident.cast_mut(),
-                    (*node).data.env.ident_len,
+                    data.environment().ident.cast_mut(),
+                    data.environment().ident_len,
                 );
                 dict_put(ret_node, c"ident", ident);
             }
@@ -327,30 +323,34 @@ unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut 
                 dict_put(
                     ret_node,
                     c"name",
-                    Object::integer((*node).data.reg.name as Integer),
+                    Object::integer(data.register().name as Integer),
                 );
             }
             kExprNodeComparison => {
-                let cmp = eltkn_cmp_type_tab.with(|tab| tab[(*node).data.cmp.type_0 as usize]);
+                let cmp = eltkn_cmp_type_tab.with(|tab| tab[data.comparison().type_0 as usize]);
                 dict_put(ret_node, c"cmp_type", Object::string(cstr_as_string(cmp)));
-                let ccs = ccs_tab.with(|tab| tab[(*node).data.cmp.ccs as usize]);
+                let ccs = ccs_tab.with(|tab| tab[data.comparison().ccs as usize]);
                 dict_put(
                     ret_node,
                     c"ccs_strategy",
                     Object::string(cstr_as_string(ccs)),
                 );
-                dict_put(ret_node, c"invert", Object::boolean((*node).data.cmp.inv));
+                dict_put(ret_node, c"invert", Object::boolean(data.comparison().inv));
             }
             kExprNodeFloat => {
-                dict_put(ret_node, c"fvalue", Object::float((*node).data.flt.value));
+                dict_put(ret_node, c"fvalue", Object::float(data.float().value));
             }
             kExprNodeInteger => {
                 // The lexer's value is unsigned; the wire's is not.
-                let value = (*node).data.num.value.min(Integer::MAX as uvarnumber_T);
+                let value = (*node)
+                    .data
+                    .integer()
+                    .value
+                    .min(Integer::MAX as uvarnumber_T);
                 dict_put(ret_node, c"ivalue", Object::integer(value as Integer));
             }
             kExprNodeAssignment => {
-                let asgn_type = (*node).data.ass.type_0;
+                let asgn_type = data.assignment().type_0;
                 // Plain "=" has no augmentation, and the table's slot for it is
                 // the empty string rather than a name.
                 let augmentation = if asgn_type == kExprAsgnPlain {

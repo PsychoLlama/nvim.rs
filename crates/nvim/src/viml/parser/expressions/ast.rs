@@ -3,7 +3,7 @@
 //!
 //! # Node pointers
 //!
-//! A node is `xmalloc`ed by [`viml_pexpr_new_node`] and lives until
+//! A node is `xcalloc`ed by [`viml_pexpr_new_node`] and lives until
 //! [`viml_pexpr_free_ast`] walks the finished tree, so a non-null node
 //! pointer the parser holds is live and dereferenceable for the whole parse.
 //! That is the whole of the obligation behind the accessors below, and it is
@@ -22,7 +22,7 @@ use core::ptr;
 use std::collections::HashSet;
 
 use super::*;
-use crate::types::{expr_ast_node_data, expr_ast_node_data_fig};
+use crate::types::{ExprNodeData, ExprNodeFigure};
 use crate::viml::parser::parser::reader_line;
 
 /// A node's type tag.
@@ -103,30 +103,28 @@ pub(super) fn set_slot_node(slot: *mut *mut ExprASTNode, node: *mut ExprASTNode)
     unsafe { *slot = node }
 }
 
-/// Write the whole of a node's payload. The union is *constructed* in safe
-/// code — only reading one back out has to name the right member, which is
-/// what the three readers below are for.
+/// Write the whole of a node's payload.
 #[inline(always)]
-pub(super) fn set_node_data(node: *mut ExprASTNode, data: expr_ast_node_data) {
+pub(super) fn set_node_data(node: *mut ExprASTNode, data: ExprNodeData) {
     unsafe { (*node).data = data }
 }
 
 /// A figure brace node's guesses at what it will turn out to be.
 #[inline(always)]
-pub(super) fn node_fig(node: *mut ExprASTNode) -> expr_ast_node_data_fig {
-    unsafe { (*node).data.fig }
+pub(super) fn node_fig(node: *mut ExprASTNode) -> ExprNodeFigure {
+    *unsafe { (*node).data }.figure()
 }
 
 /// Whether a TernaryValue node has seen its `:` yet.
 #[inline(always)]
 pub(super) fn node_got_colon(node: *mut ExprASTNode) -> bool {
-    unsafe { (*node).data.ter.got_colon }
+    unsafe { (*node).data }.ternary().got_colon
 }
 
 /// The decoded bytes a string node owns.
 #[inline(always)]
 pub(super) fn node_str_value(node: *mut ExprASTNode) -> *mut c_char {
-    unsafe { (*node).data.str.value }
+    unsafe { (*node).data }.string().value
 }
 
 /// The slot the root of the tree goes into — the bottom AST stack item.
@@ -389,7 +387,7 @@ pub unsafe fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 // decoded into, and nothing else points at it.
                 unsafe { xfree(node_str_value(cur_node).cast::<c_void>()) };
             }
-            // SAFETY: the node came from `viml_pexpr_new_node`'s `xmalloc`,
+            // SAFETY: the node came from `viml_pexpr_new_node`'s `xcalloc`,
             // and the walk has already freed everything it pointed at.
             unsafe { xfree(cur_node.cast::<c_void>()) };
             set_slot_node(cur_slot, ptr::null_mut());
@@ -401,13 +399,20 @@ pub unsafe fn viml_pexpr_free_ast(mut ast: ExprAST) {
 /// and its payload are the caller's to fill in.
 #[inline]
 pub(super) fn viml_pexpr_new_node(type_0: ExprASTNodeType) -> *mut ExprASTNode {
-    // SAFETY: `xmalloc` answers a live allocation the size of a node, or dies
-    // trying; the three fields every node has are written before it escapes.
+    // SAFETY: `xcalloc` answers a live zeroed allocation the size of a node,
+    // or dies trying.
+    //
+    // Upstream uses `xmalloc` and writes three of the six fields, leaving
+    // `start`, `len` and the payload as whatever the allocator handed back --
+    // fine for a union whose live member the type tag names, not fine for a
+    // tagged payload, which has to start somewhere valid. Zeroing costs one
+    // `memset` of a node and settles all three; the discriminant is then
+    // written explicitly, because zero bytes are not a promise about an
+    // enum's representation.
     unsafe {
-        let node = xmalloc(size_of::<ExprASTNode>()) as *mut ExprASTNode;
+        let node = xcalloc(1, size_of::<ExprASTNode>()) as *mut ExprASTNode;
         (*node).type_0 = type_0;
-        (*node).children = ptr::null_mut::<ExprASTNode>();
-        (*node).next = ptr::null_mut::<ExprASTNode>();
+        (*node).data = ExprNodeData::None;
         node
     }
 }

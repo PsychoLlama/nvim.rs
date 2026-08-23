@@ -247,19 +247,6 @@ typedef union estack_T_es_info estack_T_es_info;
 typedef struct pos_T pos_T;
 typedef struct sctx_T sctx_T;
 typedef struct expand_T expand_T;
-typedef struct expr_ast_node_data_ass expr_ast_node_data_ass;
-typedef struct expr_ast_node_data_cmp expr_ast_node_data_cmp;
-typedef struct expr_ast_node_data_env expr_ast_node_data_env;
-typedef struct expr_ast_node_data_fig_type_guesses expr_ast_node_data_fig_type_guesses;
-typedef struct expr_ast_node_data_fig expr_ast_node_data_fig;
-typedef struct expr_ast_node_data_flt expr_ast_node_data_flt;
-typedef struct expr_ast_node_data_num expr_ast_node_data_num;
-typedef struct expr_ast_node_data_opt expr_ast_node_data_opt;
-typedef struct expr_ast_node_data_reg expr_ast_node_data_reg;
-typedef struct expr_ast_node_data_str expr_ast_node_data_str;
-typedef struct expr_ast_node_data_ter expr_ast_node_data_ter;
-typedef struct expr_ast_node_data_var expr_ast_node_data_var;
-typedef union expr_ast_node_data expr_ast_node_data;
 typedef struct extmark_undo_vec_t extmark_undo_vec_t;
 typedef struct funccall_S_fc_fixvar funccall_S_fc_fixvar;
 typedef struct garray_T garray_T;
@@ -2109,66 +2096,6 @@ struct expand_T {
   char xp_buf[256];
   Direction xp_search_dir;
   pos_T xp_pre_incsearch_pos;
-};
-struct expr_ast_node_data_ass {
-  ExprAssignmentType type;
-};
-struct expr_ast_node_data_cmp {
-  ExprComparisonType type;
-  ExprCaseCompareStrategy ccs;
-  bool inv;
-};
-struct expr_ast_node_data_env {
-  const char *ident;
-  size_t ident_len;
-};
-struct expr_ast_node_data_fig_type_guesses {
-  bool allow_dict;
-  bool allow_lambda;
-  bool allow_ident;
-};
-struct expr_ast_node_data_fig {
-  expr_ast_node_data_fig_type_guesses type_guesses;
-  size_t opening_hl_idx;
-};
-struct expr_ast_node_data_flt {
-  float_T value;
-};
-struct expr_ast_node_data_num {
-  uvarnumber_T value;
-};
-struct expr_ast_node_data_opt {
-  const char *ident;
-  size_t ident_len;
-  ExprOptScope scope;
-};
-struct expr_ast_node_data_reg {
-  int name;
-};
-struct expr_ast_node_data_str {
-  char *value;
-  size_t size;
-};
-struct expr_ast_node_data_ter {
-  bool got_colon;
-};
-struct expr_ast_node_data_var {
-  ExprVarScope scope;
-  const char *ident;
-  size_t ident_len;
-};
-union expr_ast_node_data {
-  expr_ast_node_data_reg reg;
-  expr_ast_node_data_fig fig;
-  expr_ast_node_data_var var;
-  expr_ast_node_data_ter ter;
-  expr_ast_node_data_cmp cmp;
-  expr_ast_node_data_num num;
-  expr_ast_node_data_flt flt;
-  expr_ast_node_data_str str;
-  expr_ast_node_data_opt opt;
-  expr_ast_node_data_env env;
-  expr_ast_node_data_ass ass;
 };
 struct extmark_undo_vec_t {
   size_t size;

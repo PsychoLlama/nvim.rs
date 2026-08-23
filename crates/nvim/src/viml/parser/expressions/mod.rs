@@ -41,16 +41,15 @@ use crate::charset::{hex2nr, vim_str2nr};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::trans_special;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utfc_ptr2len_len};
-use crate::memory::{xfree, xmalloc, xmallocz};
+use crate::memory::{xcalloc, xfree, xmalloc, xmallocz};
 use crate::os::cshim::gettext;
 use crate::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
-    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, ExprVarScope,
-    ParserLine, ParserPosition, ParserState, expr_ast_node_data, expr_ast_node_data_ass,
-    expr_ast_node_data_cmp, expr_ast_node_data_env, expr_ast_node_data_fig,
-    expr_ast_node_data_fig_type_guesses, expr_ast_node_data_flt, expr_ast_node_data_num,
-    expr_ast_node_data_opt, expr_ast_node_data_reg, expr_ast_node_data_ter, expr_ast_node_data_var,
-    float_T, size_t, uint8_t, uvarnumber_T,
+    ExprCaseCompareStrategy, ExprComparisonType, ExprFigureGuesses, ExprNodeAssignment,
+    ExprNodeComparison, ExprNodeData, ExprNodeEnvironment, ExprNodeFigure, ExprNodeFloat,
+    ExprNodeInteger, ExprNodeOption, ExprNodeRegister, ExprNodeStr, ExprNodeTernary,
+    ExprNodeVariable, ExprOptScope, ExprParserFlags, ExprVarScope, ParserLine, ParserPosition,
+    ParserState, float_T, size_t, uint8_t, uvarnumber_T,
 };
 use crate::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
