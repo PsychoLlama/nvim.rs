@@ -328,7 +328,7 @@
     "crates/nvim/src/event/libuv.rs": {"unsafe_lines": 332},
     "crates/nvim/src/event/libuv_proc.rs": {"extern_abi": 2, "unsafe_lines": 31},
     "crates/nvim/src/event/loop.rs": {"extern_abi": 6, "unsafe_lines": 107},
-    "crates/nvim/src/event/multiqueue.rs": {"extern_abi": 7, "no_mangle": 6, "unsafe_lines": 27},
+    "crates/nvim/src/event/multiqueue.rs": {"extern_abi": 1, "unsafe_lines": 27},
     "crates/nvim/src/event/proc.rs": {"cell_ptr": 3, "extern_abi": 5, "unsafe_lines": 97},
     "crates/nvim/src/event/rstream.rs": {"extern_abi": 4, "unsafe_lines": 82},
     "crates/nvim/src/event/signal.rs": {"extern_abi": 3, "unsafe_lines": 19},

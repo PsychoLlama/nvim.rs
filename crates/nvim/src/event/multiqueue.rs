@@ -111,8 +111,7 @@ impl DerefMut for Queue {
 /// # Safety
 /// `on_put`, if given, is safe to call with `data` for as long as the queue
 /// lives.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_new(on_put: PutCallback, data: *mut c_void) -> *mut MultiQueue {
+pub unsafe fn multiqueue_new(on_put: PutCallback, data: *mut c_void) -> *mut MultiQueue {
     new_queue(ptr::null_mut(), on_put, data)
 }
 
@@ -120,8 +119,7 @@ pub unsafe extern "C" fn multiqueue_new(on_put: PutCallback, data: *mut c_void) 
 ///
 /// # Safety
 /// `parent` is live and outlives the child.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue {
+pub unsafe fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue {
     // SAFETY: the caller's live queue.
     let mut parent = unsafe { Queue::new(parent) };
     assert!(parent.parent().is_none(), "queues nest only one level deep");
@@ -148,8 +146,7 @@ fn new_queue(parent: *mut MultiQueue, on_put: PutCallback, data: *mut c_void) ->
 /// # Safety
 /// `queue` is live, was made by [`multiqueue_new`] or
 /// [`multiqueue_new_child`], and is not used again.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_free(queue: *mut MultiQueue) {
+pub unsafe fn multiqueue_free(queue: *mut MultiQueue) {
     debug_assert!(!queue.is_null());
     // SAFETY: the caller hands the queue over; `new_queue` boxed it and its
     // list, and this is the only place either is taken back.
@@ -178,8 +175,7 @@ pub unsafe extern "C" fn multiqueue_free(queue: *mut MultiQueue) {
 ///
 /// # Safety
 /// `queue` is live.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_get(queue: *mut MultiQueue) -> Event {
+pub unsafe fn multiqueue_get(queue: *mut MultiQueue) -> Event {
     // SAFETY: the caller's live queue.
     let queue = unsafe { Queue::new(queue) };
     take_event(queue).unwrap_or(NIL_EVENT)
@@ -190,8 +186,7 @@ pub unsafe extern "C" fn multiqueue_get(queue: *mut MultiQueue) -> Event {
 /// # Safety
 /// `queue` is live, and `event`'s handler is safe to call with its argv once
 /// the queue reaches it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_put_event(queue: *mut MultiQueue, event: Event) {
+pub unsafe fn multiqueue_put_event(queue: *mut MultiQueue, event: Event) {
     debug_assert!(!queue.is_null());
     // SAFETY: the caller's live queue.
     put_event(unsafe { Queue::new(queue) }, event);
@@ -223,8 +218,7 @@ fn put_event(mut queue: Queue, event: Event) {
 ///
 /// # Safety
 /// `queue` is live.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_size(queue: *mut MultiQueue) -> size_t {
+pub unsafe fn multiqueue_size(queue: *mut MultiQueue) -> size_t {
     // SAFETY: the caller's live queue.
     unsafe { Queue::new(queue) }.size
 }

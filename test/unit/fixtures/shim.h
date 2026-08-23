@@ -106,13 +106,6 @@ void *memcpy(void *, const void *, size_t);
 #define EXTERN extern
 #define INIT(...)
 
-// nvim/event/defs.h + nvim/event/multiqueue.h.
-#define event_create(cb, ...) ((Event){ .handler = cb, .argv = { __VA_ARGS__ } })
-#define multiqueue_put(q, h, ...) \
-  do { \
-    multiqueue_put_event(q, event_create(h, __VA_ARGS__)); \
-  } while (0)
-
 // nvim/vterm/vterm.h. CSI_ARG_MISSING and the flag/type constants are chunk
 // constants; only the function-like macros need restating.
 #define CSI_ARG_MASK (~(1U << 31))
