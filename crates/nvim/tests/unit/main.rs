@@ -33,6 +33,7 @@ mod packer;
 mod parser;
 mod path;
 mod profile;
+mod search;
 mod sha256;
 mod shell;
 mod strings;

@@ -135,11 +135,17 @@ unsafe fn clone_spat(idx: c_int) -> SearchPattern {
 /// - `options & SEARCH_HIS`: put the pattern in the search history.
 /// - `options & SEARCH_KEEP`: do not remember the pattern at all.
 ///
-/// @param regmatch  return: pattern and ignore-case flag
+/// `regmatch` is an out parameter: the compiled pattern and the
+/// ignore-case flag to match it with. Answers `OK`, or `FAIL` when the
+/// pattern does not compile or there is no remembered one to fall back on.
 ///
-/// @return  FAIL if failed, OK otherwise.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn search_regcomp(
+/// # Safety
+/// `pat` must be null, or readable for `patlen` bytes and NUL-terminated;
+/// it is borrowed only for the call. `used_pat` may be null, and is
+/// otherwise written with a pointer into `pat` or into the remembered
+/// pattern, which lives until the next call. `regmatch` must be writable,
+/// and the caller owns the `regprog` this leaves in it.
+pub unsafe fn search_regcomp(
     mut pat: *mut c_char,
     mut patlen: size_t,
     used_pat: *mut *mut c_char,
@@ -220,9 +226,9 @@ pub unsafe extern "C" fn search_regcomp(
     }
 }
 
-/// The pattern [`search_regcomp`] last compiled.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn get_search_pat() -> *mut c_char {
+/// The pattern [`search_regcomp`] last compiled, valid until the next call
+/// to it.
+pub fn get_search_pat() -> *mut c_char {
     compiled_pat.get()
 }
 
@@ -457,8 +463,7 @@ pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: c_int, scs: c_int) -> c_in
 ///
 /// # Safety
 /// `pat` must be a NUL-terminated string, and not null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn pat_has_uppercase(pat: *mut c_char) -> bool {
+pub unsafe fn pat_has_uppercase(pat: *mut c_char) -> bool {
     unsafe {
         // Which of `\`, `%` and `_` introduce an escape depends on the
         // pattern's own magicness, which only a parse can tell us.

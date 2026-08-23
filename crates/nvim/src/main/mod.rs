@@ -924,7 +924,6 @@ pub static ins_at_eol: GlobalCell<bool> = GlobalCell::new(false);
 pub static no_abbr: GlobalCell<bool> = GlobalCell::new(true);
 pub static mapped_ctrl_c: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static ctrl_c_interrupts: GlobalCell<bool> = GlobalCell::new(true);
-#[unsafe(no_mangle)]
 pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
     cmod_flags: CmdModFlags::NONE,
     cmod_split: 0,
