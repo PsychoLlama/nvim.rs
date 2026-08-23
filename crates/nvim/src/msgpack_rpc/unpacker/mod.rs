@@ -444,8 +444,7 @@ unsafe fn ext_object(p: *mut Unpacker, ext_type: c_int, length: mpack_uint32_t) 
 
 /// # Safety
 /// `p` points at writable `Unpacker`-sized storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn unpacker_init(p: *mut Unpacker) {
+pub unsafe fn unpacker_init(p: *mut Unpacker) {
     // SAFETY: the caller's storage.
     unsafe {
         mpack_parser_init(&raw mut (*p).parser, 0);
@@ -463,8 +462,7 @@ pub unsafe extern "C" fn unpacker_init(p: *mut Unpacker) {
 /// # Safety
 /// `p` points at an unpacker that has been through [`unpacker_init`] and is
 /// about to be released.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn unpacker_teardown(p: *mut Unpacker) {
+pub unsafe fn unpacker_teardown(p: *mut Unpacker) {
     // SAFETY: the arena is the unpacker's own.
     unsafe { arena_mem_free(arena_finish(&raw mut (*p).arena)) };
 }
@@ -599,8 +597,7 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
 /// # Safety
 /// `p` points at a live unpacker whose `read_ptr`/`read_size` describe the
 /// bytes that have arrived.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn unpacker_advance(p: *mut Unpacker) -> bool {
+pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
     // The tree parser below re-enters the unpacker through the parser's own
     // `data` pointer, so this body keeps raw-pointer discipline throughout
     // rather than holding a reference across `mpack_parse`.

@@ -33,6 +33,7 @@ mod mbyte;
 mod memory;
 mod message;
 mod r#move;
+mod msgpack;
 mod multiqueue;
 mod optionstr;
 mod packer;

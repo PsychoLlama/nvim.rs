@@ -75,13 +75,7 @@ pub fn mpack_pack_chunk(p: *const c_char, l: mpack_uint32_t) -> mpack_token_t {
 
 /// The narrowest integer token that represents `v` exactly, or a float token
 /// when none does.
-///
-/// Exported for `test/unit/msgpack_spec.lua`, which asserts the *width* this
-/// picks at each signed boundary — the token's `length` is the byte count the
-/// value will be encoded at, and picking it one too wide is a silent wire
-/// regression that nothing else notices.
-#[unsafe(no_mangle)]
-pub extern "C-unwind" fn mpack_pack_number(v: c_double) -> mpack_token_t {
+pub(crate) extern "C-unwind" fn mpack_pack_number(v: c_double) -> mpack_token_t {
     from_tok(&token::pack_number(v))
 }
 
@@ -142,6 +136,12 @@ mod tests {
     fn the_exported_pack_number_round_trips() {
         for v in [0.0f64, 1.0, -1.0, 255.0, -32769.0, 0.5] {
             assert_eq!(mpack_unpack_number(mpack_pack_number(v)), v, "{v}");
+        }
+        // The width the token carries is the width the value is written at,
+        // so `from_tok` has to hand it through unchanged: a token one byte
+        // too wide is a silent wire regression nothing else notices.
+        for (v, length) in [(-128.0, 1), (-129.0, 2), (255.0, 1), (256.0, 2)] {
+            assert_eq!(mpack_pack_number(v).length, length, "{v}");
         }
         assert!(mpack_unpack_boolean(mpack_pack_boolean(1)));
         assert!(!mpack_unpack_boolean(mpack_pack_boolean(0)));

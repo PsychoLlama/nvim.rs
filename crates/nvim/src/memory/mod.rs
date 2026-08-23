@@ -209,10 +209,11 @@ pub unsafe extern "C" fn xfree(ptr: *mut c_void) {
 /// `calloc` that never fails. The zeroing is load-bearing: callers all over
 /// the tree treat a fresh allocation as initialized.
 ///
+/// Carries the C ABI as tree-sitter's allocator hook; see [`xmalloc`].
+///
 /// # Safety
 ///
 /// As [`try_malloc`].
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
     // As in `try_malloc`: a zero-sized request must still answer a pointer.
     let (allocated_count, allocated_size) = if count != 0 && size != 0 {

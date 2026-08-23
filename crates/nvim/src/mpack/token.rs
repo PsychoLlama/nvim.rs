@@ -612,9 +612,37 @@ mod tests {
     /// The boundaries `test/unit/msgpack_spec.lua` pins, in Rust.
     #[test]
     fn pack_number_picks_the_narrowest_signed_width() {
-        for (v, len) in [(-128.0, 1), (-129.0, 2), (-32768.0, 2), (-32769.0, 4)] {
+        for (v, len) in [
+            (-1.0, 1),
+            (-128.0, 1),
+            (-129.0, 2),
+            (-32768.0, 2),
+            (-32769.0, 4),
+            (-2147483648.0, 4),
+            (-2147483649.0, 8),
+        ] {
             let tok = pack_number(v);
             assert_eq!(tok.kind, Some(Kind::Sint), "{v}");
+            assert_eq!(tok.len, len, "{v}");
+        }
+    }
+
+    /// The unsigned side, where each boundary sits one bit further out
+    /// because there is no sign bit to pay for.
+    #[test]
+    fn pack_number_picks_the_narrowest_unsigned_width() {
+        for (v, len) in [
+            (0.0, 1),
+            (127.0, 1),
+            (255.0, 1),
+            (256.0, 2),
+            (65535.0, 2),
+            (65536.0, 4),
+            (4294967295.0, 4),
+            (4294967296.0, 8),
+        ] {
+            let tok = pack_number(v);
+            assert_eq!(tok.kind, Some(Kind::Uint), "{v}");
             assert_eq!(tok.len, len, "{v}");
         }
     }
