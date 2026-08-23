@@ -813,7 +813,7 @@
     "crates/nvim/src/register/store.rs": {"cell_ptr": 8, "unsafe_lines": 173},
     "crates/nvim/src/register/yank.rs": {"unsafe_lines": 317},
     "crates/nvim/src/runtime/cache.rs": {"cell_ptr": 1, "missing_safety_doc": 5, "unsafe_lines": 262},
-    "crates/nvim/src/runtime/estack.rs": {"missing_safety_doc": 7, "unsafe_lines": 92},
+    "crates/nvim/src/runtime/estack.rs": {"missing_safety_doc": 7, "unsafe_lines": 91},
     "crates/nvim/src/runtime/expand.rs": {"unsafe_lines": 153},
     "crates/nvim/src/runtime/mod.rs": {"missing_safety_doc": 4, "unsafe_lines": 26},
     "crates/nvim/src/runtime/pack.rs": {"missing_safety_doc": 5, "unsafe_lines": 344},

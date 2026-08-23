@@ -41,17 +41,9 @@ fn entry_for(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> estack_T {
     }
 }
 
-/// Append `entry` to the execution stack and hand back the slot it landed in.
-///
-/// The pointer is how the two pushers that carry an `es_info` payload fill it
-/// in. It is valid only until the next push, which is the same rule the
-/// garray this replaced had.
-fn push_entry(entry: estack_T) -> *mut estack_T {
-    exestack.with_mut(|stack| {
-        stack.push(entry);
-        let last = stack.len() - 1;
-        &raw mut stack[last]
-    })
+/// Append `entry` to the execution stack.
+fn push_entry(entry: estack_T) {
+    exestack.with_mut(|stack| stack.push(entry));
 }
 
 /// Push the bottom frame, the one that stands for "not executing anything".
@@ -63,9 +55,11 @@ pub fn estack_init() {
 
 /// Add an item to the execution stack.
 ///
-/// Returns the new entry, so the caller can fill in its `es_info`.
-pub fn estack_push(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> *mut estack_T {
-    push_entry(entry_for(es_type, name, lnum))
+/// The `es_info` payload, where the frame has one, is filled in afterwards
+/// through [`with_innermost`]; upstream hands the caller a pointer to the new
+/// slot instead, and no caller here wanted one.
+pub fn estack_push(es_type: etype_T, name: *mut c_char, lnum: linenr_T) {
+    push_entry(entry_for(es_type, name, lnum));
 }
 
 /// Add a user function to the execution stack.
@@ -80,10 +74,8 @@ pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
             (*ufunc).uf_name_exp
         }
     };
-    let entry = push_entry(entry_for(ETYPE_UFUNC, name, lnum));
-    // SAFETY: the slot `push_entry` just wrote to. (Upstream guards this with
-    // a null check, but `ga_grow` aborts rather than returning short.)
-    unsafe { (*entry).es_info.ufunc = ufunc };
+    push_entry(entry_for(ETYPE_UFUNC, name, lnum));
+    with_innermost(|entry| entry.es_info.ufunc = ufunc);
 }
 
 /// Take an item off of the execution stack. The bottom frame stays.
