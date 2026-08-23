@@ -538,15 +538,21 @@ impl Symbols {
     }
 }
 
-/// The name a `pub` item on this line declares, if it is one a table can
+/// The visibilities a generated table can name. The generated modules live
+/// *inside* the crate, so `pub(crate)` is as good as `pub` to them -- and as
+/// the crate's flat `pub mod` root narrows, most callbacks land there. A
+/// `pub(super)` item is deliberately not accepted: whether the generated
+/// module can see it depends on where that module sits, so it is left to fail
+/// as an unresolvable name rather than resolved to a path that may not
+/// compile.
+const VISIBILITIES: &[&str] = &["pub ", "pub(crate) "];
+
+/// The name an item on this line declares, if it is one a table can
 /// reference. `in_extern` allows the indented `pub fn` declarations of a
 /// c2rust `unsafe extern "C"` block, which is where `cos` and friends live.
 fn declared(line: &str, in_extern: bool) -> Option<&str> {
-    let rest = if in_extern {
-        line.trim_start().strip_prefix("pub ")?
-    } else {
-        line.strip_prefix("pub ")?
-    };
+    let line = if in_extern { line.trim_start() } else { line };
+    let rest = VISIBILITIES.iter().find_map(|vis| line.strip_prefix(vis))?;
     let prefixes: &[&str] = if in_extern {
         &["fn "]
     } else {

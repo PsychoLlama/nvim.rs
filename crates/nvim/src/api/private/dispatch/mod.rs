@@ -61,24 +61,26 @@ use crate::ui_client::handle_ui_client_redraw;
 
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
+/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
+/// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
     use core::ffi::c_int;
 
-    pub use crate::types::kErrorTypeException;
+    pub(crate) use crate::types::kErrorTypeException;
 
     // `KeySetLink::type_0`: the `ObjectType` a key's value must arrive as, as
     // the `c_int` that field holds.
-    pub const TAG_STRING_ARRAY: c_int = -1; // ShaDa's own unpacked-in-place array of strings
-    pub const TAG_NIL: c_int = 0; // any Object
-    pub const TAG_BOOLEAN: c_int = 1;
-    pub const TAG_INTEGER: c_int = 2;
-    pub const TAG_FLOAT: c_int = 3;
-    pub const TAG_STRING: c_int = 4;
-    pub const TAG_ARRAY: c_int = 5;
-    pub const TAG_DICT: c_int = 6;
-    pub const TAG_LUAREF: c_int = 7;
-    pub const TAG_BUFFER: c_int = 8;
-    pub const TAG_WINDOW: c_int = 9;
+    pub(crate) const TAG_STRING_ARRAY: c_int = -1; // ShaDa's own unpacked-in-place array of strings
+    pub(crate) const TAG_NIL: c_int = 0; // any Object
+    pub(crate) const TAG_BOOLEAN: c_int = 1;
+    pub(crate) const TAG_INTEGER: c_int = 2;
+    pub(crate) const TAG_FLOAT: c_int = 3;
+    pub(crate) const TAG_STRING: c_int = 4;
+    pub(crate) const TAG_ARRAY: c_int = 5;
+    pub(crate) const TAG_DICT: c_int = 6;
+    pub(crate) const TAG_LUAREF: c_int = 7;
+    pub(crate) const TAG_BUFFER: c_int = 8;
+    pub(crate) const TAG_WINDOW: c_int = 9;
 }
 
 use known::*;

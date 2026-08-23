@@ -1666,13 +1666,13 @@ fn generate(
             // These have one definition, in `types`. Re-export rather than
             // repeat it -- a `use` is not a constant, so it still stays out
             // of what the unit-test header generator collects.
-            known.push_str(&format!("    pub use crate::types::{name};\n"));
+            known.push_str(&format!("    pub(crate) use crate::types::{name};\n"));
             continue;
         }
         if *ty != "c_int" {
             known_types.insert(ty);
         }
-        known.push_str(&format!("    pub const {name}: {ty} = {value};\n"));
+        known.push_str(&format!("    pub(crate) const {name}: {ty} = {value};\n"));
     }
 
     let mut uses: Vec<String> = Vec::new();
@@ -1751,6 +1751,8 @@ fn generate(
         r#"
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
+/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
+/// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {{
     use super::{{{}}};
     use core::ffi::c_int;
@@ -2202,7 +2204,7 @@ fn generate_tables(
         } else {
             format!(" // {note}")
         };
-        writeln!(tags, "    pub const {name}: c_int = {value};{note}").unwrap();
+        writeln!(tags, "    pub(crate) const {name}: c_int = {value};{note}").unwrap();
     }
 
     let mut out = String::from(TABLES_HEADER);
@@ -2265,10 +2267,12 @@ fn generate_tables(
         r#"
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
+/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
+/// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {{
     use core::ffi::c_int;
 
-    pub use crate::types::kErrorTypeException;
+    pub(crate) use crate::types::kErrorTypeException;
 
     // `KeySetLink::type_0`: the `ObjectType` a key's value must arrive as, as
     // the `c_int` that field holds.
@@ -3395,8 +3399,10 @@ fn generate_lua(
         r#"
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
+/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
+/// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
-    pub use crate::types::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
+    pub(crate) use crate::types::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 }
 
 use known::*;

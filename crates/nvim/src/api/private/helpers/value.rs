@@ -30,7 +30,7 @@ use crate::types::{
 };
 use ::libc::{abort, memcpy};
 use core::ffi::{CStr, c_char, c_int};
-use core::{mem, ptr};
+use core::ptr;
 
 // -- Arena allocation ------------------------------------------------------
 
@@ -38,7 +38,7 @@ use core::{mem, ptr};
 /// from the heap when `arena` is null.
 pub(crate) fn arena_array(arena: *mut Arena, max_size: size_t) -> Array {
     // SAFETY: `arena_alloc` accepts a null arena and falls back to `xmalloc`.
-    let items = unsafe { arena_alloc(arena, mem::size_of::<Object>() * max_size, true) };
+    let items = unsafe { arena_alloc(arena, size_of::<Object>() * max_size, true) };
     Array {
         size: 0,
         capacity: max_size,
@@ -49,7 +49,7 @@ pub(crate) fn arena_array(arena: *mut Arena, max_size: size_t) -> Array {
 /// [`arena_array`] for a dictionary.
 pub(crate) fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict {
     // SAFETY: as `arena_array`.
-    let items = unsafe { arena_alloc(arena, mem::size_of::<KeyValuePair>() * max_size, true) };
+    let items = unsafe { arena_alloc(arena, size_of::<KeyValuePair>() * max_size, true) };
     Dict {
         size: 0,
         capacity: max_size,
@@ -138,7 +138,7 @@ pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayB
         memcpy(
             ret.items.cast(),
             items.as_slice().as_ptr().cast(),
-            mem::size_of::<Object>() * ret.size,
+            size_of::<Object>() * ret.size,
         );
         let heap = items.take_heap();
         xfree(heap);
@@ -428,7 +428,7 @@ unsafe fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
             } else {
                 8
             };
-            let bytes = mem::size_of::<HlMessageChunk>() * msg.capacity;
+            let bytes = size_of::<HlMessageChunk>() * msg.capacity;
             msg.items = xrealloc(msg.items.cast(), bytes).cast();
         }
         *msg.items.add(msg.size) = chunk;

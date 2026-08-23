@@ -10,7 +10,7 @@
 use super::*;
 
 /// The row of [`BUILTINS`] the builtin called `name` sits in.
-pub fn builtin_index(name: &[u8]) -> Option<usize> {
+pub(crate) fn builtin_index(name: &[u8]) -> Option<usize> {
     Some(match name {
         b"abs" => 3,
         b"acos" => 39,

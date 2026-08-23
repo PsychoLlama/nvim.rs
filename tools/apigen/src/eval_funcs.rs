@@ -336,7 +336,7 @@ fn emit_row(out: &mut String, b: &Builtin) {
 fn emit_lookup(out: &mut String, rows: &[Builtin]) {
     out.push_str(
         "/// The row of [`BUILTINS`] the builtin called `name` sits in.\n\
-         pub fn builtin_index(name: &[u8]) -> Option<usize> {\n\
+         pub(crate) fn builtin_index(name: &[u8]) -> Option<usize> {\n\
          \x20   Some(match name {\n",
     );
     let mut sorted: Vec<(usize, &Builtin)> = rows.iter().enumerate().collect();
@@ -478,7 +478,7 @@ pub fn generate(
     for file in &files {
         let stem = file.name.strip_suffix(".rs").unwrap();
         if !stem.starts_with("table_") {
-            writeln!(out, "pub use self::{stem}::*;").unwrap();
+            writeln!(out, "pub(crate) use self::{stem}::*;").unwrap();
         }
     }
     out.push('\n');
@@ -488,7 +488,7 @@ pub fn generate(
         out,
         "\n/// Every builtin Vimscript function there is, plus the blank row\n\
          /// that ends the table.\n\
-         pub static BUILTINS: GlobalCell<[EvalFuncDef; {}]> = GlobalCell::new(table());\n\
+         pub(crate) static BUILTINS: GlobalCell<[EvalFuncDef; {}]> = GlobalCell::new(table());\n\
          \n\
          /// The table, spliced together from the generated parts.\n\
          const fn table() -> [EvalFuncDef; {}] {{\n\

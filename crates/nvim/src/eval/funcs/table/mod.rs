@@ -19,7 +19,7 @@
 mod lookup;
 mod table_1;
 
-pub use self::lookup::*;
+pub(crate) use self::lookup::*;
 
 use core::ffi::CStr;
 use core::ptr;
@@ -223,7 +223,7 @@ const fn fill(table: &mut [EvalFuncDef], base: usize, part: &[EvalFuncDef]) -> u
 
 /// Every builtin Vimscript function there is, plus the blank row
 /// that ends the table.
-pub static BUILTINS: GlobalCell<[EvalFuncDef; 644]> = GlobalCell::new(table());
+pub(crate) static BUILTINS: GlobalCell<[EvalFuncDef; 644]> = GlobalCell::new(table());
 
 /// The table, spliced together from the generated parts.
 const fn table() -> [EvalFuncDef; 644] {

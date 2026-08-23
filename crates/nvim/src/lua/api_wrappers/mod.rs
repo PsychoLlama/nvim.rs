@@ -186,8 +186,10 @@ use core::ptr;
 
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
+/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
+/// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
-    pub use crate::types::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
+    pub(crate) use crate::types::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 }
 
 use known::*;

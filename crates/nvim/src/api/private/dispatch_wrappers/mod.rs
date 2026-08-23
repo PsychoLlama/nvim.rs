@@ -162,22 +162,24 @@ use core::ffi::{CStr, c_int};
 
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
+/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
+/// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
     use core::ffi::c_int;
 
-    pub use crate::types::kErrorTypeException;
-    pub use crate::types::kErrorTypeNone;
-    pub use crate::types::kObjectTypeArray;
-    pub use crate::types::kObjectTypeBoolean;
-    pub use crate::types::kObjectTypeBuffer;
-    pub use crate::types::kObjectTypeDict;
-    pub use crate::types::kObjectTypeFloat;
-    pub use crate::types::kObjectTypeInteger;
-    pub use crate::types::kObjectTypeNil;
-    pub use crate::types::kObjectTypeString;
-    pub use crate::types::kObjectTypeTabpage;
-    pub use crate::types::kObjectTypeWindow;
-    pub const LOGLVL_DBG: c_int = 1;
+    pub(crate) use crate::types::kErrorTypeException;
+    pub(crate) use crate::types::kErrorTypeNone;
+    pub(crate) use crate::types::kObjectTypeArray;
+    pub(crate) use crate::types::kObjectTypeBoolean;
+    pub(crate) use crate::types::kObjectTypeBuffer;
+    pub(crate) use crate::types::kObjectTypeDict;
+    pub(crate) use crate::types::kObjectTypeFloat;
+    pub(crate) use crate::types::kObjectTypeInteger;
+    pub(crate) use crate::types::kObjectTypeNil;
+    pub(crate) use crate::types::kObjectTypeString;
+    pub(crate) use crate::types::kObjectTypeTabpage;
+    pub(crate) use crate::types::kObjectTypeWindow;
+    pub(crate) const LOGLVL_DBG: c_int = 1;
 }
 
 use known::*;
