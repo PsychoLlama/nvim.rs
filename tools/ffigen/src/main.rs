@@ -74,8 +74,6 @@ struct ExportStatic {
 
 #[derive(Default)]
 struct World {
-    // (file, name) -> Def for file-local resolution
-    by_file: HashMap<(String, String), Def>,
     // name -> all defs
     by_name: HashMap<String, Vec<Def>>,
     consts: HashMap<String, Vec<Konst>>,
@@ -107,7 +105,7 @@ fn type_names(ty: &syn::Type, out: &mut BTreeSet<String>) {
                     return;
                 }
                 let name = seg.ident.to_string();
-                if prim(&name).is_none() && !name.starts_with("C2Rust_Unnamed") {
+                if prim(&name).is_none() {
                     out.insert(name);
                 }
             }
@@ -471,9 +469,6 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
             align,
             is_types,
         };
-        world
-            .by_file
-            .insert((rel.to_string(), name.clone()), def.clone());
         world.by_name.entry(name).or_default().push(def);
     };
     for fam in flag_set_invocations(&ast) {
@@ -673,11 +668,6 @@ enum CTy {
         args: Vec<CTy>,
         variadic: bool,
     },
-    // inline anonymous struct/union (from file-local C2Rust_Unnamed_N)
-    Anon {
-        is_union: bool,
-        body: Vec<String>,
-    },
 }
 
 fn prim(name: &str) -> Option<String> {
@@ -747,10 +737,6 @@ fn decl(c: &CTy, inner: &str) -> String {
             }
             decl(ret, &format!("{}({})", inner, rendered.join(", ")))
         }
-        CTy::Anon { is_union, body } => {
-            let kw = if *is_union { "union" } else { "struct" };
-            format!("{} {{ {} }} {}", kw, body.join(" "), inner)
-        }
     }
 }
 
@@ -780,13 +766,6 @@ impl<'w> Emitter<'w> {
     }
 
     fn resolve(&self, file: &str, name: &str) -> Option<Def> {
-        if name.starts_with("C2Rust_Unnamed") {
-            return self
-                .world
-                .by_file
-                .get(&(file.to_string(), name.to_string()))
-                .cloned();
-        }
         let defs = self.world.by_name.get(name)?;
         let concrete: Vec<&Def> = defs
             .iter()
@@ -857,27 +836,6 @@ impl<'w> Emitter<'w> {
                         name: p,
                         konst: false,
                     });
-                }
-                // File-local anonymous types get inlined at the use site.
-                if name.starts_with("C2Rust_Unnamed") {
-                    let def = self.resolve(file, &name)?;
-                    let deffile = def.file.clone();
-                    match def.kind {
-                        Kind::Alias(ref t) => {
-                            let t = (**t).clone();
-                            return self.cty(&deffile, &t);
-                        }
-                        Kind::Struct(ref fields) | Kind::Union(ref fields) => {
-                            let is_union = matches!(def.kind, Kind::Union(_));
-                            let fields = fields.clone();
-                            let mut body = Vec::new();
-                            for f in &fields {
-                                body.extend(self.field_lines(&deffile, f)?);
-                            }
-                            return Some(CTy::Anon { is_union, body });
-                        }
-                        Kind::Opaque => return None,
-                    }
                 }
                 self.want(file, &name);
                 Some(CTy::Named {
@@ -1067,8 +1025,8 @@ impl<'w> Emitter<'w> {
 
 // ------------------------------------------------------------- topo order
 
-fn value_deps(world: &World, def: &Def, out: &mut BTreeSet<String>) {
-    fn walk(world: &World, file: &str, ty: &syn::Type, out: &mut BTreeSet<String>) {
+fn value_deps(def: &Def, out: &mut BTreeSet<String>) {
+    fn walk(ty: &syn::Type, out: &mut BTreeSet<String>) {
         match ty {
             syn::Type::Path(tp) => {
                 if tp.path.segments.len() > 1
@@ -1081,38 +1039,19 @@ fn value_deps(world: &World, def: &Def, out: &mut BTreeSet<String>) {
                     if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
                         for a in &ab.args {
                             if let syn::GenericArgument::Type(t) = a {
-                                walk(world, file, t, out);
+                                walk(t, out);
                             }
                         }
                         return;
                     }
                     if prim(&name).is_none() {
-                        if name.starts_with("C2Rust_Unnamed") {
-                            // inlined at use site: recurse for its deps
-                            if let Some(d) = world.by_file.get(&(file.to_string(), name.clone())) {
-                                let file = d.file.clone();
-                                match &d.kind {
-                                    Kind::Struct(fs) | Kind::Union(fs) => {
-                                        for f in fs.clone() {
-                                            walk(world, &file, &f.ty, out);
-                                        }
-                                    }
-                                    Kind::Alias(t) => {
-                                        let t = (**t).clone();
-                                        walk(world, &file, &t, out);
-                                    }
-                                    Kind::Opaque => {}
-                                }
-                            }
-                        } else {
-                            out.insert(name);
-                        }
+                        out.insert(name);
                     }
                 }
             }
-            syn::Type::Array(a) => walk(world, file, &a.elem, out),
-            syn::Type::Paren(p) => walk(world, file, &p.elem, out),
-            syn::Type::Group(g) => walk(world, file, &g.elem, out),
+            syn::Type::Array(a) => walk(&a.elem, out),
+            syn::Type::Paren(p) => walk(&p.elem, out),
+            syn::Type::Group(g) => walk(&g.elem, out),
             // pointers and fn types are not by-value deps
             _ => {}
         }
@@ -1123,10 +1062,10 @@ fn value_deps(world: &World, def: &Def, out: &mut BTreeSet<String>) {
                 if f.padding || !f.bits.is_empty() {
                     continue;
                 }
-                walk(world, &def.file, &f.ty, out);
+                walk(&f.ty, out);
             }
         }
-        Kind::Alias(t) => walk(world, &def.file, t, out),
+        Kind::Alias(t) => walk(t, out),
         Kind::Opaque => {}
     }
 }
@@ -1343,7 +1282,6 @@ fn main() {
     let mut state: HashMap<String, u8> = HashMap::new(); // 0 unseen 1 visiting 2 done
     fn visit(
         name: &str,
-        world: &World,
         emitted: &BTreeMap<String, Def>,
         state: &mut HashMap<String, u8>,
         order: &mut Vec<String>,
@@ -1359,15 +1297,15 @@ fn main() {
         };
         state.insert(name.to_string(), 1);
         let mut deps = BTreeSet::new();
-        value_deps(world, def, &mut deps);
+        value_deps(def, &mut deps);
         for d in deps {
-            visit(&d, world, emitted, state, order);
+            visit(&d, emitted, state, order);
         }
         state.insert(name.to_string(), 2);
         order.push(name.to_string());
     }
     for name in emitted.keys() {
-        visit(name, &world, &emitted, &mut state, &mut order);
+        visit(name, &emitted, &mut state, &mut order);
     }
 
     // ---- emit
@@ -1410,7 +1348,7 @@ fn main() {
     // Aliases before struct bodies, topo-sorted among themselves: a typedef
     // name must be declared before any use (even inside fn-pointer types),
     // and only struct/union tags have forward declarations above.
-    fn alias_refs(world: &World, file: &str, ty: &syn::Type, out: &mut BTreeSet<String>) {
+    fn alias_refs(ty: &syn::Type, out: &mut BTreeSet<String>) {
         match ty {
             syn::Type::Path(tp) => {
                 if tp.path.segments.len() > 1
@@ -1423,7 +1361,7 @@ fn main() {
                     if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
                         for a in &ab.args {
                             if let syn::GenericArgument::Type(t) = a {
-                                alias_refs(world, file, t, out);
+                                alias_refs(t, out);
                             }
                         }
                         return;
@@ -1431,42 +1369,26 @@ fn main() {
                     if prim(&name).is_some() {
                         return;
                     }
-                    if name.starts_with("C2Rust_Unnamed") {
-                        if let Some(d) = world.by_file.get(&(file.to_string(), name)) {
-                            let dfile = d.file.clone();
-                            match &d.kind {
-                                Kind::Struct(fs) | Kind::Union(fs) => {
-                                    for f in fs.clone() {
-                                        alias_refs(world, &dfile, &f.ty, out);
-                                    }
-                                }
-                                Kind::Alias(t) => alias_refs(world, &dfile, &t.clone(), out),
-                                Kind::Opaque => {}
-                            }
-                        }
-                        return;
-                    }
                     out.insert(name);
                 }
             }
-            syn::Type::Ptr(p) => alias_refs(world, file, &p.elem, out),
-            syn::Type::Array(a) => alias_refs(world, file, &a.elem, out),
+            syn::Type::Ptr(p) => alias_refs(&p.elem, out),
+            syn::Type::Array(a) => alias_refs(&a.elem, out),
             syn::Type::BareFn(f) => {
                 for a in &f.inputs {
-                    alias_refs(world, file, &a.ty, out);
+                    alias_refs(&a.ty, out);
                 }
                 if let syn::ReturnType::Type(_, t) = &f.output {
-                    alias_refs(world, file, t, out);
+                    alias_refs(t, out);
                 }
             }
-            syn::Type::Paren(p) => alias_refs(world, file, &p.elem, out),
-            syn::Type::Group(g) => alias_refs(world, file, &g.elem, out),
+            syn::Type::Paren(p) => alias_refs(&p.elem, out),
+            syn::Type::Group(g) => alias_refs(&g.elem, out),
             _ => {}
         }
     }
     fn avisit(
         name: &str,
-        world: &World,
         emitted: &BTreeMap<String, Def>,
         state: &mut HashMap<String, u8>,
         aorder: &mut Vec<String>,
@@ -1485,10 +1407,10 @@ fn main() {
         };
         state.insert(name.to_string(), 1);
         let mut deps = BTreeSet::new();
-        alias_refs(world, &def.file, &t, &mut deps);
+        alias_refs(&t, &mut deps);
         for d in deps {
             if d != name {
-                avisit(&d, world, emitted, state, aorder);
+                avisit(&d, emitted, state, aorder);
             }
         }
         aorder.push(name.to_string());
@@ -1496,7 +1418,7 @@ fn main() {
     let mut astate: HashMap<String, u8> = HashMap::new();
     let mut aorder: Vec<String> = Vec::new();
     for name in emitted.keys() {
-        avisit(name, &world, &emitted, &mut astate, &mut aorder);
+        avisit(name, &emitted, &mut astate, &mut aorder);
     }
     for name in &aorder {
         let def = emitted[name].clone();

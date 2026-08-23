@@ -38,7 +38,7 @@ use crate::types::{
     kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor,
     kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow,
     kObjectTypeArray, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, linenr_T, lpos_T,
-    msglist_T, object, object_data as C2Rust_Unnamed, size_t, switchwin_T, tabpage_T, win_T,
+    msglist_T, object, object_data, size_t, switchwin_T, tabpage_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -75,8 +75,7 @@ pub const kWinSplitBelow: WinSplit = 3;
 pub const kWinSplitAbove: WinSplit = 2;
 pub const kWinSplitRight: WinSplit = 1;
 pub const kWinSplitLeft: WinSplit = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const kZIndexFloatDefault: C2Rust_Unnamed_13 = 50;
+pub const kZIndexFloatDefault: ::core::ffi::c_uint = 50;
 pub const kBorderTextFooter: BorderTextType = 1;
 pub const kBorderTextTitle: BorderTextType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

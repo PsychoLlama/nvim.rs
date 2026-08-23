@@ -78,9 +78,9 @@ use crate::types::{
     CMD_defer, Callback, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED, VAR_FUNC,
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN,
     VAR_UNLOCKED, Vv, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, exception_state_T,
-    expand_T, funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T,
-    funcexe_T, garray_T, hashitem_T, hashtab_T, linenr_T, listitem_T, lval_T, partial_T,
-    regmatch_T, save_redo_T, size_t, typval_T, ufunc_T, varnumber_T,
+    expand_T, funccal_entry_T, funccall_S_fc_fixvar, funccall_T, funcdict_T, funcexe_T, garray_T,
+    hashitem_T, hashtab_T, linenr_T, listitem_T, lval_T, partial_T, regmatch_T, save_redo_T,
+    size_t, typval_T, ufunc_T, varnumber_T,
 };
 use crate::ui::ui_has;
 use ::libc::{abort, memcmp, memcpy, memset, strcmp, strcpy, strlen};

@@ -92,7 +92,7 @@ pub unsafe fn call_user_func(
         // a slot is what goes into the hashtab, which is why the array lives
         // in the funccall_T and cannot be a `Vec`.
         let mut fixvar_idx = 0;
-        let fixvar_base = (&raw mut (*fc).fc_fixvar) as *mut C2Rust_Unnamed_7;
+        let fixvar_base = (&raw mut (*fc).fc_fixvar) as *mut funccall_S_fc_fixvar;
         let take_fixvar = |idx: &mut c_int| -> *mut dictitem_T {
             let v = fixvar_base.offset(*idx as isize) as *mut dictitem_T;
             *idx += 1;

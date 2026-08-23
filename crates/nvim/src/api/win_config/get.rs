@@ -56,7 +56,7 @@ unsafe fn config_put_bordertext(
                     as OptionalKeys;
                 (*config).title = object {
                     type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed { array: bordertext },
+                    data: object_data { array: bordertext },
                 };
                 (*config).is_set__win_config_ = ((*config).is_set__win_config_
                     as ::core::ffi::c_ulonglong
@@ -71,7 +71,7 @@ unsafe fn config_put_bordertext(
                     as OptionalKeys;
                 (*config).footer = object {
                     type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed { array: bordertext },
+                    data: object_data { array: bordertext },
                 };
                 (*config).is_set__win_config_ = ((*config).is_set__win_config_
                     as ::core::ffi::c_ulonglong
@@ -192,7 +192,7 @@ pub unsafe fn nvim_win_get_config(
                     set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__border);
                 rv.border = object {
                     type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed { array: border },
+                    data: object_data { array: border },
                 };
                 if (*config).title {
                     config_put_bordertext(&raw mut rv, config, kBorderTextTitle, arena);
@@ -205,7 +205,7 @@ pub unsafe fn nvim_win_get_config(
                     set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__border);
                 rv.border = object {
                     type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
+                    data: object_data {
                         string: cstr_as_string(c"none".as_ptr()),
                     },
                 };

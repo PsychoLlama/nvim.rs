@@ -416,160 +416,160 @@ pub(super) fn viml_pexpr_new_node(type_0: ExprASTNodeType) -> *mut ExprASTNode {
         node
     }
 }
-pub(super) static node_type_to_node_props: [C2Rust_Unnamed_34; 39] = [
-    C2Rust_Unnamed_34 {
+pub(super) static node_type_to_node_props: [ExprNodeProps; 39] = [
+    ExprNodeProps {
         lvl: kEOpLvlInvalid,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlMultiplication,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlTernary,
         ass: kEOpAssRight,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlTernaryValue,
         ass: kEOpAssRight,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlParens,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlParens,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlUnary,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlAddition,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlParens,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlParens,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlParens,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlParens,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlParens,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlComplexIdentifier,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlComma,
         ass: kEOpAssRight,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlColon,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlArrow,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlComparison,
         ass: kEOpAssRight,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlAddition,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlSubscript,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlOr,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlAnd,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlUnary,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlAddition,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlUnary,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlMultiplication,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlMultiplication,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlMultiplication,
         ass: kEOpAssLeft,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlValue,
         ass: kEOpAssNo,
     },
-    C2Rust_Unnamed_34 {
+    ExprNodeProps {
         lvl: kEOpLvlAssignment,
         ass: kEOpAssLeft,
     },

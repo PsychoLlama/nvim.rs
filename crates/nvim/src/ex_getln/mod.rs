@@ -141,9 +141,8 @@ use crate::state::{
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback,
-    Callback_data as C2Rust_Unnamed_5, CmdAddr, CmdModFlags, CmdParseInfo,
-    CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk, CmdlineColors,
+    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, Callback_data, CmdAddr,
+    CmdModFlags, CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineColors,
     CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST,
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
     ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
@@ -226,9 +225,8 @@ pub const HIST_SEARCH: HistoryType = 1;
 pub const HIST_CMD: HistoryType = 0;
 pub const HIST_INVALID: HistoryType = -1;
 pub const REMAP_NONE: RemapValues = -1;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_int;
-pub const VSE_BUFFER: C2Rust_Unnamed_29 = 2;
-pub const VSE_SHELL: C2Rust_Unnamed_29 = 1;
+pub const VSE_BUFFER: ::core::ffi::c_int = 2;
+pub const VSE_SHELL: ::core::ffi::c_int = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct CommandLineState {
@@ -343,17 +341,17 @@ pub const kExprNodeTernary: ExprASTNodeType = 2;
 pub const kExprNodeOpMissing: ExprASTNodeType = 1;
 pub const kExprNodeMissing: ExprASTNodeType = 0;
 pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
-pub const MAX_CB_ERRORS: C2Rust_Unnamed_58 = 1;
+pub const MAX_CB_ERRORS: ::core::ffi::c_int = 1;
 #[derive(Clone)]
 pub struct CpInfo {
-    pub win_info: C2Rust_Unnamed_50,
-    pub buf_info: C2Rust_Unnamed_49,
+    pub win_info: CpWinInfoVec,
+    pub buf_info: CpBufInfoVec,
     pub save_hls: bool,
     pub save_cmdmod: cmdmod_T,
     pub save_view: garray_T,
 }
 #[derive(Copy, Clone)]
-pub struct C2Rust_Unnamed_49 {
+pub struct CpBufInfoVec {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut CpBufInfo,
@@ -386,7 +384,7 @@ pub struct CpUndoInfo {
     pub save_b_u_line_colnr: colnr_T,
 }
 #[derive(Copy, Clone)]
-pub struct C2Rust_Unnamed_50 {
+pub struct CpWinInfoVec {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut CpWinInfo,
@@ -416,7 +414,6 @@ pub(crate) enum KeyOutcome {
     /// Leave the command line for Normal mode.
     GotoNormalMode,
 }
-pub type C2Rust_Unnamed_58 = ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -491,7 +488,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     cmdbuff_replaced: false,
     prompt_id: 0,
     highlight_callback: Callback {
-        data: C2Rust_Unnamed_5 {
+        data: Callback_data {
             funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         },
         type_0: kCallbackNone,
@@ -683,7 +680,7 @@ pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
 /// An all-zero [`CmdParseInfo`]; `parse_cmdline` fills it.
 pub(crate) const CMD_PARSE_INFO_INIT: CmdParseInfo = CmdParseInfo {
     cmdmod: CMDMOD_T_INIT,
-    magic: C2Rust_Unnamed_21 {
+    magic: CmdParseInfo_magic {
         file: false,
         bar: false,
     },
@@ -729,12 +726,12 @@ pub(crate) const CP_WIN_INFO_INIT: CpWinInfo = CpWinInfo {
 
 /// An all-zero [`CpInfo`], C's two `kv_init`s plus an unset save area.
 pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
-    win_info: C2Rust_Unnamed_50 {
+    win_info: CpWinInfoVec {
         size: 0,
         capacity: 0,
         items: ::core::ptr::null_mut::<CpWinInfo>(),
     },
-    buf_info: C2Rust_Unnamed_49 {
+    buf_info: CpBufInfoVec {
         size: 0,
         capacity: 0,
         items: ::core::ptr::null_mut::<CpBufInfo>(),

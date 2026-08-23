@@ -138,9 +138,7 @@ pub use self::opts::*;
 pub(crate) use self::refine::*;
 pub use self::scroll::*;
 pub use self::update::*;
-
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
+pub const _ISdigit: ::core::ffi::c_uint = 2048;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptScopeWin: OptScope = 1;

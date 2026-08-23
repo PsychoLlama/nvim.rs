@@ -24,12 +24,12 @@ use crate::main::{curbuf, current_sctx};
 use crate::memory::{strequal, xfree};
 use crate::strings::arena_printf;
 use crate::types::{
-    Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback,
-    Callback_data as C2Rust_Unnamed_5, Dict, Error, Integer, KeyDict_clear_autocmds,
-    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds, KeyDict_get_autocmds,
-    LuaRef, Object, String_0, TryState, auto_event, buf_T, event_T, exarg_T, except_T, int64_t,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBuffer,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, msglist_T, sctx_T, size_t, uint64_t,
+    Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback, Callback_data,
+    Dict, Error, Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, Object, String_0, TryState, auto_event,
+    buf_T, event_T, exarg_T, except_T, int64_t, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, msglist_T, sctx_T, size_t, uint64_t,
 };
 use ::libc::{abort, strlen};
 
@@ -46,10 +46,9 @@ pub use self::group::*;
 pub(crate) use self::pattern::*;
 pub use self::query::*;
 pub const NUM_EVENTS: auto_event = 145;
-pub const AUGROUP_DEFAULT: C2Rust_Unnamed_14 = -1;
-pub const AUGROUP_ERROR: C2Rust_Unnamed_14 = -2;
-pub const AUGROUP_ALL: C2Rust_Unnamed_14 = -3;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
+pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
+pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
+pub const AUGROUP_ALL: ::core::ffi::c_int = -3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;

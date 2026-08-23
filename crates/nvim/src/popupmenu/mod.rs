@@ -64,8 +64,8 @@ use crate::types::{
     AlignTextPos, Array, Buffer, Error, Float, Integer, Object, OptInt, OptVal, OptValData,
     OptValType, String_0, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T,
     exarg_T, float_T, handle_T, hlf_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T, object_data as C2Rust_Unnamed_12,
-    pumitem_T, sattr_T, schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
+    kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T, object_data, pumitem_T, sattr_T,
+    schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -353,7 +353,7 @@ unsafe fn pum_publish_external(
             for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
                 *item.items.add(item.size) = Object {
                     type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_12 {
+                    data: object_data {
                         string: cstr_as_string(text),
                     },
                 };
@@ -361,7 +361,7 @@ unsafe fn pum_publish_external(
             }
             *arr.items.add(arr.size) = Object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_12 { array: item },
+                data: object_data { array: item },
             };
             arr.size += 1;
         }

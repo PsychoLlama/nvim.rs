@@ -94,7 +94,7 @@ impl Drop for Payload {
 }
 
 /// The values a reader assumes for the fields an entry leaves out.
-unsafe fn defaults_for(type_0: ShadaEntryType) -> C2Rust_Unnamed_22 {
+unsafe fn defaults_for(type_0: ShadaEntryType) -> ShadaEntryData {
     unsafe { (*sd_default_values.ptr())[type_0 as usize].data }
 }
 

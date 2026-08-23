@@ -87,14 +87,14 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::types::{
-    Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CmdModFlags, ExtmarkOp, MotionType,
-    OP_APPEND, OP_CHANGE, OP_COLON, OP_DELETE, OP_FILTER, OP_FOLD, OP_FOLDCLOSE, OP_FOLDCLOSEREC,
-    OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC, OP_FORMAT, OP_FORMAT2, OP_FUNCTION,
-    OP_INDENT, OP_INSERT, OP_JOIN, OP_JOIN_NS, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD, OP_NR_SUB,
-    OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OpType, OptInt, StrCharInfo,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T,
-    int32_t, int64_t, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
+    Callback, Callback_data, CharsizeArg, CmdModFlags, ExtmarkOp, MotionType, OP_APPEND, OP_CHANGE,
+    OP_COLON, OP_DELETE, OP_FILTER, OP_FOLD, OP_FOLDCLOSE, OP_FOLDCLOSEREC, OP_FOLDDEL,
+    OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC, OP_FORMAT, OP_FORMAT2, OP_FUNCTION, OP_INDENT,
+    OP_INSERT, OP_JOIN, OP_JOIN_NS, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_REPLACE,
+    OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OpType, OptInt, StrCharInfo, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, int32_t,
+    int64_t, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union,
+    uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};

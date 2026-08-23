@@ -243,22 +243,18 @@ crate::flag_set! {
     /// The completion was asked for by `'wildmode'`'s function trigger.
     const FUNC_TRIGGER = 65536;
 }
-pub const VSE_NONE: C2Rust_Unnamed_24 = 0;
-pub const VSE_BUFFER: C2Rust_Unnamed_24 = 2;
-pub const VSE_SHELL: C2Rust_Unnamed_24 = 1;
+pub const VSE_NONE: ::core::ffi::c_int = 0;
+pub const VSE_BUFFER: ::core::ffi::c_int = 2;
+pub const VSE_SHELL: ::core::ffi::c_int = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const EXP_BREAKPT_DEL: C2Rust_Unnamed_20 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const EXP_PROFDEL: C2Rust_Unnamed_20 = 2;
-pub const EXP_BREAKPT_ADD: C2Rust_Unnamed_20 = 0;
-pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_25 = -2147483648;
-pub const TAG_MANY: C2Rust_Unnamed_32 = 300;
-pub const WM_SCROLLED: C2Rust_Unnamed_26 = 2;
-pub const WM_SHOWN: C2Rust_Unnamed_26 = 1;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_int;
+pub const EXP_BREAKPT_DEL: BreakpointExpandKind = 1;
+pub type BreakpointExpandKind = ::core::ffi::c_uint;
+pub const EXP_PROFDEL: BreakpointExpandKind = 2;
+pub const EXP_BREAKPT_ADD: BreakpointExpandKind = 0;
+pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
+pub const TAG_MANY: ::core::ffi::c_int = 300;
+pub const WM_SCROLLED: ::core::ffi::c_int = 2;
+pub const WM_SHOWN: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
@@ -297,5 +293,5 @@ pub(crate) enum FiletypeWhat {
 }
 
 static filetype_expand_what: GlobalCell<FiletypeWhat> = GlobalCell::new(FiletypeWhat::All);
-static breakpt_expand_what: GlobalCell<C2Rust_Unnamed_20> = GlobalCell::new(EXP_BREAKPT_ADD);
+static breakpt_expand_what: GlobalCell<BreakpointExpandKind> = GlobalCell::new(EXP_BREAKPT_ADD);
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;

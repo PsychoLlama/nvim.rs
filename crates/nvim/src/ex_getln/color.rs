@@ -213,7 +213,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
         static prev_prompt_errors: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
         let mut color_cb = Callback {
-            data: C2Rust_Unnamed_5 {
+            data: Callback_data {
                 funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             },
             type_0: kCallbackNone,

@@ -19,7 +19,7 @@ use core::ptr;
 /// The global `'tagfunc'` callback. A buffer-local one lives in
 /// `b_tfu_cb`.
 static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_5 {
+    data: Callback_data {
         funcref: ptr::null_mut(),
     },
     type_0: kCallbackNone,

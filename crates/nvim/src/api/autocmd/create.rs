@@ -34,7 +34,7 @@ pub unsafe fn nvim_create_autocmd(
         let mut handler_cmd: *mut ::core::ffi::c_char =
             ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut handler_fn: Callback = Callback {
-            data: C2Rust_Unnamed_5 {
+            data: Callback_data {
                 funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             },
             type_0: kCallbackNone,

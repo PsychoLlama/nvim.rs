@@ -43,6 +43,7 @@ use crate::main::c_bytes;
 use crate::memory::{xfree, xmallocz, xmemdupz, xstrdup};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::os::fileio::FileOpenFlags;
 use crate::os::fs::{
     os_can_exe, os_file_is_readable, os_file_is_writable, os_fileinfo, os_fileinfo_link,
     os_fileinfo_size, os_getperm, os_isdir,
@@ -74,21 +75,18 @@ pub use self::write::*;
 
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-pub const VALID_PATH: C2Rust_Unnamed_17 = 1;
-pub const VALID_HEAD: C2Rust_Unnamed_17 = 2;
-pub const FINDFILE_DIR: C2Rust_Unnamed_18 = 1;
-pub const FINDFILE_FILE: C2Rust_Unnamed_18 = 0;
-pub const kFileCreate: C2Rust_Unnamed_19 = 2;
-pub const kFileMkDir: C2Rust_Unnamed_19 = 256;
-pub const kFileTruncate: C2Rust_Unnamed_19 = 32;
-pub const kFileAppend: C2Rust_Unnamed_19 = 64;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kFileCreateOnly: C2Rust_Unnamed_19 = 16;
-pub const kFileNoSymlink: C2Rust_Unnamed_19 = 8;
-pub const kFileWriteOnly: C2Rust_Unnamed_19 = 4;
-pub const kFileReadOnly: C2Rust_Unnamed_19 = 1;
+pub const VALID_PATH: ::core::ffi::c_uint = 1;
+pub const VALID_HEAD: ::core::ffi::c_uint = 2;
+pub const FINDFILE_DIR: ::core::ffi::c_uint = 1;
+pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
+pub const kFileCreate: FileOpenFlags = 2;
+pub const kFileMkDir: FileOpenFlags = 256;
+pub const kFileTruncate: FileOpenFlags = 32;
+pub const kFileAppend: FileOpenFlags = 64;
+pub const kFileCreateOnly: FileOpenFlags = 16;
+pub const kFileNoSymlink: FileOpenFlags = 8;
+pub const kFileWriteOnly: FileOpenFlags = 4;
+pub const kFileReadOnly: FileOpenFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

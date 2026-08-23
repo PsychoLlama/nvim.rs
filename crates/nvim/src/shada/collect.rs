@@ -85,7 +85,7 @@ pub(crate) unsafe fn shada_get_buflist(removable_bufs: *mut Set_ptr_t) -> ShadaE
             type_0: kSDItemBufferList,
             can_free_entry: false,
             timestamp: os_time(),
-            data: C2Rust_Unnamed_22 {
+            data: ShadaEntryData {
                 buffer_list: buffer_list {
                     size: wanted.len(),
                     buffers,
@@ -126,7 +126,7 @@ pub(crate) unsafe fn add_search_pattern(
             type_0: kSDItemSearchPattern,
             can_free_entry: false,
             timestamp: pat.timestamp,
-            data: C2Rust_Unnamed_22 {
+            data: ShadaEntryData {
                 search_pattern: KeyDict__shada_search_pat {
                     is_set___shada_search_pat_: 0,
                     magic: pat.magic,
@@ -180,7 +180,7 @@ pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_
                     type_0: kSDItemRegister,
                     can_free_entry: false,
                     timestamp: reg.timestamp,
-                    data: C2Rust_Unnamed_22 {
+                    data: ShadaEntryData {
                         reg: reg {
                             name,
                             type_0: reg.y_type,
@@ -319,7 +319,7 @@ pub(crate) unsafe fn shada_init_jumps(
                     type_0: kSDItemJump,
                     can_free_entry: false,
                     timestamp: fm.fmark.timestamp,
-                    data: C2Rust_Unnamed_22 {
+                    data: ShadaEntryData {
                         filemark: shada_filemark {
                             name: NUL as c_char,
                             mark: fm.fmark.mark,
@@ -445,7 +445,7 @@ pub unsafe fn shada_encode_gvars() -> String_0 {
                         type_0: kSDItemVariable,
                         can_free_entry: false,
                         timestamp: cur_timestamp,
-                        data: C2Rust_Unnamed_22 {
+                        data: ShadaEntryData {
                             global_var: global_var {
                                 name: name.cast_mut(),
                                 value: tgttv,

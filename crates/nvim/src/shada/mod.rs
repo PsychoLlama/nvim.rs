@@ -47,7 +47,7 @@ use crate::option::{copy_option_part, magic_isset};
 use crate::os::cshim::gettext;
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_pid};
 use crate::os::fileio::{
-    file_close, file_flush, file_open, file_open_buffer, file_read, file_skip,
+    FileOpenFlags, file_close, file_flush, file_open, file_open_buffer, file_read, file_skip,
     file_try_read_buffered,
 };
 use crate::os::fs::{os_fchown, os_fileinfo, os_getperm, os_isdir, os_mkdir_recurse, os_remove};
@@ -65,8 +65,8 @@ use crate::search::{
 };
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, Arena, Dict, FileDescriptor, FileInfo, Integer,
-    KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
+    AdditionalData, AdditionalDataBuilder, Arena, Dict, FileDescriptor, FileInfo, HistoryType,
+    Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
     KeyDict__shada_search_pat, KeyValuePair, MHPutStatus, Map_cstr_t_ptr_t, MapHash, MarkGet,
     MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, Set_cstr_t, Set_ptr_t,
     String_0, StringArray, SubReplacementString, Timestamp, VAR_UNKNOWN, VAR_UNLOCKED, bln_values,
@@ -98,26 +98,22 @@ pub(crate) use self::write::*;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kMarkBufLocal: MarkGet = 0;
 pub const BLN_LISTED: bln_values = 2;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const HIST_SEARCH: C2Rust_Unnamed_17 = 1;
-pub const HIST_CMD: C2Rust_Unnamed_17 = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const HIST_COUNT: C2Rust_Unnamed_18 = 5;
+pub const HIST_SEARCH: HistoryType = 1;
+pub const HIST_CMD: HistoryType = 0;
+pub const HIST_COUNT: ::core::ffi::c_uint = 5;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kFileTruncate: C2Rust_Unnamed_19 = 32;
-pub const kFileCreateOnly: C2Rust_Unnamed_19 = 16;
-pub const kFileNoSymlink: C2Rust_Unnamed_19 = 8;
-pub const kFileCreate: C2Rust_Unnamed_19 = 2;
-pub const kFileReadOnly: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const kShaDaMissingError: C2Rust_Unnamed_21 = 16;
-pub const kShaDaGetOldfiles: C2Rust_Unnamed_21 = 8;
-pub const kShaDaForceit: C2Rust_Unnamed_21 = 4;
-pub const kShaDaWantMarks: C2Rust_Unnamed_21 = 2;
-pub const kShaDaWantInfo: C2Rust_Unnamed_21 = 1;
+pub const kFileTruncate: FileOpenFlags = 32;
+pub const kFileCreateOnly: FileOpenFlags = 16;
+pub const kFileNoSymlink: FileOpenFlags = 8;
+pub const kFileCreate: FileOpenFlags = 2;
+pub const kFileReadOnly: FileOpenFlags = 1;
+pub const kShaDaMissingError: ::core::ffi::c_uint = 16;
+pub const kShaDaGetOldfiles: ::core::ffi::c_uint = 8;
+pub const kShaDaForceit: ::core::ffi::c_uint = 4;
+pub const kShaDaWantMarks: ::core::ffi::c_uint = 2;
+pub const kShaDaWantInfo: ::core::ffi::c_uint = 1;
 pub const kSDWriteReadNotShada: ShaDaWriteResult = 1;
 pub type ShaDaWriteResult = ::core::ffi::c_uint;
 pub const kSDWriteIgnError: ShaDaWriteResult = 3;
@@ -144,19 +140,19 @@ pub struct ShadaEntry {
     pub type_0: ShadaEntryType,
     pub can_free_entry: bool,
     pub timestamp: Timestamp,
-    pub data: C2Rust_Unnamed_22,
+    pub data: ShadaEntryData,
     pub additional_data: *mut AdditionalData,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union C2Rust_Unnamed_22 {
+pub union ShadaEntryData {
     pub header: Dict,
     pub filemark: shada_filemark,
     pub search_pattern: KeyDict__shada_search_pat,
     pub history_item: history_item,
     pub reg: reg,
     pub global_var: global_var,
-    pub unknown_item: C2Rust_Unnamed_23,
+    pub unknown_item: unknown_item,
     pub sub_string: sub_string,
     pub buffer_list: buffer_list,
 }
@@ -180,7 +176,7 @@ pub struct sub_string {
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_23 {
+pub struct unknown_item {
     pub type_0: uint64_t,
     pub contents: *mut ::core::ffi::c_char,
     pub size: size_t,
@@ -469,7 +465,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemMissing,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             header: Dict {
                 size: 0,
                 capacity: 0,
@@ -482,7 +478,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemHeader,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             header: Dict {
                 size: 0 as size_t,
                 capacity: 0,
@@ -495,7 +491,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemSearchPattern,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             search_pattern: KeyDict__shada_search_pat {
                 is_set___shada_search_pat_: 0,
                 magic: true,
@@ -519,7 +515,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemSubString,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             sub_string: sub_string {
                 sub: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             },
@@ -530,7 +526,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemHistoryEntry,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             history_item: history_item {
                 histtype: HIST_CMD as ::core::ffi::c_int as uint8_t,
                 string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -543,7 +539,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemRegister,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             reg: reg {
                 name: '\0' as ::core::ffi::c_char,
                 type_0: kMTCharWise,
@@ -559,7 +555,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemVariable,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             global_var: global_var {
                 name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 value: typval_T {
@@ -577,7 +573,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemGlobalMark,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             filemark: shada_filemark {
                 name: '"' as ::core::ffi::c_char,
                 mark: pos_T {
@@ -594,7 +590,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemJump,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             filemark: shada_filemark {
                 name: '\0' as ::core::ffi::c_char,
                 mark: pos_T {
@@ -611,7 +607,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemBufferList,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             buffer_list: buffer_list {
                 size: 0 as size_t,
                 buffers: ::core::ptr::null_mut::<buffer_list_buffer>(),
@@ -623,7 +619,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemLocalMark,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             filemark: shada_filemark {
                 name: '"' as ::core::ffi::c_char,
                 mark: pos_T {
@@ -640,7 +636,7 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
         type_0: kSDItemChange,
         can_free_entry: false,
         timestamp: 0 as Timestamp,
-        data: C2Rust_Unnamed_22 {
+        data: ShadaEntryData {
             filemark: shada_filemark {
                 name: '\0' as ::core::ffi::c_char,
                 mark: pos_T {

@@ -9,8 +9,8 @@
 use super::args::Args;
 use super::table::{BUILTINS, builtin_index};
 use super::{
-    ARENA_EMPTY, ARRAY_DICT_INIT, BASE_LAST, BASE_NONE, C2Rust_Unnamed_16, FCERR_NONE,
-    FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
+    ARENA_EMPTY, ARRAY_DICT_INIT, BASE_LAST, BASE_NONE, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW,
+    FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL, object_data,
 };
 use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::api::private::helpers::{api_clear_error, api_free_object};
@@ -343,7 +343,7 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
 
         let mut items = [Object {
             type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_16 { boolean: false },
+            data: object_data { boolean: false },
         }; MAX_FUNC_ARGS as usize];
         let mut args: Array = ARRAY_DICT_INIT;
         args.capacity = MAX_FUNC_ARGS as usize;

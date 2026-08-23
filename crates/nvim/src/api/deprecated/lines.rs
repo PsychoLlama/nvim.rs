@@ -53,7 +53,7 @@ pub unsafe fn buffer_set_line(
     unsafe {
         let mut l: Object = object {
             type_0: kObjectTypeString,
-            data: C2Rust_Unnamed { string: line },
+            data: object_data { string: line },
         };
         let array: Array = Array {
             size: 1 as size_t,

@@ -69,8 +69,8 @@ use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::{
-    Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, CmdAddr, Direction, ExArgt,
-    LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, dobuf_action_values,
+    Callback, Callback_data, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter,
+    LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, dobuf_action_values,
     dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T,
     optmagic_T, uint8_t, uint16_t,
 };
@@ -133,24 +133,21 @@ pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub const kOptValTypeString: OptValType = 2;
 pub const kMarkAll: MarkGet = 1;
 pub const kMarkBufLocal: MarkGet = 0;
-pub type C2Rust_Unnamed_35 = c_uint;
-pub const CSF_CAUGHT: C2Rust_Unnamed_35 = 4096;
-pub const CSF_THROWN: C2Rust_Unnamed_35 = 2048;
-pub const CSF_FINALLY: C2Rust_Unnamed_35 = 512;
-pub const CSF_TRY: C2Rust_Unnamed_35 = 256;
-pub const CSF_FOR: C2Rust_Unnamed_35 = 16;
-pub const CSF_WHILE: C2Rust_Unnamed_35 = 8;
-pub const CSF_ACTIVE: C2Rust_Unnamed_35 = 2;
-pub const CSF_TRUE: C2Rust_Unnamed_35 = 1;
-pub type C2Rust_Unnamed_36 = c_uint;
-pub const CSTP_THROW: C2Rust_Unnamed_36 = 4;
-pub const CSTP_INTERRUPT: C2Rust_Unnamed_36 = 2;
-pub const CSTP_ERROR: C2Rust_Unnamed_36 = 1;
-pub type C2Rust_Unnamed_37 = c_uint;
-pub const CSL_HAD_FINA: C2Rust_Unnamed_37 = 8;
-pub const CSL_HAD_CONT: C2Rust_Unnamed_37 = 4;
-pub const CSL_HAD_ENDLOOP: C2Rust_Unnamed_37 = 2;
-pub const CSL_HAD_LOOP: C2Rust_Unnamed_37 = 1;
+pub const CSF_CAUGHT: c_uint = 4096;
+pub const CSF_THROWN: c_uint = 2048;
+pub const CSF_FINALLY: c_uint = 512;
+pub const CSF_TRY: c_uint = 256;
+pub const CSF_FOR: c_uint = 16;
+pub const CSF_WHILE: c_uint = 8;
+pub const CSF_ACTIVE: c_uint = 2;
+pub const CSF_TRUE: c_uint = 1;
+pub const CSTP_THROW: c_uint = 4;
+pub const CSTP_INTERRUPT: c_uint = 2;
+pub const CSTP_ERROR: c_uint = 1;
+pub const CSL_HAD_FINA: c_uint = 8;
+pub const CSL_HAD_CONT: c_uint = 4;
+pub const CSL_HAD_ENDLOOP: c_uint = 2;
+pub const CSL_HAD_LOOP: c_uint = 1;
 /// A command handler. Plain `unsafe fn`, not `extern "C"`: nothing
 /// outside this crate calls the table.
 pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;
@@ -173,31 +170,24 @@ pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kMTLineWise: MotionType = 1;
-pub type C2Rust_Unnamed_47 = c_uint;
-pub const VIM_QUESTION: C2Rust_Unnamed_47 = 4;
-pub type C2Rust_Unnamed_48 = c_uint;
-pub const VIM_YES: C2Rust_Unnamed_48 = 2;
-pub type C2Rust_Unnamed_49 = c_uint;
-pub const ECMD_ALTBUF: C2Rust_Unnamed_49 = 32;
-pub const ECMD_ADDBUF: C2Rust_Unnamed_49 = 16;
-pub const ECMD_FORCEIT: C2Rust_Unnamed_49 = 8;
-pub const ECMD_OLDBUF: C2Rust_Unnamed_49 = 4;
-pub const ECMD_HIDE: C2Rust_Unnamed_49 = 1;
-pub type C2Rust_Unnamed_50 = c_int;
-pub const ECMD_ONE: C2Rust_Unnamed_50 = 1;
-pub const ECMD_LAST: C2Rust_Unnamed_50 = -1;
-pub type C2Rust_Unnamed_51 = c_uint;
-pub const CCGD_EXCMD: C2Rust_Unnamed_51 = 16;
-pub const CCGD_FORCEIT: C2Rust_Unnamed_51 = 4;
-pub const CCGD_MULTWIN: C2Rust_Unnamed_51 = 2;
-pub const CCGD_AW: C2Rust_Unnamed_51 = 1;
+pub const VIM_QUESTION: c_uint = 4;
+pub const VIM_YES: c_uint = 2;
+pub const ECMD_ALTBUF: c_uint = 32;
+pub const ECMD_ADDBUF: c_uint = 16;
+pub const ECMD_FORCEIT: c_uint = 8;
+pub const ECMD_OLDBUF: c_uint = 4;
+pub const ECMD_HIDE: c_uint = 1;
+pub const ECMD_ONE: c_int = 1;
+pub const ECMD_LAST: c_int = -1;
+pub const CCGD_EXCMD: c_uint = 16;
+pub const CCGD_FORCEIT: c_uint = 4;
+pub const CCGD_MULTWIN: c_uint = 2;
+pub const CCGD_AW: c_uint = 1;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub type C2Rust_Unnamed_53 = c_uint;
-pub const VALID_HEAD: C2Rust_Unnamed_53 = 2;
-pub const VALID_PATH: C2Rust_Unnamed_53 = 1;
-pub type C2Rust_Unnamed_54 = c_uint;
-pub const DIALOG_MSG_SIZE: C2Rust_Unnamed_54 = 1000;
+pub const VALID_HEAD: c_uint = 2;
+pub const VALID_PATH: c_uint = 1;
+pub const DIALOG_MSG_SIZE: c_uint = 1000;
 #[derive(Copy, Clone)]
 pub struct dbg_stuff {
     pub trylevel: c_int,
@@ -226,33 +216,29 @@ pub struct wcmd_T {
     pub lnum: linenr_T,
 }
 pub const ETYPE_EXCEPT: etype_T = 5;
-pub const DT_LTAG: C2Rust_Unnamed_65 = 11;
-pub const DT_TAG: C2Rust_Unnamed_65 = 1;
-pub const DT_LAST: C2Rust_Unnamed_65 = 6;
-pub const DT_FIRST: C2Rust_Unnamed_65 = 5;
-pub const DT_POP: C2Rust_Unnamed_65 = 2;
-pub const DT_NEXT: C2Rust_Unnamed_65 = 3;
-pub const DT_PREV: C2Rust_Unnamed_65 = 4;
-pub const DT_SELECT: C2Rust_Unnamed_65 = 7;
-pub const DT_JUMP: C2Rust_Unnamed_65 = 9;
-pub const FIND_ANY: C2Rust_Unnamed_61 = 1;
-pub const FIND_DEFINE: C2Rust_Unnamed_61 = 2;
-pub const ACTION_SPLIT: C2Rust_Unnamed_62 = 3;
-pub const ACTION_GOTO: C2Rust_Unnamed_62 = 2;
-pub const ACTION_SHOW_ALL: C2Rust_Unnamed_62 = 4;
-pub const ACTION_SHOW: C2Rust_Unnamed_62 = 1;
+pub const DT_LTAG: c_uint = 11;
+pub const DT_TAG: c_uint = 1;
+pub const DT_LAST: c_uint = 6;
+pub const DT_FIRST: c_uint = 5;
+pub const DT_POP: c_uint = 2;
+pub const DT_NEXT: c_uint = 3;
+pub const DT_PREV: c_uint = 4;
+pub const DT_SELECT: c_uint = 7;
+pub const DT_JUMP: c_uint = 9;
+pub const FIND_ANY: c_uint = 1;
+pub const FIND_DEFINE: c_uint = 2;
+pub const ACTION_SPLIT: c_uint = 3;
+pub const ACTION_GOTO: c_uint = 2;
+pub const ACTION_SHOW_ALL: c_uint = 4;
+pub const ACTION_SHOW: c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
-pub const CHECK_PATH: C2Rust_Unnamed_61 = 3;
+pub const CHECK_PATH: c_uint = 3;
 pub const ESTACK_SCRIPT: estack_arg_T = 3;
 pub const ESTACK_STACK: estack_arg_T = 2;
 pub const ESTACK_SFILE: estack_arg_T = 1;
-pub const FIND_STRING: C2Rust_Unnamed_58 = 2;
-pub const FIND_EVAL: C2Rust_Unnamed_58 = 4;
-pub const FIND_IDENT: C2Rust_Unnamed_58 = 1;
-pub type C2Rust_Unnamed_58 = c_uint;
-pub type C2Rust_Unnamed_61 = c_uint;
-pub type C2Rust_Unnamed_62 = c_uint;
-pub type C2Rust_Unnamed_65 = c_uint;
+pub const FIND_STRING: c_uint = 2;
+pub const FIND_EVAL: c_uint = 4;
+pub const FIND_IDENT: c_uint = 1;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;
@@ -296,7 +282,7 @@ static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_error_buf: GlobalCell<[c_char; 480]> = GlobalCell::new([0; 480]);
 static exmode_plus: GlobalCell<[c_char; 2]> = GlobalCell::new(c_bytes(b"+\0"));
 static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_20 {
+    data: Callback_data {
         funcref: ::core::ptr::null_mut::<c_char>(),
     },
     type_0: kCallbackNone,

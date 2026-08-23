@@ -90,53 +90,53 @@ pub unsafe fn nvim_set_decoration_provider(
         debug_assert!(!p.is_null(), "p != NULL");
         decor_provider_clear(p);
         redraw_all_later(UPD_NOT_VALID);
-        let mut cbs: [C2Rust_Unnamed_26; 10] = [
-            C2Rust_Unnamed_26 {
+        let mut cbs: [DecorProviderCallback; 10] = [
+            DecorProviderCallback {
                 name: c"on_start".as_ptr(),
                 source: &raw mut (*opts).on_start,
                 dest: &raw mut (*p).redraw_start,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"on_buf".as_ptr(),
                 source: &raw mut (*opts).on_buf,
                 dest: &raw mut (*p).redraw_buf,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"on_win".as_ptr(),
                 source: &raw mut (*opts).on_win,
                 dest: &raw mut (*p).redraw_win,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"on_line".as_ptr(),
                 source: &raw mut (*opts).on_line,
                 dest: &raw mut (*p).redraw_line,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"on_range".as_ptr(),
                 source: &raw mut (*opts).on_range,
                 dest: &raw mut (*p).redraw_range,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"on_end".as_ptr(),
                 source: &raw mut (*opts).on_end,
                 dest: &raw mut (*p).redraw_end,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"_on_hl_def".as_ptr(),
                 source: &raw mut (*opts)._on_hl_def,
                 dest: &raw mut (*p).hl_def,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"_on_spell_nav".as_ptr(),
                 source: &raw mut (*opts)._on_spell_nav,
                 dest: &raw mut (*p).spell_nav,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: c"_on_conceal_line".as_ptr(),
                 source: &raw mut (*opts)._on_conceal_line,
                 dest: &raw mut (*p).conceal_line,
             },
-            C2Rust_Unnamed_26 {
+            DecorProviderCallback {
                 name: ::core::ptr::null::<::core::ffi::c_char>(),
                 source: ::core::ptr::null_mut::<LuaRef>(),
                 dest: ::core::ptr::null_mut::<LuaRef>(),

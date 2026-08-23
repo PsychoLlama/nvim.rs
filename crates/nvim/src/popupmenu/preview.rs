@@ -90,7 +90,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
 
             lines.push(Object {
                 type_0: kObjectTypeString,
-                data: C2Rust_Unnamed_12 {
+                data: object_data {
                     string: cstr_to_string(curr),
                 },
             });

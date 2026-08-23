@@ -187,7 +187,7 @@ pub(crate) unsafe fn hms_load_pending(hms_p: *mut HistoryMergerState) {
                 type_0: kSDItemHistoryEntry,
                 can_free_entry: (*hms_p).reading,
                 timestamp: he.timestamp,
-                data: C2Rust_Unnamed_22 {
+                data: ShadaEntryData {
                     history_item: history_item {
                         histtype: history_type,
                         string: he.text,

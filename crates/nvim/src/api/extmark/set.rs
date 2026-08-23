@@ -40,7 +40,7 @@ pub unsafe fn nvim_buf_set_extmark(
             width: 0 as ::core::ffi::c_int,
             col: 0 as ::core::ffi::c_int,
             pos: kVPosEndOfLine,
-            data: C2Rust_Unnamed_2 {
+            data: DecorVirtText_data {
                 virt_text: VirtText {
                     size: 0 as size_t,
                     capacity: 0 as size_t,
@@ -56,7 +56,7 @@ pub unsafe fn nvim_buf_set_extmark(
             width: 0 as ::core::ffi::c_int,
             col: 0 as ::core::ffi::c_int,
             pos: kVPosEndOfLine,
-            data: C2Rust_Unnamed_2 {
+            data: DecorVirtText_data {
                 virt_lines: VirtLines {
                     size: 0 as size_t,
                     capacity: 0 as size_t,

@@ -290,7 +290,7 @@ fn set_mousemoveevent(on: bool) {
         String_0::from_raw_parts(c"mousemoveevent".as_ptr().cast_mut(), 14),
         Object {
             type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed_12 { boolean: on },
+            data: object_data { boolean: on },
         },
     );
 }

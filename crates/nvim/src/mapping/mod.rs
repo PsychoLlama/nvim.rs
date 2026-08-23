@@ -69,8 +69,8 @@ use crate::types::{
     Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
     LuaRef, LuaRetMode, Object, RemapValues, String_0, buf_T, cmdidx_T, dict_T, exarg_T, expand_T,
     fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_value_pair, linenr_T,
-    mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t,
-    typval_T, typval_vval_union, uint64_t, varnumber_T,
+    mapblock_T, object_data, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t, typval_T,
+    typval_vval_union, uint64_t, varnumber_T,
 };
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strcmp, strlen, strpbrk};
 
@@ -93,17 +93,14 @@ mod abbrev;
 pub use self::abbrev::*;
 mod langmap;
 pub use self::langmap::*;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXMAPLEN: C2Rust_Unnamed_13 = 50;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_17 = -2147483648;
+pub const MAXMAPLEN: ::core::ffi::c_uint = 50;
+pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const REPTERM_NO_SIMPLIFY: C2Rust_Unnamed_20 = 8;
-pub const REPTERM_DO_LT: C2Rust_Unnamed_20 = 2;
-pub const REPTERM_FROM_PART: C2Rust_Unnamed_20 = 1;
+pub const REPTERM_NO_SIMPLIFY: ::core::ffi::c_uint = 8;
+pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
+pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub type MapArguments = map_arguments;
 #[derive(Copy, Clone)]
@@ -128,11 +125,10 @@ pub struct map_arguments {
     pub orig_rhs_len: size_t,
     pub desc: *mut ::core::ffi::c_char,
 }
-pub const MAPTYPE_UNMAP: C2Rust_Unnamed_21 = 1;
-pub const MAPTYPE_NOREMAP: C2Rust_Unnamed_21 = 2;
-pub const MAPTYPE_UNMAP_LHS: C2Rust_Unnamed_21 = 3;
-pub const MAPTYPE_MAP: C2Rust_Unnamed_21 = 0;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
+pub const MAPTYPE_UNMAP: ::core::ffi::c_uint = 1;
+pub const MAPTYPE_NOREMAP: ::core::ffi::c_uint = 2;
+pub const MAPTYPE_UNMAP_LHS: ::core::ffi::c_uint = 3;
+pub const MAPTYPE_MAP: ::core::ffi::c_uint = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = Array {

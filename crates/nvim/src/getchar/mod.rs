@@ -62,7 +62,7 @@ use crate::ops::clear_oparg;
 use crate::options::kOptBoFlagError;
 use crate::os::cshim::{gettext, putc, stderr, strncmp};
 use crate::os::env::expand_env;
-use crate::os::fileio::{file_close, file_open, file_open_stdin, file_read};
+use crate::os::fileio::{FileOpenFlags, file_close, file_open, file_open_stdin, file_read};
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::state::{
@@ -104,20 +104,18 @@ mod cmdkey;
 pub use self::cmdkey::*;
 mod paste;
 pub use self::paste::*;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const MAXMAPLEN: C2Rust_Unnamed_27 = 50;
+pub const MAXMAPLEN: ::core::ffi::c_uint = 50;
 pub const REMAP_SKIP: RemapValues = -3;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
 pub const FLUSH_INPUT: flush_buffers_T = 2;
 pub const FLUSH_MINIMAL: flush_buffers_T = 0;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
-pub const NSCRIPT: C2Rust_Unnamed_30 = 15;
-pub const RM_SCRIPT: C2Rust_Unnamed_36 = 2;
-pub const RM_NONE: C2Rust_Unnamed_36 = 1;
-pub const RM_YES: C2Rust_Unnamed_36 = 0;
-pub const RM_ABBR: C2Rust_Unnamed_36 = 4;
+pub const NSCRIPT: ::core::ffi::c_uint = 15;
+pub const RM_SCRIPT: ::core::ffi::c_uint = 2;
+pub const RM_NONE: ::core::ffi::c_uint = 1;
+pub const RM_YES: ::core::ffi::c_uint = 0;
+pub const RM_ABBR: ::core::ffi::c_uint = 4;
 #[derive(Copy, Clone)]
 pub struct gotchars_state_T {
     pub buf: [uint8_t; 67],
@@ -126,27 +124,23 @@ pub struct gotchars_state_T {
     pub pending_special: ::core::ffi::c_uint,
     pub pending_mbyte: ::core::ffi::c_uint,
 }
-pub const KEYLEN_PART_KEY: C2Rust_Unnamed_37 = -1;
-pub const SHOWCMD_COLS: C2Rust_Unnamed_33 = 10;
+pub const KEYLEN_PART_KEY: ::core::ffi::c_int = -1;
+pub const SHOWCMD_COLS: ::core::ffi::c_uint = 10;
 pub const map_result_get: map_result_T = 1;
 pub type map_result_T = ::core::ffi::c_uint;
 pub const map_result_nomatch: map_result_T = 3;
 pub const map_result_retry: map_result_T = 2;
 pub const map_result_fail: map_result_T = 0;
-pub const KEYLEN_PART_MAP: C2Rust_Unnamed_37 = -2;
+pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
 pub const kMTCharWise: MotionType = 0;
-pub const kFileReadOnly: C2Rust_Unnamed_34 = 1;
-pub const kFileNonBlocking: C2Rust_Unnamed_34 = 128;
+pub const kFileReadOnly: FileOpenFlags = 1;
+pub const kFileNonBlocking: FileOpenFlags = 128;
 pub const kRetNilBool: LuaRetMode = 1;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub const kFileTruncate: C2Rust_Unnamed_34 = 32;
-pub const kFileCreateOnly: C2Rust_Unnamed_34 = 16;
-pub const kFileNoSymlink: C2Rust_Unnamed_34 = 8;
-pub const kFileWriteOnly: C2Rust_Unnamed_34 = 4;
-pub const kFileCreate: C2Rust_Unnamed_34 = 2;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
+pub const kFileTruncate: FileOpenFlags = 32;
+pub const kFileCreateOnly: FileOpenFlags = 16;
+pub const kFileNoSymlink: FileOpenFlags = 8;
+pub const kFileWriteOnly: FileOpenFlags = 4;
+pub const kFileCreate: FileOpenFlags = 2;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,

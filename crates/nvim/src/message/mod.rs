@@ -91,9 +91,8 @@ use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, Dict, Event, FILE, HlMessage, HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts,
     MessageData, Object, OptInt, ShmFlag, String_0, Vv, colnr_T, estack_T, estack_arg_T, exarg_T,
-    flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, object,
-    object_data as C2Rust_Unnamed_11, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uint64_t,
+    flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, object, object_data,
+    ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
 };
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -188,7 +187,7 @@ static msg_ext_trigger: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static msg_ext_id: GlobalCell<Object> = GlobalCell::new(object {
     type_0: kObjectTypeInteger,
-    data: C2Rust_Unnamed_11 {
+    data: object_data {
         integer: 1 as Integer,
     },
 });

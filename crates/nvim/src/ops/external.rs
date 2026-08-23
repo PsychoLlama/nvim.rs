@@ -98,7 +98,7 @@ pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
 
 /// The parsed callback behind 'operatorfunc'.
 static OPFUNC_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_5 {
+    data: Callback_data {
         funcref: ::core::ptr::null_mut(),
     },
     type_0: kCallbackNone,

@@ -39,8 +39,7 @@ use crate::types::{
     Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
     OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
     hashitem_T, kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeString,
-    key_value_pair, object, object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union,
-    uint8_t,
+    key_value_pair, object, object_data, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -50,17 +49,14 @@ pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptValTypeNil: OptValType = -1;
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.
-pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
-pub const kCtxFuncs: C2Rust_Unnamed_1 = 32;
-pub const kCtxSFuncs: C2Rust_Unnamed_1 = 16;
-pub const kCtxGVars: C2Rust_Unnamed_1 = 8;
-pub const kCtxBufs: C2Rust_Unnamed_1 = 4;
-pub const kCtxJumps: C2Rust_Unnamed_1 = 2;
-pub const kCtxRegs: C2Rust_Unnamed_1 = 1;
-
-pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
-pub const kShaDaForceit: C2Rust_Unnamed_3 = 4;
-pub const kShaDaWantInfo: C2Rust_Unnamed_3 = 1;
+pub const kCtxFuncs: ::core::ffi::c_uint = 32;
+pub const kCtxSFuncs: ::core::ffi::c_uint = 16;
+pub const kCtxGVars: ::core::ffi::c_uint = 8;
+pub const kCtxBufs: ::core::ffi::c_uint = 4;
+pub const kCtxJumps: ::core::ffi::c_uint = 2;
+pub const kCtxRegs: ::core::ffi::c_uint = 1;
+pub const kShaDaForceit: ::core::ffi::c_uint = 4;
+pub const kShaDaWantInfo: ::core::ffi::c_uint = 1;
 
 /// `shada_read_string` flags for every restore: read the info sections, and
 /// overwrite what is already there.
@@ -325,7 +321,7 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
                     &mut ctx.funcs,
                     object {
                         type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_0 { string: func_body },
+                        data: object_data { string: func_body },
                     },
                 );
             }
@@ -364,7 +360,7 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
         object_to_vim(
             object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_0 { array },
+                data: object_data { array },
             },
             &raw mut list_tv,
             err,
@@ -398,7 +394,7 @@ unsafe fn put_array(rv: &mut Dict, key: &CStr, array: Array) {
             key: cstr_as_string(key.as_ptr()),
             value: object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_0 { array },
+                data: object_data { array },
             },
         };
         rv.size += 1;

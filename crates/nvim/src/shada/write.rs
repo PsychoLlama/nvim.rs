@@ -244,7 +244,7 @@ impl Writing {
                     type_0: kSDItemHeader,
                     can_free_entry: false,
                     timestamp: os_time(),
-                    data: C2Rust_Unnamed_22 {
+                    data: ShadaEntryData {
                         header: header.dict(),
                     },
                     additional_data: core::ptr::null_mut(),
@@ -299,7 +299,7 @@ impl Writing {
                         type_0: kSDItemVariable,
                         can_free_entry: false,
                         timestamp,
-                        data: C2Rust_Unnamed_22 {
+                        data: ShadaEntryData {
                             global_var: global_var {
                                 name: name.cast_mut(),
                                 value: tgttv,
@@ -373,7 +373,7 @@ impl Writing {
                     type_0: kSDItemSubString,
                     can_free_entry: false,
                     timestamp: sub.timestamp,
-                    data: C2Rust_Unnamed_22 {
+                    data: ShadaEntryData {
                         sub_string: sub_string { sub: sub.sub },
                     },
                     additional_data: sub.additional_data,
@@ -406,7 +406,7 @@ impl Writing {
                         type_0: kSDItemGlobalMark,
                         can_free_entry: false,
                         timestamp: fm.fmark.timestamp,
-                        data: C2Rust_Unnamed_22 {
+                        data: ShadaEntryData {
                             filemark: shada_filemark {
                                 name,
                                 mark: fm.fmark.mark,
@@ -485,7 +485,7 @@ impl Writing {
                     type_0: kSDItemLocalMark,
                     can_free_entry: false,
                     timestamp: fm.timestamp,
-                    data: C2Rust_Unnamed_22 {
+                    data: ShadaEntryData {
                         filemark: shada_filemark {
                             name,
                             mark: fm.mark,
@@ -506,7 +506,7 @@ impl Writing {
                     type_0: kSDItemChange,
                     can_free_entry: false,
                     timestamp: fm.timestamp,
-                    data: C2Rust_Unnamed_22 {
+                    data: ShadaEntryData {
                         filemark: shada_filemark {
                             name: 0,
                             mark: fm.mark,
@@ -560,7 +560,7 @@ impl Writing {
                     type_0: kSDItemGlobalMark,
                     can_free_entry: false,
                     timestamp: os_time(),
-                    data: C2Rust_Unnamed_22 {
+                    data: ShadaEntryData {
                         filemark: shada_filemark {
                             name: '0' as c_char,
                             mark: (*curwin.get()).w_cursor,

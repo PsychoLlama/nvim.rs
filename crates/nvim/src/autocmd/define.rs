@@ -16,7 +16,7 @@ use crate::types::{FAIL, OK};
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
 const CALLBACK_INIT: Callback = Callback {
-    data: C2Rust_Unnamed_5 {
+    data: Callback_data {
         funcref: ::core::ptr::null_mut(),
     },
     type_0: kCallbackNone,

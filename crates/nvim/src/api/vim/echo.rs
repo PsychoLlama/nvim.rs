@@ -38,7 +38,7 @@ pub unsafe fn nvim_echo(
         let mut save_msg_didany: bool = false;
         let mut id: Object = object {
             type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 integer: -1 as Integer,
             },
         };

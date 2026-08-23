@@ -67,7 +67,7 @@ impl LexExprToken {
     }
 
     /// A number literal's base and whether it is a float.
-    pub(super) fn number(&self) -> C2Rust_Unnamed_9 {
+    pub(super) fn number(&self) -> LexExprTokenNumber {
         unsafe { self.data.num }
     }
 
@@ -82,17 +82,17 @@ impl LexExprToken {
     }
 
     /// What an invalid token was trying to be, and why it is not.
-    pub(super) fn error(&self) -> C2Rust_Unnamed_11 {
+    pub(super) fn error(&self) -> LexExprTokenError {
         unsafe { self.data.err }
     }
 
     /// An identifier's scope and whether it is an autoload name.
-    pub(super) fn variable(&self) -> C2Rust_Unnamed_12 {
+    pub(super) fn variable(&self) -> LexExprTokenVar {
         unsafe { self.data.var }
     }
 
     /// An option's name, its length and its scope.
-    pub(super) fn option(&self) -> C2Rust_Unnamed_13 {
+    pub(super) fn option(&self) -> LexExprTokenOption {
         unsafe { self.data.opt }
     }
 
@@ -112,12 +112,12 @@ impl LexExprToken {
     }
 
     /// Which of `*`, `/` and `%` this is.
-    pub(super) fn multiplication_type(&self) -> C2Rust_Unnamed_18 {
+    pub(super) fn multiplication_type(&self) -> ExprLexMulType {
         unsafe { self.data.mul.type_0 }
     }
 
     /// A comparison's operator, case-comparison strategy and inversion.
-    pub(super) fn comparison(&self) -> C2Rust_Unnamed_19 {
+    pub(super) fn comparison(&self) -> LexExprTokenComparison {
         unsafe { self.data.cmp }
     }
 }
@@ -219,8 +219,8 @@ impl ExprParser {
                 start: ParserPosition { line: 0, col: 0 },
                 len: 0,
                 type_0: kExprLexMissing,
-                data: C2Rust_Unnamed_7 {
-                    cmp: C2Rust_Unnamed_19 {
+                data: LexExprTokenData {
+                    cmp: LexExprTokenComparison {
                         type_0: kExprCmpEqual,
                         ccs: kCCStrategyUseOption,
                         inv: false,
@@ -234,8 +234,8 @@ impl ExprParser {
                 start: ParserPosition { line: 0, col: 0 },
                 len: 0,
                 type_0: kExprLexMissing,
-                data: C2Rust_Unnamed_7 {
-                    cmp: C2Rust_Unnamed_19 {
+                data: LexExprTokenData {
+                    cmp: LexExprTokenComparison {
                         type_0: kExprCmpEqual,
                         ccs: kCCStrategyUseOption,
                         inv: false,

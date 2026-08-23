@@ -224,8 +224,7 @@ unsafe extern "C" {
         new_free: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>,
     );
 }
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISalnum: C2Rust_Unnamed = 8;
+pub const _ISalnum: ::core::ffi::c_uint = 8;
 pub type TSSymbol = uint16_t;
 pub type TSFieldId = uint16_t;
 pub type TSDecodeFunction =

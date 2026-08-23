@@ -98,18 +98,14 @@ pub use self::offsets::*;
 mod lines;
 pub use self::lines::*;
 pub const kOptValTypeString: OptValType = 2;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const VIM_WARNING: C2Rust_Unnamed_18 = 2;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const READ_NEW: C2Rust_Unnamed_19 = 1;
+pub const VIM_WARNING: ::core::ffi::c_uint = 2;
+pub const READ_NEW: ::core::ffi::c_uint = 1;
 pub const FLUSH_TYPEAHEAD: flush_buffers_T = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const MFS_ZERO: C2Rust_Unnamed_20 = 8;
-pub const MFS_FLUSH: C2Rust_Unnamed_20 = 4;
-pub const MFS_STOP: C2Rust_Unnamed_20 = 2;
-pub const MFS_ALL: C2Rust_Unnamed_20 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const MIN_SWAP_PAGE_SIZE: C2Rust_Unnamed_21 = 1048;
+pub const MFS_ZERO: ::core::ffi::c_uint = 8;
+pub const MFS_FLUSH: ::core::ffi::c_uint = 4;
+pub const MFS_STOP: ::core::ffi::c_uint = 2;
+pub const MFS_ALL: ::core::ffi::c_uint = 1;
+pub const MIN_SWAP_PAGE_SIZE: ::core::ffi::c_uint = 1048;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct DataBlock {
@@ -120,7 +116,7 @@ pub struct DataBlock {
     pub db_line_count: ::core::ffi::c_long,
     pub db_index: [::core::ffi::c_uint; 0],
 }
-pub const DATA_ID: C2Rust_Unnamed_27 = 25697;
+pub const DATA_ID: ::core::ffi::c_uint = 25697;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct PointerEntry {
@@ -137,7 +133,7 @@ pub struct PointerBlock {
     pub pb_count_max: uint16_t,
     pub pb_pointer: [PointerEntry; 0],
 }
-pub const PTR_ID: C2Rust_Unnamed_27 = 28788;
+pub const PTR_ID: ::core::ffi::c_uint = 28788;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ZeroBlock {
@@ -155,17 +151,17 @@ pub struct ZeroBlock {
     pub b0_magic_short: int16_t,
     pub b0_magic_char: ::core::ffi::c_char,
 }
-pub const B0_HNAME_SIZE: C2Rust_Unnamed_28 = 40;
-pub const B0_UNAME_SIZE: C2Rust_Unnamed_28 = 40;
-pub const B0_FNAME_SIZE_ORG: C2Rust_Unnamed_28 = 900;
-pub const B0_FNAME_SIZE_NOCRYPT: C2Rust_Unnamed_28 = 898;
-pub const B0_FNAME_SIZE_CRYPT: C2Rust_Unnamed_28 = 890;
-pub const B0_MAGIC_CHAR: C2Rust_Unnamed_29 = 85;
-pub const B0_MAGIC_SHORT: C2Rust_Unnamed_29 = 269554195;
-pub const B0_MAGIC_INT: C2Rust_Unnamed_29 = 539042339;
-pub const B0_MAGIC_LONG: C2Rust_Unnamed_29 = 808530483;
-pub const BLOCK0_ID1: C2Rust_Unnamed_27 = 48;
-pub const BLOCK0_ID0: C2Rust_Unnamed_27 = 98;
+pub const B0_HNAME_SIZE: ::core::ffi::c_uint = 40;
+pub const B0_UNAME_SIZE: ::core::ffi::c_uint = 40;
+pub const B0_FNAME_SIZE_ORG: ::core::ffi::c_uint = 900;
+pub const B0_FNAME_SIZE_NOCRYPT: ::core::ffi::c_uint = 898;
+pub const B0_FNAME_SIZE_CRYPT: ::core::ffi::c_uint = 890;
+pub const B0_MAGIC_CHAR: ::core::ffi::c_uint = 85;
+pub const B0_MAGIC_SHORT: ::core::ffi::c_uint = 269554195;
+pub const B0_MAGIC_INT: ::core::ffi::c_uint = 539042339;
+pub const B0_MAGIC_LONG: ::core::ffi::c_uint = 808530483;
+pub const BLOCK0_ID1: ::core::ffi::c_uint = 48;
+pub const BLOCK0_ID0: ::core::ffi::c_uint = 98;
 pub const SEA_CHOICE_NONE: sea_choice_T = 0;
 pub type sea_choice_T = ::core::ffi::c_uint;
 pub const SEA_CHOICE_ABORT: sea_choice_T = 6;
@@ -199,9 +195,6 @@ pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
 /// ends up empty.
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const kEqualFiles: file_comparison = 1;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const O_RDWR: ::core::ffi::c_int = 0o2 as ::core::ffi::c_int;

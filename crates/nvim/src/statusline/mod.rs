@@ -57,9 +57,9 @@ use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
     AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptValType, OptionSetFlags,
-    ScreenGrid, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord,
-    StlFlag, Vv, WinSplit, WinStyle, hlf_T, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t,
-    varnumber_T, win_T,
+    ScreenGrid, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, StlFlag, Vv,
+    WinSplit, WinStyle, hlf_T, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T,
+    win_T,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -75,10 +75,10 @@ pub use self::status::*;
 pub use self::stl::*;
 pub use self::tabline::*;
 
-pub const kStlClickFuncRun: C2Rust_Unnamed_13 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_13 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_13 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_13 = 0;
+pub const kStlClickFuncRun: StlClickDefinition_type_0 = 3;
+pub const kStlClickTabClose: StlClickDefinition_type_0 = 2;
+pub const kStlClickTabSwitch: StlClickDefinition_type_0 = 1;
+pub const kStlClickDisabled: StlClickDefinition_type_0 = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
@@ -132,20 +132,20 @@ pub struct stl_item {
     pub cmd: *mut ::core::ffi::c_char,
     pub minwid: ::core::ffi::c_int,
     pub maxwid: ::core::ffi::c_int,
-    pub type_0: C2Rust_Unnamed_15,
+    pub type_0: StlItemType,
 }
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const Trunc: C2Rust_Unnamed_15 = 10;
-pub const ClickFunc: C2Rust_Unnamed_15 = 9;
-pub const TabPage: C2Rust_Unnamed_15 = 8;
-pub const HighlightFold: C2Rust_Unnamed_15 = 7;
-pub const HighlightSign: C2Rust_Unnamed_15 = 6;
-pub const HighlightCombining: C2Rust_Unnamed_15 = 5;
-pub const Highlight: C2Rust_Unnamed_15 = 4;
-pub const Separate: C2Rust_Unnamed_15 = 3;
-pub const Group: C2Rust_Unnamed_15 = 2;
-pub const Empty: C2Rust_Unnamed_15 = 1;
-pub const Normal: C2Rust_Unnamed_15 = 0;
+pub type StlItemType = ::core::ffi::c_uint;
+pub const Trunc: StlItemType = 10;
+pub const ClickFunc: StlItemType = 9;
+pub const TabPage: StlItemType = 8;
+pub const HighlightFold: StlItemType = 7;
+pub const HighlightSign: StlItemType = 6;
+pub const HighlightCombining: StlItemType = 5;
+pub const Highlight: StlItemType = 4;
+pub const Separate: StlItemType = 3;
+pub const Group: StlItemType = 2;
+pub const Empty: StlItemType = 1;
+pub const Normal: StlItemType = 0;
 pub type stl_item_t = stl_item;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
@@ -422,7 +422,7 @@ impl ClickArena {
     pub(crate) fn set(
         &mut self,
         cols: core::ops::Range<c_int>,
-        kind: C2Rust_Unnamed_13,
+        kind: StlClickDefinition_type_0,
         tabnr: c_int,
     ) {
         let Some(defs) = self.entries() else { return };

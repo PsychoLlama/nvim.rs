@@ -3,11 +3,10 @@
 //! The C headers spell each flag family as a run of `#define`s or an
 //! anonymous enum, and c2rust re-emits those constants into *every* file that
 //! included the header. So a family like `EW_*` exists eleven times over,
-//! under three different integer types (`c_int`, `c_uint`, and a
-//! `C2Rust_Unnamed_NN` alias), and the call sites are full of `as c_int`
-//! casts reconciling the copies. Worse, nothing relates a constant to the
-//! parameter it is passed as: a `WILD_*` value fits an `EW_*` parameter and
-//! the compiler has no opinion about it.
+//! under two different integer types (`c_int` and `c_uint`), and the call
+//! sites are full of `as c_int` casts reconciling the copies. Worse, nothing
+//! relates a constant to the parameter it is passed as: a `WILD_*` value fits
+//! an `EW_*` parameter and the compiler has no opinion about it.
 //!
 //! [`flag_set!`] declares one family as a single `Copy` newtype whose members
 //! are associated constants. The parameter type then *is* the check, the

@@ -40,15 +40,14 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
     Arena, Array, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline, DecorInlineData,
-    DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ExtmarkInfoArray, ExtmarkType, Integer,
-    KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider,
-    KeyDict_set_extmark, KeySetLink, LuaRef, MHPutStatus, MTKey, MTPair, Map_String_int,
-    Map_uint32_t_uint32_t, MapHash, NS, Object, OptionalKeys, Set_ptr_t, Set_uint32_t, String_0,
-    UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t,
-    int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeInteger, kObjectTypeString, linenr_T, ptr_t, schar_T, size_t, tabpage_T, uint8_t,
-    uint16_t, uint32_t, virt_line, win_T,
+    DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Dict,
+    Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks,
+    KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark, KeySetLink, LuaRef,
+    MHPutStatus, MTKey, MTPair, Map_String_int, Map_uint32_t_uint32_t, MapHash, NS, Object,
+    OptionalKeys, Set_ptr_t, Set_uint32_t, String_0, UndoObjectType, VirtLines, VirtText,
+    VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, int64_t, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeInteger, kObjectTypeString,
+    linenr_T, ptr_t, schar_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t, virt_line, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -63,15 +62,14 @@ pub use self::query::*;
 pub use self::set::*;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const kSHConcealLines: C2Rust_Unnamed_18 = 128;
-pub const kSHConceal: C2Rust_Unnamed_18 = 64;
-pub const kSHSpellOff: C2Rust_Unnamed_18 = 32;
-pub const kSHSpellOn: C2Rust_Unnamed_18 = 16;
-pub const kSHUIWatchedOverlay: C2Rust_Unnamed_18 = 8;
-pub const kSHUIWatched: C2Rust_Unnamed_18 = 4;
-pub const kSHHlEol: C2Rust_Unnamed_18 = 2;
-pub const kSHIsSign: C2Rust_Unnamed_18 = 1;
+pub const kSHConcealLines: ::core::ffi::c_uint = 128;
+pub const kSHConceal: ::core::ffi::c_uint = 64;
+pub const kSHSpellOff: ::core::ffi::c_uint = 32;
+pub const kSHSpellOn: ::core::ffi::c_uint = 16;
+pub const kSHUIWatchedOverlay: ::core::ffi::c_uint = 8;
+pub const kSHUIWatched: ::core::ffi::c_uint = 4;
+pub const kSHHlEol: ::core::ffi::c_uint = 2;
+pub const kSHIsSign: ::core::ffi::c_uint = 1;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kExtmarkHighlight: ExtmarkType = 32;
 pub const kExtmarkVirtLines: ExtmarkType = 16;
@@ -79,7 +77,7 @@ pub const kExtmarkVirtText: ExtmarkType = 8;
 pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
 #[derive(Copy, Clone)]
-pub struct C2Rust_Unnamed_26 {
+pub struct DecorProviderCallback {
     pub name: *const ::core::ffi::c_char,
     pub source: *mut LuaRef,
     pub dest: *mut LuaRef,

@@ -214,18 +214,15 @@ pub struct bw_info {
     pub bw_start_lnum: linenr_T,
     pub bw_iconv_fd: iconv_t,
 }
-pub const WRITEBUFSIZE: C2Rust_Unnamed_17 = 8192;
-pub const FIO_LATIN1: C2Rust_Unnamed_16 = 1;
-pub const FIO_ENDIAN_L: C2Rust_Unnamed_16 = 128;
-pub const FIO_UTF16: C2Rust_Unnamed_16 = 16;
-pub const FIO_UCS2: C2Rust_Unnamed_16 = 4;
-pub const FIO_UCS4: C2Rust_Unnamed_16 = 8;
-pub const FIO_NOCONVERT: C2Rust_Unnamed_16 = 8192;
-pub const FIO_UTF8: C2Rust_Unnamed_16 = 2;
-pub const ICONV_MULT: C2Rust_Unnamed_18 = 8;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
+pub const WRITEBUFSIZE: ::core::ffi::c_uint = 8192;
+pub const FIO_LATIN1: ::core::ffi::c_int = 1;
+pub const FIO_ENDIAN_L: ::core::ffi::c_int = 128;
+pub const FIO_UTF16: ::core::ffi::c_int = 16;
+pub const FIO_UCS2: ::core::ffi::c_int = 4;
+pub const FIO_UCS4: ::core::ffi::c_int = 8;
+pub const FIO_NOCONVERT: ::core::ffi::c_int = 8192;
+pub const FIO_UTF8: ::core::ffi::c_int = 2;
+pub const ICONV_MULT: ::core::ffi::c_uint = 8;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_WRONLY: ::core::ffi::c_int = 0o1 as ::core::ffi::c_int;
 pub const O_CREAT: ::core::ffi::c_int = 0o100 as ::core::ffi::c_int;

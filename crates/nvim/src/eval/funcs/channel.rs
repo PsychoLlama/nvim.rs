@@ -4,9 +4,9 @@
 
 use super::args::{Args, frame};
 use super::{
-    ARENA_EMPTY, ARRAY_DICT_INIT, C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE,
-    MAX_FUNC_ARGS, kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin,
-    kChannelPartStdout, kRetObject,
+    ARENA_EMPTY, ARRAY_DICT_INIT, Callback_data, GA_EMPTY_INIT_VALUE, MAX_FUNC_ARGS,
+    kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
+    kRetObject, object_data,
 };
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api::private::helpers::{api_clear_error, arena_array, cstr_as_string};
@@ -49,7 +49,7 @@ use core::ptr;
 /// A cleared `CallbackReader`, which the option parsers fill in.
 const NO_READER: CallbackReader = CallbackReader {
     cb: Callback {
-        data: C2Rust_Unnamed_22 {
+        data: Callback_data {
             funcref: ptr::null_mut::<c_char>(),
         },
         type_0: kCallbackNone,
@@ -65,7 +65,7 @@ const NO_READER: CallbackReader = CallbackReader {
 /// A cleared `Object`.
 const NIL: Object = Object {
     type_0: kObjectTypeNil,
-    data: C2Rust_Unnamed_16 { boolean: false },
+    data: object_data { boolean: false },
 };
 
 /// The `{stream}` names `chanclose()` accepts.
@@ -413,7 +413,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             tv_list_append_allocated_string(list, *addrs.add(i));
             *addrs_arr.items.add(addrs_arr.size) = object {
                 type_0: kObjectTypeString,
-                data: C2Rust_Unnamed_16 {
+                data: object_data {
                     string: cstr_as_string(*addrs.add(i)),
                 },
             };
@@ -429,7 +429,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             lua_args.items = items.as_mut_ptr();
             *lua_args.items = object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_16 { array: addrs_arr },
+                data: object_data { array: addrs_arr },
             };
             lua_args.size = 1;
 

@@ -55,12 +55,10 @@ use crate::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
 };
 use ::libc::abort;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const STR2NR_ALL: C2Rust_Unnamed = 15;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const FSK_SIMPLIFY: C2Rust_Unnamed_0 = 8;
-pub const FSK_IN_STRING: C2Rust_Unnamed_0 = 4;
-pub const FSK_KEYCODE: C2Rust_Unnamed_0 = 1;
+pub const STR2NR_ALL: ::core::ffi::c_uint = 15;
+pub const FSK_SIMPLIFY: ::core::ffi::c_uint = 8;
+pub const FSK_IN_STRING: ::core::ffi::c_uint = 4;
+pub const FSK_KEYCODE: ::core::ffi::c_uint = 1;
 pub const kCCStrategyIgnoreCase: ExprCaseCompareStrategy = 63;
 pub const kCCStrategyMatchCase: ExprCaseCompareStrategy = 35;
 pub const kCCStrategyUseOption: ExprCaseCompareStrategy = 0;
@@ -118,97 +116,96 @@ pub struct LexExprToken {
     pub start: ParserPosition,
     pub len: size_t,
     pub type_0: LexExprTokenType,
-    pub data: C2Rust_Unnamed_7,
+    pub data: LexExprTokenData,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union C2Rust_Unnamed_7 {
-    pub cmp: C2Rust_Unnamed_19,
-    pub mul: C2Rust_Unnamed_17,
-    pub brc: C2Rust_Unnamed_16,
-    pub reg: C2Rust_Unnamed_15,
-    pub str: C2Rust_Unnamed_14,
-    pub opt: C2Rust_Unnamed_13,
-    pub var: C2Rust_Unnamed_12,
-    pub err: C2Rust_Unnamed_11,
-    pub num: C2Rust_Unnamed_9,
-    pub ass: C2Rust_Unnamed_8,
+pub union LexExprTokenData {
+    pub cmp: LexExprTokenComparison,
+    pub mul: LexExprTokenMultiplication,
+    pub brc: LexExprTokenBrace,
+    pub reg: LexExprTokenRegister,
+    pub str: LexExprTokenString,
+    pub opt: LexExprTokenOption,
+    pub var: LexExprTokenVar,
+    pub err: LexExprTokenError,
+    pub num: LexExprTokenNumber,
+    pub ass: LexExprTokenAssignment,
 }
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_8 {
+pub struct LexExprTokenAssignment {
     pub type_0: ExprAssignmentType,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_9 {
-    pub val: C2Rust_Unnamed_10,
+pub struct LexExprTokenNumber {
+    pub val: LexExprTokenNumberValue,
     pub base: uint8_t,
     pub is_float: bool,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union C2Rust_Unnamed_10 {
+pub union LexExprTokenNumberValue {
     pub floating: float_T,
     pub integer: uvarnumber_T,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_11 {
+pub struct LexExprTokenError {
     pub type_0: LexExprTokenType,
     pub msg: *const ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_12 {
+pub struct LexExprTokenVar {
     pub scope: ExprVarScope,
     pub autoload: bool,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_13 {
+pub struct LexExprTokenOption {
     pub name: *const ::core::ffi::c_char,
     pub len: size_t,
     pub scope: ExprOptScope,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_14 {
+pub struct LexExprTokenString {
     pub closed: bool,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_15 {
+pub struct LexExprTokenRegister {
     pub name: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_16 {
+pub struct LexExprTokenBrace {
     pub closing: bool,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_17 {
-    pub type_0: C2Rust_Unnamed_18,
+pub struct LexExprTokenMultiplication {
+    pub type_0: ExprLexMulType,
 }
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const kExprLexMulMod: C2Rust_Unnamed_18 = 2;
-pub const kExprLexMulDiv: C2Rust_Unnamed_18 = 1;
-pub const kExprLexMulMul: C2Rust_Unnamed_18 = 0;
+pub type ExprLexMulType = ::core::ffi::c_uint;
+pub const kExprLexMulMod: ExprLexMulType = 2;
+pub const kExprLexMulDiv: ExprLexMulType = 1;
+pub const kExprLexMulMul: ExprLexMulType = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_19 {
+pub struct LexExprTokenComparison {
     pub type_0: ExprComparisonType,
     pub ccs: ExprCaseCompareStrategy,
     pub inv: bool,
 }
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const kELFlagForbidEOC: C2Rust_Unnamed_20 = 16;
-pub const kELFlagIsNotCmp: C2Rust_Unnamed_20 = 8;
-pub const kELFlagAllowFloat: C2Rust_Unnamed_20 = 4;
-pub const kELFlagForbidScope: C2Rust_Unnamed_20 = 2;
-pub const kELFlagPeek: C2Rust_Unnamed_20 = 1;
+pub const kELFlagForbidEOC: ::core::ffi::c_uint = 16;
+pub const kELFlagIsNotCmp: ::core::ffi::c_uint = 8;
+pub const kELFlagAllowFloat: ::core::ffi::c_uint = 4;
+pub const kELFlagForbidScope: ::core::ffi::c_uint = 2;
+pub const kELFlagPeek: ::core::ffi::c_uint = 1;
 pub const kExprNodeAssignment: ExprASTNodeType = 38;
 pub const kExprNodeEnvironment: ExprASTNodeType = 37;
 pub const kExprNodeOption: ExprASTNodeType = 36;
@@ -282,7 +279,7 @@ pub const kEOpLvlParens: ExprOpLvl = 2;
 pub const kEOpLvlComplexIdentifier: ExprOpLvl = 1;
 pub const kEOpLvlInvalid: ExprOpLvl = 0;
 #[derive(Copy, Clone)]
-pub struct C2Rust_Unnamed_34 {
+pub struct ExprNodeProps {
     pub lvl: ExprOpLvl,
     pub ass: ExprOpAssociativity,
 }

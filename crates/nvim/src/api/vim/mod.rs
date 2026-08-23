@@ -104,8 +104,8 @@ use crate::types::{
     foldinfo_T, handle_T, int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeString, linenr_T, mpack_token_type_t, msg_data, msglist_T,
-    object, object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t,
-    statuscol_T, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    object, object_data, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, tabpage_T,
+    uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
@@ -146,9 +146,9 @@ pub const kOptValTypeString: OptValType = 2;
 pub const kOptScopeBuf: OptScope = 2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub const REPTERM_NO_SPECIAL: C2Rust_Unnamed_36 = 4;
-pub const REPTERM_DO_LT: C2Rust_Unnamed_36 = 2;
-pub const REPTERM_FROM_PART: C2Rust_Unnamed_36 = 1;
+pub const REPTERM_NO_SPECIAL: ::core::ffi::c_uint = 4;
+pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
+pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 #[derive(Copy, Clone)]
@@ -156,31 +156,27 @@ pub struct RuntimeCookie {
     pub rv: ArrayBuilder,
     pub arena: *mut Arena,
 }
-pub const DOSO_NONE: C2Rust_Unnamed_40 = 0;
+pub const DOSO_NONE: ::core::ffi::c_uint = 0;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_GOTO: dobuf_action_values = 0;
 pub const BLN_LISTED: bln_values = 2;
 pub const BLN_NEW: bln_values = 8;
 pub const BLN_NOOPT: bln_values = 16;
-pub const BCO_NOHELP: C2Rust_Unnamed_37 = 4;
-pub const BCO_ENTER: C2Rust_Unnamed_37 = 1;
+pub const BCO_NOHELP: ::core::ffi::c_uint = 4;
+pub const BCO_ENTER: ::core::ffi::c_uint = 1;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const kChannelStreamInternal: ChannelStreamType = 4;
 pub const kMTCharWise: MotionType = 0;
-pub const kCtxFuncs: C2Rust_Unnamed_33 = 32;
-pub const kCtxSFuncs: C2Rust_Unnamed_33 = 16;
-pub const kCtxGVars: C2Rust_Unnamed_33 = 8;
-pub const kCtxBufs: C2Rust_Unnamed_33 = 4;
-pub const kCtxJumps: C2Rust_Unnamed_33 = 2;
-pub const kCtxRegs: C2Rust_Unnamed_33 = 1;
+pub const kCtxFuncs: ::core::ffi::c_uint = 32;
+pub const kCtxSFuncs: ::core::ffi::c_uint = 16;
+pub const kCtxGVars: ::core::ffi::c_uint = 8;
+pub const kCtxBufs: ::core::ffi::c_uint = 4;
+pub const kCtxJumps: ::core::ffi::c_uint = 2;
+pub const kCtxRegs: ::core::ffi::c_uint = 1;
 pub const BLN_CURBUF: bln_values = 1;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_40 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;

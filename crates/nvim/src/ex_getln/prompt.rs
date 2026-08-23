@@ -113,7 +113,7 @@ pub unsafe fn get_user_input(
         };
         let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         let mut input_callback = Callback {
-            data: C2Rust_Unnamed_5 {
+            data: Callback_data {
                 funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             },
             type_0: kCallbackNone,

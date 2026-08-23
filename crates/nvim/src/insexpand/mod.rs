@@ -112,12 +112,11 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
-    Arena, BackslashEscape, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction,
-    EvalFuncData, ExpandContext, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN,
-    VAR_UNLOCKED, Vv, buf_T, colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T,
-    hashtab_T, linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T,
-    sctx_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T,
-    xp_prefix_T,
+    Arena, BackslashEscape, BoolVarValue, Callback, Callback_data, Direction, EvalFuncData,
+    ExpandContext, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VAR_UNLOCKED, Vv, buf_T,
+    colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, linenr_T,
+    list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t,
+    typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -151,31 +150,28 @@ pub use self::keys::*;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub const kExtmarkUndo: ExtmarkOp = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const OPENLINE_FORCE_INDENT: C2Rust_Unnamed_17 = 64;
-pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_17 = 4;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_int;
-pub const KEY_COMPLETE: C2Rust_Unnamed_22 = 259;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_int;
-pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_23 = -2147483648;
-pub const CTRL_X_CMDLINE_CTRL_X: C2Rust_Unnamed_36 = 17;
-pub const CTRL_X_NORMAL: C2Rust_Unnamed_36 = 0;
-pub const CTRL_X_NOT_DEFINED_YET: C2Rust_Unnamed_36 = 1;
-pub const CTRL_X_CMDLINE: C2Rust_Unnamed_36 = 11;
-pub const CTRL_X_SCROLL: C2Rust_Unnamed_36 = 2;
-pub const CTRL_X_WHOLE_LINE: C2Rust_Unnamed_36 = 3;
-pub const CTRL_X_FILES: C2Rust_Unnamed_36 = 4;
-pub const CTRL_X_TAGS: C2Rust_Unnamed_36 = 261;
-pub const CTRL_X_PATH_PATTERNS: C2Rust_Unnamed_36 = 262;
-pub const CTRL_X_PATH_DEFINES: C2Rust_Unnamed_36 = 263;
-pub const CTRL_X_DICTIONARY: C2Rust_Unnamed_36 = 265;
-pub const CTRL_X_THESAURUS: C2Rust_Unnamed_36 = 266;
-pub const CTRL_X_FUNCTION: C2Rust_Unnamed_36 = 12;
-pub const CTRL_X_OMNI: C2Rust_Unnamed_36 = 13;
-pub const CTRL_X_SPELL: C2Rust_Unnamed_36 = 14;
-pub const CTRL_X_EVAL: C2Rust_Unnamed_36 = 16;
-pub const CTRL_X_REGISTER: C2Rust_Unnamed_36 = 19;
-pub const CTRL_X_BUFNAMES: C2Rust_Unnamed_36 = 18;
+pub const OPENLINE_FORCE_INDENT: ::core::ffi::c_int = 64;
+pub const OPENLINE_KEEPTRAIL: ::core::ffi::c_int = 4;
+pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
+pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
+pub const CTRL_X_CMDLINE_CTRL_X: ::core::ffi::c_int = 17;
+pub const CTRL_X_NORMAL: ::core::ffi::c_int = 0;
+pub const CTRL_X_NOT_DEFINED_YET: ::core::ffi::c_int = 1;
+pub const CTRL_X_CMDLINE: ::core::ffi::c_int = 11;
+pub const CTRL_X_SCROLL: ::core::ffi::c_int = 2;
+pub const CTRL_X_WHOLE_LINE: ::core::ffi::c_int = 3;
+pub const CTRL_X_FILES: ::core::ffi::c_int = 4;
+pub const CTRL_X_TAGS: ::core::ffi::c_int = 261;
+pub const CTRL_X_PATH_PATTERNS: ::core::ffi::c_int = 262;
+pub const CTRL_X_PATH_DEFINES: ::core::ffi::c_int = 263;
+pub const CTRL_X_DICTIONARY: ::core::ffi::c_int = 265;
+pub const CTRL_X_THESAURUS: ::core::ffi::c_int = 266;
+pub const CTRL_X_FUNCTION: ::core::ffi::c_int = 12;
+pub const CTRL_X_OMNI: ::core::ffi::c_int = 13;
+pub const CTRL_X_SPELL: ::core::ffi::c_int = 14;
+pub const CTRL_X_EVAL: ::core::ffi::c_int = 16;
+pub const CTRL_X_REGISTER: ::core::ffi::c_int = 19;
+pub const CTRL_X_BUFNAMES: ::core::ffi::c_int = 18;
 pub type compl_T = compl_S;
 #[derive(Copy, Clone)]
 pub struct compl_S {
@@ -194,16 +190,16 @@ pub struct compl_S {
     pub cp_user_kind_hlattr: ::core::ffi::c_int,
     pub cp_cpt_source_idx: ::core::ffi::c_int,
 }
-pub const CP_ICASE: C2Rust_Unnamed_37 = 16;
-pub const CP_ORIGINAL_TEXT: C2Rust_Unnamed_37 = 1;
-pub const CPT_COUNT: C2Rust_Unnamed_26 = 4;
-pub const CP_FREE_FNAME: C2Rust_Unnamed_37 = 2;
-pub const CP_FAST: C2Rust_Unnamed_37 = 32;
-pub const CP_CONT_S_IPOS: C2Rust_Unnamed_37 = 4;
-pub const CPT_INFO: C2Rust_Unnamed_26 = 3;
-pub const CPT_KIND: C2Rust_Unnamed_26 = 1;
-pub const CPT_MENU: C2Rust_Unnamed_26 = 2;
-pub const CPT_ABBR: C2Rust_Unnamed_26 = 0;
+pub const CP_ICASE: ::core::ffi::c_int = 16;
+pub const CP_ORIGINAL_TEXT: ::core::ffi::c_int = 1;
+pub const CPT_COUNT: ::core::ffi::c_int = 4;
+pub const CP_FREE_FNAME: ::core::ffi::c_int = 2;
+pub const CP_FAST: ::core::ffi::c_int = 32;
+pub const CP_CONT_S_IPOS: ::core::ffi::c_int = 4;
+pub const CPT_INFO: ::core::ffi::c_int = 3;
+pub const CPT_KIND: ::core::ffi::c_int = 1;
+pub const CPT_MENU: ::core::ffi::c_int = 2;
+pub const CPT_ABBR: ::core::ffi::c_int = 0;
 #[derive(Copy, Clone)]
 pub struct cpt_source_T {
     pub cs_refresh_always: bool,
@@ -212,7 +208,7 @@ pub struct cpt_source_T {
     pub compl_start_tv: uint64_t,
     pub cs_flag: ::core::ffi::c_char,
 }
-pub const CP_EQUAL: C2Rust_Unnamed_37 = 8;
+pub const CP_EQUAL: ::core::ffi::c_int = 8;
 #[derive(Copy, Clone)]
 pub struct ins_compl_next_state_T {
     pub e_cpt_copy: *mut ::core::ffi::c_char,
@@ -228,31 +224,22 @@ pub struct ins_compl_next_state_T {
     pub dict_f: ::core::ffi::c_int,
     pub func_cb: *mut Callback,
 }
-pub const NUM_REGISTERS: C2Rust_Unnamed_29 = 39;
-pub const TAG_MANY: C2Rust_Unnamed_35 = 300;
-pub const TAG_VERBOSE: C2Rust_Unnamed_35 = 32;
-pub const TAG_INS_COMP: C2Rust_Unnamed_35 = 64;
-pub const TAG_NOIC: C2Rust_Unnamed_35 = 8;
-pub const TAG_NAMES: C2Rust_Unnamed_35 = 2;
-pub const TAG_REGEXP: C2Rust_Unnamed_35 = 4;
-pub const LSIZE: C2Rust_Unnamed_34 = 512;
-pub const ACTION_EXPAND: C2Rust_Unnamed_31 = 5;
-pub const FIND_ANY: C2Rust_Unnamed_30 = 1;
-pub const FIND_DEFINE: C2Rust_Unnamed_30 = 2;
-pub const INS_COMPL_CPT_CONT: C2Rust_Unnamed_38 = 2;
-pub const INS_COMPL_CPT_OK: C2Rust_Unnamed_38 = 1;
-pub const INS_COMPL_CPT_END: C2Rust_Unnamed_38 = 3;
-pub const CTRL_X_LOCAL_MSG: C2Rust_Unnamed_36 = 15;
-pub const CTRL_X_FINISHED: C2Rust_Unnamed_36 = 8;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_35 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_38 = ::core::ffi::c_int;
+pub const NUM_REGISTERS: ::core::ffi::c_int = 39;
+pub const TAG_MANY: ::core::ffi::c_int = 300;
+pub const TAG_VERBOSE: ::core::ffi::c_int = 32;
+pub const TAG_INS_COMP: ::core::ffi::c_int = 64;
+pub const TAG_NOIC: ::core::ffi::c_int = 8;
+pub const TAG_NAMES: ::core::ffi::c_int = 2;
+pub const TAG_REGEXP: ::core::ffi::c_int = 4;
+pub const LSIZE: ::core::ffi::c_int = 512;
+pub const ACTION_EXPAND: ::core::ffi::c_int = 5;
+pub const FIND_ANY: ::core::ffi::c_int = 1;
+pub const FIND_DEFINE: ::core::ffi::c_int = 2;
+pub const INS_COMPL_CPT_CONT: ::core::ffi::c_int = 2;
+pub const INS_COMPL_CPT_OK: ::core::ffi::c_int = 1;
+pub const INS_COMPL_CPT_END: ::core::ffi::c_int = 3;
+pub const CTRL_X_LOCAL_MSG: ::core::ffi::c_int = 15;
+pub const CTRL_X_FINISHED: ::core::ffi::c_int = 8;
 /// A zeroed `garray_T`, which `ga_init` then fills in.
 pub(crate) const GARRAY_T_INIT: garray_T = garray_T {
     ga_len: 0,
@@ -492,19 +479,19 @@ static compl_match_arraysize: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0
 pub const DICT_FIRST: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DICT_EXACT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static cfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_5 {
+    data: Callback_data {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
 });
 static ofu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_5 {
+    data: Callback_data {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
 });
 static tsrfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_5 {
+    data: Callback_data {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,

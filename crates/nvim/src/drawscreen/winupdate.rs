@@ -278,7 +278,7 @@ unsafe fn add_suspended_terminal_note(buf: *mut buf_T) {
             width: 0,
             col: 0,
             pos: kVPosWinCol,
-            data: C2Rust_Unnamed_2 {
+            data: DecorVirtText_data {
                 virt_text: VirtText {
                     size: 1,
                     capacity: 0,

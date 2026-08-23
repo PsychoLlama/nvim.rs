@@ -35,9 +35,9 @@ use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    Callback, Callback_data as C2Rust_Unnamed_19, CallbackReader, ChannelPart, EvalFuncData,
-    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, garray_T, kBoolVarTrue, list_T,
-    listitem_T, typval_T, uint64_t, varnumber_T,
+    Callback, Callback_data, CallbackReader, ChannelPart, EvalFuncData, VAR_DICT, VAR_LIST,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, garray_T, kBoolVarTrue, list_T, listitem_T, typval_T,
+    uint64_t, varnumber_T,
 };
 
 pub const kChannelPartRpc: ChannelPart = 3;
@@ -51,7 +51,7 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 
 /// `CALLBACK_NONE`: no callback at all.
 const CALLBACK_NONE: Callback = Callback {
-    data: C2Rust_Unnamed_19 {
+    data: Callback_data {
         funcref: core::ptr::null_mut(),
     },
     type_0: kCallbackNone,

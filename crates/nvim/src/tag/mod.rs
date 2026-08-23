@@ -64,11 +64,10 @@ use crate::state::MODE_INSERT;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, FILE, OptInt, Timestamp, buf_T,
-    colnr_T, dict_T, dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T,
-    getf_retvalues, getf_values, int64_t, linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T,
-    ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T, typval_vval_union, varnumber_T, vimconv_T,
-    win_T,
+    AdditionalData, Callback, Callback_data, FILE, OptInt, Timestamp, buf_T, colnr_T, dict_T,
+    dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values,
+    int64_t, linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t,
+    taggy_T, typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -102,31 +101,27 @@ pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const GETF_SETMARK: getf_values = 1;
 pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
 pub const GETFILE_SAME_FILE: getf_retvalues = 0;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const FINDFILE_FILE: C2Rust_Unnamed_26 = 0;
+pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
 pub const kEqualFiles: file_comparison = 1;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const LSIZE: C2Rust_Unnamed_31 = 512;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const DT_LTAG: C2Rust_Unnamed_32 = 11;
-pub const DT_JUMP: C2Rust_Unnamed_32 = 9;
-pub const DT_HELP: C2Rust_Unnamed_32 = 8;
-pub const DT_SELECT: C2Rust_Unnamed_32 = 7;
-pub const DT_FIRST: C2Rust_Unnamed_32 = 5;
-pub const DT_PREV: C2Rust_Unnamed_32 = 4;
-pub const DT_NEXT: C2Rust_Unnamed_32 = 3;
-pub const DT_POP: C2Rust_Unnamed_32 = 2;
-pub const DT_TAG: C2Rust_Unnamed_32 = 1;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub const TAG_MANY: C2Rust_Unnamed_33 = 300;
-pub const TAG_NO_TAGFUNC: C2Rust_Unnamed_33 = 256;
-pub const TAG_KEEP_LANG: C2Rust_Unnamed_33 = 128;
-pub const TAG_INS_COMP: C2Rust_Unnamed_33 = 64;
-pub const TAG_VERBOSE: C2Rust_Unnamed_33 = 32;
-pub const TAG_NOIC: C2Rust_Unnamed_33 = 8;
-pub const TAG_REGEXP: C2Rust_Unnamed_33 = 4;
-pub const TAG_NAMES: C2Rust_Unnamed_33 = 2;
-pub const TAG_HELP: C2Rust_Unnamed_33 = 1;
+pub const LSIZE: ::core::ffi::c_uint = 512;
+pub const DT_LTAG: ::core::ffi::c_uint = 11;
+pub const DT_JUMP: ::core::ffi::c_uint = 9;
+pub const DT_HELP: ::core::ffi::c_uint = 8;
+pub const DT_SELECT: ::core::ffi::c_uint = 7;
+pub const DT_FIRST: ::core::ffi::c_uint = 5;
+pub const DT_PREV: ::core::ffi::c_uint = 4;
+pub const DT_NEXT: ::core::ffi::c_uint = 3;
+pub const DT_POP: ::core::ffi::c_uint = 2;
+pub const DT_TAG: ::core::ffi::c_uint = 1;
+pub const TAG_MANY: ::core::ffi::c_uint = 300;
+pub const TAG_NO_TAGFUNC: ::core::ffi::c_uint = 256;
+pub const TAG_KEEP_LANG: ::core::ffi::c_uint = 128;
+pub const TAG_INS_COMP: ::core::ffi::c_uint = 64;
+pub const TAG_VERBOSE: ::core::ffi::c_uint = 32;
+pub const TAG_NOIC: ::core::ffi::c_uint = 8;
+pub const TAG_REGEXP: ::core::ffi::c_uint = 4;
+pub const TAG_NAMES: ::core::ffi::c_uint = 2;
+pub const TAG_HELP: ::core::ffi::c_uint = 1;
 /// The parts of one tags-file line, as pointers into the buffer holding it.
 ///
 /// Each field is bracketed by a start and an `_end` pointer; the parts a
@@ -147,15 +142,14 @@ pub struct TagParts {
     pub user_data_end: *mut ::core::ffi::c_char,
     pub tagline: linenr_T,
 }
-pub const MT_IC_OFF: C2Rust_Unnamed_35 = 4;
-pub const MT_MASK: C2Rust_Unnamed_35 = 7;
-pub const MT_COUNT: C2Rust_Unnamed_35 = 16;
-pub const MT_GL_OTH: C2Rust_Unnamed_35 = 2;
-pub const MT_GL_CUR: C2Rust_Unnamed_35 = 1;
-pub const MT_ST_OTH: C2Rust_Unnamed_35 = 3;
-pub const MT_ST_CUR: C2Rust_Unnamed_35 = 0;
-pub const MT_RE_OFF: C2Rust_Unnamed_35 = 8;
-pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
+pub const MT_IC_OFF: ::core::ffi::c_uint = 4;
+pub const MT_MASK: ::core::ffi::c_uint = 7;
+pub const MT_COUNT: ::core::ffi::c_uint = 16;
+pub const MT_GL_OTH: ::core::ffi::c_uint = 2;
+pub const MT_GL_CUR: ::core::ffi::c_uint = 1;
+pub const MT_ST_OTH: ::core::ffi::c_uint = 3;
+pub const MT_ST_CUR: ::core::ffi::c_uint = 0;
+pub const MT_RE_OFF: ::core::ffi::c_uint = 8;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;

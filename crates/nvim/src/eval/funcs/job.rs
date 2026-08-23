@@ -3,8 +3,8 @@
 
 use super::args::frame;
 use super::{
-    C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ,
-    kChannelPartRpc, kChannelStreamProc, kProcTypePty,
+    Callback_data, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc,
+    kProcTypePty, object_data,
 };
 use crate::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
 use crate::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
@@ -68,7 +68,7 @@ const NO_READER: CallbackReader = CallbackReader {
 
 /// A cleared `Callback`.
 const NO_CALLBACK: Callback = Callback {
-    data: C2Rust_Unnamed_22 {
+    data: Callback_data {
         funcref: ptr::null_mut::<c_char>(),
     },
     type_0: kCallbackNone,
@@ -710,7 +710,7 @@ unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: *mut Er
             cstr_as_string(name.as_ptr()),
             object {
                 type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_16 { integer: value },
+                data: object_data { integer: value },
             },
             false,
             false,

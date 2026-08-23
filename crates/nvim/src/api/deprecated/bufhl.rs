@@ -168,7 +168,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
             width: 0 as ::core::ffi::c_int,
             col: 0 as ::core::ffi::c_int,
             pos: kVPosEndOfLine,
-            data: C2Rust_Unnamed_2 {
+            data: DecorVirtText_data {
                 virt_text: VirtText {
                     size: 0 as size_t,
                     capacity: 0 as size_t,

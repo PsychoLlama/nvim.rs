@@ -98,7 +98,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
                 c"callback",
                 Object {
                     type_0: kObjectTypeLuaRef,
-                    data: C2Rust_Unnamed {
+                    data: object_data {
                         luaref: api_new_luaref((*mp).m_luaref),
                     },
                 },
