@@ -12,7 +12,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Event {
     pub handler: argv_callback,
     pub argv: [*mut ::core::ffi::c_void; 10],

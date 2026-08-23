@@ -18,7 +18,6 @@ pub struct AdditionalDataBuilder {
     pub items: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Arena {
     pub cur_blk: *mut ::core::ffi::c_char,
     pub pos: size_t,
@@ -68,7 +67,6 @@ pub const kErrorTypeNone: ErrorType = -1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeValidation: ErrorType = 1;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ExtmarkInfoArray {
     pub size: size_t,
     pub capacity: size_t,

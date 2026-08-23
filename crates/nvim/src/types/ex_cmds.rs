@@ -195,7 +195,6 @@ pub struct cmdmod_T {
     pub cmod_did_esilent: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct exarg {
     pub arg: *mut ::core::ffi::c_char,
     pub args: *mut *mut ::core::ffi::c_char,

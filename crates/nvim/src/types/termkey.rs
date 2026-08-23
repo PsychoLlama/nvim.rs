@@ -16,7 +16,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TermKey {
     pub flags: ::core::ffi::c_int,
     pub canonflags: ::core::ffi::c_int,
@@ -43,7 +42,6 @@ pub struct TermKeyCsi {
     pub saved_string: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TermKeyCsiParam {
     pub param: *const ::core::ffi::c_uchar,
     pub length: size_t,
@@ -51,7 +49,6 @@ pub struct TermKeyCsiParam {
 pub type TermKeyEvent = ::core::ffi::c_uint;
 pub type TermKeyFormat = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TermKeyKey {
     pub type_0: TermKeyType,
     pub code: TermKeyKey_code,

@@ -51,7 +51,6 @@ pub struct RemoteUI {
     pub wildmenu_active: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct UIClientHandler {
     pub name: *const ::core::ffi::c_char,
     pub fn_0: Option<unsafe fn(Array) -> ()>,

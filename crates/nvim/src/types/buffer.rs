@@ -17,7 +17,6 @@ use crate::undo::store::UndoStore;
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct BufUpdateCallbacks {
     pub on_lines: LuaRef,
     pub on_bytes: LuaRef,

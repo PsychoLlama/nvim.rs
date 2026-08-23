@@ -26,7 +26,6 @@ pub struct DecorHighlightInline {
     pub conceal_char: schar_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct DecorInline {
     pub ext: bool,
     pub data: DecorInlineData,

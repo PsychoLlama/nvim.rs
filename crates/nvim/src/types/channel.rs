@@ -21,7 +21,6 @@ use super::*;
 /// The layout is pinned: `test/unit/msgpack_spec.lua` allocates one with
 /// `ffi.sizeof` and drives it by writing `read_ptr`/`read_size` directly.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Unpacker {
     pub parser: mpack_parser_t,
     pub reader: mpack_tokbuf_t,

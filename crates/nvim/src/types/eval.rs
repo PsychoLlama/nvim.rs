@@ -390,7 +390,6 @@ crate::flag_set! {
     const RO_SBX = 4;
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct evalarg_T {
     pub eval_flags: ::core::ffi::c_int,
     pub eval_getline: LineGetter,

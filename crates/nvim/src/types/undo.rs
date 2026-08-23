@@ -12,7 +12,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct u_entry {
     pub ue_next: *mut u_entry_T,
     pub ue_top: linenr_T,

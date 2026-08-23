@@ -12,7 +12,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct CharBoundsOff {
     pub begin_off: int8_t,
     pub end_off: int8_t,

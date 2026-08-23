@@ -29,7 +29,6 @@ pub struct MTKey {
     pub decor_data: DecorInlineData,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct MTPair {
     pub start: MTKey,
     pub end_pos: MTPos,
@@ -49,7 +48,6 @@ pub struct MarkTree {
     pub id2node: [Map_uint64_t_ptr_t; 1],
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct MarkTreeIter {
     pub pos: MTPos,
     pub lvl: ::core::ffi::c_int,
@@ -61,7 +59,6 @@ pub struct MarkTreeIter {
     pub intersect_pos_x: MTPos,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct MarkTreeIter_s {
     pub oldcol: ::core::ffi::c_int,
     pub i: ::core::ffi::c_int,

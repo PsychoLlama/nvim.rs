@@ -22,7 +22,6 @@ pub struct FileID {
     pub device_id: uint64_t,
 }
 #[derive(Copy, Clone, Default)]
-#[repr(C)]
 pub struct FileInfo {
     pub stat: uv_stat_t,
 }

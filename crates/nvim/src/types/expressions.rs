@@ -12,13 +12,11 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ExprAST {
     pub err: ExprASTError,
     pub root: *mut ExprASTNode,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ExprASTError {
     pub msg: *const ::core::ffi::c_char,
     pub arg: *const ::core::ffi::c_char,

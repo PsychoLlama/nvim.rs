@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TPVAR {
     pub num: ::core::ffi::c_long,
     pub string: *mut ::core::ffi::c_char,

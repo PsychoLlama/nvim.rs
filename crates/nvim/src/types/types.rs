@@ -43,7 +43,6 @@ pub struct MTDamagePair {
 }
 pub type MTNode = mtnode_s;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct MsgpackRpcRequestHandler {
     pub name: *const ::core::ffi::c_char,
     pub fn_0: ApiDispatchWrapper,

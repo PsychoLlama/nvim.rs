@@ -12,7 +12,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct GridLineEvent {
     pub args: [::core::ffi::c_int; 3],
     pub icell: ::core::ffi::c_int,

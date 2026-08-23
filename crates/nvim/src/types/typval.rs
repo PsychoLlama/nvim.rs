@@ -16,7 +16,6 @@ pub type BoolVarValue = ::core::ffi::c_uint;
 pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Callback {
     pub data: Callback_data,
     pub type_0: CallbackType,
@@ -30,7 +29,6 @@ pub union Callback_data {
     pub luaref: LuaRef,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct DictWatcher {
     pub callback: Callback,
     pub key_pattern: *mut ::core::ffi::c_char,
@@ -96,7 +94,6 @@ pub struct blobvar_S {
 }
 pub type dict_T = dictvar_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct dictvar_S {
     pub dv_lock: VarLockStatus,
     pub dv_scope: ScopeType,
@@ -188,7 +185,6 @@ pub struct listwatch_S {
 }
 pub type listwatch_T = listwatch_S;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct partial_S {
     pub pt_refcount: ::core::ffi::c_int,
     pub pt_copyID: ::core::ffi::c_int,

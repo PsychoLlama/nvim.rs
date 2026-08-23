@@ -13,7 +13,6 @@ use super::multiqueue_list::ItemList;
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct multiqueue {
     pub parent: *mut MultiQueue,
     pub on_put: PutCallback,

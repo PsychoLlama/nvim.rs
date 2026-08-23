@@ -95,7 +95,6 @@ pub(crate) const ETYPE_ARGS: etype_T = 6;
 pub(crate) const ETYPE_TOP: etype_T = 0;
 pub(crate) const kRetObject: LuaRetMode = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct mparm_T {
     pub argc: c_int,
     pub argv: *mut *mut c_char,

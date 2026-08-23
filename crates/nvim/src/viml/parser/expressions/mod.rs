@@ -115,7 +115,6 @@ pub const kExprVarScopeGlobal: ExprVarScope = 103;
 pub const kExprVarScopeScript: ExprVarScope = 115;
 pub const kExprVarScopeMissing: ExprVarScope = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprToken {
     pub start: ParserPosition,
     pub len: size_t,

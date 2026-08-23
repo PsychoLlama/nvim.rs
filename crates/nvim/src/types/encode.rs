@@ -12,7 +12,6 @@
 use super::*;
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ListReaderState {
     pub list: *const list_T,
     pub li: *const listitem_T,

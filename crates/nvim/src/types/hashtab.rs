@@ -13,13 +13,11 @@ use super::*;
 
 pub type hash_T = size_t;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct hashitem_T {
     pub hi_hash: hash_T,
     pub hi_key: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct hashtab_T {
     pub ht_mask: hash_T,
     pub ht_used: size_t,
