@@ -29,9 +29,13 @@ use crate::support::{Editor, Sandbox, cstr};
 /// field `get_sts_value` reads is set below, and `b_p_vts_array` being null
 /// is what "no 'vartabstop'" means.
 fn with_buffer(f: impl FnOnce(&mut buf_T)) {
-    let _editor = Sandbox::globals();
+    let _sandbox = Sandbox::globals();
     // Boxed rather than a local: `curbuf` is a raw pointer the crate reads
     // through, and a heap allocation has an address that is nobody else's.
+    //
+    // SAFETY: every field of a `buf_T` is valid all-zero -- null pointers,
+    // false flags and zeroed counters, which is what `xcalloc` hands
+    // `buflist_new` for a real one.
     let mut buf: Box<buf_T> = Box::new(unsafe { std::mem::zeroed() });
     let saved = curbuf.get();
     curbuf.set(&raw mut *buf);
