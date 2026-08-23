@@ -200,6 +200,19 @@ A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
 every local and CI build instead, so the counter is retired.
 
+One thing here is not a count but a hard check, and it fails the run outright:
+**a write through an accessor that answers by value**. `f().field = x`
+compiles when `f` returns a value — the assignment lands in a temporary that
+is dropped on the next line, and the write is a silent no-op. Three of those
+shipped past `cargo test`, the unit suite, Miri and 2 743 functional tests;
+only `oldtest test_profile` caught them, because it is the only lane that
+reads a derived number back. The check is name-based and deliberately
+over-approximating in the *safe* direction: a call is accepted if **any** `fn`
+of that name in the tree answers with a place (a `&`/`*` type, or a newtype
+that `impl DerefMut`s, which is how `cur_buf()`/`cur_win()` write through a
+pointer). So a same-named sibling can hide a real one; what it cannot do is
+cry wolf, which is what would get it switched off.
+
 Everything is measured over a *masked* copy of the source, in which comments,
 string literals and character literals are blanked out (offsets and newlines
 preserved) so that only code is scanned. That is what makes the counts mean
@@ -288,6 +301,113 @@ CFG_TEST_MOD = re.compile(
 
 # Metrics computed from the source rather than counted with a needle.
 DERIVED = ("unsafe_lines", "missing_safety_doc")
+
+# `accessor().field = value` and its compound-assignment forms, which is a
+# silent no-op when `accessor` answers by value. Nullary on purpose: that is
+# the shape an accessor has, and requiring it keeps the needle away from
+# builder chains. `=(?!=)` so a comparison is not a write.
+PLACE_WRITE = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\.\s*[A-Za-z_][A-Za-z0-9_]*"
+    r"\s*(?:[-+*/%|&^]|<<|>>)?=(?!=)"
+)
+# A newtype whose `.field` reaches through to something it points at.
+DEREF_MUT = re.compile(
+    r"\bimpl(?:<[^>]*>)?\s+(?:[A-Za-z0-9_]+::)*DerefMut\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
+)
+FN_NAME = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def balanced(text, start, opens, closes):
+    """The index just past the bracket group beginning at `start`."""
+    depth = 0
+    i = start
+    while i < len(text):
+        if text[i] in opens:
+            depth += 1
+        elif text[i] in closes:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return i
+
+
+def fn_returns(masked, out):
+    """name -> the set of return types every `fn` of that name declares."""
+    for match in FN_NAME.finditer(masked):
+        i = match.end()
+        while i < len(masked) and masked[i].isspace():
+            i += 1
+        if i < len(masked) and masked[i] == "<":  # generic parameters
+            i = balanced(masked, i, "<", ">")
+        while i < len(masked) and masked[i].isspace():
+            i += 1
+        if i >= len(masked) or masked[i] != "(":
+            continue  # not a definition: a `fn` type, or a trait bound
+        i = balanced(masked, i, "(", ")")
+        while i < len(masked) and masked[i].isspace():
+            i += 1
+        if masked[i : i + 2] != "->":
+            out.setdefault(match.group(1), set()).add("()")
+            continue
+        i += 2
+        end, depth = i, 0
+        while end < len(masked):
+            char = masked[end]
+            if char in "<([":
+                depth += 1
+            elif char in ">)]":
+                depth -= 1
+            elif depth == 0 and (char in "{;" or masked[end : end + 6] == "where "):
+                break
+            end += 1
+        out.setdefault(match.group(1), set()).add(masked[i:end].strip())
+
+
+def is_place(ty, deref_mut):
+    """Whether `.field` on a value of this type resolves to somewhere real."""
+    return (
+        ty.startswith("&")
+        or ty.startswith("*")
+        # `Self` in an inherent impl of a newtype; the impl block's own type is
+        # not in reach of a name-keyed scan, and every one of these in the tree
+        # is a handle.
+        or ty == "Self"
+        or ty in deref_mut
+    )
+
+
+def place_writes(tree):
+    """`accessor().field = …` where the accessor answers by value."""
+    returns = {}
+    deref_mut = set()
+    for masked in tree.values():
+        deref_mut.update(DEREF_MUT.findall(masked))
+        fn_returns(masked, returns)
+    found = []
+    for file, masked in sorted(tree.items()):
+        for match in PLACE_WRITE.finditer(masked):
+            declared = returns.get(match.group(1))
+            if declared is None or any(is_place(t, deref_mut) for t in declared):
+                continue
+            line = masked.count("\n", 0, match.start()) + 1
+            found.append(
+                f"  {file}:{line}: {match.group(1)}() answers with "
+                f"{' or '.join(sorted(declared))}"
+            )
+    return found
+
+
+def check_place_writes(tree):
+    if found := place_writes(tree):
+        sys.exit(
+            "ratchet: a write through an accessor that answers by value is a "
+            "silent no-op — the assignment lands in a temporary:\n"
+            + "\n".join(found)
+            + "\nTake `&mut`/`*mut` from the accessor, or write through the "
+            "cell the accessor reads."
+        )
+
 
 IDENT = re.compile(r"[A-Za-z0-9_]")
 IDENT_AT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -530,8 +650,10 @@ def measure():
     """(repo-relative file -> {metric: count} with zeros included,
     number of files not carrying the forbid attribute,
     number of files carrying neither forbid nor the unsafe-op deny,
-    number of files not carrying the cast deny)."""
+    number of files not carrying the cast deny,
+    repo-relative file -> its masked source, for the whole-tree checks)."""
     stats = {}
+    tree = {}
     without_forbid = 0
     without_deny = 0
     without_casts = 0
@@ -551,10 +673,11 @@ def measure():
         counts["missing_safety_doc"] = missing_safety_doc(text, masked)
         counts["lines"] = len(text.splitlines()) - len(test_module_lines(masked))
         stats[str(path.relative_to(ROOT))] = counts
+        tree[str(path.relative_to(ROOT))] = masked
         without_forbid += FORBID not in masked
         without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
         without_casts += DENY_CASTS.search(masked) is None
-    return stats, without_forbid, without_deny, without_casts
+    return stats, without_forbid, without_deny, without_casts, tree
 
 
 def ledgers():
@@ -777,6 +900,28 @@ SELF_TEST_DENY = [
     ("unsafe fn f() {\n    g();\n}\n", 0),
     ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 3),
 ]
+# (source, expected number of by-value accessor writes)
+SELF_TEST_PLACE_WRITE = [
+    # The shape that shipped three silent no-ops: a value accessor, written to.
+    ("fn a() -> E {\n    E\n}\nfn f() {\n    a().x = 1;\n}\n", 1),
+    ("fn a() -> E {\n    E\n}\nfn f() {\n    a().x += 1;\n}\n", 1),
+    # Accessors that answer with a place.
+    ("fn a() -> &mut E {\n}\nfn f() {\n    a().x = 1;\n}\n", 0),
+    ("fn a() -> *mut E {\n}\nfn f() {\n    a().x = 1;\n}\n", 0),
+    # A handle newtype: `.x` reaches through to what it points at.
+    ("impl DerefMut for H {}\nfn a() -> H {\n}\nfn f() {\n    a().x = 1;\n}\n", 0),
+    (
+        "impl core::ops::DerefMut for H {}\nfn a() -> H {}\nfn f() {\n    a().x = 1;\n}\n",
+        0,
+    ),
+    # A comparison is not a write, and neither is a call with arguments.
+    ("fn a() -> E {}\nfn f() {\n    if a().x == 1 {}\n}\n", 0),
+    ("fn a(n: c_int) -> E {}\nfn f() {\n    a(1).x = 1;\n}\n", 0),
+    # An unknown name is left alone: it is someone else's method.
+    ("fn f() {\n    unknown().x = 1;\n}\n", 0),
+    # Prose about one costs nothing.
+    ("fn a() -> E {}\n// a().x = 1;\n", 0),
+]
 # (source, expected pub_items)
 SELF_TEST_PUB_ITEMS = [
     ("pub fn f() {}\n", 1),
@@ -829,6 +974,9 @@ def self_test():
     for source, expected in SELF_TEST_PUB_ITEMS:
         got = len(needle.findall(mask(source)))
         assert got == expected, f"pub_items={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_PLACE_WRITE:
+        got = len(place_writes({"t.rs": mask(source)}))
+        assert got == expected, f"place_writes={got}, want {expected}, for {source!r}"
 
 
 def main():
@@ -837,7 +985,8 @@ def main():
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     self_test()
-    stats, without_forbid, without_deny, without_casts = measure()
+    stats, without_forbid, without_deny, without_casts, tree = measure()
+    check_place_writes(tree)
     counts = ledgers()
     content = render(stats, counts, without_forbid, without_deny, without_casts)
     committed = BASELINE.read_text() if BASELINE.exists() else None
