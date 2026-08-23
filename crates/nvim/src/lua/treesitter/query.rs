@@ -238,9 +238,8 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
                     if (*step.add(k)).type_0 as ::core::ffi::c_uint
                         == TSQueryPredicateStepTypeDone as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        let c2rust_fresh0 = nextpred;
+                        lua_rawseti(L, -2 as ::core::ffi::c_int, nextpred);
                         nextpred += 1;
-                        lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh0);
                         lua_createtable(L, 3 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
                         nextitem = 1 as ::core::ffi::c_int;
                     } else {
@@ -266,9 +265,8 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
                         } else {
                             abort();
                         }
-                        let c2rust_fresh1 = nextitem;
+                        lua_rawseti(L, -2 as ::core::ffi::c_int, nextitem);
                         nextitem += 1;
-                        lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh1);
                     }
                     k = k.wrapping_add(1);
                 }

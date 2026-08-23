@@ -296,9 +296,8 @@ pub unsafe fn skip_vimgrep_pat(
             }
             p = skiptowhite(p);
             if !s.is_null() && *p as ::core::ffi::c_int != NUL {
-                let c2rust_fresh13 = p;
+                *p = NUL as ::core::ffi::c_char;
                 p = p.offset(1);
-                *c2rust_fresh13 = NUL as ::core::ffi::c_char;
             }
         } else {
             if !s.is_null() {

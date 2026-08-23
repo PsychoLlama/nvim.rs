@@ -128,12 +128,12 @@ pub unsafe extern "C" fn vim_snprintf_add(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,
-    mut c2rust_args: ...
+    mut args: ...
 ) -> c_int {
     unsafe {
         let len = strlen(str);
         let space = str_m.saturating_sub(len);
-        vim_vsnprintf(str.add(len), space, fmt, c2rust_args.clone())
+        vim_vsnprintf(str.add(len), space, fmt, args.clone())
     }
 }
 
@@ -146,9 +146,9 @@ pub unsafe extern "C" fn vim_snprintf(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,
-    mut c2rust_args: ...
+    mut args: ...
 ) -> c_int {
-    unsafe { vim_vsnprintf(str, str_m, fmt, c2rust_args.clone()) }
+    unsafe { vim_vsnprintf(str, str_m, fmt, args.clone()) }
 }
 
 /// Like `vim_snprintf` but with a return value that can safely increment a
@@ -157,13 +157,13 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,
-    mut c2rust_args: ...
+    mut args: ...
 ) -> size_t {
     unsafe {
         if str_m == 0 {
             return 0;
         }
-        let str_l = vim_vsnprintf_typval(str, str_m, fmt, c2rust_args.clone(), ptr::null_mut());
+        let str_l = vim_vsnprintf_typval(str, str_m, fmt, args.clone(), ptr::null_mut());
         if str_l < 0 {
             *str = 0;
             return 0;
@@ -216,7 +216,7 @@ const TMP_LEN: c_int = 350;
 pub unsafe extern "C" fn kv_do_printf(
     str: *mut StringBuilder,
     fmt: *const c_char,
-    mut c2rust_args: ...
+    mut args: ...
 ) -> c_int {
     unsafe {
         let remaining = (*str).capacity - (*str).size;
@@ -225,7 +225,7 @@ pub unsafe extern "C" fn kv_do_printf(
         } else {
             (*str).items.add((*str).size)
         };
-        let mut printed = vsnprintf(tail, remaining, fmt, c2rust_args.clone());
+        let mut printed = vsnprintf(tail, remaining, fmt, args.clone());
         if printed < 0 {
             return -1;
         }
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn kv_do_printf(
                 (*str).items.add((*str).size),
                 (*str).capacity - (*str).size,
                 fmt,
-                c2rust_args.clone(),
+                args.clone(),
             );
             if printed < 0 {
                 return -1;
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn kv_do_printf(
 pub unsafe extern "C" fn arena_printf(
     arena: *mut Arena,
     fmt: *const c_char,
-    mut c2rust_args: ...
+    mut args: ...
 ) -> String_0 {
     unsafe {
         let mut remaining: size_t = 0;
@@ -281,14 +281,14 @@ pub unsafe extern "C" fn arena_printf(
             buf = (*arena).cur_blk.add((*arena).pos);
         }
 
-        let mut printed = vsnprintf(buf, remaining, fmt, c2rust_args.clone());
+        let mut printed = vsnprintf(buf, remaining, fmt, args.clone());
         if printed < 0 {
             return String_0::NULL;
         }
 
         if printed as size_t >= remaining {
             buf = arena_alloc(arena, printed as size_t + 1, false) as *mut c_char;
-            printed = vsnprintf(buf, printed as size_t + 1, fmt, c2rust_args.clone());
+            printed = vsnprintf(buf, printed as size_t + 1, fmt, args.clone());
             if printed < 0 {
                 return String_0::NULL;
             }

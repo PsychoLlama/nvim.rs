@@ -1805,11 +1805,3 @@ pub static float_anchor_str: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
 ]);
 pub(crate) const WRITEBIN: [c_char; 3] = c_bytes(b"wb\0");
 pub(crate) const APPENDBIN: [c_char; 3] = c_bytes(b"ab\0");
-unsafe extern "C" fn c2rust_run_static_initializers() {
-    kTVCstring.set((18446744073709551615 as size_t).wrapping_sub(1 as size_t));
-}
-#[used]
-#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
-#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
-#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
-static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

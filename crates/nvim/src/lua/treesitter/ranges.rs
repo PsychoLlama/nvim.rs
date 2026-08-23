@@ -30,32 +30,26 @@ pub(crate) unsafe fn push_ranges(
             );
             let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             lua_pushnumber(L, (*ranges.add(i)).start_point.row as lua_Number);
-            let c2rust_fresh2 = j;
+            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
             j += 1;
-            lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh2);
             lua_pushnumber(L, (*ranges.add(i)).start_point.column as lua_Number);
-            let c2rust_fresh3 = j;
+            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
             j += 1;
-            lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh3);
             if include_bytes {
                 lua_pushnumber(L, (*ranges.add(i)).start_byte as lua_Number);
-                let c2rust_fresh4 = j;
+                lua_rawseti(L, -2 as ::core::ffi::c_int, j);
                 j += 1;
-                lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh4);
             }
             lua_pushnumber(L, (*ranges.add(i)).end_point.row as lua_Number);
-            let c2rust_fresh5 = j;
+            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
             j += 1;
-            lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh5);
             lua_pushnumber(L, (*ranges.add(i)).end_point.column as lua_Number);
-            let c2rust_fresh6 = j;
+            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
             j += 1;
-            lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh6);
             if include_bytes {
                 lua_pushnumber(L, (*ranges.add(i)).end_byte as lua_Number);
-                let c2rust_fresh7 = j;
+                lua_rawseti(L, -2 as ::core::ffi::c_int, j);
                 j += 1;
-                lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh7);
             }
             lua_rawseti(
                 L,
