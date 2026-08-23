@@ -181,8 +181,7 @@ fn own_line(line: &[u8]) -> *mut c_char {
 /// # Safety
 /// `data` must be a live `list_T *` and `buf` must be readable for `len`
 /// bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size_t) {
+pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size_t) {
     if len == 0 {
         return;
     }

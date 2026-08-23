@@ -92,8 +92,7 @@ const fn bool_tv(value: bool) -> typval_T {
 /// # Safety
 /// `buf` is a live, non-NULL buffer of `buf_len` bytes and `rettv` is
 /// writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn json_decode_string(
+pub unsafe fn json_decode_string(
     buf: *const c_char,
     buf_len: size_t,
     rettv: *mut typval_T,

@@ -139,10 +139,12 @@ def deps_libraries():
 
 
 # Spec references built with string concatenation, which the token scan
-# cannot see. testutil.lua's alloc_log_new rebinds the allocator seam at
-# runtime via self.lib['mem_' .. funcname] — deleting these exports breaks
-# every spec that asserts on allocation logs.
-DYNAMIC_SPEC_REFS = {"mem_malloc", "mem_free", "mem_calloc", "mem_realloc"}
+# cannot see: a spec that reaches an export as `lib['pre' .. 'fix']` has to
+# be listed here by hand. Empty since the allocator seam went — testutil.lua's
+# alloc_log_new rebound `mem_malloc`/`mem_free`/`mem_calloc`/`mem_realloc`
+# through `self.lib['mem_' .. funcname]`, and the specs that used it now
+# record allocations through `crate::memory::alloc_log` instead.
+DYNAMIC_SPEC_REFS: set[str] = set()
 
 
 # ffi.cdef arguments in functional specs: a long-bracket string (optionally

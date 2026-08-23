@@ -40,11 +40,6 @@ end
 --- @field func function
 --- @field args any[]
 
---- @class ChildCallLog
---- @field func string
---- @field args any[]
---- @field ret any?
-
 local child_calls_init = {} --- @type ChildCall[]
 local child_calls_mod = nil --- @type ChildCall[]
 local child_calls_mod_once = nil --- @type ChildCall[]?
@@ -364,110 +359,6 @@ if is_child_cdefs() then
   cimportstr = child_call(_cimportstr, lib)
 else
   cimportstr = _cimportstr
-end
-
-local function alloc_log_new()
-  local log = {
-    log = {}, --- @type ChildCallLog[]
-    lib = cimport('./src/nvim/memory.h'), --- @type table<string,function>
-    original_functions = {}, --- @type table<string,function>
-    null = { ['\0:is_null'] = true },
-  }
-
-  local allocator_functions = { 'malloc', 'free', 'calloc', 'realloc' }
-
-  function log:save_original_functions()
-    for _, funcname in ipairs(allocator_functions) do
-      if not self.original_functions[funcname] then
-        self.original_functions[funcname] = self.lib['mem_' .. funcname]
-      end
-    end
-  end
-
-  log.save_original_functions = child_call(log.save_original_functions)
-
-  function log:set_mocks()
-    for _, k in ipairs(allocator_functions) do
-      do
-        local kk = k
-        self.lib['mem_' .. k] = function(...)
-          --- @type ChildCallLog
-          local log_entry = { func = kk, args = { ... } }
-          self.log[#self.log + 1] = log_entry
-          if kk == 'free' then
-            self.original_functions[kk](...)
-          else
-            log_entry.ret = self.original_functions[kk](...)
-          end
-          for i, v in ipairs(log_entry.args) do
-            if v == nil then
-              -- XXX This thing thinks that {NULL} ~= {NULL}.
-              log_entry.args[i] = self.null
-            end
-          end
-          if self.hook then
-            self:hook(log_entry)
-          end
-          if log_entry.ret then
-            return log_entry.ret
-          end
-        end
-      end
-    end
-    -- JIT-compiled FFI calls cannot call back into Lua, so disable JIT.
-    -- Ref: https://luajit.org/ext_ffi_semantics.html#callback
-    jit.off()
-  end
-
-  log.set_mocks = child_call(log.set_mocks)
-
-  function log:clear()
-    self.log = {}
-  end
-
-  function log:check(exp)
-    eq(exp, self.log)
-    self:clear()
-  end
-
-  function log:clear_tmp_allocs(clear_null_frees)
-    local toremove = {} --- @type integer[]
-    local allocs = {} --- @type table<string,integer>
-    for i, v in ipairs(self.log) do
-      if v.func == 'malloc' or v.func == 'calloc' then
-        allocs[tostring(v.ret)] = i
-      elseif v.func == 'realloc' or v.func == 'free' then
-        if allocs[tostring(v.args[1])] then
-          toremove[#toremove + 1] = allocs[tostring(v.args[1])]
-          if v.func == 'free' then
-            toremove[#toremove + 1] = i
-          end
-        elseif clear_null_frees and v.args[1] == self.null then
-          toremove[#toremove + 1] = i
-        end
-        if v.func == 'realloc' then
-          allocs[tostring(v.ret)] = i
-        end
-      end
-    end
-    table.sort(toremove)
-    for i = #toremove, 1, -1 do
-      table.remove(self.log, toremove[i])
-    end
-  end
-
-  function log:setup()
-    log:save_original_functions()
-    log:set_mocks()
-  end
-
-  function log:before_each() end
-
-  function log:after_each() end
-
-  log:setup()
-
-  return log
 end
 
 -- take a pointer to a C-allocated string and return an interned
@@ -967,7 +858,6 @@ local M = {
   NULL = ffi.cast('void*', 0),
   OK = 1,
   FAIL = 0,
-  alloc_log_new = alloc_log_new,
   gen_itp = gen_itp,
   only_separate = only_separate,
   child_call_once = child_call_once,

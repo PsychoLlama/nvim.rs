@@ -14,12 +14,7 @@ use crate::semsg_c;
 use crate::types::{FAIL, OK};
 
 /// Link `ni` into `l` in front of `item`, or at the tail when `item` is NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_insert(
-    l: *mut list_T,
-    ni: *mut listitem_T,
-    item: *mut listitem_T,
-) {
+pub unsafe fn tv_list_insert(l: *mut list_T, ni: *mut listitem_T, item: *mut listitem_T) {
     unsafe {
         if item.is_null() {
             // Append new item at end of list.
@@ -48,12 +43,7 @@ pub unsafe extern "C" fn tv_list_insert(
 }
 
 /// Insert a copy of `tv` into `l` in front of `item`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_insert_tv(
-    l: *mut list_T,
-    tv: *mut typval_T,
-    item: *mut listitem_T,
-) {
+pub unsafe fn tv_list_insert_tv(l: *mut list_T, tv: *mut typval_T, item: *mut listitem_T) {
     unsafe {
         let ni = tv_list_item_alloc();
         tv_copy(tv, &raw mut (*ni).li_tv);
@@ -82,8 +72,7 @@ pub unsafe extern "C" fn tv_list_append(l: *mut list_T, item: *mut listitem_T) {
 }
 
 /// Append a copy of `tv` to `l`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T) {
+pub unsafe fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T) {
     unsafe {
         let li = tv_list_item_alloc();
         tv_copy(tv, &raw mut (*li).li_tv);
@@ -94,8 +83,7 @@ pub unsafe extern "C" fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T) {
 /// Append `tv` to `l`, taking over whatever it owns.
 ///
 /// Answers the appended item's value, so the caller can keep filling it in.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T {
+pub unsafe fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T {
     unsafe {
         let li = tv_list_item_alloc();
         (*li).li_tv = tv;
@@ -105,8 +93,7 @@ pub unsafe extern "C" fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -
 }
 
 /// Append `itemlist` to `l`, taking a reference to it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T) {
+pub unsafe fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T) {
     unsafe {
         tv_list_append_owned_tv(
             l,
@@ -121,8 +108,7 @@ pub unsafe extern "C" fn tv_list_append_list(l: *mut list_T, itemlist: *mut list
 }
 
 /// Append `dict` to `l`, taking a reference to it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) {
+pub unsafe fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) {
     unsafe {
         tv_list_append_owned_tv(
             l,
@@ -142,12 +128,7 @@ pub unsafe extern "C" fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) 
 ///
 /// A negative `len` means the whole NUL-terminated string; a NULL `str`
 /// appends a NULL string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append_string(
-    l: *mut list_T,
-    str: *const ::core::ffi::c_char,
-    len: ssize_t,
-) {
+pub unsafe fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t) {
     unsafe {
         let copied = if str.is_null() {
             ::core::ptr::null_mut()
@@ -161,11 +142,7 @@ pub unsafe extern "C" fn tv_list_append_string(
 }
 
 /// Append `str` to `l`, taking ownership of the allocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append_allocated_string(
-    l: *mut list_T,
-    str: *mut ::core::ffi::c_char,
-) {
+pub unsafe fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char) {
     unsafe {
         tv_list_append_owned_tv(
             l,
@@ -179,8 +156,7 @@ pub unsafe extern "C" fn tv_list_append_allocated_string(
 }
 
 /// Append the number `n` to `l`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_append_number(l: *mut list_T, n: varnumber_T) {
+pub unsafe fn tv_list_append_number(l: *mut list_T, n: varnumber_T) {
     unsafe {
         tv_list_append_owned_tv(
             l,
@@ -198,8 +174,7 @@ pub unsafe extern "C" fn tv_list_append_number(l: *mut list_T, n: varnumber_T) {
 /// `copyID` is the garbage collector's mark: non-zero records the copy on the
 /// original *before* any item is added, so a list containing itself resolves
 /// to the same copy.  Answers NULL when a deep copy of an item failed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_copy(
+pub unsafe fn tv_list_copy(
     conv: *const vimconv_T,
     orig: *mut list_T,
     deep: bool,
@@ -247,8 +222,7 @@ pub unsafe extern "C" fn tv_list_copy(
 }
 
 /// Insert copies of `l2`'s items into `l1` in front of `bef`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T) {
+pub unsafe fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T) {
     unsafe {
         let mut todo = tv_list_len(l2);
         let befbef = if bef.is_null() {
@@ -279,8 +253,7 @@ pub unsafe extern "C" fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *
 }
 
 /// `l1 + l2`: store a shallow copy of the two lists joined in `tv`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_concat(
+pub unsafe fn tv_list_concat(
     l1: *mut list_T,
     l2: *mut list_T,
     tv: *mut typval_T,
@@ -383,8 +356,7 @@ pub unsafe fn tv_list_remove(
 
 /// Whether `l1` and `l2` hold equal items in the same order.  An empty list and
 /// a NULL one are equal.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: bool) -> bool {
+pub unsafe fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: bool) -> bool {
     unsafe {
         if l1 == l2 {
             return true;
@@ -437,8 +409,7 @@ pub unsafe fn tv_list_reverse(l: *mut list_T) {
 ///
 /// Caches the index it lands on in the list, and starts the next walk from
 /// whichever of the head, the tail and that cache is nearest.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T {
+pub unsafe fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T {
     unsafe {
         if l.is_null() {
             return ::core::ptr::null_mut();
@@ -488,8 +459,7 @@ pub unsafe extern "C" fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> 
 
 /// The number at index `n` of `l`.  Sets `*ret_error` when there is no such
 /// item.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_find_nr(
+pub unsafe fn tv_list_find_nr(
     l: *mut list_T,
     n: ::core::ffi::c_int,
     ret_error: *mut bool,
@@ -507,8 +477,7 @@ pub unsafe extern "C" fn tv_list_find_nr(
 }
 
 /// The string at index `n` of `l`, or NULL with `E684` raised.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_find_str(
+pub unsafe fn tv_list_find_str(
     l: *mut list_T,
     n: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
@@ -546,11 +515,7 @@ pub(crate) unsafe fn tv_list_find_index(
 }
 
 /// The index of `item` in `l`, or -1 when it is not there.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_idx_of_item(
-    l: *const list_T,
-    item: *const listitem_T,
-) -> ::core::ffi::c_int {
+pub unsafe fn tv_list_idx_of_item(l: *const list_T, item: *const listitem_T) -> ::core::ffi::c_int {
     unsafe {
         if l.is_null() {
             return -1;

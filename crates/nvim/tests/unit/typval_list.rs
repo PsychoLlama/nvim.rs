@@ -198,7 +198,7 @@ fn removing_a_watch_unlinks_it_without_freeing() {
             watch(l, (*l).lv_first),
             watch(l, (*l).lv_first),
         ];
-        let at = |lw: &Box<listwatch_T>| (&raw const **lw).cast_mut();
+        let at = |lw: &listwatch_T| (&raw const *lw).cast_mut();
         log.clear();
 
         // The newest is at the head, so removing the middle one leaves the
@@ -278,7 +278,8 @@ unsafe fn three_lists(log: &AllocLog) -> [(*mut list_T, Vec<*mut std::ffi::c_voi
         ]);
         out.push((l3, vec![inner.cast(), (*l3).lv_first.cast(), l3.cast()]));
     }
-    out.try_into().ok().expect("three lists")
+    out.try_into()
+        .unwrap_or_else(|_| unreachable!("three lists"))
 }
 
 /// `describe('free()') itp('recursively frees list')`, spec line 290.

@@ -235,12 +235,7 @@ pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 ///
 /// `vcp` must be writable and hold either a valid plan or zeroed memory;
 /// `from` and `to` must be null or NUL-terminated.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn convert_setup(
-    vcp: *mut vimconv_T,
-    from: *mut c_char,
-    to: *mut c_char,
-) -> c_int {
+pub unsafe fn convert_setup(vcp: *mut vimconv_T, from: *mut c_char, to: *mut c_char) -> c_int {
     unsafe { convert_setup_ext(vcp, from, true, to, true) }
 }
 

@@ -588,8 +588,10 @@ fn the_type_checks_read_only_the_type() {
         );
         log.clear();
 
-        type Check = (&'static str, unsafe extern "C" fn(*const typval_T) -> bool);
-        let checks: [(Check, [(VarType, Option<&str>); 9]); 3] = [
+        type Check = (&'static str, unsafe fn(*const typval_T) -> bool);
+        /// One check, and the nine rows it is stated over.
+        type Table = (Check, [(VarType, Option<&'static str>); 9]);
+        let checks: [Table; 3] = [
             (
                 ("str_or_nr", tv_check_str_or_nr),
                 [

@@ -145,8 +145,7 @@ unsafe fn cbytes<'a>(s: *const c_char) -> &'a [u8] {
 ///
 /// `gap` points to a live `garray_T` whose `ga_data` is null or an
 /// `xmalloc`-family allocation this call takes over.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ga_clear(gap: *mut garray_T) {
+pub unsafe fn ga_clear(gap: *mut garray_T) {
     // SAFETY: the caller's array, and its own data allocation.
     let ga = unsafe { &mut *gap };
     unsafe { xfree(ga.ga_data) };
@@ -177,8 +176,7 @@ pub unsafe fn ga_clear_strings(gap: *mut garray_T) {
 ///
 /// `gap` points to writable, possibly uninitialized `garray_T` storage. Any
 /// allocation it already held is leaked, as upstream's is.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: c_int) {
+pub unsafe fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: c_int) {
     // SAFETY: the caller's storage, written before anything reads it.
     let ga = unsafe { &mut *gap };
     ga.ga_data = ptr::null_mut();

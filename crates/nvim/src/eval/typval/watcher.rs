@@ -28,8 +28,7 @@ pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
 
 /// Register `callback` to fire when a key of `dict` matching `key_pattern`
 /// changes.  A trailing `*` in the pattern matches a prefix.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_watcher_add(
+pub unsafe fn tv_dict_watcher_add(
     dict: *mut dict_T,
     key_pattern: *const ::core::ffi::c_char,
     key_pattern_len: size_t,
@@ -169,8 +168,7 @@ pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut :
 /// A watcher removed while any watcher on the queue is mid-callback is only
 /// marked `needs_free`; [`tv_dict_watcher_notify`] unlinks it when the walk
 /// that is running finishes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_watcher_remove(
+pub unsafe fn tv_dict_watcher_remove(
     dict: *mut dict_T,
     key_pattern: *const ::core::ffi::c_char,
     key_pattern_len: size_t,

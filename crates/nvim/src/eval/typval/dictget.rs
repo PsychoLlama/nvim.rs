@@ -80,8 +80,7 @@ pub(crate) unsafe fn tv_string2items(argvars: *mut typval_T, rettv: *mut typval_
 /// The item `d[key]`, or NULL when there is none.
 ///
 /// A negative `len` means `key` is NUL-terminated.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_find(
+pub unsafe fn tv_dict_find(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     len: ptrdiff_t,
@@ -124,11 +123,7 @@ pub unsafe fn tv_dict_get_tv(
 }
 
 /// `d[key]` as a number, or 0 when there is no such key.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_get_number(
-    d: *const dict_T,
-    key: *const ::core::ffi::c_char,
-) -> varnumber_T {
+pub unsafe fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T {
     unsafe { tv_dict_get_number_def(d, key, 0) }
 }
 
@@ -195,8 +190,7 @@ pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char
 /// With `save`, the answer is a fresh allocation the caller owns; without it,
 /// the answer may point into that shared buffer and only lasts until the next
 /// call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_get_string(
+pub unsafe fn tv_dict_get_string(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     save: bool,
@@ -212,8 +206,7 @@ pub unsafe extern "C" fn tv_dict_get_string(
 }
 
 /// `d[key]` as a string, formatting a number into `numbuf`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_get_string_buf(
+pub unsafe fn tv_dict_get_string_buf(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     numbuf: *mut ::core::ffi::c_char,
@@ -229,8 +222,7 @@ pub unsafe extern "C" fn tv_dict_get_string_buf(
 
 /// [`tv_dict_get_string_buf`] answering `def` for a missing key, and NULL with
 /// an error raised for a value that has no string form.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_get_string_buf_chk(
+pub unsafe fn tv_dict_get_string_buf_chk(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     key_len: ptrdiff_t,
@@ -250,8 +242,7 @@ pub unsafe extern "C" fn tv_dict_get_string_buf_chk(
 ///
 /// A missing key answers true with `result` left as `kCallbackNone`; a value
 /// that is neither a function nor a string answers false with `E6000` raised.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_get_callback(
+pub unsafe fn tv_dict_get_callback(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: ptrdiff_t,

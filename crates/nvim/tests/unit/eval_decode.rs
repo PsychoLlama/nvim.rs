@@ -101,7 +101,7 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
     // past it unless the decoder is wrong, which is the assertion.
     unsafe {
         let mut rettv = unset();
-        for byte in [b'n', b't', b'f', b'"'] {
+        for &byte in b"ntf\"" {
             let one = xmemdup((&raw const byte).cast(), 1);
             assert_eq!(
                 json_decode_string(one.cast(), 1, &raw mut rettv),

@@ -18,11 +18,7 @@ pub(crate) unsafe fn tv_list_item_alloc() -> *mut listitem_T {
 /// Remove `item` from `l`, clear its value and free it.
 ///
 /// Answers the item that followed it, or NULL when it was the last one.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_item_remove(
-    l: *mut list_T,
-    item: *mut listitem_T,
-) -> *mut listitem_T {
+pub unsafe fn tv_list_item_remove(l: *mut list_T, item: *mut listitem_T) -> *mut listitem_T {
     unsafe {
         let next_item = (*item).li_next;
         tv_list_drop_items(l, item, item);
@@ -33,8 +29,7 @@ pub unsafe extern "C" fn tv_list_item_remove(
 }
 
 /// Push `lw` onto `l`'s watcher chain.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_watch_add(l: *mut list_T, lw: *mut listwatch_T) {
+pub unsafe fn tv_list_watch_add(l: *mut list_T, lw: *mut listwatch_T) {
     unsafe {
         (*lw).lw_next = (*l).lv_watch;
         (*l).lv_watch = lw;
@@ -42,8 +37,7 @@ pub unsafe extern "C" fn tv_list_watch_add(l: *mut list_T, lw: *mut listwatch_T)
 }
 
 /// Unlink `lwrem` from `l`'s watcher chain.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_watch_remove(l: *mut list_T, lwrem: *mut listwatch_T) {
+pub unsafe fn tv_list_watch_remove(l: *mut list_T, lwrem: *mut listwatch_T) {
     unsafe {
         // `lwp` trails `lw` by one link so the match can be spliced out.
         let mut lwp = &raw mut (*l).lv_watch;
@@ -132,8 +126,7 @@ pub unsafe fn tv_list_init_static(l: *mut list_T) {
 }
 
 /// Free every item in `l`, leaving the list itself allocated and empty.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_free_contents(l: *mut list_T) {
+pub unsafe fn tv_list_free_contents(l: *mut list_T) {
     unsafe {
         // Unlink each item before clearing it: `tv_clear` can re-enter.
         let mut item = (*l).lv_first;
@@ -151,8 +144,7 @@ pub unsafe extern "C" fn tv_list_free_contents(l: *mut list_T) {
 }
 
 /// Unlink `l` from the garbage collector's chain and free the `list_T` itself.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_free_list(l: *mut list_T) {
+pub unsafe fn tv_list_free_list(l: *mut list_T) {
     unsafe {
         // Remove the list from the list of lists for garbage collection.
         match (*l).lv_used_prev.as_mut() {
@@ -199,12 +191,7 @@ pub unsafe extern "C" fn tv_list_unref(l: *mut list_T) {
 }
 
 /// Unlink the items `item..=item2` from `l` without freeing them.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_drop_items(
-    l: *mut list_T,
-    item: *mut listitem_T,
-    item2: *mut listitem_T,
-) {
+pub unsafe fn tv_list_drop_items(l: *mut list_T, item: *mut listitem_T, item2: *mut listitem_T) {
     unsafe {
         // Notify watchers.
         let mut ip = item;
@@ -227,12 +214,7 @@ pub unsafe extern "C" fn tv_list_drop_items(
 }
 
 /// Unlink the items `item..=item2` from `l` and free them.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_remove_items(
-    l: *mut list_T,
-    item: *mut listitem_T,
-    item2: *mut listitem_T,
-) {
+pub unsafe fn tv_list_remove_items(l: *mut list_T, item: *mut listitem_T, item2: *mut listitem_T) {
     unsafe {
         tv_list_drop_items(l, item, item2);
         let mut li = item;
@@ -271,8 +253,7 @@ pub unsafe fn tv_list_move_items(
 }
 
 /// Allocate an empty list and store it in `ret_tv` as the return value.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T {
+pub unsafe fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T {
     unsafe {
         let l = tv_list_alloc(len);
         tv_list_set_ret(ret_tv, l);

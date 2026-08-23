@@ -20,7 +20,6 @@ use core::ptr;
 static msg_hist_first: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
 
 /// Newest entry in the history. Exported for the unit specs.
-#[unsafe(no_mangle)]
 pub static msg_hist_last: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
 
 /// Oldest entry `g<` may still show: the temporary entries start here.

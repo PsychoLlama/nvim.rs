@@ -133,8 +133,7 @@ fn change_lock(lock: bool, var: VarLockStatus) -> VarLockStatus {
 /// With `check_refcount`, a container held by more than one reference is left
 /// alone — that is what keeps `:lockvar` on a function argument from locking
 /// the caller's value.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_item_lock(
+pub unsafe fn tv_item_lock(
     tv: *mut typval_T,
     deep: ::core::ffi::c_int,
     lock: bool,
@@ -197,8 +196,7 @@ pub unsafe extern "C" fn tv_item_lock(
 }
 
 /// Whether `tv` is locked, either itself or as the container it names.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_islocked(tv: *const typval_T) -> bool {
+pub unsafe fn tv_islocked(tv: *const typval_T) -> bool {
     unsafe {
         (*tv).v_lock == VAR_LOCKED
             || ((*tv).v_type == VAR_LIST && tv_list_locked((*tv).vval.v_list) == VAR_LOCKED)
@@ -242,8 +240,7 @@ pub unsafe extern "C" fn tv_check_lock(
 }
 
 /// Whether `lock` forbids a change, raising the matching error if so.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn value_check_lock(
+pub unsafe fn value_check_lock(
     lock: VarLockStatus,
     mut name: *const ::core::ffi::c_char,
     mut name_len: size_t,
@@ -280,8 +277,7 @@ pub unsafe extern "C" fn value_check_lock(
 ///
 /// Containers are compared structurally.  Two values of different types are
 /// never equal, except that a funcref and a partial may be.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool {
+pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool {
     unsafe {
         // TODO(ZyX-I): Make this not recursive
         static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

@@ -40,8 +40,7 @@ pub fn added(status: ::core::ffi::c_int) -> Result<(), KeyTaken> {
 /// The item is over-allocated so the NUL-terminated key fits in the `di_key`
 /// flexible array member — but never below `size_of::<dictitem_T>()`, which is
 /// what upstream's `MAX` guards.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_item_alloc_len(
+pub unsafe fn tv_dict_item_alloc_len(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
 ) -> *mut dictitem_T {
@@ -67,8 +66,7 @@ pub unsafe extern "C" fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> 
 
 /// Clear `item`'s value and free it, if it was allocated (rather than embedded
 /// in a `funccall_S`'s fixed-variable array or a scope dictionary).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_item_free(item: *mut dictitem_T) {
+pub unsafe fn tv_dict_item_free(item: *mut dictitem_T) {
     unsafe {
         tv_clear(&raw mut (*item).di_tv);
         if (*item).di_flags as ::core::ffi::c_uint & DI_FLAGS_ALLOC != 0 {
@@ -87,8 +85,7 @@ pub unsafe fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
 }
 
 /// Remove `item` from `dict` and free it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
+pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
     unsafe {
         let hi = hash_find(&raw mut (*dict).dv_hashtab, tv_dict_item_key(item));
         if (*hi).is_kept() {
@@ -193,8 +190,7 @@ pub unsafe extern "C" fn tv_dict_free(d: *mut dict_T) {
 }
 
 /// Drop a reference to `d`, freeing it when the last one goes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_unref(d: *mut dict_T) {
+pub unsafe fn tv_dict_unref(d: *mut dict_T) {
     unsafe {
         if let Some(dict) = d.as_mut() {
             dict.dv_refcount -= 1;
@@ -219,8 +215,7 @@ pub unsafe extern "C" fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> :
 }
 
 /// Add `list` to `d` under `key`, taking a reference to it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_add_list(
+pub unsafe fn tv_dict_add_list(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -250,8 +245,7 @@ pub unsafe fn tv_dict_add_tv(
 }
 
 /// Add `dict` to `d` under `key`, taking a reference to it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_add_dict(
+pub unsafe fn tv_dict_add_dict(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -267,8 +261,7 @@ pub unsafe extern "C" fn tv_dict_add_dict(
 }
 
 /// Add the number `nr` to `d` under `key`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_add_nr(
+pub unsafe fn tv_dict_add_nr(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -283,8 +276,7 @@ pub unsafe extern "C" fn tv_dict_add_nr(
 }
 
 /// Add the float `nr` to `d` under `key`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_add_float(
+pub unsafe fn tv_dict_add_float(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -314,8 +306,7 @@ pub unsafe fn tv_dict_add_bool(
 }
 
 /// Add a copy of the NUL-terminated string `val` to `d` under `key`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_add_str(
+pub unsafe fn tv_dict_add_str(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -346,8 +337,7 @@ pub unsafe fn tv_dict_add_str_len(
 }
 
 /// Add `val` to `d` under `key`, taking ownership of the allocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_add_allocated_str(
+pub unsafe fn tv_dict_add_allocated_str(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
@@ -396,8 +386,7 @@ unsafe fn add_or_free(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_i
 }
 
 /// Free every item of `d`, leaving it allocated and empty.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_clear(d: *mut dict_T) {
+pub unsafe fn tv_dict_clear(d: *mut dict_T) {
     unsafe {
         // Lock the hashtab so `hash_remove` below cannot rehash it under the
         // walk.
@@ -416,12 +405,7 @@ pub unsafe extern "C" fn tv_dict_clear(d: *mut dict_T) {
 /// `action` is `"keep"`, `"force"` or `"error"`, tested by its first byte —
 /// plus the internal `"move"`, which takes each item out of `d2` rather than
 /// copying it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_extend(
-    d1: *mut dict_T,
-    d2: *mut dict_T,
-    action: *const ::core::ffi::c_char,
-) {
+pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char) {
     unsafe {
         let watched = tv_dict_is_watched(d1);
         let arg_errmsg = gettext(c"extend() argument".as_ptr());
@@ -513,8 +497,7 @@ pub unsafe extern "C" fn tv_dict_extend(
 }
 
 /// Whether `d1` and `d2` hold the same keys with equal values.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: bool) -> bool {
+pub unsafe fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: bool) -> bool {
     unsafe {
         if d1 == d2 {
             return true;
@@ -544,8 +527,7 @@ pub unsafe extern "C" fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: boo
 ///
 /// `copyID` is the garbage collector's mark: non-zero records the copy on the
 /// original so a self-referencing dictionary resolves to the same copy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_copy(
+pub unsafe fn tv_dict_copy(
     conv: *const vimconv_T,
     orig: *mut dict_T,
     deep: bool,
@@ -613,8 +595,7 @@ pub unsafe extern "C" fn tv_dict_copy(
 }
 
 /// Mark every key of `dict` read-only and fixed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
+pub unsafe fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
     unsafe {
         for hi in tv_dict_iter(&*dict) {
             let di = tv_dict_hi2di(hi);
@@ -633,8 +614,7 @@ pub unsafe fn tv_dict_alloc_lock(lock: VarLockStatus) -> *mut dict_T {
 }
 
 /// Allocate an empty dictionary and store it in `ret_tv` as the return value.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_dict_alloc_ret(ret_tv: *mut typval_T) {
+pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut typval_T) {
     unsafe {
         let d = tv_dict_alloc_lock(VAR_UNLOCKED);
         tv_dict_set_ret(ret_tv, d);

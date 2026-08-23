@@ -357,8 +357,7 @@ pub(crate) unsafe fn list_join_inner(
 }
 
 /// `join()`: append `l`'s items to `gap`, separated by `sep`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_join(
+pub unsafe fn tv_list_join(
     gap: *mut garray_T,
     l: *mut list_T,
     sep: *const ::core::ffi::c_char,

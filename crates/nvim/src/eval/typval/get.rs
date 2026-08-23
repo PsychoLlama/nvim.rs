@@ -14,8 +14,7 @@ use crate::types::NUL;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_number(tv: *const typval_T) -> varnumber_T {
+pub unsafe fn tv_get_number(tv: *const typval_T) -> varnumber_T {
     unsafe {
         let mut error = false;
         tv_get_number_chk(tv, &raw mut error)
@@ -27,11 +26,7 @@ pub unsafe extern "C" fn tv_get_number(tv: *const typval_T) -> varnumber_T {
 ///
 /// With a NULL `ret_error` the failure answer is -1 rather than 0, which is
 /// what makes `tv_get_bool` usable as a tri-state.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_number_chk(
-    tv: *const typval_T,
-    ret_error: *mut bool,
-) -> varnumber_T {
+pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T {
     unsafe {
         match (*tv).v_type {
             VAR_NUMBER => return (*tv).vval.v_number,
@@ -87,8 +82,7 @@ pub unsafe fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varn
 
 /// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
 /// through `var2fpos`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
+pub unsafe fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
     unsafe {
         let did_emsg_before = did_emsg.get();
         let mut lnum = tv_get_number_chk(tv, ::core::ptr::null_mut()) as linenr_T;
@@ -121,8 +115,7 @@ pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no
 /// float form.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_float(tv: *const typval_T) -> float_T {
+pub unsafe fn tv_get_float(tv: *const typval_T) -> float_T {
     unsafe {
         let message = match (*tv).v_type {
             VAR_NUMBER => return (*tv).vval.v_number as float_T,
@@ -151,8 +144,7 @@ pub unsafe extern "C" fn tv_get_float(tv: *const typval_T) -> float_T {
 /// `tv` as a string, formatting a number into `buf` (`NUMBUFLEN` bytes).
 ///
 /// Answers NULL with an error raised for a value that has no string form.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_string_buf_chk(
+pub unsafe fn tv_get_string_buf_chk(
     tv: *const typval_T,
     buf: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
@@ -206,8 +198,7 @@ pub unsafe extern "C" fn tv_get_string_buf_chk(
 /// [`tv_get_string_buf_chk`] using a shared scratch buffer.
 ///
 /// The answer may point into that buffer and only lasts until the next call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char {
+pub unsafe fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char {
     unsafe {
         static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
         tv_get_string_buf_chk(tv, mybuf.ptr() as *mut ::core::ffi::c_char)
@@ -216,8 +207,7 @@ pub unsafe extern "C" fn tv_get_string_chk(tv: *const typval_T) -> *const ::core
 
 /// [`tv_get_string_buf`] using a shared scratch buffer of its own — a
 /// different one from [`tv_get_string_chk`]'s.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char {
+pub unsafe fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char {
     unsafe {
         static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
         tv_get_string_buf(tv, mybuf.ptr() as *mut ::core::ffi::c_char)
@@ -225,8 +215,7 @@ pub unsafe extern "C" fn tv_get_string(tv: *const typval_T) -> *const ::core::ff
 }
 
 /// [`tv_get_string_buf_chk`] answering the empty string rather than NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_get_string_buf(
+pub unsafe fn tv_get_string_buf(
     tv: *const typval_T,
     buf: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {

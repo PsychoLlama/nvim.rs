@@ -648,7 +648,6 @@ pub static msg_listdo_overwrite: GlobalCell<c_int> = GlobalCell::new(0 as c_int)
 // TV_CSTRING (SIZE_MAX - 1): c2rust dropped the initializer expression and
 // left 0, which is a valid pointer-sentinel value and would corrupt any
 // caller comparing against it (the unit tests do, via FFI).
-#[unsafe(no_mangle)]
 pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614);
 pub static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 #[unsafe(no_mangle)]
@@ -700,7 +699,6 @@ pub static emsg_off: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static info_message: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_hist_off: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_clr_eos: GlobalCell<bool> = GlobalCell::new(false);
-#[unsafe(no_mangle)]
 pub static emsg_skip: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static emsg_severe: GlobalCell<bool> = GlobalCell::new(false);
 pub static emsg_assert_fails_msg: GlobalCell<*mut c_char> =
@@ -846,7 +844,6 @@ pub static full_screen: GlobalCell<bool> = GlobalCell::new(false);
 pub static secure: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static textlock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static allbuf_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-#[unsafe(no_mangle)]
 pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static silent_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static VIsual: GlobalCell<pos_T> = GlobalCell::new(pos_T {
@@ -945,7 +942,6 @@ pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
     cmod_did_esilent: 0,
 });
 pub static msg_silent: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-#[unsafe(no_mangle)]
 pub static emsg_silent: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static emsg_noredir: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmd_silent: GlobalCell<bool> = GlobalCell::new(false);

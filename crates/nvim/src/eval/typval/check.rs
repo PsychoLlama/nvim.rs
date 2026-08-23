@@ -30,8 +30,7 @@ unsafe fn arg_check(
 
 /// Whether `tv` is a Number or a String, raising the type-specific error if
 /// not.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
+pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
     unsafe {
         let message = match (*tv).v_type {
             VAR_NUMBER | VAR_STRING => return true,
@@ -57,8 +56,7 @@ pub unsafe extern "C" fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
 }
 
 /// Whether `tv` has a Number value, raising the type-specific error if not.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_check_num(tv: *const typval_T) -> bool {
+pub unsafe fn tv_check_num(tv: *const typval_T) -> bool {
     unsafe {
         match (*tv).v_type {
             VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
@@ -72,8 +70,7 @@ pub unsafe extern "C" fn tv_check_num(tv: *const typval_T) -> bool {
 }
 
 /// Whether `tv` has a String value, raising the type-specific error if not.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_check_str(tv: *const typval_T) -> bool {
+pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
     unsafe {
         match (*tv).v_type {
             VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,

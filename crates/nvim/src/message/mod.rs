@@ -313,8 +313,7 @@ unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
 ///
 /// # Safety
 /// `s` must be a valid C string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn msg(s: *const c_char, hl_id: c_int) -> bool {
+pub unsafe fn msg(s: *const c_char, hl_id: c_int) -> bool {
     unsafe { msg_keep(s, hl_id, false, false) }
 }
 
