@@ -147,7 +147,6 @@ pub const Group: C2Rust_Unnamed_15 = 2;
 pub const Empty: C2Rust_Unnamed_15 = 1;
 pub const Normal: C2Rust_Unnamed_15 = 0;
 pub type stl_item_t = stl_item;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;

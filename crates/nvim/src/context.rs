@@ -58,8 +58,6 @@ pub const kCtxBufs: C2Rust_Unnamed_1 = 4;
 pub const kCtxJumps: C2Rust_Unnamed_1 = 2;
 pub const kCtxRegs: C2Rust_Unnamed_1 = 1;
 
-pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
-
 pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
 pub const kShaDaForceit: C2Rust_Unnamed_3 = 4;
 pub const kShaDaWantInfo: C2Rust_Unnamed_3 = 1;

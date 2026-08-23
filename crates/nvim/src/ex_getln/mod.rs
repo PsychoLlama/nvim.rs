@@ -206,8 +206,6 @@ pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
@@ -223,14 +221,11 @@ pub const kMTCharWise: MotionType = 0;
 pub const kCmdRedrawAll: CmdRedraw = 2;
 pub const kCmdRedrawPos: CmdRedraw = 1;
 pub const kCmdRedrawNone: CmdRedraw = 0;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_int;
 pub const HIST_DEBUG: HistoryType = 4;
 pub const HIST_SEARCH: HistoryType = 1;
 pub const HIST_CMD: HistoryType = 0;
 pub const HIST_INVALID: HistoryType = -1;
 pub const REMAP_NONE: RemapValues = -1;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_int;
 pub const VSE_BUFFER: C2Rust_Unnamed_29 = 2;
 pub const VSE_SHELL: C2Rust_Unnamed_29 = 1;
@@ -421,7 +416,6 @@ pub(crate) enum KeyOutcome {
     /// Leave the command line for Normal mode.
     GotoNormalMode,
 }
-pub type C2Rust_Unnamed_53 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

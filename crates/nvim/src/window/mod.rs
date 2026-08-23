@@ -59,7 +59,7 @@ use crate::os::cshim::gettext;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, CMD_tabnew, CdCause, Direction, Error, Map_int_ptr_t, MapHash, MotionType,
-    OptInt, OptValType, Set_uint32_t, WinSplit, WinStyle, aucmdwin_T, bln_values, buf_T, cmdidx_T,
+    OptInt, OptValType, Set_uint32_t, WinSplit, WinStyle, bln_values, buf_T, cmdidx_T,
     dobuf_action_values, dobuf_start_values, event_T, getf_values, handle_T, kErrorTypeException,
     kErrorTypeNone, ptr_t, size_t, tabpage_T, uint32_t, win_T,
 };
@@ -120,12 +120,6 @@ pub const kWinOptFoldtext: C2Rust_Unnamed_16 = 22;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
-#[derive(Copy, Clone)]
-pub struct C2Rust_Unnamed_20 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut aucmdwin_T,
-}
 pub const GETF_SWITCH: getf_values = 4;
 pub const GETF_ALT: getf_values = 2;
 pub const GETF_SETMARK: getf_values = 1;
@@ -141,7 +135,6 @@ pub const DOBUF_MOD: dobuf_start_values = 3;
 pub const DOBUF_LAST: dobuf_start_values = 2;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub const ECMD_NOWINENTER: C2Rust_Unnamed_25 = 64;
 pub const ECMD_ALTBUF: C2Rust_Unnamed_25 = 32;

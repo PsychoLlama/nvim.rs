@@ -79,13 +79,6 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const kZIndexFloatDefault: C2Rust_Unnamed_13 = 50;
 pub const kBorderTextFooter: BorderTextType = 1;
 pub const kBorderTextTitle: BorderTextType = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_15 {
-    pub name: *const ::core::ffi::c_char,
-    pub chars: [[::core::ffi::c_char; 32]; 8],
-    pub shadow_color: bool,
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,

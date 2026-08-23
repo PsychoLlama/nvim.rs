@@ -199,9 +199,6 @@ pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
 /// ends up empty.
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const kEqualFiles: file_comparison = 1;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;

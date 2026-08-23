@@ -103,7 +103,6 @@ pub use self::groups::*;
 pub use self::listing::*;
 pub use self::trigger::*;
 pub use self::walk::*;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_int;
 pub const kOptValTypeString: OptValType = 2;
 pub const NUM_EVENTS: auto_event = 145;
 pub const EVENT_WINSCROLLED: auto_event = 144;
@@ -261,12 +260,6 @@ pub struct AutoCmdEvent {
     pub eap: *mut exarg_T,
     pub data: *mut Object,
 }
-#[derive(Copy, Clone)]
-pub struct C2Rust_Unnamed_30 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut aucmdwin_T,
-}
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_int;
 pub const AUGROUP_DELETED: C2Rust_Unnamed_31 = -4;
 pub const AUGROUP_ALL: C2Rust_Unnamed_31 = -3;
@@ -276,8 +269,6 @@ pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub const BUFLOCAL_PAT_LEN: C2Rust_Unnamed_32 = 25;
 pub const ETYPE_AUCMD: etype_T = 3;
 pub const kRetNilBool: LuaRetMode = 1;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;

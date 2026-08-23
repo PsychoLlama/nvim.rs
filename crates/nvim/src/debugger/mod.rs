@@ -64,10 +64,8 @@ use ::libc::{atoi, strcmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-pub type C2Rust_Unnamed_13 = c_int;
 pub const ESTACK_NONE: estack_arg_T = 0;
 pub const EXPR_IS: crate::types::exprtype_T = 9;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
 pub const KS_EXTRA: c_int = 253;
 

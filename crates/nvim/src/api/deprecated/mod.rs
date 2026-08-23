@@ -58,7 +58,6 @@ pub const kOptScopeWin: OptScope = 1;
 pub const kOptScopeGlobal: OptScope = 0;
 pub const kOptValTypeNil: OptValType = -1;
 pub const LINE_BUFFER_MIN_SIZE: C2Rust_Unnamed_18 = 4096;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

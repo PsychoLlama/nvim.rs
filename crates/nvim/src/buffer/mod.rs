@@ -169,8 +169,6 @@ pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_30 = -2147483648;
 
 pub const READ_DUMMY: C2Rust_Unnamed_29 = 16;
 pub const ECMD_HIDE: C2Rust_Unnamed_27 = 1;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const ECMD_OLDBUF: C2Rust_Unnamed_27 = 4;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_int;
@@ -178,7 +176,6 @@ pub const ECMD_LAST: C2Rust_Unnamed_28 = -1;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

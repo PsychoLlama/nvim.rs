@@ -95,7 +95,6 @@ mod langmap;
 pub use self::langmap::*;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXMAPLEN: C2Rust_Unnamed_13 = 50;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_17 = -2147483648;
 pub const REMAP_SCRIPT: RemapValues = -2;

@@ -71,7 +71,6 @@ mod autocmds;
 pub(crate) use self::autocmds::*;
 mod lines;
 pub(crate) use self::lines::*;
-pub type C2Rust_Unnamed = ::core::ffi::c_int;
 /// A write error, held until the cleanup path can report it.
 ///
 /// `buf_write` has a single exit that emits the message, because the file
@@ -227,7 +226,6 @@ pub const ICONV_MULT: C2Rust_Unnamed_18 = 8;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_WRONLY: ::core::ffi::c_int = 0o1 as ::core::ffi::c_int;
 pub const O_CREAT: ::core::ffi::c_int = 0o100 as ::core::ffi::c_int;

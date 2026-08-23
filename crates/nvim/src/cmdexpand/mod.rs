@@ -147,10 +147,6 @@ pub(crate) use self::bufpat::*;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
 /// Not a `WILD_*` at all — `buffer.h`'s, and `expand_buf_names` reads it out
 /// of the same `options` word, so it is spelled as one of them.
 pub const BUF_DIFF_FILTER: WildOpts = WildOpts::from_bits(8192);
@@ -255,7 +251,6 @@ pub const EXP_BREAKPT_DEL: C2Rust_Unnamed_20 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const EXP_PROFDEL: C2Rust_Unnamed_20 = 2;
 pub const EXP_BREAKPT_ADD: C2Rust_Unnamed_20 = 0;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_25 = -2147483648;
 pub const TAG_MANY: C2Rust_Unnamed_32 = 300;
 pub const WM_SCROLLED: C2Rust_Unnamed_26 = 2;
@@ -263,10 +258,7 @@ pub const WM_SHOWN: C2Rust_Unnamed_26 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,

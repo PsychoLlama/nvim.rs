@@ -30,7 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_char, c_int};
 
 pub mod arith;
 
@@ -66,7 +66,6 @@ use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
 
-pub type C2Rust_Unnamed_15 = c_uint;
 pub const kMTCharWise: MotionType = 0;
 
 /// One buffer line as the vertical scrolling walks it: the line, the filler

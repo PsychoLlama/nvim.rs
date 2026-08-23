@@ -61,10 +61,6 @@ pub use self::glob::*;
 mod expand;
 pub use self::expand::*;
 
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-
 crate::flag_set! {
     /// What a wildcard expansion should look for, and what it should do with
     /// what it finds — upstream's `EW_*` family, the `flags` argument

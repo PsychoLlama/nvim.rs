@@ -95,7 +95,6 @@ mod read;
 pub use self::read::*;
 mod write;
 pub(crate) use self::write::*;
-pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kMarkBufLocal: MarkGet = 0;
 pub const BLN_LISTED: bln_values = 2;
