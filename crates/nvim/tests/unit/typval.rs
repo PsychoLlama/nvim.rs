@@ -1,18 +1,19 @@
-//! Cases lifted out of `test/unit/eval/typval_spec.lua`.
+//! The first cases lifted out of `test/unit/eval/typval_spec.lua`, plus the
+//! three that close what no differential can see.
 //!
-//! The spec is 3,418 lines and 111 cases, 285 of which assert an exact
-//! allocation sequence through the LuaJIT allocator seam. These three are the
-//! proof that the seam has a Rust twin — one case per shape the rest of the
-//! spec is built out of:
+//! The spec asserted an exact allocation sequence through the LuaJIT
+//! allocator seam 285 times, which is why it was never ported; these were
+//! written as the proof that the seam has a Rust twin, one per shape the
+//! rest of the spec is built out of:
 //!
 //! - an allocation *sequence* whose order is the assertion
 //!   (`tv_list_append_string`),
 //! - a *size* derived from a struct's layout, which is the only evidence the
 //!   over-allocation happened (`tv_dict_item_alloc`),
-//! - and a case that allocates nothing but reads editor globals
-//!   (`tv_get_lnum`, the one place in all 3,418 lines that mentions
-//!   `curwin`).
+//! - and `tv_dict_add`, whose interesting step allocates nothing at all.
 //!
+//! The rest of the spec is in `typval_list`, `typval_dict` and
+//! `typval_value`, and the value model both use is `crate::support::tv`.
 //! See `crate::support::alloc` for the porting rules; the short version is
 //! that a size is always `size_of`/`offset_of!`, never a literal.
 //!
@@ -26,17 +27,14 @@ use std::ptr;
 use c2rust_neovim::eval::typval::{
     kCallbackNone, tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_is_watched,
     tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_item_remove,
-    tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_lnum, tv_list_alloc, tv_list_append_number,
+    tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_alloc, tv_list_append_number,
     tv_list_append_string, tv_list_drop_items, tv_list_first, tv_list_last, tv_list_len,
     tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
 };
-use c2rust_neovim::main::curwin;
 use c2rust_neovim::memory::{xfree, xstrdup};
 use c2rust_neovim::types::{
-    Callback, Callback_data, FAIL, OK, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kBoolVarFalse,
-    kBoolVarTrue, kListLenUnknown, kSpecialVarNull, listitem_T, listwatch_T, ptrdiff_t, typval_T,
-    typval_vval_union, win_T,
+    Callback, Callback_data, FAIL, OK, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown,
+    listitem_T, listwatch_T, ptrdiff_t,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -226,132 +224,6 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
     }
 }
 
-/// `describe('get') describe('lnum()') itp('works')`, spec line 3204.
-///
-/// The only case in the spec that touches `curwin`: a `"."` resolves through
-/// `var2fpos` to the cursor's line, which is what pins `win_T` for the whole
-/// file. Everything else here allocates nothing, and the case says so.
-#[test]
-fn tv_get_lnum_resolves_the_cursor_and_reports_the_rest() {
-    let log = AllocLog::start();
-    // A window is all `var2fpos` needs for `"."`; it never reaches the
-    // buffer on that path.
-    let mut win: Box<win_T> = Box::new(unsafe { std::mem::zeroed() });
-    let saved_curwin = curwin.get();
-    curwin.set(&raw mut *win);
-
-    let dot = cstr(".");
-    let number = cstr("100500");
-    let cases: [(u32, typval_vval_union, Option<&str>, i64); 12] = [
-        (VAR_NUMBER, typval_vval_union { v_number: 42 }, None, 42),
-        (
-            VAR_STRING,
-            typval_vval_union {
-                v_string: number.as_ptr().cast_mut(),
-            },
-            None,
-            100500,
-        ),
-        (
-            VAR_STRING,
-            typval_vval_union {
-                v_string: dot.as_ptr().cast_mut(),
-            },
-            None,
-            46,
-        ),
-        (
-            VAR_FLOAT,
-            typval_vval_union { v_float: 42.53 },
-            Some("E805: Using a Float as a Number"),
-            -1,
-        ),
-        (
-            VAR_PARTIAL,
-            typval_vval_union {
-                v_partial: ptr::null_mut(),
-            },
-            Some("E703: Using a Funcref as a Number"),
-            -1,
-        ),
-        (
-            VAR_FUNC,
-            typval_vval_union {
-                v_string: ptr::null_mut(),
-            },
-            Some("E703: Using a Funcref as a Number"),
-            -1,
-        ),
-        (
-            VAR_LIST,
-            typval_vval_union {
-                v_list: ptr::null_mut(),
-            },
-            Some("E745: Using a List as a Number"),
-            -1,
-        ),
-        (
-            VAR_DICT,
-            typval_vval_union {
-                v_dict: ptr::null_mut(),
-            },
-            Some("E728: Using a Dictionary as a Number"),
-            -1,
-        ),
-        (
-            VAR_SPECIAL,
-            typval_vval_union {
-                v_special: kSpecialVarNull,
-            },
-            None,
-            0,
-        ),
-        (
-            VAR_BOOL,
-            typval_vval_union {
-                v_bool: kBoolVarTrue,
-            },
-            None,
-            1,
-        ),
-        (
-            VAR_BOOL,
-            typval_vval_union {
-                v_bool: kBoolVarFalse,
-            },
-            None,
-            0,
-        ),
-        (
-            VAR_UNKNOWN,
-            typval_vval_union { v_number: 0 },
-            Some("E685: Internal error: tv_get_number(UNKNOWN)"),
-            -1,
-        ),
-    ];
-
-    for (v_type, vval, emsg, expected) in cases {
-        win.w_cursor.lnum = 46;
-        let tv = typval_T {
-            v_type,
-            v_lock: VAR_UNLOCKED,
-            vval,
-        };
-        log.check(&[]);
-        // SAFETY: `tv` is a value this case owns and does not free; the
-        // editor lock is held by `log`.
-        let got = check_emsg(log.editor(), || unsafe { tv_get_lnum(&raw const tv) }, emsg);
-        assert_eq!(i64::from(got), expected, "{v_type:?} {emsg:?}");
-        if emsg.is_some() {
-            // Reporting the error allocated; the spec does not describe what.
-            log.clear();
-        } else {
-            log.check(&[]);
-        }
-    }
-
-    curwin.set(saved_curwin);
-}
 /// `tv_list_drop_items` unlinks a run of items and shortens the list.
 ///
 /// **No differential can see this.** `string()` and all six encoder sinks
