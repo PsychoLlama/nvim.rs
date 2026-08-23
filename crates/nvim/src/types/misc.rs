@@ -25,43 +25,49 @@ pub struct MPConvStack {
     pub items: *mut MPConvStackVal,
     pub init_array: [MPConvStackVal; 8],
 }
-#[derive(Copy, Clone)]
+/// The khash-derived maps and sets, one monomorphisation per key/value pair.
+///
+/// None of them is `Copy`. Each owns its [`MapHash`]'s bucket table and the
+/// `keys` (and, for a map, `values`) array beside it, all of which
+/// `map_destroy`/`set_destroy` free exactly once. `Clone` stays, so the few
+/// places that really do want a second handle say so.
+#[derive(Clone)]
 pub struct Map_String_int {
     pub set: Set_String,
     pub values: *mut ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Map_cstr_t_int {
     pub set: Set_cstr_t,
     pub values: *mut ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct Map_cstr_t_ptr_t {
     pub set: Set_cstr_t,
     pub values: *mut ptr_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Map_int64_t_int64_t {
     pub set: Set_int64_t,
     pub values: *mut int64_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Map_int64_t_ptr_t {
     pub set: Set_int64_t,
     pub values: *mut ptr_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Map_int_String {
     pub set: Set_int,
     pub values: *mut String_0,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Map_int_ptr_t {
     pub set: Set_int,
     pub values: *mut ptr_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Map_ptr_t_ptr_t {
     pub set: Set_ptr_t,
     pub values: *mut ptr_t,
@@ -102,38 +108,37 @@ pub struct ScopeDictDictItem {
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 1],
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Set_String {
     pub h: MapHash,
     pub keys: *mut String_0,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct Set_cstr_t {
     pub h: MapHash,
     pub keys: *mut cstr_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Set_glyph {
     pub h: MapHash,
     pub keys: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Set_int {
     pub h: MapHash,
     pub keys: *mut ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Set_int64_t {
     pub h: MapHash,
     pub keys: *mut int64_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Set_ptr_t {
     pub h: MapHash,
     pub keys: *mut ptr_t,
 }
-/// Not `Copy`: `keys` and the hash's own tables are owned allocations.
 #[derive(Clone)]
 pub struct Set_uint32_t {
     pub h: MapHash,

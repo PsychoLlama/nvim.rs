@@ -124,7 +124,7 @@ pub type ShaDaWriteResult = ::core::ffi::c_uint;
 pub const kSDWriteIgnError: ShaDaWriteResult = 3;
 pub const kSDWriteFailed: ShaDaWriteResult = 2;
 pub const kSDWriteSuccessful: ShaDaWriteResult = 0;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct WriteMergerState {
     pub hms: [HistoryMergerState; 5],
@@ -230,7 +230,7 @@ pub const kSDItemSearchPattern: ShadaEntryType = 2;
 pub const kSDItemHeader: ShadaEntryType = 1;
 pub const kSDItemMissing: ShadaEntryType = 0;
 pub const kSDItemUnknown: ShadaEntryType = -1;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct HistoryMergerState {
     pub hmll: HMLList,
@@ -245,7 +245,7 @@ pub struct HistoryMergerState {
     pub pending_pos: size_t,
     pub history_type: uint8_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct HMLList {
     pub entries: *mut HMLListEntry,

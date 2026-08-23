@@ -12,7 +12,12 @@
 use super::*;
 
 pub type MHPutStatus = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+/// The bucket table every khash-derived map and set is built on.
+///
+/// Not `Copy`: `hash` is the table's own allocation, freed by `mh_clear` /
+/// `map_destroy`. Two copies of one of these is two owners of that table and
+/// of whichever `keys`/`values` arrays the set or map around it holds.
+#[derive(Clone)]
 #[repr(C)]
 pub struct MapHash {
     pub n_buckets: uint32_t,
