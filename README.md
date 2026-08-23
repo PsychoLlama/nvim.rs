@@ -17,7 +17,7 @@ This repo is an attempt to port neovim's `v0.12.4` codebase to safe, idiomatic R
 - [x] Port simple CMake dependencies to Rust.
 - [x] Quarantine shared mutable data behind runtime checks.
 - [x] Replace mechanical ports of generated data with `build.rs` equivalents.
-- [ ] Incrementally refactor feature-level scopes to idiomatic Rust.
+- [x] Incrementally refactor interior scopes to idiomatic Rust.
 - [ ] Migrate cross-cutting concerns to idiomatic Rust.
 - [ ] Replace runtime-checked cells with static `&mut` where possible.
 - [ ] Break codebase into smaller crates.
