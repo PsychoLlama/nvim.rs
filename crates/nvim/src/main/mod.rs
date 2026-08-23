@@ -1192,7 +1192,6 @@ pub static p_fenc: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_m
 pub static p_fencs: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_ff: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_ffs: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-#[unsafe(no_mangle)]
 pub static p_fic: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_ft: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_fcs: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());

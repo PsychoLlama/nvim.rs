@@ -27,8 +27,7 @@ use crate::types::{MAXPATHL, NUL};
 /// # Safety
 /// Both names must be NUL-terminated strings. With `expandenv`, `s1` also
 /// has its environment variables expanded.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_full_compare(
+pub unsafe fn path_full_compare(
     s1: *mut c_char,
     s2: *mut c_char,
     checkname: bool,
@@ -86,8 +85,7 @@ pub unsafe extern "C" fn path_full_compare(
 /// # Safety
 /// `name` must be a writable NUL-terminated string: its directory part is
 /// terminated in place while the directory is opened, as upstream does.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_fix_case(name: *mut c_char) {
+pub unsafe fn path_fix_case(name: *mut c_char) {
     unsafe {
         let mut file_info = FileInfo::default();
         if !os_fileinfo_link(name, &raw mut file_info) {

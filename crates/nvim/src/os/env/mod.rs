@@ -206,12 +206,7 @@ pub unsafe fn os_env_exists(name: *const c_char, nonempty: bool) -> bool {
 ///
 /// # Safety
 /// `name` and `value` must be NUL-terminated strings.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_setenv(
-    name: *const c_char,
-    value: *const c_char,
-    overwrite: c_int,
-) -> c_int {
+pub unsafe fn os_setenv(name: *const c_char, value: *const c_char, overwrite: c_int) -> c_int {
     // SAFETY: the caller's contract.
     unsafe {
         if *name == 0 {

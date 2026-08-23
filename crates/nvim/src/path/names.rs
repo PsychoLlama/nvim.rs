@@ -37,8 +37,7 @@ pub(crate) fn tail_index(name: &[u8]) -> usize {
 ///
 /// # Safety
 /// `fname` must be a NUL-terminated string, or NULL for `""`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_tail(fname: *const c_char) -> *mut c_char {
+pub unsafe fn path_tail(fname: *const c_char) -> *mut c_char {
     unsafe {
         if fname.is_null() {
             return c"".as_ptr().cast_mut();
@@ -54,8 +53,7 @@ pub unsafe extern "C" fn path_tail(fname: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `fname` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char {
+pub unsafe fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char {
     unsafe {
         let past_head = get_past_head(fname);
         let mut tail = path_tail(fname);
@@ -71,11 +69,7 @@ pub unsafe extern "C" fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `invocation` must be a NUL-terminated string and `len` writable or NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn invocation_path_tail(
-    invocation: *const c_char,
-    len: *mut size_t,
-) -> *const c_char {
+pub unsafe fn invocation_path_tail(invocation: *const c_char, len: *mut size_t) -> *const c_char {
     unsafe {
         let past_head = get_past_head(invocation).cast_const();
         let bytes = CStr::from_ptr(past_head).to_bytes();
@@ -94,8 +88,7 @@ pub unsafe extern "C" fn invocation_path_tail(
 ///
 /// # Safety
 /// `fname` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_next_component(fname: *const c_char) -> *const c_char {
+pub unsafe fn path_next_component(fname: *const c_char) -> *const c_char {
     unsafe {
         let bytes = CStr::from_ptr(fname).to_bytes();
         let at = bytes
@@ -321,8 +314,7 @@ pub unsafe fn path_is_url(p: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `fname` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_with_url(fname: *const c_char) -> c_int {
+pub unsafe fn path_with_url(fname: *const c_char) -> c_int {
     unsafe {
         let bytes = CStr::from_ptr(fname).to_bytes();
         // A scheme starts with a letter — and a Windows drive letter, which
@@ -350,11 +342,7 @@ pub unsafe extern "C" fn path_with_url(fname: *const c_char) -> c_int {
 ///
 /// # Safety
 /// Both must be NUL-terminated strings.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_with_extension(
-    path: *const c_char,
-    extension: *const c_char,
-) -> bool {
+pub unsafe fn path_with_extension(path: *const c_char, extension: *const c_char) -> bool {
     unsafe {
         let bytes = CStr::from_ptr(path).to_bytes();
         let Some(dot) = bytes.iter().rposition(|&b| b == b'.') else {

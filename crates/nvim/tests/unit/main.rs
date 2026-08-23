@@ -28,6 +28,7 @@ mod r#move;
 mod multiqueue;
 mod packer;
 mod parser;
+mod path;
 mod profile;
 mod sha256;
 mod shell;

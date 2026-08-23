@@ -410,8 +410,7 @@ pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
 /// # Safety
 /// `buf` must be writable for `len` bytes; `fname` must be a NUL-terminated
 /// string, or NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_full_name(
+pub unsafe fn vim_full_name(
     fname: *const c_char,
     buf: *mut c_char,
     len: size_t,
@@ -455,8 +454,7 @@ pub unsafe fn fix_fname(fname: *const c_char) -> *mut c_char {
 /// # Safety
 /// `directory` must be a NUL-terminated string and `buffer` writable for
 /// `len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_full_dir_name(
+pub unsafe fn path_full_dir_name(
     directory: *mut c_char,
     buffer: *mut c_char,
     len: size_t,
@@ -489,12 +487,7 @@ pub unsafe extern "C" fn path_full_dir_name(
 /// # Safety
 /// `path` must be a NUL-terminated string writable for `max_len` bytes, and
 /// `to_append` a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn append_path(
-    path: *mut c_char,
-    to_append: *const c_char,
-    max_len: size_t,
-) -> c_int {
+pub unsafe fn append_path(path: *mut c_char, to_append: *const c_char, max_len: size_t) -> c_int {
     unsafe {
         let mut current_length = CStr::from_ptr(path).to_bytes().len();
         let to_append_length = CStr::from_ptr(to_append).to_bytes().len();
@@ -596,12 +589,7 @@ unsafe fn path_to_absolute(
 /// # Safety
 /// `argv0` must be a NUL-terminated string and `buf` writable for `bufsize`
 /// bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_guess_exepath(
-    argv0: *const c_char,
-    buf: *mut c_char,
-    bufsize: size_t,
-) {
+pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize: size_t) {
     unsafe {
         let path = os_getenv(c"PATH".as_ptr());
         if path.is_null() || path_is_absolute(argv0) {

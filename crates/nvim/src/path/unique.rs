@@ -366,8 +366,7 @@ pub unsafe fn gettail_dir(fname: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// `full_path` must be a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char {
+pub unsafe fn path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char {
     unsafe {
         let mut dirname = vec![0 as c_char; MAXPATHL as usize];
         if os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) != OK {
@@ -383,11 +382,7 @@ pub unsafe extern "C" fn path_try_shorten_fname(full_path: *mut c_char) -> *mut 
 ///
 /// # Safety
 /// `dir_name` must be a NUL-terminated string, and `full_path` one or NULL.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_shorten_fname(
-    full_path: *mut c_char,
-    dir_name: *mut c_char,
-) -> *mut c_char {
+pub unsafe fn path_shorten_fname(full_path: *mut c_char, dir_name: *mut c_char) -> *mut c_char {
     unsafe {
         if full_path.is_null() {
             return core::ptr::null_mut();
