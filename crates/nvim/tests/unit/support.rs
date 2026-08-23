@@ -10,6 +10,9 @@ use std::sync::{Mutex, MutexGuard};
 
 use c2rust_neovim::memory::xfree;
 
+#[cfg(not(miri))]
+pub mod tv;
+
 /// A NUL-terminated copy of `s`, kept alive by the caller's binding.
 pub fn cstr(s: impl Into<Vec<u8>>) -> CString {
     CString::new(s).unwrap()

@@ -58,6 +58,9 @@ mod pattern;
 pub use self::pattern::*;
 mod expr;
 pub(crate) use self::expr::*;
+// `eval0` is reached from `crates/nvim/tests/unit`, which links the library
+// from outside; the rest of `expr` stays in-crate.
+pub use self::expr::eval0;
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
