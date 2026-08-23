@@ -833,8 +833,8 @@ mod tests {
     }
 
     /// The stack is 20 deep: the twenty-first push fails the expansion, and
-    /// nothing after it runs. `test/unit/tui/terminfo_spec.lua` pins the same
-    /// boundary through the C entry point.
+    /// nothing after it runs. This was `test/unit/tui/terminfo_spec.lua`'s
+    /// only case, which is why that spec no longer exists.
     #[test]
     fn the_stack_is_twenty_deep() {
         let fits = "%p1".repeat(20) + "%c";
