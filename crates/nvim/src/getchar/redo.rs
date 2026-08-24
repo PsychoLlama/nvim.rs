@@ -32,8 +32,7 @@ pub unsafe fn reset_redobuff() {
             return;
         }
         free_buff(old_redobuff.ptr());
-        old_redobuff.set(redobuff.get());
-        (*redobuff.ptr()).bh_first.b_next = ptr::null_mut();
+        old_redobuff.set(redobuff.take());
     }
 }
 
@@ -47,8 +46,7 @@ pub unsafe fn cancel_redo() {
             return;
         }
         free_buff(redobuff.ptr());
-        redobuff.set(old_redobuff.get());
-        (*old_redobuff.ptr()).bh_first.b_next = ptr::null_mut();
+        redobuff.set(old_redobuff.take());
         start_stuff();
         while read_readbuffers(true) != NUL {}
     }
@@ -66,10 +64,8 @@ pub unsafe fn cancel_redo() {
 /// [`restore_redobuff`].
 pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
     unsafe {
-        (*save_redo).sr_redobuff = redobuff.get();
-        (*redobuff.ptr()).bh_first.b_next = ptr::null_mut();
-        (*save_redo).sr_old_redobuff = old_redobuff.get();
-        (*old_redobuff.ptr()).bh_first.b_next = ptr::null_mut();
+        (*save_redo).sr_redobuff = redobuff.take();
+        (*save_redo).sr_old_redobuff = old_redobuff.take();
 
         let (copy, len) = buff_contents(&raw mut (*save_redo).sr_redobuff, false);
         if copy.is_null() {

@@ -44,6 +44,29 @@ pub struct buffheader_T {
     pub bh_space: size_t,
     pub bh_create_newblock: bool,
 }
+
+impl buffheader_T {
+    /// The state all five buffers start in, and the one `GlobalCell::take`
+    /// leaves behind: no blocks, so nothing to free. A `const` as well as a
+    /// [`Default`], because the cells themselves are `static`s.
+    pub const EMPTY: Self = buffheader_T {
+        bh_first: buffblock_T {
+            b_next: ::core::ptr::null_mut(),
+            b_strlen: 0,
+            b_str: [0],
+        },
+        bh_curr: ::core::ptr::null_mut(),
+        bh_index: 0,
+        bh_space: 0,
+        bh_create_newblock: false,
+    };
+}
+
+impl Default for buffheader_T {
+    fn default() -> Self {
+        buffheader_T::EMPTY
+    }
+}
 pub type flush_buffers_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 pub struct save_redo_T {
@@ -71,4 +94,27 @@ pub struct typebuf_T {
     pub tb_silent: ::core::ffi::c_int,
     pub tb_no_abbr_cnt: ::core::ffi::c_int,
     pub tb_change_cnt: ::core::ffi::c_int,
+}
+
+impl typebuf_T {
+    /// A typeahead buffer with no storage at all: what `init_typebuf` looks
+    /// for when it decides to hand out the static initial buffers, and what
+    /// `GlobalCell::take` leaves behind.
+    pub const EMPTY: Self = typebuf_T {
+        tb_buf: ::core::ptr::null_mut(),
+        tb_noremap: ::core::ptr::null_mut(),
+        tb_buflen: 0,
+        tb_off: 0,
+        tb_len: 0,
+        tb_maplen: 0,
+        tb_silent: 0,
+        tb_no_abbr_cnt: 0,
+        tb_change_cnt: 0,
+    };
+}
+
+impl Default for typebuf_T {
+    fn default() -> Self {
+        typebuf_T::EMPTY
+    }
 }

@@ -33,23 +33,10 @@ const SCTX_INIT: sctx_T = sctx_T {
     sc_chan: 0,
 };
 
-/// A zeroed `buffheader_T`; `save_redobuff` fills it in.
-const BUFFHEADER_INIT: buffheader_T = buffheader_T {
-    bh_first: buffblock_T {
-        b_next: ::core::ptr::null_mut(),
-        b_strlen: 0,
-        b_str: [0; 1],
-    },
-    bh_curr: ::core::ptr::null_mut(),
-    bh_index: 0,
-    bh_space: 0,
-    bh_create_newblock: false,
-};
-
-/// A zeroed `save_redo_T`.
+/// An empty `save_redo_T`; `save_redobuff` fills it in.
 const SAVE_REDO_INIT: save_redo_T = save_redo_T {
-    sr_redobuff: BUFFHEADER_INIT,
-    sr_old_redobuff: BUFFHEADER_INIT,
+    sr_redobuff: buffheader_T::EMPTY,
+    sr_old_redobuff: buffheader_T::EMPTY,
 };
 
 /// The events whose `<afile>` is not a file name, so nothing is set.

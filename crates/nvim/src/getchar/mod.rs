@@ -73,9 +73,9 @@ use crate::state::{
 use crate::strings::vim_strchr;
 use crate::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
-    MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, buffblock, buffblock_T,
-    buffheader_T, colnr_T, flush_buffers_T, garray_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T,
-    size_t, tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
+    MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, buffblock_T, buffheader_T,
+    colnr_T, flush_buffers_T, garray_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t,
+    tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
@@ -181,29 +181,16 @@ const EMPTY_FILE: FileDescriptor = FileDescriptor {
     non_blocking: false,
     bytes_read: 0,
 };
-/// An empty `buffheader_T`, the state all five of them start in.
-const EMPTY_BUFF: buffheader_T = buffheader_T {
-    bh_first: buffblock {
-        b_next: ::core::ptr::null_mut(),
-        b_strlen: 0,
-        b_str: [0],
-    },
-    bh_curr: ::core::ptr::null_mut(),
-    bh_index: 0,
-    bh_space: 0,
-    bh_create_newblock: false,
-};
-
 /// The redo buffer: the keys `.` replays.
-static redobuff: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+static redobuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
 /// The redo buffer before this command, which `CTRL-O .` replays.
-static old_redobuff: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+static old_redobuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
 /// The register being recorded into by `q`.
-static recordbuff: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+static recordbuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
 /// First read-ahead buffer, for translated commands.
-static readbuf1: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+static readbuf1: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
 /// Second read-ahead buffer, for redo.
-static readbuf2: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+static readbuf2: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
 /// The bytes of the key `vgetc` is assembling, for the `vim.on_key()`
 /// callbacks. Upstream is a `kvec_withinit_t(char, MAXMAPLEN + 1)`; nothing
 /// outside this module touches it, so it is an owned `Vec` here.
@@ -230,19 +217,8 @@ static e_cmd_mapping_must_end_with_cr: [::core::ffi::c_char; 40] =
 static e_cmd_mapping_must_end_with_cr_before_second_cmd: [::core::ffi::c_char; 60] =
     c_bytes(b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0");
 /// The typeahead each `:source!` displaced, put back by `closescript`.
-static saved_typebuf: GlobalCell<[typebuf_T; NSCRIPT as usize]> = GlobalCell::new(
-    [typebuf_T {
-        tb_buf: ::core::ptr::null_mut::<uint8_t>(),
-        tb_noremap: ::core::ptr::null_mut::<uint8_t>(),
-        tb_buflen: 0,
-        tb_off: 0,
-        tb_len: 0,
-        tb_maplen: 0,
-        tb_silent: 0,
-        tb_no_abbr_cnt: 0,
-        tb_change_cnt: 0,
-    }; NSCRIPT as usize],
-);
+static saved_typebuf: GlobalCell<[typebuf_T; NSCRIPT as usize]> =
+    GlobalCell::new([typebuf_T::EMPTY; NSCRIPT as usize]);
 static old_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static old_mod_mask: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static old_mouse_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

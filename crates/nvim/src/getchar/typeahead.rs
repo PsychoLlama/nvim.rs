@@ -377,9 +377,14 @@ pub unsafe fn may_sync_undo() {
 
 /// Empty `typebuf` and give it freshly allocated buffers.
 ///
+/// `was` is the change counter of the typeahead being replaced, which the
+/// fresh one carries on from: both callers have just *moved* the old
+/// typeahead out, so the counter is no longer in the cell to be read, and a
+/// snapshot taken before the swap still has to compare unequal afterwards.
+///
 /// # Safety
 /// The current buffers must already have been saved or freed.
-pub(crate) unsafe fn alloc_typebuf() {
+pub(crate) unsafe fn alloc_typebuf(was: c_int) {
     unsafe {
         let tb = typebuf.ptr();
         (*tb).tb_buf = xmalloc(TYPELEN_INIT as usize).cast();
@@ -390,7 +395,7 @@ pub(crate) unsafe fn alloc_typebuf() {
         (*tb).tb_maplen = 0;
         (*tb).tb_silent = 0;
         (*tb).tb_no_abbr_cnt = 0;
-        (*tb).tb_change_cnt += 1;
+        (*tb).tb_change_cnt = was + 1;
         if (*tb).tb_change_cnt == 0 {
             (*tb).tb_change_cnt = 1;
         }
@@ -432,8 +437,9 @@ pub(crate) unsafe fn save_typebuf() {
     unsafe {
         debug_assert!(curscript.get() >= 0);
         init_typebuf();
-        (*saved_typebuf.ptr())[curscript.get() as usize] = typebuf.get();
-        alloc_typebuf();
+        let saved = typebuf.take();
+        (*saved_typebuf.ptr())[curscript.get() as usize] = saved;
+        alloc_typebuf(saved.tb_change_cnt);
     }
 }
 
@@ -456,17 +462,15 @@ pub(crate) unsafe fn can_get_old_char() -> bool {
 /// [`restore_typeahead`].
 pub unsafe fn save_typeahead(tp: *mut tasave_T) {
     unsafe {
-        (*tp).save_typebuf = typebuf.get();
-        alloc_typebuf();
+        (*tp).save_typebuf = typebuf.take();
+        alloc_typebuf((*tp).save_typebuf.tb_change_cnt);
         (*tp).typebuf_valid = true;
         (*tp).old_char = old_char.get();
         (*tp).old_mod_mask = old_mod_mask.get();
         old_char.set(-1);
 
-        (*tp).save_readbuf1 = readbuf1.get();
-        (*readbuf1.ptr()).bh_first.b_next = ptr::null_mut();
-        (*tp).save_readbuf2 = readbuf2.get();
-        (*readbuf2.ptr()).bh_first.b_next = ptr::null_mut();
+        (*tp).save_readbuf1 = readbuf1.take();
+        (*tp).save_readbuf2 = readbuf2.take();
     }
 }
 

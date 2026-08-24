@@ -108,6 +108,37 @@ impl<T> GlobalCell<T> {
         old
     }
 
+    /// Move the value out, leaving the cell's own empty state behind.
+    ///
+    /// This is the safe spelling of the C save/restore idiom
+    /// (`save->sr_redobuff = redobuff; redobuff.bh_first.b_next = NULL;`):
+    /// what the cell holds is handed to one owner and the cell is left with
+    /// nothing to free, in one step that cannot be half-done.
+    ///
+    /// Two design choices, both deliberate:
+    ///
+    /// - **The empty state is `T::default()`, not an argument.** Passing the
+    ///   replacement is what [`replace`](Self::replace) already is; the
+    ///   point of `take` is that the *type* names its own empty once, so
+    ///   every move site spells the same thing and a new field cannot be
+    ///   left holding a stale value at one site out of four.
+    /// - **There is no `Copy` bound.** A move is precisely what a value that
+    ///   owns an allocation wants, and `get` — which needs `Copy` — is the
+    ///   operation that leaves the cell and the caller holding the *same*
+    ///   pointer. So the types worth taking are the ones that are not `Copy`,
+    ///   and requiring it would exclude them.
+    ///
+    /// The move itself is `with_mut(mem::take)`: the closure is `mem::take`,
+    /// which provably cannot re-enter, so the exclusive borrow is a leaf one
+    /// and the debug borrow table catches a caller that is already inside a
+    /// `with`/`with_mut` on the same cell.
+    pub fn take(&self) -> T
+    where
+        T: Default,
+    {
+        self.with_mut(core::mem::take)
+    }
+
     /// Run `f` with a shared reference to the contents.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         check_main_thread();
