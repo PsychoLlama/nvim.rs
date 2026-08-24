@@ -30,7 +30,7 @@ use crate::eval::userfunc::{call_func, func_init, restore_funccal, save_funccal}
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
 use crate::eval::{
     EVAL_EVALUATE, FUNCEXE_INIT, NL, NOTDONE, check_luafunc_name, clear_evalarg, eval0,
-    eval0_simple_funccal, eval1, kWinOptFoldexpr, may_call_simple_func, partial_name,
+    eval0_simple_funccal, eval1, may_call_simple_func, partial_name,
 };
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
@@ -38,7 +38,7 @@ use crate::hashtab::hash_init;
 use crate::main::{EVALARG_EVALUATE, called_emsg, current_sctx, curwin, did_emsg, e_invexpr2};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::was_set_insecurely;
-use crate::options::{kOptFoldexpr, kOptFoldtext};
+use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::os::cshim::gettext;
 use crate::runtime::sourcing_a_script;
 use crate::types::{

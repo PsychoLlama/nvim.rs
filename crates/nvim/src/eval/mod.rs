@@ -64,7 +64,6 @@ pub use self::expr::eval0;
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
-pub const kWinOptFoldexpr: c_int = 15;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNil: OptValType = -1;
 pub const kMarkAll: MarkGet = 1;

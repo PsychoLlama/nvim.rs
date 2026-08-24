@@ -27,6 +27,7 @@ use core::ptr;
 
 use super::marker::*;
 use super::*;
+use crate::options::kWinOptFoldtext;
 
 /// Generates text to display
 ///

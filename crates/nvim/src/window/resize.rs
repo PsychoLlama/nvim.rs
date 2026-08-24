@@ -36,6 +36,7 @@ use crate::r#move::{
     validate_botline_win, win_col_off, win_col_off2,
 };
 use crate::option::get_scrolloff_value;
+use crate::options::kWinOptScroll;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
 use crate::statusline::stl_clear_click_defs;

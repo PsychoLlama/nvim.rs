@@ -62,7 +62,6 @@ pub const VIRTTEXT_EMPTY: VirtText = VirtText {
     items: ptr::null_mut(),
 };
 pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kWinOptFoldtext: c_int = 22;
 
 /// The deepest nesting 'foldnestmax' will accept.
 pub const MAX_LEVEL: c_int = 20;
