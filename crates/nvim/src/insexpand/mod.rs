@@ -593,9 +593,9 @@ static cpt_sources_array: GlobalCell<*mut cpt_source_T> =
 static cpt_sources_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cpt_sources_index: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
-static compl_match_array: GlobalCell<*mut pumitem_T> =
+static COMPL_MATCH_ARRAY: GlobalCell<*mut pumitem_T> =
     GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
-static compl_match_arraysize: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static COMPL_MATCH_ARRAYSIZE: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const DICT_FIRST: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DICT_EXACT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static cfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {

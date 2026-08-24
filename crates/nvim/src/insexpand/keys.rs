@@ -126,7 +126,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
         ins_compl_show_pum();
 
         // Don't let Enter select the original text when there is no popup menu.
-        if (*compl_match_array.ptr()).is_null() {
+        if compl_match_array().is_unset() {
             compl_enter_selects.set(false);
         } else if ins_compl_has_preinsert() && !compl_leader().is_empty() {
             ins_compl_insert(true, false);
@@ -323,7 +323,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         if word.is_null()
             && c != Ctrl_E
             && compl_used_match.get()
-            && (*compl_match_array.ptr()).is_null()
+            && compl_match_array().is_unset()
             && !compl_curr_match.get().is_null()
             && !(*compl_curr_match.get()).cp_str.data().is_null()
         {

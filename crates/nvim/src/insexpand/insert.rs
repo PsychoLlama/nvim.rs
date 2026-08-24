@@ -334,7 +334,7 @@ pub(crate) unsafe fn find_next_completion_match(
             }
             let shown = compl_shown_match.get();
             if compl_shows_dir_forward() && !(*shown).cp_next.is_null() {
-                compl_shown_match.set(if !(*compl_match_array.ptr()).is_null() {
+                compl_shown_match.set(if !compl_match_array().is_unset() {
                     find_next_match_in_menu()
                 } else {
                     (*shown).cp_next
@@ -344,7 +344,7 @@ pub(crate) unsafe fn find_next_completion_match(
                         || is_first_match(compl_shown_match.get()));
             } else if compl_shows_dir_backward() && !(*shown).cp_prev.is_null() {
                 found_end = is_first_match(shown);
-                compl_shown_match.set(if !(*compl_match_array.ptr()).is_null() {
+                compl_shown_match.set(if !compl_match_array().is_unset() {
                     find_next_match_in_menu()
                 } else {
                     (*shown).cp_prev
@@ -537,7 +537,7 @@ pub(crate) unsafe fn ins_compl_next(
         if compl_no_insert && !started && !match_at_original_text(compl_shown_match.get()) {
             compl_enter_selects.set(true);
         } else {
-            compl_enter_selects.set(!insert_match && !(*compl_match_array.ptr()).is_null());
+            compl_enter_selects.set(!insert_match && !compl_match_array().is_unset());
         }
 
         // Show the file name for the match (if any).

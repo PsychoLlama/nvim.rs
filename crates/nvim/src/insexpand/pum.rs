@@ -12,6 +12,83 @@ use super::*;
 use crate::guard::{Allow, Lock};
 use crate::types::{IOSIZE, NUL, ShmFlag};
 
+/// The popup menu's view of the match list.
+///
+/// [`ins_compl_build_pum`] filters the cyclic `compl_T` list by the current
+/// leader, sorts what survives and flattens it into a `pumitem_T` array;
+/// [`ins_compl_show_pum`] lends that array to `pum_display`, and
+/// `pum_undisplay` gives the borrow back. Upstream keeps it as a bare
+/// `pumitem_T *` with `compl_match_arraysize` beside it, `xcalloc`'d in one
+/// function and `xfree`'d in three others, with "is the menu up?" spelled as
+/// a null check on the pointer.
+///
+/// `ComplMatchArray` is the one owner of that allocation: a boxed slice
+/// behind the two cells, handed out either as a safe `&[pumitem_T]` or -- for
+/// `pum_display` alone, which wants the same C-shaped pair the external UI
+/// protocol does -- as a raw address. The *strings* inside each item stay
+/// borrowed from the `compl_T` they were read out of, so this owns the spine
+/// and nothing else; the menu must come down before the match list is freed,
+/// exactly as upstream required.
+#[derive(Clone, Copy)]
+pub(crate) struct ComplMatchArray(());
+
+/// The popup menu's item array. See [`ComplMatchArray`].
+pub(crate) fn compl_match_array() -> ComplMatchArray {
+    ComplMatchArray(())
+}
+
+impl ComplMatchArray {
+    /// Whether there is no array at all -- upstream's
+    /// `compl_match_array == NULL`, which is how the completion asks whether
+    /// a menu is up.
+    pub(crate) fn is_unset(self) -> bool {
+        COMPL_MATCH_ARRAY.get().is_null()
+    }
+
+    /// The number of items.
+    pub(crate) fn len(self) -> c_int {
+        COMPL_MATCH_ARRAYSIZE.get()
+    }
+
+    /// The items, empty while the menu is down.
+    pub(crate) fn items(self) -> &'static [pumitem_T] {
+        let array = COMPL_MATCH_ARRAY.get();
+        if array.is_null() {
+            return &[];
+        }
+        // SAFETY: `set` stored a boxed slice of exactly this length and only
+        // `clear` drops it, after `pum_undisplay` has taken the menu down.
+        unsafe { ::core::slice::from_raw_parts(array, COMPL_MATCH_ARRAYSIZE.get() as usize) }
+    }
+
+    /// The address `pum_display` borrows, null while the menu is down.
+    pub(crate) fn as_mut_ptr(self) -> *mut pumitem_T {
+        COMPL_MATCH_ARRAY.get()
+    }
+
+    /// Take `items` as the new array, dropping whatever was there.
+    pub(crate) fn set(self, items: Vec<pumitem_T>) {
+        self.clear();
+        let len = items.len() as c_int;
+        let array = Box::into_raw(items.into_boxed_slice());
+        COMPL_MATCH_ARRAY.set(array.cast::<pumitem_T>());
+        COMPL_MATCH_ARRAYSIZE.set(len);
+    }
+
+    /// Drop the array. The menu must already be down.
+    pub(crate) fn clear(self) {
+        let array = COMPL_MATCH_ARRAY.get();
+        let len = COMPL_MATCH_ARRAYSIZE.replace(0) as usize;
+        COMPL_MATCH_ARRAY.set(ptr::null_mut());
+        if array.is_null() {
+            return;
+        }
+        // SAFETY: the allocation is this owner's own boxed slice, of exactly
+        // `len` items; the strings inside it belong to the match list.
+        drop(unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(array, len)) });
+    }
+}
+
 /// The highlight attribute for the inserted-but-not-accepted text at
 /// `lnum`/`col`, or −1 where there is none.
 pub unsafe fn ins_compl_col_range_attr(lnum: linenr_T, col: c_int) -> c_int {
@@ -48,12 +125,11 @@ pub unsafe fn ins_compl_col_range_attr(lnum: linenr_T, col: c_int) -> c_int {
 /// Take the popup menu down and drop the item array it was built from.
 pub(crate) unsafe fn ins_compl_del_pum() {
     unsafe {
-        if compl_match_array.get().is_null() {
+        if compl_match_array().is_unset() {
             return;
         }
         pum_undisplay(false);
-        xfree(compl_match_array.get().cast::<c_void>());
-        compl_match_array.set(ptr::null_mut());
+        compl_match_array().clear();
     }
 }
 
@@ -250,8 +326,6 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool
 /// Returns the entry that should be selected, or −1 for none.
 pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
     unsafe {
-        compl_match_arraysize.set(0);
-
         // Under a user completion function with `refresh: 'always'` the leader
         // is not a prefix filter, so drop it.
         //
@@ -282,6 +356,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
             });
         }
 
+        let mut match_arraysize = 0;
         let mut did_find_shown_match = false;
         let mut shown_compl: *mut compl_T = ptr::null_mut();
         let mut i = 0;
@@ -330,7 +405,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
                 }
 
                 if !match_limit_exceeded {
-                    compl_match_arraysize.set(compl_match_arraysize.get() + 1);
+                    match_arraysize += 1;
                     (*comp).cp_in_match_array = true;
                     if match_head.is_null() {
                         match_head = comp;
@@ -387,7 +462,8 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
 
         xfree(match_count.cast::<c_void>());
 
-        if compl_match_arraysize.get() == 0 {
+        if match_arraysize == 0 {
+            compl_match_array().clear();
             return -1;
         }
 
@@ -397,38 +473,33 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
             cur = 0;
         }
 
-        debug_assert!(compl_match_arraysize.get() >= 0);
-        let array = xcalloc(
-            compl_match_arraysize.get() as size_t,
-            size_of::<pumitem_T>(),
-        ) as *mut pumitem_T;
-        compl_match_array.set(array);
-
-        let mut i = 0isize;
+        let mut array = Vec::with_capacity(match_arraysize as usize);
         let mut comp = match_head;
         while !comp.is_null() {
-            let item = &mut *array.offset(i);
-            item.pum_text = if (*comp).cp_text[CPT_ABBR as usize].is_null() {
-                (*comp).cp_str.data()
-            } else {
-                (*comp).cp_text[CPT_ABBR as usize]
-            };
-            item.pum_kind = (*comp).cp_text[CPT_KIND as usize];
-            item.pum_info = (*comp).cp_text[CPT_INFO as usize];
-            item.pum_cpt_source_idx = (*comp).cp_cpt_source_idx;
-            item.pum_user_abbr_hlattr = (*comp).cp_user_abbr_hlattr;
-            item.pum_user_kind_hlattr = (*comp).cp_user_kind_hlattr;
-            item.pum_extra = if (*comp).cp_text[CPT_MENU as usize].is_null() {
-                (*comp).cp_fname
-            } else {
-                (*comp).cp_text[CPT_MENU as usize]
-            };
-            i += 1;
+            array.push(pumitem_T {
+                pum_text: if (*comp).cp_text[CPT_ABBR as usize].is_null() {
+                    (*comp).cp_str.data()
+                } else {
+                    (*comp).cp_text[CPT_ABBR as usize]
+                },
+                pum_kind: (*comp).cp_text[CPT_KIND as usize],
+                pum_info: (*comp).cp_text[CPT_INFO as usize],
+                pum_cpt_source_idx: (*comp).cp_cpt_source_idx,
+                pum_user_abbr_hlattr: (*comp).cp_user_abbr_hlattr,
+                pum_user_kind_hlattr: (*comp).cp_user_kind_hlattr,
+                pum_extra: if (*comp).cp_text[CPT_MENU as usize].is_null() {
+                    (*comp).cp_fname
+                } else {
+                    (*comp).cp_text[CPT_MENU as usize]
+                },
+            });
 
             let match_next = (*comp).cp_match_next;
             (*comp).cp_match_next = ptr::null_mut();
             comp = match_next;
         }
+        debug_assert_eq!(array.len(), match_arraysize as usize);
+        compl_match_array().set(array);
 
         if !shown_match_ok {
             // No displayed match at all.
@@ -452,22 +523,22 @@ pub unsafe fn ins_compl_show_pum() {
         let mut cur = -1;
         let mut array_changed = false;
 
-        if compl_match_array.get().is_null() {
+        if compl_match_array().is_unset() {
             array_changed = true;
             cur = ins_compl_build_pum();
         } else {
             // The menu already exists; only the current item has to be found.
             let shown = compl_shown_match.get();
-            for i in 0..compl_match_arraysize.get() {
-                let text = (*compl_match_array.get().offset(i as isize)).pum_text;
+            for (i, item) in compl_match_array().items().iter().enumerate() {
+                let text = item.pum_text;
                 if text == (*shown).cp_str.data() || text == (*shown).cp_text[CPT_ABBR as usize] {
-                    cur = i;
+                    cur = i as c_int;
                     break;
                 }
             }
         }
 
-        if compl_match_array.get().is_null() {
+        if compl_match_array().is_unset() {
             if compl_started.get() && has_event(EVENT_COMPLETECHANGED) {
                 trigger_complete_changed_event(cur);
             }
@@ -483,8 +554,8 @@ pub unsafe fn ins_compl_show_pum() {
         (*curwin.get()).w_cursor.col = compl_col.get();
         compl_selected_item.set(cur);
         pum_display(
-            compl_match_array.get(),
-            compl_match_arraysize.get(),
+            compl_match_array().as_mut_ptr(),
+            compl_match_array().len(),
             cur,
             array_changed,
             0,
