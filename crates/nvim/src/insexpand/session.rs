@@ -481,12 +481,6 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
 /// Start insert-mode completion.
 pub(crate) unsafe fn ins_compl_start() -> c_int {
     unsafe {
-        // C's `kv_destroy(compl_orig_extmarks)`.
-        let destroy_orig_extmarks = || {
-            xfree((*compl_orig_extmarks.ptr()).items.cast::<c_void>());
-            compl_orig_extmarks.set(EXTMARK_UNDO_VEC_INIT);
-        };
-
         // First time we hit ^N or ^P (in a row, I mean).
         let save_did_ai = did_ai.get();
         did_ai.set(false);
@@ -578,12 +572,12 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
 
         // Always add a completion for the original text.
         compl_orig_text().clear();
-        destroy_orig_extmarks();
+        compl_orig_extmarks().clear();
         compl_orig_text().set(cbuf_to_string(
             line.offset(compl_col.get() as isize),
             compl_length.get() as size_t,
         ));
-        save_orig_extmarks();
+        compl_orig_extmarks().save();
         let mut flags = CP_ORIGINAL_TEXT;
         if p_ic.get() != 0 {
             flags |= CP_ICASE;
@@ -604,7 +598,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
         {
             compl_pattern().clear();
             compl_orig_text().clear();
-            destroy_orig_extmarks();
+            compl_orig_extmarks().clear();
             did_ai.set(save_did_ai);
             return FAIL;
         }

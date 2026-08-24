@@ -350,7 +350,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
                     );
                 }
             }
-            restore_orig_extmarks();
+            compl_orig_extmarks().restore();
             retval = true;
         }
 

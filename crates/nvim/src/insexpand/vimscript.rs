@@ -182,32 +182,73 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut dict_T) {
     }
 }
 
-/// Save the extmarks over `compl_orig_text`, so they can be restored when the
-/// completion is cancelled or the original text is completed.
-pub(crate) unsafe fn save_orig_extmarks() {
-    unsafe {
-        let lnum = (*curwin.get()).w_cursor.lnum as c_int - 1;
-        extmark_splice_delete(
-            curbuf.get(),
-            lnum,
-            compl_col.get(),
-            lnum,
-            compl_col.get() + compl_length.get(),
-            compl_orig_extmarks.ptr(),
-            true,
-            kExtmarkUndo,
-        );
-    }
+/// The extmarks that were sitting on `compl_orig_text`, kept so they can go
+/// back when the completion is cancelled or the original text is completed.
+///
+/// The list is a `kvec` -- `extmark_splice_delete` pushes onto it through
+/// `xrealloc`, so it stays C-shaped -- but the allocation is the
+/// completion's own, and upstream frees it by hand at three sites with
+/// `kv_destroy` written out.  `ComplOrigExtmarks` names the cell rather than
+/// pointing into it, so it is `Copy`, needs no `unsafe` to make, and is the
+/// single owner of the buffer: the address is produced only inside
+/// [`save`](Self::save), and only for the length of that one call.
+#[derive(Clone, Copy)]
+pub(crate) struct ComplOrigExtmarks(());
+
+/// The extmarks saved over the original text. See [`ComplOrigExtmarks`].
+pub(crate) fn compl_orig_extmarks() -> ComplOrigExtmarks {
+    ComplOrigExtmarks(())
 }
 
-/// Put the saved extmarks back, newest first.
-pub(crate) unsafe fn restore_orig_extmarks() {
-    let saved = compl_orig_extmarks.ptr();
-    unsafe {
-        for i in (0..(*saved).size as isize).rev() {
-            let undo_info = *(*saved).items.offset(i);
-            extmark_apply_undo(undo_info, true);
+impl ComplOrigExtmarks {
+    /// Save the extmarks over the text `compl_col`/`compl_length` covers,
+    /// invalidating them in the buffer.
+    ///
+    /// # Safety
+    /// The cursor's line must be live, and `compl_col`/`compl_length` must
+    /// describe a range inside it.
+    pub(crate) unsafe fn save(self) {
+        // The list is handed over by address because `kv_push` reallocates
+        // it; a local stands in for the cell so nothing else can see it
+        // half-grown, and `splice_delete` runs no editor code that could
+        // look.
+        let mut saved = COMPL_ORIG_EXTMARKS.get();
+        // SAFETY: the caller's promise; `saved` is a live vector.
+        unsafe {
+            let lnum = (*curwin.get()).w_cursor.lnum as c_int - 1;
+            extmark_splice_delete(
+                curbuf.get(),
+                lnum,
+                compl_col.get(),
+                lnum,
+                compl_col.get() + compl_length.get(),
+                &raw mut saved,
+                true,
+                kExtmarkUndo,
+            );
         }
+        COMPL_ORIG_EXTMARKS.set(saved);
+    }
+
+    /// Put the saved extmarks back, newest first.
+    ///
+    /// # Safety
+    /// The buffer they were taken from must still be current.
+    pub(crate) unsafe fn restore(self) {
+        let saved = COMPL_ORIG_EXTMARKS.get();
+        // SAFETY: `saved` holds `size` undo objects the buffer still owns.
+        unsafe {
+            for i in (0..saved.size as isize).rev() {
+                extmark_apply_undo(*saved.items.offset(i), true);
+            }
+        }
+    }
+
+    /// C's `kv_destroy(compl_orig_extmarks)`.
+    pub(crate) fn clear(self) {
+        let saved = COMPL_ORIG_EXTMARKS.replace(EXTMARK_UNDO_VEC_INIT);
+        // SAFETY: the buffer is this owner's own, and `xfree` takes null.
+        unsafe { xfree(saved.items.cast::<c_void>()) };
     }
 }
 
@@ -240,7 +281,7 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
             get_cursor_line_ptr().offset(compl_col.get() as isize),
             compl_length.get() as size_t,
         ));
-        save_orig_extmarks();
+        compl_orig_extmarks().save();
 
         let mut flags = CP_ORIGINAL_TEXT;
         if p_ic.get() != 0 {

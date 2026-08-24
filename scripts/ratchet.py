@@ -357,12 +357,11 @@ CELL_PTR_ALLOW_RE = re.compile(
 # `.get()` hands out a second owner of the same allocation. Hand-maintained:
 # see the doc block. Grouped by the family whose slice retires them.
 CELL_COPY_OWNER = (
-    # insexpand — the Array of extmarks saved over the original text. Its
-    # four `String_0` siblings retired in phase 22's S5: `compl_pattern`,
-    # `compl_leader`, `compl_orig_text` and `adjusted_leader` are reached
-    # through `ComplStr`, which is the single owner of each buffer, so no
-    # site copies the two words out of the cell any more.
-    "compl_orig_extmarks",
+    # insexpand is done: `compl_pattern`, `compl_leader`, `compl_orig_text`
+    # and `adjusted_leader` retired in phase 22's S5 behind `ComplStr`, and
+    # `compl_orig_extmarks` in S6 behind `ComplOrigExtmarks`. Each is now
+    # reached only through the single owner of its buffer, so no site copies
+    # the words out of the cell to get at the allocation.
     # runtime — garray_T and the search-path buffers
     "script_items",
     "runtime_search_path",

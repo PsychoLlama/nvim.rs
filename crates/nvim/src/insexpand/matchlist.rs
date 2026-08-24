@@ -544,8 +544,7 @@ pub unsafe fn ins_compl_clear() {
         compl_pattern().clear();
         compl_leader().clear();
         edit_submode_extra.set(ptr::null_mut());
-        xfree(compl_orig_extmarks.get().items.cast::<c_void>());
-        compl_orig_extmarks.set(EXTMARK_UNDO_VEC_INIT);
+        compl_orig_extmarks().clear();
         compl_orig_text().clear();
         compl_enter_selects.set(false);
         cpt_sources().clear();

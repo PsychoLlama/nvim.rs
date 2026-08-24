@@ -499,7 +499,7 @@ pub(crate) unsafe fn ins_compl_next(
                 -1,
             );
             compl_used_match.set(false);
-            restore_orig_extmarks();
+            compl_orig_extmarks().restore();
         } else if insert_match {
             if !compl_get_longest.get() || compl_used_match.get() {
                 // None selected.
@@ -514,7 +514,7 @@ pub(crate) unsafe fn ins_compl_next(
                 (*compl_shown_match.get()).cp_str.data(),
                 compl_orig_text().data(),
             ) {
-                restore_orig_extmarks();
+                compl_orig_extmarks().restore();
             }
         } else {
             compl_used_match.set(false);

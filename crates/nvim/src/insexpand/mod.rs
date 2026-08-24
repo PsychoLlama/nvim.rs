@@ -540,7 +540,7 @@ static compl_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static compl_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
 static compl_ins_end_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
 static COMPL_ORIG_TEXT: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static compl_orig_extmarks: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXTMARK_UNDO_VEC_INIT);
+static COMPL_ORIG_EXTMARKS: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXTMARK_UNDO_VEC_INIT);
 static compl_cont_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
     xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
