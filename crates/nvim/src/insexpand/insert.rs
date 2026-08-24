@@ -354,9 +354,9 @@ pub(crate) unsafe fn find_next_completion_match(
                 if !allow_get_expansion {
                     if advance {
                         if compl_shows_dir_backward() {
-                            (*compl_pending.ptr()) -= todo + 1;
+                            compl_pending.set(compl_pending.get() - (todo + 1));
                         } else {
-                            (*compl_pending.ptr()) += todo + 1;
+                            compl_pending.set(compl_pending.get() + (todo + 1));
                         }
                     }
                     return -1;
@@ -364,14 +364,14 @@ pub(crate) unsafe fn find_next_completion_match(
 
                 if !compl_no_select && advance {
                     if compl_shows_dir_backward() {
-                        (*compl_pending.ptr()) -= 1;
+                        compl_pending.set(compl_pending.get() - 1);
                     } else {
-                        (*compl_pending.ptr()) += 1;
+                        compl_pending.set(compl_pending.get() + 1);
                     }
                 }
 
                 // Find matches.
-                *num_matches = ins_compl_get_exp(compl_startpos.ptr());
+                *num_matches = ins_compl_get_exp(compl_startpos.get());
 
                 // Handle any pending completions.
                 while compl_pending.get() != 0
@@ -381,10 +381,10 @@ pub(crate) unsafe fn find_next_completion_match(
                     let shown = compl_shown_match.get();
                     if compl_pending.get() > 0 && !(*shown).cp_next.is_null() {
                         compl_shown_match.set((*shown).cp_next);
-                        (*compl_pending.ptr()) -= 1;
+                        compl_pending.set(compl_pending.get() - 1);
                     } else if compl_pending.get() < 0 && !(*shown).cp_prev.is_null() {
                         compl_shown_match.set((*shown).cp_prev);
-                        (*compl_pending.ptr()) += 1;
+                        compl_pending.set(compl_pending.get() + 1);
                     } else {
                         break;
                     }

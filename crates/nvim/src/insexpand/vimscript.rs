@@ -202,9 +202,10 @@ pub(crate) unsafe fn save_orig_extmarks() {
 
 /// Put the saved extmarks back, newest first.
 pub(crate) unsafe fn restore_orig_extmarks() {
+    let saved = compl_orig_extmarks.ptr();
     unsafe {
-        for i in (0..(*compl_orig_extmarks.ptr()).size as isize).rev() {
-            let undo_info = *(*compl_orig_extmarks.ptr()).items.offset(i);
+        for i in (0..(*saved).size as isize).rev() {
+            let undo_info = *(*saved).items.offset(i);
             extmark_apply_undo(undo_info, true);
         }
     }

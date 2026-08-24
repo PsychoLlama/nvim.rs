@@ -291,7 +291,7 @@ pub(crate) unsafe fn ins_compl_files(
                                 && !(*compl_first_match.get()).cp_next.is_null()
                                 && score == (*(*compl_first_match.get()).cp_next).cp_score
                             {
-                                (*compl_num_bests.ptr()) += 1;
+                                compl_num_bests.set(compl_num_bests.get() + 1);
                             }
                         }
                     }
@@ -660,7 +660,7 @@ pub(crate) unsafe fn get_next_default_completion(
             ) != NOTDONE
             {
                 if in_fuzzy_collect && score == (*(*compl_first_match.get()).cp_next).cp_score {
-                    (*compl_num_bests.ptr()) += 1;
+                    compl_num_bests.set(compl_num_bests.get() + 1);
                 }
                 found_new_match = OK;
                 break;

@@ -15,6 +15,17 @@ use crate::types::{
     ExpandContext, FAIL, IOSIZE, NUL, OK, ShmFlag, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
 
+/// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`
+/// — the completion's anchor moved to `col` on the cursor's line.
+///
+/// # Safety
+/// There must be a current window.
+unsafe fn set_compl_startpos_here(col: colnr_T) {
+    // SAFETY: the caller's contract.
+    let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+    compl_startpos.set(compl_startpos.get().with_lnum(lnum).with_col(col));
+}
+
 /// The pattern, column and length for normal (CTRL-N / CTRL-P) completion.
 ///
 /// Sets `compl_col`, `compl_length` and `compl_pattern`; reads
@@ -47,7 +58,7 @@ pub(crate) unsafe fn get_normal_compl_info(
                         && vim_is_ident_char(*line.offset(startcol as isize) as u8 as c_int)
                 } {}
                 startcol += 1;
-                (*compl_col.ptr()) += startcol;
+                compl_col.set(compl_col.get() + startcol);
                 compl_length.set(curs_col - startcol);
             }
             if p_ic.get() != 0 {
@@ -83,7 +94,7 @@ pub(crate) unsafe fn get_normal_compl_info(
             if startcol < 0 || !vim_iswordp(mb_prevptr(line, line.offset(startcol as isize + 1))) {
                 // Match any word of at least two chars.
                 compl_pattern.set(cbuf_to_string(c"\\<\\k\\k".as_ptr(), 6));
-                (*compl_col.ptr()) += curs_col;
+                compl_col.set(compl_col.get() + curs_col);
                 compl_length.set(0);
                 compl_from_nonkeyword.set(true);
             } else {
@@ -104,7 +115,7 @@ pub(crate) unsafe fn get_normal_compl_info(
                     startcol -= head_off;
                 }
                 startcol += 1;
-                (*compl_col.ptr()) += startcol;
+                compl_col.set(compl_col.get() + startcol);
                 compl_length.set(curs_col - startcol);
                 if compl_length.get() == 1 {
                     // Only match a word with at least two chars -- webb.
@@ -187,7 +198,7 @@ pub(crate) unsafe fn get_filename_compl_info(
             };
         }
 
-        (*compl_col.ptr()) += startcol;
+        compl_col.set(compl_col.get() + startcol);
         compl_length.set(curs_col - startcol);
         compl_pattern.set(cstr_as_string(addstar(
             line.offset(compl_col.get() as isize),
@@ -201,29 +212,28 @@ pub(crate) unsafe fn get_filename_compl_info(
 /// The pattern, column and length for command-line completion.
 pub(crate) unsafe fn get_cmdline_compl_info(line: *mut c_char, curs_col: colnr_T) -> c_int {
     unsafe {
+        // The expansion context outlives no call here, but `set_cmd_context`
+        // and `nlua_expand_pat` both want it by pointer, so it is taken once.
+        let xp = compl_xp.ptr();
         compl_pattern.set(cbuf_to_string(line, curs_col as size_t));
         set_cmd_context(
-            compl_xp.ptr(),
+            xp,
             (*compl_pattern.ptr()).data(),
             (*compl_pattern.ptr()).len() as c_int,
             curs_col,
             false,
         );
-        if (*compl_xp.ptr()).xp_context == ExpandContext::Lua {
-            nlua_expand_pat(compl_xp.ptr());
+        if (*xp).xp_context == ExpandContext::Lua {
+            nlua_expand_pat(xp);
         }
-        if (*compl_xp.ptr()).xp_context == ExpandContext::Unsuccessful
-            || (*compl_xp.ptr()).xp_context == ExpandContext::Nothing
+        if (*xp).xp_context == ExpandContext::Unsuccessful
+            || (*xp).xp_context == ExpandContext::Nothing
         {
             // No completion possible: use an empty pattern to get a
             // "pattern not found" message.
             compl_col.set(curs_col);
         } else {
-            compl_col.set(
-                (*compl_xp.ptr())
-                    .xp_pattern
-                    .offset_from((*compl_pattern.ptr()).data()) as colnr_T,
-            );
+            compl_col.set((*xp).xp_pattern.offset_from((*compl_pattern.ptr()).data()) as colnr_T);
         }
         compl_length.set(curs_col - compl_col.get());
         OK
@@ -425,41 +435,40 @@ pub(crate) unsafe fn compl_get_info(
 pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
     unsafe {
         // It is a continued search.
-        (*compl_cont_status.ptr()) &= !CONT_INTRPT; // remove INTRPT
+        compl_cont_status.set(compl_cont_status.get() & !CONT_INTRPT); // remove INTRPT
         if ctrl_x_mode_normal() || ctrl_x_mode_path_patterns() || ctrl_x_mode_path_defines() {
-            if (*compl_startpos.ptr()).lnum != (*curwin.get()).w_cursor.lnum {
+            if compl_startpos.get().lnum != (*curwin.get()).w_cursor.lnum {
                 // The line (probably) wrapped: set compl_startpos to the first
                 // non-blank in the line. If that is not a word character we
                 // include it to get a better pattern, but then we don't want
                 // the "\\<" prefix — checked below.
                 compl_col.set(getwhitecols(line) as colnr_T);
-                (*compl_startpos.ptr()).col = compl_col.get();
-                (*compl_startpos.ptr()).lnum = (*curwin.get()).w_cursor.lnum;
-                (*compl_cont_status.ptr()) &= !CONT_SOL; // clear SOL if present
+                set_compl_startpos_here(compl_col.get());
+                compl_cont_status.set(compl_cont_status.get() & !CONT_SOL); // clear SOL if present
             } else {
                 // S_IPOS was set when we inserted a word that was at the
                 // beginning of the line, which means that we'll go to SOL
                 // mode, but first we need to redefine compl_startpos.
                 if compl_cont_status.get() & CONT_S_IPOS != 0 {
-                    (*compl_cont_status.ptr()) |= CONT_SOL;
-                    (*compl_startpos.ptr()).col = skipwhite(
-                        line.offset((compl_length.get() + (*compl_startpos.ptr()).col) as isize),
-                    )
-                    .offset_from(line) as colnr_T;
+                    compl_cont_status.set(compl_cont_status.get() | CONT_SOL);
+                    let after =
+                        line.offset((compl_length.get() + compl_startpos.get().col) as isize);
+                    let col = skipwhite(after).offset_from(line) as colnr_T;
+                    compl_startpos.set(compl_startpos.get().with_col(col));
                 }
-                compl_col.set((*compl_startpos.ptr()).col);
+                compl_col.set(compl_startpos.get().col);
             }
             compl_length.set((*curwin.get()).w_cursor.col - compl_col.get());
             // IObuff is used to add a "word from the next line"; would we have
             // enough space?  Just being paranoid.
             if compl_length.get() > IOSIZE - MIN_SPACE {
-                (*compl_cont_status.ptr()) &= !CONT_SOL;
+                compl_cont_status.set(compl_cont_status.get() & !CONT_SOL);
                 compl_length.set(IOSIZE - MIN_SPACE);
                 compl_col.set((*curwin.get()).w_cursor.col - compl_length.get());
             }
-            (*compl_cont_status.ptr()) |= CONT_ADDING | CONT_N_ADDS;
+            compl_cont_status.set(compl_cont_status.get() | CONT_ADDING | CONT_N_ADDS);
             if compl_length.get() < 1 {
-                (*compl_cont_status.ptr()) &= CONT_LOCAL;
+                compl_cont_status.set(compl_cont_status.get() & CONT_LOCAL);
             }
         } else if ctrl_x_mode_line_or_eval() || ctrl_x_mode_register() {
             compl_cont_status.set(CONT_ADDING | CONT_N_ADDS);
@@ -501,7 +510,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
             // completion.
             ins_compl_continue_search(line);
         } else {
-            (*compl_cont_status.ptr()) &= CONT_LOCAL;
+            compl_cont_status.set(compl_cont_status.get() & CONT_LOCAL);
         }
 
         let mut startcol = 0; // column where the searched text starts
@@ -512,7 +521,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
                 // Remove LOCAL if ctrl_x_mode != CTRL_X_NORMAL.
                 compl_cont_status.set(0);
             }
-            (*compl_cont_status.ptr()) |= CONT_N_ADDS;
+            compl_cont_status.set(compl_cont_status.get() | CONT_N_ADDS);
             compl_startpos.set((*curwin.get()).w_cursor);
             startcol = curs_col;
             compl_col.set(0);
@@ -543,8 +552,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
                 // Insert a new line, keep indentation but ignore 'comments'.
                 let old = (*curbuf.get()).b_p_com;
                 (*curbuf.get()).b_p_com = c"".as_ptr().cast_mut();
-                (*compl_startpos.ptr()).lnum = (*curwin.get()).w_cursor.lnum;
-                (*compl_startpos.ptr()).col = compl_col.get();
+                set_compl_startpos_here(compl_col.get());
                 ins_eol('\r' as c_int);
                 (*curbuf.get()).b_p_com = old;
                 compl_length.set(0);
@@ -553,7 +561,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
             }
         } else {
             edit_submode_pre.set(ptr::null_mut());
-            (*compl_startpos.ptr()).col = compl_col.get();
+            compl_startpos.set(compl_startpos.get().with_col(compl_col.get()));
         }
 
         if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
@@ -688,14 +696,14 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> c_int {
                     && !ctrl_x_mode_path_patterns()
                     && !ctrl_x_mode_path_defines())
             {
-                (*compl_cont_status.ptr()) &= !CONT_N_ADDS;
+                compl_cont_status.set(compl_cont_status.get() & !CONT_N_ADDS);
             }
         }
 
         if (*compl_curr_match.get()).cp_flags & CP_CONT_S_IPOS != 0 {
-            (*compl_cont_status.ptr()) |= CONT_S_IPOS;
+            compl_cont_status.set(compl_cont_status.get() | CONT_S_IPOS);
         } else {
-            (*compl_cont_status.ptr()) &= !CONT_S_IPOS;
+            compl_cont_status.set(compl_cont_status.get() & !CONT_S_IPOS);
         }
 
         if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {

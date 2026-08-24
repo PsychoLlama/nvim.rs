@@ -546,15 +546,23 @@ pub(crate) unsafe fn compl_source_start_timer(source_idx: c_int) {
 /// continues where the previous call stopped. May return before every match is
 /// found; the answer is the total number of matches, or −1 while that is still
 /// unknown. -- Acevedo
-pub(crate) unsafe fn ins_compl_get_exp(ini: *mut pos_T) -> c_int {
+pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
     unsafe {
-        static st: GlobalCell<ins_compl_next_state_T> = GlobalCell::new(INS_COMPL_NEXT_STATE_INIT);
+        // Upstream's function-scope `static ins_compl_next_state_T st`: the
+        // scan is collected over many calls, so the state outlives each one.
+        // The pointer is taken once, here, because `st.cur_match_pos` points
+        // *into* `st` — the address has to stay put for the whole call — and
+        // because `process_next_cpt_value` and `get_next_completion_match`
+        // want it by pointer anyway.
+        static st_cell: GlobalCell<ins_compl_next_state_T> =
+            GlobalCell::new(INS_COMPL_NEXT_STATE_INIT);
         static st_cleared: GlobalCell<bool> = GlobalCell::new(false);
+        let st = st_cell.ptr();
 
         let mut found_new_match;
         let mut type_0 = ctrl_x_mode.get();
         let mut may_advance_cpt_idx = false;
-        let mut start_pos = *ini;
+        let mut start_pos = ini;
 
         debug_assert!(!curbuf.get().is_null());
 
@@ -565,39 +573,39 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: *mut pos_T) -> c_int {
                 buf = (*buf).b_next;
             }
             if !st_cleared.get() {
-                st.set(INS_COMPL_NEXT_STATE_INIT);
+                st_cell.set(INS_COMPL_NEXT_STATE_INIT);
                 st_cleared.set(true);
             }
-            (*st.ptr()).found_all = false;
-            (*st.ptr()).ins_buf = curbuf.get();
-            xfree((*st.ptr()).e_cpt_copy.cast::<c_void>());
+            (*st).found_all = false;
+            (*st).ins_buf = curbuf.get();
+            xfree((*st).e_cpt_copy.cast::<c_void>());
             // Copy 'complete', in case the buffer is wiped out.
-            (*st.ptr()).e_cpt_copy = xstrdup(if compl_cont_status.get() & CONT_LOCAL != 0 {
+            (*st).e_cpt_copy = xstrdup(if compl_cont_status.get() & CONT_LOCAL != 0 {
                 c".".as_ptr()
             } else {
                 (*curbuf.get()).b_p_cpt
             });
-            strip_caret_numbers_in_place((*st.ptr()).e_cpt_copy);
-            (*st.ptr()).e_cpt = (*st.ptr()).e_cpt_copy;
+            strip_caret_numbers_in_place((*st).e_cpt_copy);
+            (*st).e_cpt = (*st).e_cpt_copy;
 
             if compl_autocomplete.get() && is_nearest_active() {
                 start_pos.lnum = (start_pos.lnum - LOOKBACK_LINE_COUNT).max(1);
                 start_pos.col = 0;
             }
-            (*st.ptr()).first_match_pos = start_pos;
-            (*st.ptr()).last_match_pos = start_pos;
-        } else if (*st.ptr()).ins_buf != curbuf.get() && !buf_valid((*st.ptr()).ins_buf) {
+            (*st).first_match_pos = start_pos;
+            (*st).last_match_pos = start_pos;
+        } else if (*st).ins_buf != curbuf.get() && !buf_valid((*st).ins_buf) {
             // In case the buffer was wiped out.
-            (*st.ptr()).ins_buf = curbuf.get();
+            (*st).ins_buf = curbuf.get();
         }
-        debug_assert!(!(*st.ptr()).ins_buf.is_null());
+        debug_assert!(!(*st).ins_buf.is_null());
 
         // Remember the last current match.
         compl_old_match.set(compl_curr_match.get());
-        (*st.ptr()).cur_match_pos = if compl_dir_forward() {
-            &raw mut (*st.ptr()).last_match_pos
+        (*st).cur_match_pos = if compl_dir_forward() {
+            &raw mut (*st).last_match_pos
         } else {
-            &raw mut (*st.ptr()).first_match_pos
+            &raw mut (*st).first_match_pos
         };
 
         let normal_mode_strict = ctrl_x_mode_normal()
@@ -621,17 +629,17 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: *mut pos_T) -> c_int {
         // 'complete'.
         loop {
             found_new_match = FAIL;
-            (*st.ptr()).set_match_pos = false;
+            (*st).set_match_pos = false;
 
             // For CTRL-N/CTRL-P pick a new entry from `e_cpt` when
             // `compl_started` is off, or when `found_all` says this entry is
             // done. For CTRL-X CTRL-L only the entries that look in loaded
             // buffers are used.
             if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
-                && (!compl_started.get() || (*st.ptr()).found_all)
+                && (!compl_started.get() || (*st).found_all)
             {
                 let status = process_next_cpt_value(
-                    st.ptr(),
+                    st,
                     &raw mut type_0,
                     &raw mut start_pos,
                     cot_fuzzy(),
@@ -669,11 +677,8 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: *mut pos_T) -> c_int {
                 });
             }
 
-            found_new_match = c_int::from(get_next_completion_match(
-                type_0,
-                st.ptr(),
-                &raw mut start_pos,
-            ));
+            found_new_match =
+                c_int::from(get_next_completion_match(type_0, st, &raw mut start_pos));
 
             // If complete() was called then `compl_pattern` has been reset and
             // the rest of this cannot work; bail out.
@@ -707,10 +712,9 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: *mut pos_T) -> c_int {
                 compl_started.set(!compl_time_slice_expired.get());
             } else {
                 // Mark a buffer scanned when it has been scanned completely.
-                if buf_valid((*st.ptr()).ins_buf) && (type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS)
-                {
-                    debug_assert!(!(*st.ptr()).ins_buf.is_null());
-                    (*(*st.ptr()).ins_buf).b_scanned = true;
+                if buf_valid((*st).ins_buf) && (type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS) {
+                    debug_assert!(!(*st).ins_buf.is_null());
+                    (*(*st).ins_buf).b_scanned = true;
                 }
                 compl_started.set(false);
             }
@@ -739,9 +743,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: *mut pos_T) -> c_int {
         cpt_sources_index.set(-1);
         compl_started.set(true);
 
-        if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
-            && *(*st.ptr()).e_cpt as c_int == NUL
-        {
+        if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && *(*st).e_cpt as c_int == NUL {
             // Got to the end of 'complete'.
             found_new_match = FAIL;
         }
