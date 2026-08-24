@@ -175,9 +175,9 @@ pub(crate) unsafe fn cmdpreview_restore_undo(cp_undoinfo: *const CpUndoInfo, buf
 pub(crate) unsafe fn cmdpreview_prepare(cpinfo: *mut CpInfo) {
     unsafe {
         // C's `kv_push` onto one of `CpInfo`'s two kvecs. A macro rather than
-        // a function because the two differ only in element type, and the
-        // kvecs are c2rust's anonymous structs with no name to be generic
-        // over.
+        // a function because `CpBufInfoVec` and `CpWinInfoVec` are separate
+        // structs differing only in element type, with nothing relating
+        // their fields to be generic over.
         macro_rules! kv_push {
             ($vec:expr, $value:expr) => {{
                 let value = $value;

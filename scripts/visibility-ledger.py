@@ -223,7 +223,7 @@ def declaring(module, item, seen=()):
     """Chase re-exports to the file that really declares `item`.
 
     A row whose `file` is the module the test imports from says nothing about
-    where the item lives; c2rust's headers are re-exported through half the
+    where the item lives; the header modules are re-exported through half the
     tree. Answers (file, kind), falling back to the importing module when the
     chain leaves what this script can follow.
     """
