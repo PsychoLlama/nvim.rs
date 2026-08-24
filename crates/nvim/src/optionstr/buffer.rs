@@ -24,20 +24,20 @@ use crate::fold::{
 use crate::indent::tabstop_set;
 use crate::indent_c::parse_cino;
 use crate::main::{
-    bkc_flags, e_modifiable, e_unsupportedoption, p_bex, p_bkc, p_bs, p_enc, p_fenc, p_isk, p_pm,
-    secure,
+    bkc_flags, e_modifiable, e_unsupportedoption, p_bex, p_bkc, p_bs, p_enc, p_fenc, p_pm, secure,
 };
 use crate::mark::free_fmark;
 use crate::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_setflags;
 use crate::memory::xfree;
+use crate::option::option_var;
 use crate::option::{
     get_fileformat, get_varp_scope_from, redraw_titles, set_iminsert_global, set_imsearch_global,
     set_option_direct, skip_to_option_part,
 };
 use crate::options::{
-    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, opt_bh_values, opt_bkc_values,
-    opt_bt_values,
+    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, kOptIskeyword, opt_bh_values,
+    opt_bkc_values, opt_bt_values,
 };
 use crate::os::cshim::strstr;
 use crate::os::time::os_time;
@@ -513,7 +513,7 @@ pub unsafe fn did_set_formatoptions(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
     let varp = unsafe { varp(args) };
-    if varp != p_isk.ptr() {
+    if varp != option_var(kOptIskeyword).string_var() {
         return unsafe { did_set_isopt(args) };
     }
     // SAFETY: the frame's C string value.

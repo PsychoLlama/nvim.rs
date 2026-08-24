@@ -86,7 +86,7 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
         if !file.is_null() && *file != NUL as c_char {
             return Some(CStr::from_ptr(file).to_owned());
         }
-        if !(*p_shadafile.ptr()).is_null() && *p_shadafile.get() != NUL as c_char {
+        if !p_shadafile.get().is_null() && *p_shadafile.get() != NUL as c_char {
             if strequal(p_shadafile.get(), c"NONE".as_ptr()) {
                 return None; // "-i NONE" or "--clean"
             }

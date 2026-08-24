@@ -36,16 +36,16 @@ use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
 use crate::main::{
     Columns, Rows, clear_cmdline, cmdline_row, curbuf, curtab, curwin, e_invarg, first_tabpage,
-    firstbuf, firstwin, full_screen, lastwin, need_maketitle, p_arshape, p_ch, p_chi, p_columns,
-    p_deco, p_ea, p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj, p_tbidi, p_titlelen, p_uc,
-    p_udf, p_ul, p_wh, p_window, p_wiw, readonlymode, starting, topframe, updating_screen,
+    firstbuf, firstwin, full_screen, lastwin, need_maketitle, p_arshape, p_ch, p_columns, p_deco,
+    p_ea, p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj, p_tbidi, p_titlelen, p_uc, p_udf, p_ul,
+    p_wh, p_window, p_wiw, readonlymode, starting, topframe, updating_screen,
 };
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
 use crate::message::{msg, msg_source};
 use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};
-use crate::options::{kOptKeymap, kOptWindow};
+use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
 use crate::optionstr::check_signcolumn;
 use crate::os::cshim::{gettext, strncmp};
 use crate::popupmenu::{pum_drawn, pum_redraw};
@@ -68,8 +68,8 @@ use ::libc::strcmp;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, check_blending,
-    did_set_title, kOptValTypeNumber, kOptValTypeString, option_was_set, optval_boolean,
-    redraw_titles, set_option_value, set_option_varp, set_options_bin,
+    did_set_title, kOptValTypeNumber, kOptValTypeString, option_var, option_was_set,
+    optval_boolean, redraw_titles, set_option_value, set_option_varp, set_options_bin,
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};
@@ -698,7 +698,7 @@ pub(crate) unsafe fn did_set_undolevels(args: *mut optset_T) -> *const c_char {
         let f = Frame::read(args);
         let pp = f.varp.number_var();
         let (value, old_value) = (f.new_number(), f.old_number());
-        if pp == p_ul.ptr() {
+        if f.varp == option_var(kOptUndolevels) {
             p_ul.set(old_value);
             u_sync(true);
             p_ul.set(value);
@@ -806,7 +806,7 @@ pub(crate) unsafe fn did_set_xhistory(args: *mut optset_T) -> *const c_char {
     unsafe {
         let f = Frame::read(args);
         let arg = f.varp.number_var();
-        if arg == p_chi.ptr() {
+        if f.varp == option_var(kOptChistory) {
             qf_resize_stack(*arg as c_int);
         } else {
             ll_resize_stack(f.win, *arg as c_int);
