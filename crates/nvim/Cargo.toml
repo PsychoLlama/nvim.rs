@@ -20,7 +20,7 @@ crate-type = ["rlib"]
 
 # Runnable `nvim` executable. `autobins = false` above disables bin
 # auto-discovery, so the entry point is declared explicitly here; it just
-# calls the `main()` c2rust generated in src/main.rs.
+# calls the `main()` in src/main.rs.
 [[bin]]
 name = "nvim"
 path = "src/bin/nvim.rs"

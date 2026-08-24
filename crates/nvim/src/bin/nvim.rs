@@ -1,10 +1,9 @@
-//! Binary entry point for the c2rust-transpiled neovim.
+//! Binary entry point for neovim.
 //!
-//! c2rust already emitted a `pub fn main()` in `src/main.rs` that
-//! marshals `std::env::args()` into the `argc`/`argv` the transpiled C
-//! `main` expects and calls it. All this shim does is invoke it, turning
-//! the library crate into a runnable `nvim` executable without touching
-//! the generated sources.
+//! `src/main.rs` holds a `pub fn main()` that marshals `std::env::args()`
+//! into the `argc`/`argv` the editor's own `main` expects and calls it. All
+//! this shim does is invoke it, turning the library crate into a runnable
+//! `nvim` executable.
 
 #![forbid(unsafe_code)]
 #![deny(

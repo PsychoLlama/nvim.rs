@@ -3,7 +3,7 @@
 
   inputs = {
     # Linux-only: the build.rs link line (`-lrt`, `-ldl`/`-lutil`,
-    # `--export-dynamic`) and the c2rust-transpiled sources are GNU/Linux-bound,
+    # `--export-dynamic`) and the ported sources are GNU/Linux-bound,
     # so there is nothing buildable to advertise on Darwin.
     systems.url = "github:nix-systems/default-linux";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

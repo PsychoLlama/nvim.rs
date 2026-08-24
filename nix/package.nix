@@ -1,5 +1,5 @@
-# The `nvim` executable: the c2rust-transpiled Neovim, linked against the
-# prebuilt C dependencies from `deps.nix`.
+# The `nvim` executable: Neovim ported to Rust, linked against the prebuilt C
+# dependencies from `deps.nix`.
 #
 # `build.rs` would normally shell out to cmake.deps to build the C libraries. We
 # short-circuit that with `$NVIM_DEPS_PREFIX`, pointing it at the already-built
@@ -73,7 +73,7 @@ rustPlatform.buildRustPackage {
   doCheck = false;
 
   meta = {
-    description = "Neovim v0.12.4, transpiled to Rust with c2rust";
+    description = "Neovim v0.12.4, ported to Rust";
     homepage = "https://github.com/PsychoLlama/nvim.rs";
     # Apache-2.0 overall, Vim-license contributions, and the in-tree ports
     # (xdiff: LGPL-2.1+ except xhistogram under the Eclipse Distribution
