@@ -56,10 +56,10 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
                 if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
                     reset_redobuff();
                 }
-                add_char_buff(redobuff.ptr(), c);
+                redobuff().add_char(c);
             }
             if need_record {
-                add_char_buff(recordbuff.ptr(), c);
+                recordbuff().add_char(c);
             }
             return;
         }
@@ -80,10 +80,10 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
             if s > start {
                 let len = s.offset_from(start);
                 if need_redo {
-                    add_buff(redobuff.ptr(), start, len);
+                    redobuff().add(start, len);
                 }
                 if need_record {
-                    add_buff(recordbuff.ptr(), start, len);
+                    recordbuff().add(start, len);
                 }
             }
 
@@ -99,10 +99,10 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
                     c = NL;
                 }
                 if need_redo {
-                    add_byte_buff(redobuff.ptr(), c);
+                    redobuff().add_byte(c);
                 }
                 if need_record {
-                    add_byte_buff(recordbuff.ptr(), c);
+                    recordbuff().add_byte(c);
                 }
             }
         }

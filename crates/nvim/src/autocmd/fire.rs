@@ -21,6 +21,7 @@
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
+use crate::getchar::KeyBuffer;
 use crate::guard::Suppress;
 use crate::types::{FAIL, MAXPATHL, OK};
 
@@ -35,8 +36,8 @@ const SCTX_INIT: sctx_T = sctx_T {
 
 /// An empty `save_redo_T`; `save_redobuff` fills it in.
 const SAVE_REDO_INIT: save_redo_T = save_redo_T {
-    sr_redobuff: buffheader_T::EMPTY,
-    sr_old_redobuff: buffheader_T::EMPTY,
+    sr_redobuff: KeyBuffer::EMPTY,
+    sr_old_redobuff: KeyBuffer::EMPTY,
 };
 
 /// The events whose `<afile>` is not a file name, so nothing is set.

@@ -234,9 +234,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
     // These three outlive the iteration that sets them, exactly as upstream's
     // do: `:debuggreedy` can be typed at this very prompt, so a pass that
     // does not save the typeahead may still restore what an earlier one did.
-    // SAFETY: `tasave_T` is a plain C aggregate that `save_typeahead` fills;
-    // all-zero is its "nothing saved" state.
-    let mut typeaheadbuf: tasave_T = unsafe { ::core::mem::zeroed() };
+    let mut typeaheadbuf = tasave_T::default();
     let mut typeahead_saved = false;
     let mut save_ignore_script = false;
     let mut cmdline: *mut c_char = ptr::null_mut();

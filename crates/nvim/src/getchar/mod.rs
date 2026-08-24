@@ -73,9 +73,9 @@ use crate::state::{
 use crate::strings::vim_strchr;
 use crate::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
-    MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, buffblock_T, buffheader_T,
-    colnr_T, flush_buffers_T, garray_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t,
-    tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
+    MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, colnr_T, flush_buffers_T,
+    garray_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typebuf_T, typval_T,
+    uint8_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
@@ -181,16 +181,14 @@ const EMPTY_FILE: FileDescriptor = FileDescriptor {
     non_blocking: false,
     bytes_read: 0,
 };
-/// The redo buffer: the keys `.` replays.
-static redobuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
-/// The redo buffer before this command, which `CTRL-O .` replays.
-static old_redobuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
-/// The register being recorded into by `q`.
-static recordbuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
-/// First read-ahead buffer, for translated commands.
-static readbuf1: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
-/// Second read-ahead buffer, for redo.
-static readbuf2: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T::EMPTY);
+// The five key buffers. Each is reached through the `KeyBufferRef` its
+// accessor answers (`redobuff()`, ...), never by name: the accessor is what
+// keeps every operation to one short borrow of the cell.
+static REDOBUFF: GlobalCell<KeyBuffer> = GlobalCell::new(KeyBuffer::EMPTY);
+static OLD_REDOBUFF: GlobalCell<KeyBuffer> = GlobalCell::new(KeyBuffer::EMPTY);
+static RECORDBUFF: GlobalCell<KeyBuffer> = GlobalCell::new(KeyBuffer::EMPTY);
+static READBUF1: GlobalCell<KeyBuffer> = GlobalCell::new(KeyBuffer::EMPTY);
+static READBUF2: GlobalCell<KeyBuffer> = GlobalCell::new(KeyBuffer::EMPTY);
 /// The bytes of the key `vgetc` is assembling, for the `vim.on_key()`
 /// callbacks. Upstream is a `kvec_withinit_t(char, MAXMAPLEN + 1)`; nothing
 /// outside this module touches it, so it is an owned `Vec` here.

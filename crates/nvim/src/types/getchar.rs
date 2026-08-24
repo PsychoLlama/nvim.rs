@@ -10,78 +10,30 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::getchar::KeyBuffer;
 
 pub type RemapValues = ::core::ffi::c_int;
-/// One block of a [`buffheader_T`]'s byte string.
-///
-/// The layout is pinned, and load-bearing: `b_str` is a flexible array member
-/// — the type declares one byte, the allocation holds as many as the block was
-/// sized for, and `getchar::buffers::add_buff` sizes it as
-/// `offset_of!(buffblock_T, b_str) + len + 1`. That arithmetic only describes
-/// the allocation when `b_str` is the *last* field, so every append past the
-/// first byte would otherwise land on another field. `#[repr(C)]` is what
-/// guarantees declaration order here; `add_buff` carries the matching
-/// compile-time assertion.
-///
-/// `Copy` stays, and it is narrower than it looks: the only block ever
-/// copied by value is [`buffheader_T::bh_first`], the inline head sentinel,
-/// whose flexible tail is the one declared byte and is never written. Every
-/// block that carries text is reached as `*mut buffblock_T` and lives for
-/// exactly as long as its allocation.
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct buffblock {
-    pub b_next: *mut buffblock,
-    pub b_strlen: size_t,
-    pub b_str: [::core::ffi::c_char; 1],
-}
-pub type buffblock_T = buffblock;
-#[derive(Copy, Clone)]
-pub struct buffheader_T {
-    pub bh_first: buffblock_T,
-    pub bh_curr: *mut buffblock_T,
-    pub bh_index: size_t,
-    pub bh_space: size_t,
-    pub bh_create_newblock: bool,
-}
-
-impl buffheader_T {
-    /// The state all five buffers start in, and the one `GlobalCell::take`
-    /// leaves behind: no blocks, so nothing to free. A `const` as well as a
-    /// [`Default`], because the cells themselves are `static`s.
-    pub const EMPTY: Self = buffheader_T {
-        bh_first: buffblock_T {
-            b_next: ::core::ptr::null_mut(),
-            b_strlen: 0,
-            b_str: [0],
-        },
-        bh_curr: ::core::ptr::null_mut(),
-        bh_index: 0,
-        bh_space: 0,
-        bh_create_newblock: false,
-    };
-}
-
-impl Default for buffheader_T {
-    fn default() -> Self {
-        buffheader_T::EMPTY
-    }
-}
 pub type flush_buffers_T = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+/// The redo pair a user function or autocommand set aside. Not `Copy`: each
+/// field owns a block chain, and `save_redobuff` *moves* them here.
+/// [`Default`] is the "nothing saved yet" state its callers declare it in --
+/// `mem::zeroed` is not usable on a struct holding an enum with a niche.
+#[derive(Default)]
 pub struct save_redo_T {
-    pub sr_redobuff: buffheader_T,
-    pub sr_old_redobuff: buffheader_T,
+    pub(crate) sr_redobuff: KeyBuffer,
+    pub(crate) sr_old_redobuff: KeyBuffer,
 }
-#[derive(Copy, Clone)]
+/// All three kinds of typeahead, set aside so that a prompt has to be
+/// answered by the user. Not `Copy`, and `Default` rather than zeroed, for
+/// the same reasons as [`save_redo_T`].
+#[derive(Default)]
 pub struct tasave_T {
-    pub save_typebuf: typebuf_T,
-    pub typebuf_valid: bool,
-    pub old_char: ::core::ffi::c_int,
-    pub old_mod_mask: ::core::ffi::c_int,
-    pub save_readbuf1: buffheader_T,
-    pub save_readbuf2: buffheader_T,
-    pub save_inputbuf: String_0,
+    pub(crate) save_typebuf: typebuf_T,
+    pub(crate) typebuf_valid: bool,
+    pub(crate) old_char: ::core::ffi::c_int,
+    pub(crate) old_mod_mask: ::core::ffi::c_int,
+    pub(crate) save_readbuf1: KeyBuffer,
+    pub(crate) save_readbuf2: KeyBuffer,
 }
 #[derive(Copy, Clone)]
 pub struct typebuf_T {

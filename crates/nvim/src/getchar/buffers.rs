@@ -1,16 +1,31 @@
-//! The stuff/read/record buffers: [`buffheader_T`] and its chain.
+//! The stuff/read/record buffers: [`KeyBuffer`] and its chain.
 //!
-//! A `buffheader_T` is a linked list of [`buffblock_T`]s holding a byte string
-//! that is appended to at the tail ([`add_buff`]) and consumed from the head
-//! ([`read_readbuf`]).  Five of them exist — the two read buffers behind
-//! `stuff_readbuf`, the record buffer behind `q`, and the redo pair — and
-//! every one of them is filled by the functions here.
+//! A `KeyBuffer` is a linked list of [`KeyBlock`]s holding a byte string that
+//! is appended to at the insertion point ([`KeyBuffer::add`]) and consumed
+//! from the front ([`KeyBuffer::read`]).  Five of them exist — the two read
+//! buffers behind [`stuff_readbuf`], the record buffer behind `q`, and the
+//! redo pair — and every one of them is filled by the methods here.
 //!
-//! `buffblock_T::b_str` is a flexible array member: the type declares one
-//! byte, the allocation holds as many as the block was sized for. Every read
-//! of it goes through [`block_str`], which forms the pointer from the field's
+//! `KeyBlock::bytes` is a flexible array member: the type declares one byte,
+//! the allocation holds as many as the block was sized for. Every read of it
+//! goes through [`block_str`], which forms the pointer from the field's
 //! address so that it inherits the whole allocation's provenance — taking a
 //! slice of the declared `[c_char; 1]` would cover one byte.
+//!
+//! # What changed against upstream
+//!
+//! Upstream's `buffheader_T` starts with an *inline* block, `bh_first`, whose
+//! only live field is `b_next`; the insertion cursor `bh_curr` then points
+//! either at a real block or at that inline sentinel — that is, **into the
+//! header itself**. A struct holding its own address cannot be moved, and
+//! moving it is exactly what `save_redobuff` and `save_typeahead` do. So the
+//! sentinel is gone here: the head is a plain `first` pointer and the cursor
+//! is an [`InsertPoint`], which spells "before everything" as a *value*
+//! rather than as the sentinel's address. `KeyBuffer` is therefore
+//! position-independent, and deliberately **not `Copy`** — a copy of one is
+//! two owners of one block chain, which is the bug the phase exists to
+//! retire. [`GlobalCell::take`](crate::global_cell::GlobalCell) moves one out
+//! of its cell instead.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -21,97 +36,444 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::mem::offset_of;
 use core::ptr;
 
-/// Smallest block `add_buff` will allocate; upstream's `MINIMAL_SIZE`.
+/// Smallest block [`KeyBuffer::add`] will allocate; upstream's
+/// `MINIMAL_SIZE`.
 const MINIMAL_SIZE: usize = 20;
 
-/// [`add_buff`] sizes a block as `offset_of!(buffblock_T, b_str) + len + 1`,
-/// which only describes the allocation while `b_str` is the last field — a
-/// layout that put it anywhere else would make every append overwrite
-/// `b_next`/`b_strlen`. `#[repr(C)]` on [`buffblock_T`] is what holds that.
-/// Drop the attribute and rustc is free to reorder, but only *some* layouts it
-/// then picks are wrong — so this fails the build on exactly the ones that
-/// are, which is what `-Zrandomize-layout` shakes out (verified: without the
-/// attribute, that flag trips this assertion rather than the suite).
-const _: () = {
-    let tail = offset_of!(buffblock_T, b_str);
-    assert!(tail > offset_of!(buffblock_T, b_next));
-    assert!(tail > offset_of!(buffblock_T, b_strlen));
-};
+/// One block of a [`KeyBuffer`]'s byte string.
+///
+/// The layout is pinned, and load-bearing: `bytes` is a flexible array member
+/// — the type declares one byte, the allocation holds as many as the block
+/// was sized for, and [`KeyBuffer::add`] sizes it as
+/// `offset_of!(KeyBlock, bytes) + len + 1`. That arithmetic only describes
+/// the allocation when `bytes` is the *last* field, so every append past the
+/// first byte would otherwise land on another field. `#[repr(C)]` is what
+/// guarantees declaration order here; [`KeyBuffer::add`] carries the matching
+/// compile-time assertion.
+#[repr(C)]
+pub(crate) struct KeyBlock {
+    pub(crate) next: *mut KeyBlock,
+    pub(crate) len: usize,
+    pub(crate) bytes: [c_char; 1],
+}
+
+/// Where a [`KeyBuffer`] puts the bytes it is given next.
+///
+/// Upstream keeps this as a `buffblock_T *` that may be the address of the
+/// header's own inline sentinel; naming the three cases makes the two
+/// non-block ones say what they mean, and makes "write into the sentinel"
+/// unrepresentable rather than merely unreachable.
+#[derive(Clone, Copy)]
+enum InsertPoint {
+    /// Before everything the buffer already holds. What [`KeyBuffer::restart`]
+    /// sets while the buffer is being read, so that text stuffed mid-read is
+    /// read *before* the remainder — upstream's `bh_curr = &bh_first`.
+    Front,
+    /// At the end of this block, while it still has [`KeyBuffer::space`].
+    Block(*mut KeyBlock),
+    /// Nowhere: the buffer was freed and has no cursor. Adding to it is the
+    /// internal error `E222`.
+    Gone,
+}
+
+/// One key buffer: a byte string of already-escaped keys.
+pub(crate) struct KeyBuffer {
+    /// The first block, or null when the buffer holds nothing.
+    first: *mut KeyBlock,
+    /// Where the next bytes go.
+    at: InsertPoint,
+    /// How far [`KeyBuffer::read`] has got into the first block.
+    index: usize,
+    /// Bytes still unused in the block `at` names.
+    space: usize,
+    /// Start a new block on the next add rather than fill `space`.
+    create_newblock: bool,
+}
+
+impl KeyBuffer {
+    /// The state all five buffers start in, and the one `GlobalCell::take`
+    /// leaves behind: no blocks, so nothing to free. A `const` as well as a
+    /// [`Default`], because the cells themselves are `static`s.
+    pub(crate) const EMPTY: Self = KeyBuffer {
+        first: ptr::null_mut(),
+        at: InsertPoint::Front,
+        index: 0,
+        space: 0,
+        create_newblock: false,
+    };
+}
+
+impl Default for KeyBuffer {
+    fn default() -> Self {
+        KeyBuffer::EMPTY
+    }
+}
 
 /// The bytes of one block, as a pointer over the whole allocation.
 ///
 /// # Safety
-/// `block` must point at a live block allocated by [`add_buff`].
-pub(crate) unsafe fn block_str(block: *mut buffblock_T) -> *mut c_char {
-    unsafe { (&raw mut (*block).b_str).cast::<c_char>() }
+/// `block` must point at a live block allocated by [`KeyBuffer::add`].
+pub(crate) unsafe fn block_str(block: *mut KeyBlock) -> *mut c_char {
+    unsafe { (&raw mut (*block).bytes).cast::<c_char>() }
 }
 
-/// Walk the blocks of `buf`, head first.
-///
-/// Each block's successor is read *before* the block is handed out, so a
-/// caller may free what it is given — which is what [`free_buff`] does.
-///
-/// # Safety
-/// `buf` must point at a live buffer whose chain nothing else is mutating.
-unsafe fn blocks(buf: *const buffheader_T) -> impl Iterator<Item = *mut buffblock_T> {
-    let mut next = unsafe { (*buf).bh_first.b_next };
-    core::iter::from_fn(move || {
-        let block = next;
-        if block.is_null() {
-            return None;
-        }
-        next = unsafe { (*block).b_next };
-        Some(block)
-    })
-}
+impl KeyBuffer {
+    /// The first block, for the redo walk. Null when the buffer is empty.
+    fn head(&self) -> *mut KeyBlock {
+        self.first
+    }
 
-/// Free and clear a buffer.
-///
-/// # Safety
-/// `buf` must point at a live buffer.
-pub(crate) unsafe fn free_buff(buf: *mut buffheader_T) {
-    unsafe {
-        for block in blocks(buf) {
-            xfree(block.cast());
+    /// Whether the buffer holds nothing.
+    fn is_empty(&self) -> bool {
+        self.first.is_null()
+    }
+
+    /// Free every block and leave the buffer with no insertion point.
+    ///
+    /// # Safety
+    /// Nothing may hold a pointer into the chain.
+    unsafe fn free(&mut self) {
+        unsafe {
+            let mut block = self.first;
+            while !block.is_null() {
+                let next = (*block).next;
+                xfree(block.cast());
+                block = next;
+            }
         }
-        (*buf).bh_first.b_next = ptr::null_mut();
-        (*buf).bh_curr = ptr::null_mut();
+        self.first = ptr::null_mut();
+        self.at = InsertPoint::Gone;
+    }
+
+    /// The contents as one `xmalloc`ed NUL-terminated string, with its
+    /// length. `K_SPECIAL` in the answer is still escaped.
+    ///
+    /// Answers a null pointer when the buffer is empty and `dozero` is false.
+    ///
+    /// # Safety
+    /// The answer must be freed with `xfree`.
+    pub(crate) unsafe fn contents(&self, dozero: bool) -> (*mut c_char, usize) {
+        unsafe {
+            let mut count = 0;
+            let mut block = self.first;
+            while !block.is_null() {
+                count += (*block).len;
+                block = (*block).next;
+            }
+            if count == 0 && !dozero {
+                return (ptr::null_mut(), 0);
+            }
+
+            let out = xmalloc(count + 1).cast::<c_char>();
+            let mut at = 0;
+            let mut block = self.first;
+            while !block.is_null() {
+                // Copy up to the block's own terminator rather than up to
+                // `len`: `delete_tail` shortens a block by moving the NUL,
+                // and upstream reads the NUL here too.
+                let str = block_str(block);
+                let mut i = 0;
+                while *str.add(i) != 0 {
+                    *out.add(at) = *str.add(i);
+                    at += 1;
+                    i += 1;
+                }
+                block = (*block).next;
+            }
+            *out.add(at) = 0;
+            (out, at)
+        }
+    }
+
+    /// Append `s` at the insertion point.
+    ///
+    /// `K_SPECIAL` must have been escaped already. `slen` is the length, or
+    /// -1 for a NUL-terminated string. Answers false when the buffer has been
+    /// read out and has nowhere to put the bytes, which is upstream's `E222`;
+    /// the message is the caller's to emit, because it reaches the message
+    /// machinery and this runs inside the cell's borrow.
+    ///
+    /// # Safety
+    /// `s` must point at `slen` readable bytes.
+    unsafe fn add(&mut self, s: *const c_char, slen: ptrdiff_t) -> bool {
+        unsafe {
+            let slen = if slen < 0 { strlen(s) } else { slen as usize };
+            if slen == 0 {
+                return true; // don't add empty strings
+            }
+
+            if self.first.is_null() {
+                // First add to the list.
+                self.at = InsertPoint::Front;
+                self.create_newblock = true;
+            } else if matches!(self.at, InsertPoint::Gone) {
+                return false;
+            } else if self.index != 0 {
+                // Reclaim what has already been read out of the head block.
+                let head = self.first;
+                let str = block_str(head);
+                let kept = (*head).len - self.index;
+                ptr::copy(str.add(self.index), str, kept + 1);
+                (*head).len = kept;
+                self.space += self.index;
+            }
+            self.index = 0;
+
+            match self.at {
+                InsertPoint::Block(curr) if !self.create_newblock && self.space >= slen => {
+                    xmemcpyz(block_str(curr).add((*curr).len).cast(), s.cast(), slen);
+                    (*curr).len += slen;
+                    self.space -= slen;
+                }
+                at => {
+                    let len = MINIMAL_SIZE.max(slen);
+                    let block = xmalloc(offset_of!(KeyBlock, bytes) + len + 1).cast::<KeyBlock>();
+                    xmemcpyz(block_str(block).cast(), s.cast(), slen);
+                    (*block).len = slen;
+                    self.space = len - slen;
+                    self.create_newblock = false;
+
+                    // Link it in *after* the insertion point, which is what
+                    // makes `Front` mean "read this before the rest".
+                    match at {
+                        InsertPoint::Block(curr) => {
+                            (*block).next = (*curr).next;
+                            (*curr).next = block;
+                        }
+                        // `Gone` is impossible: the chain is either empty,
+                        // and the first branch above reset `at`, or it is not
+                        // and `Gone` returned early.
+                        InsertPoint::Front | InsertPoint::Gone => {
+                            (*block).next = self.first;
+                            self.first = block;
+                        }
+                    }
+                    self.at = InsertPoint::Block(block);
+                }
+            }
+            true
+        }
+    }
+
+    /// Delete `slen` bytes from the end. Only works when they were just
+    /// added: a block boundary in between and nothing happens, which is how
+    /// `ungetchars` can fail to take back a key longer than the last one.
+    fn delete_tail(&mut self, slen: c_int) {
+        let InsertPoint::Block(curr) = self.at else {
+            return; // nothing to delete from
+        };
+        // SAFETY: `at` names a live block of this buffer's own chain.
+        unsafe {
+            if (*curr).len < slen as usize {
+                return; // the bytes are not all in the last block
+            }
+            (*curr).len -= slen as usize;
+            *block_str(curr).add((*curr).len) = 0;
+        }
+        self.space += slen as usize;
+    }
+
+    /// One byte from the front, advancing past it when `advance` is set.
+    ///
+    /// # Safety
+    /// Nothing may hold a pointer into the block being consumed.
+    unsafe fn read(&mut self, advance: bool) -> c_int {
+        unsafe {
+            let curr = self.first;
+            if curr.is_null() {
+                return NUL; // buffer is empty
+            }
+
+            let str = block_str(curr);
+            let c = *str.add(self.index) as u8;
+            if advance {
+                self.index += 1;
+                if c_int::from(*str.add(self.index)) == NUL {
+                    self.first = (*curr).next;
+                    if matches!(self.at, InsertPoint::Block(at) if at == curr) {
+                        // Upstream leaves `bh_curr` pointing at the block it
+                        // just freed, and the next add writes through it.
+                        // Fall back to the front, which is where `restart`
+                        // would have put the cursor anyway.
+                        self.at = InsertPoint::Front;
+                        self.create_newblock = true;
+                    }
+                    xfree(curr.cast());
+                    self.index = 0;
+                }
+            }
+            c_int::from(c)
+        }
+    }
+
+    /// Prepare the buffer for reading, if it holds anything.
+    fn restart(&mut self) {
+        if !self.first.is_null() {
+            self.at = InsertPoint::Front;
+            // Force a new block to be created; see `add`.
+            self.create_newblock = true;
+        }
     }
 }
 
-/// The contents of a buffer as one `xmalloc`ed NUL-terminated string, with
-/// its length. `K_SPECIAL` in the answer is escaped.
-///
-/// Answers a null pointer when the buffer is empty and `dozero` is false.
-///
-/// # Safety
-/// `buf` must point at a live buffer.
-pub(crate) unsafe fn buff_contents(buf: *mut buffheader_T, dozero: bool) -> (*mut c_char, usize) {
-    unsafe {
-        let mut count = 0;
-        for block in blocks(buf) {
-            count += (*block).b_strlen;
-        }
-        if count == 0 && !dozero {
-            return (ptr::null_mut(), 0);
-        }
+/// [`KeyBuffer::add`] sizes a block as `offset_of!(KeyBlock, bytes) + len +
+/// 1`, which only describes the allocation while `bytes` is the last field —
+/// a layout that put it anywhere else would make every append overwrite
+/// `next`/`len`. `#[repr(C)]` on [`KeyBlock`] is what holds that. Drop the
+/// attribute and rustc is free to reorder, but only *some* layouts it then
+/// picks are wrong — so this fails the build on exactly the ones that are,
+/// which is what `-Zrandomize-layout` shakes out (verified: without the
+/// attribute, that flag trips this assertion rather than the suite).
+const _: () = {
+    let tail = offset_of!(KeyBlock, bytes);
+    assert!(tail > offset_of!(KeyBlock, next));
+    assert!(tail > offset_of!(KeyBlock, len));
+};
 
-        let out = xmalloc(count + 1).cast::<c_char>();
-        let mut at = 0;
-        for block in blocks(buf) {
-            // Copy up to the block's own terminator rather than up to
-            // `b_strlen`: `delete_buff_tail` shortens a block by moving the
-            // NUL, and upstream reads the NUL here too.
-            let str = block_str(block);
-            let mut i = 0;
-            while *str.add(i) != 0 {
-                *out.add(at) = *str.add(i);
-                at += 1;
-                i += 1;
-            }
+/// One of the five key buffers, *named* rather than pointed at.
+///
+/// `Copy`, and holding a `&'static` to the cell rather than a pointer into
+/// it, so making one needs no `unsafe` and every operation takes its own
+/// short borrow. Each method below is a leaf — the one call-out, `E222`'s
+/// message, is deliberately made after the borrow ends.
+#[derive(Clone, Copy)]
+pub(crate) struct KeyBufferRef(&'static GlobalCell<KeyBuffer>);
+
+/// The redo buffer: the keys `.` replays.
+pub(crate) fn redobuff() -> KeyBufferRef {
+    KeyBufferRef(&REDOBUFF)
+}
+
+/// The redo buffer before this command, which `CTRL-O .` replays.
+pub(crate) fn old_redobuff() -> KeyBufferRef {
+    KeyBufferRef(&OLD_REDOBUFF)
+}
+
+/// The register being recorded into by `q`.
+pub(crate) fn recordbuff() -> KeyBufferRef {
+    KeyBufferRef(&RECORDBUFF)
+}
+
+/// First read-ahead buffer, for translated commands.
+pub(crate) fn readbuf1() -> KeyBufferRef {
+    KeyBufferRef(&READBUF1)
+}
+
+/// Second read-ahead buffer, for redo.
+pub(crate) fn readbuf2() -> KeyBufferRef {
+    KeyBufferRef(&READBUF2)
+}
+
+impl KeyBufferRef {
+    /// Append `s`, which must already have `K_SPECIAL` escaped. `slen` is the
+    /// length, or -1 for a NUL-terminated string.
+    ///
+    /// # Safety
+    /// `s` must point at `slen` readable bytes.
+    pub(crate) unsafe fn add(self, s: *const c_char, slen: ptrdiff_t) {
+        // SAFETY: the caller's obligation, forwarded.
+        if !self.0.with_mut(|buf| unsafe { buf.add(s, slen) }) {
+            // Outside the borrow: `iemsg` reaches the message machinery.
+            // SAFETY: a static string.
+            unsafe { iemsg(gettext(c"E222: Add to read buffer".as_ptr())) };
         }
-        *out.add(at) = 0;
-        (out, at)
+    }
+
+    /// Append the decimal spelling of `n`.
+    pub(crate) fn add_num(self, n: c_int) {
+        let mut number = [0u8; 32];
+        let len = write_int(&mut number, n);
+        // SAFETY: `number[..len]` is what `write_int` just filled in.
+        unsafe { self.add(number.as_ptr().cast(), len as ptrdiff_t) };
+    }
+
+    /// Append byte or special key `c`, escaping special keys, NUL and
+    /// `K_SPECIAL`.
+    pub(crate) fn add_byte(self, c: c_int) {
+        let mut temp = [0u8; 4];
+        let templen = if c < 0 || c == K_SPECIAL || c == NUL {
+            temp[..3].copy_from_slice(&key_escape(c));
+            3
+        } else {
+            temp[0] = c as u8;
+            1
+        };
+        // SAFETY: `temp[..templen]` was just filled in.
+        unsafe { self.add(temp.as_ptr().cast(), templen) };
+    }
+
+    /// Append character `c`, escaping special keys, NUL and `K_SPECIAL` and
+    /// splitting a codepoint into its UTF-8 bytes.
+    pub(crate) fn add_char(self, c: c_int) {
+        if c < 0 {
+            // A special key is one unit; it has no UTF-8 spelling.
+            self.add_byte(c);
+            return;
+        }
+        let mut bytes = [0u8; MB_MAXBYTES + 1];
+        // SAFETY: `bytes` is the buffer `utf_char2bytes` documents.
+        let len = unsafe { utf_char2bytes(c, bytes.as_mut_ptr().cast()) } as usize;
+        for &byte in &bytes[..len] {
+            self.add_byte(c_int::from(byte));
+        }
+    }
+
+    /// Delete `slen` bytes from the end; see [`KeyBuffer::delete_tail`].
+    pub(crate) fn delete_tail(self, slen: c_int) {
+        self.0.with_mut(|buf| buf.delete_tail(slen));
+    }
+
+    /// Free every block.
+    ///
+    /// # Safety
+    /// Nothing may hold a pointer into the chain.
+    pub(crate) unsafe fn free(self) {
+        // SAFETY: the caller's obligation, forwarded.
+        self.0.with_mut(|buf| unsafe { buf.free() });
+    }
+
+    /// The contents as one `xmalloc`ed string; see [`KeyBuffer::contents`].
+    ///
+    /// # Safety
+    /// The answer must be freed with `xfree`.
+    pub(crate) unsafe fn contents(self, dozero: bool) -> (*mut c_char, usize) {
+        // SAFETY: the caller's obligation, forwarded.
+        self.0.with(|buf| unsafe { buf.contents(dozero) })
+    }
+
+    /// One byte from the front; see [`KeyBuffer::read`].
+    ///
+    /// # Safety
+    /// Nothing may hold a pointer into the block being consumed.
+    pub(crate) unsafe fn read(self, advance: bool) -> c_int {
+        // SAFETY: the caller's obligation, forwarded.
+        self.0.with_mut(|buf| unsafe { buf.read(advance) })
+    }
+
+    /// Prepare the buffer for reading, if it holds anything.
+    pub(crate) fn restart(self) {
+        self.0.with_mut(KeyBuffer::restart);
+    }
+
+    /// Whether the buffer holds nothing.
+    pub(crate) fn is_empty(self) -> bool {
+        self.0.with(KeyBuffer::is_empty)
+    }
+
+    /// The first block, for the redo walk.
+    pub(crate) fn head(self) -> *mut KeyBlock {
+        self.0.with(KeyBuffer::head)
+    }
+
+    /// Move the buffer out of its cell, leaving an empty one behind.
+    pub(crate) fn take(self) -> KeyBuffer {
+        self.0.take()
+    }
+
+    /// Install `buf`. Whatever the cell held is dropped on the floor, so it
+    /// must have been freed or moved out first.
+    pub(crate) fn set(self, buf: KeyBuffer) {
+        self.0.with_mut(|slot| *slot = buf);
     }
 }
 
@@ -123,11 +485,11 @@ pub(crate) unsafe fn buff_contents(buf: *mut buffheader_T, dozero: bool) -> (*mu
 /// Callable at any time; the answer must be freed with `xfree`.
 pub unsafe fn get_recorded() -> *mut c_char {
     unsafe {
-        let (recorded, mut len) = buff_contents(recordbuff.ptr(), true);
+        let (recorded, mut len) = recordbuff().contents(true);
         if recorded.is_null() {
             return ptr::null_mut();
         }
-        free_buff(recordbuff.ptr());
+        recordbuff().free();
 
         // Drop the characters added last, which must be the (possibly mapped)
         // keys that stopped the recording.
@@ -149,87 +511,8 @@ pub unsafe fn get_recorded() -> *mut c_char {
 /// # Safety
 /// Callable at any time; the answer owns its bytes.
 pub unsafe fn get_inserted() -> String_0 {
-    let (data, size) = unsafe { buff_contents(redobuff.ptr(), false) };
+    let (data, size) = unsafe { redobuff().contents(false) };
     String_0::from_raw_parts(data, size)
-}
-
-/// Append `s` to `buf` after its current block.
-///
-/// `K_SPECIAL` must have been escaped already. `slen` is the length, or -1 for
-/// a NUL-terminated string.
-///
-/// # Safety
-/// `buf` must point at a live buffer and `s` at `slen` readable bytes.
-pub(crate) unsafe fn add_buff(buf: *mut buffheader_T, s: *const c_char, slen: ptrdiff_t) {
-    unsafe {
-        let slen = if slen < 0 { strlen(s) } else { slen as usize };
-        if slen == 0 {
-            return; // don't add empty strings
-        }
-
-        if (*buf).bh_first.b_next.is_null() {
-            // First add to the list.
-            (*buf).bh_curr = &raw mut (*buf).bh_first;
-            (*buf).bh_create_newblock = true;
-        } else if (*buf).bh_curr.is_null() {
-            iemsg(gettext(c"E222: Add to read buffer".as_ptr()));
-            return;
-        } else if (*buf).bh_index != 0 {
-            // Reclaim what has already been read out of the head block.
-            let head = (*buf).bh_first.b_next;
-            let str = block_str(head);
-            let kept = (*head).b_strlen - (*buf).bh_index;
-            ptr::copy(str.add((*buf).bh_index), str, kept + 1);
-            (*head).b_strlen = kept;
-            (*buf).bh_space += (*buf).bh_index;
-        }
-        (*buf).bh_index = 0;
-
-        if !(*buf).bh_create_newblock && (*buf).bh_space >= slen {
-            let curr = (*buf).bh_curr;
-            xmemcpyz(block_str(curr).add((*curr).b_strlen).cast(), s.cast(), slen);
-            (*curr).b_strlen += slen;
-            (*buf).bh_space -= slen;
-        } else {
-            let len = MINIMAL_SIZE.max(slen);
-            let block = xmalloc(offset_of!(buffblock_T, b_str) + len + 1).cast::<buffblock_T>();
-            xmemcpyz(block_str(block).cast(), s.cast(), slen);
-            (*block).b_strlen = slen;
-            (*buf).bh_space = len - slen;
-            (*buf).bh_create_newblock = false;
-
-            (*block).b_next = (*(*buf).bh_curr).b_next;
-            (*(*buf).bh_curr).b_next = block;
-            (*buf).bh_curr = block;
-        }
-    }
-}
-
-/// Delete `slen` bytes from the end of `buf`. Only works when they were just
-/// added.
-///
-/// # Safety
-/// `buf` must point at a live buffer.
-pub(crate) unsafe fn delete_buff_tail(buf: *mut buffheader_T, slen: c_int) {
-    unsafe {
-        let curr = (*buf).bh_curr;
-        if curr.is_null() || (*curr).b_strlen < slen as usize {
-            return; // nothing to delete
-        }
-        (*curr).b_strlen -= slen as usize;
-        *block_str(curr).add((*curr).b_strlen) = 0;
-        (*buf).bh_space += slen as usize;
-    }
-}
-
-/// Append the decimal spelling of `n` to `buf`.
-///
-/// # Safety
-/// `buf` must point at a live buffer.
-pub(crate) unsafe fn add_num_buff(buf: *mut buffheader_T, n: c_int) {
-    let mut number = [0u8; 32];
-    let len = write_int(&mut number, n);
-    unsafe { add_buff(buf, number.as_ptr().cast(), len as ptrdiff_t) };
 }
 
 /// Write `n` into `out` as decimal digits and answer how many there are.
@@ -258,43 +541,6 @@ fn write_int(out: &mut [u8; 32], n: c_int) -> usize {
     len
 }
 
-/// Append byte or special key `c` to `buf`, escaping special keys, NUL and
-/// `K_SPECIAL`.
-///
-/// # Safety
-/// `buf` must point at a live buffer.
-pub(crate) unsafe fn add_byte_buff(buf: *mut buffheader_T, c: c_int) {
-    let mut temp = [0u8; 4];
-    let templen = if c < 0 || c == K_SPECIAL || c == NUL {
-        temp[..3].copy_from_slice(&key_escape(c));
-        3
-    } else {
-        temp[0] = c as u8;
-        1
-    };
-    unsafe { add_buff(buf, temp.as_ptr().cast(), templen) };
-}
-
-/// Append character `c` to `buf`, escaping special keys, NUL, `K_SPECIAL` and
-/// splitting a codepoint into its UTF-8 bytes.
-///
-/// # Safety
-/// `buf` must point at a live buffer.
-pub(crate) unsafe fn add_char_buff(buf: *mut buffheader_T, c: c_int) {
-    unsafe {
-        if c < 0 {
-            // A special key is one unit; it has no UTF-8 spelling.
-            add_byte_buff(buf, c);
-            return;
-        }
-        let mut bytes = [0u8; MB_MAXBYTES + 1];
-        let len = utf_char2bytes(c, bytes.as_mut_ptr().cast()) as usize;
-        for &byte in &bytes[..len] {
-            add_byte_buff(buf, c_int::from(byte));
-        }
-    }
-}
-
 /// One byte from the read buffers, `readbuf1` first. No translation is done,
 /// so `K_SPECIAL` is still escaped.
 ///
@@ -302,73 +548,30 @@ pub(crate) unsafe fn add_char_buff(buf: *mut buffheader_T, c: c_int) {
 /// Callable at any time.
 pub(crate) unsafe fn read_readbuffers(advance: bool) -> c_int {
     unsafe {
-        let c = read_readbuf(readbuf1.ptr(), advance);
+        let c = readbuf1().read(advance);
         if c == NUL {
-            read_readbuf(readbuf2.ptr(), advance)
+            readbuf2().read(advance)
         } else {
             c
         }
     }
 }
 
-/// One byte from `buf`, advancing past it when `advance` is set.
-///
-/// # Safety
-/// `buf` must point at a live buffer.
-pub(crate) unsafe fn read_readbuf(buf: *mut buffheader_T, advance: bool) -> c_int {
-    unsafe {
-        let curr = (*buf).bh_first.b_next;
-        if curr.is_null() {
-            return NUL; // buffer is empty
-        }
-
-        let str = block_str(curr);
-        let c = *str.add((*buf).bh_index) as u8;
-        if advance {
-            (*buf).bh_index += 1;
-            if c_int::from(*str.add((*buf).bh_index)) == NUL {
-                (*buf).bh_first.b_next = (*curr).b_next;
-                xfree(curr.cast());
-                (*buf).bh_index = 0;
-            }
-        }
-        c_int::from(c)
-    }
-}
-
 /// Prepare the read buffers for reading, if they hold anything.
-///
-/// # Safety
-/// Callable at any time.
-pub(crate) unsafe fn start_stuff() {
-    unsafe {
-        for buf in [readbuf1.ptr(), readbuf2.ptr()] {
-            if !(*buf).bh_first.b_next.is_null() {
-                (*buf).bh_curr = &raw mut (*buf).bh_first;
-                // Force a new block to be created; see `add_buff`.
-                (*buf).bh_create_newblock = true;
-            }
-        }
-    }
+pub(crate) fn start_stuff() {
+    readbuf1().restart();
+    readbuf2().restart();
 }
 
 /// Whether the stuff buffer is empty.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn stuff_empty() -> bool {
-    unsafe {
-        (*readbuf1.ptr()).bh_first.b_next.is_null() && (*readbuf2.ptr()).bh_first.b_next.is_null()
-    }
+pub fn stuff_empty() -> bool {
+    readbuf1().is_empty() && readbuf2().is_empty()
 }
 
 /// Whether `readbuf1` is empty. There may still be redo characters in
 /// `readbuf2`.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn readbuf1_empty() -> bool {
-    unsafe { (*readbuf1.ptr()).bh_first.b_next.is_null() }
+pub fn readbuf1_empty() -> bool {
+    readbuf1().is_empty()
 }
 
 /// Set a typeahead character that `flush_buffers` will not throw away.
@@ -444,7 +647,7 @@ pub unsafe fn beep_flush() {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn stuff_readbuf(s: *const c_char) {
-    unsafe { add_buff(readbuf1.ptr(), s, -1) };
+    unsafe { readbuf1().add(s, -1) };
 }
 
 /// Stuff a NUL-terminated string into the redo read buffer.
@@ -452,7 +655,7 @@ pub unsafe fn stuff_readbuf(s: *const c_char) {
 /// # Safety
 /// `s` must point at a NUL-terminated string.
 pub unsafe fn stuff_redo_readbuf(s: *const c_char) {
-    unsafe { add_buff(readbuf2.ptr(), s, -1) };
+    unsafe { readbuf2().add(s, -1) };
 }
 
 /// Stuff `len` bytes into `readbuf1`.
@@ -460,7 +663,7 @@ pub unsafe fn stuff_redo_readbuf(s: *const c_char) {
 /// # Safety
 /// `s` must point at `len` readable bytes.
 pub unsafe fn stuff_readbuf_len(s: *const c_char, len: ptrdiff_t) {
-    unsafe { add_buff(readbuf1.ptr(), s, len) };
+    unsafe { readbuf1().add(s, len) };
 }
 
 /// Stuff a string into `readbuf1`, replacing the characters that would end a
@@ -494,19 +697,13 @@ pub unsafe fn stuff_readbuf_one_line(mut s: *const c_char) {
 }
 
 /// Stuff one character into `readbuf1`.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn stuff_readbuf_char(c: c_int) {
-    unsafe { add_char_buff(readbuf1.ptr(), c) };
+pub fn stuff_readbuf_char(c: c_int) {
+    readbuf1().add_char(c);
 }
 
 /// Stuff the decimal spelling of `n` into `readbuf1`.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn stuff_readbuf_number(n: c_int) {
-    unsafe { add_num_buff(readbuf1.ptr(), n) };
+pub fn stuff_readbuf_number(n: c_int) {
+    readbuf1().add_num(n);
 }
 
 /// Stuff `arg` into `readbuf1`, one printable run at a time.

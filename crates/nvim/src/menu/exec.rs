@@ -154,10 +154,7 @@ fn select_range(line1: linenr_T, line2: linenr_T) {
 
 /// Run the rhs immediately, inside a saved editor state.
 fn run_now(menu: Menu, bit: usize) {
-    // SAFETY: `save_state_T` is a plain aggregate of scalars, pointers and
-    // buffers, all valid all-zero, and `save_current_state` fills it before
-    // anything reads it -- the same shape `ex_docmd` uses.
-    let mut state: save_state_T = unsafe { core::mem::zeroed() };
+    let mut state = save_state_T::default();
     ex_normal_busy_adjust(1);
     // SAFETY: `state` is a live local for the whole call, and the rhs is a
     // NUL-terminated string owned by a node that outlives the run.

@@ -484,8 +484,7 @@ pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
     // SAFETY: pushes one key back onto the editor's own typeahead.
     let len = unsafe { ins_char_typebuf(c, mods, true) };
     if KeyTyped.get() {
-        // SAFETY: rewinds the typeahead over the key just pushed.
-        unsafe { ungetchars(len) };
+        ungetchars(len); // rewind over the key just pushed
     }
     true
 }

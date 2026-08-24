@@ -445,8 +445,7 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
             stuff_char(Ctrl_O);
         }
         if count > 1 {
-            // SAFETY: appends to the stuff buffer.
-            unsafe { stuff_readbuf_number(count) };
+            stuff_readbuf_number(count);
         }
         stuff_char(Ctrl_T);
         got_click.set(false); // ignore drag&release now
@@ -548,12 +547,9 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
     // SAFETY: as above.
     unsafe { do_put(regname, reg, BACKWARD as c_int, 1, flags) };
     // Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r
-    // SAFETY: appends to the redo buffer.
-    unsafe {
-        append_to_redobuff_char(Ctrl_R);
-        append_to_redobuff_char(if fixindent { Ctrl_P } else { Ctrl_O });
-        append_to_redobuff_char(if regname == 0 { '"' as c_int } else { regname });
-    }
+    append_to_redobuff_char(Ctrl_R);
+    append_to_redobuff_char(if fixindent { Ctrl_P } else { Ctrl_O });
+    append_to_redobuff_char(if regname == 0 { '"' as c_int } else { regname });
     Some(false)
 }
 
@@ -938,8 +934,7 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
 
 /// Push `c` back onto the input, so it is read as the next key.
 fn stuff_char(c: c_int) {
-    // SAFETY: appends to the stuff buffer.
-    unsafe { stuff_readbuf_char(c) };
+    stuff_readbuf_char(c);
 }
 
 /// The character at `pos`, or NUL past the end of the line.

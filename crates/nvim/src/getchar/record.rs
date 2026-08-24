@@ -6,7 +6,7 @@
 //!
 //! Both [`gotchars`] and [`add_byte_to_showcmd`] are fed one *byte* at a time
 //! but have to act on whole *keys*, because a key that straddled two calls
-//! would be split across two record-buffer blocks and `delete_buff_tail`
+//! would be split across two record-buffer blocks and `delete_tail`
 //! could no longer take it back off. [`gotchars_add_byte`] is the little
 //! state machine that reassembles them, and each caller keeps its own copy of
 //! that state.
@@ -70,7 +70,7 @@ pub(crate) unsafe fn gotchars_add_byte(state: *mut gotchars_state_T, byte: u8) -
                 }
                 // A multibyte character is held until all its bytes are in,
                 // so that it cannot be split between two buffer blocks --
-                // `delete_buff_tail` would not be able to undo half of one.
+                // `delete_tail` would not be able to undo half of one.
                 (*state).pending_mbyte = mb_byte2len_check(c) as c_uint - 1;
             }
             whole = (*state).pending_mbyte == 0;
@@ -88,7 +88,7 @@ pub(crate) unsafe fn gotchars_add_byte(state: *mut gotchars_state_T, byte: u8) -
 ///
 /// # Safety
 /// `chars` must point at `len` readable bytes. It stays a raw pointer rather
-/// than a slice because the loop calls `updatescript` and `add_buff` between
+/// than a slice because the loop calls `updatescript` and `add` between
 /// reads, and neither is provably unable to reach the buffer it points into.
 pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
     unsafe {
@@ -122,11 +122,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
 
             if reg_recording.get() != 0 {
                 (*state.ptr()).buf[buflen] = 0;
-                add_buff(
-                    recordbuff.ptr(),
-                    (*state.ptr()).buf.as_ptr().cast(),
-                    buflen as ptrdiff_t,
-                );
+                recordbuff().add((*state.ptr()).buf.as_ptr().cast(), buflen as ptrdiff_t);
                 // Remember how many characters were recorded last, so that
                 // `get_recorded` can drop the keys that stopped the recording.
                 last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));

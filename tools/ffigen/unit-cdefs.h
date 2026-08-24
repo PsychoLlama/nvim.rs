@@ -238,7 +238,6 @@ typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
 typedef struct vim_state vim_state;
 typedef struct addrinfo addrinfo;
-typedef struct buffblock buffblock;
 typedef struct bufstate_T bufstate_T;
 typedef struct cmdarg_T cmdarg_T;
 typedef union cstack_T_cs_pend cstack_T_cs_pend;
@@ -491,7 +490,6 @@ typedef unsigned int bfa_values;
 typedef unsigned int bln_values;
 typedef blobvar_S blob_T;
 typedef int64_t blocknr_T;
-typedef struct buffblock buffblock_T;
 typedef cleanup_stuff cleanup_T;
 typedef CMD_index cmdidx_T;
 typedef const char *cstr_t;
@@ -2023,11 +2021,6 @@ struct addrinfo {
   sockaddr *ai_addr;
   char *ai_canonname;
   addrinfo *ai_next;
-};
-struct buffblock {
-  buffblock *b_next;
-  size_t b_strlen;
-  char b_str[1];
 };
 struct bufstate_T {
   int bs_idx;

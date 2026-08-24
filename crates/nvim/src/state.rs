@@ -511,9 +511,7 @@ static was_safe: GlobalCell<bool> = GlobalCell::new(false);
 /// # Safety
 /// The editor must be initialized.
 unsafe fn is_safe_now() -> bool {
-    // SAFETY: the editor is initialized.
-    let stuff_empty = unsafe { stuff_empty() };
-    stuff_empty
+    stuff_empty()
         && typebuf.with(|t| t.tb_len) == 0
         && using_script() == 0
         && global_busy.get() == 0

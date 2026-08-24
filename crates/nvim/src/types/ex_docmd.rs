@@ -11,7 +11,9 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// What `:normal` sets aside. Not `Copy`: `tabuf` owns the typeahead it
+/// saved. `Default` is the state its callers declare it in.
+#[derive(Default)]
 pub struct save_state_T {
     pub save_msg_scroll: ::core::ffi::c_int,
     pub save_restart_edit: ::core::ffi::c_int,

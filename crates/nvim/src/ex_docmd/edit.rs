@@ -696,7 +696,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
 
         let arg = escape_k_special((*eap).arg);
         *ex_normal_busy.ptr() += 1;
-        let mut save_state: save_state_T = core::mem::zeroed();
+        let mut save_state = save_state_T::default();
         if save_current_state(&raw mut save_state) {
             loop {
                 // With a range, the keys are run once per line, from the

@@ -341,21 +341,17 @@ pub unsafe fn del_typebuf(len: c_int, offset: c_int) {
 /// Undo the last [`gotchars`] for `len` bytes, so that putting a typed
 /// character back into the typeahead does not record it twice.
 ///
-/// Only the recording is affected.
-///
-/// # Safety
-/// `len` must be at most what the last `gotchars` recorded.
-pub unsafe fn ungetchars(len: c_int) {
-    unsafe {
-        if reg_recording.get() == 0 {
-            return;
-        }
-        delete_buff_tail(recordbuff.ptr(), len);
-        // Wrapping, as the C's `size_t -=` is: `delete_buff_tail` gives up
-        // when the block is shorter than `len`, and the counter then goes
-        // below zero rather than tracking what was really removed.
-        last_recorded_len.set(last_recorded_len.get().wrapping_sub(len as usize));
+/// Only the recording is affected. `len` is expected to be at most what the
+/// last `gotchars` recorded.
+pub fn ungetchars(len: c_int) {
+    if reg_recording.get() == 0 {
+        return;
     }
+    recordbuff().delete_tail(len);
+    // Wrapping, as the C's `size_t -=` is: `delete_tail` gives up when the
+    // bytes are not all in the last block, and the counter then goes below
+    // zero rather than tracking what was really removed.
+    last_recorded_len.set(last_recorded_len.get().wrapping_sub(len as usize));
 }
 
 /// Sync undo, as reading typed characters out of the typeahead should.
@@ -447,11 +443,8 @@ pub(crate) unsafe fn save_typebuf() {
 ///
 /// It cannot when it was not stuffed and something has since been added to
 /// the stuff buffer: those characters have to come first.
-///
-/// # Safety
-/// Callable at any time.
-pub(crate) unsafe fn can_get_old_char() -> bool {
-    unsafe { old_char.get() != -1 && (old_KeyStuffed.get() != 0 || stuff_empty()) }
+pub(crate) fn can_get_old_char() -> bool {
+    old_char.get() != -1 && (old_KeyStuffed.get() != 0 || stuff_empty())
 }
 
 /// Save all three kinds of typeahead, so that a prompt really has to be
@@ -469,8 +462,8 @@ pub unsafe fn save_typeahead(tp: *mut tasave_T) {
         (*tp).old_mod_mask = old_mod_mask.get();
         old_char.set(-1);
 
-        (*tp).save_readbuf1 = readbuf1.take();
-        (*tp).save_readbuf2 = readbuf2.take();
+        (*tp).save_readbuf1 = readbuf1().take();
+        (*tp).save_readbuf2 = readbuf2().take();
     }
 }
 
@@ -488,9 +481,9 @@ pub unsafe fn restore_typeahead(tp: *mut tasave_T) {
         old_char.set((*tp).old_char);
         old_mod_mask.set((*tp).old_mod_mask);
 
-        free_buff(readbuf1.ptr());
-        readbuf1.set((*tp).save_readbuf1);
-        free_buff(readbuf2.ptr());
-        readbuf2.set((*tp).save_readbuf2);
+        readbuf1().free();
+        readbuf1().set(core::mem::take(&mut (*tp).save_readbuf1));
+        readbuf2().free();
+        readbuf2().set(core::mem::take(&mut (*tp).save_readbuf2));
     }
 }

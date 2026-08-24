@@ -171,12 +171,12 @@ plus these whole-tree metrics, which are not per-file:
 
   cell_copy_owner   `.get()` reads of a global whose `T` derives `Copy` *and*
                     transitively owns a raw pointer — a `String_0`, a
-                    `garray_T`, a `buffheader_T`. `get` copies the struct out
+                    `garray_T`, a `typebuf_T`. `get` copies the struct out
                     of the cell, so the copy and the global now hold the same
                     pointer: whoever frees or reallocates through one leaves
-                    the other dangling (`getchar/redo.rs` writes
-                    `old_redobuff.set(redobuff.get())` and both then own the
-                    same block chain). Most sites are borrows *spelled* as
+                    the other dangling (`getchar/redo.rs` used to write
+                    `old_redobuff.set(redobuff.get())`, and both then owned
+                    the same block chain). Most sites are borrows *spelled* as
                     copies —
                     `script_items.get().ga_len` — and their fix is the owning
                     family's rewrite, not a blanket transformation; a few are
@@ -367,11 +367,9 @@ CELL_COPY_OWNER = (
     "runtime_search_path",
     "runtime_search_path_thread",
     "ga_loaded",
-    # getchar — buffheader_T / typebuf_T, each a chain of owned blocks
-    "redobuff",
-    "old_redobuff",
-    "readbuf1",
-    "readbuf2",
+    # getchar — `typebuf_T` owns two parallel byte arrays. The five
+    # `buffheader_T` cells left the list in phase 22's S7: `KeyBuffer` is not
+    # `Copy` at all now, so there is no `get` to count.
     "typebuf",
     # regexp — saved matcher state holding pointers into the subject
     "rex",
@@ -1130,11 +1128,11 @@ SELF_TEST_CELL_PTR_ALLOW = [
 ]
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [
-    ("fn f() {\n    redobuff.get();\n}\n", 1),
+    ("fn f() {\n    typebuf.get();\n}\n", 1),
     ("fn f() {\n    let n = script_items.get().ga_len;\n}\n", 1),
     # Only `get`: the other accessors do not hand out a second owner.
-    ("fn f() {\n    redobuff.set(x);\n}\n", 0),
-    ("fn f() {\n    redobuff.with(|s| s);\n}\n", 0),
+    ("fn f() {\n    typebuf.set(x);\n}\n", 0),
+    ("fn f() {\n    typebuf.with(|s| s);\n}\n", 0),
     # rustfmt wraps a long chain, and the copy still happens.
     ("fn f() {\n    *script_items\n        .get()\n}\n", 1),
     # A global that is not on the list.

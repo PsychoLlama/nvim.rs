@@ -17,7 +17,7 @@ use core::ptr;
 /// Where [`read_redo`] is up to: the block it is reading, and the byte within
 /// it. A pair of walk cursors rather than an index, because the blocks are
 /// separately allocated and the walk crosses from one to the next mid-key.
-static redo_block: GlobalCell<*mut buffblock_T> = GlobalCell::new(ptr::null_mut());
+static redo_block: GlobalCell<*mut KeyBlock> = GlobalCell::new(ptr::null_mut());
 static redo_at: GlobalCell<*const u8> = GlobalCell::new(ptr::null());
 
 /// Move the current redo buffer to `old_redobuff` and start a fresh one.
@@ -31,8 +31,8 @@ pub unsafe fn reset_redobuff() {
         if block_redo.get() {
             return;
         }
-        free_buff(old_redobuff.ptr());
-        old_redobuff.set(redobuff.take());
+        old_redobuff().free();
+        old_redobuff().set(redobuff().take());
     }
 }
 
@@ -45,8 +45,8 @@ pub unsafe fn cancel_redo() {
         if block_redo.get() {
             return;
         }
-        free_buff(redobuff.ptr());
-        redobuff.set(old_redobuff.take());
+        redobuff().free();
+        redobuff().set(old_redobuff().take());
         start_stuff();
         while read_readbuffers(true) != NUL {}
     }
@@ -64,14 +64,14 @@ pub unsafe fn cancel_redo() {
 /// [`restore_redobuff`].
 pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
     unsafe {
-        (*save_redo).sr_redobuff = redobuff.take();
-        (*save_redo).sr_old_redobuff = old_redobuff.take();
+        (*save_redo).sr_redobuff = redobuff().take();
+        (*save_redo).sr_old_redobuff = old_redobuff().take();
 
-        let (copy, len) = buff_contents(&raw mut (*save_redo).sr_redobuff, false);
+        let (copy, len) = (*save_redo).sr_redobuff.contents(false);
         if copy.is_null() {
             return;
         }
-        add_buff(redobuff.ptr(), copy, len as ptrdiff_t);
+        redobuff().add(copy, len as ptrdiff_t);
         xfree(copy.cast());
     }
 }
@@ -82,10 +82,10 @@ pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
 /// `save_redo` must be the one a matching [`save_redobuff`] filled.
 pub unsafe fn restore_redobuff(save_redo: *mut save_redo_T) {
     unsafe {
-        free_buff(redobuff.ptr());
-        redobuff.set((*save_redo).sr_redobuff);
-        free_buff(old_redobuff.ptr());
-        old_redobuff.set((*save_redo).sr_old_redobuff);
+        redobuff().free();
+        redobuff().set(core::mem::take(&mut (*save_redo).sr_redobuff));
+        old_redobuff().free();
+        old_redobuff().set(core::mem::take(&mut (*save_redo).sr_old_redobuff));
     }
 }
 
@@ -96,7 +96,7 @@ pub unsafe fn restore_redobuff(save_redo: *mut save_redo_T) {
 pub unsafe fn append_to_redobuff(s: *const c_char) {
     unsafe {
         if !block_redo.get() {
-            add_buff(redobuff.ptr(), s, -1);
+            redobuff().add(s, -1);
         }
     }
 }
@@ -143,7 +143,7 @@ pub unsafe fn append_to_redobuff_literally(str: *const c_char, len: c_int) {
                 s = s.sub(1);
             }
             if s > start {
-                add_buff(redobuff.ptr(), start, s.offset_from(start));
+                redobuff().add(start, s.offset_from(start));
             }
             if c_int::from(*s) == NUL || !more(s) {
                 break;
@@ -154,13 +154,13 @@ pub unsafe fn append_to_redobuff_literally(str: *const c_char, len: c_int) {
             let c = mb_cptr2char_adv(&raw mut s);
             let last = c_int::from(*s) == NUL;
             if c < ' ' as c_int || c == DEL || (last && (c == '0' as c_int || c == '^' as c_int)) {
-                add_char_buff(redobuff.ptr(), Ctrl_V);
+                redobuff().add_char(Ctrl_V);
             }
             if last && c == '0' as c_int {
                 // CTRL-V '0' must be inserted as CTRL-V 048.
-                add_buff(redobuff.ptr(), c"048".as_ptr(), 3);
+                redobuff().add(c"048".as_ptr(), 3);
             } else {
-                add_char_buff(redobuff.ptr(), c);
+                redobuff().add_char(c);
             }
         }
     }
@@ -182,10 +182,10 @@ pub unsafe fn append_to_redobuff_keys(mut s: *const c_char) {
                 && c_int::from(*s.add(2)) != NUL
             {
                 // Insert the special key literally.
-                add_buff(redobuff.ptr(), s, 3);
+                redobuff().add(s, 3);
                 s = s.add(3);
             } else {
-                add_char_buff(redobuff.ptr(), mb_cptr2char_adv(&raw mut s));
+                redobuff().add_char(mb_cptr2char_adv(&raw mut s));
             }
         }
     }
@@ -193,30 +193,20 @@ pub unsafe fn append_to_redobuff_keys(mut s: *const c_char) {
 
 /// Append one character to the redo buffer, escaping special keys, NUL and
 /// `K_SPECIAL` and splitting a codepoint into its UTF-8 bytes.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn append_to_redobuff_char(c: c_int) {
-    unsafe {
-        if !block_redo.get() {
-            add_char_buff(redobuff.ptr(), c);
-        }
+pub fn append_to_redobuff_char(c: c_int) {
+    if !block_redo.get() {
+        redobuff().add_char(c);
     }
 }
 
 /// Append the decimal spelling of `n` to the redo buffer.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn append_to_redobuff_number(n: c_int) {
-    unsafe {
-        if !block_redo.get() {
-            add_num_buff(redobuff.ptr(), n);
-        }
+pub fn append_to_redobuff_number(n: c_int) {
+    if !block_redo.get() {
+        redobuff().add_num(n);
     }
 }
 
-/// Read one character from the redo buffer, undoing `add_char_buff`'s
+/// Read one character from the redo buffer, undoing `KeyBufferRef::add_char`'s
 /// escaping. The buffer itself is left alone.
 ///
 /// With `init` set this only positions the cursor and answers `OK`, or `FAIL`
@@ -230,9 +220,9 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
     unsafe {
         if init {
             let head = if old_redo {
-                (*old_redobuff.ptr()).bh_first.b_next
+                old_redobuff().head()
             } else {
-                (*redobuff.ptr()).bh_first.b_next
+                redobuff().head()
             };
             if head.is_null() {
                 return FAIL;
@@ -265,8 +255,8 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
                 redo_at.set(redo_at.get().add(2));
             }
             redo_at.set(redo_at.get().add(1));
-            if c_int::from(*redo_at.get()) == NUL && !(*redo_block.get()).b_next.is_null() {
-                let next = (*redo_block.get()).b_next;
+            if c_int::from(*redo_at.get()) == NUL && !(*redo_block.get()).next.is_null() {
+                let next = (*redo_block.get()).next;
                 redo_block.set(next);
                 redo_at.set(block_str(next).cast());
             }
@@ -302,7 +292,7 @@ pub(crate) fn mb_byte2len_check(b: c_int) -> usize {
 /// Copy the rest of the redo buffer into `readbuf2`, one character at a time.
 ///
 /// The escaped `K_SPECIAL` is copied without translation: [`read_redo`]
-/// decodes it and `add_char_buff` re-encodes it identically.
+/// decodes it and `KeyBufferRef::add_char` re-encodes it identically.
 ///
 /// # Safety
 /// As [`read_redo`] without `init`.
@@ -313,7 +303,7 @@ unsafe fn copy_redo(old_redo: bool) {
             if c == NUL {
                 break;
             }
-            add_char_buff(readbuf2.ptr(), c);
+            readbuf2().add_char(c);
         }
     }
 }
@@ -336,19 +326,19 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
 
         // Copy the register name, if there is one.
         if c == '"' as c_int {
-            add_buff(readbuf2.ptr(), c"\"".as_ptr(), 1);
+            readbuf2().add(c"\"".as_ptr(), 1);
             c = read_redo(false, old_redo);
 
             // A numbered register shifts up: the redo of `"1p` is `"2p`.
             if c >= '1' as c_int && c < '9' as c_int {
                 c += 1;
             }
-            add_char_buff(readbuf2.ptr(), c);
+            readbuf2().add_char(c);
 
             // The expression register has to be re-evaluated, so its CR --
             // which ends the expression -- goes in too.
             if c == '=' as c_int {
-                add_char_buff(readbuf2.ptr(), CAR);
+                readbuf2().add_char(CAR);
                 cmd_silent.set(true);
             }
 
@@ -370,12 +360,12 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
             while ascii_isdigit(c) {
                 c = read_redo(false, old_redo);
             }
-            add_num_buff(readbuf2.ptr(), count);
+            readbuf2().add_num(count);
         }
 
         // Then the rest of the redo buffer, from the character the count
         // scan stopped on.
-        add_char_buff(readbuf2.ptr(), c);
+        readbuf2().add_char(c);
         copy_redo(old_redo);
         OK
     }
@@ -404,7 +394,7 @@ pub unsafe fn start_redo_ins() -> c_int {
                 if c == 'O' as c_int || c == 'o' as c_int {
                     // `o`/`O` opened the line; repeating the insert alone
                     // needs the newline put back.
-                    add_buff(readbuf2.ptr(), c"\n".as_ptr(), -1);
+                    readbuf2().add(c"\n".as_ptr(), -1);
                 }
                 break;
             }
