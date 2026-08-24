@@ -43,9 +43,9 @@ use crate::highlight_group::{
 };
 use crate::indent_c::find_start_comment;
 use crate::main::{
-    Columns, Rows, curbuf, curwin, display_tick, e_invarg2, e_nogroup, e_notopen,
-    empty_string_option, firstwin, got_int, include_default, include_link, include_none, msg_col,
-    p_cpo, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
+    Columns, Rows, curbuf, curwin, display_tick, e_invarg2, e_nogroup, e_notopen, firstwin,
+    got_int, include_default, include_link, include_none, msg_col, p_cpo, re_extmatch_in,
+    re_extmatch_out, reg_do_extmatch,
 };
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};

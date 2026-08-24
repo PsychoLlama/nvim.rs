@@ -12,11 +12,11 @@ use core::ptr::{copy_nonoverlapping, null_mut};
 use crate::api::private::helpers::cstr_as_string;
 use crate::eval::{REGSUB_COPY, REGSUB_MAGIC, kOptValTypeString};
 use crate::garray::{ga_clear, ga_grow, ga_init};
-use crate::main::{empty_string_option, p_cpo, p_ic};
+use crate::main::{p_cpo, p_ic};
 use crate::mbyte::utfc_ptr2len;
 use crate::option::set_option_value_give_err;
 use crate::options::kOptCpoptions;
-use crate::optionstr::free_string_option;
+use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
 use crate::types::{
@@ -57,7 +57,7 @@ impl QuietCpo {
     /// Must be dropped before anything else writes 'cpoptions'.
     unsafe fn enter() -> Self {
         let saved = p_cpo.get();
-        p_cpo.set(empty_string_option.ptr() as *mut c_char);
+        p_cpo.set(empty_option());
         Self { saved }
     }
 }
@@ -66,7 +66,7 @@ impl Drop for QuietCpo {
     fn drop(&mut self) {
         // SAFETY: `saved` is the pointer 'cpoptions' held on entry.
         unsafe {
-            if p_cpo.get() == empty_string_option.ptr() as *mut c_char {
+            if is_empty_option(p_cpo.get()) {
                 // Nothing touched it: put the old pointer straight back.
                 p_cpo.set(self.saved);
                 return;

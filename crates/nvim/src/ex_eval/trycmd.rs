@@ -55,11 +55,12 @@ use crate::eval::userfunc::do_return;
 use crate::ex_docmd::{ends_excmd, find_nextcmd};
 use crate::guard::Suppress;
 use crate::main::{
-    current_exception, did_emsg, did_throw, e_argreq, e_invarg2, e_trailing_arg,
-    empty_string_option, emsg_silent, force_abort, got_int, msg_list, need_rethrow, p_cpo,
+    current_exception, did_emsg, did_throw, e_argreq, e_invarg2, e_trailing_arg, emsg_silent,
+    force_abort, got_int, msg_list, need_rethrow, p_cpo,
 };
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, internal_error};
+use crate::optionstr::empty_option;
 use crate::regexp::{
     RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
 };
@@ -319,7 +320,7 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
             *end = NUL as c_char;
         }
         let save_cpo = p_cpo.get();
-        p_cpo.set(empty_string_option.ptr().cast());
+        p_cpo.set(empty_option());
         // Errors here would invalidate the current exception.
         // Disable error messages: one here would invalidate the exception.
         let no_emsg = Suppress::emsg();

@@ -18,9 +18,8 @@ use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::main::{
-    Rows, VIsual, VIsual_active, VIsual_mode, curwin, empty_string_option, ex_normal_busy,
-    hl_attr_active, msg_grid_adj, msg_silent, p_ch, p_sbr, p_sc, p_sel, p_sloc, redraw_tabline,
-    sc_col, showcmd_buf,
+    Rows, VIsual, VIsual_active, VIsual_mode, curwin, ex_normal_busy, hl_attr_active, msg_grid_adj,
+    msg_silent, p_ch, p_sbr, p_sc, p_sel, p_sloc, redraw_tabline, sc_col, showcmd_buf,
 };
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
@@ -29,6 +28,7 @@ use crate::normal::{
     ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear,
     showcmd_visual,
 };
+use crate::optionstr::empty_option;
 use crate::os::cshim::{memmove, snprintf};
 use crate::plines::getvcols;
 use crate::pos::lt;
@@ -131,8 +131,8 @@ fn blockwise_width() -> c_int {
     unsafe {
         let saved_sbr = p_sbr.get();
         let saved_w_sbr = (*curwin.get()).w_onebuf_opt.wo_sbr;
-        p_sbr.set(empty_string_option.ptr().cast::<c_char>());
-        (*curwin.get()).w_onebuf_opt.wo_sbr = empty_string_option.ptr().cast::<c_char>();
+        p_sbr.set(empty_option());
+        (*curwin.get()).w_onebuf_opt.wo_sbr = empty_option();
         getvcols(
             curwin.get(),
             &raw mut (*curwin.get()).w_cursor,

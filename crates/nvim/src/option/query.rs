@@ -19,12 +19,13 @@ use crate::eval::typval::{callback_free, kCallbackNone, tv_dict_add_tv, tv_dict_
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::main::{
-    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, bkc_flags, curbuf, empty_string_option,
-    magic_overruled, need_maketitle, p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh,
-    p_shm, p_siso, p_so, redraw_tabline, ve_flags,
+    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, bkc_flags, curbuf, magic_overruled, need_maketitle,
+    p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm, p_siso, p_so,
+    redraw_tabline, ve_flags,
 };
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::*;
+use crate::optionstr::empty_option;
 use crate::os::cshim::{strncmp, strstr};
 use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
@@ -306,7 +307,7 @@ pub(crate) unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
             return p_sbr.get();
         }
         if strcmp(local, c"NONE".as_ptr()) == 0 {
-            return empty_string_option.ptr().cast::<c_char>();
+            return empty_option();
         }
         local
     }

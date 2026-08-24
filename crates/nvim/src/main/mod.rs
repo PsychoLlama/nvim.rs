@@ -1088,7 +1088,6 @@ pub static linebuf_vcol: GlobalCell<*mut colnr_T> =
     GlobalCell::new(::core::ptr::null_mut::<colnr_T>());
 pub static linebuf_scratch: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub static empty_string_option: GlobalCell<[c_char; 1]> = GlobalCell::new(c_bytes(b"\0"));
 pub static p_ambw: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_acd: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_ai: GlobalCell<c_int> = GlobalCell::new(0);

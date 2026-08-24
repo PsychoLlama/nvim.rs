@@ -20,10 +20,11 @@ use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::{curbuf, e_invarg, empty_string_option, lastwin};
+use crate::main::{curbuf, e_invarg, lastwin};
 use crate::memory::{xcalloc, xmalloc};
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
+use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
 use crate::types::{Integer, NUL, OptInt, frame_T, handle_T, linenr_T, tabpage_T, win_T};
@@ -277,7 +278,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
         _ if !cc.is_null() => cc,
         _ => match win {
             Some(w) => w.w_onebuf_opt.wo_cc,
-            None => empty_string_option.ptr().cast::<c_char>(),
+            None => empty_option(),
         },
     };
     let tw = win.map_or(0 as OptInt, |w| w.buffer().b_p_tw);

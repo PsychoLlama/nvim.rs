@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::optionstr::empty_option;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -514,7 +515,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
         // first, to avoid the 'l' flag.
         ci.sp_pattern = xstrnsave(arg.add(1), end.offset_from(arg) as size_t - 1);
         let cpo_save = p_cpo.get();
-        p_cpo.set(empty_string_option.ptr() as *mut c_char);
+        p_cpo.set(empty_option());
         ci.sp_prog = vim_regcomp(ci.sp_pattern, RE_MAGIC);
         p_cpo.set(cpo_save);
         if ci.sp_prog.is_null() {

@@ -16,13 +16,13 @@ use crate::eval::typval::{
     tv_list_append_number,
 };
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
-use crate::main::{curbuf, curwin, e_invarg2, empty_string_option, p_cpo, p_ws};
+use crate::main::{curbuf, curwin, e_invarg2, p_cpo, p_ws};
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
 use crate::normal::find_decl;
 use crate::option::{kOptValTypeString, set_option_value_give_err};
 use crate::options::kOptCpoptions;
-use crate::optionstr::free_string_option;
+use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::profile::profile_setlimit;
@@ -497,14 +497,14 @@ struct EmptyCpo(*mut c_char);
 impl EmptyCpo {
     fn new() -> Self {
         let saved = p_cpo.get();
-        p_cpo.set(empty_string_option.ptr() as *mut c_char);
+        p_cpo.set(empty_option());
         EmptyCpo(saved)
     }
 }
 
 impl Drop for EmptyCpo {
     fn drop(&mut self) {
-        if p_cpo.get() == empty_string_option.ptr() as *mut c_char {
+        if is_empty_option(p_cpo.get()) {
             p_cpo.set(self.0);
             return;
         }

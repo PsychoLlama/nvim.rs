@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::optionstr::empty_option;
 use crate::types::{FAIL, OK};
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
 use core::ffi::{c_int, c_uint};
@@ -166,7 +167,7 @@ unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> c_int {
             return FAIL;
         }
         // Do not split again for the next entry.
-        p_swb.set(empty_string_option.ptr().cast());
+        p_swb.set(empty_option());
         swb_flags.set(0);
         (*curwin.get()).w_onebuf_opt.wo_scb = false as c_int;
         (*curwin.get()).w_onebuf_opt.wo_crb = false as c_int;

@@ -23,11 +23,11 @@ use crate::insexpand::{
     set_buflocal_cfu_callback, set_buflocal_cpt_callbacks, set_buflocal_ofu_callback,
 };
 use crate::main::{
-    curbuf, empty_string_option, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink, p_cino, p_cinsd,
-    p_cinw, p_cms, p_com, p_cpo, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo,
-    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop, p_ma,
-    p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl, p_spo, p_sts,
-    p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
+    curbuf, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_com,
+    p_cpo, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo, p_iminsert, p_imsearch,
+    p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop, p_ma, p_ml, p_mps, p_nf, p_ofu,
+    p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl, p_spo, p_sts, p_sua, p_sw, p_swf, p_tfu,
+    p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
 };
 use crate::memory::xstrdup;
 
@@ -50,7 +50,7 @@ use crate::options::{
     kBufOptVarsofttabstop, kBufOptVartabstop, kBufOptWrapmargin, kOptModifiable, options,
 };
 use crate::optionstr::{
-    check_buf_options, check_signcolumn, check_string_option, clear_string_option,
+    check_buf_options, check_signcolumn, check_string_option, clear_string_option, empty_option,
 };
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
@@ -66,7 +66,7 @@ use crate::option::cpo_has;
 
 /// The string every unset string option shares.
 fn unset_string() -> *mut c_char {
-    empty_string_option.ptr().cast::<c_char>()
+    empty_option()
 }
 
 /// Give a window's option values to a freshly split one.

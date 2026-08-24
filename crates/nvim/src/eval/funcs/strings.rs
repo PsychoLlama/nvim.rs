@@ -18,12 +18,13 @@ use crate::ex_getln::vim_strsave_fnameescape;
 use crate::garray::{ga_clear, ga_grow};
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::vim_strsave_escape_ks;
-use crate::main::{curbuf, curwin, did_emsg, e_no_spell, empty_string_option, p_cpo, p_enc};
+use crate::main::{curbuf, curwin, did_emsg, e_no_spell, p_cpo, p_enc};
 use crate::mbyte::{
     convert_setup, enc_locale, string_convert, utf_char2bytes, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::{emsg, str2special_save};
+use crate::optionstr::empty_option;
 use crate::os::cshim::{gettext, memmove};
 use crate::os::time::{os_localtime_r, os_strptime, tm_zeroed};
 use crate::regexp::{
@@ -501,7 +502,7 @@ pub unsafe fn f_split(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     // 'cpoptions' is cleared around the split so that its flags cannot
     // change what the pattern means.
     let save_cpo = p_cpo.get();
-    p_cpo.set(empty_string_option.ptr() as *mut c_char);
+    p_cpo.set(empty_option());
     // SAFETY: the arguments are live typvals, `patbuf` outlives the calls
     // that may fill it, and the compiled program is freed before returning.
     unsafe {

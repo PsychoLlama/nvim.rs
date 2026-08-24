@@ -21,6 +21,7 @@ use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::optionstr::empty_option;
 use crate::types::{IOSIZE, NUL};
 
 /// Bytes, words and characters in one line, up to `limit` bytes.
@@ -192,8 +193,8 @@ unsafe fn measure_selection(visual_mode: c_int) -> Selection {
             // 'showbreak' would move the columns `getvcols` answers.
             let saved_sbr = p_sbr.get();
             let saved_w_sbr = (*curwin.get()).w_onebuf_opt.wo_sbr;
-            p_sbr.set(empty_string_option.ptr() as *mut c_char);
-            (*curwin.get()).w_onebuf_opt.wo_sbr = empty_string_option.ptr() as *mut c_char;
+            p_sbr.set(empty_option());
+            (*curwin.get()).w_onebuf_opt.wo_sbr = empty_option();
 
             oparg.is_VIsual = true;
             oparg.motion_type = kMTBlockWise;

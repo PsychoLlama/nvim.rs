@@ -24,11 +24,12 @@ use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::main::{
-    IObuff, curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg,
-    empty_string_option, lastbuf, p_cpo, p_magic,
+    IObuff, curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg, lastbuf, p_cpo,
+    p_magic,
 };
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
+use crate::optionstr::empty_option;
 use crate::os::cshim::{gettext, strncmp};
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
@@ -412,7 +413,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
         let save_magic = p_magic.get();
         let save_cpo = p_cpo.get();
         p_magic.set(1);
-        p_cpo.set(empty_string_option.ptr() as *mut c_char);
+        p_cpo.set(empty_option());
         let mut buf = buflist_findnr(buflist_findpat(
             name,
             name.add(strlen(name)),

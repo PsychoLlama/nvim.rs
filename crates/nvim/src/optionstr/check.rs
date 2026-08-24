@@ -6,9 +6,11 @@
 //! The **empty string option**. A string option's variable is never null:
 //! out of memory, `xstrdup` may hand back null, and everything downstream
 //! dereferences the variable, so a null one is replaced by the shared
-//! `empty_string_option`. That one allocation is aliased by every option
-//! holding "", which is why freeing a string option has to go through
-//! [`free_string_option`] rather than `xfree`.
+//! [`empty_option`]. That one allocation is aliased by every option holding
+//! "", which is why freeing a string option has to go through
+//! [`free_string_option`] rather than `xfree`, and why "does this option own
+//! its value" is [`is_empty_option`] rather than a pointer comparison
+//! spelled out at each of the three dozen places that ask.
 //!
 //! The **error buffer**. A check that has to name what it disliked formats
 //! into a caller-supplied `errbuf`; the caller may decline one by passing
@@ -24,7 +26,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
 use crate::global_cell::GlobalCell;
 use crate::indent_c::parse_cino;
-use crate::main::{empty_string_option, secure};
+use crate::main::secure;
 use crate::memory::xfree;
 use crate::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
 use crate::options::{
@@ -193,13 +195,39 @@ pub unsafe fn check_buf_options(buf: *mut buf_T) {
     }
 }
 
+/// The value every string option with nothing of its own points at.
+///
+/// Upstream declares it `char empty_string_option[]` and lets thirty-odd
+/// places compare an option variable against that address by hand. Here the
+/// static is private and [`empty_option`]/[`is_empty_option`] are the only
+/// way to reach it, so the sentinel is a question callers ask by name.
+///
+/// It keeps a cell rather than becoming a `ConstTable`: upstream's array is
+/// writable, and putting one byte in `.rodata` would turn a write nobody has
+/// proved impossible into a fault. Nothing dereferences the cell — both
+/// accessors only want the address — so `as_raw` is the whole of its use.
+static EMPTY_OPTION: GlobalCell<[c_char; 1]> = GlobalCell::new([0]);
+
+/// The shared value to give a string option that has none of its own.
+pub(crate) const fn empty_option() -> *mut c_char {
+    EMPTY_OPTION.as_raw().cast::<c_char>()
+}
+
+/// Whether a string option's value is that shared one, which answers two
+/// questions at once: the option owns no allocation, so it must not be
+/// freed, and it holds no value of its own, so a global-local one falls
+/// back and a `:setlocal` reads as unset.
+pub(crate) fn is_empty_option(value: *const c_char) -> bool {
+    ptr::eq(value, empty_option().cast_const())
+}
+
 /// Free a string option's value, unless it is the shared empty string every
 /// option holding "" points at.
 ///
 /// # Safety
 /// `p` is null, the shared empty string, or an allocation this owns.
 pub unsafe fn free_string_option(p: *mut c_char) {
-    if p != empty_string_option.ptr().cast::<c_char>() {
+    if !is_empty_option(p) {
         // SAFETY: as documented above.
         unsafe { xfree(p.cast::<c_void>()) };
     }
@@ -215,7 +243,7 @@ pub unsafe fn clear_string_option(pp: *mut *mut c_char) {
     // accepts.
     unsafe {
         free_string_option(*pp);
-        *pp = empty_string_option.ptr().cast::<c_char>();
+        *pp = empty_option();
     }
 }
 
@@ -228,7 +256,7 @@ pub unsafe fn check_string_option(pp: *mut *mut c_char) {
     // SAFETY: the caller's variable.
     unsafe {
         if (*pp).is_null() {
-            *pp = empty_string_option.ptr().cast::<c_char>();
+            *pp = empty_option();
         }
     }
 }
@@ -256,7 +284,7 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
         // SAFETY: the caller's window.
         unsafe { (*wp).w_onebuf_opt.wo_scl }
     } else {
-        empty_string_option.ptr().cast::<c_char>()
+        empty_option()
     };
     // SAFETY: an option value is a C string.
     let val = unsafe { CStr::from_ptr(val) }.to_bytes();

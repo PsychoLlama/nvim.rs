@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Suppress;
+use crate::optionstr::is_empty_option;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -163,7 +164,7 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
         let arg = skipwhite((*eap).arg);
         if *arg as c_int == NUL {
             msg_puts(c"\n".as_ptr());
-            if (*cur_syn_block()).b_syn_isk != empty_string_option.ptr() as *mut c_char {
+            if !is_empty_option((*cur_syn_block()).b_syn_isk) {
                 msg_puts(c"syntax iskeyword ".as_ptr());
                 msg_outtrans((*cur_syn_block()).b_syn_isk, 0, false);
             } else {

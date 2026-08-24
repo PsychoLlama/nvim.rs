@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::edit::BeginlineOpts;
+use crate::optionstr::is_empty_option;
 use crate::search::SEARCH_KEEP;
 use crate::types::{FAIL, IOSIZE, OK, ShmFlag};
 use core::ffi::{c_char, c_int, c_uint};
@@ -507,7 +508,7 @@ pub(crate) unsafe fn qf_jump_newwin(
 
         // Put 'switchbuf' back, unless an autocommand or a modeline changed
         // it meanwhile.
-        if p_swb.get() != old_swb && p_swb.get() == empty_string_option.ptr().cast() {
+        if p_swb.get() != old_swb && is_empty_option(p_swb.get()) {
             p_swb.set(old_swb);
             swb_flags.set(old_swb_flags);
         }

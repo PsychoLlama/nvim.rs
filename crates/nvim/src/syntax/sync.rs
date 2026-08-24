@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::optionstr::{empty_option, is_empty_option};
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -300,7 +301,7 @@ unsafe fn scan_for_sync_point(
 /// [`restore_chartab`] is a no-op too and the saved buffer is never read.
 pub(crate) unsafe fn save_chartab(chartab: *mut c_char) {
     unsafe {
-        if (*syn_block.get()).b_syn_isk == empty_string_option.ptr() as *mut c_char {
+        if is_empty_option((*syn_block.get()).b_syn_isk) {
             return;
         }
         memmove(
@@ -320,7 +321,7 @@ pub(crate) unsafe fn save_chartab(chartab: *mut c_char) {
 /// Put back what [`save_chartab`] saved.
 pub(crate) unsafe fn restore_chartab(chartab: *mut c_char) {
     unsafe {
-        if (*(*syn_win.get()).w_s).b_syn_isk != empty_string_option.ptr() as *mut c_char {
+        if !is_empty_option((*(*syn_win.get()).w_s).b_syn_isk) {
             memmove(
                 &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
                 chartab as *const ::core::ffi::c_void,
@@ -559,7 +560,7 @@ unsafe fn sync_linecont(
                 xstrnsave(next_arg.add(1), arg_end.offset_from(next_arg) as size_t - 1);
             (*block).b_syn_linecont_ic = (*block).b_syn_ic;
             let cpo_save = p_cpo.get();
-            p_cpo.set(empty_string_option.ptr() as *mut c_char);
+            p_cpo.set(empty_option());
             (*block).b_syn_linecont_prog = vim_regcomp((*block).b_syn_linecont_pat, RE_MAGIC);
             p_cpo.set(cpo_save);
             syn_clear_time(&mut (*block).b_syn_linecont_time);

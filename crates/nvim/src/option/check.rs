@@ -24,14 +24,13 @@ use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::tabstop_set;
 use crate::main::{
-    curbuf, curwin, empty_string_option, need_maketitle, p_bin, p_et, p_ml, p_tw, p_wm,
-    redraw_tabline, starting,
+    curbuf, curwin, need_maketitle, p_bin, p_et, p_ml, p_tw, p_wm, redraw_tabline, starting,
 };
 use crate::memory::{xfree, xstrchrnul};
 use crate::r#move::changed_window_setting;
 use crate::options::*;
 use crate::optionstr::{
-    check_string_option, did_set_breakat, didset_string_options, set_chars_option,
+    check_string_option, did_set_breakat, didset_string_options, empty_option, set_chars_option,
 };
 use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
@@ -301,7 +300,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bo
         } else if !wp.is_null() {
             (*wp).w_onebuf_opt.wo_winhl
         } else {
-            empty_string_option.ptr().cast::<c_char>()
+            empty_option()
         };
 
         if *p == 0 {

@@ -14,9 +14,10 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::{api_free_string, copy_string, cstr_as_string};
-use crate::main::{curbuf, empty_string_option};
+use crate::main::curbuf;
 use crate::memory::{strnequal, xmalloc, xstrdup};
 use crate::options::options;
+use crate::optionstr::is_empty_option;
 use crate::os::cshim::snprintf;
 use crate::types::{
     Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, kObjectTypeBoolean,
@@ -87,7 +88,7 @@ pub(crate) fn optval_free(value: OptVal) {
     }
     // SAFETY: the tag says the payload is the string field.
     let string = unsafe { value.data.string };
-    if string.data() != empty_string_option.ptr().cast::<c_char>() {
+    if !is_empty_option(string.data()) {
         // SAFETY: a string value owns its bytes, and it is not the shared
         // empty string.
         unsafe { api_free_string(string) };

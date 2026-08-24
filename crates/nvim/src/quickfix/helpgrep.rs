@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::optionstr::{empty_option, is_empty_option};
 use crate::path::ExpandFlags;
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::semsg_c;
@@ -223,7 +224,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
 
         // Make 'cpoptions' empty, the 'l' flag should not be used here.
         let save_cpo = p_cpo.get();
-        p_cpo.set(empty_string_option.ptr().cast());
+        p_cpo.set(empty_option());
 
         let mut new_qi = false;
         if is_loclist_cmd((*eap).cmdidx as c_int) {
@@ -254,7 +255,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
             qf_list_changed(qfl);
         }
 
-        if p_cpo.get() == empty_string_option.ptr().cast() {
+        if is_empty_option(p_cpo.get()) {
             p_cpo.set(save_cpo);
         } else {
             // Darn, some plugin changed the value. If it's still empty it

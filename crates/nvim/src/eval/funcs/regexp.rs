@@ -16,13 +16,13 @@ use crate::eval::typval::{
     tv_list_find, tv_list_first, tv_list_item_remove, tv_list_uidx,
 };
 use crate::main::{
-    did_emsg, e_buffer_is_not_loaded, e_invalid_buffer_name_str, e_invargval, empty_string_option,
-    p_cpo, p_ic,
+    did_emsg, e_buffer_is_not_loaded, e_invalid_buffer_name_str, e_invargval, p_cpo, p_ic,
 };
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmemdupz};
 use crate::message::emsg;
+use crate::optionstr::empty_option;
 use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg_c;
@@ -52,7 +52,7 @@ struct EmptyCpo(*mut c_char);
 impl EmptyCpo {
     fn new() -> Self {
         let saved = p_cpo.get();
-        p_cpo.set(empty_string_option.ptr() as *mut c_char);
+        p_cpo.set(empty_option());
         EmptyCpo(saved)
     }
 }

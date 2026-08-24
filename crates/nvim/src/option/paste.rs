@@ -14,15 +14,13 @@ use core::ptr;
 use crate::drawscreen::status_redraw_all;
 use crate::global_cell::GlobalCell;
 use crate::indent::tabstop_set;
-use crate::main::{
-    empty_string_option, p_ai, p_et, p_paste, p_ri, p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm,
-};
+use crate::main::{p_ai, p_et, p_paste, p_ri, p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm};
 use crate::memory::{xfree, xstrdup};
 use crate::options::{
     kOptAutoindent, kOptExpandtab, kOptRevins, kOptRuler, kOptShowmatch, kOptSmarttab,
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
-use crate::optionstr::free_string_option;
+use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::types::{OptIndex, OptInt, OptionSetFlags, colnr_T, optset_T};
 
 use super::{buffers, didset_options_sctx};
@@ -102,7 +100,7 @@ pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
                 if !(*buf).b_p_vsts.is_null() {
                     free_string_option((*buf).b_p_vsts);
                 }
-                (*buf).b_p_vsts = empty_string_option.ptr().cast::<c_char>();
+                (*buf).b_p_vsts = empty_option();
                 xfree((*buf).b_p_vsts_array.cast::<c_void>());
                 (*buf).b_p_vsts_array = ptr::null_mut();
             }
@@ -121,7 +119,7 @@ pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
             if !p_vsts.get().is_null() {
                 free_string_option(p_vsts.get());
             }
-            p_vsts.set(empty_string_option.ptr().cast::<c_char>());
+            p_vsts.set(empty_option());
         } else if old_p_paste.get() != 0 {
             for buf in buffers() {
                 (*buf).b_p_tw = (*buf).b_p_tw_nopaste;
@@ -134,9 +132,7 @@ pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
                 }
                 (*buf).b_p_vsts = restored_copy((*buf).b_p_vsts_nopaste);
                 xfree((*buf).b_p_vsts_array.cast::<c_void>());
-                if !(*buf).b_p_vsts.is_null()
-                    && (*buf).b_p_vsts != empty_string_option.ptr().cast::<c_char>()
-                {
+                if !(*buf).b_p_vsts.is_null() && !is_empty_option((*buf).b_p_vsts) {
                     tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array);
                 } else {
                     (*buf).b_p_vsts_array = ptr::null_mut::<colnr_T>();
@@ -175,7 +171,7 @@ pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
 ///
 /// `value` must be a string option's value.
 unsafe fn saved_copy(value: *mut c_char) -> *mut c_char {
-    if value.is_null() || value == empty_string_option.ptr().cast::<c_char>() {
+    if value.is_null() || is_empty_option(value) {
         return ptr::null_mut();
     }
     // SAFETY: the caller's `value` is a NUL-terminated option value.
@@ -189,7 +185,7 @@ unsafe fn saved_copy(value: *mut c_char) -> *mut c_char {
 /// `saved` must be what [`saved_copy`] returned.
 unsafe fn restored_copy(saved: *mut c_char) -> *mut c_char {
     if saved.is_null() {
-        return empty_string_option.ptr().cast::<c_char>();
+        return empty_option();
     }
     // SAFETY: the caller's `saved` is a NUL-terminated allocation.
     unsafe { xstrdup(saved) }
