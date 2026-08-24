@@ -41,7 +41,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
             return;
         }
 
-        *curscript.ptr() += 1;
+        curscript.set(curscript.get() + 1);
         // NameBuff is the scratch space for the expanded name.
         expand_env(name, NameBuff.ptr().cast(), MAXPATHL);
         let error = file_open(
@@ -56,7 +56,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
                 name,
                 uv_strerror(error),
             );
-            *curscript.ptr() -= 1;
+            curscript.set(curscript.get() - 1);
             return;
         }
         save_typebuf();
@@ -107,7 +107,7 @@ pub(crate) unsafe fn closescript() {
         restore_saved_typebuf(curscript.get());
 
         file_close(script_at(curscript.get()), false);
-        *curscript.ptr() -= 1;
+        curscript.set(curscript.get() - 1);
     }
 }
 
@@ -121,7 +121,7 @@ pub(crate) unsafe fn closescript() {
 pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
     unsafe {
         debug_assert!(curscript.get() == -1);
-        *curscript.ptr() += 1;
+        curscript.set(curscript.get() + 1);
 
         let error = if strequal(scriptin_name, c"-".as_ptr()) {
             file_open_stdin(script_at(0))
@@ -140,7 +140,7 @@ pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
                 scriptin_name,
                 uv_strerror(error),
             );
-            *curscript.ptr() -= 1;
+            curscript.set(curscript.get() - 1);
             return false;
         }
         save_typebuf();
@@ -187,7 +187,7 @@ pub(crate) unsafe fn updatescript(c: c_int) {
         let idle = c == 0;
         if idle
             || (p_uc.get() > 0 && {
-                *count.ptr() += 1;
+                count.set(count.get() + 1);
                 count.get() as OptInt >= p_uc.get()
             })
         {

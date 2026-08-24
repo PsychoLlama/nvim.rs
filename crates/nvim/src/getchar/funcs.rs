@@ -203,14 +203,14 @@ pub(crate) unsafe fn getchar_common(
         }
         let raw_key = Keys::unmapped_with_codes();
         if !opts.simplify {
-            *no_reduce_keys.ptr() += 1;
+            no_reduce_keys.set(no_reduce_keys.get() + 1);
         }
 
         let n = getchar_read(argvars, opts.cursor);
 
         drop(raw_key);
         if !opts.simplify {
-            *no_reduce_keys.ptr() -= 1;
+            no_reduce_keys.set(no_reduce_keys.get() - 1);
         }
         if opts.cursor == CursorFlag::Hide {
             ui_busy_stop();

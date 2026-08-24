@@ -35,50 +35,45 @@ impl gotchars_state_T {
 ///
 /// When it answers true, `state.buf[..state.buflen]` is the key's bytes and
 /// the caller is expected to reset `buflen`.
-///
-/// # Safety
-/// `state` must point at a live state machine.
-pub(crate) unsafe fn gotchars_add_byte(state: *mut gotchars_state_T, byte: u8) -> bool {
-    unsafe {
-        (*state).buf[(*state).buflen] = byte;
-        (*state).buflen += 1;
-        let mut c = c_int::from(byte);
+pub(crate) fn gotchars_add_byte(state: &mut gotchars_state_T, byte: u8) -> bool {
+    state.buf[state.buflen] = byte;
+    state.buflen += 1;
+    let mut c = c_int::from(byte);
 
-        let in_special = (*state).pending_special > 0;
-        let in_mbyte = (*state).pending_mbyte > 0;
+    let in_special = state.pending_special > 0;
+    let in_mbyte = state.pending_mbyte > 0;
 
-        if in_special {
-            (*state).pending_special -= 1;
-        } else if c == K_SPECIAL {
-            // A special key sequence is held until all three bytes are in and
-            // it is clear what they stand for.
-            (*state).pending_special = 2;
-        }
-
-        let mut whole = false;
-        if (*state).pending_special == 0 {
-            if in_mbyte {
-                (*state).pending_mbyte -= 1;
-            } else {
-                if in_special {
-                    if (*state).prev_c == KS_MODIFIER {
-                        // A modifier prefix: wait for the key it modifies.
-                        (*state).prev_c = c;
-                        return false;
-                    }
-                    c = key_unescape((*state).prev_c as u8, c as u8);
-                }
-                // A multibyte character is held until all its bytes are in,
-                // so that it cannot be split between two buffer blocks --
-                // `delete_tail` would not be able to undo half of one.
-                (*state).pending_mbyte = mb_byte2len_check(c) as c_uint - 1;
-            }
-            whole = (*state).pending_mbyte == 0;
-        }
-
-        (*state).prev_c = c;
-        whole
+    if in_special {
+        state.pending_special -= 1;
+    } else if c == K_SPECIAL {
+        // A special key sequence is held until all three bytes are in and
+        // it is clear what they stand for.
+        state.pending_special = 2;
     }
+
+    let mut whole = false;
+    if state.pending_special == 0 {
+        if in_mbyte {
+            state.pending_mbyte -= 1;
+        } else {
+            if in_special {
+                if state.prev_c == KS_MODIFIER {
+                    // A modifier prefix: wait for the key it modifies.
+                    state.prev_c = c;
+                    return false;
+                }
+                c = key_unescape(state.prev_c as u8, c as u8);
+            }
+            // A multibyte character is held until all its bytes are in,
+            // so that it cannot be split between two buffer blocks --
+            // `delete_tail` would not be able to undo half of one.
+            state.pending_mbyte = mb_byte2len_check(c) as c_uint - 1;
+        }
+        whole = state.pending_mbyte == 0;
+    }
+
+    state.prev_c = c;
+    whole
 }
 
 /// Record `len` bytes of typed input.
@@ -96,39 +91,39 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
         static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
 
         for i in 0..len {
-            if !gotchars_add_byte(state.ptr(), *chars.add(i)) {
+            if !state.with_mut(|st| gotchars_add_byte(st, *chars.add(i))) {
                 continue;
             }
-            let buflen = (*state.ptr()).buflen;
+            // A copy of the finished key, so that nothing below holds a
+            // borrow of the cell across `updatescript` or the callbacks.
+            let key = state.get();
+            let buflen = key.buflen;
 
             // One byte at a time; no translation to be done.
             for i in 0..buflen {
-                updatescript(c_int::from((*state.ptr()).buf[i]));
+                updatescript(c_int::from(key.buf[i]));
             }
 
             // `ins_char_typebuf` can ask for the bytes it puts back to be
             // hidden from vim.on_key(); that is what the ignore count is.
             if buflen > on_key_ignore_len.get() {
                 let from = on_key_ignore_len.get();
-                let bytes = core::slice::from_raw_parts(
-                    (&raw const (*state.ptr()).buf).cast::<u8>().add(from),
-                    buflen - from,
-                );
-                (*on_key_buf.ptr()).extend_from_slice(bytes);
+                on_key_buf.with_mut(|buf| buf.extend_from_slice(&key.buf[from..buflen]));
                 on_key_ignore_len.set(0);
             } else {
                 on_key_ignore_len.set(on_key_ignore_len.get() - buflen);
             }
 
             if reg_recording.get() != 0 {
-                (*state.ptr()).buf[buflen] = 0;
-                recordbuff().add((*state.ptr()).buf.as_ptr().cast(), buflen as ptrdiff_t);
+                let mut bytes = key.buf;
+                bytes[buflen] = 0;
+                recordbuff().add(bytes.as_ptr().cast(), buflen as ptrdiff_t);
                 // Remember how many characters were recorded last, so that
                 // `get_recorded` can drop the keys that stopped the recording.
                 last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
             }
 
-            (*state.ptr()).buflen = 0;
+            state.with_mut(|st| st.buflen = 0);
         }
 
         may_sync_undo();
@@ -168,15 +163,19 @@ pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
         if p_sc.get() == 0 || msg_silent.get() != 0 {
             return;
         }
-        if !gotchars_add_byte(state.ptr(), byte) {
+        if !state.with_mut(|st| gotchars_add_byte(st, byte)) {
             return;
         }
-        let buflen = (*state.ptr()).buflen;
-        (*state.ptr()).buf[buflen] = 0;
-        (*state.ptr()).buflen = 0;
+        // A copy of the finished key: `add_to_showcmd` below can reach the
+        // screen, so no borrow of the cell may be outstanding, and the walk
+        // wants a stable buffer to point into.
+        let mut key = state.get();
+        let buflen = key.buflen;
+        key.buf[buflen] = 0;
+        state.with_mut(|st| st.buflen = 0);
 
         // Split the key into its modifier prefix and the key itself.
-        let mut ptr: *const c_char = (*state.ptr()).buf.as_ptr().cast();
+        let mut ptr: *const c_char = key.buf.as_ptr().cast();
         let mut modifiers = 0;
         if c_int::from(*ptr as u8) == K_SPECIAL
             && c_int::from(*ptr.add(1) as u8) == KS_MODIFIER

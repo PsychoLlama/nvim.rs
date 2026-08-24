@@ -41,7 +41,7 @@ unsafe fn langmap_adjust(c: c_int, condition: bool) -> c_int {
             && c >= 0
         {
             if c < 256 {
-                c_int::from((*langmap_mapchar.ptr())[c as usize])
+                langmap_mapchar.with(|map| c_int::from(map[c as usize]))
             } else {
                 langmap_adjust_mb(c)
             }

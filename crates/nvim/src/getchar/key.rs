@@ -77,12 +77,8 @@ pub unsafe fn vgetc() -> c_int {
         // internally are not freed under a caller.
         may_garbage_collect.set(false);
 
-        // Hand the key's bytes to the Lua on_key callbacks. The buffer is
-        // reached through `ptr()` rather than `with_mut` throughout: a
-        // callback can re-enter `vgetc`, and a live borrow across the call
-        // would be exactly the overlap `GlobalCell` forbids.
-        (*on_key_buf.ptr()).push(0);
-        let discarded = nlua_execute_on_key(c, (*on_key_buf.ptr()).as_mut_ptr().cast());
+        // Hand the key's bytes to the Lua on_key callbacks.
+        let discarded = nlua_execute_on_key(c, on_key_bytes().cast());
         if discarded {
             // Keys following K_COMMAND/K_LUA/K_PASTE_START are not normally
             // seen by vim.on_key() callbacks, so drop them with this one.
@@ -95,7 +91,7 @@ pub unsafe fn vgetc() -> c_int {
             }
             c = K_IGNORE;
         }
-        (*on_key_buf.ptr()).clear();
+        on_key_buf.with_mut(Vec::clear);
 
         // The character has to be processed before anything else is safe.
         if c != K_IGNORE {
@@ -189,11 +185,7 @@ unsafe fn vgetc_from_typeahead() -> c_int {
                 // K_SPECIAL KS_MODIFIER MOD_MASK_ALT takes three more bytes.
                 let old_len = len + 3;
                 ungetchars(old_len);
-                let keys = on_key_buf.ptr();
-                if (*keys).len() >= old_len as usize {
-                    let kept = (*keys).len() - old_len as usize;
-                    (*keys).truncate(kept);
-                }
+                unsee_keys(old_len as usize);
                 continue;
             }
 
@@ -375,4 +367,29 @@ pub fn check_end_reg_executing(advance: bool) {
             pending_end_reg_executing.set(true);
         }
     }
+}
+
+/// The bytes of the key being reported to the `vim.on_key()` callbacks,
+/// NUL-terminated as they expect.
+///
+/// The borrow is taken and released *before* the callbacks run: one can
+/// re-enter `vgetc`, and a live borrow across the call would be exactly the
+/// overlap `GlobalCell` forbids. The bytes stay valid as long as nothing
+/// re-entrant grows the buffer, which is what upstream assumes too.
+fn on_key_bytes() -> *mut u8 {
+    on_key_buf.with_mut(|buf| {
+        buf.push(0);
+        buf.as_mut_ptr()
+    })
+}
+
+/// Take the last `len` bytes back off the `vim.on_key()` buffer, for keys
+/// that were put back into the typeahead rather than acted on.
+fn unsee_keys(len: usize) {
+    on_key_buf.with_mut(|buf| {
+        if buf.len() >= len {
+            let kept = buf.len() - len;
+            buf.truncate(kept);
+        }
+    });
 }
