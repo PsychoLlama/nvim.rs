@@ -622,9 +622,9 @@ pub unsafe fn searchit(
                     && s.opt(SEARCH_MSG)
                 {
                     let msg = if dir == BACKWARD {
-                        top_bot_msg.ptr()
+                        top_bot_msg.as_ptr()
                     } else {
-                        bot_top_msg.ptr()
+                        bot_top_msg.as_ptr()
                     };
                     give_warning(gettext(msg.cast()), true, false);
                 }
@@ -724,7 +724,7 @@ pub unsafe fn search_for_exact_line(
                 }
                 (*pos).lnum = (*buf).b_ml.ml_line_count;
                 if !shortmess(ShmFlag::SEARCH) {
-                    give_warning(gettext(top_bot_msg.ptr().cast()), true, false);
+                    give_warning(gettext(top_bot_msg.as_ptr()), true, false);
                 }
             } else if (*pos).lnum > (*buf).b_ml.ml_line_count {
                 (*pos).lnum = 1;
@@ -732,7 +732,7 @@ pub unsafe fn search_for_exact_line(
                     break;
                 }
                 if !shortmess(ShmFlag::SEARCH) {
-                    give_warning(gettext(bot_top_msg.ptr().cast()), true, false);
+                    give_warning(gettext(bot_top_msg.as_ptr()), true, false);
                 }
             }
             if (*pos).lnum == start {

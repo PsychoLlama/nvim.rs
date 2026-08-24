@@ -360,9 +360,8 @@ pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
             arena_mem_free(arena_finish(&raw mut arena));
             i += 1;
         }
-        let names = hlf_names.ptr().cast::<*const c_char>();
         for hlf in 0..HLF_COUNT as usize {
-            let name = cstr_as_string(*names.add(hlf));
+            let name = cstr_as_string(hlf_names[hlf]);
             let attr = Integer::from((*highlight_attr.ptr())[hlf]);
             remote_ui_hl_group_set(ui, name, attr);
         }
@@ -690,8 +689,7 @@ unsafe fn hl_inspect_impl(arr: &mut Array, attr: c_int, arena: *mut Arena) {
                 let ui_name = if entry.id1 == -1 {
                     c"Normal".as_ptr()
                 } else {
-                    let names = hlf_names.ptr().cast::<*const c_char>();
-                    *names.add(entry.id1 as usize)
+                    hlf_names[entry.id1 as usize]
                 };
                 put(&mut item, c"ui_name", name_object(ui_name));
                 put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2)));

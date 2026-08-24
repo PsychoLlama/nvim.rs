@@ -8,7 +8,7 @@
 //! and the raw `lua_State`, and it drives `spell_check` over a raw
 //! `char *` the way the spell checker expects.
 
-use crate::global_cell::GlobalCell;
+use crate::global_cell::ConstTable;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::lua::ffi::{
     LUA_TSTRING, lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushstring,
@@ -113,7 +113,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
 
 /// What `luaL_register` copies into the table, terminated by a null name.
 /// The raw name pointers are what keep it out of a plain `static`.
-static SPELL_FUNCTIONS: GlobalCell<[luaL_Reg; 2]> = GlobalCell::new([
+static SPELL_FUNCTIONS: ConstTable<[luaL_Reg; 2]> = ConstTable::new([
     luaL_Reg {
         name: c"check".as_ptr(),
         func: Some(nlua_spell_check),
@@ -133,7 +133,7 @@ pub unsafe fn luaopen_spell(lstate: *mut lua_State) -> c_int {
     // copies the (`'static`) registry into.
     unsafe {
         lua_createtable(lstate, 0, 0);
-        luaL_register(lstate, ptr::null(), SPELL_FUNCTIONS.ptr().cast());
+        luaL_register(lstate, ptr::null(), SPELL_FUNCTIONS.as_ptr());
     }
     1
 }

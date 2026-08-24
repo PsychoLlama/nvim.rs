@@ -8,10 +8,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 
-pub(crate) static tree_meta: SharedCell<[luaL_Reg; 7]> = luaL_reg_table![
+pub(crate) static tree_meta: ConstTable<[luaL_Reg; 7]> = luaL_reg_table![
     c"__gc" => tree_gc,
     c"__tostring" => tree_tostring,
     c"root" => tree_root,

@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, set_key};
+use crate::global_cell::ConstTable;
 
 unsafe fn config_put_bordertext(
     mut config: *mut KeyDict_win_config,
@@ -91,7 +92,7 @@ pub unsafe fn nvim_win_get_config(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     unsafe {
-        static float_relative_str: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
+        static float_relative_str: ConstTable<[*const ::core::ffi::c_char; 6]> = ConstTable::new([
             c"editor".as_ptr(),
             c"win".as_ptr(),
             c"cursor".as_ptr(),
@@ -99,14 +100,14 @@ pub unsafe fn nvim_win_get_config(
             c"tabline".as_ptr(),
             c"laststatus".as_ptr(),
         ]);
-        static win_split_str: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
+        static win_split_str: ConstTable<[*const ::core::ffi::c_char; 4]> = ConstTable::new([
             c"left".as_ptr(),
             c"right".as_ptr(),
             c"above".as_ptr(),
             c"below".as_ptr(),
         ]);
-        static win_style_str: GlobalCell<[*const ::core::ffi::c_char; 2]> =
-            GlobalCell::new([c"".as_ptr(), c"minimal".as_ptr()]);
+        static win_style_str: ConstTable<[*const ::core::ffi::c_char; 2]> =
+            ConstTable::new([c"".as_ptr(), c"minimal".as_ptr()]);
         let mut rv: KeyDict_win_config = KEYDICT_INIT;
         let mut wp: *mut win_T = find_window_by_handle(win, err);
         if wp.is_null() {
@@ -124,7 +125,7 @@ pub unsafe fn nvim_win_get_config(
         rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__mouse);
         rv.mouse = (*config).mouse as Boolean;
         rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__style);
-        rv.style = cstr_as_string((*win_style_str.ptr())[(*config).style as usize]);
+        rv.style = cstr_as_string(win_style_str[(*config).style as usize]);
         if (*wp).w_floating {
             rv.is_set__win_config_ =
                 set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__width);
@@ -220,11 +221,11 @@ pub unsafe fn nvim_win_get_config(
             let mut split: WinSplit = win_split_dir(wp);
             rv.is_set__win_config_ =
                 set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__split);
-            rv.split = cstr_as_string((*win_split_str.ptr())[split as usize]);
+            rv.split = cstr_as_string(win_split_str[split as usize]);
         }
         let mut rel: *const ::core::ffi::c_char =
             if (*wp).w_floating as ::core::ffi::c_int != 0 && !(*config).external {
-                (*float_relative_str.ptr())[(*config).relative as usize]
+                float_relative_str[(*config).relative as usize]
             } else {
                 c"".as_ptr()
             };

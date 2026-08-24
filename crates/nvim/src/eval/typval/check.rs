@@ -75,7 +75,7 @@ pub unsafe fn tv_check_num(tv: *const typval_T) -> bool {
         match (*tv).v_type {
             VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
             VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
-                emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
+                emsg(gettext(num_errors[(*tv).v_type as usize]));
                 false
             }
             _ => abort(),
@@ -94,7 +94,7 @@ pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
         match (*tv).v_type {
             VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
             VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-                emsg(gettext((*str_errors.ptr())[(*tv).v_type as usize]));
+                emsg(gettext(str_errors[(*tv).v_type as usize]));
                 false
             }
             _ => abort(),

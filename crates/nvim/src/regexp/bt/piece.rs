@@ -472,7 +472,7 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
         }
         prog.set_reghasz(re_has_z.get() as uint8_t);
         find_shortcuts(prog, flags);
-        prog.set_engine(bt_regengine.ptr());
+        prog.set_engine((&raw const bt_regengine).cast_mut());
         prog.into_regprog()
     }
 }

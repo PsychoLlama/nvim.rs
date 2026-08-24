@@ -26,24 +26,12 @@ unsafe fn build_meta(
 
 unsafe fn tslua_init(mut L: *mut lua_State) {
     unsafe {
-        build_meta(
-            L,
-            TS_META_PARSER.as_ptr(),
-            parser_meta.ptr() as *mut luaL_Reg,
-        );
-        build_meta(L, TS_META_TREE.as_ptr(), tree_meta.ptr() as *mut luaL_Reg);
-        build_meta(L, TS_META_NODE.as_ptr(), node_meta.ptr() as *mut luaL_Reg);
-        build_meta(L, TS_META_QUERY.as_ptr(), query_meta.ptr() as *mut luaL_Reg);
-        build_meta(
-            L,
-            TS_META_QUERYCURSOR.as_ptr(),
-            querycursor_meta.ptr() as *mut luaL_Reg,
-        );
-        build_meta(
-            L,
-            TS_META_QUERYMATCH.as_ptr(),
-            querymatch_meta.ptr() as *mut luaL_Reg,
-        );
+        build_meta(L, TS_META_PARSER.as_ptr(), parser_meta.as_ptr());
+        build_meta(L, TS_META_TREE.as_ptr(), tree_meta.as_ptr());
+        build_meta(L, TS_META_NODE.as_ptr(), node_meta.as_ptr());
+        build_meta(L, TS_META_QUERY.as_ptr(), query_meta.as_ptr());
+        build_meta(L, TS_META_QUERYCURSOR.as_ptr(), querycursor_meta.as_ptr());
+        build_meta(L, TS_META_QUERYMATCH.as_ptr(), querymatch_meta.as_ptr());
         ts_set_allocator(
             Some(xmalloc as unsafe extern "C" fn(size_t) -> *mut ::core::ffi::c_void),
             Some(xcalloc as unsafe extern "C" fn(size_t, size_t) -> *mut ::core::ffi::c_void),

@@ -122,7 +122,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
 
         if (*curbuf.get()).b_ml.ml_flags.has(MlFlags::EMPTY) {
             if dict.is_null() {
-                msg(gettext(no_lines_msg.ptr() as *mut c_char), 0);
+                msg(gettext(no_lines_msg.as_ptr().cast_mut()), 0);
                 return;
             }
         } else {

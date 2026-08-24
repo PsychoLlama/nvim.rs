@@ -8,10 +8,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 
-pub(crate) static query_meta: SharedCell<[luaL_Reg; 6]> = luaL_reg_table![
+pub(crate) static query_meta: ConstTable<[luaL_Reg; 6]> = luaL_reg_table![
     c"__gc" => query_gc,
     c"__tostring" => query_tostring,
     c"inspect" => query_inspect,

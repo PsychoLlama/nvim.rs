@@ -84,12 +84,8 @@ unsafe extern "C" fn nv_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     // SAFETY: `qsort` hands back pointers to two elements of `nv_cmd_idx`,
     // each a valid row index.
     unsafe {
-        let c1 = (*nv_cmds.ptr())[*(s1 as *const int16_t) as usize]
-            .cmd_char
-            .abs();
-        let c2 = (*nv_cmds.ptr())[*(s2 as *const int16_t) as usize]
-            .cmd_char
-            .abs();
+        let c1 = nv_cmds[*(s1 as *const int16_t) as usize].cmd_char.abs();
+        let c2 = nv_cmds[*(s2 as *const int16_t) as usize].cmd_char.abs();
         c1.cmp(&c2) as c_int
     }
 }
@@ -116,7 +112,7 @@ pub(crate) fn init_normal_cmds() {
         );
         let mut i = 0;
         while i < NV_CMDS_SIZE as c_int
-            && i == (*nv_cmds.ptr())[(*nv_cmd_idx.ptr())[i as usize] as usize].cmd_char
+            && i == nv_cmds[(*nv_cmd_idx.ptr())[i as usize] as usize].cmd_char
         {
             i += 1;
         }
@@ -142,7 +138,7 @@ pub(crate) fn find_command(cmdchar: c_int) -> c_int {
         let mut top = NV_CMDS_SIZE as c_int - 1;
         while bot <= top {
             let i = (top + bot) / 2;
-            let c = (*nv_cmds.ptr())[(*nv_cmd_idx.ptr())[i as usize] as usize]
+            let c = nv_cmds[(*nv_cmd_idx.ptr())[i as usize] as usize]
                 .cmd_char
                 .abs();
             if cmdchar == c {
@@ -326,7 +322,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
         did_cursorhold.set(true);
 
         let (slot, lit, repl) = additional_char_slot(s);
-        let lang = repl || (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_LANG != 0;
+        let lang = repl || nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_LANG != 0;
 
         if slot != Slot::None {
             let cp: *mut c_int = match slot {
@@ -353,7 +349,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
             if !lit {
                 // CTRL-K starts a digraph, unless 'cpoptions' says otherwise.
                 if *cp == Ctrl_K
-                    && ((*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_LANG != 0
+                    && (nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_LANG != 0
                         || slot == Slot::Extra)
                     && !cpo_has(CpoFlag::DIGRAPH)
                 {
@@ -488,8 +484,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             // NV_KEEPREG, releases the register it was given.
             if !finish_op.get()
                 && (*s).oa.op_type == 0
-                && ((*s).idx < 0
-                    || (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_KEEPREG == 0)
+                && ((*s).idx < 0 || nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_KEEPREG == 0)
             {
                 clearop(&raw mut (*s).oa);
                 set_reg_var(get_default_register_name());
@@ -663,7 +658,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
         if (*s).idx < 0 {
             clearopbeep(&raw mut (*s).oa);
             (*s).command_finished = true;
-        } else if ((*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_NCW != 0
+        } else if (nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_NCW != 0
             && check_text_or_curbuf_locked(&raw mut (*s).oa))
             || (VIsual_active.get() && normal_handle_special_visual_command(s))
         {
@@ -672,7 +667,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
             if (*curwin.get()).w_onebuf_opt.wo_rl != 0
                 && KeyTyped.get()
                 && KeyStuffed.get() == 0
-                && (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int & NV_RL != 0
+                && nv_cmds[(*s).idx as usize].cmd_flags as c_int & NV_RL != 0
             {
                 normal_invert_horizontal(s);
             }
@@ -700,7 +695,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
                 // 'keymodel' startsel: a shifted special key starts a
                 // selection and then acts as its unshifted self.
                 if !VIsual_active.get() && km_startsel.get() {
-                    let flags = (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int;
+                    let flags = nv_cmds[(*s).idx as usize].cmd_flags as c_int;
                     if flags & NV_SS != 0 {
                         start_selection();
                         unshift_special(&raw mut (*s).ca);
@@ -712,9 +707,10 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
                     }
                 }
 
-                (*s).ca.arg = (*nv_cmds.ptr())[(*s).idx as usize].cmd_arg as c_int;
-                ((*nv_cmds.ptr())[(*s).idx as usize].cmd_func)
-                    .expect("every nv_cmds row has a handler")(&raw mut (*s).ca);
+                (*s).ca.arg = nv_cmds[(*s).idx as usize].cmd_arg as c_int;
+                (nv_cmds[(*s).idx as usize].cmd_func).expect("every nv_cmds row has a handler")(
+                    &raw mut (*s).ca,
+                );
             }
         }
         normal_finish_command(s);

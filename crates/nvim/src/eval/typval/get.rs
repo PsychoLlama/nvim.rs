@@ -50,7 +50,7 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
             VAR_BOOL => return varnumber_T::from((*tv).vval.v_bool == kBoolVarTrue),
             VAR_SPECIAL => return 0,
             VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
-                emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
+                emsg(gettext(num_errors[(*tv).v_type as usize]));
             }
             VAR_UNKNOWN => {
                 semsg_c!(
@@ -187,7 +187,7 @@ pub unsafe fn tv_get_string_buf_chk(
                 buf
             }
             VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-                emsg(gettext((*str_errors.ptr())[(*tv).v_type as usize]));
+                emsg(gettext(str_errors[(*tv).v_type as usize]));
                 ::core::ptr::null()
             }
             _ => abort(),

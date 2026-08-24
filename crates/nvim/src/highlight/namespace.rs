@@ -529,9 +529,8 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
         // The pointer, not a borrow: resolving a group below can re-enter and
         // insert into the map, and the table's own allocation does not move.
         let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().as_ptr());
-        let names = hlf_names.ptr().cast::<*const c_char>();
         for hlf in 1..HLF_COUNT {
-            let name = *names.add(hlf as usize);
+            let name = hlf_names[hlf as usize];
             let id = syn_check_group(name, strlen(name));
             // These two are the groups where "undefined" is meaningful.
             let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;

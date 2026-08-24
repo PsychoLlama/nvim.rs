@@ -29,7 +29,7 @@ pub mod walk;
 
 use core::ffi::{c_char, c_int, c_uint};
 
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
     LUA_NOREF, LUA_REFNIL, LUA_REGISTRYINDEX, LUA_TFUNCTION, LUA_TNUMBER, LUA_TTABLE, lua_getfield,
     lua_gettop, lua_insert, lua_isnil, lua_istable, lua_newtable, lua_newuserdata, lua_next,
@@ -826,17 +826,17 @@ unsafe extern "C-unwind" fn nil_tostring(state: *mut lua_State) -> c_int {
 // Registration
 // ---------------------------------------------------------------------------
 
-static UNPACKER_METHODS: SharedCell<[luaL_Reg; 3]> = luaL_reg_table![
+static UNPACKER_METHODS: ConstTable<[luaL_Reg; 3]> = luaL_reg_table![
     c"__call" => unpacker_unpack,
     c"__gc" => unpacker_delete,
 ];
 
-static PACKER_METHODS: SharedCell<[luaL_Reg; 3]> = luaL_reg_table![
+static PACKER_METHODS: ConstTable<[luaL_Reg; 3]> = luaL_reg_table![
     c"__call" => packer_pack,
     c"__gc" => packer_delete,
 ];
 
-static SESSION_METHODS: SharedCell<[luaL_Reg; 6]> = luaL_reg_table![
+static SESSION_METHODS: ConstTable<[luaL_Reg; 6]> = luaL_reg_table![
     c"receive" => session::receive,
     c"request" => session::request,
     c"reply" => session::reply,
@@ -844,7 +844,7 @@ static SESSION_METHODS: SharedCell<[luaL_Reg; 6]> = luaL_reg_table![
     c"__gc" => session::delete,
 ];
 
-static MPACK_FUNCTIONS: SharedCell<[luaL_Reg; 6]> = luaL_reg_table![
+static MPACK_FUNCTIONS: ConstTable<[luaL_Reg; 6]> = luaL_reg_table![
     c"Unpacker" => unpacker_new,
     c"Packer" => packer_new,
     c"Session" => session::new,
@@ -873,13 +873,9 @@ unsafe fn register_class(state: *mut lua_State, name: *const c_char, methods: &[
 /// `state` must be a live Lua state with room for a few values.
 pub unsafe fn luaopen_mpack(state: *mut lua_State) -> c_int {
     unsafe {
-        register_class(
-            state,
-            UNPACKER_META,
-            UNPACKER_METHODS.ptr().as_ref().unwrap(),
-        );
-        register_class(state, PACKER_META, PACKER_METHODS.ptr().as_ref().unwrap());
-        register_class(state, SESSION_META, SESSION_METHODS.ptr().as_ref().unwrap());
+        register_class(state, UNPACKER_META, &UNPACKER_METHODS[..]);
+        register_class(state, PACKER_META, &PACKER_METHODS[..]);
+        register_class(state, SESSION_META, &SESSION_METHODS[..]);
 
         // One shared userdatum stands for msgpack nil, so that `x ==
         // mpack.NIL` works and survives being stored in a table. It lives in
@@ -897,11 +893,7 @@ pub unsafe fn luaopen_mpack(state: *mut lua_State) -> c_int {
         lua_pop(state, 1);
 
         lua_newtable(state);
-        luaL_register(
-            state,
-            core::ptr::null(),
-            MPACK_FUNCTIONS.ptr().cast::<luaL_Reg>(),
-        );
+        luaL_register(state, core::ptr::null(), MPACK_FUNCTIONS.as_ptr());
         lua_getfield(state, LUA_REGISTRYINDEX, NIL_NAME);
         lua_setfield(state, -2, c"NIL".as_ptr());
         1

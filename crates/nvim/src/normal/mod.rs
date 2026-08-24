@@ -186,7 +186,7 @@ const fn cmd(cmd_char: c_int, cmd_func: nv_func_T, cmd_flags: c_int, cmd_arg: c_
     }
 }
 
-static nv_cmds: GlobalCell<[nv_cmd; 188]> = GlobalCell::new([
+static nv_cmds: [nv_cmd; 188] = [
     cmd(NUL, Some(nv_error), 0, 0),
     cmd(Ctrl_A, Some(nv_addsub), 0, 0),
     cmd(Ctrl_B, Some(nv_page), NV_STS, BACKWARD as c_int),
@@ -595,7 +595,7 @@ static nv_cmds: GlobalCell<[nv_cmd; 188]> = GlobalCell::new([
         0,
         0,
     ),
-]);
+];
 pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
     .wrapping_div(::core::mem::size_of::<nv_cmd>())
     .wrapping_div(

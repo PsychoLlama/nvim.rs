@@ -113,7 +113,7 @@ pub(crate) unsafe fn add_search_pattern(
     search_highlighted: bool,
 ) {
     unsafe {
-        let defaults = (*sd_default_values.ptr())[kSDItemSearchPattern as usize]
+        let defaults = sd_default_values[kSDItemSearchPattern as usize]
             .data
             .search_pattern;
         let mut pat: SearchPattern = core::mem::zeroed();

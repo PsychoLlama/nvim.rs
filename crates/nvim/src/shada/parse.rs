@@ -24,7 +24,7 @@ pub(crate) unsafe fn parse_known(
 ) -> Result<(), Malformed> {
     unsafe {
         // Fields the file leaves out keep the type's documented default.
-        (*entry).data = (*sd_default_values.ptr())[header.type_u64 as usize].data;
+        (*entry).data = sd_default_values[header.type_u64 as usize].data;
 
         // Map keys this Nvim does not know are collected here and written
         // back out with the entry.

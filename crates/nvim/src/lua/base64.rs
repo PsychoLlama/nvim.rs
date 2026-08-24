@@ -9,7 +9,7 @@
 //! and the codec above it is safe and lives elsewhere.
 
 use crate::base64::{decode, encode};
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
     lua_createtable, lua_gettop, lua_pushlstring, lua_tolstring, lua_type, luaL_argerror,
     luaL_error, luaL_register,
@@ -69,7 +69,7 @@ unsafe extern "C-unwind" fn nlua_base64_decode(lstate: *mut lua_State) -> c_int 
 
 /// What `luaL_register` copies into the table, terminated by a null name.
 /// The raw name pointers are what keep it out of a plain `static`.
-static BASE64_FUNCTIONS: SharedCell<[luaL_Reg; 3]> = SharedCell::new([
+static BASE64_FUNCTIONS: ConstTable<[luaL_Reg; 3]> = ConstTable::new([
     luaL_Reg {
         name: c"encode".as_ptr(),
         func: Some(nlua_base64_encode),
@@ -93,7 +93,7 @@ pub unsafe fn luaopen_base64(lstate: *mut lua_State) -> c_int {
     // copies the (`'static`) registry into.
     unsafe {
         lua_createtable(lstate, 0, 0);
-        luaL_register(lstate, ptr::null(), BASE64_FUNCTIONS.ptr().cast());
+        luaL_register(lstate, ptr::null(), BASE64_FUNCTIONS.as_ptr());
     }
     1
 }

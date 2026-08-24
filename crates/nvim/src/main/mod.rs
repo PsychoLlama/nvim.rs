@@ -4,7 +4,7 @@
 //! read from all over the tree. The startup path lives in the submodules.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::global_cell::{GlobalCell, SharedCell};
+use crate::global_cell::{ConstTable, GlobalCell, SharedCell};
 use crate::options::{
     kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
@@ -232,7 +232,7 @@ pub static tabpage_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
 });
-pub static ui_ext_names: GlobalCell<[*const c_char; 10]> = GlobalCell::new([
+pub static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
     c"ext_cmdline".as_ptr(),
     c"ext_popupmenu".as_ptr(),
     c"ext_tabline".as_ptr(),
@@ -599,11 +599,9 @@ pub static e_cannot_read_from_str_2: [c_char; 28] = c_bytes(b"E282: Cannot read 
 pub(crate) static e_conflicting_configs: [c_char; 38] =
     c_bytes(b"E5422: Conflicting configs: \"%s\" \"%s\"\0");
 pub static e_unknown_option2: [c_char; 25] = c_bytes(b"E355: Unknown option: %s\0");
-pub static top_bot_msg: GlobalCell<[c_char; 37]> =
-    GlobalCell::new(c_bytes(b"search hit TOP, continuing at BOTTOM\0"));
-pub static bot_top_msg: GlobalCell<[c_char; 37]> =
-    GlobalCell::new(c_bytes(b"search hit BOTTOM, continuing at TOP\0"));
-pub static line_msg: GlobalCell<[c_char; 7]> = GlobalCell::new(c_bytes(b" line \0"));
+pub static top_bot_msg: [c_char; 37] = c_bytes(b"search hit TOP, continuing at BOTTOM\0");
+pub static bot_top_msg: [c_char; 37] = c_bytes(b"search hit BOTTOM, continuing at TOP\0");
+pub static line_msg: [c_char; 7] = c_bytes(b" line \0");
 pub static EVALARG_EVALUATE: GlobalCell<evalarg_T> = GlobalCell::new(evalarg_T {
     eval_flags: EVAL_EVALUATE as c_int,
     eval_getline: None,
@@ -1034,8 +1032,7 @@ pub static cmdwin_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::nul
 pub static cmdwin_old_curwin: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static cmdline_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-pub static no_lines_msg: GlobalCell<[c_char; 23]> =
-    GlobalCell::new(c_bytes(b"--No lines in buffer--\0"));
+pub static no_lines_msg: [c_char; 23] = c_bytes(b"--No lines in buffer--\0");
 pub static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub static sub_nlines: GlobalCell<linenr_T> = GlobalCell::new(0);
 pub static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);

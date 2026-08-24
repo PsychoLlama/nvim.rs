@@ -16,7 +16,6 @@ use crate::buffer::{bufref_valid, set_bufref};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
-use crate::global_cell::GlobalCell;
 use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::main::{
     autocmd_no_enter, autocmd_no_leave, cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type,

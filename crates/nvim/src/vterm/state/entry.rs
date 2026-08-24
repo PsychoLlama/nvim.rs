@@ -22,7 +22,6 @@
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 use core::slice;
 
-use crate::global_cell::GlobalCell;
 use crate::types::{
     VTerm, VTermKeyEncodingFlags, VTermLineInfo, VTermParserCallbacks, VTermProp, VTermRect,
     VTermSelectionCallbacks, VTermState, VTermStateCallbacks, VTermStateFallbacks,
@@ -168,13 +167,13 @@ pub unsafe extern "C" fn vterm_obtain_state(vt: *mut VTerm) -> *mut VTermState {
     // SAFETY: the terminal, its parser and this state are freed together, so
     // the callbacks and their `user` pointer outlive the installation.
     unsafe { (*vt).state = state };
-    unsafe { vterm_parser_set_callbacks(vt, PARSER_CALLBACKS.ptr(), state.cast::<c_void>()) };
+    unsafe { vterm_parser_set_callbacks(vt, &raw const PARSER_CALLBACKS, state.cast::<c_void>()) };
     state
 }
 
 // ------------------------------------------------------- the parser's events
 
-static PARSER_CALLBACKS: GlobalCell<VTermParserCallbacks> = GlobalCell::new(VTermParserCallbacks {
+static PARSER_CALLBACKS: VTermParserCallbacks = VTermParserCallbacks {
     text: Some(on_text),
     control: Some(on_control),
     escape: Some(on_escape),
@@ -185,7 +184,7 @@ static PARSER_CALLBACKS: GlobalCell<VTermParserCallbacks> = GlobalCell::new(VTer
     pm: Some(on_pm),
     sos: Some(on_sos),
     resize: Some(on_resize),
-});
+};
 
 /// Decodes a run of input bytes through the live character set and prints the
 /// graphemes it yields. Returns how many input bytes were consumed, which is

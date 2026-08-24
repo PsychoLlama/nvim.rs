@@ -283,7 +283,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
 /// magic number survived? Only that engine's programs carry one.
 pub(crate) fn prog_magic_wrong(rex: Rex) -> c_int {
     // SAFETY: a running match holds a live program.
-    let nfa = unsafe { (*rex.regprog()).engine } == nfa_regengine.ptr();
+    let nfa = unsafe { (*rex.regprog()).engine }.cast_const() == &raw const nfa_regengine;
     // SAFETY: anything that is not the NFA's is this engine's, and opens with
     // the magic byte.
     let wrong = !nfa && unsafe { BtProg::of_match(rex) }.is_some_and(|p| p.magic() != REGMAGIC);

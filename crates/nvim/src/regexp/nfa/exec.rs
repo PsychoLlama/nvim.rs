@@ -342,7 +342,7 @@ pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut re
                 prog = core::ptr::null_mut();
             } else {
                 (*prog).regflags = regflags.get();
-                (*prog).engine = nfa_regengine.ptr();
+                (*prog).engine = (&raw const nfa_regengine).cast_mut();
                 (*prog).nstate = nstate.get();
                 (*prog).has_zend = rex.nfa_has_zend();
                 (*prog).has_backref = rex.nfa_has_backref();

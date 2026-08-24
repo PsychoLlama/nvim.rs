@@ -202,7 +202,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
 pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -> bool {
     // SAFETY: `s` is the caller's live state and `s.idx` is a valid row.
     unsafe {
-        let flags = (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int;
+        let flags = nv_cmds[(*s).idx as usize].cmd_flags as c_int;
         // "stopsel": an unshifted movement ends the selection.
         if km_stopsel.get() && flags & NV_STS != 0 && mod_mask.get() & MOD_MASK_SHIFT == 0 {
             end_visual_mode();
@@ -236,7 +236,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
 pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
     // SAFETY: `s` is the caller's live state and `s.idx` is a valid row.
     unsafe {
-        let flags = (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int;
+        let flags = nv_cmds[(*s).idx as usize].cmd_flags as c_int;
         let pending_op = (*s).oa.op_type != OP_NOP;
         let cmdchar = (*s).ca.cmdchar;
         flags & NV_NCH != 0

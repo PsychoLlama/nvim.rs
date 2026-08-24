@@ -164,7 +164,7 @@ unsafe fn name_length(ptr: *const c_char, options: FileNameOpts) -> usize {
 unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
     unsafe {
         let english = c" line ";
-        let localized = CStr::from_ptr(gettext(line_msg.ptr().cast::<c_char>()));
+        let localized = CStr::from_ptr(gettext(line_msg.as_ptr()));
 
         let mut p = after_name.cast_mut();
         if strncmp(p, english.as_ptr(), english.count_bytes()) == 0 {

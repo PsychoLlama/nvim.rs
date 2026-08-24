@@ -314,7 +314,7 @@ pub const fn lua_upvalueindex(i: ::core::ffi::c_int) -> ::core::ffi::c_int {
 #[macro_export]
 macro_rules! luaL_reg_table {
     ($($name:expr => $func:expr),* $(,)?) => {
-        $crate::global_cell::SharedCell::new([
+        $crate::global_cell::ConstTable::new([
             $($crate::types::luaL_Reg {
                 name: $name.as_ptr(),
                 func: Some($func),

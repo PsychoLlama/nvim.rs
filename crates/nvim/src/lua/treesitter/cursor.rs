@@ -9,10 +9,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 
-pub(crate) static querycursor_meta: SharedCell<[luaL_Reg; 5]> = luaL_reg_table![
+pub(crate) static querycursor_meta: ConstTable<[luaL_Reg; 5]> = luaL_reg_table![
     c"remove_match" => querycursor_remove_match,
     c"next_capture" => querycursor_next_capture,
     c"next_match" => querycursor_next_match,
@@ -158,7 +158,7 @@ unsafe extern "C-unwind" fn querycursor_gc(mut L: *mut lua_State) -> ::core::ffi
     }
 }
 
-pub(crate) static querymatch_meta: SharedCell<[luaL_Reg; 3]> = luaL_reg_table![
+pub(crate) static querymatch_meta: ConstTable<[luaL_Reg; 3]> = luaL_reg_table![
     c"info" => querymatch_info,
     c"captures" => querymatch_captures,
 ];

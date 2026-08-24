@@ -304,7 +304,7 @@ pub unsafe fn last_set_msg(script_ctx: sctx_T) {
         msg_puts(gettext(c"\n\tLast set from ".as_ptr()));
         msg_puts(p);
         if script_ctx.sc_lnum > 0 as linenr_T {
-            msg_puts(gettext(line_msg.ptr().cast()));
+            msg_puts(gettext(line_msg.as_ptr()));
             msg_outnum(script_ctx.sc_lnum as c_int);
         } else if script_is_lua(script_ctx.sc_sid) {
             msg_puts(gettext(c" (run Nvim with -V1 for more details)".as_ptr()));

@@ -9,10 +9,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 
-pub(crate) static node_meta: SharedCell<[luaL_Reg; 36]> = luaL_reg_table![
+pub(crate) static node_meta: ConstTable<[luaL_Reg; 36]> = luaL_reg_table![
     c"__tostring" => node_tostring,
     c"__eq" => node_eq,
     c"__len" => node_child_count,

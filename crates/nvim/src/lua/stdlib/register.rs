@@ -27,7 +27,7 @@ use crate::lua::ffi::{
 use crate::lua::spell::luaopen_spell;
 use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
-use crate::types::{handle_T, linenr_T, lua_State, luaL_Reg};
+use crate::types::{handle_T, linenr_T, lua_State};
 
 unsafe extern "C-unwind" {
     /// lpeg's own `luaopen_*`, linked in from the vendored library.
@@ -110,7 +110,7 @@ pub unsafe fn nlua_state_add_stdlib(lstate: *mut lua_State, is_thread: bool) {
 
             set_cfunction(lstate, c"regex", nlua_regex);
             luaL_newmetatable(lstate, c"nvim_regex".as_ptr());
-            luaL_register(lstate, ptr::null(), REGEX_META.ptr().cast::<luaL_Reg>());
+            luaL_register(lstate, ptr::null(), REGEX_META.as_ptr());
             lua_pushvalue(lstate, -1); // [meta, meta]
             lua_setfield(lstate, -2, c"__index".as_ptr()); // [meta]
             lua_pop(lstate, 1); // don't use metatable now

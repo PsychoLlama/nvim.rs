@@ -196,8 +196,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_ui_attach(lstate: *mut lua_State) ->
             if strequal(s, c"set_cmdheight".as_ptr()) {
                 ui_refresh_cmdheight.set(val);
             } else {
-                let names = ui_ext_names.ptr().cast::<*const c_char>();
-                let found = (0..kUILinegrid as size_t).find(|&i| strequal(s, *names.add(i)));
+                let found = (0..kUILinegrid as size_t).find(|&i| strequal(s, ui_ext_names[i]));
                 match found {
                     Some(i) => {
                         if val {

@@ -535,12 +535,7 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
         unsafe { ui_refresh() };
         return;
     }
-    let name = unsafe {
-        *ui_ext_names
-            .ptr()
-            .cast::<*const core::ffi::c_char>()
-            .add(ext as usize)
-    };
+    let name = ui_ext_names[ext as usize];
     // A leading underscore marks an option that is not part of the
     // documented protocol; those are only mentioned when turned on.
     let private = unsafe { *name } == b'_' as core::ffi::c_char;
@@ -874,12 +869,7 @@ pub unsafe fn ui_array(arena: *mut Arena) -> Array {
 
 /// The protocol name of the `widget`th UI extension.
 fn ext_name(widget: usize) -> *const core::ffi::c_char {
-    unsafe {
-        *ui_ext_names
-            .ptr()
-            .cast::<*const core::ffi::c_char>()
-            .add(widget)
-    }
+    ui_ext_names[widget]
 }
 
 /// Resizes the grid a UI asked about, for `nvim_ui_try_resize_grid`.

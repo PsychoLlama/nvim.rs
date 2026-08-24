@@ -15,7 +15,7 @@ use crate::eval::{
     var_item_copy, var2fpos,
 };
 use crate::garray::{ga_append, ga_append_via_ptr, ga_clear, ga_concat_len, ga_grow, ga_init};
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::{
     hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
 };
@@ -208,7 +208,7 @@ static sortinfo: GlobalCell<*mut sortinfo_T> =
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
 static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static num_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new([
+static num_errors: ConstTable<[*const ::core::ffi::c_char; 11]> = ConstTable::new([
     c"E685: using an invalid value as a Number".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -221,7 +221,7 @@ static num_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::ne
     c"E703: Using a Funcref as a Number".as_ptr(),
     c"E974: Using a Blob as a Number".as_ptr(),
 ]);
-static str_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new([
+static str_errors: ConstTable<[*const ::core::ffi::c_char; 11]> = ConstTable::new([
     e_using_invalid_value_as_string.as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),

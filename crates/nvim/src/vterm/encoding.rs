@@ -12,7 +12,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::global_cell::GlobalCell;
 use crate::types::{VTermEncoding, VTermEncodingType, size_t, uint32_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::slice;
@@ -285,25 +284,25 @@ extern "C" fn decode_table(
     );
 }
 
-static ENCODING_UTF8: GlobalCell<VTermEncoding> = GlobalCell::new(VTermEncoding {
+static ENCODING_UTF8: VTermEncoding = VTermEncoding {
     init: Some(init_utf8),
     decode: Some(decode_utf8),
-});
+};
 
-static ENCODING_USASCII: GlobalCell<VTermEncoding> = GlobalCell::new(VTermEncoding {
+static ENCODING_USASCII: VTermEncoding = VTermEncoding {
     init: None,
     decode: Some(decode_usascii),
-});
+};
 
 /// The DEC Special Graphics set: box drawing and a handful of symbols mapped
 /// over the printable ASCII positions from `` ` `` onwards.
-static ENCODING_DEC_DRAWING: GlobalCell<TableEncoding> = GlobalCell::new(TableEncoding {
+static ENCODING_DEC_DRAWING: TableEncoding = TableEncoding {
     enc: VTermEncoding {
         init: None,
         decode: Some(decode_table),
     },
     chars: dec_drawing_chars(),
-});
+};
 
 const fn dec_drawing_chars() -> [uint32_t; 128] {
     let mut chars = [0; 128];
@@ -327,9 +326,11 @@ pub extern "C" fn vterm_lookup_encoding(
     designation: c_char,
 ) -> *mut VTermEncoding {
     match (type_0, designation as u8) {
-        (ENC_UTF8, b'u') => ENCODING_UTF8.ptr(),
-        (ENC_SINGLE_94, b'0') => ENCODING_DEC_DRAWING.ptr().cast::<VTermEncoding>(),
-        (ENC_SINGLE_94, b'B') => ENCODING_USASCII.ptr(),
+        (ENC_UTF8, b'u') => (&raw const ENCODING_UTF8).cast_mut(),
+        (ENC_SINGLE_94, b'0') => (&raw const ENCODING_DEC_DRAWING)
+            .cast::<VTermEncoding>()
+            .cast_mut(),
+        (ENC_SINGLE_94, b'B') => (&raw const ENCODING_USASCII).cast_mut(),
         _ => core::ptr::null_mut(),
     }
 }

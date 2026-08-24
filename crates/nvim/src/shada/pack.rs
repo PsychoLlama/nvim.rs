@@ -95,7 +95,7 @@ impl Drop for Payload {
 
 /// The values a reader assumes for the fields an entry leaves out.
 unsafe fn defaults_for(type_0: ShadaEntryType) -> ShadaEntryData {
-    unsafe { (*sd_default_values.ptr())[type_0 as usize].data }
+    sd_default_values[type_0 as usize].data
 }
 
 /// 1 when a field differs from its default and so has to be written.

@@ -184,7 +184,7 @@ pub(crate) unsafe fn highlight_changed() {
         let mut id_s = -1;
         let mut id_snc = 0;
         for hlf in 1..HLF_COUNT {
-            let name = hlf_names.with(|names| names[hlf as usize]);
+            let name = hlf_names[hlf as usize];
             let id = syn_check_group(name, CStr::from_ptr(name).count_bytes() as size_t);
             assert!(id != 0, "builtin highlight group {hlf} could not be added");
 

@@ -27,7 +27,6 @@ use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
 use self::resize::{realloc_sb_buffer, resize};
-use crate::global_cell::GlobalCell;
 use crate::os::cshim::memmove;
 use crate::types::{
     ScreenCell, ScreenPen, VTerm, VTermAttr, VTermColor, VTermDamageSize, VTermGlyphInfo,
@@ -719,7 +718,7 @@ impl Screen {
     }
 }
 
-static STATE_CALLBACKS: GlobalCell<VTermStateCallbacks> = GlobalCell::new(VTermStateCallbacks {
+static STATE_CALLBACKS: VTermStateCallbacks = VTermStateCallbacks {
     putglyph: Some(putglyph),
     movecursor: Some(movecursor),
     scrollrect: Some(scrollrect),
@@ -733,7 +732,7 @@ static STATE_CALLBACKS: GlobalCell<VTermStateCallbacks> = GlobalCell::new(VTermS
     theme: Some(theme),
     setlineinfo: Some(setlineinfo),
     sb_clear: Some(sb_clear),
-});
+};
 
 // ------------------------------------------------------------ the interface
 
@@ -773,7 +772,7 @@ unsafe fn screen_new(vt: *mut VTerm) -> *mut VTermScreen {
     realloc_sb_buffer(&mut screen, cols);
     // SAFETY: the table is static and the data pointer is the screen just
     // built, which outlives the state it is installed in.
-    unsafe { vterm_state_set_callbacks(state, STATE_CALLBACKS.ptr(), raw.cast()) };
+    unsafe { vterm_state_set_callbacks(state, &raw const STATE_CALLBACKS, raw.cast()) };
     raw
 }
 

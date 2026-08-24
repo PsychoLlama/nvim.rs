@@ -9,11 +9,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 use crate::types::NUL;
 
-pub(crate) static parser_meta: SharedCell<[luaL_Reg; 9]> = luaL_reg_table![
+pub(crate) static parser_meta: ConstTable<[luaL_Reg; 9]> = luaL_reg_table![
     c"__gc" => parser_gc,
     c"__tostring" => parser_tostring,
     c"parse" => parser_parse,

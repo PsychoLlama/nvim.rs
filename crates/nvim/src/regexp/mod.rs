@@ -649,18 +649,18 @@ static nfa_time_limit: GlobalCell<*mut proftime_T> =
 static nfa_timed_out: GlobalCell<*mut c_int> = GlobalCell::new(core::ptr::null_mut::<c_int>());
 static nfa_time_count: GlobalCell<c_int> = GlobalCell::new(0);
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
-static bt_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
+static bt_regengine: regengine_T = regengine {
     regcomp: Some(bt_regcomp),
     regfree: Some(bt_regfree),
     regexec_nl: Some(bt_regexec_nl),
     regexec_multi: Some(bt_regexec_multi),
-});
-static nfa_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
+};
+static nfa_regengine: regengine_T = regengine {
     regcomp: Some(nfa_regcomp),
     regfree: Some(nfa_regfree),
     regexec_nl: Some(nfa_regexec_nl),
     regexec_multi: Some(nfa_regexec_multi),
-});
+};
 static regexp_engine: GlobalCell<c_int> = GlobalCell::new(0);
 pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const INT_MAX: c_int = __INT_MAX__;

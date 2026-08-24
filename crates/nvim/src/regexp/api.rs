@@ -86,15 +86,12 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
             } else {
                 0
             };
-            (*nfa_regengine.ptr())
-                .regcomp
-                .expect("non-null function pointer")(
-                expr as *mut uint8_t, re_flags + auto
+            nfa_regengine.regcomp.expect("non-null function pointer")(
+                expr as *mut uint8_t,
+                re_flags + auto,
             )
         } else {
-            (*bt_regengine.ptr())
-                .regcomp
-                .expect("non-null function pointer")(expr as *mut uint8_t, re_flags)
+            bt_regengine.regcomp.expect("non-null function pointer")(expr as *mut uint8_t, re_flags)
         };
         // Only retry when the NFA engine declined quietly: an error means the
         // pattern is bad, not merely too much for that engine.
@@ -111,10 +108,9 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
                 msg_puts(expr);
                 verbose_leave();
             }
-            prog = (*bt_regengine.ptr())
-                .regcomp
-                .expect("non-null function pointer")(
-                expr as *mut uint8_t, re_flags
+            prog = bt_regengine.regcomp.expect("non-null function pointer")(
+                expr as *mut uint8_t,
+                re_flags,
             );
         }
         if !prog.is_null() {

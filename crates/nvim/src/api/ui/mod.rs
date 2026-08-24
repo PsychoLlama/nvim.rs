@@ -532,7 +532,7 @@ unsafe fn ui_set_option(
         // the pre-0.3 spelling of `ext_popupmenu` and still accepted.
         let is_popupmenu = named(c"popupmenu_external");
         for ext in 0..kUIExtCount as usize {
-            if !strequal(name.data(), ui_ext_names.get()[ext])
+            if !strequal(name.data(), ui_ext_names[ext])
                 && !(ext == kUIPopupmenu as usize && is_popupmenu)
             {
                 continue;

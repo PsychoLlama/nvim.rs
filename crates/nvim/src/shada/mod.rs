@@ -19,7 +19,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fileio::{modname, vim_rename};
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::hash_removed;
 use crate::main::{
     NameBuff, curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, namedfm, no_hlsearch,
@@ -460,7 +460,7 @@ pub const DEFAULT_POS: pos_T = pos_T {
     coladd: 0 as colnr_T,
 };
 static default_pos: GlobalCell<pos_T> = GlobalCell::new(DEFAULT_POS);
-static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
+static sd_default_values: ConstTable<[ShadaEntry; 12]> = ConstTable::new([
     ShadaEntry {
         type_0: kSDItemMissing,
         can_free_entry: false,

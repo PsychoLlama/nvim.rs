@@ -12,7 +12,7 @@ use core::ptr;
 
 use super::{ERROR_INIT, TRY_STATE_INIT, error_set, nlua_push_errstr};
 use crate::api::private::helpers::{api_clear_error, handle_get_buffer, try_enter, try_leave};
-use crate::global_cell::SharedCell;
+use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
     LUA_REGISTRYINDEX, lua_error, lua_getfield, lua_gettop, lua_newuserdata, lua_pushinteger,
     lua_pushstring, lua_setmetatable, luaL_checkinteger, luaL_checkstring, luaL_checkudata,
@@ -195,7 +195,7 @@ unsafe extern "C-unwind" fn regex_tostring(lstate: *mut lua_State) -> c_int {
 
 /// The userdatum's metatable, `luaL_register`ed under [`REGEX_TYPE`]. The
 /// trailing all-null row is the terminator `luaL_register` scans for.
-pub(crate) static REGEX_META: SharedCell<[luaL_Reg; 5]> = luaL_reg_table![
+pub(crate) static REGEX_META: ConstTable<[luaL_Reg; 5]> = luaL_reg_table![
     c"__gc" => regex_gc,
     c"__tostring" => regex_tostring,
     c"match_str" => regex_match_str,
