@@ -212,7 +212,7 @@ pub(crate) unsafe fn command_line_execute(
 
             // nvim_select_popupmenu_item() can be called from the handling of
             // K_EVENT, K_COMMAND or K_LUA.
-            if (*pum_want.ptr()).active {
+            if pum_want.get().active {
                 if cmdline_pum_active() {
                     nextwild(
                         &raw mut (*s).xpc,
@@ -220,7 +220,7 @@ pub(crate) unsafe fn command_line_execute(
                         WildOpts::NONE,
                         (*s).firstc != '@' as ::core::ffi::c_int,
                     );
-                    if (*pum_want.ptr()).finish {
+                    if pum_want.get().finish {
                         nextwild(
                             &raw mut (*s).xpc,
                             WildMode::Apply,
@@ -230,7 +230,7 @@ pub(crate) unsafe fn command_line_execute(
                         command_line_end_wildmenu(s, false, (*s).c);
                     }
                 }
-                (*pum_want.ptr()).active = false;
+                pum_ext_want_done();
             }
 
             if !cmdline_was_last_drawn.get() {

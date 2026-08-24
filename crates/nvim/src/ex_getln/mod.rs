@@ -120,7 +120,7 @@ use crate::os::cshim::{gettext, memmove, strncasecmp, strncmp};
 use crate::os::env::home_replace_save;
 use crate::os::input::line_breakcheck;
 use crate::path::vim_ispathsep;
-use crate::popupmenu::{pum_check_clear, pum_undisplay};
+use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_undisplay};
 use crate::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::profile::profile_setlimit;
 use crate::regexp::{RE_SEARCH, skip_regexp_ex};

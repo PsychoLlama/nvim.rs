@@ -160,7 +160,7 @@ use crate::plines::{
     charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, linetabsize_str, win_charsize,
     win_chartabsize,
 };
-use crate::popupmenu::{pum_check_clear, pum_visible};
+use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_visible};
 use crate::pos::{MAXCOL, equalpos};
 use crate::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, valid_yank_reg,

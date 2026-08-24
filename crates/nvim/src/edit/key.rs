@@ -590,17 +590,17 @@ unsafe fn may_autocomplete_before_cursor(s: *mut InsertState) {
 /// `s` must point to a live `InsertState`.
 unsafe fn check_pum(s: *mut InsertState) {
     unsafe {
-        if (*pum_want.ptr()).active {
+        if pum_want.get().active {
             if pum_visible() {
                 // Null so that `ins_complete` updates the message.
                 edit_submode_extra.set(::core::ptr::null_mut());
                 insert_do_complete(s);
-                if (*pum_want.ptr()).finish {
+                if pum_want.get().finish {
                     // Accept the item and stop completing.
                     ins_compl_prep(Ctrl_Y);
                 }
             }
-            (*pum_want.ptr()).active = false;
+            pum_ext_want_done();
         }
 
         if (*curbuf.get()).b_u_synced {

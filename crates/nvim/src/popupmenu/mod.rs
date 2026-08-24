@@ -554,6 +554,18 @@ pub fn pum_ext_select_item(item: c_int, insert: bool, finish: bool) {
     });
 }
 
+/// The request in `pum_want` has been answered: stop offering it.
+///
+/// C's `pum_want.active = false`, written where the request is consumed --
+/// in `edit`'s `check_pum` and in the cmdline loop.
+pub(crate) fn pum_ext_want_done() {
+    let want = pum_want.get();
+    pum_want.set(PumWant {
+        active: false,
+        ..want
+    });
+}
+
 /// Rows the menu shows. Only meaningful while [`pum_visible`].
 pub fn pum_get_height() -> c_int {
     if pum_external.get() {
