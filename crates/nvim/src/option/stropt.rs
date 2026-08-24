@@ -40,8 +40,9 @@ use crate::types::{NUL, OptIndex, size_t, uint32_t};
 use ::libc::{strcpy, strlen};
 
 use super::{
-    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, find_dup_item, kOptFlagColon, kOptFlagComma,
-    kOptFlagFlagList, kOptFlagNoDup, kOptFlagOneComma, option_expand, set_op_T,
+    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OptSlot, find_dup_item, kOptFlagColon,
+    kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptFlagOneComma, option_expand, option_var,
+    set_op_T,
 };
 
 /// How much room the assembled value needs: the argument, plus the current
@@ -519,26 +520,29 @@ pub(crate) unsafe fn stropt_remove_dupflags(newval: *mut c_char, flags: uint32_t
 /// the whole set.
 ///
 /// # Safety
-/// `argp` points at a cursor into the `:set` argument, `origval` is the
-/// option's current value, and `op_arg` is writable.
+/// `argp` points at a cursor into the `:set` argument, `varp` is the
+/// option's variable in the scope being set, `origval` is its current
+/// value, and `op_arg` is writable.
 pub(crate) unsafe fn stropt_get_newval(
-    _nextchar: c_int,
     opt_idx: OptIndex,
     argp: *mut *mut c_char,
+    varp: OptSlot,
     origval: *const c_char,
     op_arg: *mut set_op_T,
     flags: uint32_t,
 ) -> *mut c_char {
+    // A bare `:set keywordprg=` means ":help", not the empty string — but
+    // only for the global value. `:setlocal keywordprg=` unsets the buffer's
+    // copy, which is how it goes back to reading the global one.
+    let global_kp = opt_idx == kOptKeywordprg && varp == option_var(opt_idx);
     // SAFETY: the caller's cursor, variable and value, as documented above.
     unsafe {
         // Past the '=' or the operator's second character.
         let mut arg = (*argp).add(1);
         let mut op = *op_arg;
 
-        // A bare `:set keywordprg=` means ":help", not the empty string.
-        let empty_kp =
-            opt_idx == kOptKeywordprg && (c_int::from(*arg) == NUL || *arg == b' ' as c_char);
-        let save_arg = if empty_kp {
+        let bare = c_int::from(*arg) == NUL || *arg == b' ' as c_char;
+        let save_arg = if global_kp && bare {
             let save = arg;
             arg = c":help".as_ptr().cast_mut();
             Some(save)

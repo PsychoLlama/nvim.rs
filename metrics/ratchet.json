@@ -763,7 +763,7 @@
     "crates/nvim/src/option/set_cmd.rs": {"cell_ptr": 1, "unsafe_lines": 416},
     "crates/nvim/src/option/show.rs": {"cell_ptr": 4, "unsafe_lines": 329},
     "crates/nvim/src/option/state.rs": {"cell_ptr": 1},
-    "crates/nvim/src/option/stropt.rs": {"unsafe_lines": 314},
+    "crates/nvim/src/option/stropt.rs": {"unsafe_lines": 313},
     "crates/nvim/src/option/validate.rs": {"unsafe_lines": 83},
     "crates/nvim/src/option/value.rs": {"unsafe_lines": 103},
     "crates/nvim/src/options/flags.rs": {"pub_items": 146},

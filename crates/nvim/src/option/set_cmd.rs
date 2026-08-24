@@ -350,9 +350,9 @@ unsafe fn get_option_newval(
             kOptValTypeString => {
                 let mut op = op;
                 let newval_str = stropt_get_newval(
-                    nextchar,
                     opt_idx,
                     argp,
+                    varp,
                     oldval.data.string.data(),
                     &raw mut op,
                     flags,
