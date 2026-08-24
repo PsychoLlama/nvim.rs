@@ -1174,7 +1174,7 @@ fn emit_fn(
             writeln!(out, "    let dict = unsafe {{").unwrap();
             writeln!(
                 out,
-                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.ptr().cast(), {size} as size_t, arena)"
+                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.as_ptr().cast_mut(), {size} as size_t, arena)"
             )
             .unwrap();
             writeln!(out, "    }};").unwrap();
@@ -1964,8 +1964,7 @@ pub unsafe fn msgpack_rpc_get_handler_for(
 ) -> MsgpackRpcRequestHandler {
     // SAFETY: the caller passes a method name of `name_len` bytes.
     if let Some(index) = handler_index(unsafe { key_bytes(name, name_len) }) {
-        // SAFETY: `handler_index` only ever returns an index into the table.
-        return unsafe { (*method_handlers.ptr())[index] };
+        return method_handlers[index];
     }
     // `%.*s`: the name is not NUL-terminated, so its length goes along. The
     // stand-in for an empty one is, and upstream passed `sizeof("<empty>")`.
@@ -2021,7 +2020,7 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     };
     writeln!(
         out,
-        "pub static {name}_table: GlobalCell<[KeySetLink; {}]> = GlobalCell::new({open}",
+        "pub static {name}_table: ConstTable<[KeySetLink; {}]> = ConstTable::new({open}",
         k.len()
     )
     .unwrap();
@@ -2086,7 +2085,7 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     writeln!(out, "    }};").unwrap();
     writeln!(
         out,
-        "    let table: *mut KeySetLink = {name}_table.ptr().cast();"
+        "    let table: *mut KeySetLink = {name}_table.as_ptr().cast_mut();"
     )
     .unwrap();
     writeln!(out, "    table.wrapping_add(index)").unwrap();
@@ -2129,7 +2128,7 @@ fn emit_handlers(out: &mut String, specs: &[Spec]) {
 
     writeln!(
         out,
-        "pub static method_handlers: GlobalCell<[MsgpackRpcRequestHandler; {}]> = GlobalCell::new([",
+        "pub static method_handlers: ConstTable<[MsgpackRpcRequestHandler; {}]> = ConstTable::new([",
         specs.len()
     )
     .unwrap();
@@ -2273,7 +2272,7 @@ fn generate_tables(
     out.push_str("// Every generated wrapper; the handler table names most of them.\n");
     out.push_str("use crate::api::private::dispatch_wrappers::*;\n");
     out.push_str("use crate::api::private::helpers::api_set_error;\n");
-    out.push_str("use crate::global_cell::GlobalCell;\n");
+    out.push_str("use crate::global_cell::ConstTable;\n");
     // Handlers the spec names outright, which live outside the generated
     // wrappers.
     let mut externs: BTreeSet<&str> = BTreeSet::new();
@@ -2445,8 +2444,8 @@ unsafe trait KeySet: Sized {
 }
 
 /// A keyset's generated table, as the code that walks one takes it.
-fn keyset_table<const N: usize>(table: &GlobalCell<[KeySetLink; N]>) -> *mut KeySetLink {
-    table.ptr().cast()
+fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *mut KeySetLink {
+    table.as_ptr().cast_mut()
 }
 
 /// A keyset argument, with its release armed from the moment it exists: the
@@ -3416,7 +3415,7 @@ fn generate_lua(
         "use crate::main::{{{}}};",
         referenced_names(&["e_fast_api_disabled", "e_textlock", "textlock"]).join(", ")
     ));
-    uses.push("use crate::global_cell::GlobalCell;".into());
+    uses.push("use crate::global_cell::ConstTable;".into());
     uses.push("use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());
     let types: Vec<String> = referenced_names(&[
         "Arena",

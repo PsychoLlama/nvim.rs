@@ -807,7 +807,7 @@ pub const kBufOptVartabstop: BufOptIndex = 90;
 pub const kBufOptWrapmargin: BufOptIndex = 91;
 
 /// `BufOptIndex` -> `OptIndex`: which option a buffer-local row belongs to.
-pub static buf_opt_idx: GlobalCell<[OptIndex; 92]> = GlobalCell::new([
+pub static buf_opt_idx: [OptIndex; 92] = [
     kOptAutocomplete,
     kOptAutoindent,
     kOptAutoread,
@@ -900,4 +900,4 @@ pub static buf_opt_idx: GlobalCell<[OptIndex; 92]> = GlobalCell::new([
     kOptVarsofttabstop,
     kOptVartabstop,
     kOptWrapmargin,
-]);
+];

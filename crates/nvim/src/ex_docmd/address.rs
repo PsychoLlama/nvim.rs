@@ -142,7 +142,7 @@ pub unsafe fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut c_char) {
             return;
         }
         ea.addr_type = if ea.cmdidx as c_int != CMD_SIZE as c_int {
-            (*cmdnames.ptr())[ea.cmdidx as usize].cmd_addr_type
+            cmdnames[ea.cmdidx as usize].cmd_addr_type
         } else {
             CmdAddr::Lines
         };

@@ -103,7 +103,7 @@ use crate::ex_getln::{
 use crate::fold::{f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult};
 use crate::fuzzy::{f_matchfuzzy, f_matchfuzzypos};
 use crate::getchar::{f_getchar, f_getcharmod, f_getcharstr};
-use crate::global_cell::GlobalCell;
+use crate::global_cell::ConstTable;
 use crate::indent::expr::{f_indent, f_lispindent};
 use crate::indent_c::f_cindent;
 use crate::insexpand::{
@@ -201,11 +201,9 @@ const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
 const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
     EvalFuncDef {
         data: EvalFuncData {
-            api_handler: method_handlers
-                .as_raw()
+            api_handler: (&raw const method_handlers)
                 .cast::<MsgpackRpcRequestHandler>()
-                .wrapping_add(row)
-                .cast_const(),
+                .wrapping_add(row),
         },
         ..builtin(name, argc, argc, BASE_NONE, Some(api_wrapper))
     }
@@ -223,7 +221,7 @@ const fn fill(table: &mut [EvalFuncDef], base: usize, part: &[EvalFuncDef]) -> u
 
 /// Every builtin Vimscript function there is, plus the blank row
 /// that ends the table.
-pub(crate) static BUILTINS: GlobalCell<[EvalFuncDef; 644]> = GlobalCell::new(table());
+pub(crate) static BUILTINS: ConstTable<[EvalFuncDef; 644]> = ConstTable::new(table());
 
 /// The table, spliced together from the generated parts.
 const fn table() -> [EvalFuncDef; 644] {

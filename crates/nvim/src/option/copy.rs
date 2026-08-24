@@ -328,7 +328,7 @@ unsafe fn copy_sctx(buf: *mut buf_T, bv: BufOptIndex) {
     // SAFETY: the caller's buffer, and `buf_opt_idx` maps every buffer-local
     // row to a row of the option table.
     unsafe {
-        let opt_idx = (*buf_opt_idx.ptr())[bv as usize];
+        let opt_idx = buf_opt_idx[bv as usize];
         (*buf).b_p_script_ctx[bv as usize] = (*options.ptr())[opt_idx as usize].script_ctx;
     }
 }

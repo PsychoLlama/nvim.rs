@@ -19,6 +19,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::global_cell::ConstTable;
 use crate::types::CmdAddr as Ad;
 use crate::types::ExArgt as Ex;
 
@@ -59,10 +60,10 @@ const fn cmd_pv<const N: usize>(
     }
 }
 
-pub(crate) static command_count: GlobalCell<c_int> = GlobalCell::new(557 as c_int);
+pub(crate) const command_count: c_int = 557;
 
 #[rustfmt::skip]
-pub(crate) static cmdnames: GlobalCell<[CommandDefinition; 557]> = GlobalCell::new([
+pub(crate) static cmdnames: ConstTable<[CommandDefinition; 557]> = ConstTable::new([
     cmd(b"append\0", ex_append, Ex::RANGE.or(Ex::BANG).or(Ex::TRLBAR).or(Ex::ZEROR).or(Ex::CMDWIN).or(Ex::MODIFY).or(Ex::LOCK_OK), Ad::Lines),
     cmd(b"abbreviate\0", ex_abbreviate, Ex::EXTRA.or(Ex::TRLBAR).or(Ex::NOTRLCOM).or(Ex::CTRLV).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
     cmd(b"abclear\0", ex_abclear, Ex::EXTRA.or(Ex::TRLBAR).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
@@ -624,15 +625,15 @@ pub(crate) static cmdnames: GlobalCell<[CommandDefinition; 557]> = GlobalCell::n
 
 /// For each letter a-z, the index of the first command in `cmdnames`
 /// that starts with it.
-pub(crate) static cmdidxs1: GlobalCell<[uint16_t; 26]> = GlobalCell::new([
+pub(crate) static cmdidxs1: [uint16_t; 26] = [
     0, 20, 43, 109, 133, 154, 170, 176, 184, 203, 205, 210, 272, 290, 307, 318, 357, 360, 382, 447,
     492, 504, 522, 537, 546, 547,
-]);
+];
 
 /// For each pair of letters, the offset from `cmdidxs1` of the first
 /// command starting with them. Zero means there is none, which the
 /// caller reads as "start where the first letter says".
-pub(crate) static cmdidxs2: GlobalCell<[[uint8_t; 26]; 26]> = GlobalCell::new([
+pub(crate) static cmdidxs2: [[uint8_t; 26]; 26] = [
     [
         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 5, 6, 0, 0, 0, 7, 16, 0, 17, 0, 0, 0, 0, 0,
     ],
@@ -712,4 +713,4 @@ pub(crate) static cmdidxs2: GlobalCell<[[uint8_t; 26]; 26]> = GlobalCell::new([
     [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ],
-]);
+];

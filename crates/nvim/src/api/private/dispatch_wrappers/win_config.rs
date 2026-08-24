@@ -122,7 +122,7 @@ pub unsafe fn handle_nvim_win_get_config(
     let dict = unsafe {
         api_keydict_to_dict(
             (&raw mut rv).cast(),
-            win_config_table.ptr().cast(),
+            win_config_table.as_ptr().cast_mut(),
             25 as size_t,
             arena,
         )

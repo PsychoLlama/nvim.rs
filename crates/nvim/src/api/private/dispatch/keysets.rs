@@ -9,7 +9,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub static _shada_buflist_item_table: GlobalCell<[KeySetLink; 4]> = GlobalCell::new({
+pub static _shada_buflist_item_table: ConstTable<[KeySetLink; 4]> = ConstTable::new({
     type K = KeyDict__shada_buflist_item;
     [
         key(c"c", offset_of!(K, c), TAG_INTEGER, 1),
@@ -34,11 +34,11 @@ pub unsafe fn key_dict__shada_buflist_item_get_field(
         b"l" => 2,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = _shada_buflist_item_table.ptr().cast();
+    let table: *mut KeySetLink = _shada_buflist_item_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static _shada_mark_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new({
+pub static _shada_mark_table: ConstTable<[KeySetLink; 5]> = ConstTable::new({
     type K = KeyDict__shada_mark;
     [
         key(c"c", offset_of!(K, c), TAG_INTEGER, 1),
@@ -62,11 +62,11 @@ pub unsafe fn key_dict__shada_mark_get_field(str: *const c_char, len: size_t) ->
         b"n" => 3,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = _shada_mark_table.ptr().cast();
+    let table: *mut KeySetLink = _shada_mark_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static _shada_register_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new({
+pub static _shada_register_table: ConstTable<[KeySetLink; 6]> = ConstTable::new({
     type K = KeyDict__shada_register;
     [
         key(c"n", offset_of!(K, n), TAG_INTEGER, 1),
@@ -95,11 +95,11 @@ pub unsafe fn key_dict__shada_register_get_field(
         b"rw" => 4,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = _shada_register_table.ptr().cast();
+    let table: *mut KeySetLink = _shada_register_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static _shada_search_pat_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new({
+pub static _shada_search_pat_table: ConstTable<[KeySetLink; 11]> = ConstTable::new({
     type K = KeyDict__shada_search_pat;
     [
         key(c"sb", offset_of!(K, search_backward), TAG_BOOLEAN, 1),
@@ -138,11 +138,11 @@ pub unsafe fn key_dict__shada_search_pat_get_field(
         b"su" => 9,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = _shada_search_pat_table.ptr().cast();
+    let table: *mut KeySetLink = _shada_search_pat_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static buf_attach_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new({
+pub static buf_attach_table: ConstTable<[KeySetLink; 8]> = ConstTable::new({
     type K = KeyDict_buf_attach;
     [
         key(c"preview", offset_of!(K, preview), TAG_BOOLEAN, 1),
@@ -177,11 +177,11 @@ pub unsafe fn key_dict_buf_attach_get_field(str: *const c_char, len: size_t) -> 
         b"on_changedtick" => 6,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = buf_attach_table.ptr().cast();
+    let table: *mut KeySetLink = buf_attach_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static buf_delete_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
+pub static buf_delete_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_buf_delete;
     [
         key(c"force", offset_of!(K, force), TAG_BOOLEAN, 1),
@@ -201,11 +201,11 @@ pub unsafe fn key_dict_buf_delete_get_field(str: *const c_char, len: size_t) -> 
         b"unload" => 1,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = buf_delete_table.ptr().cast();
+    let table: *mut KeySetLink = buf_delete_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static clear_autocmds_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new({
+pub static clear_autocmds_table: ConstTable<[KeySetLink; 6]> = ConstTable::new({
     type K = KeyDict_clear_autocmds;
     [
         key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
@@ -234,11 +234,11 @@ pub unsafe fn key_dict_clear_autocmds_get_field(
         b"pattern" => 4,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = clear_autocmds_table.ptr().cast();
+    let table: *mut KeySetLink = clear_autocmds_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static cmd_table: GlobalCell<[KeySetLink; 12]> = GlobalCell::new({
+pub static cmd_table: ConstTable<[KeySetLink; 12]> = ConstTable::new({
     type K = KeyDict_cmd;
     [
         key(c"cmd", offset_of!(K, cmd), TAG_STRING, 1),
@@ -276,11 +276,11 @@ pub unsafe fn key_dict_cmd_get_field(str: *const c_char, len: size_t) -> *mut Ke
         b"nextcmd" => 10,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = cmd_table.ptr().cast();
+    let table: *mut KeySetLink = cmd_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static cmd_magic_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
+pub static cmd_magic_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_cmd_magic;
     [
         key(c"bar", offset_of!(K, bar), TAG_BOOLEAN, 1),
@@ -300,11 +300,11 @@ pub unsafe fn key_dict_cmd_magic_get_field(str: *const c_char, len: size_t) -> *
         b"file" => 1,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = cmd_magic_table.ptr().cast();
+    let table: *mut KeySetLink = cmd_magic_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static cmd_mods_table: GlobalCell<[KeySetLink; 21]> = GlobalCell::new({
+pub static cmd_mods_table: ConstTable<[KeySetLink; 21]> = ConstTable::new({
     type K = KeyDict_cmd_mods;
     [
         key(c"tab", offset_of!(K, tab), TAG_INTEGER, 1),
@@ -365,11 +365,11 @@ pub unsafe fn key_dict_cmd_mods_get_field(str: *const c_char, len: size_t) -> *m
         b"keeppatterns" => 19,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = cmd_mods_table.ptr().cast();
+    let table: *mut KeySetLink = cmd_mods_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static cmd_mods_filter_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
+pub static cmd_mods_filter_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_cmd_mods_filter;
     [
         key(c"force", offset_of!(K, force), TAG_BOOLEAN, 1),
@@ -392,11 +392,11 @@ pub unsafe fn key_dict_cmd_mods_filter_get_field(
         b"pattern" => 1,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = cmd_mods_filter_table.ptr().cast();
+    let table: *mut KeySetLink = cmd_mods_filter_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static cmd_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static cmd_opts_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_cmd_opts;
     [key(c"output", offset_of!(K, output), TAG_BOOLEAN, -1), END]
 });
@@ -411,11 +411,11 @@ pub unsafe fn key_dict_cmd_opts_get_field(str: *const c_char, len: size_t) -> *m
         b"output" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = cmd_opts_table.ptr().cast();
+    let table: *mut KeySetLink = cmd_opts_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static complete_set_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static complete_set_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_complete_set;
     [key(c"info", offset_of!(K, info), TAG_STRING, 1), END]
 });
@@ -430,11 +430,11 @@ pub unsafe fn key_dict_complete_set_get_field(str: *const c_char, len: size_t) -
         b"info" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = complete_set_table.ptr().cast();
+    let table: *mut KeySetLink = complete_set_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static context_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static context_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_context;
     [key(c"types", offset_of!(K, types), TAG_ARRAY, 1), END]
 });
@@ -449,11 +449,11 @@ pub unsafe fn key_dict_context_get_field(str: *const c_char, len: size_t) -> *mu
         b"types" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = context_table.ptr().cast();
+    let table: *mut KeySetLink = context_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static create_augroup_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static create_augroup_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_create_augroup;
     [key(c"clear", offset_of!(K, clear), TAG_BOOLEAN, 1), END]
 });
@@ -471,11 +471,11 @@ pub unsafe fn key_dict_create_augroup_get_field(
         b"clear" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = create_augroup_table.ptr().cast();
+    let table: *mut KeySetLink = create_augroup_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static create_autocmd_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new({
+pub static create_autocmd_table: ConstTable<[KeySetLink; 10]> = ConstTable::new({
     type K = KeyDict_create_autocmd;
     [
         key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
@@ -512,11 +512,11 @@ pub unsafe fn key_dict_create_autocmd_get_field(
         b"callback" => 8,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = create_autocmd_table.ptr().cast();
+    let table: *mut KeySetLink = create_autocmd_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static echo_opts_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new({
+pub static echo_opts_table: ConstTable<[KeySetLink; 11]> = ConstTable::new({
     type K = KeyDict_echo_opts;
     [
         key(c"id", offset_of!(K, id), TAG_NIL, 1),
@@ -552,11 +552,11 @@ pub unsafe fn key_dict_echo_opts_get_field(str: *const c_char, len: size_t) -> *
         b"_truncate" => 9,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = echo_opts_table.ptr().cast();
+    let table: *mut KeySetLink = echo_opts_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static empty_table: GlobalCell<[KeySetLink; 1]> = GlobalCell::new([END]);
+pub static empty_table: ConstTable<[KeySetLink; 1]> = ConstTable::new([END]);
 
 /// Look a key up in [`empty_table`].
 ///
@@ -567,7 +567,7 @@ pub unsafe fn key_dict_empty_get_field(_str: *const c_char, _len: size_t) -> *mu
     ptr::null_mut()
 }
 
-pub static eval_statusline_table: GlobalCell<[KeySetLink; 8]> = GlobalCell::new({
+pub static eval_statusline_table: ConstTable<[KeySetLink; 8]> = ConstTable::new({
     type K = KeyDict_eval_statusline;
     [
         key(c"winid", offset_of!(K, winid), TAG_WINDOW, 1),
@@ -605,11 +605,11 @@ pub unsafe fn key_dict_eval_statusline_get_field(
         b"use_statuscol_lnum" => 6,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = eval_statusline_table.ptr().cast();
+    let table: *mut KeySetLink = eval_statusline_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static exec_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new({
+pub static exec_autocmds_table: ConstTable<[KeySetLink; 7]> = ConstTable::new({
     type K = KeyDict_exec_autocmds;
     [
         key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
@@ -637,11 +637,11 @@ pub unsafe fn key_dict_exec_autocmds_get_field(str: *const c_char, len: size_t) 
         b"modeline" => 5,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = exec_autocmds_table.ptr().cast();
+    let table: *mut KeySetLink = exec_autocmds_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static exec_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static exec_opts_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_exec_opts;
     [key(c"output", offset_of!(K, output), TAG_BOOLEAN, -1), END]
 });
@@ -656,11 +656,11 @@ pub unsafe fn key_dict_exec_opts_get_field(str: *const c_char, len: size_t) -> *
         b"output" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = exec_opts_table.ptr().cast();
+    let table: *mut KeySetLink = exec_opts_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static get_autocmds_table: GlobalCell<[KeySetLink; 7]> = GlobalCell::new({
+pub static get_autocmds_table: ConstTable<[KeySetLink; 7]> = ConstTable::new({
     type K = KeyDict_get_autocmds;
     [
         key(c"id", offset_of!(K, id), TAG_INTEGER, 1),
@@ -688,11 +688,11 @@ pub unsafe fn key_dict_get_autocmds_get_field(str: *const c_char, len: size_t) -
         b"pattern" => 5,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = get_autocmds_table.ptr().cast();
+    let table: *mut KeySetLink = get_autocmds_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static get_commands_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static get_commands_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_get_commands;
     [
         key(c"builtin", offset_of!(K, builtin), TAG_BOOLEAN, -1),
@@ -710,11 +710,11 @@ pub unsafe fn key_dict_get_commands_get_field(str: *const c_char, len: size_t) -
         b"builtin" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = get_commands_table.ptr().cast();
+    let table: *mut KeySetLink = get_commands_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static get_extmark_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
+pub static get_extmark_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_get_extmark;
     [
         key(c"details", offset_of!(K, details), TAG_BOOLEAN, 1),
@@ -734,11 +734,11 @@ pub unsafe fn key_dict_get_extmark_get_field(str: *const c_char, len: size_t) ->
         b"hl_name" => 1,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = get_extmark_table.ptr().cast();
+    let table: *mut KeySetLink = get_extmark_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static get_extmarks_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new({
+pub static get_extmarks_table: ConstTable<[KeySetLink; 6]> = ConstTable::new({
     type K = KeyDict_get_extmarks;
     [
         key(c"type", offset_of!(K, type_0), TAG_STRING, 1),
@@ -764,11 +764,11 @@ pub unsafe fn key_dict_get_extmarks_get_field(str: *const c_char, len: size_t) -
         b"overlap" => 4,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = get_extmarks_table.ptr().cast();
+    let table: *mut KeySetLink = get_extmarks_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static get_highlight_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new({
+pub static get_highlight_table: ConstTable<[KeySetLink; 5]> = ConstTable::new({
     type K = KeyDict_get_highlight;
     [
         key(c"id", offset_of!(K, id), TAG_INTEGER, 1),
@@ -792,11 +792,11 @@ pub unsafe fn key_dict_get_highlight_get_field(str: *const c_char, len: size_t) 
         b"create" => 3,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = get_highlight_table.ptr().cast();
+    let table: *mut KeySetLink = get_highlight_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static get_ns_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static get_ns_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_get_ns;
     [key(c"winid", offset_of!(K, winid), TAG_WINDOW, 1), END]
 });
@@ -811,11 +811,11 @@ pub unsafe fn key_dict_get_ns_get_field(str: *const c_char, len: size_t) -> *mut
         b"winid" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = get_ns_table.ptr().cast();
+    let table: *mut KeySetLink = get_ns_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static highlight_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new({
+pub static highlight_table: ConstTable<[KeySetLink; 36]> = ConstTable::new({
     type K = KeyDict_highlight;
     [
         key(c"bg", offset_of!(K, bg), TAG_NIL, 1),
@@ -906,11 +906,11 @@ pub unsafe fn key_dict_highlight_get_field(str: *const c_char, len: size_t) -> *
         b"strikethrough" => 34,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = highlight_table.ptr().cast();
+    let table: *mut KeySetLink = highlight_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static highlight_cterm_table: GlobalCell<[KeySetLink; 17]> = GlobalCell::new({
+pub static highlight_cterm_table: ConstTable<[KeySetLink; 17]> = ConstTable::new({
     type K = KeyDict_highlight_cterm;
     [
         key(c"dim", offset_of!(K, dim), TAG_BOOLEAN, -1),
@@ -966,11 +966,11 @@ pub unsafe fn key_dict_highlight_cterm_get_field(
         b"strikethrough" => 15,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = highlight_cterm_table.ptr().cast();
+    let table: *mut KeySetLink = highlight_cterm_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static keymap_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new({
+pub static keymap_table: ConstTable<[KeySetLink; 10]> = ConstTable::new({
     type K = KeyDict_keymap;
     [
         key(c"desc", offset_of!(K, desc), TAG_STRING, 1),

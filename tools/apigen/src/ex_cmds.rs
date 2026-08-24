@@ -261,15 +261,14 @@ pub fn generate(lua_path: &Path) -> Result<(String, String), String> {
     let mut table = String::from(TABLE_DOC);
     table.push_str(
         "\n#![forbid(unsafe_code)]\n\n#[allow(unused_imports)]\nuse super::*;\n\
+         use crate::global_cell::ConstTable;\n\
          use crate::types::CmdAddr as Ad;\n\
          use crate::types::ExArgt as Ex;\n",
     );
     table.push_str(HELPERS);
+    table.push_str(&format!("\npub(crate) const command_count: c_int = {n};\n"));
     table.push_str(&format!(
-        "\npub(crate) static command_count: GlobalCell<c_int> = GlobalCell::new({n} as c_int);\n"
-    ));
-    table.push_str(&format!(
-        "\n#[rustfmt::skip]\npub(crate) static cmdnames: GlobalCell<[CommandDefinition; {n}]> = GlobalCell::new([\n"
+        "\n#[rustfmt::skip]\npub(crate) static cmdnames: ConstTable<[CommandDefinition; {n}]> = ConstTable::new([\n"
     ));
     for row in &rows {
         let flags = spell_flags(row.flags, &bits)?;
@@ -315,18 +314,18 @@ pub fn generate(lua_path: &Path) -> Result<(String, String), String> {
     table.push_str(
         "\n/// For each letter a-z, the index of the first command in `cmdnames`\n\
          /// that starts with it.\n\
-         pub(crate) static cmdidxs1: GlobalCell<[uint16_t; 26]> = GlobalCell::new([\n",
+         pub(crate) static cmdidxs1: [uint16_t; 26] = [\n",
     );
     for c in &alpha {
         table.push_str(&format!("    {},\n", idx1[c]));
     }
-    table.push_str("]);\n");
+    table.push_str("];\n");
 
     table.push_str(
         "\n/// For each pair of letters, the offset from `cmdidxs1` of the first\n\
          /// command starting with them. Zero means there is none, which the\n\
          /// caller reads as \"start where the first letter says\".\n\
-         pub(crate) static cmdidxs2: GlobalCell<[[uint8_t; 26]; 26]> = GlobalCell::new([\n",
+         pub(crate) static cmdidxs2: [[uint8_t; 26]; 26] = [\n",
     );
     for c in &alpha {
         let row: Vec<String> = alpha
@@ -340,7 +339,7 @@ pub fn generate(lua_path: &Path) -> Result<(String, String), String> {
             .collect();
         table.push_str(&format!("    [{}],\n", row.join(", ")));
     }
-    table.push_str("]);\n");
+    table.push_str("];\n");
 
     let mut enums = String::from(ENUM_DOC);
     enums.push_str(

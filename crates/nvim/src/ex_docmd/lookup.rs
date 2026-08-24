@@ -161,7 +161,7 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
         }
 
         while (ea.cmdidx as c_int) < CMD_SIZE as c_int {
-            let name = (*cmdnames.ptr())[ea.cmdidx as usize].cmd_name;
+            let name = cmdnames[ea.cmdidx as usize].cmd_name;
             if strncmp(name, ea.cmd, len as size_t) == 0 {
                 if !full.is_null() && *name.offset(len as isize) as c_int == NUL {
                     *full = 1;
@@ -204,16 +204,16 @@ unsafe fn start_index(cmd: *const c_char, len: c_int) -> cmdidx_T {
                 CMD_bang
             };
         }
-        if command_count.get() != CMD_SIZE as c_int {
+        if command_count != CMD_SIZE as c_int {
             iemsg(gettext(
                 c"E943: Command table needs to be updated, run 'make'".as_ptr(),
             ));
             getout(1);
         }
         let c2 = if len == 1 { 0u8 } else { *cmd.add(1) as u8 };
-        let mut idx = (*cmdidxs1.ptr())[(c1 - b'a') as usize] as c_int;
+        let mut idx = cmdidxs1[(c1 - b'a') as usize] as c_int;
         if c2.is_ascii_lowercase() {
-            idx += (*cmdidxs2.ptr())[(c1 - b'a') as usize][(c2 - b'a') as usize] as c_int;
+            idx += cmdidxs2[(c1 - b'a') as usize][(c2 - b'a') as usize] as c_int;
         }
         idx as cmdidx_T
     }
@@ -286,7 +286,7 @@ pub unsafe fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         (*rettv).vval.v_string = xstrdup(if (ea.cmdidx as c_int) < 0 {
             get_user_command_name(ea.useridx, ea.cmdidx as c_int)
         } else {
-            (*cmdnames.ptr())[ea.cmdidx as usize].cmd_name
+            cmdnames[ea.cmdidx as usize].cmd_name
         });
     }
 }
@@ -317,7 +317,7 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
         // shortcut: this entry point is not on the hot path.
         let mut idx = CMD_append;
         while (idx as c_int) < CMD_SIZE as c_int {
-            if strncmp((*cmdnames.ptr())[idx as usize].cmd_name, cmd, len) == 0 {
+            if strncmp(cmdnames[idx as usize].cmd_name, cmd, len) == 0 {
                 break;
             }
             idx = (idx as c_int + 1) as cmdidx_T;
@@ -328,7 +328,7 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
 
 /// The `EX_*` flag set of a command.
 pub unsafe fn excmd_get_argt(idx: cmdidx_T) -> ExArgt {
-    unsafe { (*cmdnames.ptr())[idx as usize].cmd_argt }
+    cmdnames[idx as usize].cmd_argt
 }
 
 /// The `idx`'th command name, for command-line completion. Indices past
@@ -341,6 +341,6 @@ pub unsafe fn get_command_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
         if idx >= CMD_SIZE as c_int {
             return expand_user_command_name(idx);
         }
-        (*cmdnames.ptr())[idx as usize].cmd_name
+        cmdnames[idx as usize].cmd_name
     }
 }

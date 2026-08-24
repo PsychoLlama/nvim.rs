@@ -43,7 +43,7 @@ use core::{ptr, slice};
 // Every generated wrapper; the handler table names most of them.
 use crate::api::private::dispatch_wrappers::*;
 use crate::api::private::helpers::api_set_error;
-use crate::global_cell::GlobalCell;
+use crate::global_cell::ConstTable;
 use crate::types::{
     Arena, Array, Error, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
     KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
@@ -172,8 +172,7 @@ pub unsafe fn msgpack_rpc_get_handler_for(
 ) -> MsgpackRpcRequestHandler {
     // SAFETY: the caller passes a method name of `name_len` bytes.
     if let Some(index) = handler_index(unsafe { key_bytes(name, name_len) }) {
-        // SAFETY: `handler_index` only ever returns an index into the table.
-        return unsafe { (*method_handlers.ptr())[index] };
+        return method_handlers[index];
     }
     // `%.*s`: the name is not NUL-terminated, so its length goes along. The
     // stand-in for an empty one is, and upstream passed `sizeof("<empty>")`.

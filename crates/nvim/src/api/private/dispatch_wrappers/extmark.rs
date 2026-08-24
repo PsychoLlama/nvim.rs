@@ -107,7 +107,7 @@ pub unsafe fn handle_nvim__ns_get(
     let dict = unsafe {
         api_keydict_to_dict(
             (&raw mut rv).cast(),
-            ns_opts_table.ptr().cast(),
+            ns_opts_table.as_ptr().cast_mut(),
             2 as size_t,
             arena,
         )

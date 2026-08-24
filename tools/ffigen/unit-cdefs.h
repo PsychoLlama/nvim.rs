@@ -6267,6 +6267,7 @@ static const int _ISgraph = 32768;
 static const int _ISlower = 512;
 static const int _ISpunct = 4;
 static const int _ISupper = 256;
+static const int command_count = 557;
 static const int kAlignCenter = 1;
 static const int kAlignLeft = 0;
 static const int kAlignRight = 2;

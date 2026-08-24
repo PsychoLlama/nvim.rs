@@ -100,11 +100,9 @@ pub(crate) fn ex_func_is(func: ex_func_T, f: unsafe fn(*mut exarg_T)) -> bool {
 
 /// Is this a command the build knows the name of but cannot run?
 pub unsafe fn is_cmd_ni(cmdidx: cmdidx_T) -> bool {
-    unsafe {
-        !is_user_cmd(cmdidx)
-            && (ex_func_is((*cmdnames.ptr())[cmdidx as usize].cmd_func, ex_ni)
-                || ex_func_is((*cmdnames.ptr())[cmdidx as usize].cmd_func, ex_script_ni))
-    }
+    !is_user_cmd(cmdidx)
+        && (ex_func_is(cmdnames[cmdidx as usize].cmd_func, ex_ni)
+            || ex_func_is(cmdnames[cmdidx as usize].cmd_func, ex_script_ni))
 }
 
 /// Drop the first of an API-supplied argument list, and point `eap->arg` at
@@ -340,7 +338,7 @@ pub(crate) unsafe fn do_one_cmd(
             ea.forceit = parse_bang(&raw mut ea, &raw mut p) as c_int;
 
             if !is_user_cmd(ea.cmdidx) {
-                ea.argt = (*cmdnames.ptr())[ea.cmdidx as usize].cmd_argt;
+                ea.argt = cmdnames[ea.cmdidx as usize].cmd_argt;
             }
 
             if ea.skip == 0 {
@@ -589,7 +587,7 @@ pub(crate) unsafe fn do_one_cmd(
         do_errthrow(
             cstack,
             if ea.cmdidx as c_int != CMD_SIZE as c_int && !is_user_cmd(ea.cmdidx) {
-                (*cmdnames.ptr())[ea.cmdidx as usize].cmd_name
+                cmdnames[ea.cmdidx as usize].cmd_name
             } else {
                 ptr::null_mut()
             },

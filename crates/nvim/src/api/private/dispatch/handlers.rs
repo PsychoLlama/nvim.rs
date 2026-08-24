@@ -9,7 +9,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub static method_handlers: GlobalCell<[MsgpackRpcRequestHandler; 280]> = GlobalCell::new([
+pub static method_handlers: ConstTable<[MsgpackRpcRequestHandler; 280]> = ConstTable::new([
     handler(c"redraw", handle_ui_client_redraw, true, false),
     handler(c"nvim__id", handle_nvim__id, false, false),
     handler(c"nvim_cmd", handle_nvim_cmd, false, false),

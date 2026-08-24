@@ -157,7 +157,7 @@ use crate::api::window::{
 };
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
-use crate::global_cell::GlobalCell;
+use crate::global_cell::ConstTable;
 use crate::lua::converter::{
     kNluaPushFreeRefs, kNluaPushSpecial, nlua_pop_array, nlua_pop_boolean, nlua_pop_dict,
     nlua_pop_float, nlua_pop_handle, nlua_pop_integer, nlua_pop_keydict, nlua_pop_luaref,
@@ -259,8 +259,8 @@ unsafe trait KeySet: Sized {
 }
 
 /// A keyset's generated table, as the code that walks one takes it.
-fn keyset_table<const N: usize>(table: &GlobalCell<[KeySetLink; N]>) -> *mut KeySetLink {
-    table.ptr().cast()
+fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *mut KeySetLink {
+    table.as_ptr().cast_mut()
 }
 
 /// A keyset argument, with its release armed from the moment it exists: the

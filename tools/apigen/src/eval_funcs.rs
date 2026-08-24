@@ -287,11 +287,9 @@ const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
 const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
     EvalFuncDef {
         data: EvalFuncData {
-            api_handler: method_handlers
-                .as_raw()
+            api_handler: (&raw const method_handlers)
                 .cast::<MsgpackRpcRequestHandler>()
-                .wrapping_add(row)
-                .cast_const(),
+                .wrapping_add(row),
         },
         ..builtin(name, argc, argc, BASE_NONE, Some(api_wrapper))
     }
@@ -367,7 +365,7 @@ fn imports(out: &mut String, rows: &[Builtin], symbols: &Symbols) -> Result<(), 
     out.push_str("use core::ffi::CStr;\n");
     out.push_str("use core::ptr;\n\n");
     out.push_str("use crate::api::private::dispatch::method_handlers;\n");
-    out.push_str("use crate::global_cell::GlobalCell;\n");
+    out.push_str("use crate::global_cell::ConstTable;\n");
     for (module, names) in &by_module {
         writeln!(
             out,
@@ -488,7 +486,7 @@ pub fn generate(
         out,
         "\n/// Every builtin Vimscript function there is, plus the blank row\n\
          /// that ends the table.\n\
-         pub(crate) static BUILTINS: GlobalCell<[EvalFuncDef; {}]> = GlobalCell::new(table());\n\
+         pub(crate) static BUILTINS: ConstTable<[EvalFuncDef; {}]> = ConstTable::new(table());\n\
          \n\
          /// The table, spliced together from the generated parts.\n\
          const fn table() -> [EvalFuncDef; {}] {{\n\

@@ -585,7 +585,7 @@ pub unsafe fn is_loclist_cmd(cmdidx: c_int) -> bool {
     if cmdidx < 0 || cmdidx >= CMD_SIZE as c_int {
         return false;
     }
-    unsafe { *(*cmdnames.ptr())[cmdidx as usize].cmd_name as c_int == 'l' as c_int }
+    unsafe { *cmdnames[cmdidx as usize].cmd_name as c_int == 'l' as c_int }
 }
 
 /// Is this one of the mapping commands? Asked by the argument scan, which
@@ -594,7 +594,7 @@ pub unsafe fn is_map_cmd(cmdidx: cmdidx_T) -> bool {
     if (cmdidx as c_int) < 0 {
         return false;
     }
-    let func: ex_func_T = unsafe { (*cmdnames.ptr())[cmdidx as usize].cmd_func };
+    let func: ex_func_T = cmdnames[cmdidx as usize].cmd_func;
     ex_func_is(func, ex_map)
         || ex_func_is(func, ex_unmap)
         || ex_func_is(func, ex_mapclear)

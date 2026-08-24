@@ -27,11 +27,11 @@ pub unsafe fn key_dict_keymap_get_field(str: *const c_char, len: size_t) -> *mut
         b"replace_keycodes" => 8,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = keymap_table.ptr().cast();
+    let table: *mut KeySetLink = keymap_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static ns_opts_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static ns_opts_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_ns_opts;
     [key(c"wins", offset_of!(K, wins), TAG_ARRAY, 1), END]
 });
@@ -46,11 +46,11 @@ pub unsafe fn key_dict_ns_opts_get_field(str: *const c_char, len: size_t) -> *mu
         b"wins" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = ns_opts_table.ptr().cast();
+    let table: *mut KeySetLink = ns_opts_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static open_term_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
+pub static open_term_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_open_term;
     [
         key(c"on_input", offset_of!(K, on_input), TAG_LUAREF, 1),
@@ -70,11 +70,11 @@ pub unsafe fn key_dict_open_term_get_field(str: *const c_char, len: size_t) -> *
         b"force_crlf" => 1,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = open_term_table.ptr().cast();
+    let table: *mut KeySetLink = open_term_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static option_table: GlobalCell<[KeySetLink; 5]> = GlobalCell::new({
+pub static option_table: ConstTable<[KeySetLink; 5]> = ConstTable::new({
     type K = KeyDict_option;
     [
         key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
@@ -98,11 +98,11 @@ pub unsafe fn key_dict_option_get_field(str: *const c_char, len: size_t) -> *mut
         b"filetype" => 3,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = option_table.ptr().cast();
+    let table: *mut KeySetLink = option_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static redraw_table: GlobalCell<[KeySetLink; 11]> = GlobalCell::new({
+pub static redraw_table: ConstTable<[KeySetLink; 11]> = ConstTable::new({
     type K = KeyDict_redraw;
     [
         key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
@@ -143,11 +143,11 @@ pub unsafe fn key_dict_redraw_get_field(str: *const c_char, len: size_t) -> *mut
         b"statuscolumn" => 9,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = redraw_table.ptr().cast();
+    let table: *mut KeySetLink = redraw_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static runtime_table: GlobalCell<[KeySetLink; 3]> = GlobalCell::new({
+pub static runtime_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_runtime;
     [
         key(c"is_lua", offset_of!(K, is_lua), TAG_BOOLEAN, -1),
@@ -167,11 +167,11 @@ pub unsafe fn key_dict_runtime_get_field(str: *const c_char, len: size_t) -> *mu
         b"do_source" => 1,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = runtime_table.ptr().cast();
+    let table: *mut KeySetLink = runtime_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static set_decoration_provider_table: GlobalCell<[KeySetLink; 10]> = GlobalCell::new({
+pub static set_decoration_provider_table: ConstTable<[KeySetLink; 10]> = ConstTable::new({
     type K = KeyDict_set_decoration_provider;
     [
         key(c"on_buf", offset_of!(K, on_buf), TAG_LUAREF, 1),
@@ -218,11 +218,11 @@ pub unsafe fn key_dict_set_decoration_provider_get_field(
         b"_on_conceal_line" => 8,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = set_decoration_provider_table.ptr().cast();
+    let table: *mut KeySetLink = set_decoration_provider_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static set_extmark_table: GlobalCell<[KeySetLink; 36]> = GlobalCell::new({
+pub static set_extmark_table: ConstTable<[KeySetLink; 36]> = ConstTable::new({
     type K = KeyDict_set_extmark;
     [
         key(c"id", offset_of!(K, id), TAG_INTEGER, 1),
@@ -372,11 +372,11 @@ pub unsafe fn key_dict_set_extmark_get_field(str: *const c_char, len: size_t) ->
         b"virt_text_repeat_linebreak" => 34,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = set_extmark_table.ptr().cast();
+    let table: *mut KeySetLink = set_extmark_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static tabpage_config_table: GlobalCell<[KeySetLink; 2]> = GlobalCell::new({
+pub static tabpage_config_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_tabpage_config;
     [key(c"after", offset_of!(K, after), TAG_INTEGER, 1), END]
 });
@@ -394,11 +394,11 @@ pub unsafe fn key_dict_tabpage_config_get_field(
         b"after" => 0,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = tabpage_config_table.ptr().cast();
+    let table: *mut KeySetLink = tabpage_config_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static user_command_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new({
+pub static user_command_table: ConstTable<[KeySetLink; 13]> = ConstTable::new({
     type K = KeyDict_user_command;
     [
         key(c"bar", offset_of!(K, bar), TAG_BOOLEAN, 1),
@@ -438,11 +438,11 @@ pub unsafe fn key_dict_user_command_get_field(str: *const c_char, len: size_t) -
         b"keepscript" => 11,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = user_command_table.ptr().cast();
+    let table: *mut KeySetLink = user_command_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static win_config_table: GlobalCell<[KeySetLink; 25]> = GlobalCell::new({
+pub static win_config_table: ConstTable<[KeySetLink; 25]> = ConstTable::new({
     type K = KeyDict_win_config;
     [
         key(c"col", offset_of!(K, col), TAG_FLOAT, 1),
@@ -511,11 +511,11 @@ pub unsafe fn key_dict_win_config_get_field(str: *const c_char, len: size_t) -> 
         b"_cmdline_offset" => 23,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = win_config_table.ptr().cast();
+    let table: *mut KeySetLink = win_config_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static win_text_height_table: GlobalCell<[KeySetLink; 6]> = GlobalCell::new({
+pub static win_text_height_table: ConstTable<[KeySetLink; 6]> = ConstTable::new({
     type K = KeyDict_win_text_height;
     [
         key(c"end_row", offset_of!(K, end_row), TAG_INTEGER, 1),
@@ -544,11 +544,11 @@ pub unsafe fn key_dict_win_text_height_get_field(
         b"start_vcol" => 4,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = win_text_height_table.ptr().cast();
+    let table: *mut KeySetLink = win_text_height_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }
 
-pub static xdl_diff_table: GlobalCell<[KeySetLink; 13]> = GlobalCell::new({
+pub static xdl_diff_table: ConstTable<[KeySetLink; 13]> = ConstTable::new({
     type K = KeyDict_xdl_diff;
     [
         key(c"ctxlen", offset_of!(K, ctxlen), TAG_INTEGER, 1),
@@ -623,6 +623,6 @@ pub unsafe fn key_dict_xdl_diff_get_field(str: *const c_char, len: size_t) -> *m
         b"ignore_whitespace_change_at_eol" => 11,
         _ => return ptr::null_mut(),
     };
-    let table: *mut KeySetLink = xdl_diff_table.ptr().cast();
+    let table: *mut KeySetLink = xdl_diff_table.as_ptr().cast_mut();
     table.wrapping_add(index)
 }

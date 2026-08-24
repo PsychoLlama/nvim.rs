@@ -36,7 +36,7 @@ use ::libc::strlen;
 pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
-        let name = (*cmdnames.ptr())[ea.cmdidx as usize].cmd_name;
+        let name = cmdnames[ea.cmdidx as usize].cmd_name;
         let action = match *name.add(2) as u8 {
             // `:isearch`/`:dsearch` show the first match; `:psearch` goes
             // to it in the preview window.
@@ -104,10 +104,7 @@ pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_ptag(eap: *mut exarg_T) {
     unsafe {
         g_do_tagpreview.set(p_pvh.get() as c_int);
-        ex_tag_cmd(
-            eap,
-            (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name.add(1),
-        );
+        ex_tag_cmd(eap, cmdnames[(*eap).cmdidx as usize].cmd_name.add(1));
     }
 }
 
@@ -118,10 +115,7 @@ pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
         postponed_split.set(-1);
         postponed_split_flags.set((*cmdmod.ptr()).cmod_split);
         postponed_split_tab.set((*cmdmod.ptr()).cmod_tab);
-        ex_tag_cmd(
-            eap,
-            (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name.add(1),
-        );
+        ex_tag_cmd(eap, cmdnames[(*eap).cmdidx as usize].cmd_name.add(1));
         postponed_split_flags.set(0);
         postponed_split_tab.set(0);
     }
@@ -130,7 +124,7 @@ pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
 pub(crate) unsafe fn ex_tag(eap: *mut exarg_T) {
     unsafe {
-        ex_tag_cmd(eap, (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name);
+        ex_tag_cmd(eap, cmdnames[(*eap).cmdidx as usize].cmd_name);
     }
 }
 

@@ -705,16 +705,11 @@ fn emit_index(out: &mut String, opts: &[Opt]) {
         "/// `BufOptIndex` -> `OptIndex`: which option a buffer-local row belongs to."
     )
     .unwrap();
-    writeln!(
-        out,
-        "pub static buf_opt_idx: GlobalCell<[OptIndex; {}]> = GlobalCell::new([",
-        buf.len()
-    )
-    .unwrap();
+    writeln!(out, "pub static buf_opt_idx: [OptIndex; {}] = [", buf.len()).unwrap();
     for o in &buf {
         writeln!(out, "    {},", o.index_const()).unwrap();
     }
-    writeln!(out, "]);").unwrap();
+    writeln!(out, "];").unwrap();
 }
 
 /// The per-option flag enums: the bits a string option's parsed value is

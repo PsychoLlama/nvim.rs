@@ -149,7 +149,7 @@ pub unsafe fn parse_cmdline(
 
             ea.forceit = parse_bang(eap, &raw mut p) as c_int;
             if !is_user_cmd(ea.cmdidx) {
-                ea.argt = (*cmdnames.ptr())[ea.cmdidx as usize].cmd_argt;
+                ea.argt = cmdnames[ea.cmdidx as usize].cmd_argt;
             }
             // `:!` keeps the space: `:!! -l` needs it.
             ea.arg = if ea.cmdidx as c_int == CMD_bang as c_int {
@@ -307,7 +307,7 @@ pub(crate) unsafe fn execute_cmd0(
         } else {
             ea.errmsg = ptr::null_mut();
             if preview {
-                *retv = (*cmdnames.ptr())[ea.cmdidx as usize]
+                *retv = cmdnames[ea.cmdidx as usize]
                     .cmd_preview_func
                     .expect("a command with ExArgt::PREVIEW has a preview callback")(
                     eap,
@@ -315,7 +315,7 @@ pub(crate) unsafe fn execute_cmd0(
                     cmdpreview_get_bufnr(),
                 );
             } else {
-                (*cmdnames.ptr())[ea.cmdidx as usize]
+                cmdnames[ea.cmdidx as usize]
                     .cmd_func
                     .expect("every command in the table has a handler")(eap);
             }

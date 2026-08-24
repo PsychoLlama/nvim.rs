@@ -64,7 +64,7 @@ pub unsafe fn find_internal_func(name: *const c_char) -> *const EvalFuncDef {
             slice::from_raw_parts(name.cast::<u8>(), len)
         };
         match builtin_index(key) {
-            Some(row) => BUILTINS.ptr().cast::<EvalFuncDef>().add(row),
+            Some(row) => BUILTINS.as_ptr().add(row),
             None => ptr::null::<EvalFuncDef>(),
         }
     }
@@ -223,7 +223,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
         }
 
         *BUILTIN_IDX.ptr() += 1;
-        let key = (*BUILTINS.ptr())[BUILTIN_IDX.get() as usize].name;
+        let key = BUILTINS[BUILTIN_IDX.get() as usize].name;
         if key.is_null() {
             return ptr::null_mut();
         }
@@ -231,7 +231,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
         let buf = IObuff.ptr();
         ptr::copy_nonoverlapping(key, buf as *mut c_char, key_len);
         (*buf)[key_len] = b'(' as c_char;
-        if (*BUILTINS.ptr())[BUILTIN_IDX.get() as usize].max_argc == 0 {
+        if BUILTINS[BUILTIN_IDX.get() as usize].max_argc == 0 {
             (*buf)[key_len + 1] = b')' as c_char;
             (*buf)[key_len + 2] = NUL as c_char;
         } else {

@@ -441,7 +441,7 @@ pub unsafe fn handle_nvim_parse_cmd(
     let dict = unsafe {
         api_keydict_to_dict(
             (&raw mut rv).cast(),
-            cmd_table.ptr().cast(),
+            cmd_table.as_ptr().cast_mut(),
             12 as size_t,
             arena,
         )
