@@ -32,15 +32,16 @@ use crate::global_cell::GlobalCell;
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     curbuf, current_sctx, curwin, e_invarg, e_sandbox, e_secure, e_unknown_option2,
-    e_unsupportedoption, p_flp, p_mouse, p_wbr, sandbox, secure, starting, t_colors,
+    e_unsupportedoption, sandbox, secure, starting, t_colors,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::mouse::setmouse;
 
 use crate::options::{
-    find_option_index, kOptAutocomplete, kOptAutoread, kOptFsync, kOptInvalid, kOptScrolloff,
-    kOptSidescrolloff, kOptUndolevels, options,
+    find_option_index, kOptAutocomplete, kOptAutoread, kOptFiletype, kOptFormatlistpat, kOptFsync,
+    kOptInvalid, kOptMouse, kOptScrolloff, kOptSidescrolloff, kOptSpelllang, kOptSyntax,
+    kOptUndolevels, kOptWinbar, options,
 };
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, snprintf};
@@ -52,7 +53,7 @@ use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 
 use super::{
-    NIL_OPTVAL, NO_LOCAL_UNDOLEVEL, NUMBUFLEN, SID_NONE, boolean_optval, check_redraw,
+    NIL_OPTVAL, NO_LOCAL_UNDOLEVEL, NUMBUFLEN, OptSlot, SID_NONE, boolean_optval, check_redraw,
     do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp, get_varp_scope,
     insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll,
     kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean,
@@ -385,7 +386,7 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn did_set_option(
     opt_idx: OptIndex,
-    varp: *mut c_void,
+    varp: OptSlot,
     old_value: OptVal,
     new_value: OptVal,
     opt_flags: OptionSetFlags,
@@ -405,7 +406,7 @@ pub(crate) unsafe fn did_set_option(
     // the table, and `errbuf` writable for `errbuflen` bytes.
     unsafe {
         let mut args = optset_T {
-            os_varp: varp,
+            os_varp: varp.addr(),
             os_idx: opt_idx,
             os_flags: opt_flags,
             os_oldval: old_value.data,
@@ -428,7 +429,7 @@ pub(crate) unsafe fn did_set_option(
         {
             errmsg = e_secure.as_ptr();
         } else if new_value.type_0 == kOptValTypeString
-            && check_illegal_path_names(CStr::from_ptr(*varp.cast::<*mut c_char>()), opt.flags)
+            && check_illegal_path_names(CStr::from_ptr(*varp.string_var()), opt.flags)
         {
             errmsg = e_invarg.as_ptr();
         } else if let Some(did_set_cb) = opt.opt_did_set_cb {
@@ -489,33 +490,28 @@ pub(crate) unsafe fn did_set_option(
         }
 
         // The autocommands go last, once every flag they might read is set.
-        if varp == (&raw mut (*curbuf.get()).b_p_syn).cast::<c_void>() {
-            do_syntax_autocmd(curbuf.get(), value_changed);
-        } else if varp == (&raw mut (*curbuf.get()).b_p_ft).cast::<c_void>() {
+        match opt_idx {
+            kOptSyntax => do_syntax_autocmd(curbuf.get(), value_changed),
             // A modeline only forces the FileType autocommand when the
             // filetype really changed.
-            if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed {
+            kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
                 do_filetype_autocmd(curbuf.get(), value_changed);
             }
-        } else if varp == (&raw mut (*(*curwin.get()).w_s).b_p_spl).cast::<c_void>() {
-            do_spelllang_source(curwin.get());
+            kOptSpelllang => do_spelllang_source(curwin.get()),
+            _ => {}
         }
 
         // 'ruler', 'showcmd', 'columns' and 'laststatus' all move it.
         comp_col();
 
-        if varp == p_mouse.ptr().cast::<c_void>() {
-            setmouse();
-        } else if (varp == p_flp.ptr().cast::<c_void>()
-            || varp == (&raw mut (*curbuf.get()).b_p_flp).cast::<c_void>())
-            && (*curwin.get()).w_briopt_list != 0
-        {
+        match opt_idx {
+            kOptMouse => setmouse(),
             // 'formatlistpat' is what 'breakindentopt' list mode indents by.
-            redraw_all_later(UPD_NOT_VALID);
-        } else if varp == p_wbr.ptr().cast::<c_void>()
-            || varp == (&raw mut (*curwin.get()).w_onebuf_opt.wo_wbr).cast::<c_void>()
-        {
-            set_winbar(true);
+            kOptFormatlistpat if (*curwin.get()).w_briopt_list != 0 => {
+                redraw_all_later(UPD_NOT_VALID);
+            }
+            kOptWinbar => set_winbar(true),
+            _ => {}
         }
 
         if (*curwin.get()).w_curswant != MAXCOL as c_int

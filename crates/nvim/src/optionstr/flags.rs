@@ -173,7 +173,7 @@ pub(crate) unsafe fn did_set_option_listflag(
 pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_int {
     let opt = get_option(idx);
     let varp = if varp.is_null() {
-        option_var(idx).cast::<*mut c_char>()
+        option_var(idx).string_var()
     } else {
         varp
     };

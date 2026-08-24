@@ -21,12 +21,13 @@ use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::get_special_key_code;
-use crate::main::{
-    NameBuff, curbuf, curwin, escape_chars, p_bdir, p_cdpath, p_dir, p_ft, p_keymap, p_path, p_pp,
-    p_rtp, p_sps, p_syn, p_tags, p_vdir,
-};
+use crate::main::{NameBuff, curbuf, curwin, escape_chars};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::options::{kOptAleph, kOptCount, kOptInvalid};
+use crate::options::{
+    kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,
+    kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
+    kOptViewdir,
+};
 use crate::os::cshim::strncmp;
 use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
@@ -72,7 +73,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
             return ptr::null_mut();
         }
         let val = if val.is_null() {
-            *option_var(opt_idx).cast::<*mut c_char>()
+            *option_var(opt_idx).string_var()
         } else {
             val
         };
@@ -80,16 +81,14 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
         if val.is_null() || strlen(val) > MAXPATHL as size_t {
             return ptr::null_mut();
         }
-        let var = option_var(opt_idx).cast::<*mut c_char>();
         // 'path' and 'tags' hold escaped file names, so their separators
         // must survive the expansion.
-        let esc = var == p_tags.ptr() || var == p_path.ptr();
+        let esc = matches!(opt_idx, kOptTags | kOptPath);
         // 'spellsuggest' items are `file:<name>`; only that prefix's tail
         // is a path.
-        let one_prefix = if var == p_sps.ptr() {
-            c"file:".as_ptr() as *mut c_char
-        } else {
-            ptr::null_mut()
+        let one_prefix = match opt_idx {
+            kOptSpellsuggest => c"file:".as_ptr() as *mut c_char,
+            _ => ptr::null_mut(),
         };
         expand_env_esc(
             val,
@@ -196,16 +195,15 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         START_COL.set(p.add(1).offset_from((*xp).xp_line) as c_int);
 
         // Three options reuse another command's completion wholesale.
-        let var = option_var(opt_idx);
-        for (cell, context) in [
-            (p_syn.ptr().cast::<c_void>(), ExpandContext::Ownsyntax),
-            (p_ft.ptr().cast::<c_void>(), ExpandContext::Filetype),
-            (p_keymap.ptr().cast::<c_void>(), ExpandContext::Keymap),
-        ] {
-            if var == cell {
-                (*xp).xp_context = context;
-                return;
-            }
+        let borrowed = match opt_idx {
+            kOptSyntax => Some(ExpandContext::Ownsyntax),
+            kOptFiletype => Some(ExpandContext::Filetype),
+            kOptKeymap => Some(ExpandContext::Keymap),
+            _ => None,
+        };
+        if let Some(context) = borrowed {
+            (*xp).xp_context = context;
+            return;
         }
 
         if subtract {
@@ -237,7 +235,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
             (*xp).xp_pattern = argend;
         }
         // 'spellsuggest' takes `file:<name>`, whose tail is a file name.
-        if var == p_sps.ptr().cast::<c_void>() {
+        if opt_idx == kOptSpellsuggest {
             if strncmp((*xp).xp_pattern, c"file:".as_ptr(), 5) == 0 {
                 (*xp).xp_pattern = (*xp).xp_pattern.add(5);
             } else if get_option(IDX.get()).opt_expand_cb.is_some() {
@@ -357,22 +355,20 @@ unsafe fn take_option_name(
 unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t) {
     // SAFETY: the caller's expansion state, and the option table.
     unsafe {
-        let var = option_var(opt_idx).cast::<c_char>();
-        let directories = [
-            p_bdir.ptr().cast::<c_char>(),
-            p_dir.ptr().cast::<c_char>(),
-            p_path.ptr().cast::<c_char>(),
-            p_pp.ptr().cast::<c_char>(),
-            p_rtp.ptr().cast::<c_char>(),
-            p_cdpath.ptr().cast::<c_char>(),
-            p_vdir.ptr().cast::<c_char>(),
-        ];
         // 'path', 'cdpath' and 'tags' need three backslashes for a space,
         // because their own parsers unescape one layer first.
-        let three = var == p_path.ptr().cast::<c_char>()
-            || var == p_cdpath.ptr().cast::<c_char>()
-            || var == p_tags.ptr().cast::<c_char>();
-        (*xp).xp_context = if directories.contains(&var) {
+        let three = matches!(opt_idx, kOptPath | kOptCdpath | kOptTags);
+        let directories = matches!(
+            opt_idx,
+            kOptBackupdir
+                | kOptDirectory
+                | kOptPath
+                | kOptPackpath
+                | kOptRuntimepath
+                | kOptCdpath
+                | kOptViewdir
+        );
+        (*xp).xp_context = if directories {
             ExpandContext::Directories
         } else {
             ExpandContext::Files
@@ -648,7 +644,7 @@ pub(crate) unsafe fn expand_string_setting(
 
         let set_arg = (*xp).xp_line.offset(START_COL.get() as isize);
         let mut args = optexpand_T {
-            oe_varp: get_varp_scope(opt_idx, FLAGS.get()).cast::<c_char>(),
+            oe_varp: get_varp_scope(opt_idx, FLAGS.get()).addr().cast::<c_char>(),
             oe_idx: opt_idx,
             oe_opt_value: escaped,
             oe_append: APPEND.get(),
@@ -684,8 +680,8 @@ pub(crate) unsafe fn expand_setting_subtract(
         if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
             return expand_old_setting(numMatches, matches);
         }
-        let value = *get_varp_scope_from(opt_idx, FLAGS.get(), curbuf.get(), curwin.get())
-            .cast::<*mut c_char>();
+        let value =
+            *get_varp_scope_from(opt_idx, FLAGS.get(), curbuf.get(), curwin.get()).string_var();
         let flags = get_option(opt_idx).flags;
 
         if flags & kOptFlagComma as uint32_t != 0 {

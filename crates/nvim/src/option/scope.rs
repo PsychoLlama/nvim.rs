@@ -31,7 +31,8 @@ use crate::types::{
 };
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, get_option, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin, option_default_var,
+    NO_LOCAL_UNDOLEVEL, get_option, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_default_var,
 };
 
 /// The signed distance from a field of `w_onebuf_opt` to the same field of
@@ -50,18 +51,129 @@ const ALLBUF_OFFSET: isize = {
     all - one
 };
 
+/// An option's storage in one scope, with the type its row declares.
+///
+/// The plumbing used to answer a bare `*mut c_void` and let every reader
+/// re-derive the type from the table — the storage indirection that pinned
+/// an option's field to a raw scalar whatever its struct's `repr`, and made
+/// "which variable is this" an address comparison. The arm carries the
+/// type, so the field addresses below need no `.cast()` and a field whose
+/// type disagrees with its option's does not compile.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum OptSlot {
+    /// The option has no variable in this scope.
+    None,
+    /// A boolean option's tri-state `int`: 0 false, 1 true, -1 unset here.
+    Boolean(*mut c_int),
+    /// A number option's `OptInt`.
+    Number(*mut OptInt),
+    /// A string option's `char *`. Never null; an unset one holds the
+    /// shared empty string.
+    String(*mut *mut c_char),
+}
+
+impl From<*mut c_int> for OptSlot {
+    fn from(var: *mut c_int) -> Self {
+        OptSlot::Boolean(var)
+    }
+}
+
+impl From<*mut OptInt> for OptSlot {
+    fn from(var: *mut OptInt) -> Self {
+        OptSlot::Number(var)
+    }
+}
+
+impl From<*mut *mut c_char> for OptSlot {
+    fn from(var: *mut *mut c_char) -> Self {
+        OptSlot::String(var)
+    }
+}
+
+impl OptSlot {
+    /// The slot a raw `varp` is, given the option whose variable it is.
+    /// The boundary in the other direction, for the C-shaped frames that
+    /// still carry a `void *`.
+    pub(crate) fn from_raw(opt_idx: OptIndex, varp: *mut c_void) -> Self {
+        if varp.is_null() {
+            return OptSlot::None;
+        }
+        match super::option_get_type(opt_idx) {
+            kOptValTypeBoolean => OptSlot::Boolean(varp.cast::<c_int>()),
+            kOptValTypeNumber => OptSlot::Number(varp.cast::<OptInt>()),
+            kOptValTypeString => OptSlot::String(varp.cast::<*mut c_char>()),
+            type_0 => unreachable!("option value type {type_0}"),
+        }
+    }
+
+    /// The address, for `optset_T.os_varp` and `optexpand_T.oe_varp` — the
+    /// two frames handed to the `did_set_*`/`opt_expand_cb` callbacks,
+    /// which are still shaped the way C left them.
+    pub(crate) fn addr(self) -> *mut c_void {
+        match self {
+            OptSlot::None => ptr::null_mut(),
+            OptSlot::Boolean(var) => var.cast::<c_void>(),
+            OptSlot::Number(var) => var.cast::<c_void>(),
+            OptSlot::String(var) => var.cast::<c_void>(),
+        }
+    }
+
+    /// Whether the option has no variable in this scope.
+    pub(crate) fn is_none(self) -> bool {
+        matches!(self, OptSlot::None)
+    }
+
+    /// A boolean option's variable. The callers that reach for one have
+    /// already established the option's type — from `option_has_type`, from
+    /// the `did_set_*` they are, or from the row itself — and the table's
+    /// compile-time assertion is what ties that type to this arm.
+    pub(crate) fn boolean_var(self) -> *mut c_int {
+        match self {
+            OptSlot::Boolean(var) => var,
+            _ => unreachable!("the option is not a boolean option"),
+        }
+    }
+
+    /// A number option's variable. See [`boolean_var`](Self::boolean_var).
+    pub(crate) fn number_var(self) -> *mut OptInt {
+        match self {
+            OptSlot::Number(var) => var,
+            _ => unreachable!("the option is not a number option"),
+        }
+    }
+
+    /// A string option's variable. See [`boolean_var`](Self::boolean_var).
+    pub(crate) fn string_var(self) -> *mut *mut c_char {
+        match self {
+            OptSlot::String(var) => var,
+            _ => unreachable!("the option is not a string option"),
+        }
+    }
+
+    /// The same field of the window's *other* `winopt_T`. See
+    /// [`ALLBUF_OFFSET`].
+    fn byte_offset(self, delta: isize) -> Self {
+        match self {
+            OptSlot::None => OptSlot::None,
+            OptSlot::Boolean(var) => OptSlot::Boolean(var.wrapping_byte_offset(delta)),
+            OptSlot::Number(var) => OptSlot::Number(var.wrapping_byte_offset(delta)),
+            OptSlot::String(var) => OptSlot::String(var.wrapping_byte_offset(delta)),
+        }
+    }
+}
+
 /// Where an option keeps its global value: the variable its row names, or —
 /// for an immutable option, which has nowhere to keep one — its own current
 /// default, read in place.
 ///
 /// This is the only place [`OptVar`] becomes an address.
-pub(crate) fn option_var(opt_idx: OptIndex) -> *mut c_void {
+pub(crate) fn option_var(opt_idx: OptIndex) -> OptSlot {
     match get_option(opt_idx).var {
-        OptVar::NoGlobal => ptr::null_mut(),
-        OptVar::Boolean(cell) => cell.ptr().cast(),
-        OptVar::Number(cell) => cell.ptr().cast(),
-        OptVar::String(cell) => cell.ptr().cast(),
-        OptVar::OwnDefault => option_default_var(opt_idx),
+        OptVar::NoGlobal => OptSlot::None,
+        OptVar::Boolean(cell) => OptSlot::Boolean(cell.ptr()),
+        OptVar::Number(cell) => OptSlot::Number(cell.ptr()),
+        OptVar::String(cell) => OptSlot::String(cell.ptr()),
+        OptVar::OwnDefault => OptSlot::from_raw(opt_idx, option_default_var(opt_idx)),
     }
 }
 
@@ -120,10 +232,10 @@ pub(crate) fn option_scope_idx(opt_idx: OptIndex, scope: OptScope) -> ssize_t {
 /// # Safety
 ///
 /// `local` must point at the option's local string variable.
-unsafe fn local_str(local: *mut *mut c_char, global: *mut c_void) -> *mut c_void {
+unsafe fn local_str(local: *mut *mut c_char, global: OptSlot) -> OptSlot {
     // SAFETY: an option's string variable is never null.
     if unsafe { **local } != 0 {
-        local.cast::<c_void>()
+        OptSlot::String(local)
     } else {
         global
     }
@@ -135,10 +247,10 @@ unsafe fn local_str(local: *mut *mut c_char, global: *mut c_void) -> *mut c_void
 /// # Safety
 ///
 /// `local` must point at the option's local variable.
-unsafe fn local_int(local: *mut c_int, global: *mut c_void) -> *mut c_void {
+unsafe fn local_int(local: *mut c_int, global: OptSlot) -> OptSlot {
     // SAFETY: the caller's pointer is the option's local variable.
     if unsafe { *local } >= 0 {
-        local.cast::<c_void>()
+        OptSlot::Boolean(local)
     } else {
         global
     }
@@ -149,10 +261,10 @@ unsafe fn local_int(local: *mut c_int, global: *mut c_void) -> *mut c_void {
 /// # Safety
 ///
 /// `local` must point at the option's local variable.
-unsafe fn local_optint(local: *mut OptInt, global: *mut c_void) -> *mut c_void {
+unsafe fn local_optint(local: *mut OptInt, global: OptSlot) -> OptSlot {
     // SAFETY: the caller's pointer is the option's local variable.
     if unsafe { *local } >= 0 {
-        local.cast::<c_void>()
+        OptSlot::Number(local)
     } else {
         global
     }
@@ -169,57 +281,54 @@ pub(crate) unsafe fn get_varp_scope_from(
     opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
-) -> *mut c_void {
+) -> OptSlot {
     // SAFETY: the caller's pointers are live.
     unsafe {
         if opt_flags.has(OptionSetFlags::GLOBAL) && !option_is_global_only(opt_idx) {
             // A window-local option's global copy is its own field in the
             // window's second `winopt_T`, not the table's `var`.
             if option_is_window_local(opt_idx) {
-                return get_varp_from(opt_idx, buf, win)
-                    .cast::<c_char>()
-                    .offset(ALLBUF_OFFSET)
-                    .cast::<c_void>();
+                return get_varp_from(opt_idx, buf, win).byte_offset(ALLBUF_OFFSET);
             }
             return option_var(opt_idx);
         }
         if opt_flags.has(OptionSetFlags::LOCAL) && option_is_global_local(opt_idx) {
             // The local variable itself, sentinel and all.
             return match opt_idx {
-                kOptFormatprg => (&raw mut (*buf).b_p_fp).cast(),
-                kOptFsync => (&raw mut (*buf).b_p_fs).cast(),
-                kOptFindfunc => (&raw mut (*buf).b_p_ffu).cast(),
-                kOptErrorformat => (&raw mut (*buf).b_p_efm).cast(),
-                kOptGrepformat => (&raw mut (*buf).b_p_gefm).cast(),
-                kOptGrepprg => (&raw mut (*buf).b_p_gp).cast(),
-                kOptMakeprg => (&raw mut (*buf).b_p_mp).cast(),
-                kOptEqualprg => (&raw mut (*buf).b_p_ep).cast(),
-                kOptKeywordprg => (&raw mut (*buf).b_p_kp).cast(),
-                kOptPath => (&raw mut (*buf).b_p_path).cast(),
-                kOptAutocomplete => (&raw mut (*buf).b_p_ac).cast(),
-                kOptAutoread => (&raw mut (*buf).b_p_ar).cast(),
-                kOptTags => (&raw mut (*buf).b_p_tags).cast(),
-                kOptTagcase => (&raw mut (*buf).b_p_tc).cast(),
-                kOptSidescrolloff => (&raw mut (*win).w_onebuf_opt.wo_siso).cast(),
-                kOptScrolloff => (&raw mut (*win).w_onebuf_opt.wo_so).cast(),
-                kOptDefine => (&raw mut (*buf).b_p_def).cast(),
-                kOptInclude => (&raw mut (*buf).b_p_inc).cast(),
-                kOptCompleteopt => (&raw mut (*buf).b_p_cot).cast(),
-                kOptDictionary => (&raw mut (*buf).b_p_dict).cast(),
-                kOptDiffanchors => (&raw mut (*buf).b_p_dia).cast(),
-                kOptThesaurus => (&raw mut (*buf).b_p_tsr).cast(),
-                kOptThesaurusfunc => (&raw mut (*buf).b_p_tsrfu).cast(),
-                kOptTagfunc => (&raw mut (*buf).b_p_tfu).cast(),
-                kOptShowbreak => (&raw mut (*win).w_onebuf_opt.wo_sbr).cast(),
-                kOptStatusline => (&raw mut (*win).w_onebuf_opt.wo_stl).cast(),
-                kOptWinbar => (&raw mut (*win).w_onebuf_opt.wo_wbr).cast(),
-                kOptUndolevels => (&raw mut (*buf).b_p_ul).cast(),
-                kOptLispwords => (&raw mut (*buf).b_p_lw).cast(),
-                kOptBackupcopy => (&raw mut (*buf).b_p_bkc).cast(),
-                kOptMakeencoding => (&raw mut (*buf).b_p_menc).cast(),
-                kOptFillchars => (&raw mut (*win).w_onebuf_opt.wo_fcs).cast(),
-                kOptListchars => (&raw mut (*win).w_onebuf_opt.wo_lcs).cast(),
-                kOptVirtualedit => (&raw mut (*win).w_onebuf_opt.wo_ve).cast(),
+                kOptFormatprg => OptSlot::from(&raw mut (*buf).b_p_fp),
+                kOptFsync => OptSlot::from(&raw mut (*buf).b_p_fs),
+                kOptFindfunc => OptSlot::from(&raw mut (*buf).b_p_ffu),
+                kOptErrorformat => OptSlot::from(&raw mut (*buf).b_p_efm),
+                kOptGrepformat => OptSlot::from(&raw mut (*buf).b_p_gefm),
+                kOptGrepprg => OptSlot::from(&raw mut (*buf).b_p_gp),
+                kOptMakeprg => OptSlot::from(&raw mut (*buf).b_p_mp),
+                kOptEqualprg => OptSlot::from(&raw mut (*buf).b_p_ep),
+                kOptKeywordprg => OptSlot::from(&raw mut (*buf).b_p_kp),
+                kOptPath => OptSlot::from(&raw mut (*buf).b_p_path),
+                kOptAutocomplete => OptSlot::from(&raw mut (*buf).b_p_ac),
+                kOptAutoread => OptSlot::from(&raw mut (*buf).b_p_ar),
+                kOptTags => OptSlot::from(&raw mut (*buf).b_p_tags),
+                kOptTagcase => OptSlot::from(&raw mut (*buf).b_p_tc),
+                kOptSidescrolloff => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_siso),
+                kOptScrolloff => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_so),
+                kOptDefine => OptSlot::from(&raw mut (*buf).b_p_def),
+                kOptInclude => OptSlot::from(&raw mut (*buf).b_p_inc),
+                kOptCompleteopt => OptSlot::from(&raw mut (*buf).b_p_cot),
+                kOptDictionary => OptSlot::from(&raw mut (*buf).b_p_dict),
+                kOptDiffanchors => OptSlot::from(&raw mut (*buf).b_p_dia),
+                kOptThesaurus => OptSlot::from(&raw mut (*buf).b_p_tsr),
+                kOptThesaurusfunc => OptSlot::from(&raw mut (*buf).b_p_tsrfu),
+                kOptTagfunc => OptSlot::from(&raw mut (*buf).b_p_tfu),
+                kOptShowbreak => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_sbr),
+                kOptStatusline => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_stl),
+                kOptWinbar => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_wbr),
+                kOptUndolevels => OptSlot::from(&raw mut (*buf).b_p_ul),
+                kOptLispwords => OptSlot::from(&raw mut (*buf).b_p_lw),
+                kOptBackupcopy => OptSlot::from(&raw mut (*buf).b_p_bkc),
+                kOptMakeencoding => OptSlot::from(&raw mut (*buf).b_p_menc),
+                kOptFillchars => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fcs),
+                kOptListchars => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_lcs),
+                kOptVirtualedit => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_ve),
                 _ => unreachable!("option {opt_idx} has no local variable"),
             };
         }
@@ -228,7 +337,7 @@ pub(crate) unsafe fn get_varp_scope_from(
 }
 
 /// [`get_varp_scope_from`] for the current buffer and window.
-pub(crate) fn get_varp_scope(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> *mut c_void {
+pub(crate) fn get_varp_scope(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptSlot {
     // SAFETY: `curbuf`/`curwin` are live.
     unsafe { get_varp_scope_from(opt_idx, opt_flags, curbuf.get(), curwin.get()) }
 }
@@ -240,11 +349,7 @@ pub(crate) fn get_varp_scope(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> *m
 ///
 /// `buf` and `win` must be live, and `win->w_s` must be set for the four
 /// 'spell*' options.
-pub(crate) unsafe fn get_varp_from(
-    opt_idx: OptIndex,
-    buf: *mut buf_T,
-    win: *mut win_T,
-) -> *mut c_void {
+pub(crate) unsafe fn get_varp_from(opt_idx: OptIndex, buf: *mut buf_T, win: *mut win_T) -> OptSlot {
     // SAFETY: the caller's pointers are live.
     unsafe {
         let global = option_var(opt_idx);
@@ -283,7 +388,7 @@ pub(crate) unsafe fn get_varp_from(
             // 'undolevels' has a sentinel of its own: 0 is a real value.
             kOptUndolevels => {
                 if (*buf).b_p_ul != NO_LOCAL_UNDOLEVEL as OptInt {
-                    (&raw mut (*buf).b_p_ul).cast()
+                    OptSlot::from(&raw mut (*buf).b_p_ul)
                 } else {
                     global
                 }
@@ -295,126 +400,126 @@ pub(crate) unsafe fn get_varp_from(
             kOptVirtualedit => local_str(&raw mut (*win).w_onebuf_opt.wo_ve, global),
 
             // Window-local.
-            kOptArabic => (&raw mut (*win).w_onebuf_opt.wo_arab).cast(),
-            kOptList => (&raw mut (*win).w_onebuf_opt.wo_list).cast(),
-            kOptSpell => (&raw mut (*win).w_onebuf_opt.wo_spell).cast(),
-            kOptCursorcolumn => (&raw mut (*win).w_onebuf_opt.wo_cuc).cast(),
-            kOptCursorline => (&raw mut (*win).w_onebuf_opt.wo_cul).cast(),
-            kOptCursorlineopt => (&raw mut (*win).w_onebuf_opt.wo_culopt).cast(),
-            kOptColorcolumn => (&raw mut (*win).w_onebuf_opt.wo_cc).cast(),
-            kOptDiff => (&raw mut (*win).w_onebuf_opt.wo_diff).cast(),
-            kOptEventignorewin => (&raw mut (*win).w_onebuf_opt.wo_eiw).cast(),
-            kOptFoldcolumn => (&raw mut (*win).w_onebuf_opt.wo_fdc).cast(),
-            kOptFoldenable => (&raw mut (*win).w_onebuf_opt.wo_fen).cast(),
-            kOptFoldignore => (&raw mut (*win).w_onebuf_opt.wo_fdi).cast(),
-            kOptFoldlevel => (&raw mut (*win).w_onebuf_opt.wo_fdl).cast(),
-            kOptFoldmethod => (&raw mut (*win).w_onebuf_opt.wo_fdm).cast(),
-            kOptFoldminlines => (&raw mut (*win).w_onebuf_opt.wo_fml).cast(),
-            kOptFoldnestmax => (&raw mut (*win).w_onebuf_opt.wo_fdn).cast(),
-            kOptFoldexpr => (&raw mut (*win).w_onebuf_opt.wo_fde).cast(),
-            kOptFoldtext => (&raw mut (*win).w_onebuf_opt.wo_fdt).cast(),
-            kOptFoldmarker => (&raw mut (*win).w_onebuf_opt.wo_fmr).cast(),
-            kOptNumber => (&raw mut (*win).w_onebuf_opt.wo_nu).cast(),
-            kOptRelativenumber => (&raw mut (*win).w_onebuf_opt.wo_rnu).cast(),
-            kOptNumberwidth => (&raw mut (*win).w_onebuf_opt.wo_nuw).cast(),
-            kOptWinfixbuf => (&raw mut (*win).w_onebuf_opt.wo_wfb).cast(),
-            kOptWinfixheight => (&raw mut (*win).w_onebuf_opt.wo_wfh).cast(),
-            kOptWinfixwidth => (&raw mut (*win).w_onebuf_opt.wo_wfw).cast(),
-            kOptPreviewwindow => (&raw mut (*win).w_onebuf_opt.wo_pvw).cast(),
-            kOptLhistory => (&raw mut (*win).w_onebuf_opt.wo_lhi).cast(),
-            kOptRightleft => (&raw mut (*win).w_onebuf_opt.wo_rl).cast(),
-            kOptRightleftcmd => (&raw mut (*win).w_onebuf_opt.wo_rlc).cast(),
-            kOptScroll => (&raw mut (*win).w_onebuf_opt.wo_scr).cast(),
-            kOptSmoothscroll => (&raw mut (*win).w_onebuf_opt.wo_sms).cast(),
-            kOptWrap => (&raw mut (*win).w_onebuf_opt.wo_wrap).cast(),
-            kOptLinebreak => (&raw mut (*win).w_onebuf_opt.wo_lbr).cast(),
-            kOptBreakindent => (&raw mut (*win).w_onebuf_opt.wo_bri).cast(),
-            kOptBreakindentopt => (&raw mut (*win).w_onebuf_opt.wo_briopt).cast(),
-            kOptScrollbind => (&raw mut (*win).w_onebuf_opt.wo_scb).cast(),
-            kOptCursorbind => (&raw mut (*win).w_onebuf_opt.wo_crb).cast(),
-            kOptConcealcursor => (&raw mut (*win).w_onebuf_opt.wo_cocu).cast(),
-            kOptConceallevel => (&raw mut (*win).w_onebuf_opt.wo_cole).cast(),
-            kOptSigncolumn => (&raw mut (*win).w_onebuf_opt.wo_scl).cast(),
-            kOptWinhighlight => (&raw mut (*win).w_onebuf_opt.wo_winhl).cast(),
-            kOptWinblend => (&raw mut (*win).w_onebuf_opt.wo_winbl).cast(),
-            kOptStatuscolumn => (&raw mut (*win).w_onebuf_opt.wo_stc).cast(),
+            kOptArabic => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_arab),
+            kOptList => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_list),
+            kOptSpell => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_spell),
+            kOptCursorcolumn => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_cuc),
+            kOptCursorline => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_cul),
+            kOptCursorlineopt => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_culopt),
+            kOptColorcolumn => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_cc),
+            kOptDiff => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_diff),
+            kOptEventignorewin => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_eiw),
+            kOptFoldcolumn => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fdc),
+            kOptFoldenable => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fen),
+            kOptFoldignore => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fdi),
+            kOptFoldlevel => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fdl),
+            kOptFoldmethod => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fdm),
+            kOptFoldminlines => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fml),
+            kOptFoldnestmax => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fdn),
+            kOptFoldexpr => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fde),
+            kOptFoldtext => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fdt),
+            kOptFoldmarker => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_fmr),
+            kOptNumber => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_nu),
+            kOptRelativenumber => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_rnu),
+            kOptNumberwidth => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_nuw),
+            kOptWinfixbuf => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_wfb),
+            kOptWinfixheight => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_wfh),
+            kOptWinfixwidth => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_wfw),
+            kOptPreviewwindow => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_pvw),
+            kOptLhistory => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_lhi),
+            kOptRightleft => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_rl),
+            kOptRightleftcmd => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_rlc),
+            kOptScroll => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_scr),
+            kOptSmoothscroll => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_sms),
+            kOptWrap => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_wrap),
+            kOptLinebreak => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_lbr),
+            kOptBreakindent => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_bri),
+            kOptBreakindentopt => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_briopt),
+            kOptScrollbind => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_scb),
+            kOptCursorbind => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_crb),
+            kOptConcealcursor => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_cocu),
+            kOptConceallevel => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_cole),
+            kOptSigncolumn => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_scl),
+            kOptWinhighlight => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_winhl),
+            kOptWinblend => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_winbl),
+            kOptStatuscolumn => OptSlot::from(&raw mut (*win).w_onebuf_opt.wo_stc),
 
             // The 'spell*' options belong to the window's syntax block,
             // which a diff or preview window may share with another window.
-            kOptSpellcapcheck => (&raw mut (*(*win).w_s).b_p_spc).cast(),
-            kOptSpellfile => (&raw mut (*(*win).w_s).b_p_spf).cast(),
-            kOptSpelllang => (&raw mut (*(*win).w_s).b_p_spl).cast(),
-            kOptSpelloptions => (&raw mut (*(*win).w_s).b_p_spo).cast(),
+            kOptSpellcapcheck => OptSlot::from(&raw mut (*(*win).w_s).b_p_spc),
+            kOptSpellfile => OptSlot::from(&raw mut (*(*win).w_s).b_p_spf),
+            kOptSpelllang => OptSlot::from(&raw mut (*(*win).w_s).b_p_spl),
+            kOptSpelloptions => OptSlot::from(&raw mut (*(*win).w_s).b_p_spo),
 
             // Buffer-local.
-            kOptAutoindent => (&raw mut (*buf).b_p_ai).cast(),
-            kOptBinary => (&raw mut (*buf).b_p_bin).cast(),
-            kOptBomb => (&raw mut (*buf).b_p_bomb).cast(),
-            kOptBufhidden => (&raw mut (*buf).b_p_bh).cast(),
-            kOptBuftype => (&raw mut (*buf).b_p_bt).cast(),
-            kOptBuflisted => (&raw mut (*buf).b_p_bl).cast(),
-            kOptBusy => (&raw mut (*buf).b_p_busy).cast(),
-            kOptChannel => (&raw mut (*buf).b_p_channel).cast(),
-            kOptCopyindent => (&raw mut (*buf).b_p_ci).cast(),
-            kOptCindent => (&raw mut (*buf).b_p_cin).cast(),
-            kOptCinkeys => (&raw mut (*buf).b_p_cink).cast(),
-            kOptCinoptions => (&raw mut (*buf).b_p_cino).cast(),
-            kOptCinscopedecls => (&raw mut (*buf).b_p_cinsd).cast(),
-            kOptCinwords => (&raw mut (*buf).b_p_cinw).cast(),
-            kOptComments => (&raw mut (*buf).b_p_com).cast(),
-            kOptCommentstring => (&raw mut (*buf).b_p_cms).cast(),
-            kOptComplete => (&raw mut (*buf).b_p_cpt).cast(),
-            kOptCompletefunc => (&raw mut (*buf).b_p_cfu).cast(),
-            kOptOmnifunc => (&raw mut (*buf).b_p_ofu).cast(),
-            kOptEndoffile => (&raw mut (*buf).b_p_eof).cast(),
-            kOptEndofline => (&raw mut (*buf).b_p_eol).cast(),
-            kOptFixendofline => (&raw mut (*buf).b_p_fixeol).cast(),
-            kOptExpandtab => (&raw mut (*buf).b_p_et).cast(),
-            kOptFileencoding => (&raw mut (*buf).b_p_fenc).cast(),
-            kOptFileformat => (&raw mut (*buf).b_p_ff).cast(),
-            kOptFiletype => (&raw mut (*buf).b_p_ft).cast(),
-            kOptFormatoptions => (&raw mut (*buf).b_p_fo).cast(),
-            kOptFormatlistpat => (&raw mut (*buf).b_p_flp).cast(),
-            kOptIminsert => (&raw mut (*buf).b_p_iminsert).cast(),
-            kOptImsearch => (&raw mut (*buf).b_p_imsearch).cast(),
-            kOptInfercase => (&raw mut (*buf).b_p_inf).cast(),
-            kOptIskeyword => (&raw mut (*buf).b_p_isk).cast(),
-            kOptIncludeexpr => (&raw mut (*buf).b_p_inex).cast(),
-            kOptIndentexpr => (&raw mut (*buf).b_p_inde).cast(),
-            kOptIndentkeys => (&raw mut (*buf).b_p_indk).cast(),
-            kOptFormatexpr => (&raw mut (*buf).b_p_fex).cast(),
-            kOptLisp => (&raw mut (*buf).b_p_lisp).cast(),
-            kOptLispoptions => (&raw mut (*buf).b_p_lop).cast(),
-            kOptModeline => (&raw mut (*buf).b_p_ml).cast(),
-            kOptMatchpairs => (&raw mut (*buf).b_p_mps).cast(),
-            kOptModifiable => (&raw mut (*buf).b_p_ma).cast(),
-            kOptModified => (&raw mut (*buf).b_changed).cast(),
-            kOptNrformats => (&raw mut (*buf).b_p_nf).cast(),
-            kOptPreserveindent => (&raw mut (*buf).b_p_pi).cast(),
-            kOptQuoteescape => (&raw mut (*buf).b_p_qe).cast(),
-            kOptReadonly => (&raw mut (*buf).b_p_ro).cast(),
-            kOptScrollback => (&raw mut (*buf).b_p_scbk).cast(),
-            kOptSmartindent => (&raw mut (*buf).b_p_si).cast(),
-            kOptSofttabstop => (&raw mut (*buf).b_p_sts).cast(),
-            kOptSuffixesadd => (&raw mut (*buf).b_p_sua).cast(),
-            kOptSwapfile => (&raw mut (*buf).b_p_swf).cast(),
-            kOptSynmaxcol => (&raw mut (*buf).b_p_smc).cast(),
-            kOptSyntax => (&raw mut (*buf).b_p_syn).cast(),
-            kOptShiftwidth => (&raw mut (*buf).b_p_sw).cast(),
-            kOptTagfunc => (&raw mut (*buf).b_p_tfu).cast(),
-            kOptTabstop => (&raw mut (*buf).b_p_ts).cast(),
-            kOptTextwidth => (&raw mut (*buf).b_p_tw).cast(),
-            kOptUndofile => (&raw mut (*buf).b_p_udf).cast(),
-            kOptWrapmargin => (&raw mut (*buf).b_p_wm).cast(),
-            kOptVarsofttabstop => (&raw mut (*buf).b_p_vsts).cast(),
-            kOptVartabstop => (&raw mut (*buf).b_p_vts).cast(),
-            kOptKeymap => (&raw mut (*buf).b_p_keymap).cast(),
+            kOptAutoindent => OptSlot::from(&raw mut (*buf).b_p_ai),
+            kOptBinary => OptSlot::from(&raw mut (*buf).b_p_bin),
+            kOptBomb => OptSlot::from(&raw mut (*buf).b_p_bomb),
+            kOptBufhidden => OptSlot::from(&raw mut (*buf).b_p_bh),
+            kOptBuftype => OptSlot::from(&raw mut (*buf).b_p_bt),
+            kOptBuflisted => OptSlot::from(&raw mut (*buf).b_p_bl),
+            kOptBusy => OptSlot::from(&raw mut (*buf).b_p_busy),
+            kOptChannel => OptSlot::from(&raw mut (*buf).b_p_channel),
+            kOptCopyindent => OptSlot::from(&raw mut (*buf).b_p_ci),
+            kOptCindent => OptSlot::from(&raw mut (*buf).b_p_cin),
+            kOptCinkeys => OptSlot::from(&raw mut (*buf).b_p_cink),
+            kOptCinoptions => OptSlot::from(&raw mut (*buf).b_p_cino),
+            kOptCinscopedecls => OptSlot::from(&raw mut (*buf).b_p_cinsd),
+            kOptCinwords => OptSlot::from(&raw mut (*buf).b_p_cinw),
+            kOptComments => OptSlot::from(&raw mut (*buf).b_p_com),
+            kOptCommentstring => OptSlot::from(&raw mut (*buf).b_p_cms),
+            kOptComplete => OptSlot::from(&raw mut (*buf).b_p_cpt),
+            kOptCompletefunc => OptSlot::from(&raw mut (*buf).b_p_cfu),
+            kOptOmnifunc => OptSlot::from(&raw mut (*buf).b_p_ofu),
+            kOptEndoffile => OptSlot::from(&raw mut (*buf).b_p_eof),
+            kOptEndofline => OptSlot::from(&raw mut (*buf).b_p_eol),
+            kOptFixendofline => OptSlot::from(&raw mut (*buf).b_p_fixeol),
+            kOptExpandtab => OptSlot::from(&raw mut (*buf).b_p_et),
+            kOptFileencoding => OptSlot::from(&raw mut (*buf).b_p_fenc),
+            kOptFileformat => OptSlot::from(&raw mut (*buf).b_p_ff),
+            kOptFiletype => OptSlot::from(&raw mut (*buf).b_p_ft),
+            kOptFormatoptions => OptSlot::from(&raw mut (*buf).b_p_fo),
+            kOptFormatlistpat => OptSlot::from(&raw mut (*buf).b_p_flp),
+            kOptIminsert => OptSlot::from(&raw mut (*buf).b_p_iminsert),
+            kOptImsearch => OptSlot::from(&raw mut (*buf).b_p_imsearch),
+            kOptInfercase => OptSlot::from(&raw mut (*buf).b_p_inf),
+            kOptIskeyword => OptSlot::from(&raw mut (*buf).b_p_isk),
+            kOptIncludeexpr => OptSlot::from(&raw mut (*buf).b_p_inex),
+            kOptIndentexpr => OptSlot::from(&raw mut (*buf).b_p_inde),
+            kOptIndentkeys => OptSlot::from(&raw mut (*buf).b_p_indk),
+            kOptFormatexpr => OptSlot::from(&raw mut (*buf).b_p_fex),
+            kOptLisp => OptSlot::from(&raw mut (*buf).b_p_lisp),
+            kOptLispoptions => OptSlot::from(&raw mut (*buf).b_p_lop),
+            kOptModeline => OptSlot::from(&raw mut (*buf).b_p_ml),
+            kOptMatchpairs => OptSlot::from(&raw mut (*buf).b_p_mps),
+            kOptModifiable => OptSlot::from(&raw mut (*buf).b_p_ma),
+            kOptModified => OptSlot::from(&raw mut (*buf).b_changed),
+            kOptNrformats => OptSlot::from(&raw mut (*buf).b_p_nf),
+            kOptPreserveindent => OptSlot::from(&raw mut (*buf).b_p_pi),
+            kOptQuoteescape => OptSlot::from(&raw mut (*buf).b_p_qe),
+            kOptReadonly => OptSlot::from(&raw mut (*buf).b_p_ro),
+            kOptScrollback => OptSlot::from(&raw mut (*buf).b_p_scbk),
+            kOptSmartindent => OptSlot::from(&raw mut (*buf).b_p_si),
+            kOptSofttabstop => OptSlot::from(&raw mut (*buf).b_p_sts),
+            kOptSuffixesadd => OptSlot::from(&raw mut (*buf).b_p_sua),
+            kOptSwapfile => OptSlot::from(&raw mut (*buf).b_p_swf),
+            kOptSynmaxcol => OptSlot::from(&raw mut (*buf).b_p_smc),
+            kOptSyntax => OptSlot::from(&raw mut (*buf).b_p_syn),
+            kOptShiftwidth => OptSlot::from(&raw mut (*buf).b_p_sw),
+            kOptTagfunc => OptSlot::from(&raw mut (*buf).b_p_tfu),
+            kOptTabstop => OptSlot::from(&raw mut (*buf).b_p_ts),
+            kOptTextwidth => OptSlot::from(&raw mut (*buf).b_p_tw),
+            kOptUndofile => OptSlot::from(&raw mut (*buf).b_p_udf),
+            kOptWrapmargin => OptSlot::from(&raw mut (*buf).b_p_wm),
+            kOptVarsofttabstop => OptSlot::from(&raw mut (*buf).b_p_vsts),
+            kOptVartabstop => OptSlot::from(&raw mut (*buf).b_p_vts),
+            kOptKeymap => OptSlot::from(&raw mut (*buf).b_p_keymap),
 
             _ => {
                 iemsg(gettext(c"E356: get_varp ERROR".as_ptr()));
                 // Upstream falls through to 'wrapmargin' rather than
                 // returning null; every caller dereferences the result.
-                (&raw mut (*buf).b_p_wm).cast()
+                OptSlot::from(&raw mut (*buf).b_p_wm)
             }
         }
     }
@@ -422,7 +527,7 @@ pub(crate) unsafe fn get_varp_from(
 
 /// [`get_varp_from`] for the current buffer and window.
 #[inline]
-pub(crate) fn get_varp(opt_idx: OptIndex) -> *mut c_void {
+pub(crate) fn get_varp(opt_idx: OptIndex) -> OptSlot {
     // SAFETY: `curbuf`/`curwin` are live.
     unsafe { get_varp_from(opt_idx, curbuf.get(), curwin.get()) }
 }

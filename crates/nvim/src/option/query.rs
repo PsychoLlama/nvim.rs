@@ -487,7 +487,7 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
                 continue;
             }
             let varp = get_varp(opt_idx);
-            if varp.is_null() {
+            if varp.is_none() {
                 continue;
             }
             let mut tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);

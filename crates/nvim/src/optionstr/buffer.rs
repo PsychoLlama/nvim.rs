@@ -339,7 +339,7 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
     // SAFETY: the option table's scope plumbing, with this buffer.
     let gvarp =
         unsafe { get_varp_scope_from(idx, OptionSetFlags::GLOBAL, buf, ptr::null_mut::<win_T>()) }
-            .cast::<*mut c_char>();
+            .string_var();
 
     if gvarp == p_fenc.ptr() {
         // SAFETY: the frame's buffer and C string value.

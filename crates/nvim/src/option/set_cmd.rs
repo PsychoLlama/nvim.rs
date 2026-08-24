@@ -19,7 +19,8 @@ use core::ptr;
 use core::slice;
 
 use super::{
-    NIL_OPTVAL, boolean_optval, option_last_set, optval_boolean, set_op_T, ui_refresh_options,
+    NIL_OPTVAL, OptSlot, boolean_optval, option_last_set, optval_boolean, set_op_T,
+    ui_refresh_options,
 };
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -30,12 +31,14 @@ use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::keycodes::{K_ZERO, find_special_key};
 use crate::main::{
-    IObuff, curbuf, curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, p_wc,
-    p_wcm, sandbox, silent_mode,
+    IObuff, curbuf, curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose,
+    sandbox, silent_mode,
 };
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
-use crate::options::{kOptAleph, kOptFoldmethod, kOptInvalid, kOptWrap};
+use crate::options::{
+    kOptAleph, kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap,
+};
 use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
@@ -274,10 +277,10 @@ unsafe fn get_option_newval(
     nextchar: c_int,
     op: set_op_T,
     flags: uint32_t,
-    varp: *mut c_void,
+    varp: OptSlot,
     errmsg: &mut *const c_char,
 ) -> OptVal {
-    debug_assert!(!varp.is_null());
+    debug_assert!(!varp.is_none());
 
     let nil = NIL_OPTVAL;
 
@@ -319,7 +322,7 @@ unsafe fn get_option_newval(
                     // value unset.
                     optval_boolean(oldval.data).map(|b| !b)
                 } else if prefix == Prefix::Inv {
-                    Some(*varp.cast::<c_int>() == 0)
+                    Some(*varp.boolean_var() == 0)
                 } else {
                     Some(prefix != Prefix::No)
                 };
@@ -328,7 +331,7 @@ unsafe fn get_option_newval(
             kOptValTypeNumber => {
                 let oldval_num = oldval.data.number;
                 let arg = argp.add(1);
-                let Some(newval_num) = take_number(varp, arg, errmsg) else {
+                let Some(newval_num) = take_number(opt_idx, arg, errmsg) else {
                     return nil;
                 };
                 let number = match op {
@@ -350,7 +353,6 @@ unsafe fn get_option_newval(
                     nextchar,
                     opt_idx,
                     argp,
-                    varp,
                     oldval.data.string.data(),
                     &raw mut op,
                     flags,
@@ -375,16 +377,15 @@ unsafe fn get_option_newval(
 ///
 /// # Safety
 ///
-/// `varp` must be the option's variable and `arg` NUL-terminated.
+/// `arg` must be NUL-terminated.
 unsafe fn take_number(
-    varp: *mut c_void,
+    opt_idx: OptIndex,
     arg: *mut c_char,
     errmsg: &mut *const c_char,
 ) -> Option<OptInt> {
     // SAFETY: the caller's variable and string.
     unsafe {
-        let is_key_option =
-            varp.cast::<OptInt>() == p_wc.ptr() || varp.cast::<OptInt>() == p_wcm.ptr();
+        let is_key_option = matches!(opt_idx, kOptWildchar | kOptWildcharm);
         let looks_like_key = *arg as c_int == '<' as c_int
             || *arg as c_int == '^' as c_int
             || (*arg != NUL as c_char
@@ -566,7 +567,7 @@ unsafe fn do_one_set_option(
 unsafe fn show_one(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    varp: *mut c_void,
+    varp: OptSlot,
     did_show: &mut bool,
 ) {
     // SAFETY: `curwin`/`curbuf` are live and the option table is a plain

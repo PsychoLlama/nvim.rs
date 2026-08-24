@@ -244,7 +244,7 @@ fn set_init_expand_env() {
             // A `kOptFlagGettext` default is a translatable message rather
             // than a path; there is nothing in it to expand.
             let expanded = if opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global() {
-                gettext(*option_var(opt_idx).cast::<*mut c_char>())
+                gettext(*option_var(opt_idx).string_var())
             } else {
                 option_expand(opt_idx, ptr::null())
             };

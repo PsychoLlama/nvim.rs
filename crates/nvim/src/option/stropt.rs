@@ -31,9 +31,9 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::ascii::ascii_iswhite;
-use crate::main::p_kp;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::options::kOptKeywordprg;
 use crate::os::cshim::{memmove, strncmp};
 use crate::strings::vim_strchr;
 use crate::types::{NUL, OptIndex, size_t, uint32_t};
@@ -519,14 +519,12 @@ pub(crate) unsafe fn stropt_remove_dupflags(newval: *mut c_char, flags: uint32_t
 /// the whole set.
 ///
 /// # Safety
-/// `argp` points at a cursor into the `:set` argument, `varp` at the
-/// option's variable, `origval` is its current value, and `op_arg` is
-/// writable.
+/// `argp` points at a cursor into the `:set` argument, `origval` is the
+/// option's current value, and `op_arg` is writable.
 pub(crate) unsafe fn stropt_get_newval(
     _nextchar: c_int,
     opt_idx: OptIndex,
     argp: *mut *mut c_char,
-    varp: *mut c_void,
     origval: *const c_char,
     op_arg: *mut set_op_T,
     flags: uint32_t,
@@ -538,8 +536,8 @@ pub(crate) unsafe fn stropt_get_newval(
         let mut op = *op_arg;
 
         // A bare `:set keywordprg=` means ":help", not the empty string.
-        let empty_kp = varp == p_kp.ptr().cast::<c_void>()
-            && (c_int::from(*arg) == NUL || *arg == b' ' as c_char);
+        let empty_kp =
+            opt_idx == kOptKeywordprg && (c_int::from(*arg) == NUL || *arg == b' ' as c_char);
         let save_arg = if empty_kp {
             let save = arg;
             arg = c":help".as_ptr().cast_mut();

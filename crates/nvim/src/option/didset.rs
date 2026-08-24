@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
@@ -67,9 +67,9 @@ use crate::winfloat::win_float_update_statusline;
 use ::libc::strcmp;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, STATUS_HEIGHT, check_blending, did_set_title,
-    kOptValTypeNumber, kOptValTypeString, option_was_set, optval_boolean, redraw_titles,
-    set_option_value, set_option_varp, set_options_bin,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, check_blending,
+    did_set_title, kOptValTypeNumber, kOptValTypeString, option_was_set, optval_boolean,
+    redraw_titles, set_option_value, set_option_varp, set_options_bin,
 };
 use crate::highlight_group::HLF_W;
 use crate::keycodes::{Ctrl_C, K_KENTER};
@@ -85,7 +85,7 @@ const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
 #[derive(Clone, Copy)]
 struct Frame {
     /// The variable that already holds the new value.
-    varp: *mut c_void,
+    varp: OptSlot,
     idx: OptIndex,
     flags: OptionSetFlags,
     old: OptValData,
@@ -104,7 +104,7 @@ impl Frame {
         // SAFETY: the caller's frame.
         unsafe {
             Frame {
-                varp: (*args).os_varp,
+                varp: OptSlot::from_raw((*args).os_idx, (*args).os_varp),
                 idx: (*args).os_idx,
                 flags: (*args).os_flags,
                 old: (*args).os_oldval,
@@ -578,7 +578,7 @@ pub(crate) unsafe fn did_set_shiftwidth_tabstop(args: *mut optset_T) -> *const c
         }
         // A zero 'shiftwidth' means "use 'tabstop'", so 'tabstop' feeds the
         // C indent options too.
-        if f.varp.cast::<OptInt>() == &raw mut (*f.buf).b_p_sw || (*f.buf).b_p_sw == 0 {
+        if f.varp == OptSlot::Number(&raw mut (*f.buf).b_p_sw) || (*f.buf).b_p_sw == 0 {
             parse_cino(f.buf);
         }
     }
@@ -696,7 +696,7 @@ pub(crate) unsafe fn did_set_undolevels(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, and the buffer it names is live.
     unsafe {
         let f = Frame::read(args);
-        let pp = f.varp.cast::<OptInt>();
+        let pp = f.varp.number_var();
         let (value, old_value) = (f.new_number(), f.old_number());
         if pp == p_ul.ptr() {
             p_ul.set(old_value);
@@ -727,7 +727,7 @@ pub(crate) unsafe fn did_set_updatecount(args: *mut optset_T) -> *const c_char {
 pub(crate) unsafe fn did_set_wildchar(args: *mut optset_T) -> *const c_char {
     // SAFETY: the table's call frame, whose `varp` is this numeric option's
     // own variable.
-    let c = unsafe { *Frame::read(args).varp.cast::<OptInt>() };
+    let c = unsafe { *Frame::read(args).varp.number_var() };
     if c == Ctrl_C as OptInt
         || c == '\n' as OptInt
         || c == '\r' as OptInt
@@ -805,7 +805,7 @@ pub(crate) unsafe fn did_set_xhistory(args: *mut optset_T) -> *const c_char {
     // own variable, and the window it names is live.
     unsafe {
         let f = Frame::read(args);
-        let arg = f.varp.cast::<OptInt>();
+        let arg = f.varp.number_var();
         if arg == p_chi.ptr() {
             qf_resize_stack(*arg as c_int);
         } else {

@@ -182,7 +182,7 @@ pub(crate) fn check_options() {
     unsafe {
         for opt_idx in kOptAleph..kOptCount {
             if option_has_type(opt_idx, kOptValTypeString) && get_option(opt_idx).var.has_global() {
-                check_string_option(get_varp(opt_idx).cast::<*mut c_char>());
+                check_string_option(get_varp(opt_idx).string_var());
             }
         }
     }

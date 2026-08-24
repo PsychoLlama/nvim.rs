@@ -10,7 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use crate::api::private::helpers::{api_free_string, copy_string, cstr_as_string};
@@ -19,14 +19,14 @@ use crate::memory::{strnequal, xmalloc, xstrdup};
 use crate::optionstr::is_empty_option;
 use crate::os::cshim::snprintf;
 use crate::types::{
-    Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, kObjectTypeBoolean,
+    Arena, Object, OptIndex, OptVal, OptValData, OptValType, kObjectTypeBoolean,
     kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, object, object_data, size_t,
 };
 use crate::undo::curbuf_is_changed;
 
 use super::{
-    NUMBUFLEN, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
-    kOptValTypeString, option_default, option_has_type,
+    NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,
+    kOptValTypeNumber, kOptValTypeString, option_default, option_has_type,
 };
 
 /// An `OptVal` holding nothing: an unknown option, or one the caller only
@@ -140,69 +140,68 @@ pub(crate) fn option_get_type(opt_idx: OptIndex) -> OptValType {
     get_option(opt_idx).type_0
 }
 
-/// Read the option variable `varp` points at as a value of `opt_idx`'s type.
+/// Read the option variable `slot` names as a value of `opt_idx`'s type.
 ///
 /// # Safety
 ///
-/// `varp` must be the variable the table names for `opt_idx`, in some scope
+/// `slot` must be the variable the table names for `opt_idx`, in some scope
 /// — what `get_varp`/`get_varp_scope` hand out.
-pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, varp: *mut c_void) -> OptVal {
+pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
     // 'modified' has no variable of its own worth reading: `b_changed` alone
     // misses a buffer whose undo state says it is unchanged after all.
     // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
-    if varp.cast::<c_int>() == unsafe { &raw mut (*curbuf.get()).b_changed } {
+    if slot == OptSlot::Boolean(unsafe { &raw mut (*curbuf.get()).b_changed }) {
         // SAFETY: reading the current buffer's change state.
         return boolean_optval(Some(unsafe { curbuf_is_changed() }));
     }
-    let type_0 = option_get_type(opt_idx);
-    let data = match type_0 {
-        kOptValTypeNil => NIL_OPTVAL.data,
-        // SAFETY (all three): the caller's `varp` is the variable for this
-        // option, and the table's type says which of the three it is.
-        kOptValTypeBoolean => OptValData {
-            boolean: match unsafe { *varp.cast::<c_int>() } {
-                0 => 0,
-                1.. => 1,
-                _ => -1,
-            },
+    let data = match slot {
+        OptSlot::None => return NIL_OPTVAL,
+        // SAFETY (all three): the slot names this option's variable and its
+        // arm is the type that variable holds. A boolean's word is the
+        // option's own tri-state, so anything above 1 reads as true.
+        OptSlot::Boolean(var) => OptValData {
+            boolean: unsafe { *var }.clamp(-1, 1),
         },
-        kOptValTypeNumber => OptValData {
-            number: unsafe { *varp.cast::<OptInt>() },
+        OptSlot::Number(var) => OptValData {
+            number: unsafe { *var },
         },
-        kOptValTypeString => OptValData {
-            string: unsafe { cstr_as_string(*varp.cast::<*mut c_char>()) },
+        OptSlot::String(var) => OptValData {
+            string: unsafe { cstr_as_string(*var) },
         },
-        _ => unreachable!("option value type {type_0}"),
     };
-    OptVal { type_0, data }
+    OptVal {
+        type_0: option_get_type(opt_idx),
+        data,
+    }
 }
 
-/// Write `value` into the option variable `varp` points at, taking ownership
+/// Write `value` into the option variable `slot` names, taking ownership
 /// of whatever it holds. With `free_oldval` the value already there is freed
 /// first; without it the caller has kept a copy and will free it later.
 ///
 /// # Safety
 ///
-/// `varp` must be the variable the table names for `opt_idx`, in some scope.
+/// `slot` must be the variable the table names for `opt_idx`, in some scope.
 pub(crate) unsafe fn set_option_varp(
     opt_idx: OptIndex,
-    varp: *mut c_void,
+    slot: OptSlot,
     value: OptVal,
     free_oldval: bool,
 ) {
     debug_assert!(option_has_type(opt_idx, value.type_0));
     if free_oldval {
-        // SAFETY: the caller's `varp` is this option's variable.
-        optval_free(unsafe { optval_from_varp(opt_idx, varp) });
+        // SAFETY: the caller's slot is this option's variable.
+        optval_free(unsafe { optval_from_varp(opt_idx, slot) });
     }
-    // SAFETY: the assertion above ties the tag to the variable's type, so
-    // both the union read and the write through `varp` are of that type.
+    // SAFETY: the slot's arm and the value's tag are the same type — the
+    // table asserts it for every row at compile time, and the assertion
+    // above ties this value to the same row.
     unsafe {
-        match value.type_0 {
-            kOptValTypeBoolean => *varp.cast::<c_int>() = value.data.boolean,
-            kOptValTypeNumber => *varp.cast::<OptInt>() = value.data.number,
-            kOptValTypeString => *varp.cast::<*mut c_char>() = value.data.string.data(),
-            _ => unreachable!("a nil value has no variable to write it to"),
+        match (slot, value.type_0) {
+            (OptSlot::Boolean(var), kOptValTypeBoolean) => *var = value.data.boolean,
+            (OptSlot::Number(var), kOptValTypeNumber) => *var = value.data.number,
+            (OptSlot::String(var), kOptValTypeString) => *var = value.data.string.data(),
+            _ => unreachable!("an option's slot is not the type its value is"),
         }
     }
 }
@@ -304,12 +303,12 @@ pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
 ///
 /// # Safety
 ///
-/// `varp` must be the variable the table names for `opt_idx`, in some scope.
-pub(crate) unsafe fn optval_is_default(opt_idx: OptIndex, varp: *mut c_void) -> bool {
+/// `slot` must be the variable the table names for `opt_idx`, in some scope.
+pub(crate) unsafe fn optval_is_default(opt_idx: OptIndex, slot: OptSlot) -> bool {
     if is_option_hidden(opt_idx) {
         return true;
     }
-    // SAFETY: the caller's `varp` is this option's variable.
-    let current = unsafe { optval_from_varp(opt_idx, varp) };
+    // SAFETY: the caller's slot is this option's variable.
+    let current = unsafe { optval_from_varp(opt_idx, slot) };
     optval_equal(current, option_default(opt_idx))
 }
