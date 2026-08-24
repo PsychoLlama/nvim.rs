@@ -360,7 +360,7 @@ unsafe fn map_get_int_string(
     }
 }
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
-/// byte array upstream, because c2rust has no `CStr`; nothing writes it.
+/// byte array upstream, because c2rust had no `CStr`; nothing writes it.
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
 static active_apc_list: GlobalCell<*mut AutoPatCmd> =
     GlobalCell::new(::core::ptr::null_mut::<AutoPatCmd>());

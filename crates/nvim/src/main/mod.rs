@@ -44,7 +44,7 @@ use crate::state::MODE_NORMAL;
 
 /// A C string literal as the fixed-size `c_char` array a global holds.
 ///
-/// c2rust spells every `static char foo[] = "…"` as a `transmute` from the
+/// c2rust spelled every `static char foo[] = "…"` as a `transmute` from the
 /// byte string, which is one `unsafe` block per message and 194 of them in
 /// this file alone. Copying the bytes is const-evaluable, needs no `unsafe`,
 /// and unlike `transmute` it works with a const generic length.

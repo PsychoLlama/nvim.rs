@@ -462,9 +462,9 @@ unsafe fn scan_fmt_types(
 /// Position `ap` on positional argument `*arg_idx`.
 ///
 /// Hand-ported from neovim's static `skip_to_arg` in `src/nvim/strings.c`:
-/// c2rust drops the definition (it takes `va_list` by value, which its
-/// variadic support cannot translate) yet still emits the 17 call sites in
-/// `vim_vsnprintf_typval`.
+/// c2rust dropped the definition (it takes `va_list` by value, which its
+/// variadic support could not translate) yet still emitted the 17 call sites
+/// in `vim_vsnprintf_typval`.
 ///
 /// A `va_list` only moves forwards, so reaching an argument that is behind
 /// the cursor means restarting from `ap_start` and *reading* every argument

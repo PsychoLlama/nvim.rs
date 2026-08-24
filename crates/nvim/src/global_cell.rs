@@ -1,7 +1,7 @@
 //! `GlobalCell<T>`: the checked cell that replaces `static mut` globals.
 //!
-//! The transpiled editor state is a web of C globals that c2rust rendered as
-//! mutable statics. Any two overlapping references into one of those — an
+//! The editor's state is a web of C globals that c2rust rendered as mutable
+//! statics. Any two overlapping references into one of those — an
 //! autocmd firing mid-operation and touching the same global, say — is
 //! undefined behavior even single-threaded. `GlobalCell` funnels every
 //! access through a single `UnsafeCell` so the compiler stops assuming

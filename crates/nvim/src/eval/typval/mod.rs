@@ -179,7 +179,7 @@ pub const SORTINFO_INIT: sortinfo_T = sortinfo_T {
     item_compare_func_err: false,
 };
 /// A zeroed `garray_T`, which is what a bare `garray_T ga;` declaration is
-/// before `ga_init` fills it in.  c2rust writes the five fields out at every
+/// before `ga_init` fills it in.  c2rust wrote the five fields out at every
 /// such declaration.
 pub const GARRAY_EMPTY: garray_T = garray_T {
     ga_len: 0,
@@ -190,7 +190,7 @@ pub const GARRAY_EMPTY: garray_T = garray_T {
 };
 /// `TV_INITIAL_VALUE`: an unlocked `VAR_UNKNOWN` object, which is what a
 /// `typval_T` is initialised to and what one is left as after being moved out
-/// of.  c2rust writes the designated initialiser out at every use site.
+/// of.  c2rust wrote the designated initialiser out at every use site.
 pub const TV_INITIAL_VALUE: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
     v_lock: VAR_UNLOCKED,
@@ -200,7 +200,7 @@ pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());
 /// `ARRAY_SIZE(sl->sl_items)`: how many `listitem_T`s a `staticList10_T`
-/// embeds.  c2rust renders `ARRAY_SIZE` as a division by the macro's own
+/// embeds.  c2rust rendered `ARRAY_SIZE` as a division by the macro's own
 /// `== 0` static assertion; the value it computes is just the length.
 pub const SL_SIZE: usize = 10;
 static sortinfo: GlobalCell<*mut sortinfo_T> =

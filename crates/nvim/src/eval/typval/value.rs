@@ -114,7 +114,7 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
 /// `:unlockvar`.
 ///
 /// `VAR_FIXED` never changes — that is a slot that cannot be unlocked at all,
-/// not merely one that is locked.  c2rust renders the macro's designated-index
+/// not merely one that is locked.  c2rust rendered the macro's designated-index
 /// array literal at each of its four use sites.
 #[inline]
 fn change_lock(lock: bool, var: VarLockStatus) -> VarLockStatus {

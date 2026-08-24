@@ -1,7 +1,7 @@
 //! A C flag word as a type the compiler can check.
 //!
 //! The C headers spell each flag family as a run of `#define`s or an
-//! anonymous enum, and c2rust re-emits those constants into *every* file that
+//! anonymous enum, and c2rust re-emitted those constants into *every* file that
 //! included the header. So a family like `EW_*` exists eleven times over,
 //! under two different integer types (`c_int` and `c_uint`), and the call
 //! sites are full of `as c_int` casts reconciling the copies. Worse, nothing

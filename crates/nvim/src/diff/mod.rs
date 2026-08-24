@@ -144,7 +144,7 @@ pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-/// An empty growable array, the shape c2rust writes out at every site.
+/// An empty growable array, the shape c2rust wrote out at every site.
 pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0,
     ga_maxlen: 0,
