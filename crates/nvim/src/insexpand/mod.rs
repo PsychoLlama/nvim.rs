@@ -606,26 +606,26 @@ static COMPL_MATCH_ARRAY: GlobalCell<*mut pumitem_T> =
 static COMPL_MATCH_ARRAYSIZE: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const DICT_FIRST: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DICT_EXACT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static cfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
+static CFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: Callback_data {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
 });
-static ofu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
+static OFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: Callback_data {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
 });
-static tsrfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
+static TSRFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: Callback_data {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
 });
-static cpt_cb: GlobalCell<*mut Callback> = GlobalCell::new(::core::ptr::null_mut::<Callback>());
-static cpt_cb_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static CPT_CB: GlobalCell<*mut Callback> = GlobalCell::new(::core::ptr::null_mut::<Callback>());
+static CPT_CB_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const CI_WHAT_MODE: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const CI_WHAT_PUM_VISIBLE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const CI_WHAT_ITEMS: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;

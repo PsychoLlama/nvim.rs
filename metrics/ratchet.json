@@ -1,7 +1,7 @@
 {
   "internal_exports": 0,
   "test_reached_pub": 672,
-  "cell_ptr_unlisted": 1600,
+  "cell_ptr_unlisted": 1590,
   "cell_copy_owner": 71,
   "files_without_forbid_unsafe": 1061,
   "files_without_deny_unsafe_op": 0,
@@ -516,7 +516,7 @@
     "crates/nvim/src/indent_c/recog.rs": {"pub_items": 1, "unsafe_lines": 264},
     "crates/nvim/src/indent_c/toplevel.rs": {"unsafe_lines": 136},
     "crates/nvim/src/input.rs": {"unsafe_lines": 64},
-    "crates/nvim/src/insexpand/callbacks.rs": {"cell_ptr": 13, "missing_safety_doc": 24, "pub_items": 10, "unsafe_lines": 454},
+    "crates/nvim/src/insexpand/callbacks.rs": {"cell_ptr": 3, "missing_safety_doc": 24, "pub_items": 10, "unsafe_lines": 453},
     "crates/nvim/src/insexpand/getexp.rs": {"cell_ptr": 7, "missing_safety_doc": 11, "unsafe_lines": 586},
     "crates/nvim/src/insexpand/insert.rs": {"missing_safety_doc": 9, "pub_items": 2, "unsafe_lines": 384},
     "crates/nvim/src/insexpand/keys.rs": {"missing_safety_doc": 11, "pub_items": 6, "unsafe_lines": 412},

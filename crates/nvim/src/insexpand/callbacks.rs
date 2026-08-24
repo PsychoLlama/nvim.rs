@@ -15,6 +15,123 @@ use crate::types::{
     FAIL, IOSIZE, NUL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
 
+/// One of the three global completion-function callbacks.
+///
+/// `'completefunc'`, `'omnifunc'` and `'thesaurusfunc'` each compile to a
+/// `Callback` the editor *calls*, so `get`/`set` cannot own one: the value
+/// holds a funcref or a Lua reference, and a copy would be a second owner of
+/// it. Every helper that touches a callback -- `option_set_callback_func`,
+/// `callback_copy`, `callback_free`, `set_ref_in_callback` -- is C-shaped
+/// and takes the *slot's* address so it can free what is there and write the
+/// new value in place; the buffer-local twin of each of these lives in a
+/// `buf_T` field, and the same helpers serve both.
+///
+/// `CompleteFuncCb` names the cell rather than pointing into it, so it is
+/// `Copy` and needs no `unsafe` to make. The one thing it cannot avoid is
+/// the address, and that is produced at exactly one place --
+/// [`slot`](Self::slot) -- rather than at nine call sites.
+#[derive(Clone, Copy)]
+pub(crate) struct CompleteFuncCb(&'static GlobalCell<Callback>);
+
+/// The global `'completefunc'` callback.
+pub(crate) fn cfu_cb() -> CompleteFuncCb {
+    CompleteFuncCb(&CFU_CB)
+}
+
+/// The global `'omnifunc'` callback.
+pub(crate) fn ofu_cb() -> CompleteFuncCb {
+    CompleteFuncCb(&OFU_CB)
+}
+
+/// The global `'thesaurusfunc'` callback.
+pub(crate) fn tsrfu_cb() -> CompleteFuncCb {
+    CompleteFuncCb(&TSRFU_CB)
+}
+
+impl CompleteFuncCb {
+    /// The slot's address, which is what the C-shaped callback helpers take.
+    /// It stands where a buffer-local callback would answer
+    /// `&raw mut (*buf).b_cfu_cb`.
+    pub(crate) fn slot(self) -> *mut Callback {
+        self.0.ptr()
+    }
+
+    /// Compile `value` into this callback, freeing what was there. C's
+    /// `option_set_callback_func`; answers `OK` or `FAIL`.
+    ///
+    /// # Safety
+    /// `value` must be a live NUL-terminated option string, or null.
+    pub(crate) unsafe fn set_from_option(self, value: *mut c_char) -> c_int {
+        // SAFETY: the caller's promise; the slot is this cell's own.
+        unsafe { option_set_callback_func(value, self.slot()) }
+    }
+
+    /// Copy this callback into a buffer-local slot, freeing what was there.
+    ///
+    /// # Safety
+    /// `bufcb` must point at a live buffer's callback field.
+    pub(crate) unsafe fn copy_to_buflocal(self, bufcb: *mut Callback) {
+        // SAFETY: the caller's promise.
+        unsafe { copy_global_to_buflocal_cb(self.slot(), bufcb) };
+    }
+
+    /// Mark what this callback references with `copyID`, so the garbage
+    /// collector leaves it alone. Answers whether to abort.
+    ///
+    /// # Safety
+    /// Runs the `set_ref_in_*` walk over a live typval graph.
+    pub(crate) unsafe fn set_ref(self, copyID: c_int) -> bool {
+        // SAFETY: the caller's promise; the slot is this cell's own.
+        unsafe { set_ref_in_callback(self.slot(), copyID, ptr::null_mut(), ptr::null_mut()) }
+    }
+}
+
+/// The global `'complete'` `F{func}` callbacks: one slot per entry of the
+/// option, empty for every entry that is not an `F{func}`.
+///
+/// This is the cached copy `:set complete=` leaves behind so a buffer that
+/// has never had `:setlocal complete=` can be given the same array; the
+/// live one a completion reads is always `curbuf`'s `b_p_cpt_cb`. Upstream
+/// keeps it as a `Callback *` with `cpt_cb_count` beside it and passes
+/// *both cells' addresses* to `copy_cpt_callbacks` as out-parameters, which
+/// is the only reason those two `.ptr()`s existed.
+#[derive(Clone, Copy)]
+pub(crate) struct CptCallbacks(());
+
+/// The cached global `'complete'` `F{func}` callbacks. See [`CptCallbacks`].
+pub(crate) fn cpt_cb() -> CptCallbacks {
+    CptCallbacks(())
+}
+
+impl CptCallbacks {
+    /// The array, null when `'complete'` has never been set globally.
+    pub(crate) fn slots(self) -> *mut Callback {
+        CPT_CB.get()
+    }
+
+    /// The number of slots.
+    pub(crate) fn count(self) -> c_int {
+        CPT_CB_COUNT.get()
+    }
+
+    /// Replace the cached array with a copy of `src`'s `count` callbacks.
+    /// A `count` of zero leaves the cache alone, as upstream's did.
+    ///
+    /// # Safety
+    /// `src` must hold `count` live callbacks.
+    pub(crate) unsafe fn replace_from(self, src: *mut Callback, count: c_int) {
+        let mut slots = CPT_CB.get();
+        let mut slot_count = CPT_CB_COUNT.get();
+        // SAFETY: the caller's promise; the out-parameters are locals, so
+        // nothing observes the cache half-written.
+        unsafe {
+            copy_cpt_callbacks(&raw mut slots, &raw mut slot_count, src, count);
+        }
+        CPT_CB.set(slots);
+        CPT_CB_COUNT.set(slot_count);
+    }
+}
+
 /// The per-`'complete'`-entry state: one row for every comma-separated
 /// segment of the option, plus the index of the segment being collected.
 ///
@@ -188,7 +305,7 @@ pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
         let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func((*args).os_newval.string.data(), &raw mut (*buf).b_cfu_cb)
         } else {
-            let retval = option_set_callback_func((*args).os_newval.string.data(), cfu_cb.ptr());
+            let retval = cfu_cb().set_from_option((*args).os_newval.string.data());
             if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 set_buflocal_cfu_callback(buf);
             }
@@ -204,7 +321,7 @@ pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
 
 /// Copy the global `'completefunc'` callback into `buf`'s local one.
 pub unsafe fn set_buflocal_cfu_callback(buf: *mut buf_T) {
-    unsafe { copy_global_to_buflocal_cb(cfu_cb.ptr(), &raw mut (*buf).b_cfu_cb) }
+    unsafe { cfu_cb().copy_to_buflocal(&raw mut (*buf).b_cfu_cb) }
 }
 
 /// Parse the `'omnifunc'` value and set the callback function; an
@@ -215,7 +332,7 @@ pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
         let retval = if (*args).os_flags.has(OptionSetFlags::LOCAL) {
             option_set_callback_func((*args).os_newval.string.data(), &raw mut (*buf).b_ofu_cb)
         } else {
-            let retval = option_set_callback_func((*args).os_newval.string.data(), ofu_cb.ptr());
+            let retval = ofu_cb().set_from_option((*args).os_newval.string.data());
             if retval == OK && !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 set_buflocal_ofu_callback(buf);
             }
@@ -231,7 +348,7 @@ pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
 
 /// Copy the global `'omnifunc'` callback into `buf`'s local one.
 pub unsafe fn set_buflocal_ofu_callback(buf: *mut buf_T) {
-    unsafe { copy_global_to_buflocal_cb(ofu_cb.ptr(), &raw mut (*buf).b_ofu_cb) }
+    unsafe { ofu_cb().copy_to_buflocal(&raw mut (*buf).b_ofu_cb) }
 }
 
 /// Free an array of `'complete'` `F{func}` callbacks and null the pointer.
@@ -275,14 +392,14 @@ pub(crate) unsafe fn copy_cpt_callbacks(
 /// clearing any existing buffer-local callbacks first.
 pub unsafe fn set_buflocal_cpt_callbacks(buf: *mut buf_T) {
     unsafe {
-        if buf.is_null() || cpt_cb_count.get() == 0 {
+        if buf.is_null() || cpt_cb().count() == 0 {
             return;
         }
         copy_cpt_callbacks(
             &raw mut (*buf).b_p_cpt_cb,
             &raw mut (*buf).b_p_cpt_count,
-            cpt_cb.get(),
-            cpt_cb_count.get(),
+            cpt_cb().slots(),
+            cpt_cb().count(),
         );
     }
 }
@@ -340,12 +457,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
 
         if !local {
             // ':set' was used instead of ':setlocal': cache the callback array.
-            copy_cpt_callbacks(
-                cpt_cb.ptr(),
-                cpt_cb_count.ptr(),
-                (*curbuf.get()).b_p_cpt_cb,
-                (*curbuf.get()).b_p_cpt_count,
-            );
+            cpt_cb().replace_from((*curbuf.get()).b_p_cpt_cb, (*curbuf.get()).b_p_cpt_count);
         }
         OK
     }
@@ -361,7 +473,7 @@ pub unsafe fn did_set_thesaurusfunc(args: *mut optset_T) -> *const c_char {
             option_set_callback_func((*buf).b_p_tsrfu, &raw mut (*buf).b_tsrfu_cb)
         } else {
             // Global option set.
-            let retval = option_set_callback_func(p_tsrfu.get(), tsrfu_cb.ptr());
+            let retval = tsrfu_cb().set_from_option(p_tsrfu.get());
             // When using :set, free the local callback.
             if !(*args).os_flags.has(OptionSetFlags::GLOBAL) {
                 callback_free(&raw mut (*buf).b_tsrfu_cb);
@@ -405,12 +517,10 @@ pub unsafe fn set_ref_in_cpt_callbacks(
 /// callbacks with `copyID` so they are not garbage collected.
 pub unsafe fn set_ref_in_insexpand_funcs(copyID: c_int) -> bool {
     unsafe {
-        let mark =
-            |cb: *mut Callback| set_ref_in_callback(cb, copyID, ptr::null_mut(), ptr::null_mut());
-        let mut abort = mark(cfu_cb.ptr());
-        abort = abort || mark(ofu_cb.ptr());
-        abort = abort || mark(tsrfu_cb.ptr());
-        abort = abort || set_ref_in_cpt_callbacks(cpt_cb.get(), cpt_cb_count.get(), copyID);
+        let mut abort = cfu_cb().set_ref(copyID);
+        abort = abort || ofu_cb().set_ref(copyID);
+        abort = abort || tsrfu_cb().set_ref(copyID);
+        abort = abort || set_ref_in_cpt_callbacks(cpt_cb().slots(), cpt_cb().count(), copyID);
         abort
     }
 }
@@ -446,7 +556,7 @@ pub(crate) unsafe fn get_insert_callback(type_0: c_int) -> *mut Callback {
         if *(*curbuf.get()).b_p_tsrfu as c_int != NUL {
             &raw mut (*curbuf.get()).b_tsrfu_cb
         } else {
-            tsrfu_cb.ptr()
+            tsrfu_cb().slot()
         }
     }
 }
