@@ -127,6 +127,38 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
     }
 }
 
+/// C's `"match %d of %d"` / `"match %d"`, formatted into the static buffer
+/// `showmode` reads back through `edit_submode_extra`.
+///
+/// The buffer outlives the call by design — the message is shown on a later
+/// redraw — so its address is taken once, here, and handed out as a
+/// `char *` the way upstream's `match_ref[81]` was. `total` of zero or less
+/// selects the short form.
+///
+/// # Safety
+/// Must run on the main thread; the returned pointer stays valid until the
+/// next call, which is the lifetime `edit_submode_extra` assumes.
+unsafe fn match_position_message(number: c_int, total: c_int) -> *mut c_char {
+    static match_ref: GlobalCell<[c_char; 81]> = GlobalCell::new([0; 81]);
+    let msg = match_ref.ptr().cast::<c_char>();
+    let size = size_of::<[c_char; 81]>();
+    // SAFETY: `msg` addresses all 81 bytes, and both formats take `int`s.
+    unsafe {
+        if total > 0 {
+            vim_snprintf(
+                msg,
+                size,
+                gettext(c"match %d of %d".as_ptr()),
+                number,
+                total,
+            );
+        } else {
+            vim_snprintf(msg, size, gettext(c"match %d".as_ptr()), number);
+        }
+    }
+    msg
+}
+
 /// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
 /// to `src`.
 pub(crate) unsafe fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_int) {
@@ -595,24 +627,8 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
                     ins_compl_update_sequence_numbers();
                 }
                 if (*curr).cp_number != -1 {
-                    static match_ref: GlobalCell<[c_char; 81]> = GlobalCell::new([0; 81]);
-                    if compl_matches.get() > 0 {
-                        vim_snprintf(
-                            match_ref.ptr() as *mut c_char,
-                            size_of::<[c_char; 81]>(),
-                            gettext(c"match %d of %d".as_ptr()),
-                            (*curr).cp_number,
-                            compl_matches.get(),
-                        );
-                    } else {
-                        vim_snprintf(
-                            match_ref.ptr() as *mut c_char,
-                            size_of::<[c_char; 81]>(),
-                            gettext(c"match %d".as_ptr()),
-                            (*curr).cp_number,
-                        );
-                    }
-                    edit_submode_extra.set(match_ref.ptr() as *mut c_char);
+                    let msg = match_position_message((*curr).cp_number, compl_matches.get());
+                    edit_submode_extra.set(msg);
                     edit_submode_highl.set(HLF_R);
                     if dollar_vcol.get() >= 0 {
                         curs_columns(curwin.get(), 0);

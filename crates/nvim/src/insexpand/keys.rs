@@ -569,7 +569,7 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
         }
 
         // Only do this at regular intervals.
-        (*count.ptr()) += 1;
+        count.set(count.get() + 1);
         if count.get() < frequency {
             return;
         }
