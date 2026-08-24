@@ -235,12 +235,14 @@ impl ComplOrigExtmarks {
     /// # Safety
     /// The buffer they were taken from must still be current.
     pub(crate) unsafe fn restore(self) {
-        let saved = COMPL_ORIG_EXTMARKS.get();
-        // SAFETY: `saved` holds `size` undo objects the buffer still owns.
-        unsafe {
-            for i in (0..saved.size as isize).rev() {
-                extmark_apply_undo(*saved.items.offset(i), true);
-            }
+        // The count is read once and the buffer once per step, exactly as
+        // upstream's `for (i = kv_size(v); i > 0; i--) kv_A(v, i - 1)` did:
+        // `extmark_apply_undo` re-enters the marktree, and nothing there
+        // pushes onto this list, but nothing here assumes that either.
+        for i in (0..COMPL_ORIG_EXTMARKS.get().size as isize).rev() {
+            // SAFETY: `i` is within the list's own `size` undo objects, and
+            // the buffer they name is still current (the caller's promise).
+            unsafe { extmark_apply_undo(*COMPL_ORIG_EXTMARKS.get().items.offset(i), true) };
         }
     }
 

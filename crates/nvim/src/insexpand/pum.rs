@@ -66,9 +66,15 @@ impl ComplMatchArray {
         COMPL_MATCH_ARRAY.get()
     }
 
-    /// Take `items` as the new array, dropping whatever was there.
+    /// Take `items` as the new array, dropping whatever was there. An empty
+    /// `items` leaves the array unset: a zero-length boxed slice is a
+    /// *dangling* pointer, not a null one, and `is_unset` is the null check
+    /// upstream's callers do.
     pub(crate) fn set(self, items: Vec<pumitem_T>) {
         self.clear();
+        if items.is_empty() {
+            return;
+        }
         let len = items.len() as c_int;
         let array = Box::into_raw(items.into_boxed_slice());
         COMPL_MATCH_ARRAY.set(array.cast::<pumitem_T>());

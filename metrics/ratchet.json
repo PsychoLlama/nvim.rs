@@ -527,7 +527,7 @@
     "crates/nvim/src/insexpand/session.rs": {"cell_ptr": 1, "missing_safety_doc": 12, "pub_items": 1, "unsafe_lines": 542},
     "crates/nvim/src/insexpand/sources.rs": {"cell_ptr": 3, "missing_safety_doc": 7, "unsafe_lines": 590},
     "crates/nvim/src/insexpand/text.rs": {"cell_ptr": 1, "missing_safety_doc": 9, "pub_items": 4, "unsafe_lines": 328},
-    "crates/nvim/src/insexpand/vimscript.rs": {"missing_safety_doc": 12, "pub_items": 4, "unsafe_lines": 388},
+    "crates/nvim/src/insexpand/vimscript.rs": {"missing_safety_doc": 12, "pub_items": 4, "unsafe_lines": 384},
     "crates/nvim/src/keycodes/codes.rs": {"pub_items": 349},
     "crates/nvim/src/keycodes/mod.rs": {"cell_ptr": 3, "pub_items": 13, "unsafe_lines": 470},
     "crates/nvim/src/keycodes/tables.rs": {"pub_items": 2},

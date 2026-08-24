@@ -212,9 +212,15 @@ impl CptSources {
     }
 
     /// Take `rows` as the new state, dropping whatever was there. The index
-    /// is left alone: the caller sets it when the scan starts.
+    /// is left alone: the caller sets it when the scan starts. Empty `rows`
+    /// leave the state unset -- a zero-length boxed slice is a *dangling*
+    /// pointer, not a null one, and `is_unset` is the null check upstream's
+    /// callers do.
     pub(crate) fn set_rows(self, rows: Vec<cpt_source_T>) {
         self.free_rows();
+        if rows.is_empty() {
+            return;
+        }
         let count = rows.len() as c_int;
         CPT_SOURCES.set(Box::into_raw(rows.into_boxed_slice()).cast::<cpt_source_T>());
         CPT_SOURCES_COUNT.set(count);
