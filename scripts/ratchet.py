@@ -129,7 +129,7 @@ unmeasured, as they were when they lived at the repo root):
               however many leaves it names; the point is pressure, not a
               census. It falls as modules narrow, which is phase 22's business.
 
-plus three whole-tree metrics:
+plus these whole-tree metrics, which are not per-file:
 
   internal_exports  the number of internal-only exports in the committed ABI
                     ledger (metrics/abi-ledger.jsonl — `just abi-ledger
@@ -143,6 +143,52 @@ plus three whole-tree metrics:
                     that stays public because a ported spec drives it. Falls
                     when a test stops needing the entry point; a new one is
                     growth that has to be justified.
+
+  cell_ptr_unlisted  the `cell_ptr` sites that are *not* one of the nine
+                    globals allowed to hand out a raw pointer forever. Phase
+                    22's shape in one number: `cell_ptr` counts every escape
+                    hatch, but a handful of globals are addresses libuv or
+                    libc owns — a `uv_loop_t` with self-referential
+                    multiqueues, uv stream/timer/signal handles, two
+                    `uv_mutex_t`s, a `uv_thread_t`, a `struct termios` handed
+                    to `tcsetattr`. Those cannot become owned Rust state
+                    without a rewrite of the C library underneath them, so
+                    counting them alongside the ones that can be owned hides
+                    the finish line.
+
+                    So: `cell_ptr_unlisted` = the tree's `cell_ptr` total,
+                    minus the `.ptr()`/`.as_raw()` sites whose receiver is a
+                    name in CELL_PTR_ALLOW (each entry carries the reason it
+                    is a boundary). It reaches **0** at the phase's exit, and
+                    at that point `cell_ptr` itself equals the allowlist's
+                    size and stops falling. The list is keyed by *name*, not
+                    by file, deliberately: `main_loop` alone is read from 29
+                    files that also hold unrelated `.ptr()` sites, so a
+                    file-keyed allowlist would exempt those too. A rename
+                    cannot silently widen the list either — `check_names`
+                    fails the run if an allowlisted name no longer declares a
+                    GlobalCell/SharedCell static.
+
+  cell_copy_owner   `.get()` reads of a global whose `T` derives `Copy` *and*
+                    transitively owns a raw pointer — a `String_0`, a
+                    `garray_T`, a `buffheader_T`. `get` copies the struct out
+                    of the cell, so the copy and the global now hold the same
+                    pointer: whoever frees or reallocates through one leaves
+                    the other dangling (`insexpand/getexp.rs` frees
+                    `compl_pattern.get().data()` while the global still holds
+                    it). Most sites are borrows *spelled* as copies —
+                    `script_items.get().ga_len` — and their fix is the owning
+                    family's rewrite, not a blanket transformation; a few are
+                    genuine moves and want `replace`/`take`.
+
+                    Counting them is what stops a 32nd static from joining the
+                    set unnoticed while the families are being rewritten. The
+                    list of statics (CELL_COPY_OWNER) is hand-maintained,
+                    because "derives Copy and transitively owns a pointer" is
+                    a type-graph question this script has no business
+                    answering; `check_names` does guarantee every name on it
+                    still declares a cell, so a deleted global cannot leave a
+                    stale entry propping the floor up.
 
   files_without_forbid_unsafe  the number of source files not carrying
                     #![forbid(unsafe_code)]. The shrink-only trick inverted:
@@ -281,6 +327,85 @@ COUNTED_RE = {
         re.M,
     ),
 }
+# The globals whose raw address a C library owns, and the reason for each.
+# `cell_ptr_unlisted` subtracts their `.ptr()`/`.as_raw()` sites from the
+# tree's `cell_ptr` total, so the metric measures only the sites that can
+# still become owned Rust state. Keyed by name because a file-keyed list
+# would exempt every unrelated site in the 29 files `main_loop` reaches.
+CELL_PTR_ALLOW = {
+    "main_loop": "uv_loop_t plus self-referential multiqueues; libuv owns the address",
+    "read_stream": "RStream — a uv stream handle registered with the loop",
+    "dummy_ap": "VaList<'static>; retires with the variadics, not with the cells",
+    # NB. `msgpack_rpc/server.rs` declares a second, unrelated `WATCHERS`;
+    # the list is name-keyed, so a `.ptr()` there would be exempted too. It
+    # has none today, and `cell_ptr` still counts it.
+    "WATCHERS": "uv_signal_t array whose addresses are registered with uv",
+    "REFRESH_TIMER": "TimeWatcher — a uv timer handle",
+    "MUTEX": "uv_mutex_t, const-initialised in place",
+    "runtime_search_path_mutex": "uv_mutex_t",
+    "main_thread": "uv_thread_t, compared with uv_thread_equal",
+    "TERMIOS_DEFAULT": "struct termios handed to tcsetattr",
+}
+# No whitespace is tolerated around the `.`, so that what this subtracts is
+# exactly a subset of what `cell_ptr`'s substring needles counted; rustfmt
+# writes the canonical form and `just fmt-check` enforces it.
+CELL_PTR_ALLOW_RE = re.compile(
+    r"\b(?:" + "|".join(map(re.escape, CELL_PTR_ALLOW)) + r")\.(?:ptr|as_raw)\(\)"
+)
+# Globals whose `T` derives Copy *and* transitively owns a raw pointer, so a
+# `.get()` hands out a second owner of the same allocation. Hand-maintained:
+# see the doc block. Grouped by the family whose slice retires them.
+CELL_COPY_OWNER = (
+    # insexpand — String_0 (a pointer + a length) and an Array of extmarks
+    "compl_pattern",
+    "compl_leader",
+    "compl_orig_text",
+    "adjusted_leader",
+    "compl_orig_extmarks",
+    # runtime — garray_T and the search-path buffers
+    "script_items",
+    "runtime_search_path",
+    "runtime_search_path_thread",
+    "ga_loaded",
+    # getchar — buffheader_T / typebuf_T, each a chain of owned blocks
+    "redobuff",
+    "old_redobuff",
+    "readbuf1",
+    "readbuf2",
+    "typebuf",
+    # regexp — saved matcher state holding pointers into the subject
+    "rex",
+    "rsm",
+    "behind_pos",
+    # the rest, one or a few sites each
+    "curgrid",
+    "au_new_curbuf",
+    "dont_sync_undo",
+    "old_sub",
+    "cmdline_block",
+    "restart_args",
+    "pending_vimresume",
+    "CLIPBOARD",
+    "pc_status",
+    "EXPAND_WHAT",
+    "value_init_String",
+    "provider_caller_scope",
+    "saved_last_search_spat",
+    "counted",
+)
+# Whitespace *is* tolerated here, unlike CELL_PTR_ALLOW_RE: this count is
+# not a subtraction from a substring total, and rustfmt wraps a long chain
+# onto its own line (`*script_items\n    .get()`), which is still a copy.
+CELL_COPY_OWNER_RE = re.compile(
+    r"\b(?:" + "|".join(map(re.escape, CELL_COPY_OWNER)) + r")\s*\.\s*get\(\)"
+)
+# What `check_names` demands of every name on either list: that somewhere in
+# the tree it still names a `static X: GlobalCell<..>`/`SharedCell<..>`. Any
+# visibility may precede `static`, and the static may sit inside a function
+# (`TERMIOS_DEFAULT` does), so only the two words either side of the name are
+# pinned.
+CELL_DECL = r"\bstatic\s+{}\s*:\s*(?:GlobalCell|SharedCell)\b"
+
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
 # A module's claim to have finished its casts. `.` spans newlines so the list
@@ -696,6 +821,40 @@ def ledgers():
     }
 
 
+def whole_tree(stats, tree):
+    """The two name-keyed whole-tree counts. See the doc block."""
+    return {
+        "cell_ptr_unlisted": sum(c["cell_ptr"] for c in stats.values())
+        - sum(len(CELL_PTR_ALLOW_RE.findall(m)) for m in tree.values()),
+        "cell_copy_owner": sum(
+            len(CELL_COPY_OWNER_RE.findall(m)) for m in tree.values()
+        ),
+    }
+
+
+def check_names(tree):
+    """Every allowlisted name still declares a cell.
+
+    Both lists are keyed by name, so a rename would quietly widen the
+    `cell_ptr` allowlist or quietly drop a `cell_copy_owner` floor. Neither
+    list is large enough for that to be caught by reading the diff, so the
+    run asserts it.
+    """
+    missing = [
+        name
+        for name in (*CELL_PTR_ALLOW, *CELL_COPY_OWNER)
+        if not any(re.search(CELL_DECL.format(name), m) for m in tree.values())
+    ]
+    if missing:
+        sys.exit(
+            "ratchet: these names are on a cell allowlist but no longer "
+            "declare a GlobalCell/SharedCell static:\n  "
+            + "\n  ".join(missing)
+            + "\nRename them in CELL_PTR_ALLOW/CELL_COPY_OWNER, or drop the "
+            "entry (and lower the baseline) if the global is gone."
+        )
+
+
 def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
     """The baseline document: only metrics with ratchet room are recorded
     (nonzero counts, over-cap line counts), so files that are already clean
@@ -716,6 +875,8 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
         "{\n"
         f'  "internal_exports": {ledger_counts["internal_exports"]},\n'
         f'  "test_reached_pub": {ledger_counts["test_reached_pub"]},\n'
+        f'  "cell_ptr_unlisted": {ledger_counts["cell_ptr_unlisted"]},\n'
+        f'  "cell_copy_owner": {ledger_counts["cell_copy_owner"]},\n'
         f'  "files_without_forbid_unsafe": {without_forbid},\n'
         f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files_without_deny_casts": {without_casts},\n'
@@ -724,16 +885,19 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
     )
 
 
-LEDGER_LABEL = {
+# The whole-tree counts, and how a violation of each reads.
+WHOLE_TREE_LABEL = {
     "internal_exports": "abi-ledger internal exports",
     "test_reached_pub": "test-reached pub items",
+    "cell_ptr_unlisted": "cell_ptr sites outside the boundary allowlist",
+    "cell_copy_owner": "get() copies of a Copy global owning a pointer",
 }
 
 
 def violations(stats, counts, without_forbid, without_deny, without_casts, baseline):
     """Every metric that grew past the committed baseline."""
     found = []
-    for name, label in LEDGER_LABEL.items():
+    for name, label in WHOLE_TREE_LABEL.items():
         # .get: absent from baselines committed before the metric existed.
         base = baseline.get(name, counts[name])
         if counts[name] > base:
@@ -774,6 +938,8 @@ def summary(stats, counts, without_forbid, without_deny, without_casts):
         f"{over} files over {LINE_CAP} lines",
         f"{counts['internal_exports']} internal exports",
         f"{counts['test_reached_pub']} test-reached pub items",
+        f"{counts['cell_ptr_unlisted']} unlisted cell_ptr sites",
+        f"{counts['cell_copy_owner']} Copy-owner get()s",
         f"{without_forbid} files without forbid(unsafe_code)",
         f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
         f"{without_casts} files without the cast deny",
@@ -945,6 +1111,39 @@ SELF_TEST_PUB_ITEMS = [
     ("pubfn f() {}\n", 0),
 ]
 
+# (source, expected allowlisted sites). The needle runs over masked source
+# and subtracts from `cell_ptr`, so it must match exactly what `cell_ptr`
+# matched — receiver-blind `.ptr()`/`.as_raw()`, with the receiver pinned.
+SELF_TEST_CELL_PTR_ALLOW = [
+    ("fn f() {\n    main_loop.ptr();\n}\n", 1),
+    ("fn f() {\n    MUTEX.as_raw();\n}\n", 1),
+    # Spacing rustfmt never writes is not matched either — the subtraction
+    # has to stay a subset of what `cell_ptr`'s substring needle counted.
+    ("fn f() {\n    main_loop . ptr();\n}\n", 0),
+    # A field or a method of the same name is not the global.
+    ("fn f() {\n    loop_.main_loop.ptr();\n}\n", 1),
+    ("fn f() {\n    x.not_main_loop.ptr();\n}\n", 0),
+    # Another global's site is exactly what the metric is left holding.
+    ("fn f() {\n    curbuf.ptr();\n}\n", 0),
+    # Prose about one costs nothing.
+    ("// main_loop.ptr()\nfn f() {}\n", 0),
+]
+# (source, expected cell_copy_owner)
+SELF_TEST_CELL_COPY_OWNER = [
+    ("fn f() {\n    compl_leader.get();\n}\n", 1),
+    ("fn f() {\n    let n = script_items.get().ga_len;\n}\n", 1),
+    # Only `get`: the other accessors do not hand out a second owner.
+    ("fn f() {\n    compl_leader.set(x);\n}\n", 0),
+    ("fn f() {\n    compl_leader.with(|s| s);\n}\n", 0),
+    # rustfmt wraps a long chain, and the copy still happens.
+    ("fn f() {\n    *script_items\n        .get()\n}\n", 1),
+    # A global that is not on the list.
+    ("fn f() {\n    p_ai.get();\n}\n", 0),
+    # A longer name ending in a listed one is not it.
+    ("fn f() {\n    saved_typebuf.get();\n}\n", 0),
+    ("// typebuf.get()\nfn f() {}\n", 0),
+]
+
 
 def self_test():
     for source, expected in SELF_TEST:
@@ -974,6 +1173,16 @@ def self_test():
     for source, expected in SELF_TEST_PUB_ITEMS:
         got = len(needle.findall(mask(source)))
         assert got == expected, f"pub_items={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_CELL_PTR_ALLOW:
+        got = len(CELL_PTR_ALLOW_RE.findall(mask(source)))
+        assert got == expected, (
+            f"cell_ptr allowlist={got}, want {expected}, for {source!r}"
+        )
+    for source, expected in SELF_TEST_CELL_COPY_OWNER:
+        got = len(CELL_COPY_OWNER_RE.findall(mask(source)))
+        assert got == expected, (
+            f"cell_copy_owner={got}, want {expected}, for {source!r}"
+        )
     for source, expected in SELF_TEST_PLACE_WRITE:
         got = len(place_writes({"t.rs": mask(source)}))
         assert got == expected, f"place_writes={got}, want {expected}, for {source!r}"
@@ -987,7 +1196,8 @@ def main():
     self_test()
     stats, without_forbid, without_deny, without_casts, tree = measure()
     check_place_writes(tree)
-    counts = ledgers()
+    check_names(tree)
+    counts = {**ledgers(), **whole_tree(stats, tree)}
     content = render(stats, counts, without_forbid, without_deny, without_casts)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
