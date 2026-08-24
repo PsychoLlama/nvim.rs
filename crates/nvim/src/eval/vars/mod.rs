@@ -60,8 +60,8 @@ use crate::message::{
     msg_outtrans, msg_putchar, msg_puts, msg_puts_len, msg_start,
 };
 use crate::option::{
-    find_option, get_option, get_option_sctx, get_option_value, get_tty_option, get_winbuf_options,
-    is_option_hidden, is_tty_option, kOptFlagFunc, option_has_type, optval_free,
+    find_option, get_option, get_option_value, get_tty_option, get_winbuf_options,
+    is_option_hidden, is_tty_option, kOptFlagFunc, option_has_type, option_last_set, optval_free,
     set_option_value_handle_tty,
 };
 use crate::options::{

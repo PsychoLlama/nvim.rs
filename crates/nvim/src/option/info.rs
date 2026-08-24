@@ -16,13 +16,13 @@ use crate::options::*;
 use crate::types::{
     Arena, Dict, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, String_0, buf_T,
     int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    key_value_pair, object, object_data, scid_T, sctx_T, size_t, vimoption_T, win_T,
+    key_value_pair, object, object_data, scid_T, sctx_T, size_t, win_T,
 };
 
 use super::{
-    find_option_len, get_opt_idx, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptFlagWasSet,
-    kOptScopeBuf, kOptScopeWin, option_get_type, option_has_scope, option_is_global_local,
-    optval_as_object, optval_type_name,
+    find_option_len, get_option, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptScopeBuf,
+    kOptScopeWin, option_default, option_get_type, option_has_scope, option_is_global_local,
+    option_last_set, option_was_set, optval_as_object, optval_type_name,
 };
 
 /// Append `key: value` to an arena-backed dictionary.
@@ -96,8 +96,7 @@ pub(crate) unsafe fn get_vimoption(
                 items: ptr::null_mut::<KeyValuePair>(),
             };
         }
-        let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-        vimoption2dict(opt, opt_flags, buf, win, arena)
+        vimoption2dict(opt_idx, opt_flags, buf, win, arena)
     }
 }
 
@@ -112,16 +111,15 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
     unsafe {
         let mut retval = arena_dict(arena, kOptCount as size_t);
         for opt_idx in kOptAleph..kOptCount {
-            let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
             let opt_dict = vimoption2dict(
-                opt,
+                opt_idx,
                 OptionSetFlags::GLOBAL,
                 curbuf.get(),
                 curwin.get(),
                 arena,
             );
             *retval.items.add(retval.size) = key_value_pair {
-                key: cstr_as_string((*opt).fullname),
+                key: cstr_as_string(get_option(opt_idx).fullname),
                 value: object {
                     type_0: kObjectTypeDict,
                     data: object_data { dict: opt_dict },
@@ -140,19 +138,19 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
 ///
 /// # Safety
 ///
-/// `opt` must point into the option table; `buf` and `win` must be live
-/// unless `opt_flags` is exactly `OptionSetFlags::GLOBAL`.
+/// `buf` and `win` must be live unless `opt_flags` is exactly
+/// `OptionSetFlags::GLOBAL`.
 unsafe fn last_set(
-    opt: *mut vimoption_T,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
 ) -> sctx_T {
+    let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live for the scopes reached below.
     unsafe {
         if opt_flags == OptionSetFlags::GLOBAL {
-            return (*opt).script_ctx;
+            return option_last_set(opt_idx);
         }
         let mut script_ctx = sctx_T {
             sc_sid: 0 as scid_T,
@@ -161,14 +159,14 @@ unsafe fn last_set(
             sc_chan: 0,
         };
         if option_has_scope(opt_idx, kOptScopeBuf) {
-            script_ctx = (*buf).b_p_script_ctx[(*opt).scope_idx[kOptScopeBuf as usize] as usize];
+            script_ctx = (*buf).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize];
         }
         if option_has_scope(opt_idx, kOptScopeWin) {
             script_ctx =
-                (*win).w_onebuf_opt.wo_script_ctx[(*opt).scope_idx[kOptScopeWin as usize] as usize];
+                (*win).w_onebuf_opt.wo_script_ctx[opt.scope_idx[kOptScopeWin as usize] as usize];
         }
         if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
-            script_ctx = (*opt).script_ctx;
+            script_ctx = option_last_set(opt_idx);
         }
         script_ctx
     }
@@ -178,23 +176,22 @@ unsafe fn last_set(
 ///
 /// # Safety
 ///
-/// `opt` must point into the option table; `buf`, `win` and `arena` must be
-/// live.
+/// `buf`, `win` and `arena` must be live.
 pub(crate) unsafe fn vimoption2dict(
-    opt: *mut vimoption_T,
+    opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
     arena: *mut Arena,
 ) -> Dict {
+    let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live, and the dictionary is asked
     // for exactly the thirteen slots pushed below.
     unsafe {
-        let opt_idx = get_opt_idx(opt);
         let mut dict = arena_dict(arena, 13 as size_t);
 
-        push(&mut dict, c"name", str_value((*opt).fullname));
-        push(&mut dict, c"shortname", str_value((*opt).shortname));
+        push(&mut dict, c"name", str_value(opt.fullname));
+        push(&mut dict, c"shortname", str_value(opt.shortname));
 
         // An option in more than one scope reports the narrowest.
         let scope = if option_has_scope(opt_idx, kOptScopeBuf) {
@@ -214,20 +211,16 @@ pub(crate) unsafe fn vimoption2dict(
         push(
             &mut dict,
             c"commalist",
-            bool_value((*opt).flags & kOptFlagComma != 0),
+            bool_value(opt.flags & kOptFlagComma != 0),
         );
         push(
             &mut dict,
             c"flaglist",
-            bool_value((*opt).flags & kOptFlagFlagList != 0),
+            bool_value(opt.flags & kOptFlagFlagList != 0),
         );
-        push(
-            &mut dict,
-            c"was_set",
-            bool_value((*opt).flags & kOptFlagWasSet != 0),
-        );
+        push(&mut dict, c"was_set", bool_value(option_was_set(opt_idx)));
 
-        let script_ctx = last_set(opt, opt_idx, opt_flags, buf, win);
+        let script_ctx = last_set(opt_idx, opt_flags, buf, win);
         push(
             &mut dict,
             c"last_set_sid",
@@ -249,11 +242,15 @@ pub(crate) unsafe fn vimoption2dict(
             c"type",
             str_value(optval_type_name(option_get_type(opt_idx)).as_ptr()),
         );
-        push(&mut dict, c"default", optval_as_object((*opt).def_val));
+        push(
+            &mut dict,
+            c"default",
+            optval_as_object(option_default(opt_idx)),
+        );
         push(
             &mut dict,
             c"allows_duplicates",
-            bool_value((*opt).flags & kOptFlagNoDup == 0),
+            bool_value(opt.flags & kOptFlagNoDup == 0),
         );
 
         dict

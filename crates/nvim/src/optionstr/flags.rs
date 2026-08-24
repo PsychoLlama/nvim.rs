@@ -39,9 +39,7 @@ pub(crate) fn opt_values(idx: OptIndex) -> &'static [&'static CStr] {
         kOptFileformats => kOptFileformat,
         _ => idx,
     };
-    // SAFETY: `get_option` indexes the generated option table with a valid
-    // index and returns a row of it, which lives for the process.
-    unsafe { (*get_option(shared)).values }
+    get_option(shared).values
 }
 
 /// Does `value` open with `word`, ending there or at a separating comma?
@@ -173,17 +171,16 @@ pub(crate) unsafe fn did_set_option_listflag(
 /// # Safety
 /// `varp` is null or points at the option's `char *` variable.
 pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_int {
-    // SAFETY: `get_option` returns a row of the generated option table.
     let opt = get_option(idx);
     let varp = if varp.is_null() {
-        unsafe { option_var(opt).cast::<*mut c_char>() }
+        option_var(idx).cast::<*mut c_char>()
     } else {
         varp
     };
-    let list = unsafe { (*opt).flags } & (kOptFlagComma | kOptFlagOneComma) != 0;
+    let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
     let values = opt_values(idx);
     // The table names the mask cell itself; an option with no mask has none.
-    let flagp = unsafe { (*opt).flags_var }.map_or(ptr::null_mut(), |cell| cell.ptr());
+    let flagp = opt.flags_var.map_or(ptr::null_mut(), |cell| cell.ptr());
     // SAFETY: the option's variable holds a C string.
     unsafe { opt_strings_flags(*varp, values, flagp, list) }
 }

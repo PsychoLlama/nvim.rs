@@ -36,7 +36,7 @@ use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
     kOptFileformats, kOptHelplang, kOptIcon, kOptInvalid, kOptModeline, kOptPackpath,
     kOptRuntimepath, kOptScroll, kOptShell, kOptShellpipe, kOptShellredir, kOptTermbidi, kOptTitle,
-    kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow, options,
+    kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow,
 };
 use crate::optionstr::{check_buf_options, free_string_option};
 use crate::os::cshim::{bind_textdomain_codeset, gettext, memmove, snprintf, strncasecmp, strncmp};
@@ -49,18 +49,19 @@ use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, PATHSEPSTR, String_0, garray_T,
-    size_t, tabpage_T, uint32_t, vimoption_T,
+    size_t, tabpage_T, uint32_t,
 };
 use crate::window::{last_status, win_comp_scroll};
 use ::libc::{getuid, strlen};
 
 use super::{
     NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, boolean_optval, check_options,
-    check_win_options, default_fileformat, didset_options, didset_options2, get_option_unset_value,
-    insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagInsecure, kOptFlagNoDefExp,
-    kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeNumber, kOptValTypeString, option_expand,
+    check_win_options, default_fileformat, didset_options, didset_options2, get_option,
+    get_option_unset_value, insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagNoDefExp,
+    kOptFlagNoDefault, kOptValTypeNumber, kOptValTypeString, option_default, option_expand,
     option_has_type, option_is_global_local, option_var, option_was_set, optval_copy, optval_free,
     set_fileformat, set_option_direct, set_option_value_give_err, set_option_varp,
+    store_option_default,
 };
 
 /// Every option, in table order.
@@ -100,18 +101,11 @@ unsafe fn owned(value: *mut c_char) -> OptVal {
 const OFF: OptVal = boolean_optval(Some(false));
 const ON: OptVal = boolean_optval(Some(true));
 
-/// Whether a script has already given the option a value, in which case a
-/// computed default must not overwrite it.
-fn was_set(opt_idx: OptIndex) -> bool {
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { (*options.ptr())[opt_idx as usize].flags & kOptFlagWasSet as uint32_t != 0 }
-}
-
 /// A new tab page starts with the global 'cmdheight', not with whatever the
 /// tab page it was opened from had.
 pub(crate) fn set_init_tablocal() {
-    // SAFETY: the option table is a plain array, and 'cmdheight' is numeric.
-    p_ch.set(unsafe { (*options.ptr())[kOptCmdheight as usize].def_val.data.number });
+    // SAFETY: 'cmdheight' is numeric, so the union holds its number.
+    p_ch.set(unsafe { option_default(kOptCmdheight).data.number });
 }
 
 /// 'shell' defaults to `$SHELL`. A path with a space in it is quoted, since
@@ -152,7 +146,7 @@ fn set_init_default_backupskip() {
     // or an owned result of `vim_getenv`.
     unsafe {
         ga_init(&raw mut ga, 1, 100);
-        let flags = (*options.ptr())[kOptBackupskip as usize].flags;
+        let flags = get_option(kOptBackupskip).flags;
 
         for name in SOURCES {
             let (dir, mut dirlen, owned) = if name.is_empty() {
@@ -243,18 +237,17 @@ fn set_init_expand_env() {
     // option's own variable.
     unsafe {
         for opt_idx in all_options() {
-            let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
-            if (*opt).flags & kOptFlagNoDefExp as uint32_t != 0 {
+            let opt = get_option(opt_idx);
+            if opt.flags & kOptFlagNoDefExp as uint32_t != 0 {
                 continue;
             }
             // A `kOptFlagGettext` default is a translatable message rather
             // than a path; there is nothing in it to expand.
-            let expanded =
-                if (*opt).flags & kOptFlagGettext as uint32_t != 0 && (*opt).var.has_global() {
-                    gettext(*option_var(opt).cast::<*mut c_char>())
-                } else {
-                    option_expand(opt_idx, ptr::null())
-                };
+            let expanded = if opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global() {
+                gettext(*option_var(opt_idx).cast::<*mut c_char>())
+            } else {
+                option_expand(opt_idx, ptr::null())
+            };
             if expanded.is_null() {
                 continue;
             }
@@ -264,7 +257,7 @@ fn set_init_expand_env() {
                     string: cstr_to_string(expanded),
                 },
             };
-            set_option_varp(opt_idx, option_var(opt), value, true);
+            set_option_varp(opt_idx, option_var(opt_idx), value, true);
             change_option_default(
                 opt_idx,
                 OptVal {
@@ -389,18 +382,17 @@ pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -
     if opt_flags.has(OptionSetFlags::LOCAL) && option_is_global_local(opt_idx) {
         return get_option_unset_value(opt_idx);
     }
-    // SAFETY: the option table is a plain array, and the string arm is only
-    // read once the type has been tested.
+    let default = option_default(opt_idx);
+    // SAFETY: the string arm is only read once the type has been tested.
     unsafe {
-        let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
         if !option_has_type(opt_idx, kOptValTypeString)
-            || (*opt).flags & kOptFlagNoDefExp as uint32_t != 0
+            || get_option(opt_idx).flags & kOptFlagNoDefExp as uint32_t != 0
         {
-            return (*opt).def_val;
+            return default;
         }
-        let expanded = option_expand(opt_idx, (*opt).def_val.data.string.data());
+        let expanded = option_expand(opt_idx, default.data.string.data());
         if expanded.is_null() {
-            (*opt).def_val
+            default
         } else {
             owned(expanded)
         }
@@ -410,23 +402,16 @@ pub(crate) fn get_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) -
 /// Give every default in the table an allocation of its own, so that the
 /// computed ones below can free what they replace.
 fn alloc_options_default() {
-    // SAFETY: the option table is a plain array.
-    unsafe {
-        for opt_idx in all_options() {
-            let def_val = &mut (*options.ptr())[opt_idx as usize].def_val;
-            *def_val = optval_copy(*def_val);
-        }
+    for opt_idx in all_options() {
+        store_option_default(opt_idx, optval_copy(option_default(opt_idx)));
     }
 }
 
 /// Replace an option's default, releasing the one it had. Takes ownership.
 pub(crate) fn change_option_default(opt_idx: OptIndex, value: OptVal) {
-    // SAFETY: the option table is a plain array, and every default in it is
-    // owned by the table after `alloc_options_default`.
-    unsafe {
-        optval_free((*options.ptr())[opt_idx as usize].def_val);
-        (*options.ptr())[opt_idx as usize].def_val = value;
-    }
+    // Every default is owned by the option after `alloc_options_default`.
+    optval_free(option_default(opt_idx));
+    store_option_default(opt_idx, value);
 }
 
 /// Put an option back to its default, and clear the insecure mark with it —
@@ -443,10 +428,9 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
         if opt_idx == kOptScroll {
             win_comp_scroll(curwin.get());
         }
-        *insecure_flag(curwin.get(), opt_idx, opt_flags) &= !(kOptFlagInsecure as uint32_t);
+        insecure_flag(curwin.get(), opt_idx, opt_flags).set(false);
         if both {
-            *insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL) &=
-                !(kOptFlagInsecure as uint32_t);
+            insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL).set(false);
         }
     }
 }
@@ -457,7 +441,7 @@ pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
     // SAFETY: the option table and the window lists are the editor's own.
     unsafe {
         for opt_idx in all_options() {
-            if (*options.ptr())[opt_idx as usize].flags & kOptFlagNoDefault as uint32_t == 0 {
+            if get_option(opt_idx).flags & kOptFlagNoDefault as uint32_t == 0 {
                 set_option_default(opt_idx, opt_flags);
             }
         }
@@ -560,7 +544,7 @@ pub(crate) fn set_init_2(_headless: bool) {
         );
         // 'scroll' is half the window height, so it could not be defaulted
         // before there was a window.
-        if !was_set(kOptScroll) {
+        if !option_was_set(kOptScroll) {
             set_option_default(kOptScroll, OptionSetFlags::LOCAL);
         }
         comp_col();
@@ -603,8 +587,8 @@ pub(crate) fn set_init_3() {
     unsafe {
         parse_shape_opt(SHAPE_CURSOR);
 
-        let do_srr = !was_set(kOptShellredir);
-        let do_sp = !was_set(kOptShellpipe);
+        let do_srr = !option_was_set(kOptShellredir);
+        let do_sp = !option_was_set(kOptShellpipe);
 
         let mut len: size_t = 0;
         let tail = invocation_path_tail(p_sh.get(), &raw mut len);
@@ -629,7 +613,7 @@ pub(crate) fn set_init_3() {
         // An empty buffer has no line endings to have detected a format
         // from, so it takes the first of 'fileformats' — but only if the
         // user gave that option a value; otherwise its own default stands.
-        if buf_is_empty(curbuf.get()) && was_set(kOptFileformats) {
+        if buf_is_empty(curbuf.get()) && option_was_set(kOptFileformats) {
             set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
         }
     }
@@ -650,7 +634,7 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
         let lang_len = strlen(lang);
         // Two letters is what the option holds; anything shorter cannot be
         // a language code.
-        if lang_len < 2 || was_set(kOptHelplang) {
+        if lang_len < 2 || option_was_set(kOptHelplang) {
             return;
         }
         free_string_option(p_hlg.get());
@@ -675,7 +659,7 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
 /// nvim does not have to ask the terminal what its title was.
 pub(crate) fn set_title_defaults() {
     for (opt_idx, cell) in [(kOptTitle, &p_title), (kOptIcon, &p_icon)] {
-        if !was_set(opt_idx) {
+        if !option_was_set(opt_idx) {
             change_option_default(opt_idx, OFF);
             cell.set(0);
         }

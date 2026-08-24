@@ -54,11 +54,12 @@ use crate::window::set_winbar;
 use super::{
     NIL_OPTVAL, NO_LOCAL_UNDOLEVEL, NUMBUFLEN, SID_NONE, boolean_optval, check_redraw,
     do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp, get_varp_scope,
-    insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure,
-    kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_scope, option_has_type,
+    insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll,
+    kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean,
+    kOptValTypeNumber, kOptValTypeString, mark_option_was_set, option_has_scope, option_has_type,
     option_is_global_local, option_is_global_only, option_scope_idx, option_var, optval_copy,
-    optval_equal, optval_free, optval_from_varp, set_option_varp, validate_option_value,
+    optval_equal, optval_free, optval_from_varp, set_option_last_set, set_option_varp,
+    validate_option_value,
 };
 use crate::pos::MAXCOL;
 
@@ -66,13 +67,6 @@ use crate::pos::MAXCOL;
 /// address to every `did_set_*`, so it cannot live on the stack of a
 /// function whose frame the autocommands may outlive.
 static ERRBUF: GlobalCell<[c_char; IOSIZE as usize]> = GlobalCell::new([0; IOSIZE as usize]);
-
-/// The script context recorded for the global value of an option.
-pub(crate) fn get_option_sctx(opt_idx: OptIndex) -> *mut sctx_T {
-    debug_assert!(opt_idx != kOptInvalid);
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { &raw mut (*options.ptr())[opt_idx as usize].script_ctx }
-}
 
 /// Record where the option was just set, in every scope the flags name.
 pub(crate) fn set_option_sctx(
@@ -92,8 +86,7 @@ pub(crate) fn set_option_sctx(
     unsafe { nlua_set_sctx(&raw mut script_ctx) };
 
     if both || opt_flags.has(OptionSetFlags::GLOBAL) || option_is_global_only(opt_idx) {
-        // SAFETY: the option table is a plain array.
-        unsafe { (*options.ptr())[opt_idx as usize].script_ctx = script_ctx };
+        set_option_last_set(opt_idx, script_ctx);
     }
     if !both && !opt_flags.has(OptionSetFlags::LOCAL) {
         return;
@@ -182,7 +175,7 @@ fn apply_optionset_autocmd(
 
         apply_autocmds(
             EVENT_OPTIONSET,
-            (*options.ptr())[opt_idx as usize].fullname,
+            get_option(opt_idx).fullname,
             ptr::null_mut(),
             false,
             ptr::null_mut(),
@@ -307,16 +300,18 @@ pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> 
     // SAFETY: `opt` points into the option table, which is what both of
     // these want.
     unsafe {
-        let opt = get_option(opt_idx);
-        optval_copy(optval_from_varp(opt_idx, get_varp_scope(opt, opt_flags)))
+        optval_copy(optval_from_varp(
+            opt_idx,
+            get_varp_scope(opt_idx, opt_flags),
+        ))
     }
 }
 
-/// The option table's row for an option.
-pub(crate) fn get_option(opt_idx: OptIndex) -> *mut vimoption_T {
+/// The option table's row for an option: everything the option *is*, all
+/// of it immutable. What changes about it is `super::state`'s business.
+pub(crate) fn get_option(opt_idx: OptIndex) -> &'static vimoption_T {
     debug_assert!(opt_idx != kOptInvalid);
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { &raw mut (*options.ptr())[opt_idx as usize] }
+    &options[opt_idx as usize]
 }
 
 /// The value that stands for "this window or buffer has no local value".
@@ -329,12 +324,9 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     debug_assert!(opt_idx != kOptInvalid);
 
     if !option_is_global_local(opt_idx) {
-        // SAFETY: `get_varp_scope` wants a row of the option table.
+        // SAFETY: `optval_from_varp` reads the variable as its own type.
         return unsafe {
-            optval_from_varp(
-                opt_idx,
-                get_varp_scope(get_option(opt_idx), OptionSetFlags::GLOBAL),
-            )
+            optval_from_varp(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::GLOBAL))
         };
     }
     // A string global-local option is unset when it is empty.
@@ -370,7 +362,7 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
     }
     // SAFETY: `get_varp_scope` wants a row of the option table.
     let local = unsafe {
-        let varp_local = get_varp_scope(get_option(opt_idx), OptionSetFlags::LOCAL);
+        let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
         optval_from_varp(opt_idx, varp_local)
     };
     optval_equal(local, get_option_unset_value(opt_idx))
@@ -429,17 +421,17 @@ pub(crate) unsafe fn did_set_option(
 
         if direct {
             // Nothing to vet: the caller is putting a value back.
-        } else if (*opt).immutable && !optval_equal(old_value, new_value) {
+        } else if opt.immutable && !optval_equal(old_value, new_value) {
             errmsg = e_unsupportedoption.as_ptr();
         } else if (secure.get() != 0 || sandbox.get() != 0)
-            && (*opt).flags & kOptFlagSecure as uint32_t != 0
+            && opt.flags & kOptFlagSecure as uint32_t != 0
         {
             errmsg = e_secure.as_ptr();
         } else if new_value.type_0 == kOptValTypeString
-            && check_illegal_path_names(CStr::from_ptr(*varp.cast::<*mut c_char>()), (*opt).flags)
+            && check_illegal_path_names(CStr::from_ptr(*varp.cast::<*mut c_char>()), opt.flags)
         {
             errmsg = e_invarg.as_ptr();
-        } else if let Some(did_set_cb) = (*opt).opt_did_set_cb {
+        } else if let Some(did_set_cb) = opt.opt_did_set_cb {
             errmsg = did_set_cb(&raw mut args);
             // 'filetype' and 'syntax' report whether the value really moved;
             // they, 'keymap' and the character-class options report whether
@@ -483,11 +475,11 @@ pub(crate) unsafe fn did_set_option(
             if option_is_global_local(opt_idx) {
                 // A bare `:set` on a global-local option drops the local
                 // value rather than assigning it too.
-                let varp_local = get_varp_scope(opt, OptionSetFlags::LOCAL);
+                let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
                 let unset = optval_copy(get_option_unset_value(opt_idx));
                 set_option_varp(opt_idx, varp_local, unset, true);
             } else {
-                let varp_global = get_varp_scope(opt, OptionSetFlags::GLOBAL);
+                let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
                 set_option_varp(opt_idx, varp_global, optval_copy(new_value), true);
             }
         }
@@ -527,15 +519,15 @@ pub(crate) unsafe fn did_set_option(
         }
 
         if (*curwin.get()).w_curswant != MAXCOL as c_int
-            && (*opt).flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
-            && (*opt).flags & kOptFlagHLOnly as uint32_t == 0
+            && opt.flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
+            && opt.flags & kOptFlagHLOnly as uint32_t == 0
         {
             (*curwin.get()).w_set_curswant = true;
         }
 
-        check_redraw((*opt).flags);
+        check_redraw(opt.flags);
 
-        (*opt).flags |= kOptFlagWasSet as uint32_t;
+        mark_option_was_set(opt_idx);
 
         // Anything set from a modeline, from the sandbox or in secure mode
         // is insecure unless the callback vetted it; replacing a value
@@ -546,14 +538,14 @@ pub(crate) unsafe fn did_set_option(
         if !value_checked
             && (secure.get() != 0 || sandbox.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
         {
-            *flagsp |= kOptFlagInsecure as uint32_t;
+            flagsp.set(true);
             if let Some(local) = flagsp_local {
-                *local |= kOptFlagInsecure as uint32_t;
+                local.set(true);
             }
         } else if value_replaced {
-            *flagsp &= !(kOptFlagInsecure as uint32_t);
+            flagsp.set(false);
             if let Some(local) = flagsp_local {
-                *local &= !(kOptFlagInsecure as uint32_t);
+                local.set(false);
             }
         }
     }
@@ -607,12 +599,12 @@ pub(crate) unsafe fn set_option(
         // `:set opt=val` on a global-local option resets the local value, so
         // it is the global variable that is being written.
         let varp = if scope_both && option_is_global_local(opt_idx) {
-            option_var(opt)
+            option_var(opt_idx)
         } else {
-            get_varp_scope(opt, opt_flags)
+            get_varp_scope(opt_idx, opt_flags)
         };
-        let varp_local = get_varp_scope(opt, OptionSetFlags::LOCAL);
-        let varp_global = get_varp_scope(opt, OptionSetFlags::GLOBAL);
+        let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
+        let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
 
         let old_value = optval_from_varp(opt_idx, varp);
         let old_global_value = optval_from_varp(opt_idx, varp_global);
@@ -626,7 +618,7 @@ pub(crate) unsafe fn set_option(
         // `v:option_old`: for `:setlocal` on a global-local option with no
         // local value, that is whatever the option reads through.
         let used_old_value = if scope_local && is_opt_local_unset {
-            optval_from_varp(opt_idx, get_varp(opt))
+            optval_from_varp(opt_idx, get_varp(opt_idx))
         } else {
             old_value
         };
@@ -638,13 +630,13 @@ pub(crate) unsafe fn set_option(
         let saved_old_local_value = optval_copy(old_local_value);
         let saved_new_value = optval_copy(value);
 
-        let insecure = *insecure_flag(curwin.get(), opt_idx, opt_flags);
+        let insecure = insecure_flag(curwin.get(), opt_idx, opt_flags).is_set();
         let secure_saved = secure.get();
         // Deal with the side effects of a modeline, of the sandbox, or of a
         // value amended rather than replaced, in secure mode.
         if opt_flags.has(OptionSetFlags::MODELINE)
             || sandbox.get() != 0
-            || (!value_replaced && insecure & kOptFlagInsecure as uint32_t != 0)
+            || (!value_replaced && insecure)
         {
             secure.set(1);
         }
@@ -676,9 +668,9 @@ pub(crate) unsafe fn set_option(
                     saved_new_value,
                 );
             }
-            if (*opt).flags & kOptFlagUIOption as uint32_t != 0 {
+            if opt.flags & kOptFlagUIOption as uint32_t != 0 {
                 ui_call_option_set(
-                    cstr_as_string((*opt).fullname),
+                    cstr_as_string(opt.fullname),
                     super::optval_as_object(saved_new_value),
                 );
             }
@@ -735,7 +727,7 @@ pub(crate) fn set_option_value(
     // SAFETY: the option table is a plain array, and `ERRBUF` is `IOSIZE`
     // writable bytes.
     unsafe {
-        if sandbox.get() > 0 && (*options.ptr())[opt_idx as usize].flags & kOptFlagSecure != 0 {
+        if sandbox.get() > 0 && get_option(opt_idx).flags & kOptFlagSecure != 0 {
             return gettext(e_sandbox.as_ptr());
         }
         set_option(

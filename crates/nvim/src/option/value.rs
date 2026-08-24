@@ -16,7 +16,6 @@ use core::ptr;
 use crate::api::private::helpers::{api_free_string, copy_string, cstr_as_string};
 use crate::main::curbuf;
 use crate::memory::{strnequal, xmalloc, xstrdup};
-use crate::options::options;
 use crate::optionstr::is_empty_option;
 use crate::os::cshim::snprintf;
 use crate::types::{
@@ -26,8 +25,8 @@ use crate::types::{
 use crate::undo::curbuf_is_changed;
 
 use super::{
-    NUMBUFLEN, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
-    kOptValTypeString, option_has_type,
+    NUMBUFLEN, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
+    kOptValTypeString, option_default, option_has_type,
 };
 
 /// An `OptVal` holding nothing: an unknown option, or one the caller only
@@ -138,8 +137,7 @@ pub(crate) fn optval_equal(o1: OptVal, o2: OptVal) -> bool {
 
 /// The type the table declares for an option.
 pub(crate) fn option_get_type(opt_idx: OptIndex) -> OptValType {
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { (*options.ptr())[opt_idx as usize].type_0 }
+    get_option(opt_idx).type_0
 }
 
 /// Read the option variable `varp` points at as a value of `opt_idx`'s type.
@@ -313,7 +311,5 @@ pub(crate) unsafe fn optval_is_default(opt_idx: OptIndex, varp: *mut c_void) -> 
     }
     // SAFETY: the caller's `varp` is this option's variable.
     let current = unsafe { optval_from_varp(opt_idx, varp) };
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    let default = unsafe { (*options.ptr())[opt_idx as usize].def_val };
-    optval_equal(current, default)
+    optval_equal(current, option_default(opt_idx))
 }

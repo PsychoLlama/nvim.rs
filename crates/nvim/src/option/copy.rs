@@ -47,7 +47,7 @@ use crate::options::{
     kBufOptShiftwidth, kBufOptSmartindent, kBufOptSofttabstop, kBufOptSpellcapcheck,
     kBufOptSpellfile, kBufOptSpelllang, kBufOptSpelloptions, kBufOptSuffixesadd, kBufOptSwapfile,
     kBufOptSynmaxcol, kBufOptTabstop, kBufOptTagfunc, kBufOptTextwidth, kBufOptUndofile,
-    kBufOptVarsofttabstop, kBufOptVartabstop, kBufOptWrapmargin, kOptModifiable, options,
+    kBufOptVarsofttabstop, kBufOptVartabstop, kBufOptWrapmargin, kOptModifiable,
 };
 use crate::optionstr::{
     check_buf_options, check_signcolumn, check_string_option, clear_string_option, empty_option,
@@ -60,7 +60,7 @@ use crate::window::{check_colorcolumn, set_winbar_win};
 use super::{
     BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, boolean_optval,
     change_option_default, check_blending, fill_culopt_flags, kFillchars, kListchars,
-    parse_winhl_opt, set_chars_option,
+    option_last_set, parse_winhl_opt, set_chars_option,
 };
 use crate::option::cpo_has;
 
@@ -329,7 +329,7 @@ unsafe fn copy_sctx(buf: *mut buf_T, bv: BufOptIndex) {
     // row to a row of the option table.
     unsafe {
         let opt_idx = buf_opt_idx[bv as usize];
-        (*buf).b_p_script_ctx[bv as usize] = (*options.ptr())[opt_idx as usize].script_ctx;
+        (*buf).b_p_script_ctx[bv as usize] = option_last_set(opt_idx);
     }
 }
 

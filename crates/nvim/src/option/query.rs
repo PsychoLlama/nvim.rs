@@ -31,14 +31,13 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptIndex, OptVal, OptValData,
-    OptionSetFlags, ShmFlag, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
-    uint8_t, vimoption_T, win_T,
+    BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptVal, OptValData, OptionSetFlags,
+    ShmFlag, VAR_STRING, buf_T, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t, win_T,
 };
 use ::libc::{strcmp, strlen};
 
 use super::{
-    EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_varp, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin,
+    EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
     kOptValTypeString, option_has_scope, optval_from_varp, set_option_direct,
 };
 use crate::state::MODE_TERMINAL;
@@ -107,20 +106,6 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
             xfree(full.cast::<c_void>());
         }
     }
-}
-
-/// Whether anything has ever set the option.
-pub(crate) fn option_was_set(opt_idx: OptIndex) -> bool {
-    debug_assert!(opt_idx != kOptInvalid);
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { (*options.ptr())[opt_idx as usize].flags & kOptFlagWasSet != 0 }
-}
-
-/// Forget that anything set the option — what `:set all&` does.
-pub(crate) fn reset_option_was_set(opt_idx: OptIndex) {
-    debug_assert!(opt_idx != kOptInvalid);
-    // SAFETY: the option table is a plain array; nothing holds a borrow.
-    unsafe { (*options.ptr())[opt_idx as usize].flags &= !kOptFlagWasSet }
 }
 
 /// Parse 'cursorlineopt' into `wp->w_p_culopt_flags`, from `val` or from the
@@ -501,13 +486,13 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
             if !option_has_scope(opt_idx, scope) {
                 continue;
             }
-            let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-            let varp = get_varp(opt);
+            let varp = get_varp(opt_idx);
             if varp.is_null() {
                 continue;
             }
             let mut tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);
-            tv_dict_add_tv(d, (*opt).fullname, strlen((*opt).fullname), &raw mut tv);
+            let name = get_option(opt_idx).fullname;
+            tv_dict_add_tv(d, name, strlen(name), &raw mut tv);
         }
         d
     }

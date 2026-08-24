@@ -37,7 +37,7 @@ use core::ptr;
 
 use crate::ex_docmd::did_set_findfunc;
 use crate::ex_getln::did_set_cedit;
-use crate::global_cell::GlobalCell;
+use crate::global_cell::ConstTable;
 use crate::insexpand::{did_set_completefunc, did_set_omnifunc, did_set_thesaurusfunc};
 use crate::main::{
     bkc_flags, bo_flags, cb_flags, cmp_flags, cot_flags, dy_flags, fdo_flags, jop_flags, p_ac,
@@ -121,8 +121,7 @@ use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::option::MAX_MCO;
 use crate::types::{
-    OptIndex, OptInt, OptScopeFlags, OptVal, OptValData, OptVar, String_0, sctx_T, ssize_t,
-    vimoption_T,
+    OptIndex, OptInt, OptScopeFlags, OptVal, OptValData, OptVar, String_0, ssize_t, vimoption_T,
 };
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
@@ -148,12 +147,6 @@ const BLANK: vimoption_T = vimoption_T {
     opt_did_set_cb: None,
     opt_expand_cb: None,
     def_val: boolean(false),
-    script_ctx: sctx_T {
-        sc_sid: 0,
-        sc_seq: 0,
-        sc_lnum: 0,
-        sc_chan: 0,
-    },
 };
 
 const fn name(s: &'static CStr) -> *mut c_char {
@@ -203,10 +196,15 @@ const fn fill(table: &mut [vimoption_T], base: usize, part: &[vimoption_T]) -> u
 }
 
 /// Every option there is. A row's position is its `OptIndex`.
-pub static options: GlobalCell<[vimoption_T; kOptCount as usize]> = GlobalCell::new(table());
+///
+/// Immutable, and in `.rodata`: what changes about an option while
+/// the editor runs lives in `crate::option::state` instead.
+pub static options: ConstTable<[vimoption_T; kOptCount as usize]> = ConstTable::new(table());
 
-/// The table, spliced together from the generated parts.
-const fn table() -> [vimoption_T; kOptCount as usize] {
+/// The table, spliced together from the generated parts. Public to
+/// the crate because `crate::option::state` seeds each option's
+/// starting default from the row that declares it.
+pub(crate) const fn table() -> [vimoption_T; kOptCount as usize] {
     let mut table = [BLANK; kOptCount as usize];
     let mut base = 0;
     base = fill(&mut table, base, &table_1::PART);

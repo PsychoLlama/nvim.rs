@@ -38,13 +38,14 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{
     DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, optset_T,
-    size_t, uint32_t, vimoption_T, win_T,
+    size_t, uint32_t, win_T,
 };
 
 use super::{
     HLATTRS_INIT, NO_SCREEN, didset_options_sctx, didset_window_options, get_option, get_varp,
     kFillchars, kListchars, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf,
     kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin, kOptValTypeString, option_has_type,
+    option_is_insecure, set_option_insecure,
 };
 
 /// What 'binary' overrode, so that switching it off again restores the
@@ -176,15 +177,12 @@ pub(crate) fn didset_options2() {
 /// Replace a null string option with the shared empty string, for every
 /// option that has a global variable. A `:source`d script can leave one.
 pub(crate) fn check_options() {
-    // SAFETY: the option table is a plain array, and `get_varp` hands back
-    // the variable of a string option, which is a `*mut c_char`.
+    // SAFETY: `get_varp` hands back the variable of a string option, which
+    // is a `*mut c_char`.
     unsafe {
         for opt_idx in kOptAleph..kOptCount {
-            if option_has_type(opt_idx, kOptValTypeString)
-                && (*get_option(opt_idx)).var.has_global()
-            {
-                let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-                check_string_option(get_varp(opt).cast::<*mut c_char>());
+            if option_has_type(opt_idx, kOptValTypeString) && get_option(opt_idx).var.has_global() {
+                check_string_option(get_varp(opt_idx).cast::<*mut c_char>());
             }
         }
     }
@@ -202,52 +200,103 @@ pub(crate) unsafe fn was_set_insecurely(
     opt_flags: OptionSetFlags,
 ) -> bool {
     debug_assert!(opt_idx != kOptInvalid);
-    // SAFETY: the caller's window is live; the result points at a flag word.
-    unsafe { *insecure_flag(wp, opt_idx, opt_flags) & kOptFlagInsecure != 0 }
+    // SAFETY: the caller's window is live.
+    unsafe { insecure_flag(wp, opt_idx, opt_flags).is_set() }
 }
 
-/// The flag word carrying `kOptFlagInsecure` for this option. The options
-/// whose value is evaluated as an expression keep it per window or per
-/// buffer, because one window may be showing a file whose modeline set it
-/// while another is not; everything else shares the table's flags.
+/// Where an option's `kOptFlagInsecure` mark lives.
+///
+/// The options whose value is evaluated as an expression keep the mark per
+/// window or per buffer, because one window may be showing a file whose
+/// modeline set it while another is not; everything else shares one mark per
+/// option. Upstream answers both with a `uint32_t *` and lets the caller
+/// poke it; here the two homes are arms, and reading or writing the mark is
+/// [`is_set`](Self::is_set)/[`set`](Self::set).
+#[derive(Copy, Clone)]
+pub(crate) enum InsecureFlag {
+    /// The one mark the option shares, in `crate::option::state`.
+    Shared(OptIndex),
+    /// A window's or buffer's own flag word.
+    Field(*mut uint32_t),
+}
+
+impl InsecureFlag {
+    /// Whether the mark is raised.
+    pub(crate) fn is_set(self) -> bool {
+        match self {
+            InsecureFlag::Shared(opt_idx) => option_is_insecure(opt_idx),
+            // SAFETY: the address came from the live window or buffer the
+            // caller passed to `insecure_flag`.
+            InsecureFlag::Field(flags) => unsafe { *flags & kOptFlagInsecure != 0 },
+        }
+    }
+
+    /// Raise or lower the mark.
+    pub(crate) fn set(self, insecure: bool) {
+        match self {
+            InsecureFlag::Shared(opt_idx) => set_option_insecure(opt_idx, insecure),
+            // SAFETY: as above.
+            InsecureFlag::Field(flags) => {
+                // SAFETY: as above.
+                let word = unsafe { *flags };
+                let word = match insecure {
+                    true => word | kOptFlagInsecure,
+                    false => word & !kOptFlagInsecure,
+                };
+                // SAFETY: as above.
+                unsafe { *flags = word };
+            }
+        }
+    }
+}
+
+/// Which of the two homes above carries this option's mark, for the window
+/// the option is about to be used from.
 ///
 /// # Safety
 ///
-/// `wp` must be live for those options; the caller must pass the window the
-/// option is about to be used from.
+/// `wp` must be live for the options that keep their own copy.
 pub(crate) unsafe fn insecure_flag(
     wp: *mut win_T,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-) -> *mut uint32_t {
-    // SAFETY: the caller's window is live where the arms below need it.
-    unsafe {
-        if opt_flags.has(OptionSetFlags::LOCAL) {
-            debug_assert!(!wp.is_null());
+) -> InsecureFlag {
+    let own: *mut uint32_t = if opt_flags.has(OptionSetFlags::LOCAL) {
+        debug_assert!(!wp.is_null());
+        // SAFETY: the caller's window, and its buffer, are live.
+        unsafe {
             match opt_idx {
-                kOptWrap => return &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,
-                kOptStatusline => return &raw mut (*wp).w_onebuf_opt.wo_stl_flags,
-                kOptWinbar => return &raw mut (*wp).w_onebuf_opt.wo_wbr_flags,
-                kOptFoldexpr => return &raw mut (*wp).w_onebuf_opt.wo_fde_flags,
-                kOptFoldtext => return &raw mut (*wp).w_onebuf_opt.wo_fdt_flags,
-                kOptIndentexpr => return &raw mut (*(*wp).w_buffer).b_p_inde_flags,
-                kOptFormatexpr => return &raw mut (*(*wp).w_buffer).b_p_fex_flags,
-                kOptIncludeexpr => return &raw mut (*(*wp).w_buffer).b_p_inex_flags,
-                _ => {}
-            }
-        } else if !wp.is_null() {
-            // The global value of a window-local option lives in the
-            // window's second `winopt_T`. Upstream dereferences `wp` here
-            // without the assert the local branch has; the null test leaves
-            // a caller that passes none on the shared flags instead.
-            match opt_idx {
-                kOptWrap => return &raw mut (*wp).w_allbuf_opt.wo_wrap_flags,
-                kOptFoldexpr => return &raw mut (*wp).w_allbuf_opt.wo_fde_flags,
-                kOptFoldtext => return &raw mut (*wp).w_allbuf_opt.wo_fdt_flags,
-                _ => {}
+                kOptWrap => &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,
+                kOptStatusline => &raw mut (*wp).w_onebuf_opt.wo_stl_flags,
+                kOptWinbar => &raw mut (*wp).w_onebuf_opt.wo_wbr_flags,
+                kOptFoldexpr => &raw mut (*wp).w_onebuf_opt.wo_fde_flags,
+                kOptFoldtext => &raw mut (*wp).w_onebuf_opt.wo_fdt_flags,
+                kOptIndentexpr => &raw mut (*(*wp).w_buffer).b_p_inde_flags,
+                kOptFormatexpr => &raw mut (*(*wp).w_buffer).b_p_fex_flags,
+                kOptIncludeexpr => &raw mut (*(*wp).w_buffer).b_p_inex_flags,
+                _ => ptr::null_mut(),
             }
         }
-        &raw mut (*(options.ptr() as *mut vimoption_T).offset(opt_idx as isize)).flags
+    } else if !wp.is_null() {
+        // The global value of a window-local option lives in the window's
+        // second `winopt_T`. Upstream dereferences `wp` here without the
+        // assert the local branch has; the null test above leaves a caller
+        // that passes none on the shared mark instead.
+        // SAFETY: the caller's window is live.
+        unsafe {
+            match opt_idx {
+                kOptWrap => &raw mut (*wp).w_allbuf_opt.wo_wrap_flags,
+                kOptFoldexpr => &raw mut (*wp).w_allbuf_opt.wo_fde_flags,
+                kOptFoldtext => &raw mut (*wp).w_allbuf_opt.wo_fdt_flags,
+                _ => ptr::null_mut(),
+            }
+        }
+    } else {
+        ptr::null_mut()
+    };
+    match own.is_null() {
+        true => InsecureFlag::Shared(opt_idx),
+        false => InsecureFlag::Field(own),
     }
 }
 

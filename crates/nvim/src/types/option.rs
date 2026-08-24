@@ -162,8 +162,10 @@ pub struct vimoption_T {
     pub values: &'static [&'static ::core::ffi::CStr],
     pub opt_did_set_cb: opt_did_set_cb_T,
     pub opt_expand_cb: opt_expand_cb_T,
+    /// The default the table declares — the seed for
+    /// `crate::option::state`'s copy, which is the one `:set opt&` reads
+    /// and the one startup rewrites once it can expand the environment.
     pub def_val: OptVal,
-    pub script_ctx: sctx_T,
 }
 
 crate::char_flags! {

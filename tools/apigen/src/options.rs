@@ -886,12 +886,6 @@ const BLANK: vimoption_T = vimoption_T {
     opt_did_set_cb: None,
     opt_expand_cb: None,
     def_val: boolean(false),
-    script_ctx: sctx_T {
-        sc_sid: 0,
-        sc_seq: 0,
-        sc_lnum: 0,
-        sc_chan: 0,
-    },
 };
 
 const fn name(s: &'static CStr) -> *mut c_char {
@@ -982,7 +976,7 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
     ffi.sort_by_key(|name| (name.starts_with("c_"), *name));
     writeln!(out, "use core::ffi::{{{}}};", ffi.join(", ")).unwrap();
     out.push_str("use core::ptr;\n\n");
-    out.push_str("use crate::global_cell::GlobalCell;\n");
+    out.push_str("use crate::global_cell::ConstTable;\n");
     for (module, names) in &by_module {
         writeln!(
             out,
@@ -999,7 +993,6 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         "OptValData",
         "OptVar",
         "String_0",
-        "sctx_T",
         "ssize_t",
         "vimoption_T",
     ];
@@ -1137,11 +1130,16 @@ pub fn generate(
     out.push_str(SUPPORT);
     out.push_str(
         "\n/// Every option there is. A row's position is its `OptIndex`.\n\
-         pub static options: GlobalCell<[vimoption_T; kOptCount as usize]> =\n\
-         \x20   GlobalCell::new(table());\n\
+         ///\n\
+         /// Immutable, and in `.rodata`: what changes about an option while\n\
+         /// the editor runs lives in `crate::option::state` instead.\n\
+         pub static options: ConstTable<[vimoption_T; kOptCount as usize]> =\n\
+         \x20   ConstTable::new(table());\n\
          \n\
-         /// The table, spliced together from the generated parts.\n\
-         const fn table() -> [vimoption_T; kOptCount as usize] {\n\
+         /// The table, spliced together from the generated parts. Public to\n\
+         /// the crate because `crate::option::state` seeds each option's\n\
+         /// starting default from the row that declares it.\n\
+         pub(crate) const fn table() -> [vimoption_T; kOptCount as usize] {\n\
          \x20   let mut table = [BLANK; kOptCount as usize];\n\
          \x20   let mut base = 0;\n",
     );

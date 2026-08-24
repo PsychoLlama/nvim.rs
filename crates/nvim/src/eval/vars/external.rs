@@ -40,9 +40,7 @@ pub unsafe fn eval_charconvert(
         set_vim_var_string(Vv::CharconvertTo, enc_to, -1);
         set_vim_var_string(Vv::FnameIn, fname_from, -1);
         set_vim_var_string(Vv::FnameOut, fname_to, -1);
-        if let Some(ctx) = get_option_sctx(kOptCharconvert).as_ref() {
-            current_sctx.set(*ctx);
-        }
+        current_sctx.set(option_last_set(kOptCharconvert));
 
         let mut err = false;
         if eval_to_bool(p_ccv.get(), &raw mut err, ptr::null_mut(), false, true) {
@@ -71,9 +69,7 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
         set_vim_var_string(Vv::FnameIn, origfile, -1);
         set_vim_var_string(Vv::FnameNew, newfile, -1);
         set_vim_var_string(Vv::FnameOut, outfile, -1);
-        if let Some(ctx) = get_option_sctx(kOptDiffexpr).as_ref() {
-            current_sctx.set(*ctx);
-        }
+        current_sctx.set(option_last_set(kOptDiffexpr));
 
         tv_free(eval_expr_ext(p_dex.get(), ptr::null_mut(), true));
 
@@ -95,9 +91,7 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
         set_vim_var_string(Vv::FnameIn, origfile, -1);
         set_vim_var_string(Vv::FnameDiff, difffile, -1);
         set_vim_var_string(Vv::FnameOut, outfile, -1);
-        if let Some(ctx) = get_option_sctx(kOptPatchexpr).as_ref() {
-            current_sctx.set(*ctx);
-        }
+        current_sctx.set(option_last_set(kOptPatchexpr));
 
         tv_free(eval_expr_ext(p_pex.get(), ptr::null_mut(), true));
 
@@ -127,9 +121,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
         prepare_vimvar(Vv::Val, &raw mut save_val);
         set_vim_var_string(Vv::Val, badword, -1);
         let no_emsg = (p_verbose.get() == 0).then(Suppress::emsg);
-        if let Some(ctx) = get_option_sctx(kOptSpellsuggest).as_ref() {
-            current_sctx.set(*ctx);
-        }
+        current_sctx.set(option_last_set(kOptSpellsuggest));
 
         let mut rettv = TV_INITIAL_VALUE;
         // A bare `Func(v:val)` call is evaluated without the expression

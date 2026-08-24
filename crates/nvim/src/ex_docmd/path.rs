@@ -27,7 +27,7 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, msg};
-use crate::option::{cpo_has, get_option_sctx, option_set_callback_func};
+use crate::option::{cpo_has, option_last_set, option_set_callback_func};
 use crate::options::kOptFindfunc;
 use crate::optionstr::free_string_option;
 use crate::os::cshim::gettext;
@@ -74,10 +74,7 @@ pub(crate) unsafe fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) 
         let locked = Lock::text();
         // Errors are reported against the script that *set* the option, not
         // against whatever is running now.
-        let ctx = get_option_sctx(kOptFindfunc);
-        if !ctx.is_null() {
-            current_sctx.set(*ctx);
-        }
+        current_sctx.set(option_last_set(kOptFindfunc));
         let cb = get_findfunc_callback();
         let mut rettv: typval_T = core::mem::zeroed();
         rettv.v_type = VAR_UNKNOWN;

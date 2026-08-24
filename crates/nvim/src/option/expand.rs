@@ -26,7 +26,7 @@ use crate::main::{
     p_rtp, p_sps, p_syn, p_tags, p_vdir,
 };
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::options::{kOptAleph, kOptCount, kOptInvalid, options};
+use crate::options::{kOptAleph, kOptCount, kOptInvalid};
 use crate::os::cshim::strncmp;
 use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
@@ -34,13 +34,13 @@ use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
     BackslashEscape, ExpandContext, FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T,
     expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint8_t, uint32_t,
-    vimoption_T, xp_prefix_T,
+    xp_prefix_T,
 };
 use ::libc::{strcmp, strlen};
 
 use super::{
     FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
-    get_option_varp_scope_from, get_varp_scope, is_option_hidden, kOptFlagColon, kOptFlagComma,
+    get_varp_scope, get_varp_scope_from, is_option_hidden, kOptFlagColon, kOptFlagComma,
     kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
     option_value2string, option_var,
 };
@@ -68,11 +68,11 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
     // variable, and the caller's `val` is NUL-terminated.
     unsafe {
         let opt = get_option(opt_idx);
-        if (*opt).flags & kOptFlagExpand as uint32_t == 0 || is_option_hidden(opt_idx) {
+        if opt.flags & kOptFlagExpand as uint32_t == 0 || is_option_hidden(opt_idx) {
             return ptr::null_mut();
         }
         let val = if val.is_null() {
-            *option_var(opt).cast::<*mut c_char>()
+            *option_var(opt_idx).cast::<*mut c_char>()
         } else {
             val
         };
@@ -80,7 +80,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> *mu
         if val.is_null() || strlen(val) > MAXPATHL as size_t {
             return ptr::null_mut();
         }
-        let var = option_var(opt).cast::<*mut c_char>();
+        let var = option_var(opt_idx).cast::<*mut c_char>();
         // 'path' and 'tags' hold escaped file names, so their separators
         // must survive the expansion.
         let esc = var == p_tags.ptr() || var == p_path.ptr();
@@ -196,7 +196,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         START_COL.set(p.add(1).offset_from((*xp).xp_line) as c_int);
 
         // Three options reuse another command's completion wholesale.
-        let var = option_var(get_option(opt_idx));
+        let var = option_var(opt_idx);
         for (cell, context) in [
             (p_syn.ptr().cast::<c_void>(), ExpandContext::Ownsyntax),
             (p_ft.ptr().cast::<c_void>(), ExpandContext::Filetype),
@@ -211,9 +211,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         if subtract {
             (*xp).xp_context = ExpandContext::SettingSubtract;
             return;
-        } else if IDX.get() != kOptInvalid
-            && (*options.ptr())[IDX.get() as usize].opt_expand_cb.is_some()
-        {
+        } else if IDX.get() != kOptInvalid && get_option(IDX.get()).opt_expand_cb.is_some() {
             (*xp).xp_context = ExpandContext::StringSetting;
         } else if *(*xp).xp_pattern == NUL as c_char {
             (*xp).xp_context = ExpandContext::OldSetting;
@@ -242,7 +240,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         if var == p_sps.ptr().cast::<c_void>() {
             if strncmp((*xp).xp_pattern, c"file:".as_ptr(), 5) == 0 {
                 (*xp).xp_pattern = (*xp).xp_pattern.add(5);
-            } else if (*options.ptr())[IDX.get() as usize].opt_expand_cb.is_some() {
+            } else if get_option(IDX.get()).opt_expand_cb.is_some() {
                 (*xp).xp_context = ExpandContext::StringSetting;
             }
         }
@@ -346,12 +344,7 @@ unsafe fn take_option_name(
             (*xp).xp_context = ExpandContext::Nothing;
             return None;
         }
-        Some((
-            nextchar,
-            opt_idx,
-            (*options.ptr())[opt_idx as usize].flags,
-            false,
-        ))
+        Some((nextchar, opt_idx, get_option(opt_idx).flags, false))
     }
 }
 
@@ -364,7 +357,7 @@ unsafe fn take_option_name(
 unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t) {
     // SAFETY: the caller's expansion state, and the option table.
     unsafe {
-        let var = option_var(get_option(opt_idx)).cast::<c_char>();
+        let var = option_var(opt_idx).cast::<c_char>();
         let directories = [
             p_bdir.ptr().cast::<c_char>(),
             p_dir.ptr().cast::<c_char>(),
@@ -527,7 +520,7 @@ pub(crate) unsafe fn expand_settings(
             }
 
             for opt_idx in kOptAleph..kOptCount as OptIndex {
-                let opt = &(*options.ptr())[opt_idx as usize];
+                let opt = get_option(opt_idx);
                 if is_option_hidden(opt_idx)
                     || (booleans_only && !option_has_type(opt_idx, kOptValTypeBoolean))
                 {
@@ -619,7 +612,7 @@ pub(crate) unsafe fn expand_old_setting(
         let var = if IDX.get() == kOptInvalid {
             c"".as_ptr() as *mut c_char
         } else {
-            option_value2string(&raw mut (*options.ptr())[IDX.get() as usize], FLAGS.get());
+            option_value2string(IDX.get(), FLAGS.get());
             NameBuff.ptr().cast::<c_char>()
         };
         *(*matches) = escape_option_str_cmdline(var);
@@ -646,17 +639,16 @@ pub(crate) unsafe fn expand_string_setting(
         if opt_idx == kOptInvalid {
             return FAIL;
         }
-        let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
-        let Some(expand_cb) = (*opt).opt_expand_cb else {
+        let Some(expand_cb) = get_option(opt_idx).opt_expand_cb else {
             return FAIL;
         };
 
-        option_value2string(opt, FLAGS.get());
+        option_value2string(opt_idx, FLAGS.get());
         let escaped = escape_option_str_cmdline(NameBuff.ptr().cast::<c_char>());
 
         let set_arg = (*xp).xp_line.offset(START_COL.get() as isize);
         let mut args = optexpand_T {
-            oe_varp: get_varp_scope(opt, FLAGS.get()).cast::<c_char>(),
+            oe_varp: get_varp_scope(opt_idx, FLAGS.get()).cast::<c_char>(),
             oe_idx: opt_idx,
             oe_opt_value: escaped,
             oe_append: APPEND.get(),
@@ -692,9 +684,9 @@ pub(crate) unsafe fn expand_setting_subtract(
         if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
             return expand_old_setting(numMatches, matches);
         }
-        let value = *get_option_varp_scope_from(opt_idx, FLAGS.get(), curbuf.get(), curwin.get())
+        let value = *get_varp_scope_from(opt_idx, FLAGS.get(), curbuf.get(), curwin.get())
             .cast::<*mut c_char>();
-        let flags = (*options.ptr())[opt_idx as usize].flags;
+        let flags = get_option(opt_idx).flags;
 
         if flags & kOptFlagComma as uint32_t != 0 {
             if *value == NUL as c_char {

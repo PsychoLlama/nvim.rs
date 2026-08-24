@@ -18,7 +18,9 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
-use super::{NIL_OPTVAL, boolean_optval, optval_boolean, set_op_T, ui_refresh_options};
+use super::{
+    NIL_OPTVAL, boolean_optval, option_last_set, optval_boolean, set_op_T, ui_refresh_options,
+};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
@@ -33,13 +35,12 @@ use crate::main::{
 };
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
-use crate::options::{kOptAleph, kOptFoldmethod, kOptInvalid, kOptWrap, options};
+use crate::options::{kOptAleph, kOptFoldmethod, kOptInvalid, kOptWrap};
 use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OptIndex, OptInt, OptVal,
-    OptValData, OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T,
-    vimoption_T, win_T,
+    OptValData, OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, win_T,
 };
 use ::libc::strlen;
 
@@ -283,7 +284,6 @@ unsafe fn get_option_newval(
     // SAFETY: the caller's `varp` is this option's variable, and `*argp` is
     // NUL-terminated.
     unsafe {
-        let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
         // Setting the local value of a global-local option amends whatever
         // it is currently reading through, which may be the global value.
         let oldval_is_global =
@@ -291,7 +291,7 @@ unsafe fn get_option_newval(
         let oldval = optval_from_varp(
             opt_idx,
             if oldval_is_global {
-                get_varp(opt)
+                get_varp(opt_idx)
             } else {
                 varp
             },
@@ -470,9 +470,8 @@ unsafe fn do_one_set_option(
         }
         let nextchar = *p as uint8_t as c_int;
 
-        let flags = (*options.ptr())[opt_idx as usize].flags;
-        let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
-        let varp = get_varp_scope(opt, opt_flags);
+        let flags = get_option(opt_idx).flags;
+        let varp = get_varp_scope(opt_idx, opt_flags);
 
         if validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
             return;
@@ -570,7 +569,6 @@ unsafe fn show_one(
     varp: *mut c_void,
     did_show: &mut bool,
 ) {
-    let opt = get_option(opt_idx);
     // SAFETY: `curwin`/`curbuf` are live and the option table is a plain
     // array.
     unsafe {
@@ -581,15 +579,15 @@ unsafe fn show_one(
             gotocmdline(true);
             *did_show = true;
         }
-        showoneopt(opt, opt_flags);
+        showoneopt(opt_idx, opt_flags);
 
         // With 'verbose' set, say where the value came from — from the
         // script context of the scope the value is being read from.
         if p_verbose.get() <= 0 {
             return;
         }
-        if varp == option_var(opt) {
-            last_set_msg((*opt).script_ctx);
+        if varp == option_var(opt_idx) {
+            last_set_msg(option_last_set(opt_idx));
         } else if option_has_scope(opt_idx, kOptScopeWin) {
             let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
             last_set_msg((*curwin.get()).w_onebuf_opt.wo_script_ctx[at]);

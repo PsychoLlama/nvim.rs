@@ -32,7 +32,6 @@ use crate::mouse::setmouse;
 use crate::options::{
     kOptAleph, kOptCount, kOptFiletype, kOptFoldenable, kOptFoldexpr, kOptFoldignore,
     kOptFoldlevel, kOptFoldmarker, kOptFoldmethod, kOptFoldminlines, kOptFoldnestmax, kOptSyntax,
-    options,
 };
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::home_replace;
@@ -40,16 +39,16 @@ use crate::os::input::os_breakcheck;
 use crate::strings::vim_strchr;
 use crate::types::{
     FAIL, FILE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptionSetFlags, buf_T, size_t,
-    uint32_t, vimoption_T,
+    uint32_t,
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
 use ::libc::{fprintf, fputs, strlen};
 
 use super::{
-    copy_option_part, get_opt_idx, get_option, get_option_unset_value, get_varp, get_varp_scope,
-    kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
-    kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_type,
+    copy_option_part, get_option, get_option_unset_value, get_varp, get_varp_scope, kOptFlagComma,
+    kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_type,
     option_is_global_local, option_is_global_only, option_is_window_local, option_var,
     optval_as_object, optval_boolean, optval_equal, optval_from_varp, optval_is_default,
 };
@@ -77,7 +76,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
     // SAFETY: the option table, the message area, and the current window
     // and buffer.
     unsafe {
-        let mut items: Vec<*mut vimoption_T> = Vec::with_capacity(kOptCount as usize);
+        let mut items: Vec<OptIndex> = Vec::with_capacity(kOptCount as usize);
 
         msg_ext_set_kind(c"list_cmd".as_ptr());
         msg_puts_title(gettext(if opt_flags.has(OptionSetFlags::GLOBAL) {
@@ -94,8 +93,8 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             }
             items.clear();
             for opt_idx in all_options() {
-                let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
-                if message_filtered((*opt).fullname) {
+                let opt = get_option(opt_idx);
+                if message_filtered(opt.fullname) {
                     continue;
                 }
                 // An explicit `:setlocal`/`:setglobal` listing skips the
@@ -104,10 +103,10 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
                     if option_is_global_only(opt_idx) {
                         ptr::null_mut()
                     } else {
-                        get_varp_scope(opt, opt_flags)
+                        get_varp_scope(opt_idx, opt_flags)
                     }
                 } else {
-                    get_varp(opt)
+                    get_varp(opt_idx)
                 };
                 if varp.is_null() || (!all && optval_is_default(opt_idx, varp)) {
                     continue;
@@ -118,14 +117,12 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
                 } else if option_has_type(opt_idx, kOptValTypeBoolean) {
                     1
                 } else {
-                    option_value2string(opt, opt_flags);
-                    strlen((*opt).fullname) as c_int
-                        + vim_strsize(NameBuff.ptr().cast::<c_char>())
-                        + 1
+                    option_value2string(opt_idx, opt_flags);
+                    strlen(opt.fullname) as c_int + vim_strsize(NameBuff.ptr().cast::<c_char>()) + 1
                 };
                 let fits = len <= INC - GAP;
                 if fits == (run == 1) {
-                    items.push(opt);
+                    items.push(opt_idx);
                 }
             }
 
@@ -166,11 +163,11 @@ pub(crate) fn ui_refresh_options() {
     unsafe {
         for opt_idx in all_options() {
             let opt = get_option(opt_idx);
-            if (*opt).flags & kOptFlagUIOption as uint32_t == 0 {
+            if opt.flags & kOptFlagUIOption as uint32_t == 0 {
                 continue;
             }
-            let name = cstr_as_string((*opt).fullname);
-            let value = optval_as_object(optval_from_varp(opt_idx, option_var(opt)));
+            let name = cstr_as_string(opt.fullname);
+            let value = optval_as_object(optval_from_varp(opt_idx, option_var(opt_idx)));
             ui_call_option_set(name, value);
         }
         // 'mouse' is not a UI option, but the UI has to be told about it
@@ -185,18 +182,18 @@ pub(crate) fn ui_refresh_options() {
 ///
 /// # Safety
 ///
-/// `opt` must point into the option table.
-pub(crate) unsafe fn showoneopt(opt: *mut vimoption_T, opt_flags: OptionSetFlags) {
+/// The current window and buffer must be live.
+pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // `:set` output is a message even under `-s`, which otherwise
     // suppresses everything.
     let save_silent = silent_mode.get();
     silent_mode.set(false);
     info_message.set(true);
 
-    // SAFETY: the caller's table row, and the current buffer.
+    // SAFETY: the current window and buffer.
     unsafe {
-        let opt_idx = get_opt_idx(opt);
-        let varp = get_varp_scope(opt, opt_flags);
+        let opt = get_option(opt_idx);
+        let varp = get_varp_scope(opt_idx, opt_flags);
         let boolean = option_has_type(opt_idx, kOptValTypeBoolean);
 
         // The variable is only read for a boolean option, because for
@@ -217,11 +214,11 @@ pub(crate) unsafe fn showoneopt(opt: *mut vimoption_T, opt_flags: OptionSetFlags
         } else {
             c"  ".as_ptr()
         });
-        msg_puts((*opt).fullname);
+        msg_puts(opt.fullname);
 
         if !boolean {
             msg_putchar('=' as c_int);
-            option_value2string(opt, opt_flags);
+            option_value2string(opt_idx, opt_flags);
             if *NameBuff.ptr().cast::<c_char>() != NUL as c_char {
                 msg_outtrans(NameBuff.ptr().cast::<c_char>(), 0, false);
             }
@@ -246,8 +243,7 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
     unsafe {
         for priority_pass in [true, false] {
             for opt_idx in all_options() {
-                let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
-                let flags = (*opt).flags;
+                let flags = get_option(opt_idx).flags;
 
                 if flags & kOptFlagNoMkrc as uint32_t != 0 {
                     continue;
@@ -264,7 +260,7 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
                 {
                     continue;
                 }
-                let mut varp = get_varp_scope(opt, opt_flags);
+                let mut varp = get_varp_scope(opt_idx, opt_flags);
                 if varp.is_null() {
                     continue;
                 }
@@ -275,8 +271,8 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
                 // `:mksession` skips the runtime paths, which belong to the
                 // installation rather than the session.
                 if opt_flags.has(OptionSetFlags::SKIPRTP)
-                    && (option_var(opt) == p_rtp.ptr().cast::<c_void>()
-                        || option_var(opt) == p_pp.ptr().cast::<c_void>())
+                    && (option_var(opt_idx) == p_rtp.ptr().cast::<c_void>()
+                        || option_var(opt_idx) == p_pp.ptr().cast::<c_void>())
                 {
                     continue;
                 }
@@ -291,7 +287,7 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
                         continue;
                     }
                     if !opt_flags.has(OptionSetFlags::GLOBAL) && local_only == 0 {
-                        let varp_global = get_varp_scope(opt, OptionSetFlags::GLOBAL);
+                        let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
                         if !optval_is_default(opt_idx, varp_global) {
                             round = 1;
                             varp_local = varp;
@@ -314,7 +310,7 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
                         && (fprintf(
                             fd,
                             c"if &%s != '%s'".as_ptr(),
-                            (*opt).fullname,
+                            get_option(opt_idx).fullname,
                             *varp.cast::<*mut c_char>(),
                         ) < 0
                             || put_eol(fd) < 0)
@@ -379,13 +375,13 @@ pub(crate) unsafe fn put_set(
     // SAFETY: the caller's file and variable, and the option table.
     unsafe {
         let value: OptVal = optval_from_varp(opt_idx, varp);
-        let opt: *mut vimoption_T = &raw mut (*options.ptr())[opt_idx as usize];
-        let name = (*opt).fullname;
-        let flags = (*opt).flags;
+        let opt = get_option(opt_idx);
+        let name = opt.fullname;
+        let flags = opt.flags;
 
         // A global-local option with no local value has nothing to say.
         if option_is_global_local(opt_idx)
-            && varp != option_var(opt)
+            && varp != option_var(opt_idx)
             && optval_equal(value, get_option_unset_value(opt_idx))
         {
             return OK;
@@ -532,16 +528,17 @@ unsafe fn put_string_value(
 ///
 /// # Safety
 ///
-/// `opt` must point into the option table.
-pub(crate) unsafe fn option_value2string(opt: *mut vimoption_T, opt_flags: OptionSetFlags) {
-    // SAFETY: the caller's table row, and `NameBuff` is `MAXPATHL` bytes.
+/// The current window and buffer must be live.
+pub(crate) unsafe fn option_value2string(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
+    // SAFETY: the current window and buffer, and `NameBuff` is `MAXPATHL`
+    // bytes.
     unsafe {
-        let varp = get_varp_scope(opt, opt_flags);
+        let varp = get_varp_scope(opt_idx, opt_flags);
         debug_assert!(!varp.is_null());
         let buf = NameBuff.ptr().cast::<c_char>();
         let cap = size_of::<[c_char; 4096]>();
 
-        if option_has_type(get_opt_idx(opt), kOptValTypeNumber) {
+        if option_has_type(opt_idx, kOptValTypeNumber) {
             let mut wc: OptInt = 0;
             if wc_use_keyname(varp, &mut wc) {
                 xstrlcpy(buf, get_special_key_name(wc as c_int, 0), cap);
@@ -556,7 +553,7 @@ pub(crate) unsafe fn option_value2string(opt: *mut vimoption_T, opt_flags: Optio
         }
 
         let value = *varp.cast::<*mut c_char>();
-        if (*opt).flags & kOptFlagExpand as uint32_t != 0 {
+        if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
             home_replace(ptr::null::<buf_T>(), value, buf, MAXPATHL as size_t, false);
         } else {
             xstrlcpy(buf, value, MAXPATHL as size_t);
