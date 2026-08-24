@@ -104,13 +104,13 @@ pub(crate) unsafe fn init_prompt(cmdchar_todo: c_int) {
 
         // The insert always starts after the prompt; text after it stays
         // editable.
-        if (*Insstart_orig.ptr()).lnum != (*start).lnum
-            || (*Insstart_orig.ptr()).col != (*start).col
-        {
-            (*Insstart.ptr()).lnum = (*start).lnum;
-            (*Insstart.ptr()).col = (*start).col;
-            Insstart_orig.set(Insstart.get());
-            Insstart_textlen.set((*Insstart.ptr()).col);
+        if Insstart_orig.get().lnum != (*start).lnum || Insstart_orig.get().col != (*start).col {
+            let mut insstart = Insstart.get();
+            insstart.lnum = (*start).lnum;
+            insstart.col = (*start).col;
+            Insstart.set(insstart);
+            Insstart_orig.set(insstart);
+            Insstart_textlen.set(insstart.col);
             Insstart_blank_vcol.set(MAXCOL as colnr_T);
             arrow_used.set(false);
         }

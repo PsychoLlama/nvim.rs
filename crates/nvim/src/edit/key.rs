@@ -656,7 +656,7 @@ unsafe fn insert_normal_char(s: *mut InsertState) {
                 can_cindent.set(false);
             }
             if Insstart_blank_vcol.get() == MAXCOL as colnr_T
-                && (*curwin.get()).w_cursor.lnum == (*Insstart.ptr()).lnum
+                && (*curwin.get()).w_cursor.lnum == Insstart.get().lnum
             {
                 Insstart_blank_vcol.set(get_nolist_virtcol());
             }

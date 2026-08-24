@@ -63,7 +63,7 @@ unsafe fn insert_enter(s: *mut InsertState) {
         } else {
             Insstart.set((*curwin.get()).w_cursor);
             if (*s).startln != 0 {
-                (*Insstart.ptr()).col = 0;
+                Insstart.set(Insstart.get().with_col(0));
             }
         }
         Insstart_textlen.set(linetabsize_str(get_cursor_line_ptr()) as colnr_T);

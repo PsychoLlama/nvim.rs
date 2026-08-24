@@ -87,7 +87,7 @@ pub(crate) unsafe fn ins_shift(c: c_int, lastc: c_int) {
 pub(crate) unsafe fn ins_tab() -> bool {
     unsafe {
         if Insstart_blank_vcol.get() == MAXCOL as colnr_T
-            && (*curwin.get()).w_cursor.lnum == (*Insstart.ptr()).lnum
+            && (*curwin.get()).w_cursor.lnum == Insstart.get().lnum
         {
             Insstart_blank_vcol.set(get_nolist_virtcol());
         }
@@ -224,11 +224,11 @@ unsafe fn tab_spaces_to_tabs() {
         }
         // In Replace mode the run must not reach back before the insert.
         if State.get() & REPLACE_FLAG != 0
-            && fpos.lnum == (*Insstart.ptr()).lnum
-            && fpos.col < (*Insstart.ptr()).col
+            && fpos.lnum == Insstart.get().lnum
+            && fpos.col < Insstart.get().col
         {
-            ptr = ptr.offset(((*Insstart.ptr()).col - fpos.col) as isize);
-            fpos.col = (*Insstart.ptr()).col;
+            ptr = ptr.offset((Insstart.get().col - fpos.col) as isize);
+            fpos.col = Insstart.get().col;
         }
 
         let mut vcol: colnr_T = 0;
@@ -263,8 +263,8 @@ unsafe fn tab_spaces_to_tabs() {
                 *ptr = TAB as c_char;
                 if change_col < 0 {
                     change_col = fpos.col; // remember the first changed column
-                    if fpos.lnum == (*Insstart.ptr()).lnum && fpos.col < (*Insstart.ptr()).col {
-                        (*Insstart.ptr()).col = fpos.col;
+                    if fpos.lnum == Insstart.get().lnum && fpos.col < Insstart.get().col {
+                        Insstart.set(Insstart.get().with_col(fpos.col));
                     }
                 }
             }

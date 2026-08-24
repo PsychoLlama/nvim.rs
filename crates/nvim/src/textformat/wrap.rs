@@ -249,8 +249,8 @@ impl BreakSearch {
         unsafe {
             while (!fo_ins_blank && !has_format_option(FoFlag::INS_VI))
                 || flags & INSCHAR_FORMAT as c_int != 0
-                || (*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
-                || (*curwin.get()).w_cursor.col >= (*Insstart.ptr()).col
+                || (*curwin.get()).w_cursor.lnum != Insstart.get().lnum
+                || (*curwin.get()).w_cursor.col >= Insstart.get().col
             {
                 let cc =
                     if (*curwin.get()).w_cursor.col == self.startcol as colnr_T && self.c != NUL {

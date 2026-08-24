@@ -95,7 +95,7 @@ pub(crate) unsafe fn stop_arrow() -> c_int {
     unsafe {
         if arrow_used.get() {
             Insstart.set((*curwin.get()).w_cursor); // new insertion starts here
-            if (*Insstart.ptr()).col > (*Insstart_orig.ptr()).col && !ins_need_undo.get() {
+            if Insstart.get().col > Insstart_orig.get().col && !ins_need_undo.get() {
                 // Don't update the original insert position when moved to the
                 // right, except when nothing was inserted yet.
                 update_Insstart_orig.set(false);

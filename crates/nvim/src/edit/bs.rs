@@ -47,6 +47,22 @@ pub(crate) enum Backspace {
     Line,
 }
 
+/// C's `if (curwin->w_cursor.lnum == Insstart_orig.lnum
+/// && curwin->w_cursor.col < Insstart_orig.col) Insstart_orig.col =
+/// curwin->w_cursor.col;`: a deletion that went back past where the insert
+/// started drags that mark along with it.
+///
+/// # Safety
+/// Must run with a live `curwin`.
+unsafe fn pull_insstart_orig_to_cursor() {
+    // SAFETY: the caller's contract.
+    let cursor = unsafe { (*curwin.get()).w_cursor };
+    let orig = Insstart_orig.get();
+    if cursor.lnum == orig.lnum && cursor.col < orig.col {
+        Insstart_orig.set(orig.with_col(cursor.col));
+    }
+}
+
 /// `<Del>` in Insert mode: delete forwards.
 ///
 /// At the end of a line that means joining the next one, which needs
@@ -105,7 +121,7 @@ unsafe fn bs_blocked() -> bool {
             return false;
         }
         let cursor = (*curwin.get()).w_cursor;
-        let start = *Insstart_orig.ptr();
+        let start = Insstart_orig.get();
         (cursor.lnum == 1 && cursor.col == 0)
             || (!can_bs(BsFlag::START)
                 && ((arrow_used.get() && !bt_prompt(curbuf.get()))
@@ -229,11 +245,7 @@ pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_
         append_to_redobuff_char(c);
 
         // If the deletion went before the insertion point, move that too.
-        if (*curwin.get()).w_cursor.lnum == (*Insstart_orig.ptr()).lnum
-            && (*curwin.get()).w_cursor.col < (*Insstart_orig.ptr()).col
-        {
-            (*Insstart_orig.ptr()).col = (*curwin.get()).w_cursor.col;
-        }
+        pull_insstart_orig_to_cursor();
 
         // Vi moves the cursor back but leaves the character on the screen;
         // Vim erases it.  The vi behaviour is emulated by pretending a
@@ -266,7 +278,7 @@ pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_
 /// Must run with a live `curwin`/`curbuf`, cursor in column 0.
 unsafe fn bs_join_line() -> bool {
     unsafe {
-        let lnum = (*Insstart.ptr()).lnum;
+        let lnum = Insstart.get().lnum;
         if (*curwin.get()).w_cursor.lnum == lnum || revins_on.get() {
             if u_save(
                 (*curwin.get()).w_cursor.lnum - 2,
@@ -275,8 +287,8 @@ unsafe fn bs_join_line() -> bool {
             {
                 return false;
             }
-            (*Insstart.ptr()).lnum -= 1;
-            (*Insstart.ptr()).col = ml_get_len((*Insstart.ptr()).lnum);
+            let lnum = Insstart.get().lnum - 1;
+            Insstart.set(Insstart.get().with_lnum(lnum).with_col(ml_get_len(lnum)));
         }
 
         // In Replace mode: below zero the NL was inserted, so delete it; at
@@ -409,8 +421,8 @@ unsafe fn bs_one_shiftwidth(in_indent: bool) {
             dec_cursor();
             if State.get() & REPLACE_FLAG != 0 {
                 // Don't delete before the insert point in Replace mode.
-                if (*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
-                    || (*curwin.get()).w_cursor.col >= (*Insstart.ptr()).col
+                if (*curwin.get()).w_cursor.lnum != Insstart.get().lnum
+                    || (*curwin.get()).w_cursor.col >= Insstart.get().col
                 {
                     replace_do_bs(-1);
                 }
@@ -422,11 +434,7 @@ unsafe fn bs_one_shiftwidth(in_indent: bool) {
         // Insert spaces until at `want_vcol`.
         while space_vcol < want_vcol {
             // Remember the first character inserted.
-            if (*curwin.get()).w_cursor.lnum == (*Insstart_orig.ptr()).lnum
-                && (*curwin.get()).w_cursor.col < (*Insstart_orig.ptr()).col
-            {
-                (*Insstart_orig.ptr()).col = (*curwin.get()).w_cursor.col;
-            }
+            pull_insstart_orig_to_cursor();
 
             if State.get() & VREPLACE_FLAG != 0 {
                 ins_char(' ' as c_int);
@@ -522,8 +530,8 @@ unsafe fn bs_delete_chars(mut mode: Backspace, mincol: colnr_T) {
             let more = revins_on.get()
                 || ((*curwin.get()).w_cursor.col > mincol
                     && (can_bs(BsFlag::NOSTOP)
-                        || ((*curwin.get()).w_cursor.lnum != (*Insstart_orig.ptr()).lnum
-                            || (*curwin.get()).w_cursor.col != (*Insstart_orig.ptr()).col)));
+                        || ((*curwin.get()).w_cursor.lnum != Insstart_orig.get().lnum
+                            || (*curwin.get()).w_cursor.col != Insstart_orig.get().col)));
             if !more {
                 break;
             }

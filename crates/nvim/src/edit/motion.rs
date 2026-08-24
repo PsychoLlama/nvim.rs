@@ -278,7 +278,9 @@ pub(crate) unsafe fn ins_updown(up: bool, startcol: bool) {
         };
         if moved == OK {
             if startcol {
-                coladvance(curwin.get(), getvcol_nolist(Insstart.ptr()));
+                // `getvcol_nolist` only reads: a copy keeps the global out
+                // of the call's reach.
+                coladvance(curwin.get(), getvcol_nolist(&mut Insstart.get()));
             }
             if old_topline != (*curwin.get()).w_topline || old_topfill != (*curwin.get()).w_topfill
             {

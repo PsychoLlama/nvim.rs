@@ -282,10 +282,10 @@ unsafe fn replay_insert(
             // The cursor may have been moved during the insert when `$` was
             // used, and then the block has no right edge to measure from.
             if bd.is_MAX != 0
-                && start_insert.lnum == (*Insstart.ptr()).lnum
-                && start_insert.col > (*Insstart.ptr()).col
+                && start_insert.lnum == Insstart.get().lnum
+                && start_insert.col > Insstart.get().col
             {
-                offset = start_insert.col - (*Insstart.ptr()).col;
+                offset = start_insert.col - Insstart.get().col;
                 add -= offset;
                 if (*oap).end_vcol <= offset {
                     // Moved outside the Visual block; nothing sensible to do.

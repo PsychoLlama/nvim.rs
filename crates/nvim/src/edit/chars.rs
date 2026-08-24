@@ -179,7 +179,7 @@ unsafe fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textw
                 && !(State.get() & REPLACE_FLAG != 0
                     && State.get() & VREPLACE_FLAG == 0
                     && *get_cursor_pos_ptr() as c_int != NUL)
-                && ((*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
+                && ((*curwin.get()).w_cursor.lnum != Insstart.get().lnum
                     || ((!fo_ins_long || Insstart_textlen.get() <= textwidth)
                         && (!fo_ins_blank || Insstart_blank_vcol.get() <= textwidth))));
         if !wanted {
@@ -299,8 +299,8 @@ pub(crate) unsafe fn echeck_abbr(c: c_int) -> bool {
             c,
             get_cursor_line_ptr(),
             (*curwin.get()).w_cursor.col,
-            if (*curwin.get()).w_cursor.lnum == (*Insstart.ptr()).lnum {
-                (*Insstart.ptr()).col
+            if (*curwin.get()).w_cursor.lnum == Insstart.get().lnum {
+                Insstart.get().col
             } else {
                 0
             },

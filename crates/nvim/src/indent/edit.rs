@@ -412,17 +412,17 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
 /// # Safety
 /// There must be a current window.
 unsafe fn adjust_insert_start(insstart_less: c_int) {
-    Insstart.with_mut(|insstart| {
-        // SAFETY: the caller's contract.
-        let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
-        if lnum == insstart.lnum && insstart.col != 0 {
-            insstart.col = if (insstart.col as c_int) <= insstart_less {
-                0
-            } else {
-                insstart.col - insstart_less as colnr_T
-            };
-        }
-    });
+    let mut insstart = Insstart.get();
+    // SAFETY: the caller's contract.
+    let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+    if lnum == insstart.lnum && insstart.col != 0 {
+        insstart.col = if (insstart.col as c_int) <= insstart_less {
+            0
+        } else {
+            insstart.col - insstart_less as colnr_T
+        };
+        Insstart.set(insstart);
+    }
     ai_col.set(if (ai_col.get() as c_int) <= insstart_less {
         0
     } else {

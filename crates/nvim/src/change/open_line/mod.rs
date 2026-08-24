@@ -110,7 +110,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<boo
 
         // Virtual Replace: start replacing the next line.
         (*curwin.get()).w_cursor.lnum += 1;
-        if (*curwin.get()).w_cursor.lnum >= (*Insstart.ptr()).lnum + vr_lines_changed.get() {
+        if (*curwin.get()).w_cursor.lnum >= Insstart.get().lnum + vr_lines_changed.get() {
             // NL to a new line, BS back, NL again: don't save the new line
             // for undo twice. Errors are ignored.
             u_save_cursor();
