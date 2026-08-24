@@ -589,7 +589,7 @@ unsafe fn parse_buffer_list(
             }
             let e = (*list).buffers.add(i);
             (*e).additional_data = item_extra.items.cast::<AdditionalData>();
-            (*e).pos = *default_pos.ptr();
+            (*e).pos = DEFAULT_POS;
             if has_key(
                 it.is_set___shada_buflist_item_,
                 KEYSET_OPTIDX__shada_buflist_item__l,

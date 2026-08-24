@@ -459,7 +459,6 @@ pub const DEFAULT_POS: pos_T = pos_T {
     col: 0 as colnr_T,
     coladd: 0 as colnr_T,
 };
-static default_pos: GlobalCell<pos_T> = GlobalCell::new(DEFAULT_POS);
 static sd_default_values: ConstTable<[ShadaEntry; 12]> = ConstTable::new([
     ShadaEntry {
         type_0: kSDItemMissing,

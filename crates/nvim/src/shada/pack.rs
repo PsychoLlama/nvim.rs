@@ -425,11 +425,11 @@ unsafe fn pack_register(entry: &ShadaEntry, payload: &mut Payload) {
 
 /// The buffer list: one map per buffer, each a file name and the cursor
 /// position in it. The position's defaults are the same for every buffer,
-/// so they come from `default_pos` rather than from an entry type.
+/// so they come from `DEFAULT_POS` rather than from an entry type.
 unsafe fn pack_buffer_list(entry: &ShadaEntry, payload: &mut Payload) {
     unsafe {
         let list = entry.data.buffer_list;
-        let default = *default_pos.ptr();
+        let default = DEFAULT_POS;
         mpack_array(&mut payload.buf.ptr, list.size as uint32_t);
         for i in 0..list.size {
             let buffer = *list.buffers.add(i);
