@@ -42,7 +42,7 @@ use crate::main::{
     p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
     pending_end_reg_executing, pending_exmode_active, redo_VIsual_busy, redraw_cmdline,
     reg_executing, reg_recording, repeat_luaref, restart_edit, scriptout, test_disable_char_avail,
-    typebuf, typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
     want_garbage_collect,
 };
 use crate::mapping::{eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb};
@@ -74,8 +74,8 @@ use crate::strings::vim_strchr;
 use crate::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
     MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, colnr_T, flush_buffers_T,
-    garray_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typebuf_T, typval_T,
-    uint8_t, uint64_t, varnumber_T,
+    garray_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typval_T, uint8_t,
+    uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
@@ -197,8 +197,6 @@ static on_key_ignore_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 static typeahead_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static block_redo: GlobalCell<bool> = GlobalCell::new(false);
 static KeyNoremap: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static typebuf_init: GlobalCell<[uint8_t; 265]> = GlobalCell::new([0; 265]);
-static noremapbuf_init: GlobalCell<[uint8_t; 265]> = GlobalCell::new([0; 265]);
 /// How many bytes the last `gotchars` recorded, so that `get_recorded` can
 /// drop the keys that stopped the recording.
 ///
@@ -214,9 +212,6 @@ static e_cmd_mapping_must_end_with_cr: [::core::ffi::c_char; 40] =
     c_bytes(b"E1255: <Cmd> mapping must end with <CR>\0");
 static e_cmd_mapping_must_end_with_cr_before_second_cmd: [::core::ffi::c_char; 60] =
     c_bytes(b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0");
-/// The typeahead each `:source!` displaced, put back by `closescript`.
-static saved_typebuf: GlobalCell<[typebuf_T; NSCRIPT as usize]> =
-    GlobalCell::new([typebuf_T::EMPTY; NSCRIPT as usize]);
 static old_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static old_mod_mask: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static old_mouse_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

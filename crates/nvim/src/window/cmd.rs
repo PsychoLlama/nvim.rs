@@ -23,7 +23,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
 use crate::ex_getln::{ERROR_INIT, curbuf_locked};
 use crate::file_search::grab_file_name;
-use crate::getchar::{plain_vgetc, typebuf_maplen};
+use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::keycodes::{
     Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
@@ -662,8 +662,7 @@ fn langmap_adjust(c: c_int) -> c_int {
     // SAFETY: `'langmap'` is a NUL-terminated option string.
     let mapping = unsafe { *p_langmap.get() } as c_int != NUL;
     let typed = if vgetc_busy.get() != 0 {
-        // SAFETY: counts the mapping still being worked through.
-        unsafe { typebuf_maplen() == 0 }
+        typeahead().maplen() == 0
     } else {
         KeyTyped.get()
     };

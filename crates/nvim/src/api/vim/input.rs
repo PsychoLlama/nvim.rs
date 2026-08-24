@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::getchar::typeahead;
 use crate::keycodes::{
     KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSELEFT,
     KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTMOUSE, KE_X1MOUSE, KE_X2MOUSE,
@@ -74,7 +75,7 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
                 if insert as ::core::ffi::c_int != 0 {
                     0 as ::core::ffi::c_int
                 } else {
-                    (*typebuf.ptr()).tb_len
+                    typeahead().len()
                 },
                 !typed,
                 false,

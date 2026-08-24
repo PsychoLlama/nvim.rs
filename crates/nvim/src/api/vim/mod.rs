@@ -58,7 +58,7 @@ use crate::main::{
     curtab, curwin, default_grid, did_emsg, e_cmdwin, e_invchan, ex_normal_busy, first_tabpage,
     firstbuf, firstwin, g_stats, lines_left, msg_didany, msg_no_more, msg_scroll, must_redraw,
     need_wait_return, ns_hl_fast, ns_hl_global, p_cpo, p_lz, pum_grid, redraw_tabline,
-    tslua_query_parse_count, typebuf, typebuf_was_filled, vgetc_busy,
+    tslua_query_parse_count, typebuf_was_filled, vgetc_busy,
 };
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;

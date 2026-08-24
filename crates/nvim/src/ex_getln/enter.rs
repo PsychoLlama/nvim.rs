@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::drawscreen::windows_in_curtab;
+use crate::getchar::typeahead;
 use crate::guard::Allow;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
@@ -527,7 +528,7 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
         // typing a command should cause the command not to be executed.
         did_emsg.set(0);
 
-        if ex_normal_busy.get() == 0 && stuff_empty() && (*typebuf.ptr()).tb_len == 0 {
+        if ex_normal_busy.get() == 0 && stuff_empty() && typeahead().is_empty() {
             // There is no pending input from sources other than user input,
             // so Vim is going to wait for the user to type a key. Consider
             // the command line typed even if the next key triggers a mapping.

@@ -27,7 +27,7 @@ use crate::ex_docmd::{
 use crate::ex_getln::getexline;
 use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
 use crate::getchar::{
-    beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuff_empty, typebuf_typed, vpeekc,
+    beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc,
 };
 use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::lua::executor::ex_lua;
@@ -36,7 +36,7 @@ use crate::main::{
     e_invrange, e_secure, e_trailing_arg, e_undobang_cannot_redo_or_move_branch, ex_no_reprint,
     ex_normal_busy, exec_from_reg, finish_op, firstwin, force_restart_edit, got_int,
     magic_overruled, main_loop, msg_didout, msg_scroll, opcount, p_mmd, pending_end_reg_executing,
-    reg_executing, restart_edit, stop_insert_mode, typebuf, virtual_op,
+    reg_executing, restart_edit, stop_insert_mode, virtual_op,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::mbyte::utfc_ptr2len;
@@ -440,7 +440,7 @@ pub(crate) unsafe fn ex_join(eap: *mut exarg_T) {
 /// "there was already typeahead before this".
 pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
     unsafe {
-        let prev_len = (*typebuf.ptr()).tb_len;
+        let prev_len = typeahead().len();
         (*curwin.get()).w_cursor.lnum = (*eap).line2;
         check_cursor_col(curwin.get());
 
@@ -456,7 +456,7 @@ pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
         }
         let save_efr = exec_from_reg.get();
         exec_from_reg.set(true);
-        while !stuff_empty() || (*typebuf.ptr()).tb_len > prev_len {
+        while !stuff_empty() || typeahead().len() > prev_len {
             do_cmdline(
                 ptr::null_mut(),
                 Some(getexline),
@@ -842,7 +842,7 @@ pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
         finish_op.set(false);
         let mut c: c_int;
         while (!stuff_empty()
-            || (was_typed || typebuf_typed() == 0) && (*typebuf.ptr()).tb_len > 0
+            || (was_typed || typeahead().maplen() != 0) && !typeahead().is_empty()
             // `use_vpeekc` also runs whatever the *user* has typed, but
             // stops at a CTRL-C rather than swallowing it.
             || use_vpeekc && {

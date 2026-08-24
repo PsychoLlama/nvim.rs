@@ -595,37 +595,13 @@ pub unsafe fn flush_buffers(flush_typeahead: flush_buffers_T) {
         start_stuff();
         while read_readbuffers(true) != NUL {}
 
-        let tb = typebuf.ptr();
-        if flush_typeahead == FLUSH_MINIMAL {
-            // Remove the mapped characters at the start only, and only when
-            // that leaves enough room in typebuf.
-            if (*tb).tb_off + (*tb).tb_maplen >= (*tb).tb_buflen {
-                (*tb).tb_off = MAXMAPLEN as c_int;
-                (*tb).tb_len = 0;
-            } else {
-                (*tb).tb_off += (*tb).tb_maplen;
-                (*tb).tb_len -= (*tb).tb_maplen;
-            }
-            if (*tb).tb_len == 0 {
-                typebuf_was_filled.set(false);
-            }
-        } else {
-            if flush_typeahead == FLUSH_INPUT {
-                while inchar((*tb).tb_buf, (*tb).tb_buflen - 1, 10) != 0 {}
-            }
-            (*tb).tb_off = MAXMAPLEN as c_int;
-            (*tb).tb_len = 0;
-            // Text received from a client or from feedkeys() is gone with it.
-            typebuf_was_filled.set(false);
+        if flush_typeahead == FLUSH_INPUT {
+            // Drain what the OS has for us as well, before the typeahead's
+            // bounds move under `inchar`.
+            let tb = typeahead();
+            while inchar(tb.storage(), tb.buflen() - 1, 10) != 0 {}
         }
-        (*tb).tb_maplen = 0;
-        (*tb).tb_silent = 0;
-        cmd_silent.set(false);
-        (*tb).tb_no_abbr_cnt = 0;
-        (*tb).tb_change_cnt += 1;
-        if (*tb).tb_change_cnt == 0 {
-            (*tb).tb_change_cnt = 1;
-        }
+        flush_typebuf(flush_typeahead == FLUSH_MINIMAL);
     }
 }
 

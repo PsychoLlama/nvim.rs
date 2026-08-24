@@ -24,7 +24,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_eval::aborting;
 use crate::fold::{fold_update_all, foldmethod_is_manual};
 use crate::garray::{ga_clear_strings, ga_grow, ga_init};
-use crate::getchar::{stuff_empty, typebuf_typed};
+use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{

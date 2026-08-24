@@ -9,8 +9,7 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
-use super::*;
-use crate::getchar::KeyBuffer;
+use crate::getchar::{KeyBuffer, TypeAhead};
 
 pub type RemapValues = ::core::ffi::c_int;
 pub type flush_buffers_T = ::core::ffi::c_uint;
@@ -28,45 +27,10 @@ pub struct save_redo_T {
 /// the same reasons as [`save_redo_T`].
 #[derive(Default)]
 pub struct tasave_T {
-    pub(crate) save_typebuf: typebuf_T,
+    pub(crate) save_typebuf: TypeAhead,
     pub(crate) typebuf_valid: bool,
     pub(crate) old_char: ::core::ffi::c_int,
     pub(crate) old_mod_mask: ::core::ffi::c_int,
     pub(crate) save_readbuf1: KeyBuffer,
     pub(crate) save_readbuf2: KeyBuffer,
-}
-#[derive(Copy, Clone)]
-pub struct typebuf_T {
-    pub tb_buf: *mut uint8_t,
-    pub tb_noremap: *mut uint8_t,
-    pub tb_buflen: ::core::ffi::c_int,
-    pub tb_off: ::core::ffi::c_int,
-    pub tb_len: ::core::ffi::c_int,
-    pub tb_maplen: ::core::ffi::c_int,
-    pub tb_silent: ::core::ffi::c_int,
-    pub tb_no_abbr_cnt: ::core::ffi::c_int,
-    pub tb_change_cnt: ::core::ffi::c_int,
-}
-
-impl typebuf_T {
-    /// A typeahead buffer with no storage at all: what `init_typebuf` looks
-    /// for when it decides to hand out the static initial buffers, and what
-    /// `GlobalCell::take` leaves behind.
-    pub const EMPTY: Self = typebuf_T {
-        tb_buf: ::core::ptr::null_mut(),
-        tb_noremap: ::core::ptr::null_mut(),
-        tb_buflen: 0,
-        tb_off: 0,
-        tb_len: 0,
-        tb_maplen: 0,
-        tb_silent: 0,
-        tb_no_abbr_cnt: 0,
-        tb_change_cnt: 0,
-    };
-}
-
-impl Default for typebuf_T {
-    fn default() -> Self {
-        typebuf_T::EMPTY
-    }
 }

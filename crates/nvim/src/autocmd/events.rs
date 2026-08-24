@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::getchar::typeahead;
 use crate::types::{FAIL, OK, OptionSetFlags};
 
 /// The [`EVENT_NAMES`] row an event number names.
@@ -215,7 +216,7 @@ pub unsafe fn trigger_cursorhold() -> bool {
         if did_cursorhold.get()
             || !has_cursorhold()
             || reg_recording.get() != 0
-            || (*typebuf.ptr()).tb_len != 0
+            || !typeahead().is_empty()
             || ins_compl_active()
         {
             return false;

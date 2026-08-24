@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
+use crate::getchar::typeahead;
 use crate::guard::Keys;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
@@ -275,8 +276,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                 // In exmode it doesn't make sense to return, except when
                 // ":normal" runs out of characters. Also, when the highlight
                 // callback is active <C-c> should interrupt only that.
-                if (exmode_active.get()
-                    && (ex_normal_busy.get() == 0 || (*typebuf.ptr()).tb_len > 0))
+                if (exmode_active.get() && (ex_normal_busy.get() == 0 || !typeahead().is_empty()))
                     || (getln_interrupted_highlight.get() && (*s).c == Ctrl_C)
                 {
                     getln_interrupted_highlight.set(false);

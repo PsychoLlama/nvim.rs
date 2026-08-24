@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::getchar::typeahead;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::semsg_multiline_c;
 use crate::types::{MB_MAXBYTES, NUL, kErrorTypeNone};
@@ -58,7 +59,7 @@ unsafe fn abbr_matches(mp: *mut mapblock_T, word: *const c_char, len: c_int) -> 
 /// `ptr` must be readable for at least `col` bytes and `curbuf`/`curwin` live.
 pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> bool {
     unsafe {
-        if (*typebuf.ptr()).tb_no_abbr_cnt != 0 {
+        if typeahead().no_abbr_cnt() != 0 {
             return false; // abbreviations are not recursive
         }
         // No remapping implies no abbreviation, except for CTRL-].
@@ -170,7 +171,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
             // Insert the "to" string.
             ins_typebuf(s, noremap, 0, true, silent);
             // No abbreviation for these chars.
-            (*typebuf.ptr()).tb_no_abbr_cnt += strlen(s) as c_int + j as c_int + 1;
+            typeahead().add_no_abbr_cnt(strlen(s) as c_int + j as c_int + 1);
             if expr {
                 xfree(s.cast());
             }

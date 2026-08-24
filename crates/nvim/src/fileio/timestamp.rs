@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::buffer::BufFlags;
+use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::semsg_c;
 use crate::undo::UNDO_HASH_SIZE;
@@ -129,7 +130,7 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
 
         if !stuff_empty()
             || global_busy.get() != 0
-            || typebuf_typed() == 0
+            || typeahead().maplen() != 0
             || autocmd_busy.get()
             || (*curbuf.get()).b_ro_locked > 0
             || allbuf_lock.get() > 0

@@ -23,6 +23,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::getchar::typeahead;
 use crate::guard::Keys;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
@@ -63,7 +64,7 @@ pub(crate) unsafe fn ins_reg() {
         // and only when it was not produced by a mapping.
         let langmap_adjust = |c: c_int| -> c_int {
             let typed = if vgetc_busy.get() != 0 {
-                typebuf_maplen() == 0
+                typeahead().maplen() == 0
             } else {
                 KeyTyped.get()
             };

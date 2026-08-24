@@ -81,7 +81,7 @@ use crate::main::{
     p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl, p_tal,
     p_tbidi, p_wbr, p_wc, p_wcm, p_wim, p_wmnu, pum_want, quit_more, redir_off, redraw_cmdline,
     redraw_tabline, redrawing_cmdline, restart_edit, search_first_line, search_last_line,
-    search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, typebuf,
+    search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor, textlock,
     wild_menu_showing, wim_flags,
 };
 use crate::map::{mh_get_ptr_t, mh_put_ptr_t};

@@ -324,7 +324,7 @@ pub unsafe fn vpeekc() -> c_int {
 pub unsafe fn vpeekc_any() -> c_int {
     unsafe {
         let c = vpeekc();
-        if c == NUL && (*typebuf.ptr()).tb_len > 0 {
+        if c == NUL && !typeahead().is_empty() {
             ESC
         } else {
             c
@@ -366,20 +366,13 @@ pub fn vungetc(c: c_int) {
 ///
 /// While *peeking* the register is not finished with yet, so the flag is only
 /// noted; the next advancing read acts on it.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn check_end_reg_executing(advance: bool) {
-    unsafe {
-        if reg_executing.get() != 0
-            && ((*typebuf.ptr()).tb_maplen == 0 || pending_end_reg_executing.get())
-        {
-            if advance {
-                reg_executing.set(0);
-                pending_end_reg_executing.set(false);
-            } else {
-                pending_end_reg_executing.set(true);
-            }
+pub fn check_end_reg_executing(advance: bool) {
+    if reg_executing.get() != 0 && (typeahead().maplen() == 0 || pending_end_reg_executing.get()) {
+        if advance {
+            reg_executing.set(0);
+            pending_end_reg_executing.set(false);
+        } else {
+            pending_end_reg_executing.set(true);
         }
     }
 }

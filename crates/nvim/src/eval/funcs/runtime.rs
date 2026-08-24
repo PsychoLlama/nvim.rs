@@ -17,14 +17,14 @@ use crate::eval::typval::{
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{eval_has_provider, get_callback_depth};
 use crate::garray::{ga_append, ga_init};
-use crate::getchar::{stuff_empty, using_script};
+use crate::getchar::{stuff_empty, typeahead, using_script};
 use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
     State, autocmd_busy, curbuf, curtab, firstwin, msg_scrolled, starting, stdin_isatty,
-    stdout_isatty, typebuf, vgetc_busy, wild_menu_showing, windowsVersion,
+    stdout_isatty, vgetc_busy, wild_menu_showing, windowsVersion,
 };
 use crate::memline::ml_get;
 use crate::memory::xstrdup;
@@ -418,7 +418,7 @@ pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             }
         };
 
-        if !(stuff_empty() && (*typebuf.ptr()).tb_len == 0 && using_script() == 0) {
+        if !(stuff_empty() && typeahead().is_empty() && using_script() == 0) {
             add(b'm');
         }
         if op_pending() {

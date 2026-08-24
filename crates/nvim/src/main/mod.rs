@@ -20,8 +20,8 @@ use crate::types::{
     evalarg_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T,
     int16_t, int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t,
     nvim_stats_s, optmagic_T, pos_T, proftime_T, ptr_t, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, tabpage_T, typebuf_T, uint8_t, uint32_t,
-    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t,
+    uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
     uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
     uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
     xfmark_T,
@@ -955,17 +955,6 @@ pub static os_buf: GlobalCell<[c_char; 4096]> = GlobalCell::new([0; 4096]);
 pub static RedrawingDisabled: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
-pub static typebuf: GlobalCell<typebuf_T> = GlobalCell::new(typebuf_T {
-    tb_buf: ::core::ptr::null_mut::<uint8_t>(),
-    tb_noremap: ::core::ptr::null_mut::<uint8_t>(),
-    tb_buflen: 0 as c_int,
-    tb_off: 0 as c_int,
-    tb_len: 0 as c_int,
-    tb_maplen: 0 as c_int,
-    tb_silent: 0 as c_int,
-    tb_no_abbr_cnt: 0 as c_int,
-    tb_change_cnt: 0 as c_int,
-});
 pub static typebuf_was_empty: GlobalCell<bool> = GlobalCell::new(false);
 pub static ex_normal_busy: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static expr_map_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

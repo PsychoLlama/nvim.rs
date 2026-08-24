@@ -30,9 +30,7 @@ use crate::ex_eval::discard_current_exception;
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::fileio::check_timestamps;
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
-use crate::getchar::{
-    char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typebuf_maplen, typebuf_typed, vgetc,
-};
+use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
 use crate::main::{
     KeyTyped, State, VIsual_active, clear_cmdline, cmdwin_result, curbuf, curtab, curwin,
     did_check_timestamps, did_emsg, did_throw, did_wait_return, diff_need_scrollbind, do_redraw,
@@ -187,7 +185,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
             (*s).oa.prev_count0 = 0;
         }
 
-        (*s).mapped_len = typebuf_maplen();
+        (*s).mapped_len = typeahead().maplen();
         State.set(MODE_NORMAL_BUSY);
         if (*s).toplevel && readbuf1_empty() {
             set_vcount_ca(&raw mut (*s).ca, &mut (*s).set_prevcount);
@@ -277,7 +275,7 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
             && (*s).oa.regname == 0
             && (*s).ca.retval & CA_COMMAND_BUSY as c_int == 0
             && stuff_empty()
-            && typebuf_typed() != 0
+            && typeahead().maplen() == 0
             && emsg_silent.get() == 0
             && !in_assert_fails.get()
             && !did_wait_return.get()

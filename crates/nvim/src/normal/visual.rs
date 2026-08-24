@@ -18,7 +18,7 @@ use crate::drawscreen::{
     UPD_INVERTED, UPD_VALID, conceal_check_cursor_line, redraw_curbuf_later, showmode,
 };
 use crate::fold::fold_adjust_visual;
-use crate::getchar::{beep_flush, stuff_empty, typebuf_typed};
+use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::main::{
     VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, VIsual_select_exclu_adj,
     VIsual_select_reg, curbuf, curwin, finish_op, motion_force, mouse_dragging, msg_silent, p_sel,
@@ -413,8 +413,7 @@ pub(crate) fn start_selection() {
 pub(crate) fn may_start_select(c: c_int) {
     // SAFETY: 'selectmode' is a C string option.
     let by_selectmode = unsafe { !vim_strchr(p_slm.get(), c).is_null() };
-    // SAFETY: reads the typeahead state.
-    let typed = unsafe { c == 'o' as c_int || (stuff_empty() && typebuf_typed() != 0) };
+    let typed = c == 'o' as c_int || (stuff_empty() && typeahead().maplen() == 0);
     VIsual_select.set(typed && by_selectmode);
 }
 

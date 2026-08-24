@@ -123,7 +123,7 @@ unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_
                         ptr::null_mut(),
                         0,
                         -1,
-                        (*typebuf.ptr()).tb_change_cnt,
+                        typeahead().change_cnt(),
                         (*main_loop.ptr()).events,
                     );
                     if input_available() == 0 && !multiqueue_empty((*main_loop.ptr()).events) {

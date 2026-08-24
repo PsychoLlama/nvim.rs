@@ -104,7 +104,7 @@ pub(crate) unsafe fn closescript() {
     unsafe {
         debug_assert!(curscript.get() >= 0);
         free_typebuf();
-        typebuf.set((*saved_typebuf.ptr())[curscript.get() as usize]);
+        restore_saved_typebuf(curscript.get());
 
         file_close(script_at(curscript.get()), false);
         *curscript.ptr() -= 1;

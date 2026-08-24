@@ -22,7 +22,7 @@ use crate::ex_docmd::do_sleep;
 use crate::fold::fold_open_cursor;
 use crate::getchar::{
     beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
-    typebuf_maplen, ungetchars, vpeekc, vungetc,
+    typeahead, ungetchars, vpeekc, vungetc,
 };
 use crate::guard::{Allow, Keys};
 use crate::keycodes::{
@@ -167,7 +167,7 @@ fn langmap_wanted(condition: bool) -> bool {
             && condition
             && (p_lrm.get() != 0
                 || if vgetc_busy.get() != 0 {
-                    typebuf_maplen() == 0
+                    typeahead().maplen() == 0
                 } else {
                     KeyTyped.get()
                 })
@@ -490,7 +490,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
                 set_reg_var(get_default_register_name());
             }
             if (*s).old_mapped_len > 0 {
-                (*s).old_mapped_len = typebuf_maplen();
+                (*s).old_mapped_len = typeahead().maplen();
             }
             if (*s).ca.cmdchar != K_IGNORE && (*s).ca.cmdchar != K_MOUSEMOVE {
                 did_visual_op =
@@ -585,9 +585,9 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
         if restart_edit.get() == 0 {
             (*s).old_mapped_len = 0;
         } else if (*s).old_mapped_len != 0
-            || (VIsual_active.get() && (*s).mapped_len == 0 && typebuf_maplen() > 0)
+            || (VIsual_active.get() && (*s).mapped_len == 0 && typeahead().maplen() > 0)
         {
-            (*s).old_mapped_len = typebuf_maplen();
+            (*s).old_mapped_len = typeahead().maplen();
         }
 
         if (*s).c == NUL {

@@ -3,6 +3,7 @@
 //! line store `:while` and `:for` replay from, and Ex mode.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::smsg_c;
@@ -28,7 +29,7 @@ use crate::main::{
     current_exception, curwin, did_emsg, did_throw, e_empty_buffer, emsg_silent, ex_no_reprint,
     ex_normal_busy, exiting, exmode_active, force_abort, global_busy, got_int, lines_left, msg_col,
     msg_row, msg_scroll, msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow,
-    trylevel, typebuf,
+    trylevel,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
@@ -118,7 +119,7 @@ pub unsafe fn do_exmode() {
         while exmode_active.get() {
             // `:normal` that ran out of keys leaves Ex mode rather than
             // waiting for more.
-            if ex_normal_busy.get() > 0 && (*typebuf.ptr()).tb_len == 0 {
+            if ex_normal_busy.get() > 0 && typeahead().is_empty() {
                 exmode_active.set(false);
                 break;
             }

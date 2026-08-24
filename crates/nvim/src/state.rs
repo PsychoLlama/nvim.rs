@@ -20,7 +20,8 @@ use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_get};
 use crate::ex_getln::{cmdline_overstrike, get_cmdline_info};
 use crate::getchar::{
-    check_end_reg_executing, may_sync_undo, safe_vgetc, stuff_empty, using_script, vpeekc,
+    check_end_reg_executing, may_sync_undo, safe_vgetc, stuff_empty, typeahead, using_script,
+    vpeekc,
 };
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
@@ -29,7 +30,7 @@ use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
     State, VIsual_active, VIsual_mode, VIsual_select, curbuf, debug_mode, exmode_active, finish_op,
     global_busy, got_int, last_mode, mod_mask, motion_force, must_redraw, need_wait_return,
-    restart_VIsual_select, restart_edit, typebuf, virtual_op,
+    restart_VIsual_select, restart_edit, virtual_op,
 };
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
@@ -130,7 +131,7 @@ unsafe fn next_key() -> c_int {
         // SAFETY: the editor is initialized, so the typeahead buffer and the
         // main loop's queue are live.
         unsafe {
-            if vpeekc() != NUL || typebuf.with(|t| t.tb_len) > 0 {
+            if vpeekc() != NUL || !typeahead().is_empty() {
                 return safe_vgetc();
             }
             if !multiqueue_empty(main_loop_events()) {
@@ -148,7 +149,7 @@ unsafe fn next_key() -> c_int {
                 ptr::null_mut::<uint8_t>(),
                 0,
                 -1,
-                typebuf.with(|t| t.tb_change_cnt),
+                typeahead().change_cnt(),
                 main_loop_events(),
             );
             // A wakeup with neither input nor queued work is spurious.
@@ -512,7 +513,7 @@ static was_safe: GlobalCell<bool> = GlobalCell::new(false);
 /// The editor must be initialized.
 unsafe fn is_safe_now() -> bool {
     stuff_empty()
-        && typebuf.with(|t| t.tb_len) == 0
+        && typeahead().is_empty()
         && using_script() == 0
         && global_busy.get() == 0
         && !debug_mode.get()

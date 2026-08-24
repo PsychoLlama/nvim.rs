@@ -140,7 +140,7 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
 /// Callable at any time.
 unsafe fn show_partial_key(at: CursorAt) -> Partial {
     unsafe {
-        let tb = typebuf.ptr();
+        let tb = typeahead();
         let mut partial = Partial {
             showcmd_idx: 0,
             showing: false,
@@ -149,9 +149,7 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
         if (State.get() & (MODE_NORMAL | MODE_INSERT) != 0 || State.get() == MODE_LANGMAP)
             && State.get() != MODE_HITRETURN
         {
-            let last = (*tb)
-                .tb_buf
-                .offset(((*tb).tb_off + (*tb).tb_len - 1) as isize);
+            let last = tb.at(tb.len() - 1);
             if State.get() & MODE_INSERT != 0 && ptr2cells(last.cast()) == 1 {
                 // This looks nice when typing a dead-character mapping.
                 edit_putchar(c_int::from(*last), false);
@@ -166,15 +164,11 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
             (*win).w_wcol = at.wcol;
             (*win).w_wrow = at.wrow;
             push_showcmd();
-            if (*tb).tb_len > SHOWCMD_COLS {
-                partial.showcmd_idx = (*tb).tb_len - SHOWCMD_COLS;
+            if tb.len() > SHOWCMD_COLS {
+                partial.showcmd_idx = tb.len() - SHOWCMD_COLS;
             }
-            while partial.showcmd_idx < (*tb).tb_len {
-                add_byte_to_showcmd(
-                    *(*tb)
-                        .tb_buf
-                        .offset(((*tb).tb_off + partial.showcmd_idx) as isize),
-                );
+            while partial.showcmd_idx < tb.len() {
+                add_byte_to_showcmd(*tb.at(partial.showcmd_idx));
                 partial.showcmd_idx += 1;
             }
             (*win).w_wcol = old_wcol;
@@ -186,9 +180,7 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
             && !(*get_cmdline_info()).cmdbuff.is_null()
             && cmdline_star.get() == 0
         {
-            let p = (*tb)
-                .tb_buf
-                .offset(((*tb).tb_off + (*tb).tb_len - 1) as isize);
+            let p = tb.at(tb.len() - 1);
             if ptr2cells(p.cast()) == 1 && c_int::from(*p) < 128 {
                 putcmdline(*p as c_char, false);
                 partial.showing = true;
@@ -221,24 +213,18 @@ unsafe fn unshow_partial_key(partial: &Partial) {
 }
 
 /// How long to wait in [`inchar`] for the rest of a mapping or key code.
-///
-/// # Safety
-/// Callable at any time.
-unsafe fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
-    unsafe {
-        if !advance {
-            return 0;
-        }
-        let tb = typebuf.ptr();
-        if (*tb).tb_len == 0
-            || !(p_timeout.get() != 0 || (p_ttimeout.get() != 0 && keylen == KEYLEN_PART_KEY))
-        {
-            -1 // blocking wait
-        } else if keylen == KEYLEN_PART_KEY && p_ttm.get() >= 0 {
-            p_ttm.get() as c_long
-        } else {
-            p_tm.get() as c_long
-        }
+fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
+    if !advance {
+        return 0;
+    }
+    if typeahead().is_empty()
+        || !(p_timeout.get() != 0 || (p_ttimeout.get() != 0 && keylen == KEYLEN_PART_KEY))
+    {
+        -1 // blocking wait
+    } else if keylen == KEYLEN_PART_KEY && p_ttm.get() >= 0 {
+        p_ttm.get() as c_long
+    } else {
+        p_tm.get() as c_long
     }
 }
 
@@ -248,16 +234,15 @@ unsafe fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
 /// Callable at any time.
 unsafe fn interrupted(advance: bool) -> c_int {
     unsafe {
-        let tb = typebuf.ptr();
+        let tb = typeahead();
         // Flush all input.
-        let got = inchar((*tb).tb_buf, (*tb).tb_buflen - 1, 0);
+        let got = inchar(tb.storage(), tb.buflen() - 1, 0);
 
         // If `inchar` answered true (a script file was active) or we are
         // inside a mapping, get out of Insert mode; otherwise behave as if a
         // CTRL-C had been typed, so that typing CTRL-C in Insert mode really
         // inserts one.
-        let c = if (got != 0 || (*tb).tb_maplen != 0)
-            && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0
+        let c = if (got != 0 || tb.maplen() != 0) && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0
         {
             ESC
         } else {
@@ -268,8 +253,8 @@ unsafe fn interrupted(advance: bool) -> c_int {
         if advance {
             // Record this character too; it may be needed to get out of
             // Insert mode.
-            *(*tb).tb_buf = c as u8;
-            gotchars((*tb).tb_buf, 1);
+            *tb.storage() = c as u8;
+            gotchars(tb.storage(), 1);
         }
         cmd_silent.set(false);
         c
@@ -295,7 +280,7 @@ unsafe fn read_from_typeahead(
 
             // `os_breakcheck` is slow; inside a mapping do not use it every
             // time round, but do for every typed character.
-            if (*typebuf.ptr()).tb_maplen != 0 {
+            if typeahead().maplen() != 0 {
                 line_breakcheck();
             } else {
                 // os_breakcheck() can call input_enqueue().
@@ -309,26 +294,25 @@ unsafe fn read_from_typeahead(
             let mut keylen = 0;
             if got_int.get() {
                 return interrupted(advance);
-            } else if (*typebuf.ptr()).tb_len > 0 {
+            } else if !typeahead().is_empty() {
                 // Check for a mapping in the typeahead.
                 match handle_mapping(&raw mut keylen, timedout, mapdepth) as map_result_T {
                     map_result_retry => continue, // try mapping again
                     map_result_fail => return -1, // failed; use the outer loop
                     map_result_get => {
                         // Take the character from the typeahead.
-                        let tb = typebuf.ptr();
-                        let c = c_int::from(*(*tb).tb_buf.offset((*tb).tb_off as isize));
+                        let tb = typeahead();
+                        let c = tb.byte(0);
                         if advance {
-                            cmd_silent.set((*tb).tb_silent > 0);
-                            if (*tb).tb_maplen > 0 {
+                            cmd_silent.set(tb.silent() > 0);
+                            if tb.maplen() > 0 {
                                 KeyTyped.set(false);
                             } else {
                                 KeyTyped.set(true);
                                 // Write the character to the script file(s).
-                                gotchars((*tb).tb_buf.offset((*tb).tb_off as isize), 1);
+                                gotchars(tb.at(0), 1);
                             }
-                            KeyNoremap
-                                .set(c_int::from(*(*tb).tb_noremap.offset((*tb).tb_off as isize)));
+                            KeyNoremap.set(tb.noremap(0));
                             del_typebuf(1, 0);
                         }
                         return c;
@@ -351,21 +335,17 @@ unsafe fn read_from_typeahead(
                 wcol: (*win).w_wcol,
                 wrow: (*win).w_wrow,
             };
-            let tb = typebuf.ptr();
+            let tb = typeahead();
             if advance
-                && (*tb).tb_len == 1
-                && c_int::from(*(*tb).tb_buf.offset((*tb).tb_off as isize)) == ESC
+                && tb.len() == 1
+                && tb.byte(0) == ESC
                 && no_mapping.get() == 0
                 && ex_normal_busy.get() == 0
-                && (*tb).tb_maplen == 0
+                && tb.maplen() == 0
                 && State.get() & MODE_INSERT != 0
                 && (p_timeout.get() != 0 || (keylen == KEYLEN_PART_KEY && p_ttimeout.get() != 0))
                 && {
-                    c = inchar(
-                        (*tb).tb_buf.offset(((*tb).tb_off + (*tb).tb_len) as isize),
-                        3,
-                        25,
-                    );
+                    c = inchar(tb.tail(), 3, 25);
                     c == 0
                 }
                 && esc_leaves_insert(&mut at)
@@ -379,11 +359,11 @@ unsafe fn read_from_typeahead(
             // Allow mapping for the characters just typed. `c` is the number
             // of extra bytes and `tb_len` is 1.
             for n in 1..=c {
-                *(*tb).tb_noremap.offset(((*tb).tb_off + n) as isize) = RM_YES as u8;
+                tb.set_noremap(n, RM_YES as u8);
             }
-            (*tb).tb_len += c;
+            tb.grow(c);
 
-            if (*tb).tb_len >= (*tb).tb_maplen + MAXMAPLEN as c_int {
+            if tb.len() >= tb.maplen() + MAXMAPLEN as c_int {
                 // The buffer is full, so don't map.
                 *timedout = true;
                 continue;
@@ -397,7 +377,7 @@ unsafe fn read_from_typeahead(
                 // No typeahead left and inside `:normal`: something has to be
                 // answered to avoid getting stuck. With an incomplete mapping
                 // present, behave as if it timed out.
-                if (*tb).tb_len > 0 {
+                if !tb.is_empty() {
                     *timedout = true;
                     continue;
                 }
@@ -423,7 +403,7 @@ unsafe fn read_from_typeahead(
                     exmode_active.set(true);
                 }
                 // No characters to block abbreviations for.
-                (*tb).tb_no_abbr_cnt = 0;
+                tb.set_no_abbr_cnt(0);
                 return c;
             }
 
@@ -442,7 +422,7 @@ unsafe fn read_from_typeahead(
                 setcursor(); // put the cursor back where it belongs
             }
 
-            let partial = if (*tb).tb_len > 0 && advance && !exmode_active.get() {
+            let partial = if !tb.is_empty() && advance && !exmode_active.get() {
                 show_partial_key(at)
             } else {
                 Partial {
@@ -451,18 +431,14 @@ unsafe fn read_from_typeahead(
                 }
             };
 
-            if (*tb).tb_len == 0 {
+            if tb.is_empty() {
                 // `timedout` may have been set when a mapping with an empty
                 // RHS fully matched while longer mappings timed out.
                 *timedout = false;
             }
 
-            let wait_tb_len = (*tb).tb_len;
-            c = inchar(
-                (*tb).tb_buf.offset(((*tb).tb_off + (*tb).tb_len) as isize),
-                (*tb).tb_buflen - (*tb).tb_off - (*tb).tb_len - 1,
-                wait_time_for(advance, keylen),
-            );
+            let wait_tb_len = tb.len();
+            c = inchar(tb.tail(), tb.room(), wait_time_for(advance, keylen));
 
             unshow_partial_key(&partial);
 
@@ -480,13 +456,9 @@ unsafe fn read_from_typeahead(
                 }
             } else {
                 // Allow mapping for the characters just typed.
-                while c_int::from(*(*tb).tb_buf.offset(((*tb).tb_off + (*tb).tb_len) as isize))
-                    != NUL
-                {
-                    *(*tb)
-                        .tb_noremap
-                        .offset(((*tb).tb_off + (*tb).tb_len) as isize) = RM_YES as u8;
-                    (*tb).tb_len += 1;
+                while c_int::from(*tb.tail()) != NUL {
+                    tb.set_noremap(tb.len(), RM_YES as u8);
+                    tb.grow(1);
                 }
             }
         }
@@ -552,8 +524,8 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
                     // open a fold, for example.
                     KeyStuffed.set(1);
                 }
-                if (*typebuf.ptr()).tb_no_abbr_cnt == 0 {
-                    (*typebuf.ptr()).tb_no_abbr_cnt = 1; // no abbreviations now
+                if typeahead().no_abbr_cnt() == 0 {
+                    typeahead().set_no_abbr_cnt(1); // no abbreviations now
                 }
                 c
             } else {
@@ -571,13 +543,13 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
         // answer an ESC but deleted the message before, it is redisplayed.
         if advance && p_smd.get() != 0 && msg_silent.get() == 0 && State.get() & MODE_INSERT != 0 {
             if c == ESC && !mode_deleted && no_mapping.get() == 0 && mode_displayed.get() {
-                if (*typebuf.ptr()).tb_len != 0 && !KeyTyped.get() {
+                if !typeahead().is_empty() && !KeyTyped.get() {
                     redraw_cmdline.set(true); // delete the mode later
                 } else {
                     unshowmode(false);
                 }
             } else if c != ESC && mode_deleted {
-                if (*typebuf.ptr()).tb_len != 0 && !KeyTyped.get() {
+                if !typeahead().is_empty() && !KeyTyped.get() {
                     redraw_cmdline.set(true); // show the mode later
                 } else {
                     showmode();
@@ -612,7 +584,7 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
     unsafe {
         let mut len = 0;
         let mut retesc = false; // answer ESC with got_int
-        let tb_change_cnt = (*typebuf.ptr()).tb_change_cnt;
+        let tb_change_cnt = typeahead().change_cnt();
 
         if wait_time == -1 || wait_time > 100 {
             ui_flush(); // flush output before waiting
@@ -707,10 +679,7 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
         // Note the change in the typeahead buffer; this matters for when
         // vgetorpeek() is called recursively, e.g. `getchar(1)` in a timer.
         if len > 0 {
-            (*typebuf.ptr()).tb_change_cnt += 1;
-            if (*typebuf.ptr()).tb_change_cnt == 0 {
-                (*typebuf.ptr()).tb_change_cnt = 1;
-            }
+            typeahead().note_change();
         }
 
         fix_input_buffer(buf, len)
