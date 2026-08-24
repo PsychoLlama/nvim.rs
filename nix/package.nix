@@ -69,7 +69,7 @@ rustPlatform.buildRustPackage {
       -c "helptags $out/share/nvim/runtime/doc" -c "qa!"
   '';
 
-  # The transpiled sources have no test harness wired up here.
+  # The suites run through `just` locally, not from the nix build.
   doCheck = false;
 
   meta = {

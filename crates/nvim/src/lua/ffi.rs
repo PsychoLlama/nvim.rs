@@ -1,4 +1,4 @@
-//! Shared LuaJIT/luv/lpeg `extern "C"` declarations (phase 5b).
+//! Shared LuaJIT/luv/lpeg `extern "C"` declarations.
 //!
 //! One declaration per symbol, `use`d by every consumer, instead of
 //! the per-module copies c2rust emitted. Everything here resolves
