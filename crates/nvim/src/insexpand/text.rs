@@ -284,14 +284,14 @@ pub(crate) unsafe fn strip_caret_numbers_in_place(str: *mut c_char) {
 /// With `curbuf_only` only matches from the `'complete'` `.` source count.
 pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bool) -> *mut c_char {
     unsafe {
-        if (*cpt_sources_array.ptr()).is_null() {
+        if cpt_sources().is_unset() {
             return ptr::null_mut();
         }
 
         // C's MB_BYTE2LEN: bytes in the sequence this byte starts.
         let byte2len = |b: c_char| utf8len_tab[b as u8 as usize] as c_int;
 
-        let mut match_count: Vec<c_int> = vec![0; cpt_sources_count.get() as usize];
+        let mut match_count: Vec<c_int> = vec![0; cpt_sources().rows().len()];
         clear_adjusted_leader();
 
         let mut compl = compl_first_match.get();
@@ -317,16 +317,14 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
                 let cur_source = (*compl).cp_cpt_source_idx;
                 if cur_source != -1 {
                     match_count[cur_source as usize] += 1;
-                    let max_matches =
-                        (*(*cpt_sources_array.ptr()).offset(cur_source as isize)).cs_max_matches;
+                    let max_matches = cpt_sources().row(cur_source).cs_max_matches;
                     if max_matches > 0 && match_count[cur_source as usize] > max_matches {
                         match_limit_exceeded = true;
                     }
                 }
 
                 let from_curbuf = cur_source != -1
-                    && (*(*cpt_sources_array.ptr()).offset(cur_source as isize)).cs_flag as c_int
-                        == '.' as c_int;
+                    && cpt_sources().row(cur_source).cs_flag as c_int == '.' as c_int;
                 if !match_limit_exceeded && (!curbuf_only || from_curbuf) {
                     if first.is_null()
                         && strncmp(

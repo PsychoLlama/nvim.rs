@@ -29,7 +29,7 @@ pub(crate) unsafe fn thesaurus_func_complete(type_0: c_int) -> bool {
 /// move on?
 pub(crate) unsafe fn may_advance_cpt_index(cpt: *const c_char) -> bool {
     unsafe {
-        if cpt_sources_index.get() == -1 {
+        if cpt_sources().index() == -1 {
             return false;
         }
         let mut p = cpt;
@@ -148,7 +148,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                     || *(*st).e_cpt as c_int == 'o' as c_int
                 {
                     compl_type = CTRL_X_FUNCTION;
-                    (*st).func_cb = get_callback_if_cpt_func((*st).e_cpt, cpt_sources_index.get());
+                    (*st).func_cb = get_callback_if_cpt_func((*st).e_cpt, cpt_sources().index());
                     if (*st).func_cb.is_null() {
                         compl_type = -1;
                     }
@@ -532,12 +532,11 @@ pub(crate) unsafe fn get_next_completion_match(
 }
 
 /// Start the per-source time slice, where a timeout is configured at all.
-pub(crate) unsafe fn compl_source_start_timer(source_idx: c_int) {
-    unsafe {
-        if compl_autocomplete.get() || p_cto.get() > 0 {
-            (*cpt_sources_array.get().offset(source_idx as isize)).compl_start_tv = os_hrtime();
-            compl_time_slice_expired.set(false);
-        }
+pub(crate) fn compl_source_start_timer(source_idx: c_int) {
+    if compl_autocomplete.get() || p_cto.get() > 0 {
+        let now = os_hrtime();
+        cpt_sources().update(source_idx, |source| source.compl_start_tv = now);
+        compl_time_slice_expired.set(false);
     }
 }
 
@@ -613,9 +612,9 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
         let normal_mode_strict = ctrl_x_mode_normal()
             && !ctrl_x_mode_line_or_eval()
             && compl_cont_status.get() & CONT_LOCAL == 0
-            && !cpt_sources_array.get().is_null();
+            && !cpt_sources().is_unset();
         if normal_mode_strict {
-            cpt_sources_index.set(0);
+            cpt_sources().set_index(0);
             if compl_autocomplete.get() || p_cto.get() > 0 {
                 compl_source_start_timer(0);
                 compl_time_slice_expired.set(false);
@@ -655,7 +654,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
                         if advance_cpt_sources_index_safe() == 0 {
                             break;
                         }
-                        compl_source_start_timer(cpt_sources_index.get());
+                        compl_source_start_timer(cpt_sources().index());
                     }
                     continue;
                 }
@@ -692,7 +691,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
                 if advance_cpt_sources_index_safe() == 0 {
                     break;
                 }
-                compl_source_start_timer(cpt_sources_index.get());
+                compl_source_start_timer(cpt_sources().index());
             }
 
             // Break out for the specialised modes — 'complete' is only for the
@@ -742,7 +741,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
             }
         }
 
-        cpt_sources_index.set(-1);
+        cpt_sources().set_index(-1);
         compl_started.set(true);
 
         if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && *(*st).e_cpt as c_int == NUL {
@@ -789,18 +788,13 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
 
 /// Expire the current source's time slice, halving the budget each time so a
 /// slow source cannot hold up the rest.
-pub(crate) unsafe fn check_elapsed_time() {
-    unsafe {
-        let start_tv = (*cpt_sources_array
-            .get()
-            .offset(cpt_sources_index.get() as isize))
-        .compl_start_tv;
-        let elapsed_ms = (os_hrtime() - start_tv) / 1_000_000;
-        if elapsed_ms > compl_timeout_ms.get() {
-            compl_time_slice_expired.set(true);
-            if compl_timeout_ms.get() > COMPL_MIN_TIMEOUT_MS as uint64_t {
-                compl_timeout_ms.set(compl_timeout_ms.get() / 2);
-            }
+pub(crate) fn check_elapsed_time() {
+    let start_tv = cpt_sources().current().compl_start_tv;
+    let elapsed_ms = (os_hrtime() - start_tv) / 1_000_000;
+    if elapsed_ms > compl_timeout_ms.get() {
+        compl_time_slice_expired.set(true);
+        if compl_timeout_ms.get() > COMPL_MIN_TIMEOUT_MS as uint64_t {
+            compl_timeout_ms.set(compl_timeout_ms.get() / 2);
         }
     }
 }

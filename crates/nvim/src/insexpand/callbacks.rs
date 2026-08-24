@@ -15,6 +15,125 @@ use crate::types::{
     FAIL, IOSIZE, NUL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
 
+/// The per-`'complete'`-entry state: one row for every comma-separated
+/// segment of the option, plus the index of the segment being collected.
+///
+/// Upstream keeps this as a `cpt_source_T *` with a hand-rolled
+/// `cpt_sources_count` beside it and `cpt_sources_index` as a third global,
+/// `xcalloc`'d by `setup_cpt_sources` and `xfree`'d by `cpt_sources_clear`;
+/// eleven sites reached a row by writing `(*cpt_sources_array.ptr()).offset(i)`
+/// and dereferencing, with the bounds carried in the reader's head.
+///
+/// `CptSources` is the one owner, in `ComplStr`'s shape: it names the cells
+/// rather than pointing into them, so it is `Copy` and forms no reference
+/// into a global. The rows are a boxed slice; `set_rows` installs the
+/// pointer and the count *together* (upstream published the array first and
+/// the count last, so the two disagreed for the length of the parse loop),
+/// and every row is read out by value or written through [`update`].
+///
+/// [`update`]: CptSources::update
+///
+/// Rows are addressed by index rather than by a pointer held across a call,
+/// which matters: `prepare_cpt_compl_funcs` and `cpt_compl_refresh` write a
+/// row *after* running a user's completion function, and that function can
+/// `:set complete=...` and rebuild the array underneath. Upstream writes
+/// through the stale pointer; an out-of-range index here is ignored, and an
+/// out-of-range read answers [`CPT_SOURCE_INIT`], the zeroed row `xcalloc`
+/// used to hand back.
+#[derive(Clone, Copy)]
+pub(crate) struct CptSources(());
+
+/// The per-`'complete'`-entry state. See [`CptSources`].
+pub(crate) fn cpt_sources() -> CptSources {
+    CptSources(())
+}
+
+impl CptSources {
+    /// Whether `'complete'` has not been parsed into rows at all — upstream's
+    /// `cpt_sources_array == NULL`, which is how the completion asks whether
+    /// it is running a `'complete'`-driven scan.
+    pub(crate) fn is_unset(self) -> bool {
+        CPT_SOURCES.get().is_null()
+    }
+
+    /// The rows, empty while [`is_unset`](Self::is_unset).
+    pub(crate) fn rows(self) -> &'static [cpt_source_T] {
+        let rows = CPT_SOURCES.get();
+        if rows.is_null() {
+            return &[];
+        }
+        // SAFETY: `set_rows` stored a boxed slice of exactly this length and
+        // only `clear` drops it.
+        unsafe { ::core::slice::from_raw_parts(rows, CPT_SOURCES_COUNT.get() as usize) }
+    }
+
+    /// Row `idx` by value, or the zeroed row when `idx` is out of range.
+    pub(crate) fn row(self, idx: c_int) -> cpt_source_T {
+        usize::try_from(idx)
+            .ok()
+            .and_then(|idx| self.rows().get(idx).copied())
+            .unwrap_or(CPT_SOURCE_INIT)
+    }
+
+    /// The row the scan is collecting from, by value.
+    pub(crate) fn current(self) -> cpt_source_T {
+        self.row(self.index())
+    }
+
+    /// Change row `idx` in place; out of range does nothing.
+    pub(crate) fn update(self, idx: c_int, f: impl FnOnce(&mut cpt_source_T)) {
+        let rows = CPT_SOURCES.get();
+        let Ok(idx) = usize::try_from(idx) else {
+            return;
+        };
+        if rows.is_null() || idx >= CPT_SOURCES_COUNT.get() as usize {
+            return;
+        }
+        // SAFETY: `idx` is in range of the boxed slice `set_rows` stored, and
+        // `f` only writes fields of the row.
+        f(unsafe { &mut *rows.add(idx) });
+    }
+
+    /// Take `rows` as the new state, dropping whatever was there. The index
+    /// is left alone: the caller sets it when the scan starts.
+    pub(crate) fn set_rows(self, rows: Vec<cpt_source_T>) {
+        self.free_rows();
+        let count = rows.len() as c_int;
+        CPT_SOURCES.set(Box::into_raw(rows.into_boxed_slice()).cast::<cpt_source_T>());
+        CPT_SOURCES_COUNT.set(count);
+    }
+
+    /// Drop the rows and forget where the scan was — C's
+    /// `cpt_sources_clear()`.
+    pub(crate) fn clear(self) {
+        self.free_rows();
+        CPT_SOURCES_INDEX.set(-1);
+    }
+
+    /// The `'complete'` entry the scan is collecting from, or −1 between
+    /// scans.
+    pub(crate) fn index(self) -> c_int {
+        CPT_SOURCES_INDEX.get()
+    }
+
+    /// Point the scan at entry `idx`.
+    pub(crate) fn set_index(self, idx: c_int) {
+        CPT_SOURCES_INDEX.set(idx);
+    }
+
+    fn free_rows(self) {
+        let rows = CPT_SOURCES.get();
+        let count = CPT_SOURCES_COUNT.replace(0) as usize;
+        CPT_SOURCES.set(ptr::null_mut());
+        if rows.is_null() {
+            return;
+        }
+        // SAFETY: the allocation is this owner's own boxed slice, of exactly
+        // `count` rows, and `cpt_source_T` owns nothing.
+        drop(unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(rows, count)) });
+    }
+}
+
 /// Step over the `,` and ` ` that separate two `'complete'` entries.
 unsafe fn skip_cpt_delims(mut p: *mut c_char) -> *mut c_char {
     unsafe {
@@ -447,7 +566,7 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
         let cpt = xstrdup((*curbuf.get()).b_p_cpt);
         strip_caret_numbers_in_place(cpt);
 
-        let mut idx: isize = 0;
+        let mut idx = 0;
         let mut p = cpt;
         while *p != 0 {
             p = skip_cpt_delims(p);
@@ -455,24 +574,23 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
                 break;
             }
 
-            let source = (*cpt_sources_array.ptr()).offset(idx);
-            let cb = get_callback_if_cpt_func(p, idx as c_int);
+            let cb = get_callback_if_cpt_func(p, idx);
             if cb.is_null() {
-                (*source).cs_startcol = -3;
+                cpt_sources().update(idx, |source| source.cs_startcol = -3);
             } else {
                 let mut startcol = 0;
                 if get_userdefined_compl_info((*curwin.get()).w_cursor.col, cb, &raw mut startcol)
                     == FAIL
                 {
                     if startcol == -3 {
-                        (*source).cs_refresh_always = false;
+                        cpt_sources().update(idx, |source| source.cs_refresh_always = false);
                     } else {
                         startcol = -2;
                     }
                 } else if startcol < 0 || startcol > (*curwin.get()).w_cursor.col {
                     startcol = (*curwin.get()).w_cursor.col;
                 }
-                (*source).cs_startcol = startcol;
+                cpt_sources().update(idx, |source| source.cs_startcol = startcol);
             }
 
             // Advance p.
@@ -491,25 +609,16 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
 /// Advance `cpt_sources_index` by one, or report E684 and fail.
 pub(crate) unsafe fn advance_cpt_sources_index_safe() -> c_int {
     unsafe {
-        if cpt_sources_index.get() >= 0 && cpt_sources_index.get() < cpt_sources_count.get() - 1 {
-            (*cpt_sources_index.ptr()) += 1;
+        let idx = cpt_sources().index();
+        if idx >= 0 && idx < cpt_sources().rows().len() as c_int - 1 {
+            cpt_sources().set_index(idx + 1);
             return OK;
         }
         semsg_c!(
             gettext(&raw const e_list_index_out_of_range_nr as *const c_char),
-            cpt_sources_index.get(),
+            idx,
         );
         FAIL
-    }
-}
-
-/// Reset the info associated with the completion sources.
-pub(crate) unsafe fn cpt_sources_clear() {
-    unsafe {
-        xfree(cpt_sources_array.get().cast::<c_void>());
-        cpt_sources_array.set(ptr::null_mut());
-        cpt_sources_index.set(-1);
-        cpt_sources_count.set(0);
     }
 }
 
@@ -517,24 +626,24 @@ pub(crate) unsafe fn cpt_sources_clear() {
 /// max-matches limit.
 pub(crate) unsafe fn setup_cpt_sources() {
     unsafe {
-        cpt_sources_clear();
+        cpt_sources().clear();
 
         let count = get_cpt_sources_count();
         if count == 0 {
             return;
         }
-        cpt_sources_array
-            .set(xcalloc(count as size_t, size_of::<cpt_source_T>()).cast::<cpt_source_T>());
 
+        let mut rows = Vec::with_capacity(count as usize);
         let mut part = [0 as c_char; LSIZE as usize];
-        let mut idx: isize = 0;
         let mut p = (*curbuf.get()).b_p_cpt;
         while *p != 0 {
             p = skip_cpt_delims(p);
             if *p != 0 {
                 // If not end of string, count this segment.
-                let source = (*cpt_sources_array.ptr()).offset(idx);
-                (*source).cs_flag = *p;
+                let mut source = cpt_source_T {
+                    cs_flag: *p,
+                    ..CPT_SOURCE_INIT
+                };
                 part.fill(0);
                 // Advance p.
                 let slen = copy_option_part(
@@ -546,29 +655,27 @@ pub(crate) unsafe fn setup_cpt_sources() {
                 if slen > 0 {
                     let caret = vim_strchr(part.as_mut_ptr(), '^' as c_int);
                     if !caret.is_null() {
-                        (*source).cs_max_matches = atoi(caret.offset(1));
+                        source.cs_max_matches = atoi(caret.offset(1));
                     }
                 }
-                idx += 1;
+                rows.push(source);
             }
         }
-        cpt_sources_count.set(count);
+        debug_assert_eq!(rows.len(), count as usize);
+        cpt_sources().set_rows(rows);
     }
 }
 
 /// Whether any completion source has `refresh` set to `always`.
-pub(crate) unsafe fn is_cpt_func_refresh_always() -> bool {
-    unsafe {
-        (0..cpt_sources_count.get() as isize)
-            .any(|i| (*(*cpt_sources_array.ptr()).offset(i)).cs_refresh_always)
-    }
+pub(crate) fn is_cpt_func_refresh_always() -> bool {
+    cpt_sources().rows().iter().any(|s| s.cs_refresh_always)
 }
 
 /// Collect matches through `cb` and record its `refresh:always` flag.
 pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
     unsafe {
-        let cpt_src = (*cpt_sources_array.ptr()).offset(cpt_sources_index.get() as isize);
-        let startcol = (*cpt_src).cs_startcol;
+        let idx = cpt_sources().index();
+        let startcol = cpt_sources().row(idx).cs_startcol;
         if startcol == -2 || startcol == -3 {
             return;
         }
@@ -578,17 +685,18 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
         // Insert the leader string (previously removed) before expansion.
         // This prevents flicker when `func` (e.g. an LSP client) is slow and
         // calls 'sleep', which triggers ui_flush().
-        if !(*cpt_src).cs_refresh_always {
+        if !cpt_sources().row(idx).cs_refresh_always {
             ins_compl_insert_bytes(ins_compl_leader(), -1);
         }
 
         expand_by_function(0, cpt_compl_pattern().data(), cb);
 
-        if !(*cpt_src).cs_refresh_always {
+        if !cpt_sources().row(idx).cs_refresh_always {
             ins_compl_delete(false);
         }
 
-        (*cpt_src).cs_refresh_always = compl_opt_refresh_always.get();
+        let refresh_always = compl_opt_refresh_always.get();
+        cpt_sources().update(idx, |source| source.cs_refresh_always = refresh_always);
         compl_opt_refresh_always.set(false);
     }
 }
@@ -603,7 +711,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
         let cpt = xstrdup((*curbuf.get()).b_p_cpt);
         strip_caret_numbers_in_place(cpt);
 
-        cpt_sources_index.set(0);
+        cpt_sources().set_index(0);
         let mut p = cpt;
         while *p != 0 {
             p = skip_cpt_delims(p);
@@ -611,9 +719,9 @@ pub(crate) unsafe fn cpt_compl_refresh() {
                 break;
             }
 
-            let source = (*cpt_sources_array.ptr()).offset(cpt_sources_index.get() as isize);
-            if (*source).cs_refresh_always {
-                let cb = get_callback_if_cpt_func(p, cpt_sources_index.get());
+            let idx = cpt_sources().index();
+            if cpt_sources().row(idx).cs_refresh_always {
+                let cb = get_callback_if_cpt_func(p, idx);
                 if !cb.is_null() {
                     remove_old_matches();
                     let mut startcol = 0;
@@ -624,16 +732,16 @@ pub(crate) unsafe fn cpt_compl_refresh() {
                     );
                     if ret == FAIL {
                         if startcol == -3 {
-                            (*source).cs_refresh_always = false;
+                            cpt_sources().update(idx, |source| source.cs_refresh_always = false);
                         } else {
                             startcol = -2;
                         }
                     } else if startcol < 0 || startcol > (*curwin.get()).w_cursor.col {
                         startcol = (*curwin.get()).w_cursor.col;
                     }
-                    (*source).cs_startcol = startcol;
+                    cpt_sources().update(idx, |source| source.cs_startcol = startcol);
                     if ret == OK {
-                        compl_source_start_timer(cpt_sources_index.get());
+                        compl_source_start_timer(idx);
                         get_cpt_func_completion_matches(cb);
                     }
                 }
@@ -650,7 +758,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
                 advance_cpt_sources_index_safe();
             }
         }
-        cpt_sources_index.set(-1);
+        cpt_sources().set_index(-1);
 
         xfree(cpt.cast::<c_void>());
         // Make the list cyclic.

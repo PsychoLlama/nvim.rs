@@ -190,7 +190,7 @@ pub(crate) unsafe fn ins_compl_restart() {
         compl_matches.set(0);
         compl_cont_status.set(0);
         compl_cont_mode.set(0);
-        cpt_sources_clear();
+        cpt_sources().clear();
         compl_autocomplete.set(false);
         compl_from_nonkeyword.set(false);
         compl_num_bests.set(0);
@@ -600,8 +600,8 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
             let normal_mode_strict = ctrl_x_mode_normal()
                 && !ctrl_x_mode_line_or_eval()
                 && compl_cont_status.get() & CONT_LOCAL == 0
-                && !(*cpt_sources_array.ptr()).is_null()
-                && cpt_sources_index.get() >= 0;
+                && !cpt_sources().is_unset()
+                && cpt_sources().index() >= 0;
             if normal_mode_strict && (compl_autocomplete.get() || p_cto.get() > 0) {
                 check_elapsed_time();
             }

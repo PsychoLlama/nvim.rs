@@ -126,7 +126,7 @@ pub(crate) unsafe fn ins_compl_add(
             *user_hl.add(1)
         };
         (*match_0).cp_score = score;
-        (*match_0).cp_cpt_source_idx = cpt_sources_index.get();
+        (*match_0).cp_cpt_source_idx = cpt_sources().index();
 
         if !cptext.is_null() {
             for i in 0..CPT_COUNT as isize {
@@ -548,7 +548,7 @@ pub unsafe fn ins_compl_clear() {
         compl_orig_extmarks.set(EXTMARK_UNDO_VEC_INIT);
         compl_orig_text().clear();
         compl_enter_selects.set(false);
-        cpt_sources_clear();
+        cpt_sources().clear();
         compl_autocomplete.set(false);
         compl_from_nonkeyword.set(false);
         compl_num_bests.set(0);
@@ -644,7 +644,7 @@ pub(crate) unsafe fn remove_old_matches() {
         let mut shown_match_removed = false;
         let forward = (*compl_first_match.get()).cp_cpt_source_idx < 0;
 
-        if cpt_sources_index.get() < 0 {
+        if cpt_sources().index() < 0 {
             return;
         }
 
@@ -655,7 +655,7 @@ pub(crate) unsafe fn remove_old_matches() {
         // they have to be removed one by one rather than as a run.
         let mut current = compl_first_match.get();
         while !current.is_null() {
-            if (*current).cp_cpt_source_idx != cpt_sources_index.get() {
+            if (*current).cp_cpt_source_idx != cpt_sources().index() {
                 current = (*current).cp_next;
                 continue;
             }
@@ -697,9 +697,9 @@ pub(crate) unsafe fn remove_old_matches() {
         let mut current = compl_first_match.get();
         while !current.is_null() {
             let before = if forward {
-                (*current).cp_cpt_source_idx < cpt_sources_index.get()
+                (*current).cp_cpt_source_idx < cpt_sources().index()
             } else {
-                (*current).cp_cpt_source_idx > cpt_sources_index.get()
+                (*current).cp_cpt_source_idx > cpt_sources().index()
             };
             if !before {
                 break;

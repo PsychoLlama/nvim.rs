@@ -208,6 +208,14 @@ pub struct cpt_source_T {
     pub compl_start_tv: uint64_t,
     pub cs_flag: ::core::ffi::c_char,
 }
+/// A zeroed `cpt_source_T`, which is what `xcalloc` left every row as.
+pub(crate) const CPT_SOURCE_INIT: cpt_source_T = cpt_source_T {
+    cs_refresh_always: false,
+    cs_startcol: 0,
+    cs_max_matches: 0,
+    compl_start_tv: 0,
+    cs_flag: 0,
+};
 pub const CP_EQUAL: ::core::ffi::c_int = 8;
 #[derive(Copy, Clone)]
 pub struct ins_compl_next_state_T {
@@ -588,10 +596,10 @@ static compl_selected_item: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
 static compl_fuzzy_scores: GlobalCell<*mut ::core::ffi::c_int> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
-static cpt_sources_array: GlobalCell<*mut cpt_source_T> =
+static CPT_SOURCES: GlobalCell<*mut cpt_source_T> =
     GlobalCell::new(::core::ptr::null_mut::<cpt_source_T>());
-static cpt_sources_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static cpt_sources_index: GlobalCell<::core::ffi::c_int> =
+static CPT_SOURCES_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static CPT_SOURCES_INDEX: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
 static COMPL_MATCH_ARRAY: GlobalCell<*mut pumitem_T> =
     GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());

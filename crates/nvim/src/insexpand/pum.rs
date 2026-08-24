@@ -278,14 +278,14 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: *mut compl_T, cached: bool
         debug_assert!(!match_0.is_null());
 
         'theend: {
-            if cpt_sources_array.get().is_null() {
+            if cpt_sources().is_unset() {
                 break 'theend;
             }
             let cpt_idx = (*match_0).cp_cpt_source_idx;
             if cpt_idx < 0 {
                 break 'theend;
             }
-            let startcol = (*cpt_sources_array.get().offset(cpt_idx as isize)).cs_startcol;
+            let startcol = cpt_sources().row(cpt_idx).cs_startcol;
 
             if compl_leader().is_unset() {
                 // The leader is not set yet (`'autocomplete'` fires before
@@ -342,7 +342,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         let mut match_head: *mut compl_T = ptr::null_mut();
         let mut match_tail: *mut compl_T = ptr::null_mut();
         let is_forward = compl_shows_dir_forward();
-        let is_cpt_completion = !cpt_sources_array.get().is_null();
+        let is_cpt_completion = !cpt_sources().is_unset();
 
         // If the current match is the original text, don't find the first
         // match after it and don't highlight anything.
@@ -363,7 +363,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         let mut cur = -1;
 
         let match_count: *mut c_int = if is_cpt_completion {
-            xcalloc(cpt_sources_count.get() as size_t, size_of::<c_int>()) as *mut c_int
+            xcalloc(cpt_sources().rows().len() as size_t, size_of::<c_int>()) as *mut c_int
         } else {
             ptr::null_mut()
         };
@@ -397,8 +397,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
                 let cur_source = (*comp).cp_cpt_source_idx;
                 if is_forward && cur_source != -1 && is_cpt_completion {
                     *match_count.offset(cur_source as isize) += 1;
-                    let max_matches =
-                        (*cpt_sources_array.get().offset(cur_source as isize)).cs_max_matches;
+                    let max_matches = cpt_sources().row(cur_source).cs_max_matches;
                     if max_matches > 0 && *match_count.offset(cur_source as isize) > max_matches {
                         match_limit_exceeded = true;
                     }
